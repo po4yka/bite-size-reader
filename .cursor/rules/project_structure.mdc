@@ -1,0 +1,17 @@
+---
+description: Project File and Module Structure
+globs:
+  - "*"
+alwaysApply: true
+---
+
+# File and Module Organization
+
+- `bot.py` to handle Telegram MTProto client using PyroTGFork.
+- `firecrawl_parser.py` to encapsulate article parsing logic.
+- `openrouter_client.py` to handle OpenRouter ChatGPT API interactions.
+- `database.py` for SQLite access and queries.
+- `Dockerfile` for containerization specifications.
+- `requirements.txt` or `pyproject.toml` for Python dependencies.
+- `tests/` directory containing unit and integration tests.
+- Separate business logic cleanly from request/response handling.

@@ -1,0 +1,16 @@
+---
+description: Security and Private Usage Guidelines
+globs:
+  - "*.py"
+alwaysApply: true
+---
+
+# Security Guidelines
+
+- Do not hardcode API keys, tokens, or secrets in source code or config files.
+- Store sensitive data in environment variables or secure vaults.
+- Validate any URLs or message content from users to prevent injection attacks.
+- Limit the bot’s permissions and exposure; it is for personal use only.
+- Avoid logging sensitive data; redact if necessary.
+- Use latest dependency versions with security patches.
+- Regularly review dependencies for vulnerabilities.

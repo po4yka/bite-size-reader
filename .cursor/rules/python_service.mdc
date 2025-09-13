@@ -1,0 +1,18 @@
+---
+description: Python Service Best Practices for Telegram Summarization Bot
+globs:
+  - "*.py"
+alwaysApply: true
+---
+
+# Python Service Coding Guidelines
+
+- Use async/await syntax for all I/O and network calls.
+- Modularize concerns: separate bot client, parser, API client, and DB layers.
+- Use type hints and docstrings on all public functions/classes.
+- Follow PEP8 style conventions strictly.
+- Gracefully handle errors with retries for transient API failures (Firecrawl, OpenRouter).
+- Validate and sanitize all user inputs before processing.
+- Use environment variables for sensitive API keys and endpoints.
+- Write unit tests and integration tests with mocked external APIs.
+- Log important events including API call success/failure.
