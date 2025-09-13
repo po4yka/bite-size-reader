@@ -71,9 +71,7 @@ Docker publishing (optional)
     - `ghcr.io/<owner>/<repo>:latest` (on main)
     - `ghcr.io/<owner>/<repo>:<git-sha>`
 
-Locked dependencies (uv or pip-tools)
-- Top-level specs live in `requirements.in` and `requirements-dev.in`.
-- Generate locked files with uv (recommended): `make lock-uv`
-  - Install uv: `curl -Ls https://astral.sh/uv/install.sh | sh`
-- Or with pip-tools: `make lock-piptools`
-  - Installs pip-tools and compiles `requirements*.in` into pinned `requirements*.txt`.
+Automated lockfile PRs
+- Workflow `.github/workflows/update-locks.yml` watches `pyproject.toml` and opens a PR to refresh `requirements*.txt` using uv.
+- Auto-merge is enabled for that PR; once CI passes, GitHub will automatically merge it.
+- You can also trigger it manually from the Actions tab.

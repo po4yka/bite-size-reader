@@ -1,0 +1,61 @@
+name: Update Lockfiles
+
+on:
+  push:
+    paths:
+      - "pyproject.toml"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  update-locks:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install uv
+        run: |
+          curl -Ls https://astral.sh/uv/install.sh | sh
+          echo "${HOME}/.local/bin" >> $GITHUB_PATH
+
+      - name: Compile locked requirements (runtime)
+        run: uv pip compile pyproject.toml -o requirements.txt
+
+      - name: Compile locked requirements (dev)
+        run: uv pip compile --extra dev pyproject.toml -o requirements-dev.txt
+
+      - name: Create Pull Request
+        id: cpr
+        uses: peter-evans/create-pull-request@v6
+        with:
+          commit-message: "chore(lock): update requirements via uv compile"
+          title: "chore(lock): update requirements"
+          body: |
+            Automated lockfile refresh from pyproject.toml.
+
+            - Updated requirements.txt and requirements-dev.txt using `uv pip compile`.
+          branch: chore/update-locks
+          delete-branch: true
+          labels: dependencies, automated pr
+          add-paths: |
+            requirements.txt
+            requirements-dev.txt
+
+      - name: Enable auto-merge for lockfile PR
+        if: ${{ steps.cpr.outputs.pull-request-number != '' }}
+        uses: peter-evans/enable-pull-request-automerge@v3
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          pull-request-number: ${{ steps.cpr.outputs.pull-request-number }}
+          merge-method: squash
