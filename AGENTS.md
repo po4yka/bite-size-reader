@@ -43,7 +43,7 @@ This repository is private and intended solely for the service owner's use.
 - `Dockerfile` — Container configuration.
 - `README.md` — Usage instructions.
 - `SPEC.md` - Project specification.
-- `requirements.txt` or `pyproject.toml` — Dependency management.
+- `pyproject.toml` — Dependency management source of truth; `requirements*.txt` are compiled lock files (uv/pip-tools).
 
 ---
 

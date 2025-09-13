@@ -7,6 +7,7 @@ Quick start
 - Build and run with Docker.
 
 Docker
+- If you updated dependencies in `pyproject.toml`, generate lock files first: `make lock-uv` (or `make lock-piptools`).
 - Build: `docker build -t bite-size-reader .`
 - Run: `docker run --env-file .env -v $(pwd)/data:/data --name bsr bite-size-reader`
 
@@ -28,3 +29,33 @@ Repository layout
 Notes
 - Dependencies include Pyrogram; if using PyroTGFork, align installation accordingly.
 - This is a skeleton implementation; handlers, retries, and persistence are minimal and should be extended per SPEC.md.
+
+Dev tooling
+- Install dev deps: `pip install -r requirements.txt -r requirements-dev.txt`
+- Format: `make format` (black + isort + ruff format)
+- Lint: `make lint` (ruff)
+- Type-check: `make type` (mypy)
+- Pre-commit: `pre-commit install` then commits will auto-run hooks
+
+Local environment
+- Create venv: `make venv` (or run `scripts/create_venv.sh`)
+- Activate: `source .venv/bin/activate`
+- Install deps: `pip install -r requirements.txt -r requirements-dev.txt`
+
+Dependency management
+- Source of truth: `pyproject.toml` ([project] deps + [project.optional-dependencies].dev).
+- Locked requirements are generated to `requirements.txt` and `requirements-dev.txt`.
+- With uv (recommended):
+  - Install: `curl -Ls https://astral.sh/uv/install.sh | sh`
+  - Lock: `make lock-uv`
+- With pip-tools:
+  - `python -m pip install pip-tools`
+  - Lock: `make lock-piptools`
+- Regenerate locks after changing dependencies in `pyproject.toml`.
+
+Locked dependencies (uv or pip-tools)
+- Top-level specs live in `requirements.in` and `requirements-dev.in`.
+- Generate locked files with uv (recommended): `make lock-uv`
+  - Install uv: `curl -Ls https://astral.sh/uv/install.sh | sh`
+- Or with pip-tools: `make lock-piptools`
+  - Installs pip-tools and compiles `requirements*.in` into pinned `requirements*.txt`.
