@@ -2,6 +2,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from typing import Any, Dict, List
+from .summary_schema import PydanticAvailable
+if PydanticAvailable:  # type: ignore
+    from .summary_schema import SummaryModel  # noqa: F401
 
 
 SummaryJSON = Dict[str, Any]
@@ -76,10 +79,60 @@ def validate_and_shape_summary(payload: SummaryJSON) -> SummaryJSON:
     except Exception:
         p["estimated_reading_time_min"] = 0
 
-    p.setdefault("key_stats", [])
+    # key_stats normalize: keep only items with label and numeric value
+    norm_stats: list[dict] = []
+    for item in p.get("key_stats", []) or []:
+        try:
+            label = str(item.get("label", "")).strip()
+            if not label:
+                continue
+            value_raw = item.get("value")
+            value = float(value_raw)
+            unit = item.get("unit")
+            source_excerpt = item.get("source_excerpt")
+            norm_stats.append({
+                "label": label,
+                "value": value,
+                "unit": str(unit) if unit is not None else None,
+                "source_excerpt": str(source_excerpt) if source_excerpt is not None else None,
+            })
+        except Exception:
+            continue
+    p["key_stats"] = norm_stats
     p.setdefault("answered_questions", [])
-    p.setdefault("readability", {"method": "Flesch-Kincaid", "score": 0.0, "level": "Unknown"})
+    # readability
+    rb = p.get("readability") or {}
+    try:
+        score = float(rb.get("score", 0.0))
+    except Exception:
+        score = 0.0
+    level = rb.get("level")
+    if not level:
+        # simple mapping
+        if score >= 90:
+            level = "Very Easy"
+        elif score >= 80:
+            level = "Easy"
+        elif score >= 70:
+            level = "Fairly Easy"
+        elif score >= 60:
+            level = "Standard"
+        elif score >= 50:
+            level = "Fairly Difficult"
+        elif score >= 30:
+            level = "Difficult"
+        else:
+            level = "Very Confusing"
+    p["readability"] = {"method": str(rb.get("method") or "Flesch-Kincaid"), "score": score, "level": level}
     p.setdefault("seo_keywords", [])
 
-    return p
-
+    # Optional strict validation via Pydantic
+    if PydanticAvailable:
+        try:
+            model = SummaryModel(**p)  # type: ignore[name-defined]
+            return model.model_dump()  # type: ignore[attr-defined]
+        except Exception:
+            # If pydantic fails, return shaped payload (still reasonably strict)
+            return p
+    else:
+        return p
