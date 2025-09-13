@@ -1,0 +1,374 @@
+from __future__ import annotations
+
+import asyncio
+import json
+import logging
+from dataclasses import dataclass
+from typing import Any
+
+from app.config import AppConfig
+from app.core.logging_utils import setup_json_logging
+from app.core.summary_contract import validate_and_shape_summary
+from app.core.url_utils import looks_like_url, normalize_url, url_hash_sha256
+from app.adapters.firecrawl_parser import FirecrawlClient
+from app.adapters.openrouter_client import OpenRouterClient
+from app.db.database import Database
+
+try:
+    from pyrogram import Client, filters
+    from pyrogram.types import Message
+except Exception:  # pragma: no cover - allow import in environments without deps
+    Client = object  # type: ignore
+    filters = None  # type: ignore
+    Message = object  # type: ignore
+
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass
+class TelegramBot:
+    cfg: AppConfig
+    db: Database
+
+    def __post_init__(self) -> None:  # type: ignore[override]
+        setup_json_logging(self.cfg.runtime.log_level)
+        logger.info("bot_init", extra={"db_path": self.cfg.runtime.db_path})
+
+        # Init clients
+        self._firecrawl = FirecrawlClient(
+            api_key=self.cfg.firecrawl.api_key,
+            timeout_sec=self.cfg.runtime.request_timeout_sec,
+            audit=self._audit,
+        )
+        self._openrouter = OpenRouterClient(
+            api_key=self.cfg.openrouter.api_key,
+            model=self.cfg.openrouter.model,
+            fallback_models=list(self.cfg.openrouter.fallback_models),
+            http_referer=self.cfg.openrouter.http_referer,
+            x_title=self.cfg.openrouter.x_title,
+            timeout_sec=self.cfg.runtime.request_timeout_sec,
+            audit=self._audit,
+        )
+
+        # Telegram client (PyroTGFork/Pyrogram)
+        if Client is object:
+            self.client = None
+        else:
+            self.client = Client(
+                name="bite_size_reader_bot",
+                api_id=self.cfg.telegram.api_id,
+                api_hash=self.cfg.telegram.api_hash,
+                bot_token=self.cfg.telegram.bot_token,
+                in_memory=True,
+            )
+
+    async def start(self) -> None:
+        if not self.client:
+            logger.warning("telegram_client_not_available")
+            return
+
+        # Register handlers only if filters are available
+        if filters:
+            @self.client.on_message(filters.private)
+            async def _handler(client: Client, message: Message):  # type: ignore[valid-type]
+                await self._on_message(message)
+
+        await self.client.start()  # type: ignore[union-attr]
+        logger.info("bot_started")
+        await idle()
+
+    async def _on_message(self, message: Any) -> None:
+        # Owner-only gate
+        uid = int(getattr(message.from_user, "id", 0))
+        if self.cfg.telegram.allowed_user_ids and uid not in self.cfg.telegram.allowed_user_ids:
+            await self._safe_reply(message, "Access denied.")
+            logger.info("access_denied", extra={"uid": uid})
+            return
+
+        text = (getattr(message, "text", None) or getattr(message, "caption", "") or "").strip()
+
+        if text and looks_like_url(text):
+            await self._handle_url_flow(message, text)
+            return
+
+        if getattr(message, "forward_from_chat", None) and getattr(message, "forward_from_message_id", None):
+            await self._handle_forward_flow(message)
+            return
+
+        await self._safe_reply(message, "Send a URL or forward a channel post.")
+
+    async def _handle_url_flow(self, message: Any, url_text: str) -> None:
+        norm = normalize_url(url_text)
+        dedupe = url_hash_sha256(norm)
+        logger.info("url_flow_detected", extra={"url": url_text, "normalized": norm, "hash": dedupe})
+        # Create request row (pending)
+        req_id = self.db.create_request(
+            type_="url",
+            status="pending",
+            chat_id=int(getattr(getattr(message, "chat", None), "id", 0)) or None,
+            user_id=int(getattr(getattr(message, "from_user", None), "id", 0)) or None,
+            input_url=url_text,
+            normalized_url=norm,
+            dedupe_hash=dedupe,
+            input_message_id=int(getattr(message, "id", getattr(message, "message_id", 0))) or None,
+            route_version=1,
+        )
+
+        # Snapshot telegram message
+        try:
+            self._persist_message_snapshot(req_id, message)
+        except Exception as e:  # noqa: BLE001
+            logger.error("snapshot_error", extra={"error": str(e)})
+
+        # Firecrawl
+        crawl = await self._firecrawl.scrape_markdown(url_text, request_id=req_id)
+        try:
+            self.db.insert_crawl_result(
+                request_id=req_id,
+                source_url=crawl.source_url,
+                endpoint=crawl.endpoint,
+                http_status=crawl.http_status,
+                status=crawl.status,
+                options_json=json.dumps(crawl.options_json or {}),
+                content_markdown=crawl.content_markdown,
+                content_html=crawl.content_html,
+                structured_json=json.dumps(crawl.structured_json or {}),
+                metadata_json=json.dumps(crawl.metadata_json or {}),
+                links_json=json.dumps(crawl.links_json or {}),
+                screenshots_paths_json=None,
+                raw_response_json=json.dumps(crawl.raw_response_json or {}),
+                latency_ms=crawl.latency_ms,
+                error_text=crawl.error_text,
+            )
+        except Exception as e:  # noqa: BLE001
+            logger.error("persist_crawl_error", extra={"error": str(e)})
+
+        if crawl.status != "ok" or not crawl.content_markdown:
+            self.db.update_request_status(req_id, "error")
+            await self._safe_reply(message, "Failed to fetch content.")
+            logger.error("firecrawl_error", extra={"error": crawl.error_text})
+            return
+
+        # LLM
+        messages = [
+            {"role": "system", "content": "You are a concise summarizer. Return only the JSON object requested."},
+            {"role": "user", "content": f"Summarize the following content to the JSON schema described previously.\n\n{crawl.content_markdown}"},
+        ]
+        llm = await self._openrouter.chat(messages, request_id=req_id)
+        try:
+            self.db.insert_llm_call(
+                request_id=req_id,
+                provider="openrouter",
+                model=llm.model or self.cfg.openrouter.model,
+                endpoint=llm.endpoint,
+                request_headers_json=json.dumps(llm.request_headers or {}),
+                request_messages_json=json.dumps(llm.request_messages or []),
+                response_text=llm.response_text,
+                response_json=json.dumps(llm.response_json or {}),
+                tokens_prompt=llm.tokens_prompt,
+                tokens_completion=llm.tokens_completion,
+                cost_usd=llm.cost_usd,
+                latency_ms=llm.latency_ms,
+                status=llm.status,
+                error_text=llm.error_text,
+            )
+        except Exception as e:  # noqa: BLE001
+            logger.error("persist_llm_error", extra={"error": str(e)})
+
+        if llm.status != "ok" or not llm.response_text:
+            self.db.update_request_status(req_id, "error")
+            await self._safe_reply(message, "LLM error.")
+            logger.error("openrouter_error", extra={"error": llm.error_text})
+            return
+
+        # Best-effort parse + validate
+        try:
+            raw = llm.response_text.strip().strip("` ")
+            summary_json = json.loads(raw)
+        except Exception:
+            start = llm.response_text.find("{")
+            end = llm.response_text.rfind("}")
+            if start == -1 or end == -1 or end <= start:
+                self.db.update_request_status(req_id, "error")
+                await self._safe_reply(message, "Invalid summary format.")
+                return
+            summary_json = json.loads(llm.response_text[start : end + 1])
+
+        shaped = validate_and_shape_summary(summary_json)
+        try:
+            self.db.insert_summary(request_id=req_id, lang="auto", json_payload=json.dumps(shaped), version=1)
+            self.db.update_request_status(req_id, "ok")
+        except Exception as e:  # noqa: BLE001
+            logger.error("persist_summary_error", extra={"error": str(e)})
+        await self._reply_json(message, shaped)
+
+    async def _handle_forward_flow(self, message: Any) -> None:
+        text = (getattr(message, "text", None) or getattr(message, "caption", "") or "").strip()
+        title = getattr(getattr(message, "forward_from_chat", None), "title", "")
+        prompt = f"Channel: {title}\n\n{text}"
+
+        # Create request row (pending)
+        req_id = self.db.create_request(
+            type_="forward",
+            status="pending",
+            chat_id=int(getattr(getattr(message, "chat", None), "id", 0)) or None,
+            user_id=int(getattr(getattr(message, "from_user", None), "id", 0)) or None,
+            input_message_id=int(getattr(message, "id", getattr(message, "message_id", 0))) or None,
+            fwd_from_chat_id=int(getattr(getattr(message, "forward_from_chat", None), "id", 0)) or None,
+            fwd_from_msg_id=int(getattr(message, "forward_from_message_id", 0)) or None,
+            route_version=1,
+        )
+
+        # Snapshot telegram message
+        try:
+            self._persist_message_snapshot(req_id, message)
+        except Exception as e:  # noqa: BLE001
+            logger.error("snapshot_error", extra={"error": str(e)})
+
+        messages = [
+            {"role": "system", "content": "You are a concise summarizer. Return only the JSON object requested."},
+            {"role": "user", "content": f"Summarize the following message to the JSON schema described previously.\n\n{prompt}"},
+        ]
+        llm = await self._openrouter.chat(messages, request_id=req_id)
+        if llm.status != "ok" or not llm.response_text:
+            # persist LLM call as error, then reply
+            try:
+                self.db.insert_llm_call(
+                    request_id=req_id,
+                    provider="openrouter",
+                    model=llm.model or self.cfg.openrouter.model,
+                    endpoint=llm.endpoint,
+                    request_headers_json=json.dumps(llm.request_headers or {}),
+                    request_messages_json=json.dumps(llm.request_messages or []),
+                    response_text=llm.response_text,
+                    response_json=json.dumps(llm.response_json or {}),
+                    tokens_prompt=llm.tokens_prompt,
+                    tokens_completion=llm.tokens_completion,
+                    cost_usd=llm.cost_usd,
+                    latency_ms=llm.latency_ms,
+                    status=llm.status,
+                    error_text=llm.error_text,
+                )
+            except Exception as e:  # noqa: BLE001
+                logger.error("persist_llm_error", extra={"error": str(e)})
+            self.db.update_request_status(req_id, "error")
+            await self._safe_reply(message, "LLM error.")
+            logger.error("openrouter_error", extra={"error": llm.error_text})
+            return
+
+        try:
+            raw = llm.response_text.strip().strip("` ")
+            summary_json = json.loads(raw)
+        except Exception:
+            start = llm.response_text.find("{")
+            end = llm.response_text.rfind("}")
+            if start == -1 or end == -1 or end <= start:
+                self.db.update_request_status(req_id, "error")
+                await self._safe_reply(message, "Invalid summary format.")
+                return
+            summary_json = json.loads(llm.response_text[start : end + 1])
+
+        shaped = validate_and_shape_summary(summary_json)
+        try:
+            self.db.insert_llm_call(
+                request_id=req_id,
+                provider="openrouter",
+                model=llm.model or self.cfg.openrouter.model,
+                endpoint=llm.endpoint,
+                request_headers_json=json.dumps(llm.request_headers or {}),
+                request_messages_json=json.dumps([m for m in messages]),
+                response_text=llm.response_text,
+                response_json=json.dumps(llm.response_json or {}),
+                tokens_prompt=llm.tokens_prompt,
+                tokens_completion=llm.tokens_completion,
+                cost_usd=llm.cost_usd,
+                latency_ms=llm.latency_ms,
+                status=llm.status,
+                error_text=llm.error_text,
+            )
+        except Exception as e:  # noqa: BLE001
+            logger.error("persist_llm_error", extra={"error": str(e)})
+
+        try:
+            self.db.insert_summary(request_id=req_id, lang="auto", json_payload=json.dumps(shaped), version=1)
+            self.db.update_request_status(req_id, "ok")
+        except Exception as e:  # noqa: BLE001
+            logger.error("persist_summary_error", extra={"error": str(e)})
+        await self._reply_json(message, shaped)
+
+    async def _reply_json(self, message: Any, obj: dict) -> None:
+        pretty = json.dumps(obj, ensure_ascii=False, indent=2)
+        await self._safe_reply(message, f"```\n{pretty}\n```")
+
+    async def _safe_reply(self, message: Any, text: str) -> None:
+        try:
+            await message.reply_text(text)  # type: ignore[union-attr]
+        except Exception as e:  # noqa: BLE001
+            logger.error("reply_failed", extra={"error": str(e)})
+
+    def _persist_message_snapshot(self, request_id: int, message: Any) -> None:
+        # Extract basic fields with best-effort approach
+        msg_id = int(getattr(message, "id", getattr(message, "message_id", 0))) or None
+        chat_id = int(getattr(getattr(message, "chat", None), "id", 0)) or None
+        date_ts = int(getattr(message, "date", getattr(message, "forward_date", 0)) or 0) or None
+        text_full = (getattr(message, "text", None) or getattr(message, "caption", "") or None)
+
+        # Entities
+        entities_obj = getattr(message, "entities", None) or []
+        try:
+            entities_json = json.dumps([getattr(e, "__dict__", {}) for e in entities_obj])
+        except Exception:
+            entities_json = None
+
+        media_type = None
+        media_file_ids_json = None
+
+        # Forward info
+        fwd_chat = getattr(message, "forward_from_chat", None)
+        forward_from_chat_id = int(getattr(fwd_chat, "id", 0)) or None
+        forward_from_chat_type = getattr(fwd_chat, "type", None)
+        forward_from_chat_title = getattr(fwd_chat, "title", None)
+        forward_from_message_id = int(getattr(message, "forward_from_message_id", 0)) or None
+        forward_date_ts = int(getattr(message, "forward_date", 0)) or None
+
+        # Raw JSON if possible
+        raw_json = None
+        try:
+            to_dict = getattr(message, "_", None)
+            if hasattr(message, "to_dict"):
+                raw_json = json.dumps(message.to_dict())  # type: ignore[attr-defined]
+        except Exception:
+            raw_json = None
+
+        self.db.insert_telegram_message(
+            request_id=request_id,
+            message_id=msg_id,
+            chat_id=chat_id,
+            date_ts=date_ts,
+            text_full=text_full,
+            entities_json=entities_json,
+            media_type=media_type,
+            media_file_ids_json=media_file_ids_json,
+            forward_from_chat_id=forward_from_chat_id,
+            forward_from_chat_type=forward_from_chat_type,
+            forward_from_chat_title=forward_from_chat_title,
+            forward_from_message_id=forward_from_message_id,
+            forward_date_ts=forward_date_ts,
+            telegram_raw_json=raw_json,
+        )
+
+    def _audit(self, level: str, event: str, details: dict) -> None:
+        try:
+            self.db.insert_audit_log(level=level, event=event, details_json=json.dumps(details, ensure_ascii=False))
+        except Exception as e:  # noqa: BLE001
+            logger.error("audit_persist_failed", extra={"error": str(e), "event": event})
+
+
+async def idle() -> None:
+    # Simple idle loop to keep the client running
+    try:
+        while True:
+            await asyncio.sleep(3600)
+    except asyncio.CancelledError:  # pragma: no cover
+        return
