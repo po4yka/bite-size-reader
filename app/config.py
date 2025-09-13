@@ -31,6 +31,7 @@ class RuntimeConfig:
     db_path: str
     log_level: str
     request_timeout_sec: int
+    preferred_lang: str
 
 
 @dataclass(frozen=True)
@@ -90,6 +91,7 @@ def load_config() -> AppConfig:
         db_path=os.getenv("DB_PATH", "/data/app.db"),
         log_level=os.getenv("LOG_LEVEL", "INFO"),
         request_timeout_sec=int(os.getenv("REQUEST_TIMEOUT_SEC", "60")),
+        preferred_lang=os.getenv("PREFERRED_LANG", "auto"),
     )
 
     return AppConfig(

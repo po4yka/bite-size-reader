@@ -185,6 +185,9 @@ class Database:
     def update_request_status(self, request_id: int, status: str) -> None:
         self.execute("UPDATE requests SET status = ? WHERE id = ?", (status, request_id))
 
+    def update_request_lang_detected(self, request_id: int, lang: str | None) -> None:
+        self.execute("UPDATE requests SET lang_detected = ? WHERE id = ?", (lang, request_id))
+
     def insert_telegram_message(
         self,
         *,

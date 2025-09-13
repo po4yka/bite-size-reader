@@ -15,6 +15,7 @@ Environment
 - `FIRECRAWL_API_KEY`
 - `OPENROUTER_API_KEY`, `OPENROUTER_MODEL`, `OPENROUTER_HTTP_REFERER`, `OPENROUTER_X_TITLE`
 - `DB_PATH=/data/app.db`, `LOG_LEVEL=INFO`, `REQUEST_TIMEOUT_SEC=60`
+- `PREFERRED_LANG=auto` (auto|en|ru)
 
 Repository layout
 - `app/core` — URL normalization, summary contract, logging utils

@@ -10,6 +10,7 @@ from app.config import AppConfig
 from app.core.logging_utils import setup_json_logging
 from app.core.summary_contract import validate_and_shape_summary
 from app.core.url_utils import looks_like_url, normalize_url, url_hash_sha256
+from app.core.lang import detect_language, choose_language, LANG_EN, LANG_RU
 from app.adapters.firecrawl_parser import FirecrawlClient
 from app.adapters.openrouter_client import OpenRouterClient
 from app.db.database import Database
@@ -150,10 +151,25 @@ class TelegramBot:
             logger.error("firecrawl_error", extra={"error": crawl.error_text})
             return
 
+        # Language detection and choice
+        detected = detect_language(crawl.content_markdown or "")
+        try:
+            self.db.update_request_lang_detected(req_id, detected)
+        except Exception as e:  # noqa: BLE001
+            logger.error("persist_lang_detected_error", extra={"error": str(e)})
+        chosen_lang = choose_language(self.cfg.runtime.preferred_lang, detected)
+        system_prompt = await self._load_system_prompt(chosen_lang)
+
         # LLM
         messages = [
-            {"role": "system", "content": "You are a concise summarizer. Return only the JSON object requested."},
-            {"role": "user", "content": f"Summarize the following content to the JSON schema described previously.\n\n{crawl.content_markdown}"},
+            {"role": "system", "content": system_prompt},
+            {
+                "role": "user",
+                "content": (
+                    f"Summarize the following content to the specified JSON schema. "
+                    f"Respond in {'Russian' if chosen_lang == LANG_RU else 'English'}.\n\n{crawl.content_markdown}"
+                ),
+            },
         ]
         llm = await self._openrouter.chat(messages, request_id=req_id)
         try:
@@ -197,7 +213,7 @@ class TelegramBot:
 
         shaped = validate_and_shape_summary(summary_json)
         try:
-            self.db.insert_summary(request_id=req_id, lang="auto", json_payload=json.dumps(shaped), version=1)
+            self.db.insert_summary(request_id=req_id, lang=chosen_lang, json_payload=json.dumps(shaped), version=URL_ROUTE_VERSION)
             self.db.update_request_status(req_id, "ok")
         except Exception as e:  # noqa: BLE001
             logger.error("persist_summary_error", extra={"error": str(e)})
@@ -207,6 +223,14 @@ class TelegramBot:
         text = (getattr(message, "text", None) or getattr(message, "caption", "") or "").strip()
         title = getattr(getattr(message, "forward_from_chat", None), "title", "")
         prompt = f"Channel: {title}\n\n{text}"
+
+        detected = detect_language(text)
+        try:
+            self.db.update_request_lang_detected(req_id, detected)
+        except Exception as e:  # noqa: BLE001
+            logger.error("persist_lang_detected_error", extra={"error": str(e)})
+        chosen_lang = choose_language(self.cfg.runtime.preferred_lang, detected)
+        system_prompt = await self._load_system_prompt(chosen_lang)
 
         # Create request row (pending)
         req_id = self.db.create_request(
@@ -227,8 +251,14 @@ class TelegramBot:
             logger.error("snapshot_error", extra={"error": str(e)})
 
         messages = [
-            {"role": "system", "content": "You are a concise summarizer. Return only the JSON object requested."},
-            {"role": "user", "content": f"Summarize the following message to the JSON schema described previously.\n\n{prompt}"},
+            {"role": "system", "content": system_prompt},
+            {
+                "role": "user",
+                "content": (
+                    f"Summarize the following message to the specified JSON schema. "
+                    f"Respond in {'Russian' if chosen_lang == LANG_RU else 'English'}.\n\n{prompt}"
+                ),
+            },
         ]
         llm = await self._openrouter.chat(messages, request_id=req_id)
         if llm.status != "ok" or not llm.response_text:
@@ -291,7 +321,7 @@ class TelegramBot:
             logger.error("persist_llm_error", extra={"error": str(e)})
 
         try:
-            self.db.insert_summary(request_id=req_id, lang="auto", json_payload=json.dumps(shaped), version=1)
+            self.db.insert_summary(request_id=req_id, lang=chosen_lang, json_payload=json.dumps(shaped), version=FORWARD_ROUTE_VERSION)
             self.db.update_request_status(req_id, "ok")
         except Exception as e:  # noqa: BLE001
             logger.error("persist_summary_error", extra={"error": str(e)})
@@ -363,6 +393,23 @@ class TelegramBot:
             self.db.insert_audit_log(level=level, event=event, details_json=json.dumps(details, ensure_ascii=False))
         except Exception as e:  # noqa: BLE001
             logger.error("audit_persist_failed", extra={"error": str(e), "event": event})
+
+    async def _load_system_prompt(self, lang: str) -> str:
+        # Load prompt file based on language
+        from pathlib import Path
+
+        base = Path(__file__).resolve().parents[1] / "prompts"
+        fname = "summary_system_ru.txt" if lang == LANG_RU else "summary_system_en.txt"
+        path = base / fname
+        try:
+            return path.read_text(encoding="utf-8").strip()
+        except Exception:
+            # Fallback inline prompt
+            return "You are a precise assistant that returns only a strict JSON object matching the provided schema."
+
+# Route versioning constants
+URL_ROUTE_VERSION = 1
+FORWARD_ROUTE_VERSION = 1
 
 
 async def idle() -> None:
