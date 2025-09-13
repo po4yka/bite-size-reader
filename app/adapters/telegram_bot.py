@@ -7,9 +7,9 @@ from dataclasses import dataclass
 from typing import Any
 
 from app.config import AppConfig
-from app.core.logging_utils import setup_json_logging
+from app.core.logging_utils import setup_json_logging, generate_correlation_id
 from app.core.summary_contract import validate_and_shape_summary
-from app.core.url_utils import looks_like_url, normalize_url, url_hash_sha256
+from app.core.url_utils import looks_like_url, normalize_url, url_hash_sha256, extract_first_url
 from app.core.lang import detect_language, choose_language, LANG_EN, LANG_RU
 from app.adapters.firecrawl_parser import FirecrawlClient
 from app.adapters.openrouter_client import OpenRouterClient
@@ -63,6 +63,8 @@ class TelegramBot:
                 bot_token=self.cfg.telegram.bot_token,
                 in_memory=True,
             )
+        # simple in-memory state: users awaiting a URL after /summarize
+        self._awaiting_url_users: set[int] = set()
 
     async def start(self) -> None:
         if not self.client:
@@ -80,39 +82,100 @@ class TelegramBot:
         await idle()
 
     async def _on_message(self, message: Any) -> None:
-        # Owner-only gate
-        uid = int(getattr(message.from_user, "id", 0))
-        if self.cfg.telegram.allowed_user_ids and uid not in self.cfg.telegram.allowed_user_ids:
-            await self._safe_reply(message, "Access denied.")
-            logger.info("access_denied", extra={"uid": uid})
-            return
+        try:
+            correlation_id = generate_correlation_id()
+            # Owner-only gate
+            uid = int(getattr(message.from_user, "id", 0))
+            if self.cfg.telegram.allowed_user_ids and uid not in self.cfg.telegram.allowed_user_ids:
+                await self._safe_reply(message, "Access denied.")
+                logger.info("access_denied", extra={"uid": uid, "cid": correlation_id})
+                return
 
-        text = (getattr(message, "text", None) or getattr(message, "caption", "") or "").strip()
+            text = (getattr(message, "text", None) or getattr(message, "caption", "") or "").strip()
 
-        if text and looks_like_url(text):
-            await self._handle_url_flow(message, text)
-            return
+            # Commands
+            if text.startswith("/help") or text.startswith("/start"):
+                await self._send_help(message)
+                return
 
-        if getattr(message, "forward_from_chat", None) and getattr(message, "forward_from_message_id", None):
-            await self._handle_forward_flow(message)
-            return
+            if text.startswith("/summarize"):
+                # If URL is in the same message, extract and process; otherwise set awaiting state
+                url = extract_first_url(text)
+                if url:
+                    await self._handle_url_flow(message, url, correlation_id=correlation_id)
+                else:
+                    self._awaiting_url_users.add(uid)
+                    await self._safe_reply(message, "Send a URL to summarize.")
+                return
 
-        await self._safe_reply(message, "Send a URL or forward a channel post.")
+            # If awaiting a URL due to prior /summarize
+            if uid in self._awaiting_url_users and looks_like_url(text):
+                url = extract_first_url(text)
+                if url:
+                    self._awaiting_url_users.discard(uid)
+                    await self._handle_url_flow(message, url, correlation_id=correlation_id)
+                    return
 
-    async def _handle_url_flow(self, message: Any, url_text: str) -> None:
+            if text and looks_like_url(text):
+                url = extract_first_url(text)
+                if url:
+                    await self._handle_url_flow(message, url, correlation_id=correlation_id)
+                return
+
+            if getattr(message, "forward_from_chat", None) and getattr(message, "forward_from_message_id", None):
+                await self._handle_forward_flow(message, correlation_id=correlation_id)
+                return
+
+            await self._safe_reply(message, "Send a URL or forward a channel post.")
+        except Exception as e:  # noqa: BLE001
+            logger.exception("handler_error", extra={"cid": correlation_id})
+            try:
+                self._audit("ERROR", "unhandled_error", {"cid": correlation_id, "error": str(e)})
+            except Exception:
+                pass
+            await self._safe_reply(
+                message,
+                f"An unexpected error occurred. Error ID: {correlation_id}. Please try again.",
+            )
+
+    async def _send_help(self, message: Any) -> None:
+        help_text = (
+            "Bite-Size Reader\n\n"
+            "Commands:\n"
+            "- /help — show this help.\n"
+            "- /summarize <URL> — summarize a URL.\n\n"
+            "Usage:\n"
+            "- Send a URL, or forward a channel post to get a JSON summary.\n"
+            "- You can also send /summarize and then a URL in the next message."
+        )
+        await self._safe_reply(message, help_text)
+
+    async def _handle_url_flow(self, message: Any, url_text: str, *, correlation_id: str | None = None) -> None:
         norm = normalize_url(url_text)
         dedupe = url_hash_sha256(norm)
-        logger.info("url_flow_detected", extra={"url": url_text, "normalized": norm, "hash": dedupe})
+        logger.info(
+            "url_flow_detected", extra={"url": url_text, "normalized": norm, "hash": dedupe, "cid": correlation_id}
+        )
         # Dedupe check
         existing_req = self.db.get_request_by_dedupe_hash(dedupe)
         if existing_req:
             req_id = int(existing_req["id"])  # reuse existing request
-            self._audit("INFO", "url_dedupe_hit", {"request_id": req_id, "hash": dedupe, "url": url_text})
+            self._audit(
+                "INFO",
+                "url_dedupe_hit",
+                {"request_id": req_id, "hash": dedupe, "url": url_text, "cid": correlation_id},
+            )
+            if correlation_id:
+                try:
+                    self.db.update_request_correlation_id(req_id, correlation_id)
+                except Exception as e:  # noqa: BLE001
+                    logger.error("persist_cid_error", extra={"error": str(e), "cid": correlation_id})
         else:
             # Create request row (pending)
             req_id = self.db.create_request(
                 type_="url",
                 status="pending",
+                correlation_id=correlation_id,
                 chat_id=int(getattr(getattr(message, "chat", None), "id", 0)) or None,
                 user_id=int(getattr(getattr(message, "from_user", None), "id", 0)) or None,
                 input_url=url_text,
@@ -126,13 +189,13 @@ class TelegramBot:
             try:
                 self._persist_message_snapshot(req_id, message)
             except Exception as e:  # noqa: BLE001
-                logger.error("snapshot_error", extra={"error": str(e)})
+                logger.error("snapshot_error", extra={"error": str(e), "cid": correlation_id})
 
         # Firecrawl or reuse existing crawl result
         existing_crawl = self.db.get_crawl_result_by_request(req_id)
         if existing_crawl and existing_crawl.get("content_markdown"):
             content_markdown = existing_crawl["content_markdown"]
-            self._audit("INFO", "reuse_crawl_result", {"request_id": req_id})
+            self._audit("INFO", "reuse_crawl_result", {"request_id": req_id, "cid": correlation_id})
         else:
             crawl = await self._firecrawl.scrape_markdown(url_text, request_id=req_id)
             try:
@@ -154,12 +217,23 @@ class TelegramBot:
                     error_text=crawl.error_text,
                 )
             except Exception as e:  # noqa: BLE001
-                logger.error("persist_crawl_error", extra={"error": str(e)})
+                logger.error("persist_crawl_error", extra={"error": str(e), "cid": correlation_id})
 
             if crawl.status != "ok" or not crawl.content_markdown:
                 self.db.update_request_status(req_id, "error")
-                await self._safe_reply(message, "Failed to fetch content.")
-                logger.error("firecrawl_error", extra={"error": crawl.error_text})
+                await self._safe_reply(
+                    message,
+                    f"Failed to fetch content. Error ID: {correlation_id}",
+                )
+                logger.error("firecrawl_error", extra={"error": crawl.error_text, "cid": correlation_id})
+                try:
+                    self._audit(
+                        "ERROR",
+                        "firecrawl_error",
+                        {"request_id": req_id, "cid": correlation_id, "error": crawl.error_text},
+                    )
+                except Exception:
+                    pass
                 return
             content_markdown = crawl.content_markdown or ""
 
@@ -202,12 +276,20 @@ class TelegramBot:
                 error_text=llm.error_text,
             )
         except Exception as e:  # noqa: BLE001
-            logger.error("persist_llm_error", extra={"error": str(e)})
+            logger.error("persist_llm_error", extra={"error": str(e), "cid": correlation_id})
 
         if llm.status != "ok" or not llm.response_text:
             self.db.update_request_status(req_id, "error")
-            await self._safe_reply(message, "LLM error.")
-            logger.error("openrouter_error", extra={"error": llm.error_text})
+            await self._safe_reply(message, f"LLM error. Error ID: {correlation_id}")
+            logger.error("openrouter_error", extra={"error": llm.error_text, "cid": correlation_id})
+            try:
+                self._audit(
+                    "ERROR",
+                    "openrouter_error",
+                    {"request_id": req_id, "cid": correlation_id, "error": llm.error_text},
+                )
+            except Exception:
+                pass
             return
 
         # Best-effort parse + validate
@@ -219,7 +301,9 @@ class TelegramBot:
             end = llm.response_text.rfind("}")
             if start == -1 or end == -1 or end <= start:
                 self.db.update_request_status(req_id, "error")
-                await self._safe_reply(message, "Invalid summary format.")
+                await self._safe_reply(
+                    message, f"Invalid summary format. Error ID: {correlation_id}"
+                )
                 return
             summary_json = json.loads(llm.response_text[start : end + 1])
 
@@ -229,10 +313,10 @@ class TelegramBot:
             self.db.update_request_status(req_id, "ok")
             self._audit("INFO", "summary_upserted", {"request_id": req_id, "version": new_version})
         except Exception as e:  # noqa: BLE001
-            logger.error("persist_summary_error", extra={"error": str(e)})
+            logger.error("persist_summary_error", extra={"error": str(e), "cid": correlation_id})
         await self._reply_json(message, shaped)
 
-    async def _handle_forward_flow(self, message: Any) -> None:
+    async def _handle_forward_flow(self, message: Any, *, correlation_id: str | None = None) -> None:
         text = (getattr(message, "text", None) or getattr(message, "caption", "") or "").strip()
         title = getattr(getattr(message, "forward_from_chat", None), "title", "")
         prompt = f"Channel: {title}\n\n{text}"
@@ -249,6 +333,7 @@ class TelegramBot:
         req_id = self.db.create_request(
             type_="forward",
             status="pending",
+            correlation_id=correlation_id,
             chat_id=int(getattr(getattr(message, "chat", None), "id", 0)) or None,
             user_id=int(getattr(getattr(message, "from_user", None), "id", 0)) or None,
             input_message_id=int(getattr(message, "id", getattr(message, "message_id", 0))) or None,
@@ -294,10 +379,18 @@ class TelegramBot:
                     error_text=llm.error_text,
                 )
             except Exception as e:  # noqa: BLE001
-                logger.error("persist_llm_error", extra={"error": str(e)})
+                logger.error("persist_llm_error", extra={"error": str(e), "cid": correlation_id})
             self.db.update_request_status(req_id, "error")
-            await self._safe_reply(message, "LLM error.")
-            logger.error("openrouter_error", extra={"error": llm.error_text})
+            await self._safe_reply(message, f"LLM error. Error ID: {correlation_id}")
+            logger.error("openrouter_error", extra={"error": llm.error_text, "cid": correlation_id})
+            try:
+                self._audit(
+                    "ERROR",
+                    "openrouter_error",
+                    {"request_id": req_id, "cid": correlation_id, "error": llm.error_text},
+                )
+            except Exception:
+                pass
             return
 
         try:
@@ -308,7 +401,9 @@ class TelegramBot:
             end = llm.response_text.rfind("}")
             if start == -1 or end == -1 or end <= start:
                 self.db.update_request_status(req_id, "error")
-                await self._safe_reply(message, "Invalid summary format.")
+                await self._safe_reply(
+                    message, f"Invalid summary format. Error ID: {correlation_id}"
+                )
                 return
             summary_json = json.loads(llm.response_text[start : end + 1])
 
@@ -331,14 +426,14 @@ class TelegramBot:
                 error_text=llm.error_text,
             )
         except Exception as e:  # noqa: BLE001
-            logger.error("persist_llm_error", extra={"error": str(e)})
+            logger.error("persist_llm_error", extra={"error": str(e), "cid": correlation_id})
 
         try:
             new_version = self.db.upsert_summary(request_id=req_id, lang=chosen_lang, json_payload=json.dumps(shaped))
             self.db.update_request_status(req_id, "ok")
             self._audit("INFO", "summary_upserted", {"request_id": req_id, "version": new_version})
         except Exception as e:  # noqa: BLE001
-            logger.error("persist_summary_error", extra={"error": str(e)})
+            logger.error("persist_summary_error", extra={"error": str(e), "cid": correlation_id})
         await self._reply_json(message, shaped)
 
     async def _reply_json(self, message: Any, obj: dict) -> None:

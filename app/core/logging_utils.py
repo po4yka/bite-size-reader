@@ -4,6 +4,7 @@ import json
 import logging
 import sys
 from typing import Any
+import uuid
 
 
 class JsonFormatter(logging.Formatter):
@@ -37,3 +38,7 @@ def setup_json_logging(level: str = "INFO") -> None:
     root.handlers.clear()
     root.addHandler(handler)
 
+
+def generate_correlation_id() -> str:
+    """Generate a short correlation ID for tracing errors across logs and user messages."""
+    return uuid.uuid4().hex[:12]

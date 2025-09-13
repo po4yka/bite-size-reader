@@ -62,7 +62,7 @@ class TestMediaSnapshot(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.db_path = os.path.join(self.tmp.name, "app.db")
         self.bot, self.db = _bot_with_tmpdb(self.db_path)
-        self.req_id = self.db.create_request(type_="forward", status="pending", chat_id=1, user_id=1, route_version=1)
+        self.req_id = self.db.create_request(type_="forward", status="pending", correlation_id=None, chat_id=1, user_id=1, route_version=1)
 
     def tearDown(self):
         self.tmp.cleanup()

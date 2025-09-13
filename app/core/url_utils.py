@@ -54,3 +54,8 @@ def looks_like_url(text: str) -> bool:
     pattern = re.compile(r"https?://[\w\.-]+[\w\./\-?=&%#]*", re.IGNORECASE)
     return bool(pattern.search(text))
 
+
+def extract_first_url(text: str) -> str | None:
+    pattern = re.compile(r"https?://[\w\.-]+[\w\./\-?=&%#]*", re.IGNORECASE)
+    m = pattern.search(text)
+    return m.group(0) if m else None

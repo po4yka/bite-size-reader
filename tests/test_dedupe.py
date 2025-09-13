@@ -63,6 +63,7 @@ class TestDedupeReuse(unittest.IsolatedAsyncioTestCase):
             req_id = db.create_request(
                 type_="url",
                 status="pending",
+                correlation_id="initcid",
                 chat_id=1,
                 user_id=1,
                 input_url=url,
@@ -109,18 +110,22 @@ class TestDedupeReuse(unittest.IsolatedAsyncioTestCase):
 
             msg = FakeMessage()
             # First run: should reuse crawl and insert summary version 1
-            await bot._handle_url_flow(msg, url)
+            await bot._handle_url_flow(msg, url, correlation_id="cid1")
             s1 = db.get_summary_by_request(req_id)
             self.assertIsNotNone(s1)
             self.assertEqual(int(s1["version"]), 1)
+            # correlation id updated
+            row = db.get_request_by_dedupe_hash(dedupe)
+            self.assertEqual(row["correlation_id"], "cid1")
 
             # Second run: dedupe again; summary version should increment
-            await bot._handle_url_flow(msg, url)
+            await bot._handle_url_flow(msg, url, correlation_id="cid2")
             s2 = db.get_summary_by_request(req_id)
             self.assertIsNotNone(s2)
             self.assertEqual(int(s2["version"]), 2)
+            row2 = db.get_request_by_dedupe_hash(dedupe)
+            self.assertEqual(row2["correlation_id"], "cid2")
 
 
 if __name__ == "__main__":
     unittest.main()
-

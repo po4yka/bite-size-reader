@@ -29,6 +29,7 @@ CREATE TABLE IF NOT EXISTS requests (
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   type TEXT NOT NULL,
   status TEXT NOT NULL DEFAULT 'pending',
+  correlation_id TEXT,
   chat_id INTEGER,
   user_id INTEGER,
   input_url TEXT,
@@ -131,7 +132,15 @@ class Database:
     def migrate(self) -> None:
         with self.connect() as conn:
             conn.executescript(SCHEMA_SQL)
+            # Ensure backward-compatible schema updates
+            self._ensure_column(conn, "requests", "correlation_id", "TEXT")
             conn.commit()
+
+    def _ensure_column(self, conn: sqlite3.Connection, table: str, column: str, coltype: str) -> None:
+        cur = conn.execute(f"PRAGMA table_info({table})")
+        cols = [row[1] for row in cur.fetchall()]
+        if column not in cols:
+            conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {coltype}")
 
     def execute(self, sql: str, params: Iterable | None = None) -> None:
         with self.connect() as conn:
@@ -163,6 +172,7 @@ class Database:
         *,
         type_: str,
         status: str,
+        correlation_id: str | None,
         chat_id: int | None,
         user_id: int | None,
         input_url: str | None = None,
@@ -175,9 +185,9 @@ class Database:
         route_version: int = 1,
     ) -> int:
         sql = (
-            "INSERT INTO requests (type, status, chat_id, user_id, input_url, normalized_url, dedupe_hash, "
+            "INSERT INTO requests (type, status, correlation_id, chat_id, user_id, input_url, normalized_url, dedupe_hash, "
             "input_message_id, fwd_from_chat_id, fwd_from_msg_id, lang_detected, route_version) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
         )
         with self.connect() as conn:
             cur = conn.execute(
@@ -185,6 +195,7 @@ class Database:
                 (
                     type_,
                     status,
+                    correlation_id,
                     chat_id,
                     user_id,
                     input_url,
@@ -202,6 +213,9 @@ class Database:
 
     def update_request_status(self, request_id: int, status: str) -> None:
         self.execute("UPDATE requests SET status = ? WHERE id = ?", (status, request_id))
+
+    def update_request_correlation_id(self, request_id: int, correlation_id: str) -> None:
+        self.execute("UPDATE requests SET correlation_id = ? WHERE id = ?", (correlation_id, request_id))
 
     def update_request_lang_detected(self, request_id: int, lang: str | None) -> None:
         self.execute("UPDATE requests SET lang_detected = ? WHERE id = ?", (lang, request_id))

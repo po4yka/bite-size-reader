@@ -20,6 +20,7 @@ class TestDatabaseHelpers(unittest.TestCase):
         rid = self.db.create_request(
             type_="url",
             status="pending",
+            correlation_id="abc123",
             chat_id=100,
             user_id=200,
             input_url="https://example.com",
@@ -32,16 +33,19 @@ class TestDatabaseHelpers(unittest.TestCase):
         self.assertIsNotNone(row)
         self.assertEqual(row["id"], rid)
         self.assertEqual(row["status"], "pending")
+        self.assertEqual(row["correlation_id"], "abc123")
 
         # Update status and lang
         self.db.update_request_status(rid, "ok")
         self.db.update_request_lang_detected(rid, "en")
+        self.db.update_request_correlation_id(rid, "zzz999")
         row2 = self.db.get_request_by_dedupe_hash("abc")
         self.assertEqual(row2["status"], "ok")
         self.assertEqual(row2["lang_detected"], "en")
+        self.assertEqual(row2["correlation_id"], "zzz999")
 
     def test_crawl_result_helpers(self):
-        rid = self.db.create_request(type_="url", status="pending", chat_id=None, user_id=None, route_version=1)
+        rid = self.db.create_request(type_="url", status="pending", correlation_id=None, chat_id=None, user_id=None, route_version=1)
         cid = self.db.insert_crawl_result(
             request_id=rid,
             source_url="https://example.com",
@@ -66,7 +70,7 @@ class TestDatabaseHelpers(unittest.TestCase):
         self.assertEqual(row["content_markdown"], "# md")
 
     def test_summary_upsert(self):
-        rid = self.db.create_request(type_="url", status="pending", chat_id=None, user_id=None, route_version=1)
+        rid = self.db.create_request(type_="url", status="pending", correlation_id=None, chat_id=None, user_id=None, route_version=1)
         v1 = self.db.upsert_summary(request_id=rid, lang="en", json_payload=json.dumps({"a": 1}))
         self.assertEqual(v1, 1)
         row = self.db.get_summary_by_request(rid)
@@ -80,7 +84,7 @@ class TestDatabaseHelpers(unittest.TestCase):
         self.assertEqual(row2["version"], 2)
 
     def test_insert_llm_and_telegram_and_audit(self):
-        rid = self.db.create_request(type_="forward", status="pending", chat_id=1, user_id=2, route_version=1)
+        rid = self.db.create_request(type_="forward", status="pending", correlation_id=None, chat_id=1, user_id=2, route_version=1)
         # Telegram message
         mid = self.db.insert_telegram_message(
             request_id=rid,
@@ -136,4 +140,3 @@ class TestDatabaseHelpers(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-
