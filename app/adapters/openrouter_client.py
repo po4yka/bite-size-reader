@@ -206,8 +206,9 @@ class OpenRouterClient:
 
 
 async def asyncio_sleep_backoff(base: float, attempt: int) -> None:
-    # Exponential backoff without jitter: base * 2^attempt
-    import asyncio
+    # Exponential backoff with light jitter: (base * 2^attempt) * (1 +/- 0.25)
+    import asyncio, random
 
-    delay = max(0.0, base * (2**attempt))
-    await asyncio.sleep(delay)
+    base_delay = max(0.0, base * (2**attempt))
+    jitter = 1.0 + random.uniform(-0.25, 0.25)
+    await asyncio.sleep(base_delay * jitter)

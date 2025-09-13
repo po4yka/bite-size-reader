@@ -138,6 +138,24 @@ class Database:
             conn.execute(sql, tuple(params or ()))
             conn.commit()
 
+    # Fetch helpers
+    def fetchone(self, sql: str, params: Iterable | None = None) -> sqlite3.Row | None:
+        with self.connect() as conn:
+            cur = conn.execute(sql, tuple(params or ()))
+            return cur.fetchone()
+
+    def get_request_by_dedupe_hash(self, dedupe_hash: str) -> dict | None:
+        row = self.fetchone("SELECT * FROM requests WHERE dedupe_hash = ?", (dedupe_hash,))
+        return dict(row) if row else None
+
+    def get_crawl_result_by_request(self, request_id: int) -> dict | None:
+        row = self.fetchone("SELECT * FROM crawl_results WHERE request_id = ?", (request_id,))
+        return dict(row) if row else None
+
+    def get_summary_by_request(self, request_id: int) -> dict | None:
+        row = self.fetchone("SELECT * FROM summaries WHERE request_id = ?", (request_id,))
+        return dict(row) if row else None
+
     # Convenience insert/update helpers for core flows
 
     def create_request(
@@ -345,6 +363,18 @@ class Database:
             cur = conn.execute(sql, (request_id, lang, json_payload, version))
             conn.commit()
             return int(cur.lastrowid)
+
+    def upsert_summary(self, *, request_id: int, lang: str, json_payload: str) -> int:
+        existing = self.get_summary_by_request(request_id)
+        if existing:
+            new_version = int(existing.get("version", 1)) + 1
+            sql = "UPDATE summaries SET lang = ?, json_payload = ?, version = ?, created_at = CURRENT_TIMESTAMP WHERE request_id = ?"
+            with self.connect() as conn:
+                conn.execute(sql, (lang, json_payload, new_version, request_id))
+                conn.commit()
+            return new_version
+        else:
+            return self.insert_summary(request_id=request_id, lang=lang, json_payload=json_payload, version=1)
 
     def insert_audit_log(self, *, level: str, event: str, details_json: str | None = None) -> int:
         sql = "INSERT INTO audit_logs (level, event, details_json) VALUES (?, ?, ?)"

@@ -46,26 +46,28 @@ class FirecrawlClient:
 
     async def scrape_markdown(self, url: str, *, mobile: bool = True, request_id: int | None = None) -> FirecrawlResult:
         headers = {"Authorization": f"Bearer {self._api_key}"}
-        body = {
-            "url": url,
-            "formats": ["markdown"],
-            "mobile": mobile,
-        }
+        body_base = {"url": url, "formats": ["markdown"]}
         last_data = None
         last_latency = None
         last_error = None
         cur_mobile = mobile
+        # Heuristic: try PDF parser if URL hints at PDF
+        pdf_hint = url.lower().endswith(".pdf") or "pdf" in url.lower()
+        cur_pdf = pdf_hint
         for attempt in range(self._max_retries + 1):
             if self._audit:
                 self._audit(
                     "INFO",
                     "firecrawl_attempt",
-                    {"attempt": attempt, "url": url, "mobile": cur_mobile, "request_id": request_id},
+                    {"attempt": attempt, "url": url, "mobile": cur_mobile, "pdf": cur_pdf, "request_id": request_id},
                 )
             started = time.perf_counter()
             try:
                 async with httpx.AsyncClient(timeout=self._timeout) as client:
-                    resp = await client.post(self._base_url, headers=headers, json={**body, "mobile": cur_mobile})
+                    json_body = {**body_base, "mobile": cur_mobile}
+                    if cur_pdf:
+                        json_body["parsers"] = ["pdf"]
+                    resp = await client.post(self._base_url, headers=headers, json=json_body)
                 latency = int((time.perf_counter() - started) * 1000)
                 data = resp.json()
                 last_data = data
@@ -76,7 +78,7 @@ class FirecrawlClient:
                         self._audit(
                             "INFO",
                             "firecrawl_success",
-                            {"attempt": attempt, "status": resp.status_code, "latency_ms": latency, "request_id": request_id},
+                            {"attempt": attempt, "status": resp.status_code, "latency_ms": latency, "pdf": cur_pdf, "request_id": request_id},
                         )
                     return FirecrawlResult(
                         status="ok",
@@ -91,7 +93,7 @@ class FirecrawlClient:
                         error_text=None,
                         source_url=url,
                         endpoint="/v1/scrape",
-                        options_json={"formats": ["markdown"], "mobile": cur_mobile},
+                        options_json={"formats": ["markdown"], "mobile": cur_mobile, **({"parsers": ["pdf"]} if cur_pdf else {})},
                     )
 
                 # Retry on 5xx
@@ -99,6 +101,8 @@ class FirecrawlClient:
                     last_error = data.get("error") or str(data)
                     if attempt < self._max_retries:
                         cur_mobile = not cur_mobile  # toggle mobile emulation on retry
+                        if pdf_hint:
+                            cur_pdf = not cur_pdf  # toggle pdf parser
                         await asyncio_sleep_backoff(self._backoff_base, attempt)
                         continue
                 # Non-retryable error
@@ -106,7 +110,7 @@ class FirecrawlClient:
                     self._audit(
                         "ERROR",
                         "firecrawl_error",
-                        {"attempt": attempt, "status": resp.status_code, "error": last_error, "request_id": request_id},
+                        {"attempt": attempt, "status": resp.status_code, "error": last_error, "pdf": cur_pdf, "request_id": request_id},
                     )
                 return FirecrawlResult(
                     status="error",
@@ -121,7 +125,7 @@ class FirecrawlClient:
                     error_text=data.get("error") or str(data),
                     source_url=url,
                     endpoint="/v1/scrape",
-                    options_json={"formats": ["markdown"], "mobile": cur_mobile},
+                    options_json={"formats": ["markdown"], "mobile": cur_mobile, **({"parsers": ["pdf"]} if cur_pdf else {})},
                 )
             except Exception as e:  # noqa: BLE001
                 latency = int((time.perf_counter() - started) * 1000)
@@ -129,6 +133,8 @@ class FirecrawlClient:
                 last_error = str(e)
                 if attempt < self._max_retries:
                     cur_mobile = not cur_mobile
+                    if pdf_hint:
+                        cur_pdf = not cur_pdf
                     await asyncio_sleep_backoff(self._backoff_base, attempt)
                     continue
                 break
@@ -152,12 +158,13 @@ class FirecrawlClient:
             error_text=last_error,
             source_url=url,
             endpoint="/v1/scrape",
-            options_json={"formats": ["markdown"], "mobile": cur_mobile},
+            options_json={"formats": ["markdown"], "mobile": cur_mobile, **({"parsers": ["pdf"]} if pdf_hint else {})},
         )
 
 
 async def asyncio_sleep_backoff(base: float, attempt: int) -> None:
-    import asyncio
+    import asyncio, random
 
-    delay = max(0.0, base * (2**attempt))
-    await asyncio.sleep(delay)
+    base_delay = max(0.0, base * (2**attempt))
+    jitter = 1.0 + random.uniform(-0.25, 0.25)
+    await asyncio.sleep(base_delay * jitter)

@@ -103,56 +103,68 @@ class TelegramBot:
         norm = normalize_url(url_text)
         dedupe = url_hash_sha256(norm)
         logger.info("url_flow_detected", extra={"url": url_text, "normalized": norm, "hash": dedupe})
-        # Create request row (pending)
-        req_id = self.db.create_request(
-            type_="url",
-            status="pending",
-            chat_id=int(getattr(getattr(message, "chat", None), "id", 0)) or None,
-            user_id=int(getattr(getattr(message, "from_user", None), "id", 0)) or None,
-            input_url=url_text,
-            normalized_url=norm,
-            dedupe_hash=dedupe,
-            input_message_id=int(getattr(message, "id", getattr(message, "message_id", 0))) or None,
-            route_version=1,
-        )
-
-        # Snapshot telegram message
-        try:
-            self._persist_message_snapshot(req_id, message)
-        except Exception as e:  # noqa: BLE001
-            logger.error("snapshot_error", extra={"error": str(e)})
-
-        # Firecrawl
-        crawl = await self._firecrawl.scrape_markdown(url_text, request_id=req_id)
-        try:
-            self.db.insert_crawl_result(
-                request_id=req_id,
-                source_url=crawl.source_url,
-                endpoint=crawl.endpoint,
-                http_status=crawl.http_status,
-                status=crawl.status,
-                options_json=json.dumps(crawl.options_json or {}),
-                content_markdown=crawl.content_markdown,
-                content_html=crawl.content_html,
-                structured_json=json.dumps(crawl.structured_json or {}),
-                metadata_json=json.dumps(crawl.metadata_json or {}),
-                links_json=json.dumps(crawl.links_json or {}),
-                screenshots_paths_json=None,
-                raw_response_json=json.dumps(crawl.raw_response_json or {}),
-                latency_ms=crawl.latency_ms,
-                error_text=crawl.error_text,
+        # Dedupe check
+        existing_req = self.db.get_request_by_dedupe_hash(dedupe)
+        if existing_req:
+            req_id = int(existing_req["id"])  # reuse existing request
+            self._audit("INFO", "url_dedupe_hit", {"request_id": req_id, "hash": dedupe, "url": url_text})
+        else:
+            # Create request row (pending)
+            req_id = self.db.create_request(
+                type_="url",
+                status="pending",
+                chat_id=int(getattr(getattr(message, "chat", None), "id", 0)) or None,
+                user_id=int(getattr(getattr(message, "from_user", None), "id", 0)) or None,
+                input_url=url_text,
+                normalized_url=norm,
+                dedupe_hash=dedupe,
+                input_message_id=int(getattr(message, "id", getattr(message, "message_id", 0))) or None,
+                route_version=URL_ROUTE_VERSION,
             )
-        except Exception as e:  # noqa: BLE001
-            logger.error("persist_crawl_error", extra={"error": str(e)})
 
-        if crawl.status != "ok" or not crawl.content_markdown:
-            self.db.update_request_status(req_id, "error")
-            await self._safe_reply(message, "Failed to fetch content.")
-            logger.error("firecrawl_error", extra={"error": crawl.error_text})
-            return
+            # Snapshot telegram message (only on first request for this URL)
+            try:
+                self._persist_message_snapshot(req_id, message)
+            except Exception as e:  # noqa: BLE001
+                logger.error("snapshot_error", extra={"error": str(e)})
+
+        # Firecrawl or reuse existing crawl result
+        existing_crawl = self.db.get_crawl_result_by_request(req_id)
+        if existing_crawl and existing_crawl.get("content_markdown"):
+            content_markdown = existing_crawl["content_markdown"]
+            self._audit("INFO", "reuse_crawl_result", {"request_id": req_id})
+        else:
+            crawl = await self._firecrawl.scrape_markdown(url_text, request_id=req_id)
+            try:
+                self.db.insert_crawl_result(
+                    request_id=req_id,
+                    source_url=crawl.source_url,
+                    endpoint=crawl.endpoint,
+                    http_status=crawl.http_status,
+                    status=crawl.status,
+                    options_json=json.dumps(crawl.options_json or {}),
+                    content_markdown=crawl.content_markdown,
+                    content_html=crawl.content_html,
+                    structured_json=json.dumps(crawl.structured_json or {}),
+                    metadata_json=json.dumps(crawl.metadata_json or {}),
+                    links_json=json.dumps(crawl.links_json or {}),
+                    screenshots_paths_json=None,
+                    raw_response_json=json.dumps(crawl.raw_response_json or {}),
+                    latency_ms=crawl.latency_ms,
+                    error_text=crawl.error_text,
+                )
+            except Exception as e:  # noqa: BLE001
+                logger.error("persist_crawl_error", extra={"error": str(e)})
+
+            if crawl.status != "ok" or not crawl.content_markdown:
+                self.db.update_request_status(req_id, "error")
+                await self._safe_reply(message, "Failed to fetch content.")
+                logger.error("firecrawl_error", extra={"error": crawl.error_text})
+                return
+            content_markdown = crawl.content_markdown or ""
 
         # Language detection and choice
-        detected = detect_language(crawl.content_markdown or "")
+        detected = detect_language(content_markdown or "")
         try:
             self.db.update_request_lang_detected(req_id, detected)
         except Exception as e:  # noqa: BLE001
@@ -167,7 +179,7 @@ class TelegramBot:
                 "role": "user",
                 "content": (
                     f"Summarize the following content to the specified JSON schema. "
-                    f"Respond in {'Russian' if chosen_lang == LANG_RU else 'English'}.\n\n{crawl.content_markdown}"
+                    f"Respond in {'Russian' if chosen_lang == LANG_RU else 'English'}.\n\n{content_markdown}"
                 ),
             },
         ]
@@ -213,8 +225,9 @@ class TelegramBot:
 
         shaped = validate_and_shape_summary(summary_json)
         try:
-            self.db.insert_summary(request_id=req_id, lang=chosen_lang, json_payload=json.dumps(shaped), version=URL_ROUTE_VERSION)
+            new_version = self.db.upsert_summary(request_id=req_id, lang=chosen_lang, json_payload=json.dumps(shaped))
             self.db.update_request_status(req_id, "ok")
+            self._audit("INFO", "summary_upserted", {"request_id": req_id, "version": new_version})
         except Exception as e:  # noqa: BLE001
             logger.error("persist_summary_error", extra={"error": str(e)})
         await self._reply_json(message, shaped)
@@ -321,8 +334,9 @@ class TelegramBot:
             logger.error("persist_llm_error", extra={"error": str(e)})
 
         try:
-            self.db.insert_summary(request_id=req_id, lang=chosen_lang, json_payload=json.dumps(shaped), version=FORWARD_ROUTE_VERSION)
+            new_version = self.db.upsert_summary(request_id=req_id, lang=chosen_lang, json_payload=json.dumps(shaped))
             self.db.update_request_status(req_id, "ok")
+            self._audit("INFO", "summary_upserted", {"request_id": req_id, "version": new_version})
         except Exception as e:  # noqa: BLE001
             logger.error("persist_summary_error", extra={"error": str(e)})
         await self._reply_json(message, shaped)
@@ -345,14 +359,63 @@ class TelegramBot:
         text_full = (getattr(message, "text", None) or getattr(message, "caption", "") or None)
 
         # Entities
-        entities_obj = getattr(message, "entities", None) or []
+        entities_obj = (getattr(message, "entities", None) or []) + (getattr(message, "caption_entities", None) or [])
         try:
-            entities_json = json.dumps([getattr(e, "__dict__", {}) for e in entities_obj])
+            def _ent_to_dict(e: Any) -> dict:
+                if hasattr(e, "to_dict"):
+                    try:
+                        return e.to_dict()  # type: ignore[attr-defined]
+                    except Exception:
+                        pass
+                return getattr(e, "__dict__", {})
+
+            entities_json = json.dumps([_ent_to_dict(e) for e in entities_obj], ensure_ascii=False)
         except Exception:
             entities_json = None
 
         media_type = None
-        media_file_ids_json = None
+        media_file_ids: list[str] = []
+        # Detect common media types and collect file_ids
+        try:
+            if getattr(message, "photo", None) is not None:
+                media_type = "photo"
+                photo = getattr(message, "photo")
+                fid = getattr(photo, "file_id", None)
+                if fid:
+                    media_file_ids.append(fid)
+            elif getattr(message, "video", None) is not None:
+                media_type = "video"
+                fid = getattr(getattr(message, "video"), "file_id", None)
+                if fid:
+                    media_file_ids.append(fid)
+            elif getattr(message, "document", None) is not None:
+                media_type = "document"
+                fid = getattr(getattr(message, "document"), "file_id", None)
+                if fid:
+                    media_file_ids.append(fid)
+            elif getattr(message, "audio", None) is not None:
+                media_type = "audio"
+                fid = getattr(getattr(message, "audio"), "file_id", None)
+                if fid:
+                    media_file_ids.append(fid)
+            elif getattr(message, "voice", None) is not None:
+                media_type = "voice"
+                fid = getattr(getattr(message, "voice"), "file_id", None)
+                if fid:
+                    media_file_ids.append(fid)
+            elif getattr(message, "animation", None) is not None:
+                media_type = "animation"
+                fid = getattr(getattr(message, "animation"), "file_id", None)
+                if fid:
+                    media_file_ids.append(fid)
+            elif getattr(message, "sticker", None) is not None:
+                media_type = "sticker"
+                fid = getattr(getattr(message, "sticker"), "file_id", None)
+                if fid:
+                    media_file_ids.append(fid)
+        except Exception:
+            pass
+        media_file_ids_json = json.dumps(media_file_ids, ensure_ascii=False) if media_file_ids else None
 
         # Forward info
         fwd_chat = getattr(message, "forward_from_chat", None)
@@ -365,9 +428,10 @@ class TelegramBot:
         # Raw JSON if possible
         raw_json = None
         try:
-            to_dict = getattr(message, "_", None)
             if hasattr(message, "to_dict"):
-                raw_json = json.dumps(message.to_dict())  # type: ignore[attr-defined]
+                raw_json = json.dumps(message.to_dict(), ensure_ascii=False)  # type: ignore[attr-defined]
+            else:
+                raw_json = None
         except Exception:
             raw_json = None
 
