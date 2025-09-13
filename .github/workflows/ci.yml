@@ -1,0 +1,209 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build-and-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install uv (fast Python package manager)
+        run: |
+          curl -Ls https://astral.sh/uv/install.sh | sh
+          echo "${HOME}/.local/bin" >> $GITHUB_PATH
+
+      - name: Compile locked requirements from pyproject.toml (runtime)
+        run: |
+          uv pip compile pyproject.toml -o requirements.txt
+
+      - name: Compile locked requirements from pyproject.toml (dev)
+        run: |
+          uv pip compile --extra dev pyproject.toml -o requirements-dev.txt
+
+      - name: Check that lockfiles are up to date
+        run: |
+          git diff --exit-code requirements.txt requirements-dev.txt || (
+            echo "Lockfiles are out of date. Run 'make lock-uv' and commit changes." && exit 1
+          )
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt -r requirements-dev.txt
+
+      - name: Lint (ruff)
+        run: ruff check .
+
+      - name: Format check (black)
+        run: black --check .
+
+      - name: Import sort check (isort)
+        run: isort --check-only .
+
+      - name: Type check (mypy)
+        run: mypy app tests
+
+      - name: Run tests
+        run: python -m unittest discover -s tests -p "test_*.py" -v
+
+  unit-tests:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11"]
+        pydantic: [true, false]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install uv (fast Python package manager)
+        run: |
+          curl -Ls https://astral.sh/uv/install.sh | sh
+          echo "${HOME}/.local/bin" >> $GITHUB_PATH
+
+      - name: Compile locked requirements from pyproject.toml (runtime)
+        run: |
+          uv pip compile pyproject.toml -o requirements.txt
+
+      - name: Compile locked requirements from pyproject.toml (dev)
+        run: |
+          uv pip compile --extra dev pyproject.toml -o requirements-dev.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt -r requirements-dev.txt
+
+      - name: Remove Pydantic for no-pydantic matrix case
+        if: ${{ matrix.pydantic == false }}
+        run: |
+          pip uninstall -y pydantic || true
+
+      - name: Verify Pydantic availability
+        run: |
+          python - <<'PY'
+          try:
+              import pydantic  # type: ignore
+              print("Pydantic: present")
+          except Exception:
+              print("Pydantic: absent")
+          PY
+
+      - name: Run unit tests
+        run: python -m unittest discover -s tests -p "test_*.py" -v
+
+  docker-image:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        if: ${{ github.event_name != 'pull_request' && vars.PUBLISH_DOCKER == 'true' }}
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate image tags
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: |
+            ghcr.io/${{ github.repository }}
+          tags: |
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+            type=sha,format=long
+
+      - name: Build (and optionally push) Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          push: ${{ github.event_name != 'pull_request' && vars.PUBLISH_DOCKER == 'true' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install uv
+        run: |
+          curl -Ls https://astral.sh/uv/install.sh | sh
+          echo "${HOME}/.local/bin" >> $GITHUB_PATH
+
+      - name: Compile locked requirements
+        run: |
+          uv pip compile pyproject.toml -o requirements.txt
+          uv pip compile --extra dev pyproject.toml -o requirements-dev.txt
+
+      - name: Install project and security tools
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt -r requirements-dev.txt
+          pip install bandit pip-audit safety
+
+      - name: Bandit (SAST)
+        run: bandit -r app -ll
+
+      - name: pip-audit (dependencies)
+        run: pip-audit -r requirements.txt -r requirements-dev.txt --strict
+
+      - name: Safety (dependencies)
+        run: safety check --full-report || true
+
+  secrets:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (full history)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Gitleaks (workspace)
+        uses: gitleaks/gitleaks-action@v2
+        with:
+          args: detect --source . --no-git --redact --verbose
+
+      - name: Gitleaks (history)
+        if: ${{ github.event_name != 'pull_request' }}
+        uses: gitleaks/gitleaks-action@v2
+        with:
+          args: detect --redact --verbose

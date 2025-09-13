@@ -53,6 +53,24 @@ Dependency management
   - Lock: `make lock-piptools`
 - Regenerate locks after changing dependencies in `pyproject.toml`.
 
+CI
+- GitHub Actions workflow `.github/workflows/ci.yml` enforces:
+  - Lockfile freshness (rebuilds from `pyproject.toml` and checks diff)
+  - Lint (ruff), format check (black, isort), type check (mypy)
+  - Unit tests (unittest)
+  - Matrix tests with and without Pydantic installed to exercise both validation paths
+  - Docker image build on every push/PR; optional push to GHCR when `PUBLISH_DOCKER` repository variable is set to `true` (non-PR events)
+  - Security checks: Bandit (SAST), pip-audit + Safety (dependency vulns)
+  - Secrets scanning: Gitleaks on workspace and full history (history only on push)
+
+Docker publishing (optional)
+- Enable publishing to GitHub Container Registry (GHCR):
+  - In repository settings → Variables, add `PUBLISH_DOCKER=true`.
+  - Ensure workflow permissions include `packages: write` (already configured).
+  - Images are tagged as:
+    - `ghcr.io/<owner>/<repo>:latest` (on main)
+    - `ghcr.io/<owner>/<repo>:<git-sha>`
+
 Locked dependencies (uv or pip-tools)
 - Top-level specs live in `requirements.in` and `requirements-dev.in`.
 - Generate locked files with uv (recommended): `make lock-uv`
