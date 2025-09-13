@@ -17,6 +17,7 @@ Environment
 - `OPENROUTER_API_KEY`, `OPENROUTER_MODEL`, `OPENROUTER_HTTP_REFERER`, `OPENROUTER_X_TITLE`
 - `DB_PATH=/data/app.db`, `LOG_LEVEL=INFO`, `REQUEST_TIMEOUT_SEC=60`
 - `PREFERRED_LANG=auto` (auto|en|ru)
+ - `DEBUG_PAYLOADS=0` — when `1`, logs request/response payload previews for Firecrawl/OpenRouter (with Authorization redacted)
 
 Repository layout
 - `app/core` — URL normalization, summary contract, logging utils
@@ -36,6 +37,7 @@ Dev tooling
 - Lint: `make lint` (ruff)
 - Type-check: `make type` (mypy)
 - Pre-commit: `pre-commit install` then commits will auto-run hooks
+ - Optional: `pip install loguru` to enable Loguru-based JSON logging with stdlib bridging
 
 Local environment
 - Create venv: `make venv` (or run `scripts/create_venv.sh`)

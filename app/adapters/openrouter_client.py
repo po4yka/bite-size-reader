@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import time
 from dataclasses import dataclass
+import logging
 from typing import Any, Dict, List, Optional, Callable
 
 import httpx
@@ -39,6 +40,7 @@ class OpenRouterClient:
         max_retries: int = 3,
         backoff_base: float = 0.5,
         audit: Callable[[str, str, Dict[str, Any]], None] | None = None,
+        debug_payloads: bool = False,
     ) -> None:
         self._api_key = api_key
         self._model = model
@@ -50,6 +52,8 @@ class OpenRouterClient:
         self._max_retries = max(0, int(max_retries))
         self._backoff_base = float(backoff_base)
         self._audit = audit
+        self._logger = logging.getLogger(__name__)
+        self._debug_payloads = debug_payloads
 
     async def chat(self, messages: List[Dict[str, str]], *, temperature: float = 0.2, request_id: int | None = None) -> LLMCallResult:
         models_to_try = [self._model] + self._fallback_models
@@ -83,6 +87,25 @@ class OpenRouterClient:
 
                 started = time.perf_counter()
                 try:
+                    self._logger.debug(
+                        "openrouter_request",
+                        extra={"model": model, "attempt": attempt, "messages_len": len(messages)},
+                    )
+                    if self._debug_payloads:
+                        red_header = dict(headers)
+                        if "Authorization" in red_header:
+                            red_header["Authorization"] = "REDACTED"
+                        self._logger.debug(
+                            "openrouter_request_payload",
+                            extra={
+                                "headers": red_header,
+                                "body_preview": {
+                                    "model": model,
+                                    "messages": messages[:3],
+                                    "temperature": temperature,
+                                },
+                            },
+                        )
                     async with httpx.AsyncClient(timeout=self._timeout) as client:
                         resp = await client.post(self._base_url, headers=headers, json=body)
                     latency = int((time.perf_counter() - started) * 1000)
@@ -90,6 +113,17 @@ class OpenRouterClient:
                     last_latency = latency
                     last_data = data
                     last_model_reported = data.get("model", model)
+                    self._logger.debug(
+                        "openrouter_response",
+                        extra={"status": resp.status_code, "latency_ms": latency, "model": last_model_reported},
+                    )
+                    if self._debug_payloads:
+                        # Avoid dumping huge payloads entirely
+                        try:
+                            preview = data
+                            self._logger.debug("openrouter_response_payload", extra={"preview": preview})
+                        except Exception:
+                            pass
 
                     status_code = resp.status_code
                     # Extract text and usage
@@ -164,6 +198,7 @@ class OpenRouterClient:
                     latency = int((time.perf_counter() - started) * 1000)
                     last_latency = latency
                     last_error_text = str(e)
+                    self._logger.error("openrouter_exception", extra={"error": str(e), "attempt": attempt})
                     if attempt < self._max_retries:
                         await asyncio_sleep_backoff(self._backoff_base, attempt)
                         continue

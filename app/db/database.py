@@ -4,6 +4,7 @@ import sqlite3
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable, Optional
+import logging
 
 
 SCHEMA_SQL = r"""
@@ -122,6 +123,7 @@ CREATE TABLE IF NOT EXISTS audit_logs (
 @dataclass
 class Database:
     path: str
+    _logger: logging.Logger = logging.getLogger(__name__)
 
     def connect(self) -> sqlite3.Connection:
         Path(self.path).parent.mkdir(parents=True, exist_ok=True)
@@ -135,6 +137,7 @@ class Database:
             # Ensure backward-compatible schema updates
             self._ensure_column(conn, "requests", "correlation_id", "TEXT")
             conn.commit()
+        self._logger.info("db_migrated", extra={"path": self.path})
 
     def _ensure_column(self, conn: sqlite3.Connection, table: str, column: str, coltype: str) -> None:
         cur = conn.execute(f"PRAGMA table_info({table})")
@@ -146,6 +149,7 @@ class Database:
         with self.connect() as conn:
             conn.execute(sql, tuple(params or ()))
             conn.commit()
+        self._logger.debug("db_execute", extra={"sql": sql, "params": list(params or [])[:10]})
 
     # Fetch helpers
     def fetchone(self, sql: str, params: Iterable | None = None) -> sqlite3.Row | None:
@@ -209,13 +213,17 @@ class Database:
                 ),
             )
             conn.commit()
-            return int(cur.lastrowid)
+            rid = int(cur.lastrowid)
+            self._logger.info("request_created", extra={"id": rid, "type": type_, "status": status, "cid": correlation_id})
+            return rid
 
     def update_request_status(self, request_id: int, status: str) -> None:
         self.execute("UPDATE requests SET status = ? WHERE id = ?", (status, request_id))
+        self._logger.info("request_status", extra={"id": request_id, "status": status})
 
     def update_request_correlation_id(self, request_id: int, correlation_id: str) -> None:
         self.execute("UPDATE requests SET correlation_id = ? WHERE id = ?", (correlation_id, request_id))
+        self._logger.debug("request_cid", extra={"id": request_id, "cid": correlation_id})
 
     def update_request_lang_detected(self, request_id: int, lang: str | None) -> None:
         self.execute("UPDATE requests SET lang_detected = ? WHERE id = ?", (lang, request_id))
@@ -265,7 +273,9 @@ class Database:
                 ),
             )
             conn.commit()
-            return int(cur.lastrowid)
+            mid = int(cur.lastrowid)
+            self._logger.debug("telegram_snapshot_inserted", extra={"request_id": request_id, "row_id": mid})
+            return mid
 
     def insert_crawl_result(
         self,
@@ -314,7 +324,9 @@ class Database:
                 ),
             )
             conn.commit()
-            return int(cur.lastrowid)
+            cid = int(cur.lastrowid)
+            self._logger.debug("crawl_result_inserted", extra={"request_id": request_id, "row_id": cid, "status": status})
+            return cid
 
     def insert_llm_call(
         self,
@@ -360,7 +372,9 @@ class Database:
                 ),
             )
             conn.commit()
-            return int(cur.lastrowid)
+            lid = int(cur.lastrowid)
+            self._logger.debug("llm_call_inserted", extra={"request_id": request_id, "row_id": lid, "status": status})
+            return lid
 
     def insert_summary(
         self,
@@ -376,7 +390,9 @@ class Database:
         with self.connect() as conn:
             cur = conn.execute(sql, (request_id, lang, json_payload, version))
             conn.commit()
-            return int(cur.lastrowid)
+            sid = int(cur.lastrowid)
+            self._logger.info("summary_inserted", extra={"request_id": request_id, "version": version})
+            return sid
 
     def upsert_summary(self, *, request_id: int, lang: str, json_payload: str) -> int:
         existing = self.get_summary_by_request(request_id)
@@ -386,6 +402,7 @@ class Database:
             with self.connect() as conn:
                 conn.execute(sql, (lang, json_payload, new_version, request_id))
                 conn.commit()
+            self._logger.info("summary_updated", extra={"request_id": request_id, "version": new_version})
             return new_version
         else:
             return self.insert_summary(request_id=request_id, lang=lang, json_payload=json_payload, version=1)
@@ -395,4 +412,6 @@ class Database:
         with self.connect() as conn:
             cur = conn.execute(sql, (level, event, details_json))
             conn.commit()
-            return int(cur.lastrowid)
+            aid = int(cur.lastrowid)
+            self._logger.debug("audit_logged", extra={"id": aid, "event": event, "level": level})
+            return aid

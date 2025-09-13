@@ -34,13 +34,14 @@ class TelegramBot:
 
     def __post_init__(self) -> None:  # type: ignore[override]
         setup_json_logging(self.cfg.runtime.log_level)
-        logger.info("bot_init", extra={"db_path": self.cfg.runtime.db_path})
+        logger.info("bot_init", extra={"db_path": self.cfg.runtime.db_path, "log_level": self.cfg.runtime.log_level})
 
         # Init clients
         self._firecrawl = FirecrawlClient(
             api_key=self.cfg.firecrawl.api_key,
             timeout_sec=self.cfg.runtime.request_timeout_sec,
             audit=self._audit,
+            debug_payloads=self.cfg.runtime.debug_payloads,
         )
         self._openrouter = OpenRouterClient(
             api_key=self.cfg.openrouter.api_key,
@@ -50,6 +51,7 @@ class TelegramBot:
             x_title=self.cfg.openrouter.x_title,
             timeout_sec=self.cfg.runtime.request_timeout_sec,
             audit=self._audit,
+            debug_payloads=self.cfg.runtime.debug_payloads,
         )
 
         # Telegram client (PyroTGFork/Pyrogram)
@@ -106,6 +108,7 @@ class TelegramBot:
                 else:
                     self._awaiting_url_users.add(uid)
                     await self._safe_reply(message, "Send a URL to summarize.")
+                    logger.debug("awaiting_url", extra={"uid": uid})
                 return
 
             # If awaiting a URL due to prior /summarize
@@ -113,6 +116,7 @@ class TelegramBot:
                 url = extract_first_url(text)
                 if url:
                     self._awaiting_url_users.discard(uid)
+                    logger.debug("received_awaited_url", extra={"uid": uid})
                     await self._handle_url_flow(message, url, correlation_id=correlation_id)
                     return
 
@@ -127,6 +131,7 @@ class TelegramBot:
                 return
 
             await self._safe_reply(message, "Send a URL or forward a channel post.")
+            logger.debug("unknown_input", extra={"has_forward": bool(getattr(message, "forward_from_chat", None)), "text_len": len(text)})
         except Exception as e:  # noqa: BLE001
             logger.exception("handler_error", extra={"cid": correlation_id})
             try:
@@ -245,6 +250,7 @@ class TelegramBot:
             logger.error("persist_lang_detected_error", extra={"error": str(e)})
         chosen_lang = choose_language(self.cfg.runtime.preferred_lang, detected)
         system_prompt = await self._load_system_prompt(chosen_lang)
+        logger.debug("language_choice", extra={"detected": detected, "chosen": chosen_lang, "cid": correlation_id})
 
         # LLM
         messages = [
@@ -328,6 +334,7 @@ class TelegramBot:
             logger.error("persist_lang_detected_error", extra={"error": str(e)})
         chosen_lang = choose_language(self.cfg.runtime.preferred_lang, detected)
         system_prompt = await self._load_system_prompt(chosen_lang)
+        logger.debug("language_choice", extra={"detected": detected, "chosen": chosen_lang, "cid": correlation_id})
 
         # Create request row (pending)
         req_id = self.db.create_request(

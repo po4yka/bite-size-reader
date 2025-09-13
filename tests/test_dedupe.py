@@ -94,7 +94,7 @@ class TestDedupeReuse(unittest.IsolatedAsyncioTestCase):
                 telegram=TelegramConfig(api_id=0, api_hash="", bot_token="", allowed_user_ids=tuple()),
                 firecrawl=FirecrawlConfig(api_key="x"),
                 openrouter=OpenRouterConfig(api_key="y", model="m", fallback_models=tuple(), http_referer=None, x_title=None),
-                runtime=RuntimeConfig(db_path=db_path, log_level="INFO", request_timeout_sec=5, preferred_lang="en"),
+                runtime=RuntimeConfig(db_path=db_path, log_level="INFO", request_timeout_sec=5, preferred_lang="en", debug_payloads=False),
             )
 
             # Avoid creating real Telegram client

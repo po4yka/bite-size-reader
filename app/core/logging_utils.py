@@ -5,6 +5,15 @@ import logging
 import sys
 from typing import Any
 import uuid
+import os
+import sys
+
+try:  # Optional: modern logging via loguru
+    from loguru import logger as loguru_logger  # type: ignore
+    _HAS_LOGURU = True
+except Exception:  # pragma: no cover - optional dependency
+    loguru_logger = None  # type: ignore
+    _HAS_LOGURU = False
 
 
 class JsonFormatter(logging.Formatter):
@@ -28,13 +37,41 @@ class JsonFormatter(logging.Formatter):
 
 
 def setup_json_logging(level: str = "INFO") -> None:
-    root = logging.getLogger()
-    root.setLevel(getattr(logging, level.upper(), logging.INFO))
+    """Configure JSON logging.
 
+    Uses loguru if available for a more convenient developer experience; falls back to
+    stdlib logging with a JSON formatter otherwise.
+    """
+    lvl = getattr(logging, level.upper(), logging.INFO)
+    if _HAS_LOGURU:
+        # Remove existing handlers to avoid duplicate logs
+        try:
+            loguru_logger.remove()  # type: ignore[attr-defined]
+        except Exception:  # pragma: no cover
+            pass
+        # Add JSON sink
+        loguru_logger.add(sys.stdout, serialize=True, level=level.upper())  # type: ignore[attr-defined]
+
+        # Bridge stdlib logging into loguru
+        class InterceptHandler(logging.Handler):  # pragma: no cover - thin glue
+            def emit(self, record: logging.LogRecord) -> None:  # type: ignore[override]
+                try:
+                    lvl = loguru_logger.level(record.levelname).name  # type: ignore[attr-defined]
+                except Exception:
+                    lvl = record.levelno
+                loguru_logger.bind().opt(depth=6, exception=record.exc_info).log(lvl, record.getMessage())  # type: ignore[attr-defined]
+
+        root = logging.getLogger()
+        root.handlers.clear()
+        root.setLevel(lvl)
+        root.addHandler(InterceptHandler())
+        return
+
+    # Fallback: stdlib JSON logs
+    root = logging.getLogger()
+    root.setLevel(lvl)
     handler = logging.StreamHandler(sys.stdout)
     handler.setFormatter(JsonFormatter())
-
-    # Clear existing handlers to avoid duplicates in certain runtimes
     root.handlers.clear()
     root.addHandler(handler)
 

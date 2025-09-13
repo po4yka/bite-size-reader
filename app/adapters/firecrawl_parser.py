@@ -4,6 +4,7 @@ import asyncio
 import json
 import time
 from dataclasses import dataclass
+import logging
 from typing import Any, Dict, Optional, Callable
 
 import httpx
@@ -36,6 +37,7 @@ class FirecrawlClient:
         max_retries: int = 3,
         backoff_base: float = 0.5,
         audit: Callable[[str, str, Dict[str, Any]], None] | None = None,
+        debug_payloads: bool = False,
     ) -> None:
         self._api_key = api_key
         self._timeout = timeout_sec
@@ -43,6 +45,8 @@ class FirecrawlClient:
         self._max_retries = max(0, int(max_retries))
         self._backoff_base = float(backoff_base)
         self._audit = audit
+        self._logger = logging.getLogger(__name__)
+        self._debug_payloads = debug_payloads
 
     async def scrape_markdown(self, url: str, *, mobile: bool = True, request_id: int | None = None) -> FirecrawlResult:
         headers = {"Authorization": f"Bearer {self._api_key}"}
@@ -61,17 +65,31 @@ class FirecrawlClient:
                     "firecrawl_attempt",
                     {"attempt": attempt, "url": url, "mobile": cur_mobile, "pdf": cur_pdf, "request_id": request_id},
                 )
+            self._logger.debug(
+                "firecrawl_request", extra={"attempt": attempt, "url": url, "mobile": cur_mobile, "pdf": cur_pdf}
+            )
             started = time.perf_counter()
             try:
                 async with httpx.AsyncClient(timeout=self._timeout) as client:
                     json_body = {**body_base, "mobile": cur_mobile}
                     if cur_pdf:
                         json_body["parsers"] = ["pdf"]
+                    if self._debug_payloads:
+                        self._logger.debug("firecrawl_request_payload", extra={"json": json_body})
                     resp = await client.post(self._base_url, headers=headers, json=json_body)
                 latency = int((time.perf_counter() - started) * 1000)
                 data = resp.json()
                 last_data = data
                 last_latency = latency
+                self._logger.debug(
+                    "firecrawl_response", extra={"status": resp.status_code, "latency_ms": latency}
+                )
+                if self._debug_payloads:
+                    preview = {
+                        "keys": list(data.keys()) if isinstance(data, dict) else None,
+                        "markdown_len": len(data.get("markdown", "")) if isinstance(data, dict) else None,
+                    }
+                    self._logger.debug("firecrawl_response_payload", extra={"preview": preview})
 
                 if resp.status_code < 400:
                     if self._audit:
@@ -112,6 +130,9 @@ class FirecrawlClient:
                         "firecrawl_error",
                         {"attempt": attempt, "status": resp.status_code, "error": last_error, "pdf": cur_pdf, "request_id": request_id},
                     )
+                self._logger.error(
+                    "firecrawl_error", extra={"status": resp.status_code, "error": last_error}
+                )
                 return FirecrawlResult(
                     status="error",
                     http_status=resp.status_code,
@@ -131,6 +152,7 @@ class FirecrawlClient:
                 latency = int((time.perf_counter() - started) * 1000)
                 last_latency = latency
                 last_error = str(e)
+                self._logger.error("firecrawl_exception", extra={"error": str(e), "attempt": attempt})
                 if attempt < self._max_retries:
                     cur_mobile = not cur_mobile
                     if pdf_hint:

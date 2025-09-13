@@ -2,7 +2,10 @@ from __future__ import annotations
 
 import hashlib
 import re
+import logging
 from urllib.parse import urlparse, urlunparse, parse_qsl, urlencode
+
+logger = logging.getLogger(__name__)
 
 
 TRACKING_PARAMS = {
@@ -43,19 +46,26 @@ def normalize_url(url: str) -> str:
     query = urlencode(query_pairs)
 
     normalized = urlunparse((scheme, netloc, path, "", query, ""))
+    logger.debug("normalize_url", extra={"url": url, "normalized": normalized})
     return normalized
 
 
 def url_hash_sha256(normalized_url: str) -> str:
-    return hashlib.sha256(normalized_url.encode("utf-8")).hexdigest()
+    h = hashlib.sha256(normalized_url.encode("utf-8")).hexdigest()
+    logger.debug("url_hash", extra={"normalized": normalized_url, "sha256": h})
+    return h
 
 
 def looks_like_url(text: str) -> bool:
     pattern = re.compile(r"https?://[\w\.-]+[\w\./\-?=&%#]*", re.IGNORECASE)
-    return bool(pattern.search(text))
+    ok = bool(pattern.search(text))
+    logger.debug("looks_like_url", extra={"text_sample": text[:80], "match": ok})
+    return ok
 
 
 def extract_first_url(text: str) -> str | None:
     pattern = re.compile(r"https?://[\w\.-]+[\w\./\-?=&%#]*", re.IGNORECASE)
     m = pattern.search(text)
-    return m.group(0) if m else None
+    val = m.group(0) if m else None
+    logger.debug("extract_first_url", extra={"text_sample": text[:80], "url": val})
+    return val

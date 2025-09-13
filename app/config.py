@@ -32,6 +32,7 @@ class RuntimeConfig:
     log_level: str
     request_timeout_sec: int
     preferred_lang: str
+    debug_payloads: bool
 
 
 @dataclass(frozen=True)
@@ -92,6 +93,7 @@ def load_config() -> AppConfig:
         log_level=os.getenv("LOG_LEVEL", "INFO"),
         request_timeout_sec=int(os.getenv("REQUEST_TIMEOUT_SEC", "60")),
         preferred_lang=os.getenv("PREFERRED_LANG", "auto"),
+        debug_payloads=os.getenv("DEBUG_PAYLOADS", "0") in ("1", "true", "True"),
     )
 
     return AppConfig(
