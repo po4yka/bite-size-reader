@@ -62,3 +62,15 @@ This repository is private and intended solely for the service owner's use.
 - Write unit tests for Firecrawl parsing and OpenRouter interface.
 - Integration tests for Telegram bot message flows.
 - Tests should mock external API calls to avoid over-usage quota risks.
+
+---
+
+## Code Quality and Formatting
+
+- **ALWAYS run linters and autoformatting after every code change** before completing the task.
+- Use the following commands in sequence after making any code modifications:
+  1. `ruff check . --fix` - Run Ruff linter with auto-fixes
+  2. `ruff format .` - Format code with Ruff formatter
+  3. `mypy .` - Run type checking with MyPy
+- Ensure all linting errors are resolved and code is properly formatted before marking tasks as complete.
+- If any linting errors cannot be automatically fixed, address them manually and re-run the linters.
