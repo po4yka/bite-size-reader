@@ -10,6 +10,11 @@ from app.db.database import Database
 
 async def main() -> None:
     cfg = load_config()
+    # Warn if DB path is not under /data when likely running in Docker (non-persistent)
+    if not cfg.runtime.db_path.startswith("/data/"):
+        logging.getLogger(__name__).warning(
+            "db_path_not_in_data_volume", extra={"db_path": cfg.runtime.db_path}
+        )
     db = Database(cfg.runtime.db_path)
     db.migrate()
 

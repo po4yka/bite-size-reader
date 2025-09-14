@@ -19,6 +19,7 @@ Environment
 - `DB_PATH=/data/app.db`, `LOG_LEVEL=INFO`, `REQUEST_TIMEOUT_SEC=60`
 - `PREFERRED_LANG=auto` (auto|en|ru)
 - `DEBUG_PAYLOADS=0` — when `1`, logs request/response payload previews for Firecrawl/OpenRouter (with Authorization redacted)
+ - `MAX_CONCURRENT_CALLS=4` — caps simultaneous Firecrawl/OpenRouter calls
 
 Repository layout
 - `app/core` — URL normalization, summary contract, logging utils

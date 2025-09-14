@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import asyncio
+import io
 import json
 import logging
+import os
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Any
 
 from app.adapters.firecrawl_parser import FirecrawlClient
@@ -72,6 +75,9 @@ class TelegramBot:
         self._awaiting_url_users: set[int] = set()
         # pending multiple links confirmation: uid -> list of urls
         self._pending_multi_links: dict[int, list[str]] = {}
+        # Limit concurrent outbound calls (Firecrawl / OpenRouter)
+        max_conc = int(os.getenv("MAX_CONCURRENT_CALLS", "4"))
+        self._ext_sem = asyncio.Semaphore(max(1, max_conc))
 
     async def start(self) -> None:
         if not self.client:
@@ -341,11 +347,16 @@ class TelegramBot:
 
         # Firecrawl or reuse existing crawl result
         existing_crawl = self.db.get_crawl_result_by_request(req_id)
-        if existing_crawl and existing_crawl.get("content_markdown"):
-            content_markdown = existing_crawl["content_markdown"]
+        if existing_crawl and (
+            existing_crawl.get("content_markdown") or existing_crawl.get("content_html")
+        ):
+            content_markdown = existing_crawl.get("content_markdown") or existing_crawl.get(
+                "content_html"
+            )
             self._audit("INFO", "reuse_crawl_result", {"request_id": req_id, "cid": correlation_id})
         else:
-            crawl = await self._firecrawl.scrape_markdown(url_text, request_id=req_id)
+            async with self._ext_sem:
+                crawl = await self._firecrawl.scrape_markdown(url_text, request_id=req_id)
             try:
                 self.db.insert_crawl_result(
                     request_id=req_id,
@@ -367,7 +378,7 @@ class TelegramBot:
             except Exception as e:  # noqa: BLE001
                 logger.error("persist_crawl_error", extra={"error": str(e), "cid": correlation_id})
 
-            if crawl.status != "ok" or not crawl.content_markdown:
+            if crawl.status != "ok" or not (crawl.content_markdown or crawl.content_html):
                 self.db.update_request_status(req_id, "error")
                 await self._safe_reply(
                     message,
@@ -385,7 +396,7 @@ class TelegramBot:
                 except Exception:
                     pass
                 return
-            content_markdown = crawl.content_markdown or ""
+            content_markdown = crawl.content_markdown or crawl.content_html or ""
 
         # Language detection and choice
         detected = detect_language(content_markdown or "")
@@ -411,7 +422,8 @@ class TelegramBot:
                 ),
             },
         ]
-        llm = await self._openrouter.chat(messages, request_id=req_id)
+        async with self._ext_sem:
+            llm = await self._openrouter.chat(messages, request_id=req_id)
         try:
             self.db.insert_llm_call(
                 request_id=req_id,
@@ -522,7 +534,8 @@ class TelegramBot:
                 ),
             },
         ]
-        llm = await self._openrouter.chat(messages, request_id=req_id)
+        async with self._ext_sem:
+            llm = await self._openrouter.chat(messages, request_id=req_id)
         if llm.status != "ok" or not llm.response_text:
             # persist LLM call as error, then reply
             try:
@@ -604,6 +617,16 @@ class TelegramBot:
 
     async def _reply_json(self, message: Any, obj: dict) -> None:
         pretty = json.dumps(obj, ensure_ascii=False, indent=2)
+        # Send large JSON as a file to avoid Telegram message size limits
+        if len(pretty) > 3500:
+            try:
+                bio = io.BytesIO(pretty.encode("utf-8"))
+                bio.name = "summary.json"
+                msg_any: Any = message
+                await msg_any.reply_document(bio, caption="Summary JSON")
+                return
+            except Exception as e:  # noqa: BLE001
+                logger.error("reply_document_failed", extra={"error": str(e)})
         await self._safe_reply(message, f"```\n{pretty}\n```")
 
     async def _safe_reply(self, message: Any, text: str) -> None:
@@ -617,7 +640,20 @@ class TelegramBot:
         # Extract basic fields with best-effort approach
         msg_id = int(getattr(message, "id", getattr(message, "message_id", 0))) or None
         chat_id = int(getattr(getattr(message, "chat", None), "id", 0)) or None
-        date_ts = int(getattr(message, "date", getattr(message, "forward_date", 0)) or 0) or None
+
+        def _to_epoch(val: object) -> int | None:
+            try:
+                if isinstance(val, datetime):
+                    return int(val.timestamp())
+                if val is None:
+                    return None
+                return int(val)  # may raise
+            except Exception:
+                return None
+
+        date_ts = _to_epoch(
+            getattr(message, "date", None) or getattr(message, "forward_date", None)
+        )
         text_full = getattr(message, "text", None) or getattr(message, "caption", "") or None
 
         # Entities
@@ -689,7 +725,7 @@ class TelegramBot:
         forward_from_chat_type = getattr(fwd_chat, "type", None)
         forward_from_chat_title = getattr(fwd_chat, "title", None)
         forward_from_message_id = int(getattr(message, "forward_from_message_id", 0)) or None
-        forward_date_ts = int(getattr(message, "forward_date", 0)) or None
+        forward_date_ts = _to_epoch(getattr(message, "forward_date", None))
 
         # Raw JSON if possible
         raw_json = None
