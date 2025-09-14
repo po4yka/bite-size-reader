@@ -62,7 +62,7 @@ dependencies = [
   "pyrogram>=2.0",
   "tgcrypto>=1.2",
   "pydantic>=2.6",
-  "readability-lxml>=0.8.1",
+  "readability-lxml==0.8.4.1",
 ]
 
 [project.optional-dependencies]
