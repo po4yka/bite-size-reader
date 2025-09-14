@@ -30,7 +30,20 @@ jobs:
           uv pip compile pyproject.toml -o requirements.txt
           uv pip compile --extra dev pyproject.toml -o requirements-dev.txt
 
-      - name: Create Pull Request if changes
+      - name: Create Pull Request (using PAT if provided)
+        if: ${{ secrets.ACTIONS_PR_TOKEN != '' }}
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.ACTIONS_PR_TOKEN }}
+          commit-message: "chore(ci): regenerate lockfiles via uv"
+          title: "chore(ci): regenerate lockfiles via uv"
+          body: "Automated lockfile regeneration triggered by CI failure."
+          branch: chore/regen-lockfiles
+          labels: dependencies
+
+      - name: Create Pull Request (best-effort with GITHUB_TOKEN)
+        if: ${{ secrets.ACTIONS_PR_TOKEN == '' }}
+        continue-on-error: true
         uses: peter-evans/create-pull-request@v6
         with:
           commit-message: "chore(ci): regenerate lockfiles via uv"
@@ -39,4 +52,9 @@ jobs:
           branch: chore/regen-lockfiles
           labels: dependencies
 
+      - name: Note PR permission restriction
+        if: ${{ secrets.ACTIONS_PR_TOKEN == '' }}
+        run: |
+          echo "::warning::Repository blocks GitHub Actions from creating PRs."
+          echo "Set a repo/org secret 'ACTIONS_PR_TOKEN' with 'contents' and 'pull_requests' write permissions (fine-grained PAT), or enable the setting to allow Actions to create PRs."
 
