@@ -112,7 +112,10 @@ class TelegramBot:
             text = (getattr(message, "text", None) or getattr(message, "caption", "") or "").strip()
 
             # Commands
-            if text.startswith("/help") or text.startswith("/start"):
+            if text.startswith("/start"):
+                await self._send_welcome(message)
+                return
+            if text.startswith("/help"):
                 await self._send_help(message)
                 return
 
@@ -210,24 +213,82 @@ class TelegramBot:
         )
         await self._safe_reply(message, help_text)
 
+    async def _send_welcome(self, message: Any) -> None:
+        welcome = (
+            "Welcome to Bite-Size Reader!\n\n"
+            "What I do:\n"
+            "- Summarize articles from URLs using Firecrawl + OpenRouter.\n"
+            "- Summarize forwarded channel posts.\n\n"
+            "How to use:\n"
+            "- Send a URL directly, or use /summarize <URL>.\n"
+            "- You can also send /summarize and then the URL in the next message.\n"
+            '- Multiple links in one message are supported: I will ask "Process N links?" and handle them sequentially.\n\n'
+            "Notes:\n"
+            "- I reply with a strict JSON object.\n"
+            "- Errors include an Error ID you can reference in logs."
+        )
+        await self._safe_reply(message, welcome)
+
     async def _setup_bot_commands(self) -> None:
         if not self.client or Client is object:
             return
         try:
             from pyrogram.types import BotCommand, BotCommandScopeAllPrivateChats
 
-            commands = [
+            commands_en = [
+                BotCommand("start", "Welcome and instructions"),
                 BotCommand("help", "Show help and usage"),
                 BotCommand("summarize", "Summarize a URL (send URL next)"),
             ]
+            commands_ru = [
+                BotCommand("start", "Приветствие и инструкция"),
+                BotCommand("help", "Показать помощь и инструкцию"),
+                BotCommand("summarize", "Суммировать ссылку (или пришлите позже)"),
+            ]
             try:
                 client_any: Any = self.client
-                await client_any.set_bot_commands(commands, scope=BotCommandScopeAllPrivateChats())
-                logger.info("bot_commands_set", extra={"count": len(commands)})
+                # Default and private scope
+                await client_any.set_bot_commands(commands_en)
+                await client_any.set_bot_commands(
+                    commands_en, scope=BotCommandScopeAllPrivateChats()
+                )
+                # Localized RU
+                await client_any.set_bot_commands(commands_ru, language_code="ru")
+                await client_any.set_bot_commands(
+                    commands_ru,
+                    scope=BotCommandScopeAllPrivateChats(),
+                    language_code="ru",
+                )
+                # Optional descriptions (if supported)
+                try:
+                    await client_any.set_bot_description(
+                        "Summarize URLs and forwarded posts into a strict JSON.",
+                        language_code="en",
+                    )
+                    await client_any.set_bot_short_description(
+                        "Summarize links & posts (JSON)", language_code="en"
+                    )
+                    await client_any.set_bot_description(
+                        "Краткие резюме ссылок и пересланных постов в формате JSON.",
+                        language_code="ru",
+                    )
+                    await client_any.set_bot_short_description(
+                        "Резюме ссылок и постов (JSON)", language_code="ru"
+                    )
+                except Exception:
+                    pass
+                # Ensure default menu button (best-effort)
+                try:
+                    await client_any.set_chat_menu_button()
+                except Exception:
+                    pass
+                logger.info(
+                    "bot_commands_set",
+                    extra={"count_en": len(commands_en), "count_ru": len(commands_ru)},
+                )
             except Exception as e:  # noqa: BLE001
                 logger.warning("bot_commands_set_failed", extra={"error": str(e)})
         except Exception:
-            # Types not available; skip
             return
 
     async def _handle_url_flow(
