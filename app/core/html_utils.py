@@ -3,13 +3,10 @@ from __future__ import annotations
 import re
 from html import unescape
 from html.parser import HTMLParser
-from typing import Any
 
 # ruff: noqa: E501
 
 
-Document: Any | None
-lxml_html: Any | None
 try:
     from lxml import html as lxml_html
     from readability import Document
@@ -68,7 +65,7 @@ class _TextExtractor(HTMLParser):
 
 def html_to_text(html: str) -> str:
     # Prefer readability (main content) + lxml text extraction if available
-    if _HAS_READABILITY:
+    if _HAS_READABILITY and Document is not None and lxml_html is not None:
         try:
             doc = Document(html)
             summary_html = doc.summary() or ""

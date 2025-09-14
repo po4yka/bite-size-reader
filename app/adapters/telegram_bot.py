@@ -14,7 +14,13 @@ from typing import Any
 from app.adapters.firecrawl_parser import FirecrawlClient
 from app.adapters.openrouter_client import OpenRouterClient
 from app.config import AppConfig
-from app.core.html_utils import clean_markdown_article_text, html_to_text, normalize_with_textacy
+from app.core.html_utils import (
+    chunk_sentences,
+    clean_markdown_article_text,
+    html_to_text,
+    normalize_with_textacy,
+    split_sentences,
+)
 from app.core.lang import LANG_RU, choose_language, detect_language
 from app.core.logging_utils import generate_correlation_id, setup_json_logging
 from app.core.summary_contract import validate_and_shape_summary
@@ -828,20 +834,44 @@ class TelegramBot:
         except Exception:
             pass
 
-        # LLM - truncate content if too long
-        max_content_length = 45000  # Leave some buffer for the prompt
-        if len(content_text) > max_content_length:
-            content_text = (
-                content_text[:max_content_length] + "\n\n[Content truncated due to length]"
-            )
-            logger.warning(
-                "content_truncated",
-                extra={
-                    "original_length": len(content_text),
-                    "truncated_length": max_content_length,
-                    "cid": correlation_id,
-                },
-            )
+        # LLM - chunk long content (map -> reduce)
+        max_chars = 40000
+        text_for_summary = content_text
+        chunks: list[str] | None = None
+        if len(content_text) > max_chars:
+            try:
+                sentences = split_sentences(content_text, "ru" if chosen_lang == LANG_RU else "en")
+                chunks = chunk_sentences(sentences, max_chars=2000)
+            except Exception:
+                chunks = None
+
+        if chunks and len(chunks) > 1:
+            partials: list[str] = []
+            for idx, chunk in enumerate(chunks, start=1):
+                messages = [
+                    {"role": "system", "content": system_prompt},
+                    {
+                        "role": "user",
+                        "content": (
+                            f"Analyze this part {idx}/{len(chunks)} and output ONLY a valid JSON object matching the schema. "
+                            f"Respond in {'Russian' if chosen_lang == LANG_RU else 'English'}.\n\n"
+                            f"CONTENT START\n{chunk}\nCONTENT END"
+                        ),
+                    },
+                ]
+                async with self._ext_sem:
+                    resp = await self._openrouter.chat(
+                        messages,
+                        temperature=self.cfg.openrouter.temperature,
+                        max_tokens=self.cfg.openrouter.max_tokens,
+                        top_p=self.cfg.openrouter.top_p,
+                        request_id=req_id,
+                    )
+                if resp.status == "ok" and resp.response_text:
+                    partials.append(resp.response_text)
+            # Merge step: concatenate partials as context for a final merge summary
+            merged_context = "\n\n".join(partials) if partials else content_text
+            text_for_summary = merged_context
 
         messages = [
             {"role": "system", "content": system_prompt},
@@ -850,7 +880,7 @@ class TelegramBot:
                 "content": (
                     f"Analyze the following content and output ONLY a valid JSON object that matches the system contract exactly. "
                     f"Respond in {'Russian' if chosen_lang == LANG_RU else 'English'}. Do NOT include any text outside the JSON.\n\n"
-                    f"CONTENT START\n{content_text}\nCONTENT END"
+                    f"CONTENT START\n{text_for_summary}\nCONTENT END"
                 ),
             },
         ]
