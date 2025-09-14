@@ -1,4 +1,4 @@
-.PHONY: format lint type test all setup-dev venv
+.PHONY: format lint type test all setup-dev venv pre-commit-install check-lock
 
 format:
 	ruff format .
@@ -16,7 +16,7 @@ test:
 all: format lint type test
 
 setup-dev:
-	pip install -r requirements.txt -r requirements-dev.txt
+	uv sync --all-extras --dev
 	pre-commit install
 
 venv:
@@ -31,3 +31,8 @@ lock-piptools:
 	pip install pip-tools
 	pip-compile pyproject.toml --output-file requirements.txt
 	pip-compile pyproject.toml --extra dev --output-file requirements-dev.txt
+
+check-lock:
+	uv pip compile pyproject.toml -o requirements.txt
+	uv pip compile --extra dev pyproject.toml -o requirements-dev.txt
+	@git diff --exit-code requirements.txt requirements-dev.txt || (echo "Lockfiles are out of date. Run 'make lock-uv' and commit changes." && exit 1)

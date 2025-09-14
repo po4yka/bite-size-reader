@@ -2,6 +2,53 @@ name: CI
 
 on:
   push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+permissions:
+  contents: read
+
+jobs:
+  lint-type-test-lock:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up UV
+        uses: astral-sh/setup-uv@v3
+
+      - name: Install Python 3.11
+        run: uv python install 3.11
+
+      - name: Sync dependencies (dev)
+        run: uv sync --all-extras --dev
+
+      - name: Ruff (lint)
+        run: uv run ruff check .
+
+      - name: Ruff (format check)
+        run: uv run ruff format --check .
+
+      - name: MyPy (type-check)
+        run: uv run mypy .
+
+      - name: Unit tests
+        run: uv run python -m unittest discover -s tests -p "test_*.py" -v
+
+      - name: Check lockfiles up to date (uv compile)
+        run: |
+          uv pip compile pyproject.toml -o requirements.txt
+          uv pip compile --extra dev pyproject.toml -o requirements-dev.txt
+          git diff --exit-code requirements.txt requirements-dev.txt || (
+            echo "Lockfiles are out of date. Run 'make lock-uv' locally or trigger the 'Regenerate Lockfiles' workflow." && exit 1
+          )
+
+name: CI
+
+on:
+  push:
     branches: [ main, master ]
   pull_request:
     branches: [ main, master ]

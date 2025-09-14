@@ -1,0 +1,42 @@
+name: Regenerate Lockfiles
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  regen-lockfiles:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Git user
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Set up UV
+        uses: astral-sh/setup-uv@v3
+
+      - name: Install Python 3.11
+        run: uv python install 3.11
+
+      - name: Regenerate lockfiles (uv compile)
+        run: |
+          uv pip compile pyproject.toml -o requirements.txt
+          uv pip compile --extra dev pyproject.toml -o requirements-dev.txt
+
+      - name: Create Pull Request if changes
+        uses: peter-evans/create-pull-request@v6
+        with:
+          commit-message: "chore(ci): regenerate lockfiles via uv"
+          title: "chore(ci): regenerate lockfiles via uv"
+          body: "Automated lockfile regeneration triggered by CI failure."
+          branch: chore/regen-lockfiles
+          labels: dependencies
+
+
