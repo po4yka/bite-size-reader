@@ -993,13 +993,63 @@ class TelegramBot:
             )
         # Notify: LLM finished (success or error will be handled below)
         try:
-            await self._safe_reply(
-                message,
-                (
-                    "LLM call finished"
-                    f" ({'ok' if llm.status == 'ok' else 'error'}, {llm.latency_ms or 0} ms)."
-                ),
-            )
+            status_emoji = "✅" if llm.status == "ok" else "❌"
+            model_name = llm.model or self.cfg.openrouter.model
+            latency_sec = (llm.latency_ms or 0) / 1000.0
+
+            if llm.status == "ok":
+                # Success message with token usage and cost
+                tokens_used = (llm.tokens_prompt or 0) + (llm.tokens_completion or 0)
+                cost_info = f", ${llm.cost_usd:.4f}" if llm.cost_usd else ""
+                await self._safe_reply(
+                    message,
+                    (
+                        f"{status_emoji} LLM call completed successfully\n"
+                        f"Model: {model_name}\n"
+                        f"Latency: {latency_sec:.1f}s\n"
+                        f"Tokens: {tokens_used:,}{cost_info}"
+                    ),
+                )
+            else:
+                # Error message with detailed error information
+                error_details = []
+                if llm.error_text:
+                    error_details.append(f"Error: {llm.error_text}")
+                if hasattr(llm, "response_json") and llm.response_json:
+                    error_data = llm.response_json.get("error", {})
+                    if error_data:
+                        if error_data.get("code"):
+                            error_details.append(f"Code: {error_data['code']}")
+                        if error_data.get("type"):
+                            error_details.append(f"Type: {error_data['type']}")
+                        if error_data.get("param"):
+                            error_details.append(f"Parameter: {error_data['param']}")
+                        if error_data.get("metadata"):
+                            metadata = error_data["metadata"]
+                            if metadata.get("provider_name"):
+                                error_details.append(f"Provider: {metadata['provider_name']}")
+                            if metadata.get("raw"):
+                                # Parse raw error for more details
+                                try:
+                                    raw_error = json.loads(metadata["raw"])
+                                    if raw_error.get("error", {}).get("message"):
+                                        error_details.append(
+                                            f"Provider error: {raw_error['error']['message']}"
+                                        )
+                                except Exception:
+                                    pass
+
+                error_text = "\n".join(error_details) if error_details else "Unknown error"
+                await self._safe_reply(
+                    message,
+                    (
+                        f"{status_emoji} LLM call failed\n"
+                        f"Model: {model_name}\n"
+                        f"Latency: {latency_sec:.1f}s\n"
+                        f"{error_text}\n"
+                        f"Error ID: {correlation_id}"
+                    ),
+                )
         except Exception:
             pass
         try:
@@ -1024,7 +1074,7 @@ class TelegramBot:
 
         if llm.status != "ok" or not llm.response_text:
             self.db.update_request_status(req_id, "error")
-            await self._safe_reply(message, f"LLM error. Error ID: {correlation_id}")
+            # Detailed error message already sent above, just log for debugging
             logger.error("openrouter_error", extra={"error": llm.error_text, "cid": correlation_id})
             try:
                 self._audit(
