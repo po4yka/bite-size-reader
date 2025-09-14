@@ -276,6 +276,41 @@ def get_summary_json_schema() -> dict[str, Any]:
                 _enforce_no_additional_props(sub)
         return schema_obj
 
+    def _enforce_required_all(schema_obj: Any) -> Any:
+        """Recursively ensure every object declares required for all of its properties.
+
+        Some providers (e.g., Azure) require that for any object with properties,
+        the 'required' array must include every key listed under 'properties'.
+        """
+        if isinstance(schema_obj, dict):
+            if schema_obj.get("type") == "object" and isinstance(
+                schema_obj.get("properties"), dict
+            ):
+                prop_keys = list(schema_obj["properties"].keys())
+                # Set or replace 'required' to include all keys (provider requirement)
+                schema_obj["required"] = prop_keys
+
+                # Recurse into nested property schemas
+                for _, sub in list(schema_obj["properties"].items()):
+                    _enforce_required_all(sub)
+
+            # Recurse common schema composition constructs
+            for key in ("items",):
+                if key in schema_obj:
+                    _enforce_required_all(schema_obj[key])
+            for key in ("oneOf", "anyOf", "allOf"):
+                if key in schema_obj and isinstance(schema_obj[key], list):
+                    for sub in schema_obj[key]:
+                        _enforce_required_all(sub)
+            for key in ("$defs", "definitions"):
+                if key in schema_obj and isinstance(schema_obj[key], dict):
+                    for _, sub in list(schema_obj[key].items()):
+                        _enforce_required_all(sub)
+        elif isinstance(schema_obj, list):
+            for sub in schema_obj:
+                _enforce_required_all(sub)
+        return schema_obj
+
     if PydanticAvailable:
         try:
             from .summary_schema import SummaryModel
@@ -286,11 +321,12 @@ def get_summary_json_schema() -> dict[str, Any]:
             else:  # v1
                 schema = SummaryModel.schema()
 
-            # Ensure top-level is object and additionalProperties is controlled
+            # Ensure top-level is object and provider strictness is satisfied
             if isinstance(schema, dict):
                 schema.setdefault("$schema", "http://json-schema.org/draft-07/schema#")
                 schema.setdefault("type", "object")
                 _enforce_no_additional_props(schema)
+                _enforce_required_all(schema)
                 return schema
         except Exception:
             pass
@@ -327,7 +363,7 @@ def get_summary_json_schema() -> dict[str, Any]:
                         "unit": {"type": ["string", "null"]},
                         "source_excerpt": {"type": ["string", "null"]},
                     },
-                    "required": ["label", "value"],
+                    "required": ["label", "value", "unit", "source_excerpt"],
                 },
             },
             "answered_questions": {"type": "array", "items": {"type": "string"}},
