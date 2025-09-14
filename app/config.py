@@ -58,6 +58,113 @@ def _parse_allowed_user_ids(value: str | None) -> tuple[int, ...]:
     return tuple(ids)
 
 
+def _validate_api_key(api_key: str, name: str) -> str:
+    """Validate API key format and security."""
+    if not api_key:
+        raise ValueError(f"{name} API key is required")
+    if len(api_key) < 10:
+        raise ValueError(f"{name} API key appears to be too short")
+    if len(api_key) > 500:
+        raise ValueError(f"{name} API key appears to be too long")
+    # Basic security: no obvious secrets in logs
+    if any(char in api_key for char in [" ", "\n", "\t"]):
+        raise ValueError(f"{name} API key contains invalid characters")
+    return api_key
+
+
+def _validate_bot_token(bot_token: str) -> str:
+    """Validate Telegram bot token format."""
+    if not bot_token:
+        raise ValueError("Bot token is required")
+    # Telegram bot tokens have format: numbers:letters
+    if ":" not in bot_token:
+        raise ValueError("Bot token format appears invalid")
+    parts = bot_token.split(":")
+    if len(parts) != 2:
+        raise ValueError("Bot token format appears invalid")
+    if not parts[0].isdigit():
+        raise ValueError("Bot token ID part appears invalid")
+    if len(parts[1]) < 30:
+        raise ValueError("Bot token secret part appears too short")
+    return bot_token
+
+
+def _validate_api_id(api_id: str) -> int:
+    """Validate Telegram API ID."""
+    try:
+        api_id_int = int(api_id)
+        if api_id_int <= 0:
+            raise ValueError("API ID must be positive")
+        if api_id_int > 2**31 - 1:  # SQLite INTEGER limit
+            raise ValueError("API ID too large")
+        return api_id_int
+    except ValueError as e:
+        if "invalid literal" in str(e):
+            raise ValueError("API ID must be a valid integer") from e
+        raise
+
+
+def _validate_timeout(timeout_str: str) -> int:
+    """Validate timeout value."""
+    try:
+        timeout = int(timeout_str)
+        if timeout <= 0:
+            raise ValueError("Timeout must be positive")
+        if timeout > 3600:  # 1 hour max
+            raise ValueError("Timeout too large (max 3600 seconds)")
+        return timeout
+    except ValueError as e:
+        if "invalid literal" in str(e):
+            raise ValueError("Timeout must be a valid integer") from e
+        raise
+
+
+def _validate_log_level(log_level: str) -> str:
+    """Validate log level."""
+    valid_levels = {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"}
+    if log_level.upper() not in valid_levels:
+        raise ValueError(f"Invalid log level: {log_level}. Must be one of {valid_levels}")
+    return log_level.upper()
+
+
+def _validate_lang(lang: str) -> str:
+    """Validate language preference."""
+    valid_langs = {"auto", "en", "ru"}
+    if lang not in valid_langs:
+        raise ValueError(f"Invalid language: {lang}. Must be one of {valid_langs}")
+    return lang
+
+
+def _validate_model_name(model: str) -> str:
+    """Validate model name for security."""
+    if not model:
+        raise ValueError("Model name cannot be empty")
+    if len(model) > 100:
+        raise ValueError("Model name too long")
+    # Basic security: no path traversal or injection attempts
+    if any(char in model for char in ["/", "\\", "..", "script", "<", ">"]):
+        raise ValueError("Model name contains invalid characters")
+    return model
+
+
+def _validate_fallback_models(fallback_raw: str) -> tuple[str, ...]:
+    """Validate fallback models list."""
+    if not fallback_raw:
+        return tuple()
+
+    models = []
+    for model in fallback_raw.split(","):
+        model = model.strip()
+        if model:
+            try:
+                validated_model = _validate_model_name(model)
+                models.append(validated_model)
+            except ValueError:
+                # Skip invalid models rather than failing completely
+                continue
+    return tuple(models)
+
+
 def load_config() -> AppConfig:
     """Load configuration from environment variables.
 
@@ -68,32 +175,38 @@ def load_config() -> AppConfig:
 
     Optional values have sensible defaults based on SPEC.md.
     """
-    telegram = TelegramConfig(
-        api_id=int(os.getenv("API_ID", "0")),
-        api_hash=os.getenv("API_HASH", ""),
-        bot_token=os.getenv("BOT_TOKEN", ""),
-        allowed_user_ids=_parse_allowed_user_ids(os.getenv("ALLOWED_USER_IDS")),
-    )
+    try:
+        telegram = TelegramConfig(
+            api_id=_validate_api_id(os.getenv("API_ID", "0")),
+            api_hash=_validate_api_key(os.getenv("API_HASH", ""), "API Hash"),
+            bot_token=_validate_bot_token(os.getenv("BOT_TOKEN", "")),
+            allowed_user_ids=_parse_allowed_user_ids(os.getenv("ALLOWED_USER_IDS")),
+        )
 
-    firecrawl = FirecrawlConfig(api_key=os.getenv("FIRECRAWL_API_KEY", ""))
+        firecrawl = FirecrawlConfig(
+            api_key=_validate_api_key(os.getenv("FIRECRAWL_API_KEY", ""), "Firecrawl")
+        )
 
-    fallback_raw = os.getenv("OPENROUTER_FALLBACK_MODELS", "")
-    fallback_models = tuple(m.strip() for m in fallback_raw.split(",") if m.strip())
+        fallback_models = _validate_fallback_models(os.getenv("OPENROUTER_FALLBACK_MODELS", ""))
 
-    openrouter = OpenRouterConfig(
-        api_key=os.getenv("OPENROUTER_API_KEY", ""),
-        model=os.getenv("OPENROUTER_MODEL", "openai/gpt-5"),
-        fallback_models=fallback_models,
-        http_referer=os.getenv("OPENROUTER_HTTP_REFERER"),
-        x_title=os.getenv("OPENROUTER_X_TITLE"),
-    )
+        openrouter = OpenRouterConfig(
+            api_key=_validate_api_key(os.getenv("OPENROUTER_API_KEY", ""), "OpenRouter"),
+            model=_validate_model_name(os.getenv("OPENROUTER_MODEL", "openai/gpt-5")),
+            fallback_models=fallback_models,
+            http_referer=os.getenv("OPENROUTER_HTTP_REFERER"),
+            x_title=os.getenv("OPENROUTER_X_TITLE"),
+        )
 
-    runtime = RuntimeConfig(
-        db_path=os.getenv("DB_PATH", "/data/app.db"),
-        log_level=os.getenv("LOG_LEVEL", "INFO"),
-        request_timeout_sec=int(os.getenv("REQUEST_TIMEOUT_SEC", "60")),
-        preferred_lang=os.getenv("PREFERRED_LANG", "auto"),
-        debug_payloads=os.getenv("DEBUG_PAYLOADS", "0").lower() in ("1", "true"),
-    )
+        runtime = RuntimeConfig(
+            db_path=os.getenv("DB_PATH", "/data/app.db"),
+            log_level=_validate_log_level(os.getenv("LOG_LEVEL", "INFO")),
+            request_timeout_sec=_validate_timeout(os.getenv("REQUEST_TIMEOUT_SEC", "60")),
+            preferred_lang=_validate_lang(os.getenv("PREFERRED_LANG", "auto")),
+            debug_payloads=os.getenv("DEBUG_PAYLOADS", "0").lower() in ("1", "true"),
+        )
 
-    return AppConfig(telegram=telegram, firecrawl=firecrawl, openrouter=openrouter, runtime=runtime)
+        return AppConfig(
+            telegram=telegram, firecrawl=firecrawl, openrouter=openrouter, runtime=runtime
+        )
+    except Exception as e:
+        raise RuntimeError(f"Configuration validation failed: {e}") from e

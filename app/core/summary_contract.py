@@ -13,6 +13,16 @@ SummaryJSON = dict[str, Any]
 
 
 def _cap_text(text: str, limit: int) -> str:
+    # Security: Validate inputs
+    if not isinstance(text, str):
+        text = str(text) if text is not None else ""
+    if not isinstance(limit, int) or limit <= 0:
+        raise ValueError("Limit must be a positive integer")
+
+    # Security: Prevent extremely large limits
+    if limit > 10000:
+        raise ValueError("Limit too large")
+
     if len(text) <= limit:
         return text
     # cut to limit and then trim to last sentence/phrase boundary
@@ -25,12 +35,27 @@ def _cap_text(text: str, limit: int) -> str:
 
 
 def _hash_tagify(tags: list[str], max_tags: int = 10) -> list[str]:
+    # Security: Validate inputs
+    if not isinstance(tags, list):
+        return []
+    if not isinstance(max_tags, int) or max_tags <= 0 or max_tags > 100:
+        max_tags = 10
+
     seen: set[str] = set()
     result: list[str] = []
     for t in tags:
+        if not isinstance(t, str):
+            continue
         t = t.strip()
         if not t:
             continue
+        # Security: Prevent extremely long tags
+        if len(t) > 100:
+            continue
+        # Security: Prevent dangerous content in tags
+        if any(char in t.lower() for char in ["<", ">", "script", "javascript"]):
+            continue
+
         if not t.startswith("#"):
             t = f"#{t}"
         key = t.lower()
@@ -43,11 +68,23 @@ def _hash_tagify(tags: list[str], max_tags: int = 10) -> list[str]:
 
 
 def _dedupe_case_insensitive(items: list[str]) -> list[str]:
+    # Security: Validate inputs
+    if not isinstance(items, list):
+        return []
+
     seen: set[str] = set()
     out: list[str] = []
     for it in items:
+        if not isinstance(it, str):
+            continue
         key = it.strip().lower()
         if key and key not in seen:
+            # Security: Prevent extremely long items
+            if len(key) > 500:
+                continue
+            # Security: Prevent dangerous content
+            if any(char in key for char in ["<", ">", "script", "javascript"]):
+                continue
             seen.add(key)
             out.append(it.strip())
     return out
@@ -60,6 +97,14 @@ def validate_and_shape_summary(payload: SummaryJSON) -> SummaryJSON:
     This is a light implementation for the initial skeleton; extend with
     stricter validation or pydantic models as needed.
     """
+    # Security: Validate input
+    if not payload or not isinstance(payload, dict):
+        raise ValueError("Summary payload must be a non-empty dictionary")
+
+    # Security: Prevent extremely large payloads
+    if len(str(payload)) > 100000:  # 100KB limit
+        raise ValueError("Summary payload too large")
+
     p: SummaryJSON = dict(payload)
 
     p["summary_250"] = _cap_text(str(p.get("summary_250", "")).strip(), 250)

@@ -42,10 +42,47 @@ class OpenRouterClient:
         audit: Callable[[str, str, dict[str, Any]], None] | None = None,
         debug_payloads: bool = False,
     ) -> None:
+        # Security: Validate API key
+        if not api_key or not isinstance(api_key, str):
+            raise ValueError("API key is required")
+        if len(api_key) < 10 or len(api_key) > 500:
+            raise ValueError("API key appears invalid")
+
+        # Security: Validate model
+        if not model or not isinstance(model, str):
+            raise ValueError("Model is required")
+        if len(model) > 100:
+            raise ValueError("Model name too long")
+
+        # Security: Validate fallback models
+        validated_fallbacks = []
+        if fallback_models:
+            for fallback in fallback_models:
+                if isinstance(fallback, str) and fallback and len(fallback) <= 100:
+                    validated_fallbacks.append(fallback)
+
+        # Security: Validate headers
+        if http_referer and (not isinstance(http_referer, str) or len(http_referer) > 500):
+            raise ValueError("HTTP referer too long")
+        if x_title and (not isinstance(x_title, str) or len(x_title) > 200):
+            raise ValueError("X-Title too long")
+
+        # Security: Validate timeout
+        if not isinstance(timeout_sec, int | float) or timeout_sec <= 0:
+            raise ValueError("Timeout must be positive")
+        if timeout_sec > 300:  # 5 minutes max
+            raise ValueError("Timeout too large")
+
+        # Security: Validate retry parameters
+        if not isinstance(max_retries, int) or max_retries < 0 or max_retries > 10:
+            raise ValueError("Max retries must be between 0 and 10")
+        if not isinstance(backoff_base, int | float) or backoff_base <= 0:
+            raise ValueError("Backoff base must be positive")
+
         self._api_key = api_key
         self._model = model
-        self._fallback_models = list(fallback_models or [])
-        self._timeout = timeout_sec
+        self._fallback_models = validated_fallbacks
+        self._timeout = int(timeout_sec)
         self._base_url = "https://openrouter.ai/api/v1/chat/completions"
         self._http_referer = http_referer
         self._x_title = x_title
@@ -53,7 +90,7 @@ class OpenRouterClient:
         self._backoff_base = float(backoff_base)
         self._audit = audit
         self._logger = logging.getLogger(__name__)
-        self._debug_payloads = debug_payloads
+        self._debug_payloads = bool(debug_payloads)
 
     async def chat(
         self,
@@ -62,6 +99,38 @@ class OpenRouterClient:
         temperature: float = 0.2,
         request_id: int | None = None,
     ) -> LLMCallResult:
+        # Security: Validate messages
+        if not messages or not isinstance(messages, list):
+            raise ValueError("Messages list is required")
+        if len(messages) > 50:  # Prevent extremely long conversations
+            raise ValueError("Too many messages")
+
+        # Security: Validate message structure
+        for i, msg in enumerate(messages):
+            if not isinstance(msg, dict):
+                raise ValueError(f"Message {i} must be a dictionary")
+            if "role" not in msg or "content" not in msg:
+                raise ValueError(f"Message {i} missing required fields")
+            if not isinstance(msg["role"], str) or msg["role"] not in {
+                "system",
+                "user",
+                "assistant",
+            }:
+                raise ValueError(f"Message {i} has invalid role")
+            if not isinstance(msg["content"], str):
+                raise ValueError(f"Message {i} content must be string")
+            if len(msg["content"]) > 50000:  # Prevent extremely long messages
+                raise ValueError(f"Message {i} content too long")
+
+        # Security: Validate temperature
+        if not isinstance(temperature, int | float):
+            raise ValueError("Temperature must be numeric")
+        if temperature < 0 or temperature > 2:
+            raise ValueError("Temperature must be between 0 and 2")
+
+        # Security: Validate request_id
+        if request_id is not None and (not isinstance(request_id, int) or request_id <= 0):
+            raise ValueError("Invalid request_id")
         models_to_try = [self._model] + self._fallback_models
         last_error_text = None
         last_data = None

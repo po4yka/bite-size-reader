@@ -5,6 +5,7 @@ import io
 import json
 import logging
 import os
+import time
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
@@ -100,10 +101,111 @@ class TelegramBot:
         await idle()
 
     async def _on_message(self, message: Any) -> None:
+        start_time = time.time()
+        interaction_id = 0
         try:
             correlation_id = generate_correlation_id()
+
+            # Extract message details for logging
+            from_user_obj = getattr(message, "from_user", None)
+            uid_raw = getattr(from_user_obj, "id", 0) if from_user_obj is not None else 0
+            uid = int(uid_raw) if uid_raw is not None else 0
+
+            chat_obj = getattr(message, "chat", None)
+            chat_id_raw = getattr(chat_obj, "id", 0) if chat_obj is not None else None
+            chat_id = int(chat_id_raw) if chat_id_raw is not None else None
+
+            msg_id_raw = getattr(message, "id", getattr(message, "message_id", 0))
+            message_id = int(msg_id_raw) if msg_id_raw is not None else None
+
+            text = (getattr(message, "text", None) or getattr(message, "caption", "") or "").strip()
+
+            # Check for forwarded message
+            has_forward = bool(getattr(message, "forward_from_chat", None))
+            forward_from_chat_id = None
+            forward_from_chat_title = None
+            forward_from_message_id = None
+
+            if has_forward:
+                fwd_chat = getattr(message, "forward_from_chat", None)
+                forward_from_chat_id = getattr(fwd_chat, "id", None) if fwd_chat else None
+                forward_from_chat_title = getattr(fwd_chat, "title", None) if fwd_chat else None
+                forward_from_message_id = getattr(message, "forward_from_message_id", None)
+
+            # Detect media type
+            media_type = None
+            if getattr(message, "photo", None) is not None:
+                media_type = "photo"
+            elif getattr(message, "video", None) is not None:
+                media_type = "video"
+            elif getattr(message, "document", None) is not None:
+                media_type = "document"
+            elif getattr(message, "audio", None) is not None:
+                media_type = "audio"
+            elif getattr(message, "voice", None) is not None:
+                media_type = "voice"
+            elif getattr(message, "animation", None) is not None:
+                media_type = "animation"
+            elif getattr(message, "sticker", None) is not None:
+                media_type = "sticker"
+
+            # Extract entities for logging
+            entities_obj = list(getattr(message, "entities", []) or [])
+            entities_obj.extend(list(getattr(message, "caption_entities", []) or []))
+            entities_json = None
+            if entities_obj:
+                try:
+
+                    def _ent_to_dict(e: Any) -> dict:
+                        if hasattr(e, "to_dict"):
+                            try:
+                                return e.to_dict()
+                            except Exception:
+                                pass
+                        return getattr(e, "__dict__", {})
+
+                    entities_json = json.dumps(
+                        [_ent_to_dict(e) for e in entities_obj], ensure_ascii=False
+                    )
+                except Exception:
+                    entities_json = None
+
+            # Determine interaction type
+            interaction_type = "unknown"
+            command = None
+            input_url = None
+
+            if text.startswith("/"):
+                interaction_type = "command"
+                command = text.split()[0] if text else None
+            elif has_forward:
+                interaction_type = "forward"
+            elif text and looks_like_url(text):
+                interaction_type = "url"
+                urls = extract_all_urls(text)
+                input_url = urls[0] if urls else None
+            elif text:
+                interaction_type = "text"
+
+            # Log the initial user interaction
+            interaction_id = self._log_user_interaction(
+                user_id=uid,
+                chat_id=chat_id,
+                message_id=message_id,
+                interaction_type=interaction_type,
+                command=command,
+                input_text=text[:1000] if text else None,  # Limit text length
+                input_url=input_url,
+                has_forward=has_forward,
+                forward_from_chat_id=forward_from_chat_id,
+                forward_from_chat_title=forward_from_chat_title,
+                forward_from_message_id=forward_from_message_id,
+                media_type=media_type,
+                entities_json=entities_json,
+                correlation_id=correlation_id,
+            )
+
             # Owner-only gate
-            uid = int(getattr(message.from_user, "id", 0))
             if self.cfg.telegram.allowed_user_ids and uid not in self.cfg.telegram.allowed_user_ids:
                 await self._safe_reply(
                     message,
@@ -114,16 +216,39 @@ class TelegramBot:
                     self._audit("WARN", "access_denied", {"uid": uid, "cid": correlation_id})
                 except Exception:
                     pass
-                return
 
-            text = (getattr(message, "text", None) or getattr(message, "caption", "") or "").strip()
+                # Update interaction with access denied
+                if interaction_id:
+                    self._update_user_interaction(
+                        interaction_id=interaction_id,
+                        response_sent=True,
+                        response_type="error",
+                        error_occurred=True,
+                        error_message="Access denied",
+                        processing_time_ms=int((time.time() - start_time) * 1000),
+                    )
+                return
 
             # Commands
             if text.startswith("/start"):
                 await self._send_welcome(message)
+                if interaction_id:
+                    self._update_user_interaction(
+                        interaction_id=interaction_id,
+                        response_sent=True,
+                        response_type="welcome",
+                        processing_time_ms=int((time.time() - start_time) * 1000),
+                    )
                 return
             if text.startswith("/help"):
                 await self._send_help(message)
+                if interaction_id:
+                    self._update_user_interaction(
+                        interaction_id=interaction_id,
+                        response_sent=True,
+                        response_type="help",
+                        processing_time_ms=int((time.time() - start_time) * 1000),
+                    )
                 return
             if text.startswith("/summarize_all"):
                 urls = extract_all_urls(text)
@@ -132,8 +257,24 @@ class TelegramBot:
                         message,
                         "Send multiple URLs in one message after /summarize_all, separated by space or new line.",
                     )
+                    if interaction_id:
+                        self._update_user_interaction(
+                            interaction_id=interaction_id,
+                            response_sent=True,
+                            response_type="error",
+                            error_occurred=True,
+                            error_message="No URLs found",
+                            processing_time_ms=int((time.time() - start_time) * 1000),
+                        )
                     return
                 await self._safe_reply(message, f"Processing {len(urls)} links...")
+                if interaction_id:
+                    self._update_user_interaction(
+                        interaction_id=interaction_id,
+                        response_sent=True,
+                        response_type="processing",
+                        processing_time_ms=int((time.time() - start_time) * 1000),
+                    )
                 for u in urls:
                     per_link_cid = generate_correlation_id()
                     logger.debug(
@@ -149,12 +290,31 @@ class TelegramBot:
                     self._pending_multi_links[uid] = urls
                     await self._safe_reply(message, f"Process {len(urls)} links? (yes/no)")
                     logger.debug("awaiting_multi_confirm", extra={"uid": uid, "count": len(urls)})
+                    if interaction_id:
+                        self._update_user_interaction(
+                            interaction_id=interaction_id,
+                            response_sent=True,
+                            response_type="confirmation",
+                            processing_time_ms=int((time.time() - start_time) * 1000),
+                        )
                 elif len(urls) == 1:
-                    await self._handle_url_flow(message, urls[0], correlation_id=correlation_id)
+                    await self._handle_url_flow(
+                        message,
+                        urls[0],
+                        correlation_id=correlation_id,
+                        interaction_id=interaction_id,
+                    )
                 else:
                     self._awaiting_url_users.add(uid)
                     await self._safe_reply(message, "Send a URL to summarize.")
                     logger.debug("awaiting_url", extra={"uid": uid})
+                    if interaction_id:
+                        self._update_user_interaction(
+                            interaction_id=interaction_id,
+                            response_sent=True,
+                            response_type="awaiting_url",
+                            processing_time_ms=int((time.time() - start_time) * 1000),
+                        )
                 return
 
             # If awaiting a URL due to prior /summarize
@@ -165,10 +325,22 @@ class TelegramBot:
                     self._pending_multi_links[uid] = urls
                     await self._safe_reply(message, f"Process {len(urls)} links? (yes/no)")
                     logger.debug("awaiting_multi_confirm", extra={"uid": uid, "count": len(urls)})
+                    if interaction_id:
+                        self._update_user_interaction(
+                            interaction_id=interaction_id,
+                            response_sent=True,
+                            response_type="confirmation",
+                            processing_time_ms=int((time.time() - start_time) * 1000),
+                        )
                     return
                 if len(urls) == 1:
                     logger.debug("received_awaited_url", extra={"uid": uid})
-                    await self._handle_url_flow(message, urls[0], correlation_id=correlation_id)
+                    await self._handle_url_flow(
+                        message,
+                        urls[0],
+                        correlation_id=correlation_id,
+                        interaction_id=interaction_id,
+                    )
                     return
 
             if text and looks_like_url(text):
@@ -177,8 +349,20 @@ class TelegramBot:
                     self._pending_multi_links[uid] = urls
                     await self._safe_reply(message, f"Process {len(urls)} links? (yes/no)")
                     logger.debug("awaiting_multi_confirm", extra={"uid": uid, "count": len(urls)})
+                    if interaction_id:
+                        self._update_user_interaction(
+                            interaction_id=interaction_id,
+                            response_sent=True,
+                            response_type="confirmation",
+                            processing_time_ms=int((time.time() - start_time) * 1000),
+                        )
                 elif len(urls) == 1:
-                    await self._handle_url_flow(message, urls[0], correlation_id=correlation_id)
+                    await self._handle_url_flow(
+                        message,
+                        urls[0],
+                        correlation_id=correlation_id,
+                        interaction_id=interaction_id,
+                    )
                 return
 
             # Handle yes/no responses for pending multi-link confirmation
@@ -186,6 +370,13 @@ class TelegramBot:
                 if self._is_affirmative(text):
                     urls = self._pending_multi_links.pop(uid)
                     await self._safe_reply(message, f"Processing {len(urls)} links...")
+                    if interaction_id:
+                        self._update_user_interaction(
+                            interaction_id=interaction_id,
+                            response_sent=True,
+                            response_type="processing",
+                            processing_time_ms=int((time.time() - start_time) * 1000),
+                        )
                     for u in urls:
                         per_link_cid = generate_correlation_id()
                         logger.debug(
@@ -197,12 +388,21 @@ class TelegramBot:
                 if self._is_negative(text):
                     self._pending_multi_links.pop(uid, None)
                     await self._safe_reply(message, "Cancelled.")
+                    if interaction_id:
+                        self._update_user_interaction(
+                            interaction_id=interaction_id,
+                            response_sent=True,
+                            response_type="cancelled",
+                            processing_time_ms=int((time.time() - start_time) * 1000),
+                        )
                     return
 
             if getattr(message, "forward_from_chat", None) and getattr(
                 message, "forward_from_message_id", None
             ):
-                await self._handle_forward_flow(message, correlation_id=correlation_id)
+                await self._handle_forward_flow(
+                    message, correlation_id=correlation_id, interaction_id=interaction_id
+                )
                 return
 
             await self._safe_reply(message, "Send a URL or forward a channel post.")
@@ -213,6 +413,13 @@ class TelegramBot:
                     "text_len": len(text),
                 },
             )
+            if interaction_id:
+                self._update_user_interaction(
+                    interaction_id=interaction_id,
+                    response_sent=True,
+                    response_type="unknown_input",
+                    processing_time_ms=int((time.time() - start_time) * 1000),
+                )
         except Exception as e:  # noqa: BLE001
             logger.exception("handler_error", extra={"cid": correlation_id})
             try:
@@ -223,6 +430,15 @@ class TelegramBot:
                 message,
                 f"An unexpected error occurred. Error ID: {correlation_id}. Please try again.",
             )
+            if interaction_id:
+                self._update_user_interaction(
+                    interaction_id=interaction_id,
+                    response_sent=True,
+                    response_type="error",
+                    error_occurred=True,
+                    error_message=str(e)[:500],  # Limit error message length
+                    processing_time_ms=int((time.time() - start_time) * 1000),
+                )
 
     async def _send_help(self, message: Any) -> None:
         help_text = (
@@ -322,7 +538,12 @@ class TelegramBot:
             return
 
     async def _handle_url_flow(
-        self, message: Any, url_text: str, *, correlation_id: str | None = None
+        self,
+        message: Any,
+        url_text: str,
+        *,
+        correlation_id: str | None = None,
+        interaction_id: int | None = None,
     ) -> None:
         norm = normalize_url(url_text)
         dedupe = url_hash_sha256(norm)
@@ -349,17 +570,27 @@ class TelegramBot:
                     )
         else:
             # Create request row (pending)
+            chat_obj = getattr(message, "chat", None)
+            chat_id_raw = getattr(chat_obj, "id", 0) if chat_obj is not None else None
+            chat_id = int(chat_id_raw) if chat_id_raw is not None else None
+
+            from_user_obj = getattr(message, "from_user", None)
+            user_id_raw = getattr(from_user_obj, "id", 0) if from_user_obj is not None else None
+            user_id = int(user_id_raw) if user_id_raw is not None else None
+
+            msg_id_raw = getattr(message, "id", getattr(message, "message_id", 0))
+            input_message_id = int(msg_id_raw) if msg_id_raw is not None else None
+
             req_id = self.db.create_request(
                 type_="url",
                 status="pending",
                 correlation_id=correlation_id,
-                chat_id=int(getattr(getattr(message, "chat", None), "id", 0)) or None,
-                user_id=int(getattr(getattr(message, "from_user", None), "id", 0)) or None,
+                chat_id=chat_id,
+                user_id=user_id,
                 input_url=url_text,
                 normalized_url=norm,
                 dedupe_hash=dedupe,
-                input_message_id=int(getattr(message, "id", getattr(message, "message_id", 0)))
-                or None,
+                input_message_id=input_message_id,
                 route_version=URL_ROUTE_VERSION,
             )
 
@@ -421,6 +652,17 @@ class TelegramBot:
                     )
                 except Exception:
                     pass
+
+                # Update interaction with error
+                if interaction_id:
+                    self._update_user_interaction(
+                        interaction_id=interaction_id,
+                        response_sent=True,
+                        response_type="error",
+                        error_occurred=True,
+                        error_message=f"Firecrawl error: {crawl.error_text or 'Unknown error'}",
+                        request_id=req_id,
+                    )
                 return
             if crawl.content_markdown:
                 content_text = crawl.content_markdown
@@ -485,6 +727,17 @@ class TelegramBot:
                 )
             except Exception:
                 pass
+
+            # Update interaction with error
+            if interaction_id:
+                self._update_user_interaction(
+                    interaction_id=interaction_id,
+                    response_sent=True,
+                    response_type="error",
+                    error_occurred=True,
+                    error_message=f"LLM error: {llm.error_text or 'Unknown error'}",
+                    request_id=req_id,
+                )
             return
 
         # Best-effort parse + validate
@@ -499,6 +752,17 @@ class TelegramBot:
                 await self._safe_reply(
                     message, f"Invalid summary format. Error ID: {correlation_id}"
                 )
+
+                # Update interaction with error
+                if interaction_id:
+                    self._update_user_interaction(
+                        interaction_id=interaction_id,
+                        response_sent=True,
+                        response_type="error",
+                        error_occurred=True,
+                        error_message="Invalid summary format",
+                        request_id=req_id,
+                    )
                 return
             summary_json = json.loads(llm.response_text[start : end + 1])
 
@@ -511,26 +775,53 @@ class TelegramBot:
             self._audit("INFO", "summary_upserted", {"request_id": req_id, "version": new_version})
         except Exception as e:  # noqa: BLE001
             logger.error("persist_summary_error", extra={"error": str(e), "cid": correlation_id})
+
+        # Update interaction with successful completion
+        if interaction_id:
+            self._update_user_interaction(
+                interaction_id=interaction_id,
+                response_sent=True,
+                response_type="summary",
+                request_id=req_id,
+            )
+
         await self._reply_json(message, shaped)
 
     async def _handle_forward_flow(
-        self, message: Any, *, correlation_id: str | None = None
+        self, message: Any, *, correlation_id: str | None = None, interaction_id: int | None = None
     ) -> None:
         text = (getattr(message, "text", None) or getattr(message, "caption", "") or "").strip()
         title = getattr(getattr(message, "forward_from_chat", None), "title", "")
         prompt = f"Channel: {title}\n\n{text}"
 
         # Create request row (pending)
+        chat_obj = getattr(message, "chat", None)
+        chat_id_raw = getattr(chat_obj, "id", 0) if chat_obj is not None else None
+        chat_id = int(chat_id_raw) if chat_id_raw is not None else None
+
+        from_user_obj = getattr(message, "from_user", None)
+        user_id_raw = getattr(from_user_obj, "id", 0) if from_user_obj is not None else None
+        user_id = int(user_id_raw) if user_id_raw is not None else None
+
+        msg_id_raw = getattr(message, "id", getattr(message, "message_id", 0))
+        input_message_id = int(msg_id_raw) if msg_id_raw is not None else None
+
+        fwd_chat_obj = getattr(message, "forward_from_chat", None)
+        fwd_from_chat_id_raw = getattr(fwd_chat_obj, "id", 0) if fwd_chat_obj is not None else None
+        fwd_from_chat_id = int(fwd_from_chat_id_raw) if fwd_from_chat_id_raw is not None else None
+
+        fwd_msg_id_raw = getattr(message, "forward_from_message_id", 0)
+        fwd_from_msg_id = int(fwd_msg_id_raw) if fwd_msg_id_raw is not None else None
+
         req_id = self.db.create_request(
             type_="forward",
             status="pending",
             correlation_id=correlation_id,
-            chat_id=int(getattr(getattr(message, "chat", None), "id", 0)) or None,
-            user_id=int(getattr(getattr(message, "from_user", None), "id", 0)) or None,
-            input_message_id=int(getattr(message, "id", getattr(message, "message_id", 0))) or None,
-            fwd_from_chat_id=int(getattr(getattr(message, "forward_from_chat", None), "id", 0))
-            or None,
-            fwd_from_msg_id=int(getattr(message, "forward_from_message_id", 0)) or None,
+            chat_id=chat_id,
+            user_id=user_id,
+            input_message_id=input_message_id,
+            fwd_from_chat_id=fwd_from_chat_id,
+            fwd_from_msg_id=fwd_from_msg_id,
             route_version=1,
         )
 
@@ -597,6 +888,17 @@ class TelegramBot:
                 )
             except Exception:
                 pass
+
+            # Update interaction with error
+            if interaction_id:
+                self._update_user_interaction(
+                    interaction_id=interaction_id,
+                    response_sent=True,
+                    response_type="error",
+                    error_occurred=True,
+                    error_message=f"LLM error: {llm.error_text or 'Unknown error'}",
+                    request_id=req_id,
+                )
             return
 
         try:
@@ -610,6 +912,17 @@ class TelegramBot:
                 await self._safe_reply(
                     message, f"Invalid summary format. Error ID: {correlation_id}"
                 )
+
+                # Update interaction with error
+                if interaction_id:
+                    self._update_user_interaction(
+                        interaction_id=interaction_id,
+                        response_sent=True,
+                        response_type="error",
+                        error_occurred=True,
+                        error_message="Invalid summary format",
+                        request_id=req_id,
+                    )
                 return
             summary_json = json.loads(llm.response_text[start : end + 1])
 
@@ -642,6 +955,16 @@ class TelegramBot:
             self._audit("INFO", "summary_upserted", {"request_id": req_id, "version": new_version})
         except Exception as e:  # noqa: BLE001
             logger.error("persist_summary_error", extra={"error": str(e), "cid": correlation_id})
+
+        # Update interaction with successful completion
+        if interaction_id:
+            self._update_user_interaction(
+                interaction_id=interaction_id,
+                response_sent=True,
+                response_type="summary",
+                request_id=req_id,
+            )
+
         await self._reply_json(message, shaped)
 
     async def _reply_json(self, message: Any, obj: dict) -> None:
@@ -666,9 +989,21 @@ class TelegramBot:
             logger.error("reply_failed", extra={"error": str(e)})
 
     def _persist_message_snapshot(self, request_id: int, message: Any) -> None:
+        # Security: Validate request_id
+        if not isinstance(request_id, int) or request_id <= 0:
+            raise ValueError("Invalid request_id")
+
+        # Security: Validate message object
+        if message is None:
+            raise ValueError("Message cannot be None")
+
         # Extract basic fields with best-effort approach
-        msg_id = int(getattr(message, "id", getattr(message, "message_id", 0))) or None
-        chat_id = int(getattr(getattr(message, "chat", None), "id", 0)) or None
+        msg_id_raw = getattr(message, "id", getattr(message, "message_id", 0))
+        msg_id = int(msg_id_raw) if msg_id_raw is not None else None
+
+        chat_obj = getattr(message, "chat", None)
+        chat_id_raw = getattr(chat_obj, "id", 0) if chat_obj is not None else None
+        chat_id = int(chat_id_raw) if chat_id_raw is not None else None
 
         def _to_epoch(val: Any) -> int | None:
             try:
@@ -758,10 +1093,13 @@ class TelegramBot:
 
         # Forward info
         fwd_chat = getattr(message, "forward_from_chat", None)
-        forward_from_chat_id = int(getattr(fwd_chat, "id", 0)) or None
+        fwd_chat_id_raw = getattr(fwd_chat, "id", 0) if fwd_chat is not None else None
+        forward_from_chat_id = int(fwd_chat_id_raw) if fwd_chat_id_raw is not None else None
         forward_from_chat_type = getattr(fwd_chat, "type", None)
         forward_from_chat_title = getattr(fwd_chat, "title", None)
-        forward_from_message_id = int(getattr(message, "forward_from_message_id", 0)) or None
+
+        fwd_msg_id_raw = getattr(message, "forward_from_message_id", 0)
+        forward_from_message_id = int(fwd_msg_id_raw) if fwd_msg_id_raw is not None else None
         forward_date_ts = _to_epoch(getattr(message, "forward_date", None))
 
         # Raw JSON if possible
@@ -819,6 +1157,56 @@ class TelegramBot:
     def _is_negative(self, text: str) -> bool:
         t = text.strip().lower()
         return t in {"n", "no", "-", "cancel", "stop", "нет", "не"}
+
+    def _log_user_interaction(
+        self,
+        *,
+        user_id: int,
+        chat_id: int | None = None,
+        message_id: int | None = None,
+        interaction_type: str,
+        command: str | None = None,
+        input_text: str | None = None,
+        input_url: str | None = None,
+        has_forward: bool = False,
+        forward_from_chat_id: int | None = None,
+        forward_from_chat_title: str | None = None,
+        forward_from_message_id: int | None = None,
+        media_type: str | None = None,
+        entities_json: str | None = None,
+        correlation_id: str | None = None,
+    ) -> int:
+        """Log a user interaction and return the interaction ID."""
+        # Note: This method is a placeholder for future user interaction tracking
+        # The current database schema doesn't include user_interactions table
+        logger.debug(
+            "user_interaction_log_placeholder",
+            extra={
+                "user_id": user_id,
+                "interaction_type": interaction_type,
+                "cid": correlation_id,
+            },
+        )
+        return 0
+
+    def _update_user_interaction(
+        self,
+        *,
+        interaction_id: int,
+        response_sent: bool | None = None,
+        response_type: str | None = None,
+        error_occurred: bool | None = None,
+        error_message: str | None = None,
+        processing_time_ms: int | None = None,
+        request_id: int | None = None,
+    ) -> None:
+        """Update an existing user interaction record."""
+        # Note: This method is a placeholder for future user interaction tracking
+        # The current database schema doesn't include user_interactions table
+        logger.debug(
+            "user_interaction_update_placeholder",
+            extra={"interaction_id": interaction_id},
+        )
 
 
 # Route versioning constants

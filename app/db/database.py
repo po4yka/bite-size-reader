@@ -142,10 +142,46 @@ class Database:
     def _ensure_column(
         self, conn: sqlite3.Connection, table: str, column: str, coltype: str
     ) -> None:
+        # Security: Validate table and column names to prevent SQL injection
+        if not self._is_valid_identifier(table):
+            self._logger.error("invalid_table_name", extra={"table": table})
+            return
+        if not self._is_valid_identifier(column):
+            self._logger.error("invalid_column_name", extra={"column": column})
+            return
+        if not self._is_valid_column_type(coltype):
+            self._logger.error("invalid_column_type", extra={"coltype": coltype})
+            return
+
+        # Use parameterized queries where possible, but PRAGMA doesn't support parameters
+        # So we validate the identifiers above and use safe string formatting
         cur = conn.execute(f"PRAGMA table_info({table})")
         cols = [row[1] for row in cur.fetchall()]
         if column not in cols:
             conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {coltype}")
+
+    def _is_valid_identifier(self, identifier: str) -> bool:
+        """Validate that an identifier is safe for SQL operations."""
+        if not identifier or not isinstance(identifier, str):
+            return False
+        # Allow only alphanumeric characters and underscores
+        return bool(identifier.replace("_", "").isalnum())
+
+    def _is_valid_column_type(self, coltype: str) -> bool:
+        """Validate that a column type is safe for SQL operations."""
+        if not coltype or not isinstance(coltype, str):
+            return False
+        # Allow only common SQLite column types
+        allowed_types = {
+            "INTEGER",
+            "TEXT",
+            "REAL",
+            "BLOB",
+            "NUMERIC",
+            "INTEGER PRIMARY KEY",
+            "TEXT PRIMARY KEY",
+        }
+        return coltype.upper() in allowed_types
 
     def execute(self, sql: str, params: Iterable | None = None) -> None:
         with self.connect() as conn:

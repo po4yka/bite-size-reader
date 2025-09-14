@@ -39,18 +39,46 @@ class FirecrawlClient:
         audit: Callable[[str, str, dict[str, Any]], None] | None = None,
         debug_payloads: bool = False,
     ) -> None:
+        # Security: Validate API key
+        if not api_key or not isinstance(api_key, str):
+            raise ValueError("API key is required")
+        if len(api_key) < 10 or len(api_key) > 500:
+            raise ValueError("API key appears invalid")
+
+        # Security: Validate timeout
+        if not isinstance(timeout_sec, int | float) or timeout_sec <= 0:
+            raise ValueError("Timeout must be positive")
+        if timeout_sec > 300:  # 5 minutes max
+            raise ValueError("Timeout too large")
+
+        # Security: Validate retry parameters
+        if not isinstance(max_retries, int) or max_retries < 0 or max_retries > 10:
+            raise ValueError("Max retries must be between 0 and 10")
+        if not isinstance(backoff_base, int | float) or backoff_base <= 0:
+            raise ValueError("Backoff base must be positive")
+
         self._api_key = api_key
-        self._timeout = timeout_sec
+        self._timeout = int(timeout_sec)
         self._base_url = "https://api.firecrawl.dev/v1/scrape"
         self._max_retries = max(0, int(max_retries))
         self._backoff_base = float(backoff_base)
         self._audit = audit
         self._logger = logging.getLogger(__name__)
-        self._debug_payloads = debug_payloads
+        self._debug_payloads = bool(debug_payloads)
 
     async def scrape_markdown(
         self, url: str, *, mobile: bool = True, request_id: int | None = None
     ) -> FirecrawlResult:
+        # Security: Validate URL input
+        if not url or not isinstance(url, str):
+            raise ValueError("URL is required")
+        if len(url) > 2048:
+            raise ValueError("URL too long")
+
+        # Security: Validate request_id
+        if request_id is not None and (not isinstance(request_id, int) or request_id <= 0):
+            raise ValueError("Invalid request_id")
+
         headers = {"Authorization": f"Bearer {self._api_key}"}
         body_base = {"url": url, "formats": ["markdown"]}
         last_data = None

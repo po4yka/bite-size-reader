@@ -19,6 +19,21 @@ TRACKING_PARAMS = {
 }
 
 
+def _validate_url_input(url: str) -> None:
+    """Validate URL input for security."""
+    if not url:
+        raise ValueError("URL cannot be empty")
+    if not isinstance(url, str):
+        raise ValueError("URL must be a string")
+    if len(url) > 2048:  # RFC 2616 limit
+        raise ValueError("URL too long")
+    # Basic security: no obvious injection attempts
+    dangerous_chars = ["<", ">", '"', "'", "script", "javascript:", "data:"]
+    url_lower = url.lower()
+    if any(char in url_lower for char in dangerous_chars):
+        raise ValueError("URL contains potentially dangerous content")
+
+
 def normalize_url(url: str) -> str:
     """Normalize a URL for deduplication as per SPEC.md.
 
@@ -27,61 +42,132 @@ def normalize_url(url: str) -> str:
     - Sort query params and remove common tracking params
     - Collapse trailing slash
     """
+    _validate_url_input(url)
+
+    # Add protocol if missing
     if "://" not in url:
         url = f"http://{url}"
-    p = urlparse(url)
-    scheme = (p.scheme or "http").lower()
-    netloc = p.netloc.lower()
-    path = p.path or "/"
 
-    # Remove redundant trailing slash except for root
-    if path.endswith("/") and path != "/":
-        path = path.rstrip("/")
+    try:
+        p = urlparse(url)
 
-    # Filter and sort query params
-    query_pairs = [
-        (k, v)
-        for k, v in parse_qsl(p.query, keep_blank_values=True)
-        if k.lower() not in TRACKING_PARAMS
-    ]
-    query_pairs.sort(key=lambda x: (x[0], x[1]))
-    query = urlencode(query_pairs)
+        # Validate parsed components
+        if not p.netloc:
+            raise ValueError("Invalid URL: missing hostname")
 
-    normalized = urlunparse((scheme, netloc, path, "", query, ""))
-    logger.debug("normalize_url", extra={"url": url, "normalized": normalized})
-    return normalized
+        # Security: validate scheme
+        if p.scheme and p.scheme.lower() not in {"http", "https"}:
+            raise ValueError(f"Unsupported URL scheme: {p.scheme}")
+
+        scheme = (p.scheme or "http").lower()
+        netloc = p.netloc.lower()
+        path = p.path or "/"
+
+        # Remove redundant trailing slash except for root
+        if path.endswith("/") and path != "/":
+            path = path.rstrip("/")
+
+        # Filter and sort query params
+        query_pairs = [
+            (k, v)
+            for k, v in parse_qsl(p.query, keep_blank_values=True)
+            if k.lower() not in TRACKING_PARAMS
+        ]
+        query_pairs.sort(key=lambda x: (x[0], x[1]))
+        query = urlencode(query_pairs)
+
+        normalized = urlunparse((scheme, netloc, path, "", query, ""))
+        logger.debug("normalize_url", extra={"url": url[:100], "normalized": normalized[:100]})
+        return normalized
+    except Exception as e:
+        logger.error("url_normalization_failed", extra={"url": url[:100], "error": str(e)})
+        raise ValueError(f"URL normalization failed: {e}") from e
 
 
 def url_hash_sha256(normalized_url: str) -> str:
-    h = hashlib.sha256(normalized_url.encode("utf-8")).hexdigest()
-    logger.debug("url_hash", extra={"normalized": normalized_url, "sha256": h})
-    return h
+    """Generate SHA256 hash of normalized URL."""
+    if not normalized_url or not isinstance(normalized_url, str):
+        raise ValueError("Normalized URL is required")
+    if len(normalized_url) > 2048:
+        raise ValueError("Normalized URL too long")
+
+    try:
+        h = hashlib.sha256(normalized_url.encode("utf-8")).hexdigest()
+        logger.debug("url_hash", extra={"normalized": normalized_url[:100], "sha256": h})
+        return h
+    except Exception as e:
+        logger.error("url_hash_failed", extra={"error": str(e)})
+        raise ValueError(f"URL hashing failed: {e}") from e
 
 
 def looks_like_url(text: str) -> bool:
-    pattern = re.compile(r"https?://[\w\.-]+[\w\./\-?=&%#]*", re.IGNORECASE)
-    ok = bool(pattern.search(text))
-    logger.debug("looks_like_url", extra={"text_sample": text[:80], "match": ok})
-    return ok
+    """Check if text contains what looks like a URL."""
+    if not text or not isinstance(text, str):
+        return False
+    if len(text) > 10000:  # Prevent processing of extremely long text
+        return False
+
+    try:
+        pattern = re.compile(r"https?://[\w\.-]+[\w\./\-?=&%#]*", re.IGNORECASE)
+        ok = bool(pattern.search(text))
+        logger.debug("looks_like_url", extra={"text_sample": text[:80], "match": ok})
+        return ok
+    except Exception as e:
+        logger.error("looks_like_url_failed", extra={"error": str(e)})
+        return False
 
 
 def extract_first_url(text: str) -> str | None:
-    pattern = re.compile(r"https?://[\w\.-]+[\w\./\-?=&%#]*", re.IGNORECASE)
-    m = pattern.search(text)
-    val = m.group(0) if m else None
-    logger.debug("extract_first_url", extra={"text_sample": text[:80], "url": val})
-    return val
+    """Extract the first URL from text."""
+    if not text or not isinstance(text, str):
+        return None
+    if len(text) > 10000:  # Prevent processing of extremely long text
+        return None
+
+    try:
+        pattern = re.compile(r"https?://[\w\.-]+[\w\./\-?=&%#]*", re.IGNORECASE)
+        m = pattern.search(text)
+        val = m.group(0) if m else None
+        logger.debug(
+            "extract_first_url", extra={"text_sample": text[:80], "url": val[:100] if val else None}
+        )
+        return val
+    except Exception as e:
+        logger.error("extract_first_url_failed", extra={"error": str(e)})
+        return None
 
 
 def extract_all_urls(text: str) -> list[str]:
-    pattern = re.compile(r"https?://[\w\.-]+[\w\./\-?=&%#]*", re.IGNORECASE)
-    urls = pattern.findall(text) if text else []
-    # Preserve order, dedupe
-    seen = set()
-    out: list[str] = []
-    for u in urls:
-        if u not in seen:
-            seen.add(u)
-            out.append(u)
-    logger.debug("extract_all_urls", extra={"count": len(out)})
-    return out
+    """Extract all URLs from text."""
+    if not text or not isinstance(text, str):
+        return []
+    if len(text) > 10000:  # Prevent processing of extremely long text
+        return []
+
+    try:
+        pattern = re.compile(r"https?://[\w\.-]+[\w\./\-?=&%#]*", re.IGNORECASE)
+        urls = pattern.findall(text) if text else []
+
+        # Validate and filter URLs
+        valid_urls = []
+        for url in urls:
+            try:
+                _validate_url_input(url)
+                valid_urls.append(url)
+            except ValueError:
+                # Skip invalid URLs
+                continue
+
+        # Preserve order, dedupe
+        seen = set()
+        out: list[str] = []
+        for u in valid_urls:
+            if u not in seen:
+                seen.add(u)
+                out.append(u)
+
+        logger.debug("extract_all_urls", extra={"count": len(out), "input_len": len(text)})
+        return out
+    except Exception as e:
+        logger.error("extract_all_urls_failed", extra={"error": str(e)})
+        return []
