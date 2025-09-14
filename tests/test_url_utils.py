@@ -13,6 +13,11 @@ class TestURLUtils(unittest.TestCase):
         self.assertEqual(normalize_url("http://example.com/"), "http://example.com/")
         self.assertEqual(normalize_url("http://example.com/path/"), "http://example.com/path")
 
+    def test_normalize_url_handles_missing_scheme_and_tracking(self):
+        self.assertEqual(normalize_url("example.com"), "http://example.com/")
+        url = "EXAMPLE.com/Path?A=1&UTM_Source=x"
+        self.assertEqual(normalize_url(url), "http://example.com/Path?A=1")
+
     def test_url_hash(self):
         norm = normalize_url("http://example.com/path?a=1")
         h = url_hash_sha256(norm)

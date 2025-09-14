@@ -93,7 +93,7 @@ def load_config() -> AppConfig:
         log_level=os.getenv("LOG_LEVEL", "INFO"),
         request_timeout_sec=int(os.getenv("REQUEST_TIMEOUT_SEC", "60")),
         preferred_lang=os.getenv("PREFERRED_LANG", "auto"),
-        debug_payloads=os.getenv("DEBUG_PAYLOADS", "0") in ("1", "true", "True"),
+        debug_payloads=os.getenv("DEBUG_PAYLOADS", "0").lower() in ("1", "true"),
     )
 
     return AppConfig(telegram=telegram, firecrawl=firecrawl, openrouter=openrouter, runtime=runtime)

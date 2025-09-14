@@ -27,6 +27,8 @@ def normalize_url(url: str) -> str:
     - Sort query params and remove common tracking params
     - Collapse trailing slash
     """
+    if "://" not in url:
+        url = f"http://{url}"
     p = urlparse(url)
     scheme = (p.scheme or "http").lower()
     netloc = p.netloc.lower()
@@ -38,7 +40,9 @@ def normalize_url(url: str) -> str:
 
     # Filter and sort query params
     query_pairs = [
-        (k, v) for k, v in parse_qsl(p.query, keep_blank_values=True) if k not in TRACKING_PARAMS
+        (k, v)
+        for k, v in parse_qsl(p.query, keep_blank_values=True)
+        if k.lower() not in TRACKING_PARAMS
     ]
     query_pairs.sort(key=lambda x: (x[0], x[1]))
     query = urlencode(query_pairs)
