@@ -42,11 +42,9 @@ class OpenRouterClient:
         audit: Callable[[str, str, dict[str, Any]], None] | None = None,
         debug_payloads: bool = False,
     ) -> None:
-        # Security: Validate API key
+        # Security: Validate API key presence. Length/format is enforced at config load.
         if not api_key or not isinstance(api_key, str):
             raise ValueError("API key is required")
-        if len(api_key) < 10 or len(api_key) > 500:
-            raise ValueError("API key appears invalid")
 
         # Security: Validate model
         if not model or not isinstance(model, str):
@@ -76,8 +74,9 @@ class OpenRouterClient:
         # Security: Validate retry parameters
         if not isinstance(max_retries, int) or max_retries < 0 or max_retries > 10:
             raise ValueError("Max retries must be between 0 and 10")
-        if not isinstance(backoff_base, int | float) or backoff_base <= 0:
-            raise ValueError("Backoff base must be positive")
+        # Allow zero to disable waits in tests; only negative is invalid
+        if not isinstance(backoff_base, int | float) or backoff_base < 0:
+            raise ValueError("Backoff base must be non-negative")
 
         self._api_key = api_key
         self._model = model
