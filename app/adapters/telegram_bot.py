@@ -81,11 +81,12 @@ class TelegramBot:
         # Register handlers only if filters are available
         if filters:
             # Register a simple on_message handler in private chats
-            @self.client.on_message(filters.private)  # type: ignore[misc]
+            client_any: Any = self.client
+
+            @client_any.on_message(filters.private)
             async def _handler(client: Any, message: Any) -> None:  # noqa: ANN401
                 await self._on_message(message)
 
-        client_any: Any = self.client
         await client_any.start()
         logger.info("bot_started")
         await self._setup_bot_commands()
