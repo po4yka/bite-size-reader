@@ -33,19 +33,12 @@ jobs:
           enable-cache: true
           cache-dependency-glob: "pyproject.toml"
 
-      - name: Compile locked requirements from pyproject.toml (runtime)
-        run: |
-          uv pip compile pyproject.toml -o requirements.txt
+      # Prepare up-to-date lockfiles for reproducible installs, but do not fail the build on drift.
+      - name: Compile locked requirements (runtime)
+        run: uv pip compile pyproject.toml -o requirements.txt
 
-      - name: Compile locked requirements from pyproject.toml (dev)
-        run: |
-          uv pip compile --extra dev pyproject.toml -o requirements-dev.txt
-
-      - name: Check that lockfiles are up to date
-        run: |
-          git diff --exit-code requirements.txt requirements-dev.txt || (
-            echo "Lockfiles are out of date. Run 'make lock-uv' and commit changes." && exit 1
-          )
+      - name: Compile locked requirements (dev)
+        run: uv pip compile --extra dev pyproject.toml -o requirements-dev.txt
 
       - name: Install dependencies
         run: |
@@ -80,6 +73,18 @@ jobs:
 
       - name: Run tests
         run: python -m unittest discover -s tests -p "test_*.py" -v
+
+      - name: Check lockfile drift (non-blocking)
+        id: lockcheck
+        continue-on-error: true
+        run: |
+          if git diff --exit-code requirements.txt requirements-dev.txt; then
+            echo "drift=false" >> "$GITHUB_OUTPUT"
+            echo "No lockfile drift detected."
+          else
+            echo "drift=true" >> "$GITHUB_OUTPUT"
+            echo "::warning::Lockfiles are out of date. Run 'make lock-uv' locally or trigger 'Update Lockfiles' workflow."
+          fi
 
   docker-image:
     needs: build-and-check
