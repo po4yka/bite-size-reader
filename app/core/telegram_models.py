@@ -591,7 +591,7 @@ class TelegramMessage:
         }
 
         result = media_map.get(self.media_type)
-        return result if isinstance(result, dict) else None
+        return result if isinstance(result, dict | list) else None
 
     def get_effective_text(self) -> str | None:
         """Get the effective text content (text or caption)."""

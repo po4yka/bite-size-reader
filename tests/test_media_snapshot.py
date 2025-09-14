@@ -45,9 +45,16 @@ def _bot_with_tmpdb(tmp_path):
     db.migrate()
     cfg = AppConfig(
         telegram=TelegramConfig(api_id=0, api_hash="", bot_token="", allowed_user_ids=tuple()),
-        firecrawl=FirecrawlConfig(api_key="x"),
+        firecrawl=FirecrawlConfig(api_key="fc-dummy-key"),
         openrouter=OpenRouterConfig(
-            api_key="y", model="m", fallback_models=tuple(), http_referer=None, x_title=None
+            api_key="y",
+            model="m",
+            fallback_models=tuple(),
+            http_referer=None,
+            x_title=None,
+            max_tokens=1024,
+            top_p=1.0,
+            temperature=0.8,
         ),
         runtime=RuntimeConfig(
             db_path=tmp_path,

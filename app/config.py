@@ -11,9 +11,9 @@ class OpenRouterConfig:
     fallback_models: tuple[str, ...]
     http_referer: str | None
     x_title: str | None
-    max_tokens: int | None
-    top_p: float | None
-    temperature: float
+    max_tokens: int | None = None
+    top_p: float | None = None
+    temperature: float = 0.2
 
 
 @dataclass(frozen=True)

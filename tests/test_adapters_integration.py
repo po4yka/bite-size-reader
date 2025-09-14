@@ -56,7 +56,7 @@ class TestAdaptersIntegration(unittest.IsolatedAsyncioTestCase):
 
             firecrawl_httpx.AsyncClient = cast(Any, _make_fc_client)
 
-            client = FirecrawlClient(api_key="x", timeout_sec=5)
+            client = FirecrawlClient(api_key="fc-dummy-key", timeout_sec=5)
             res = await client.scrape_markdown("https://example.com")
             self.assertEqual(res.status, "ok")
             self.assertEqual(res.http_status, 200)
