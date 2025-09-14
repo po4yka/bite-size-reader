@@ -232,6 +232,97 @@ class TestFirecrawlErrorHandling(unittest.IsolatedAsyncioTestCase):
         finally:
             fc_httpx.AsyncClient = cast(Any, original)
 
+    async def test_firecrawl_200_with_data_array_error(self):
+        """Test that Firecrawl handles 200 status with error in data array format."""
+
+        async def handler(url, headers, payload):
+            # Simulate Firecrawl returning 200 OK with error in data array
+            return _Resp(
+                200,
+                {
+                    "success": True,
+                    "data": [
+                        {
+                            "error": "SCRAPE_ALL_ENGINES_FAILED",
+                            "markdown": None,
+                            "html": None,
+                            "metadata": None,
+                        }
+                    ],
+                },
+            )
+
+        original = fc_httpx.AsyncClient
+        try:
+
+            def _make_fc_client(timeout=None):
+                return _SeqAsyncClient(handler)
+
+            fc_httpx.AsyncClient = cast(Any, _make_fc_client)
+            client = FirecrawlClient(
+                api_key="test_key",
+                timeout_sec=30,
+                max_retries=0,  # No retries for this test
+                debug_payloads=True,
+            )
+
+            result = await client.scrape_markdown("https://example.com")
+
+            # Verify that the result indicates an error
+            self.assertEqual(result.status, "error")
+            self.assertEqual(result.http_status, 200)
+            self.assertEqual(result.error_text, "SCRAPE_ALL_ENGINES_FAILED")
+            self.assertIsNone(result.content_markdown)
+
+        finally:
+            fc_httpx.AsyncClient = cast(Any, original)
+
+    async def test_firecrawl_200_with_data_array_success(self):
+        """Test that Firecrawl handles 200 status with success in data array format."""
+
+        async def handler(url, headers, payload):
+            # Simulate Firecrawl returning 200 OK with success in data array
+            return _Resp(
+                200,
+                {
+                    "success": True,
+                    "data": [
+                        {
+                            "markdown": "# Test Content\n\nThis is a test.",
+                            "html": "<h1>Test Content</h1><p>This is a test.</p>",
+                            "metadata": {"title": "Test Page"},
+                            "links": [],
+                        }
+                    ],
+                },
+            )
+
+        original = fc_httpx.AsyncClient
+        try:
+
+            def _make_fc_client(timeout=None):
+                return _SeqAsyncClient(handler)
+
+            fc_httpx.AsyncClient = cast(Any, _make_fc_client)
+            client = FirecrawlClient(
+                api_key="test_key",
+                timeout_sec=30,
+                max_retries=0,  # No retries for this test
+                debug_payloads=True,
+            )
+
+            result = await client.scrape_markdown("https://example.com")
+
+            # Verify that the result indicates success
+            self.assertEqual(result.status, "ok")
+            self.assertEqual(result.http_status, 200)
+            self.assertIsNone(result.error_text)
+            self.assertEqual(result.content_markdown, "# Test Content\n\nThis is a test.")
+            self.assertEqual(result.content_html, "<h1>Test Content</h1><p>This is a test.</p>")
+
+        finally:
+            fc_httpx.AsyncClient = cast(Any, original)
+
 
 if __name__ == "__main__":
     unittest.main()

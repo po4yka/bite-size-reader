@@ -132,8 +132,54 @@ class FirecrawlClient:
                 if resp.status_code < 400:
                     # Check if the response body contains an error even with 200 status
                     response_error = data.get("error")
+
+                    # Debug logging to understand the response structure
+                    self._logger.debug(
+                        "firecrawl_response_debug",
+                        extra={
+                            "status_code": resp.status_code,
+                            "response_keys": list(data.keys()) if isinstance(data, dict) else None,
+                            "error_field": response_error,
+                            "error_type": type(response_error).__name__,
+                            "success_field": data.get("success"),
+                            "data_field": data.get("data"),
+                        },
+                    )
+
+                    # Check for various error indicators in the response
+                    has_error = False
+                    error_message = None
+
+                    # Check for explicit error field
                     if response_error and response_error.strip():
-                        last_error = response_error
+                        has_error = True
+                        error_message = response_error
+                    # Check for success=false in response
+                    elif data.get("success") is False:
+                        has_error = True
+                        error_message = data.get("message") or "Request failed (success=false)"
+                    # Check if response has data array but it's empty or contains errors
+                    elif "data" in data and isinstance(data["data"], list):
+                        if not data["data"]:
+                            has_error = True
+                            error_message = "No data returned in response"
+                        else:
+                            # Check if all items in data array have errors
+                            all_items_have_errors = all(
+                                item.get("error") for item in data["data"] if isinstance(item, dict)
+                            )
+                            if all_items_have_errors and len(data["data"]) > 0:
+                                has_error = True
+                                error_message = (
+                                    data["data"][0].get("error") or "All data items have errors"
+                                )
+                    # Check for no content in direct response
+                    elif not data.get("markdown") and not data.get("html") and "data" not in data:
+                        has_error = True
+                        error_message = "No content returned"
+
+                    if has_error:
+                        last_error = error_message
                         if self._audit:
                             self._audit(
                                 "ERROR",
@@ -150,14 +196,35 @@ class FirecrawlClient:
                             "firecrawl_error",
                             extra={"status": resp.status_code, "error": last_error},
                         )
+                        # Extract content from response even in error case (handle both direct and data array formats)
+                        error_content_markdown = data.get("markdown")
+                        error_content_html = data.get("html")
+                        error_metadata = data.get("metadata")
+                        error_links = data.get("links")
+
+                        # If content is in data array, extract from first item
+                        if (
+                            not error_content_markdown
+                            and not error_content_html
+                            and "data" in data
+                            and isinstance(data["data"], list)
+                            and len(data["data"]) > 0
+                        ):
+                            first_item = data["data"][0]
+                            if isinstance(first_item, dict):
+                                error_content_markdown = first_item.get("markdown")
+                                error_content_html = first_item.get("html")
+                                error_metadata = first_item.get("metadata")
+                                error_links = first_item.get("links")
+
                         return FirecrawlResult(
                             status="error",
                             http_status=resp.status_code,
-                            content_markdown=data.get("markdown"),
-                            content_html=data.get("html"),
+                            content_markdown=error_content_markdown,
+                            content_html=error_content_html,
                             structured_json=data.get("structured"),
-                            metadata_json=data.get("metadata"),
-                            links_json=data.get("links"),
+                            metadata_json=error_metadata,
+                            links_json=error_links,
                             raw_response_json=data,
                             latency_ms=latency,
                             error_text=last_error,
@@ -171,6 +238,27 @@ class FirecrawlClient:
                         )
 
                     # No error in response body, treat as success
+                    # Extract content from response (handle both direct and data array formats)
+                    content_markdown = data.get("markdown")
+                    content_html = data.get("html")
+                    metadata = data.get("metadata")
+                    links = data.get("links")
+
+                    # If content is in data array, extract from first item
+                    if (
+                        not content_markdown
+                        and not content_html
+                        and "data" in data
+                        and isinstance(data["data"], list)
+                        and len(data["data"]) > 0
+                    ):
+                        first_item = data["data"][0]
+                        if isinstance(first_item, dict):
+                            content_markdown = first_item.get("markdown")
+                            content_html = first_item.get("html")
+                            metadata = first_item.get("metadata")
+                            links = first_item.get("links")
+
                     if self._audit:
                         self._audit(
                             "INFO",
@@ -186,11 +274,11 @@ class FirecrawlClient:
                     return FirecrawlResult(
                         status="ok",
                         http_status=resp.status_code,
-                        content_markdown=data.get("markdown"),
-                        content_html=data.get("html"),
+                        content_markdown=content_markdown,
+                        content_html=content_html,
                         structured_json=data.get("structured"),
-                        metadata_json=data.get("metadata"),
-                        links_json=data.get("links"),
+                        metadata_json=metadata,
+                        links_json=links,
                         raw_response_json=data,
                         latency_ms=latency,
                         error_text=None,

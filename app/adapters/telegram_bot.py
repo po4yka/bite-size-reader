@@ -616,6 +616,11 @@ class TelegramBot:
             "url_flow_detected",
             extra={"url": url_text, "normalized": norm, "hash": dedupe, "cid": correlation_id},
         )
+        # Notify: request accepted
+        try:
+            await self._safe_reply(message, "Accepted. Fetching content...")
+        except Exception:
+            pass
         # Dedupe check
         existing_req = self.db.get_request_by_dedupe_hash(dedupe)
         req_id: int  # Initialize variable for type checker
@@ -676,7 +681,19 @@ class TelegramBot:
             else:
                 content_text = html_to_text(existing_crawl.get("content_html") or "")
             self._audit("INFO", "reuse_crawl_result", {"request_id": req_id, "cid": correlation_id})
+            try:
+                await self._safe_reply(
+                    message,
+                    "Reusing cached fetch result.",
+                )
+            except Exception:
+                pass
         else:
+            # Notify: starting Firecrawl
+            try:
+                await self._safe_reply(message, "Fetching via Firecrawl...")
+            except Exception:
+                pass
             async with self._ext_sem:
                 crawl = await self._firecrawl.scrape_markdown(url_text, request_id=req_id)
             try:
@@ -700,6 +717,21 @@ class TelegramBot:
             except Exception as e:  # noqa: BLE001
                 logger.error("persist_crawl_error", extra={"error": str(e), "cid": correlation_id})
 
+            # Debug logging for crawl result
+            logger.debug(
+                "crawl_result_debug",
+                extra={
+                    "cid": correlation_id,
+                    "status": crawl.status,
+                    "http_status": crawl.http_status,
+                    "error_text": crawl.error_text,
+                    "has_markdown": bool(crawl.content_markdown),
+                    "has_html": bool(crawl.content_html),
+                    "markdown_len": len(crawl.content_markdown) if crawl.content_markdown else 0,
+                    "html_len": len(crawl.content_html) if crawl.content_html else 0,
+                },
+            )
+
             if crawl.status != "ok" or not (crawl.content_markdown or crawl.content_html):
                 self.db.update_request_status(req_id, "error")
                 await self._safe_reply(
@@ -707,7 +739,13 @@ class TelegramBot:
                     f"Failed to fetch content. Error ID: {correlation_id}",
                 )
                 logger.error(
-                    "firecrawl_error", extra={"error": crawl.error_text, "cid": correlation_id}
+                    "firecrawl_error",
+                    extra={
+                        "error": crawl.error_text,
+                        "cid": correlation_id,
+                        "status": crawl.status,
+                        "http_status": crawl.http_status,
+                    },
                 )
                 try:
                     self._audit(
@@ -729,6 +767,20 @@ class TelegramBot:
                         request_id=req_id,
                     )
                 return
+            # Notify: Firecrawl success
+            try:
+                excerpt_len = (len(crawl.content_markdown) if crawl.content_markdown else 0) or (
+                    len(crawl.content_html) if crawl.content_html else 0
+                )
+                await self._safe_reply(
+                    message,
+                    (
+                        f"Fetched ✓ (HTTP {crawl.http_status or 'n/a'}, "
+                        f"~{excerpt_len} chars, {crawl.latency_ms or 0} ms)."
+                    ),
+                )
+            except Exception:
+                pass
             if crawl.content_markdown:
                 content_text = crawl.content_markdown
             else:
@@ -746,6 +798,14 @@ class TelegramBot:
             "language_choice",
             extra={"detected": detected, "chosen": chosen_lang, "cid": correlation_id},
         )
+        # Notify: language detected
+        try:
+            await self._safe_reply(
+                message,
+                f"Language detected: {detected or 'unknown'}. Generating summary...",
+            )
+        except Exception:
+            pass
 
         # LLM
         messages = [
@@ -760,6 +820,17 @@ class TelegramBot:
         ]
         async with self._ext_sem:
             llm = await self._openrouter.chat(messages, request_id=req_id)
+        # Notify: LLM finished (success or error will be handled below)
+        try:
+            await self._safe_reply(
+                message,
+                (
+                    "LLM call finished"
+                    f" ({'ok' if llm.status == 'ok' else 'error'}, {llm.latency_ms or 0} ms)."
+                ),
+            )
+        except Exception:
+            pass
         try:
             self.db.insert_llm_call(
                 request_id=req_id,
@@ -896,6 +967,12 @@ class TelegramBot:
         except Exception as e:  # noqa: BLE001
             logger.error("snapshot_error", extra={"error": str(e)})
 
+        # Notify: request accepted (forward)
+        try:
+            await self._safe_reply(message, "Accepted. Generating summary...")
+        except Exception:
+            pass
+
         # Language detection and choice
         detected = detect_language(text)
         try:
@@ -908,6 +985,14 @@ class TelegramBot:
             "language_choice",
             extra={"detected": detected, "chosen": chosen_lang, "cid": correlation_id},
         )
+        # Notify: language detected (forward)
+        try:
+            await self._safe_reply(
+                message,
+                f"Language detected: {detected or 'unknown'}. Sending to LLM...",
+            )
+        except Exception:
+            pass
 
         messages = [
             {"role": "system", "content": system_prompt},
@@ -921,6 +1006,17 @@ class TelegramBot:
         ]
         async with self._ext_sem:
             llm = await self._openrouter.chat(messages, request_id=req_id)
+        # Notify: LLM finished (forward)
+        try:
+            await self._safe_reply(
+                message,
+                (
+                    "LLM call finished"
+                    f" ({'ok' if llm.status == 'ok' else 'error'}, {llm.latency_ms or 0} ms)."
+                ),
+            )
+        except Exception:
+            pass
         if llm.status != "ok" or not llm.response_text:
             # persist LLM call as error, then reply
             try:
