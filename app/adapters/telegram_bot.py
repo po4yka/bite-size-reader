@@ -12,6 +12,7 @@ from typing import Any
 from app.adapters.firecrawl_parser import FirecrawlClient
 from app.adapters.openrouter_client import OpenRouterClient
 from app.config import AppConfig
+from app.core.html_utils import html_to_text
 from app.core.lang import LANG_RU, choose_language, detect_language
 from app.core.logging_utils import generate_correlation_id, setup_json_logging
 from app.core.summary_contract import validate_and_shape_summary
@@ -124,6 +125,22 @@ class TelegramBot:
             if text.startswith("/help"):
                 await self._send_help(message)
                 return
+            if text.startswith("/summarize_all"):
+                urls = extract_all_urls(text)
+                if len(urls) == 0:
+                    await self._safe_reply(
+                        message,
+                        "Send multiple URLs in one message after /summarize_all, separated by space or new line.",
+                    )
+                    return
+                await self._safe_reply(message, f"Processing {len(urls)} links...")
+                for u in urls:
+                    per_link_cid = generate_correlation_id()
+                    logger.debug(
+                        "processing_link", extra={"uid": uid, "url": u, "cid": per_link_cid}
+                    )
+                    await self._handle_url_flow(message, u, correlation_id=per_link_cid)
+                return
 
             if text.startswith("/summarize"):
                 # If URL is in the same message, extract and process; otherwise set awaiting state
@@ -212,10 +229,12 @@ class TelegramBot:
             "Bite-Size Reader\n\n"
             "Commands:\n"
             "- /help — show this help.\n"
-            "- /summarize <URL> — summarize a URL.\n\n"
+            "- /summarize <URL> — summarize a URL.\n"
+            "- /summarize_all <URLs> — summarize multiple URLs from one message.\n\n"
             "Usage:\n"
             "- Send a URL, or forward a channel post to get a JSON summary.\n"
-            "- You can also send /summarize and then a URL in the next message."
+            "- You can also send /summarize and then a URL in the next message.\n"
+            "- Multiple links in one message are supported; I can confirm or use /summarize_all to process immediately."
         )
         await self._safe_reply(message, help_text)
 
@@ -228,7 +247,7 @@ class TelegramBot:
             "How to use:\n"
             "- Send a URL directly, or use /summarize <URL>.\n"
             "- You can also send /summarize and then the URL in the next message.\n"
-            '- Multiple links in one message are supported: I will ask "Process N links?" and handle them sequentially.\n\n'
+            '- Multiple links in one message are supported: I will ask "Process N links?" or use /summarize_all to process immediately.\n\n'
             "Notes:\n"
             "- I reply with a strict JSON object.\n"
             "- Errors include an Error ID you can reference in logs."
@@ -245,11 +264,13 @@ class TelegramBot:
                 BotCommand("start", "Welcome and instructions"),
                 BotCommand("help", "Show help and usage"),
                 BotCommand("summarize", "Summarize a URL (send URL next)"),
+                BotCommand("summarize_all", "Summarize multiple URLs from one message"),
             ]
             commands_ru = [
                 BotCommand("start", "Приветствие и инструкция"),
                 BotCommand("help", "Показать помощь и инструкцию"),
                 BotCommand("summarize", "Суммировать ссылку (или пришлите позже)"),
+                BotCommand("summarize_all", "Суммировать несколько ссылок из сообщения"),
             ]
             try:
                 client_any: Any = self.client
@@ -350,9 +371,11 @@ class TelegramBot:
         if existing_crawl and (
             existing_crawl.get("content_markdown") or existing_crawl.get("content_html")
         ):
-            content_markdown = existing_crawl.get("content_markdown") or existing_crawl.get(
-                "content_html"
-            )
+            md = existing_crawl.get("content_markdown")
+            if md:
+                content_text = md
+            else:
+                content_text = html_to_text(existing_crawl.get("content_html") or "")
             self._audit("INFO", "reuse_crawl_result", {"request_id": req_id, "cid": correlation_id})
         else:
             async with self._ext_sem:
@@ -396,10 +419,13 @@ class TelegramBot:
                 except Exception:
                     pass
                 return
-            content_markdown = crawl.content_markdown or crawl.content_html or ""
+            if crawl.content_markdown:
+                content_text = crawl.content_markdown
+            else:
+                content_text = html_to_text(crawl.content_html or "")
 
         # Language detection and choice
-        detected = detect_language(content_markdown or "")
+        detected = detect_language(content_text or "")
         try:
             self.db.update_request_lang_detected(req_id, detected)
         except Exception as e:  # noqa: BLE001
@@ -418,7 +444,7 @@ class TelegramBot:
                 "role": "user",
                 "content": (
                     f"Summarize the following content to the specified JSON schema. "
-                    f"Respond in {'Russian' if chosen_lang == LANG_RU else 'English'}.\n\n{content_markdown}"
+                    f"Respond in {'Russian' if chosen_lang == LANG_RU else 'English'}.\n\n{content_text}"
                 ),
             },
         ]
@@ -641,13 +667,21 @@ class TelegramBot:
         msg_id = int(getattr(message, "id", getattr(message, "message_id", 0))) or None
         chat_id = int(getattr(getattr(message, "chat", None), "id", 0)) or None
 
-        def _to_epoch(val: object) -> int | None:
+        def _to_epoch(val: Any) -> int | None:
             try:
                 if isinstance(val, datetime):
                     return int(val.timestamp())
                 if val is None:
                     return None
-                return int(val)  # may raise
+                # Some libraries expose pyrogram types with .timestamp or int-like
+                if hasattr(val, "timestamp"):
+                    try:
+                        ts_val = getattr(val, "timestamp")
+                        if callable(ts_val):
+                            return int(ts_val())
+                    except Exception:
+                        pass
+                return int(val)  # may raise if not int-like
             except Exception:
                 return None
 
