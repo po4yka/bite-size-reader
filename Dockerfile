@@ -25,10 +25,6 @@ RUN pip install --no-cache-dir uv && uv sync --frozen
 COPY app ./app
 COPY bot.py ./
 
-# Bake spaCy language models into the image for faster startup
-RUN uv run python -m spacy download en_core_web_sm && \
-    uv run python -m spacy download ru_core_news_sm
-
 # Runtime configuration
 VOLUME ["/data"]
 ENV DB_PATH=/data/app.db \

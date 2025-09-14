@@ -52,6 +52,7 @@ no_implicit_optional = false
 disallow_untyped_defs = false
 disallow_any_generics = false
 exclude = ["data", "build", "dist", "venv", "bite-size-reader"]
+
 [project]
 name = "bite-size-reader"
 version = "0.1.0"
@@ -65,6 +66,9 @@ dependencies = [
   "readability-lxml==0.8.4.1",
   "textacy>=0.13,<0.14",
   "spacy>=3.7,<4",
+  # spaCy language models
+  "en-core-web-sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.7.1/en_core_web_sm-3.7.1-py3-none-any.whl",
+  "ru-core-news-sm @ https://github.com/explosion/spacy-models/releases/download/ru_core_news_sm-3.7.0/ru_core_news_sm-3.7.0-py3-none-any.whl",
 ]
 
 [project.optional-dependencies]
