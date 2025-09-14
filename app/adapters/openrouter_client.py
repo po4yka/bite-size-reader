@@ -83,7 +83,7 @@ class OpenRouterClient:
         self._model = model
         self._fallback_models = validated_fallbacks
         self._timeout = int(timeout_sec)
-        self._base_url = "https://openrouter.co/v1"
+        self._base_url = "https://openrouter.ai/api/v1"
         self._http_referer = http_referer
         self._x_title = x_title
         self._max_retries = max(0, int(max_retries))
@@ -299,7 +299,7 @@ class OpenRouterClient:
                             error_text=None,
                             request_headers=redacted_headers,
                             request_messages=messages,
-                            endpoint="/v1/chat/completions",
+                            endpoint="/api/v1/chat/completions",
                         )
 
                     # Handle specific HTTP status codes according to OpenRouter documentation
@@ -331,7 +331,7 @@ class OpenRouterClient:
                             error_text=error_message,
                             request_headers=redacted_headers,
                             request_messages=messages,
-                            endpoint="/v1/chat/completions",
+                            endpoint="/api/v1/chat/completions",
                         )
 
                     # Retryable errors (429, 5xx)
@@ -378,7 +378,7 @@ class OpenRouterClient:
                             error_text=error_message,
                             request_headers=redacted_headers,
                             request_messages=messages,
-                            endpoint="/v1/chat/completions",
+                            endpoint="/api/v1/chat/completions",
                         )
                 except Exception as e:  # noqa: BLE001
                     latency = int((time.perf_counter() - started) * 1000)

@@ -42,7 +42,7 @@ class TestOpenRouterCompliance:
 
             # Verify the correct endpoint is called
             call_args = mock_client.return_value.__aenter__.return_value.post.call_args
-            assert call_args[0][0] == "https://openrouter.co/v1/chat/completions"
+            assert call_args[0][0] == "https://openrouter.ai/api/v1/chat/completions"
 
     @pytest.mark.asyncio
     async def test_authentication_header(self):
@@ -271,7 +271,7 @@ class TestOpenRouterCompliance:
             assert result.tokens_prompt == 10
             assert result.tokens_completion == 5
             assert result.model == "openai/gpt-4o-mini"
-            assert result.endpoint == "/v1/chat/completions"
+            assert result.endpoint == "/api/v1/chat/completions"
 
     @pytest.mark.asyncio
     async def test_models_endpoint(self):
@@ -293,7 +293,7 @@ class TestOpenRouterCompliance:
 
             # Verify models endpoint is called
             call_args = mock_client.return_value.__aenter__.return_value.get.call_args
-            assert call_args[0][0] == "https://openrouter.co/v1/models"
+            assert call_args[0][0] == "https://openrouter.ai/api/v1/models"
 
             # Verify response
             assert "data" in models
