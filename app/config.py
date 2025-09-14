@@ -136,13 +136,28 @@ def _validate_lang(lang: str) -> str:
 
 
 def _validate_model_name(model: str) -> str:
-    """Validate model name for security."""
+    """Validate model name for security and allow OpenRouter-style IDs.
+
+    OpenRouter models commonly use identifiers like:
+      - "openai/gpt-4o-mini"
+      - "anthropic/claude-3.5-sonnet:beta"
+      - "meta-llama/llama-3.1-8b-instruct:free"
+
+    We therefore allow a conservative set of characters found in such names:
+    letters, digits, dash, underscore, dot, forward slash and colon.
+    """
     if not model:
         raise ValueError("Model name cannot be empty")
     if len(model) > 100:
         raise ValueError("Model name too long")
-    # Basic security: no path traversal or injection attempts
-    if any(char in model for char in ["/", "\\", "..", "script", "<", ">"]):
+
+    # Disallow path traversal or obvious injection markers
+    if ".." in model or "<" in model or ">" in model or "\\" in model:
+        raise ValueError("Model name contains invalid characters")
+
+    # Allowlist characters typical for OpenRouter model IDs
+    allowed = set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_.:/")
+    if any(ch not in allowed for ch in model):
         raise ValueError("Model name contains invalid characters")
     return model
 
