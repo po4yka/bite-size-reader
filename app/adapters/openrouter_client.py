@@ -232,11 +232,52 @@ class OpenRouterClient:
                 else:
                     body["response_format"] = {"type": "json_object"}
 
-                # Enable middle-out compression for large content to reduce latency
-                # This preserves beginning and end while compressing the middle
+                # Intelligent compression strategy based on OpenRouter best practices
+                # Apply middle-out compression only when content significantly exceeds context limits
                 total_content_length = sum(len(msg.get("content", "")) for msg in messages)
-                if total_content_length > 30000:  # Enable for content > 30KB
+
+                # Adaptive compression thresholds based on model capabilities
+                # Conservative approach: only compress when truly necessary
+                model_lower = model.lower()
+                if "gpt-4" in model_lower or "gpt-5" in model_lower or "claude-3" in model_lower:
+                    # Large context models: 128K+ tokens ≈ 400KB+ text
+                    compression_threshold = 350000  # 350KB
+                elif "claude-2" in model_lower or "llama" in model_lower:
+                    # Medium context models: 32K-100K tokens ≈ 200KB-300KB text
+                    compression_threshold = 250000  # 250KB
+                else:
+                    # Conservative fallback for unknown models
+                    compression_threshold = 200000  # 200KB
+
+                if total_content_length > compression_threshold:
                     body["transforms"] = ["middle-out"]
+                    self._logger.warning(
+                        "middle_out_compression_applied",
+                        extra={
+                            "total_content_length": total_content_length,
+                            "threshold": compression_threshold,
+                            "reason": "content_exceeds_safe_context_limit",
+                        },
+                    )
+                else:
+                    # Log when we're approaching the threshold (75% or more) for monitoring
+                    warning_threshold = int(
+                        compression_threshold * 0.75
+                    )  # 75% of compression threshold
+                    if total_content_length > warning_threshold:
+                        self._logger.info(
+                            "large_content_detected",
+                            extra={
+                                "total_content_length": total_content_length,
+                                "compression_threshold": compression_threshold,
+                                "warning_threshold": warning_threshold,
+                                "model": model,
+                                "compression_applied": False,
+                                "percentage_of_threshold": round(
+                                    (total_content_length / compression_threshold) * 100, 1
+                                ),
+                            },
+                        )
 
                 started = time.perf_counter()
                 try:
@@ -356,6 +397,23 @@ class OpenRouterClient:
                                         text = json.dumps(parsed, ensure_ascii=False)
                                     except Exception:
                                         text = str(parsed)
+
+                            # OpenAI reasoning field (when using structured outputs)
+                            if (not text) or (isinstance(text, str) and not text.strip()):
+                                reasoning = message_obj.get("reasoning")
+                                if reasoning and isinstance(reasoning, str):
+                                    # Look for JSON in reasoning field
+                                    start = reasoning.find("{")
+                                    end = reasoning.rfind("}")
+                                    if start != -1 and end != -1 and end > start:
+                                        try:
+                                            # Try to extract JSON from reasoning
+                                            potential_json = reasoning[start : end + 1]
+                                            json.loads(potential_json)  # Validate it's valid JSON
+                                            text = potential_json
+                                        except Exception:
+                                            # If no valid JSON in reasoning, use reasoning as text
+                                            text = reasoning
 
                             # Function/tool calls: arguments may hold the JSON
                             if (not text) or (isinstance(text, str) and not text.strip()):
