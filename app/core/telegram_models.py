@@ -590,7 +590,8 @@ class TelegramMessage:
             MediaType.STORY: self.story,
         }
 
-        return media_map.get(self.media_type)
+        result = media_map.get(self.media_type)
+        return result if isinstance(result, dict) else None
 
     def get_effective_text(self) -> str | None:
         """Get the effective text content (text or caption)."""
@@ -622,7 +623,7 @@ class TelegramMessage:
 
     def get_urls(self) -> list[str]:
         """Extract URLs from text and entities."""
-        urls = []
+        urls: list[str] = []
 
         if not self.text:
             return urls
@@ -634,7 +635,7 @@ class TelegramMessage:
                     url = self.text[entity.offset : entity.offset + entity.length]
                 else:  # TEXT_LINK
                     # Use the URL from the entity
-                    url = entity.url
+                    url = entity.url or ""
                 if url and url.strip():
                     urls.append(url.strip())
 

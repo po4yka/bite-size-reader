@@ -36,7 +36,14 @@ def make_bot(tmp_path: str, allowed_ids):
         ),
         firecrawl=FirecrawlConfig(api_key="x"),
         openrouter=OpenRouterConfig(
-            api_key="y", model="m", fallback_models=tuple(), http_referer=None, x_title=None
+            api_key="y",
+            model="m",
+            fallback_models=tuple(),
+            http_referer=None,
+            x_title=None,
+            max_tokens=None,
+            top_p=None,
+            temperature=0.2,
         ),
         runtime=RuntimeConfig(
             db_path=tmp_path,
