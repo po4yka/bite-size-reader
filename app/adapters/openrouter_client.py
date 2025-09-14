@@ -250,15 +250,34 @@ class OpenRouterClient:
                             red_header["Authorization"] = "REDACTED"
                         preview_rf = body.get("response_format") or {}
                         rf_type = preview_rf.get("type") if isinstance(preview_rf, dict) else None
+                        # Calculate content lengths for verification
+                        content_lengths = [len(msg.get("content", "")) for msg in messages]
+                        total_content = sum(content_lengths)
+
+                        # Show truncated messages for debug but include content length info
+                        debug_messages = []
+                        for i, msg in enumerate(messages[:3]):
+                            debug_msg = dict(msg)
+                            content = debug_msg.get("content", "")
+                            if len(content) > 200:  # Truncate for logging only
+                                debug_msg["content"] = (
+                                    content[:100] + f"... [+{len(content)-100} chars]"
+                                )
+                            debug_msg["content_length"] = str(len(content))
+                            debug_messages.append(debug_msg)
+
                         self._logger.debug(
                             "openrouter_request_payload",
                             extra={
                                 "headers": red_header,
                                 "body_preview": {
                                     "model": model,
-                                    "messages": messages[:3],
+                                    "messages": debug_messages,
                                     "temperature": temperature,
                                     "response_format_type": rf_type,
+                                    "total_content_length": total_content,
+                                    "content_lengths": content_lengths,
+                                    "transforms": body.get("transforms"),
                                 },
                             },
                         )
@@ -291,11 +310,12 @@ class OpenRouterClient:
                                 if choices and isinstance(choices[0], dict):
                                     choice = choices[0]
                                     if "message" in choice and isinstance(choice["message"], dict):
-                                        content = choice["message"].get("content")
-                                        if content:
-                                            choice["message"]["content"] = truncate_log_content(
-                                                content, self._log_truncate_length
+                                        msg_content: Any = choice["message"].get("content")
+                                        if msg_content and isinstance(msg_content, str):
+                                            truncated_content = truncate_log_content(
+                                                msg_content, self._log_truncate_length
                                             )
+                                            choice["message"]["content"] = truncated_content
                             self._logger.debug(
                                 "openrouter_response_payload", extra={"preview": preview}
                             )

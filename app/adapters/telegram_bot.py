@@ -955,16 +955,32 @@ class TelegramBot:
             merged_context = "\n\n".join(partials) if partials else content_text
             text_for_summary = merged_context
 
+        # Validate content before sending to LLM
+        user_content = (
+            f"Analyze the following content and output ONLY a valid JSON object that matches the system contract exactly. "
+            f"Respond in {'Russian' if chosen_lang == LANG_RU else 'English'}. Do NOT include any text outside the JSON.\n\n"
+            f"CONTENT START\n{text_for_summary}\nCONTENT END"
+        )
+
+        logger.info(
+            "llm_content_validation",
+            extra={
+                "cid": correlation_id,
+                "system_prompt_len": len(system_prompt),
+                "user_content_len": len(user_content),
+                "text_for_summary_len": len(text_for_summary),
+                "text_preview": (
+                    text_for_summary[:200] + "..."
+                    if len(text_for_summary) > 200
+                    else text_for_summary
+                ),
+                "has_content": bool(text_for_summary.strip()),
+            },
+        )
+
         messages = [
             {"role": "system", "content": system_prompt},
-            {
-                "role": "user",
-                "content": (
-                    f"Analyze the following content and output ONLY a valid JSON object that matches the system contract exactly. "
-                    f"Respond in {'Russian' if chosen_lang == LANG_RU else 'English'}. Do NOT include any text outside the JSON.\n\n"
-                    f"CONTENT START\n{text_for_summary}\nCONTENT END"
-                ),
-            },
+            {"role": "user", "content": user_content},
         ]
         async with self._ext_sem:
             # Provide structured outputs schema through response_format
