@@ -63,6 +63,8 @@ dependencies = [
   "tgcrypto>=1.2",
   "pydantic>=2.6",
   "readability-lxml==0.8.4.1",
+  "textacy>=0.13,<0.14",
+  "spacy>=3.7,<4",
 ]
 
 [project.optional-dependencies]

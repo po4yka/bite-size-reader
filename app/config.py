@@ -3,6 +3,8 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 
+# ruff: noqa: E501
+
 
 @dataclass(frozen=True)
 class OpenRouterConfig:
@@ -36,6 +38,7 @@ class RuntimeConfig:
     request_timeout_sec: int
     preferred_lang: str
     debug_payloads: bool
+    enable_textacy: bool = False
 
 
 @dataclass(frozen=True)
@@ -261,7 +264,7 @@ def load_config() -> AppConfig:
 
         openrouter = OpenRouterConfig(
             api_key=_validate_api_key(os.getenv("OPENROUTER_API_KEY", ""), "OpenRouter"),
-            model=_validate_model_name(os.getenv("OPENROUTER_MODEL", "openai/gpt-4o-mini")),
+            model=_validate_model_name(os.getenv("OPENROUTER_MODEL", "openai/gpt-5")),
             fallback_models=fallback_models,
             http_referer=os.getenv("OPENROUTER_HTTP_REFERER"),
             x_title=os.getenv("OPENROUTER_X_TITLE"),
@@ -276,6 +279,7 @@ def load_config() -> AppConfig:
             request_timeout_sec=_validate_timeout(os.getenv("REQUEST_TIMEOUT_SEC", "60")),
             preferred_lang=_validate_lang(os.getenv("PREFERRED_LANG", "auto")),
             debug_payloads=os.getenv("DEBUG_PAYLOADS", "0").lower() in ("1", "true"),
+            enable_textacy=os.getenv("TEXTACY_ENABLED", "0").lower() in ("1", "true", "yes"),
         )
 
         return AppConfig(

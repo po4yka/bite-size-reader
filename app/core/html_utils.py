@@ -3,7 +3,13 @@ from __future__ import annotations
 import re
 from html import unescape
 from html.parser import HTMLParser
+from typing import Any
 
+# ruff: noqa: E501
+
+
+Document: Any | None
+lxml_html: Any | None
 try:
     from lxml import html as lxml_html
     from readability import Document
@@ -13,6 +19,9 @@ except Exception:  # pragma: no cover
     Document = None
     lxml_html = None
     _HAS_READABILITY = False
+
+# Optional textacy / spacy normalization imports
+_HAS_TEXTACY = True  # will be validated at runtime in functions
 
 
 class _TextExtractor(HTMLParser):
@@ -92,7 +101,8 @@ def html_to_text(html: str) -> str:
         txt = re.sub(r"</p>", "\n\n", txt, flags=re.I)
         txt = re.sub(r"<[^>]+>", " ", txt)
         txt = unescape(txt)
-        return "\n".join(line.strip() for line in txt.splitlines() if line.strip())
+        lines = [line.strip() for line in txt.splitlines() if line.strip()]
+        return "\n".join(lines)
 
 
 def clean_markdown_article_text(markdown: str) -> str:
@@ -180,3 +190,92 @@ def clean_markdown_article_text(markdown: str) -> str:
     while "\n\n\n" in cleaned:
         cleaned = cleaned.replace("\n\n\n", "\n\n")
     return cleaned
+
+
+def normalize_with_textacy(text: str) -> str:
+    """Apply lightweight normalization using textacy if available.
+
+    Operations:
+    - normalize unicode quotes/dashes
+    - replace URLs/emails with placeholders
+    - collapse repeated whitespace
+    - strip control characters
+    Fallbacks to simple regex-based cleanup if textacy isn't installed.
+    """
+    if not isinstance(text, str):
+        text = str(text) if text is not None else ""
+
+    try:
+        import textacy.preprocessing as tprep
+
+        normalized = text
+        normalized = tprep.normalize.unicode(normalized)
+        normalized = tprep.replace.urls(normalized, repl=" ")
+        normalized = tprep.replace.emails(normalized, repl=" ")
+        normalized = tprep.replace.phone_numbers(normalized, repl=" ")
+        normalized = tprep.normalize.whitespace(normalized)
+        return normalized.strip()
+    except Exception:
+        pass
+
+    # Fallbacks without textacy
+    out = text
+    out = re.sub(r"https?://\S+", " ", out)
+    out = re.sub(r"\S+@\S+", " ", out)
+    out = re.sub(r"[\u0000-\u001F\u007F]", " ", out)
+    out = re.sub(r"[ \t]{2,}", " ", out)
+    while "\n\n\n" in out:
+        out = out.replace("\n\n\n", "\n\n")
+    return out.strip()
+
+
+def split_sentences(text: str, lang: str = "en") -> list[str]:
+    """Split text into sentences using spaCy if available, else regex fallback.
+
+    Uses a lightweight blank pipeline with a sentencizer to avoid heavy models.
+    """
+    if not isinstance(text, str):
+        text = str(text) if text is not None else ""
+    text = text.strip()
+    if not text:
+        return []
+
+    try:  # pragma: no cover - optional dependency
+        import spacy
+
+        nlp = spacy.blank(lang)
+        if "sentencizer" not in nlp.pipe_names:
+            nlp.add_pipe("sentencizer")
+        doc = nlp(text)
+        return [sent.text.strip() for sent in doc.sents if sent.text.strip()]
+    except Exception:
+        pass
+
+    # Regex fallback: split on sentence punctuation followed by space/cap
+    parts = re.split(r"(?<=[\.!?])\s+", text)
+    return [p.strip() for p in parts if p.strip()]
+
+
+def chunk_sentences(sentences: list[str], max_chars: int = 2000) -> list[str]:
+    """Group sentences into chunks under max_chars, preserving boundaries."""
+    if not isinstance(sentences, list):
+        return []
+    chunks: list[str] = []
+    buf: list[str] = []
+    size = 0
+    for sent in sentences:
+        s = (sent or "").strip()
+        if not s:
+            continue
+        if size + len(s) + (1 if buf else 0) > max_chars and buf:
+            chunks.append(" ".join(buf))
+            buf = [s]
+            size = len(s)
+        else:
+            if buf:
+                size += 1  # space
+            buf.append(s)
+            size += len(s)
+    if buf:
+        chunks.append(" ".join(buf))
+    return chunks

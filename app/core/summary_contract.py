@@ -4,6 +4,9 @@ from typing import Any
 
 from .summary_schema import PydanticAvailable
 
+# ruff: noqa: E501
+
+
 SummaryModelT: Any
 if PydanticAvailable:
     from .summary_schema import SummaryModel as SummaryModelT
@@ -141,27 +144,52 @@ def validate_and_shape_summary(payload: SummaryJSON) -> SummaryJSON:
             value = float(value_raw)
             unit = item.get("unit")
             source_excerpt = item.get("source_excerpt")
+            source_excerpt_value = str(source_excerpt) if source_excerpt is not None else None
             norm_stats.append(
                 {
                     "label": label,
                     "value": value,
                     "unit": str(unit) if unit is not None else None,
-                    "source_excerpt": str(source_excerpt) if source_excerpt is not None else None,
+                    "source_excerpt": source_excerpt_value,
                 }
             )
         except Exception:
             continue
     p["key_stats"] = norm_stats
     p.setdefault("answered_questions", [])
-    # readability
+    # readability: compute locally if libs available and fields empty
     rb = p.get("readability") or {}
-    try:
-        score = float(rb.get("score", 0.0))
-    except Exception:
-        score = 0.0
+    method = str(rb.get("method") or "Flesch-Kincaid")
+    score_val = rb.get("score")
     level = rb.get("level")
+    # Choose source: prefer summary_1000, fallback to summary_250
+    read_src = p.get("summary_1000") or p.get("summary_250") or ""
+    if score_val is None or float(score_val or 0.0) == 0.0:
+        score = 0.0
+        try:
+            # Import locally to keep optional
+            import spacy
+            from textacy.text_stats import TextStats
+
+            nlp = spacy.blank("en")
+            if "sentencizer" not in nlp.pipe_names:
+                nlp.add_pipe("sentencizer")
+            doc = nlp(read_src)
+            stats = TextStats(doc)
+            score = float(getattr(stats, "flesch_reading_ease", 0.0))
+            method = "Flesch-Kincaid"
+        except Exception:
+            try:
+                score = float(score_val or 0.0)
+            except Exception:
+                score = 0.0
+    else:
+        try:
+            score = float(score_val or 0.0)
+        except Exception:
+            score = 0.0
+
     if not level:
-        # simple mapping
         if score >= 90:
             level = "Very Easy"
         elif score >= 80:
@@ -177,18 +205,39 @@ def validate_and_shape_summary(payload: SummaryJSON) -> SummaryJSON:
         else:
             level = "Very Confusing"
     p["readability"] = {
-        "method": str(rb.get("method") or "Flesch-Kincaid"),
+        "method": method,
         "score": score,
         "level": level,
     }
     p.setdefault("seo_keywords", [])
+
+    # keyterms: populate seo_keywords/topic_tags if missing (best-effort)
+    if not p.get("seo_keywords") or not p.get("topic_tags"):
+        try:  # pragma: no cover - optional heavy deps
+            import spacy
+            from textacy.extract.keyterms import sgrank
+
+            nlp_kw = spacy.blank("en")
+            if "sentencizer" not in nlp_kw.pipe_names:
+                nlp_kw.add_pipe("sentencizer")
+            doc_kw = nlp_kw(read_src)
+            pairs = list(sgrank(doc_kw, topn=10))
+            terms = [str(t) for (t, _kscore) in pairs if str(t).strip()]
+            if not p.get("seo_keywords"):
+                p["seo_keywords"] = terms[:10]
+            if not p.get("topic_tags") and terms:
+                p["topic_tags"] = _hash_tagify(terms)
+        except Exception:
+            pass
 
     # Optional strict validation via Pydantic
     if PydanticAvailable:
         try:
             model = SummaryModelT(**p)
             # Pydantic v2: model_dump; v1: dict
-            return model.model_dump() if hasattr(model, "model_dump") else model.dict()
+            if hasattr(model, "model_dump"):
+                return model.model_dump()
+            return model.dict()
         except Exception:
             return p
     return p

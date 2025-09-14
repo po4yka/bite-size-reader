@@ -1,3 +1,4 @@
+# ruff: noqa: E501
 from __future__ import annotations
 
 import asyncio
@@ -13,7 +14,7 @@ from typing import Any
 from app.adapters.firecrawl_parser import FirecrawlClient
 from app.adapters.openrouter_client import OpenRouterClient
 from app.config import AppConfig
-from app.core.html_utils import clean_markdown_article_text, html_to_text
+from app.core.html_utils import clean_markdown_article_text, html_to_text, normalize_with_textacy
 from app.core.lang import LANG_RU, choose_language, detect_language
 from app.core.logging_utils import generate_correlation_id, setup_json_logging
 from app.core.summary_contract import validate_and_shape_summary
@@ -688,6 +689,12 @@ class TelegramBot:
                 content_text = clean_markdown_article_text(md)
             else:
                 content_text = html_to_text(existing_crawl.get("content_html") or "")
+            # Optional normalization (feature-flagged)
+            try:
+                if getattr(self.cfg.runtime, "enable_textacy", False):
+                    content_text = normalize_with_textacy(content_text)
+            except Exception:
+                pass
             self._audit("INFO", "reuse_crawl_result", {"request_id": req_id, "cid": correlation_id})
             try:
                 await self._safe_reply(
@@ -793,6 +800,12 @@ class TelegramBot:
                 content_text = clean_markdown_article_text(crawl.content_markdown)
             else:
                 content_text = html_to_text(crawl.content_html or "")
+            # Optional normalization (feature-flagged)
+            try:
+                if getattr(self.cfg.runtime, "enable_textacy", False):
+                    content_text = normalize_with_textacy(content_text)
+            except Exception:
+                pass
 
         # Language detection and choice
         detected = detect_language(content_text or "")
@@ -835,8 +848,9 @@ class TelegramBot:
             {
                 "role": "user",
                 "content": (
-                    f"Summarize the following content to the specified JSON schema. "
-                    f"Respond in {'Russian' if chosen_lang == LANG_RU else 'English'}.\n\n{content_text}"
+                    f"Analyze the following content and output ONLY a valid JSON object that matches the system contract exactly. "
+                    f"Respond in {'Russian' if chosen_lang == LANG_RU else 'English'}. Do NOT include any text outside the JSON.\n\n"
+                    f"CONTENT START\n{content_text}\nCONTENT END"
                 ),
             },
         ]
@@ -957,6 +971,12 @@ class TelegramBot:
         text = (getattr(message, "text", None) or getattr(message, "caption", "") or "").strip()
         title = getattr(getattr(message, "forward_from_chat", None), "title", "")
         prompt = f"Channel: {title}\n\n{text}"
+        # Optional normalization for forwards as well
+        try:
+            if getattr(self.cfg.runtime, "enable_textacy", False):
+                prompt = normalize_with_textacy(prompt)
+        except Exception:
+            pass
 
         # Create request row (pending)
         chat_obj = getattr(message, "chat", None)
