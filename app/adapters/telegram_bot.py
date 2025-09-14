@@ -974,15 +974,6 @@ class TelegramBot:
                 top_p=self.cfg.openrouter.top_p,
                 request_id=req_id,
             )
-        logger.info(
-            "llm_finished",
-            extra={
-                "status": llm.status,
-                "latency_ms": llm.latency_ms,
-                "model": llm.model,
-                "cid": correlation_id,
-            },
-        )
         # Notify: LLM finished (success or error will be handled below)
         try:
             await self._safe_reply(
@@ -1126,6 +1117,25 @@ class TelegramBot:
                 summary_json = json.loads(llm.response_text[start : end + 1])
 
         shaped = validate_and_shape_summary(summary_json)
+
+        # Enhanced llm_finished log with summary details
+        logger.info(
+            "llm_finished",
+            extra={
+                "status": llm.status,
+                "latency_ms": llm.latency_ms,
+                "model": llm.model,
+                "cid": correlation_id,
+                "summary_250_len": len(shaped.get("summary_250", "")),
+                "summary_1000_len": len(shaped.get("summary_1000", "")),
+                "key_ideas_count": len(shaped.get("key_ideas", [])),
+                "topic_tags_count": len(shaped.get("topic_tags", [])),
+                "entities_count": len(shaped.get("entities", [])),
+                "reading_time_min": shaped.get("estimated_reading_time_min"),
+                "seo_keywords_count": len(shaped.get("seo_keywords", [])),
+            },
+        )
+
         try:
             new_version = self.db.upsert_summary(
                 request_id=req_id, lang=chosen_lang, json_payload=json.dumps(shaped)
