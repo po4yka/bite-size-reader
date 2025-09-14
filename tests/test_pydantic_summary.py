@@ -1,13 +1,14 @@
 import unittest
 
-from app.core.summary_schema import PydanticAvailable
 from app.core.summary_contract import validate_and_shape_summary
+from app.core.summary_schema import PydanticAvailable
 
 
 @unittest.skipUnless(PydanticAvailable, "Pydantic not available")
 class TestPydanticSummary(unittest.TestCase):
     def test_summarymodel_rejects_overlong(self):
         from pydantic import ValidationError
+
         from app.core.summary_schema import SummaryModel
 
         payload = {
@@ -36,7 +37,10 @@ class TestPydanticSummary(unittest.TestCase):
             "topic_tags": ["tag", "#tag"],
             "entities": {"people": ["A", "a"], "organizations": [], "locations": []},
             "estimated_reading_time_min": "5",
-            "key_stats": [{"label": "Market size", "value": "12.3", "unit": "BUSD"}, {"label": "bad", "value": "n/a"}],
+            "key_stats": [
+                {"label": "Market size", "value": "12.3", "unit": "BUSD"},
+                {"label": "bad", "value": "n/a"},
+            ],
             "answered_questions": ["What?"],
             "readability": {"score": "not-a-number"},
             "seo_keywords": ["k1"],
@@ -58,4 +62,3 @@ class TestPydanticSummary(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

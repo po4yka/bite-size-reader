@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 import asyncio
-import json
-import time
-from dataclasses import dataclass
 import logging
-from typing import Any, Dict, Optional, Callable
+import time
+from collections.abc import Callable
+from dataclasses import dataclass
+from typing import Any
 
 import httpx
 
@@ -36,7 +36,7 @@ class FirecrawlClient:
         timeout_sec: int = 60,
         max_retries: int = 3,
         backoff_base: float = 0.5,
-        audit: Callable[[str, str, Dict[str, Any]], None] | None = None,
+        audit: Callable[[str, str, dict[str, Any]], None] | None = None,
         debug_payloads: bool = False,
     ) -> None:
         self._api_key = api_key
@@ -48,7 +48,9 @@ class FirecrawlClient:
         self._logger = logging.getLogger(__name__)
         self._debug_payloads = debug_payloads
 
-    async def scrape_markdown(self, url: str, *, mobile: bool = True, request_id: int | None = None) -> FirecrawlResult:
+    async def scrape_markdown(
+        self, url: str, *, mobile: bool = True, request_id: int | None = None
+    ) -> FirecrawlResult:
         headers = {"Authorization": f"Bearer {self._api_key}"}
         body_base = {"url": url, "formats": ["markdown"]}
         last_data = None
@@ -63,10 +65,17 @@ class FirecrawlClient:
                 self._audit(
                     "INFO",
                     "firecrawl_attempt",
-                    {"attempt": attempt, "url": url, "mobile": cur_mobile, "pdf": cur_pdf, "request_id": request_id},
+                    {
+                        "attempt": attempt,
+                        "url": url,
+                        "mobile": cur_mobile,
+                        "pdf": cur_pdf,
+                        "request_id": request_id,
+                    },
                 )
             self._logger.debug(
-                "firecrawl_request", extra={"attempt": attempt, "url": url, "mobile": cur_mobile, "pdf": cur_pdf}
+                "firecrawl_request",
+                extra={"attempt": attempt, "url": url, "mobile": cur_mobile, "pdf": cur_pdf},
             )
             started = time.perf_counter()
             try:
@@ -87,7 +96,9 @@ class FirecrawlClient:
                 if self._debug_payloads:
                     preview = {
                         "keys": list(data.keys()) if isinstance(data, dict) else None,
-                        "markdown_len": len(data.get("markdown", "")) if isinstance(data, dict) else None,
+                        "markdown_len": (
+                            len(data.get("markdown", "")) if isinstance(data, dict) else None
+                        ),
                     }
                     self._logger.debug("firecrawl_response_payload", extra={"preview": preview})
 
@@ -96,7 +107,13 @@ class FirecrawlClient:
                         self._audit(
                             "INFO",
                             "firecrawl_success",
-                            {"attempt": attempt, "status": resp.status_code, "latency_ms": latency, "pdf": cur_pdf, "request_id": request_id},
+                            {
+                                "attempt": attempt,
+                                "status": resp.status_code,
+                                "latency_ms": latency,
+                                "pdf": cur_pdf,
+                                "request_id": request_id,
+                            },
                         )
                     return FirecrawlResult(
                         status="ok",
@@ -111,7 +128,11 @@ class FirecrawlClient:
                         error_text=None,
                         source_url=url,
                         endpoint="/v1/scrape",
-                        options_json={"formats": ["markdown"], "mobile": cur_mobile, **({"parsers": ["pdf"]} if cur_pdf else {})},
+                        options_json={
+                            "formats": ["markdown"],
+                            "mobile": cur_mobile,
+                            **({"parsers": ["pdf"]} if cur_pdf else {}),
+                        },
                     )
 
                 # Retry on 5xx
@@ -128,7 +149,13 @@ class FirecrawlClient:
                     self._audit(
                         "ERROR",
                         "firecrawl_error",
-                        {"attempt": attempt, "status": resp.status_code, "error": last_error, "pdf": cur_pdf, "request_id": request_id},
+                        {
+                            "attempt": attempt,
+                            "status": resp.status_code,
+                            "error": last_error,
+                            "pdf": cur_pdf,
+                            "request_id": request_id,
+                        },
                     )
                 self._logger.error(
                     "firecrawl_error", extra={"status": resp.status_code, "error": last_error}
@@ -146,13 +173,19 @@ class FirecrawlClient:
                     error_text=data.get("error") or str(data),
                     source_url=url,
                     endpoint="/v1/scrape",
-                    options_json={"formats": ["markdown"], "mobile": cur_mobile, **({"parsers": ["pdf"]} if cur_pdf else {})},
+                    options_json={
+                        "formats": ["markdown"],
+                        "mobile": cur_mobile,
+                        **({"parsers": ["pdf"]} if cur_pdf else {}),
+                    },
                 )
             except Exception as e:  # noqa: BLE001
                 latency = int((time.perf_counter() - started) * 1000)
                 last_latency = latency
                 last_error = str(e)
-                self._logger.error("firecrawl_exception", extra={"error": str(e), "attempt": attempt})
+                self._logger.error(
+                    "firecrawl_exception", extra={"error": str(e), "attempt": attempt}
+                )
                 if attempt < self._max_retries:
                     cur_mobile = not cur_mobile
                     if pdf_hint:
@@ -180,12 +213,16 @@ class FirecrawlClient:
             error_text=last_error,
             source_url=url,
             endpoint="/v1/scrape",
-            options_json={"formats": ["markdown"], "mobile": cur_mobile, **({"parsers": ["pdf"]} if pdf_hint else {})},
+            options_json={
+                "formats": ["markdown"],
+                "mobile": cur_mobile,
+                **({"parsers": ["pdf"]} if pdf_hint else {}),
+            },
         )
 
 
 async def asyncio_sleep_backoff(base: float, attempt: int) -> None:
-    import asyncio, random
+    import random
 
     base_delay = max(0.0, base * (2**attempt))
     jitter = 1.0 + random.uniform(-0.25, 0.25)

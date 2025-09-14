@@ -1,8 +1,8 @@
-import unittest
 import json
+import unittest
 
-from app.adapters.openrouter_client import OpenRouterClient as ORC, httpx as or_httpx
-from app.adapters.firecrawl_parser import FirecrawlClient as FC, httpx as fc_httpx
+from app.adapters.firecrawl_parser import FirecrawlClient, httpx as fc_httpx
+from app.adapters.openrouter_client import OpenRouterClient, httpx as or_httpx
 
 
 class _SeqAsyncClient:
@@ -44,9 +44,7 @@ class TestRetries(unittest.IsolatedAsyncioTestCase):
                     200,
                     {
                         "model": model,
-                        "choices": [
-                            {"message": {"content": json.dumps({"summary_250": "ok"})}}
-                        ],
+                        "choices": [{"message": {"content": json.dumps({"summary_250": "ok"})}}],
                         "usage": {"prompt_tokens": 3, "completion_tokens": 4},
                     },
                 )
@@ -54,7 +52,7 @@ class TestRetries(unittest.IsolatedAsyncioTestCase):
         original = or_httpx.AsyncClient
         try:
             or_httpx.AsyncClient = lambda timeout=None: _SeqAsyncClient(handler)  # type: ignore[assignment]
-            client = ORC(
+            client = OpenRouterClient(
                 api_key="k",
                 model="primary/model",
                 fallback_models=["fallback/model"],
@@ -81,7 +79,7 @@ class TestRetries(unittest.IsolatedAsyncioTestCase):
         original = fc_httpx.AsyncClient
         try:
             fc_httpx.AsyncClient = lambda timeout=None: _SeqAsyncClient(handler)  # type: ignore[assignment]
-            client = FC(api_key="x", timeout_sec=2, max_retries=2, backoff_base=0.0)
+            client = FirecrawlClient(api_key="x", timeout_sec=2, max_retries=2, backoff_base=0.0)
             res = await client.scrape_markdown("https://example.com")
             self.assertEqual(res.status, "ok")
             self.assertEqual(res.http_status, 200)
@@ -92,4 +90,3 @@ class TestRetries(unittest.IsolatedAsyncioTestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

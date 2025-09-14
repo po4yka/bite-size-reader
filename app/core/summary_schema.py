@@ -1,17 +1,21 @@
 from __future__ import annotations
 
-from typing import Optional
-
 try:
     from pydantic import BaseModel, Field
+
     PydanticAvailable = True
 except Exception:  # pragma: no cover - optional dependency
     BaseModel = object  # type: ignore
-    Field = lambda *a, **k: None  # type: ignore
+
+    def _field_stub(*a, **k):  # type: ignore
+        return None
+
+    Field = _field_stub  # type: ignore
     PydanticAvailable = False
 
 
 if PydanticAvailable:
+
     class Entities(BaseModel):
         people: list[str] = Field(default_factory=list)
         organizations: list[str] = Field(default_factory=list)
@@ -25,8 +29,8 @@ if PydanticAvailable:
     class KeyStat(BaseModel):
         label: str
         value: float
-        unit: Optional[str] = None
-        source_excerpt: Optional[str] = None
+        unit: str | None = None
+        source_excerpt: str | None = None
 
     class SummaryModel(BaseModel):
         summary_250: str = Field(max_length=250)

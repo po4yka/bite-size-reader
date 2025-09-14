@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-import json
-import time
-from dataclasses import dataclass
 import logging
-from typing import Any, Dict, List, Optional, Callable
+import time
+from collections.abc import Callable
+from dataclasses import dataclass
+from typing import Any
 
 import httpx
 
@@ -39,7 +39,7 @@ class OpenRouterClient:
         timeout_sec: int = 60,
         max_retries: int = 3,
         backoff_base: float = 0.5,
-        audit: Callable[[str, str, Dict[str, Any]], None] | None = None,
+        audit: Callable[[str, str, dict[str, Any]], None] | None = None,
         debug_payloads: bool = False,
     ) -> None:
         self._api_key = api_key
@@ -55,7 +55,13 @@ class OpenRouterClient:
         self._logger = logging.getLogger(__name__)
         self._debug_payloads = debug_payloads
 
-    async def chat(self, messages: List[Dict[str, str]], *, temperature: float = 0.2, request_id: int | None = None) -> LLMCallResult:
+    async def chat(
+        self,
+        messages: list[dict[str, str]],
+        *,
+        temperature: float = 0.2,
+        request_id: int | None = None,
+    ) -> LLMCallResult:
         models_to_try = [self._model] + self._fallback_models
         last_error_text = None
         last_data = None
@@ -115,13 +121,19 @@ class OpenRouterClient:
                     last_model_reported = data.get("model", model)
                     self._logger.debug(
                         "openrouter_response",
-                        extra={"status": resp.status_code, "latency_ms": latency, "model": last_model_reported},
+                        extra={
+                            "status": resp.status_code,
+                            "latency_ms": latency,
+                            "model": last_model_reported,
+                        },
                     )
                     if self._debug_payloads:
                         # Avoid dumping huge payloads entirely
                         try:
                             preview = data
-                            self._logger.debug("openrouter_response_payload", extra={"preview": preview})
+                            self._logger.debug(
+                                "openrouter_response_payload", extra={"preview": preview}
+                            )
                         except Exception:
                             pass
 
@@ -146,7 +158,13 @@ class OpenRouterClient:
                             self._audit(
                                 "INFO",
                                 "openrouter_success",
-                                {"attempt": attempt, "model": model, "status": status_code, "latency_ms": latency, "request_id": request_id},
+                                {
+                                    "attempt": attempt,
+                                    "model": model,
+                                    "status": status_code,
+                                    "latency_ms": latency,
+                                    "request_id": request_id,
+                                },
                             )
                         return LLMCallResult(
                             status="ok",
@@ -176,7 +194,13 @@ class OpenRouterClient:
                             self._audit(
                                 "ERROR",
                                 "openrouter_error",
-                                {"attempt": attempt, "model": model, "status": status_code, "error": data.get("error"), "request_id": request_id},
+                                {
+                                    "attempt": attempt,
+                                    "model": model,
+                                    "status": status_code,
+                                    "error": data.get("error"),
+                                    "request_id": request_id,
+                                },
                             )
                         redacted_headers = dict(headers)
                         redacted_headers["Authorization"] = "REDACTED"
@@ -198,7 +222,9 @@ class OpenRouterClient:
                     latency = int((time.perf_counter() - started) * 1000)
                     last_latency = latency
                     last_error_text = str(e)
-                    self._logger.error("openrouter_exception", extra={"error": str(e), "attempt": attempt})
+                    self._logger.error(
+                        "openrouter_exception", extra={"error": str(e), "attempt": attempt}
+                    )
                     if attempt < self._max_retries:
                         await asyncio_sleep_backoff(self._backoff_base, attempt)
                         continue
@@ -210,7 +236,11 @@ class OpenRouterClient:
                 self._audit(
                     "WARN",
                     "openrouter_fallback",
-                    {"from_model": model, "to_model": models_to_try[models_to_try.index(model) + 1], "request_id": request_id},
+                    {
+                        "from_model": model,
+                        "to_model": models_to_try[models_to_try.index(model) + 1],
+                        "request_id": request_id,
+                    },
                 )
 
         # All models exhausted
@@ -222,7 +252,12 @@ class OpenRouterClient:
             self._audit(
                 "ERROR",
                 "openrouter_exhausted",
-                {"models_tried": models_to_try, "attempts_each": self._max_retries + 1, "error": last_error_text, "request_id": request_id},
+                {
+                    "models_tried": models_to_try,
+                    "attempts_each": self._max_retries + 1,
+                    "error": last_error_text,
+                    "request_id": request_id,
+                },
             )
         return LLMCallResult(
             status="error",
@@ -242,7 +277,8 @@ class OpenRouterClient:
 
 async def asyncio_sleep_backoff(base: float, attempt: int) -> None:
     # Exponential backoff with light jitter: (base * 2^attempt) * (1 +/- 0.25)
-    import asyncio, random
+    import asyncio
+    import random
 
     base_delay = max(0.0, base * (2**attempt))
     jitter = 1.0 + random.uniform(-0.25, 0.25)

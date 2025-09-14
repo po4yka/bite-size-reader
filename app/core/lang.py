@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
-
 
 LANG_EN = "en"
 LANG_RU = "ru"
@@ -27,4 +25,3 @@ def choose_language(preferred: str, detected: str) -> str:
     if preferred in (LANG_EN, LANG_RU):
         return preferred
     return detected if detected in (LANG_EN, LANG_RU) else LANG_EN
-

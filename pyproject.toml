@@ -2,7 +2,14 @@
 line-length = 100
 target-version = ["py311"]
 include = '\.pyi?$'
-exclude = ["^/data/", "^/build/", "^/dist/", "^/venv/"]
+extend-exclude = '''
+/(
+  data
+ |build
+ |dist
+ |venv
+)/
+'''
 
 [tool.isort]
 profile = "black"
@@ -22,7 +29,6 @@ exclude = ["data", "build", "dist", "venv"]
 select = [
   "E",  # pycodestyle errors
   "F",  # pyflakes
-  "I",  # isort
   "UP", # pyupgrade
   "ASYNC", # async issues
   "N",  # pep8-naming
@@ -60,7 +66,6 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
-  "black>=24.3.0",
   "isort>=5.13.2",
   "ruff>=0.5.4",
   "mypy>=1.10.0",

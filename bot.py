@@ -3,9 +3,9 @@ from __future__ import annotations
 import asyncio
 import logging
 
+from app.adapters.telegram_bot import TelegramBot
 from app.config import load_config
 from app.db.database import Database
-from app.adapters.telegram_bot import TelegramBot
 
 
 async def main() -> None:
@@ -22,4 +22,3 @@ if __name__ == "__main__":
         asyncio.run(main())
     except KeyboardInterrupt:  # pragma: no cover
         logging.getLogger(__name__).info("shutdown")
-

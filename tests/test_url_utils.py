@@ -1,6 +1,6 @@
 import unittest
 
-from app.core.url_utils import normalize_url, url_hash_sha256, looks_like_url
+from app.core.url_utils import looks_like_url, normalize_url, url_hash_sha256
 
 
 class TestURLUtils(unittest.TestCase):
@@ -25,4 +25,3 @@ class TestURLUtils(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

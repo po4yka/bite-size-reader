@@ -3,13 +3,12 @@ from __future__ import annotations
 import json
 import logging
 import sys
-from typing import Any
 import uuid
-import os
-import sys
+from typing import Any
 
 try:  # Optional: modern logging via loguru
     from loguru import logger as loguru_logger  # type: ignore
+
     _HAS_LOGURU = True
 except Exception:  # pragma: no cover - optional dependency
     loguru_logger = None  # type: ignore
@@ -31,7 +30,28 @@ class JsonFormatter(logging.Formatter):
             if key in base:
                 continue
             # Attach extra fields provided via logger.extra
-            if key not in ("args", "msg", "name", "levelno", "levelname", "pathname", "filename", "module", "exc_info", "exc_text", "stack_info", "lineno", "funcName", "created", "msecs", "relativeCreated", "thread", "threadName", "processName", "process"):
+            if key not in (
+                "args",
+                "msg",
+                "name",
+                "levelno",
+                "levelname",
+                "pathname",
+                "filename",
+                "module",
+                "exc_info",
+                "exc_text",
+                "stack_info",
+                "lineno",
+                "funcName",
+                "created",
+                "msecs",
+                "relativeCreated",
+                "thread",
+                "threadName",
+                "processName",
+                "process",
+            ):
                 base[key] = value
         return json.dumps(base, ensure_ascii=False)
 
@@ -59,7 +79,9 @@ def setup_json_logging(level: str = "INFO") -> None:
                     lvl = loguru_logger.level(record.levelname).name  # type: ignore[attr-defined]
                 except Exception:
                     lvl = record.levelno
-                loguru_logger.bind().opt(depth=6, exception=record.exc_info).log(lvl, record.getMessage())  # type: ignore[attr-defined]
+                loguru_logger.bind().opt(depth=6, exception=record.exc_info).log(
+                    lvl, record.getMessage()
+                )  # type: ignore[attr-defined]
 
         root = logging.getLogger()
         root.handlers.clear()

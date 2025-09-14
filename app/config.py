@@ -96,6 +96,4 @@ def load_config() -> AppConfig:
         debug_payloads=os.getenv("DEBUG_PAYLOADS", "0") in ("1", "true", "True"),
     )
 
-    return AppConfig(
-        telegram=telegram, firecrawl=firecrawl, openrouter=openrouter, runtime=runtime
-    )
+    return AppConfig(telegram=telegram, firecrawl=firecrawl, openrouter=openrouter, runtime=runtime)

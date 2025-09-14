@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import hashlib
-import re
 import logging
-from urllib.parse import urlparse, urlunparse, parse_qsl, urlencode
+import re
+from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
 logger = logging.getLogger(__name__)
 
@@ -38,9 +38,7 @@ def normalize_url(url: str) -> str:
 
     # Filter and sort query params
     query_pairs = [
-        (k, v)
-        for k, v in parse_qsl(p.query, keep_blank_values=True)
-        if k not in TRACKING_PARAMS
+        (k, v) for k, v in parse_qsl(p.query, keep_blank_values=True) if k not in TRACKING_PARAMS
     ]
     query_pairs.sort(key=lambda x: (x[0], x[1]))
     query = urlencode(query_pairs)

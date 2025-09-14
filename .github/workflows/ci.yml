@@ -13,6 +13,10 @@ permissions:
 jobs:
   build-and-check:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11"]
+        pydantic: [true, false]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -20,12 +24,13 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: ${{ matrix.python-version }}
 
       - name: Install uv (fast Python package manager)
-        run: |
-          curl -Ls https://astral.sh/uv/install.sh | sh
-          echo "${HOME}/.local/bin" >> $GITHUB_PATH
+        uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+          cache-dependency-glob: "pyproject.toml"
 
       - name: Compile locked requirements from pyproject.toml (runtime)
         run: |
@@ -43,61 +48,12 @@ jobs:
 
       - name: Install dependencies
         run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt -r requirements-dev.txt
-
-      - name: Lint (ruff)
-        run: ruff check .
-
-      - name: Format check (black)
-        run: black --check .
-
-      - name: Import sort check (isort)
-        run: isort --check-only .
-
-      - name: Type check (mypy)
-        run: mypy app tests
-
-      - name: Run tests
-        run: python -m unittest discover -s tests -p "test_*.py" -v
-
-  unit-tests:
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        python-version: ["3.11"]
-        pydantic: [true, false]
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ matrix.python-version }}
-
-      - name: Install uv (fast Python package manager)
-        run: |
-          curl -Ls https://astral.sh/uv/install.sh | sh
-          echo "${HOME}/.local/bin" >> $GITHUB_PATH
-
-      - name: Compile locked requirements from pyproject.toml (runtime)
-        run: |
-          uv pip compile pyproject.toml -o requirements.txt
-
-      - name: Compile locked requirements from pyproject.toml (dev)
-        run: |
-          uv pip compile --extra dev pyproject.toml -o requirements-dev.txt
-
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt -r requirements-dev.txt
+          uv pip install -r requirements.txt -r requirements-dev.txt
 
       - name: Remove Pydantic for no-pydantic matrix case
         if: ${{ matrix.pydantic == false }}
         run: |
-          pip uninstall -y pydantic || true
+          uv pip uninstall -y pydantic || true
 
       - name: Verify Pydantic availability
         run: |
@@ -109,7 +65,19 @@ jobs:
               print("Pydantic: absent")
           PY
 
-      - name: Run unit tests
+      - name: Lint (ruff)
+        run: ruff check .
+
+      - name: Format check (ruff)
+        run: ruff format --check .
+
+      - name: Import sort check (isort)
+        run: isort --check-only .
+
+      - name: Type check (mypy)
+        run: mypy app tests
+
+      - name: Run tests
         run: python -m unittest discover -s tests -p "test_*.py" -v
 
   docker-image:
@@ -164,10 +132,11 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Install uv
-        run: |
-          curl -Ls https://astral.sh/uv/install.sh | sh
-          echo "${HOME}/.local/bin" >> $GITHUB_PATH
+      - name: Install uv (fast Python package manager)
+        uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+          cache-dependency-glob: "pyproject.toml"
 
       - name: Compile locked requirements
         run: |
@@ -176,9 +145,8 @@ jobs:
 
       - name: Install project and security tools
         run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt -r requirements-dev.txt
-          pip install bandit pip-audit safety
+          uv pip install -r requirements.txt -r requirements-dev.txt
+          uv pip install bandit pip-audit safety
 
       - name: Bandit (SAST)
         run: bandit -r app -ll

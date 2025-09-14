@@ -1,13 +1,14 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Any, Dict, List
+from typing import Any
+
 from .summary_schema import PydanticAvailable
+
 if PydanticAvailable:  # type: ignore
     from .summary_schema import SummaryModel  # noqa: F401
 
 
-SummaryJSON = Dict[str, Any]
+SummaryJSON = dict[str, Any]
 
 
 def _cap_text(text: str, limit: int) -> str:
@@ -22,9 +23,9 @@ def _cap_text(text: str, limit: int) -> str:
     return snippet.strip()
 
 
-def _hash_tagify(tags: List[str], max_tags: int = 10) -> List[str]:
+def _hash_tagify(tags: list[str], max_tags: int = 10) -> list[str]:
     seen: set[str] = set()
-    result: List[str] = []
+    result: list[str] = []
     for t in tags:
         t = t.strip()
         if not t:
@@ -40,9 +41,9 @@ def _hash_tagify(tags: List[str], max_tags: int = 10) -> List[str]:
     return result
 
 
-def _dedupe_case_insensitive(items: List[str]) -> List[str]:
+def _dedupe_case_insensitive(items: list[str]) -> list[str]:
     seen: set[str] = set()
-    out: List[str] = []
+    out: list[str] = []
     for it in items:
         key = it.strip().lower()
         if key and key not in seen:
@@ -68,8 +69,12 @@ def validate_and_shape_summary(payload: SummaryJSON) -> SummaryJSON:
 
     entities = p.get("entities", {}) or {}
     entities["people"] = _dedupe_case_insensitive([str(x) for x in entities.get("people", [])])
-    entities["organizations"] = _dedupe_case_insensitive([str(x) for x in entities.get("organizations", [])])
-    entities["locations"] = _dedupe_case_insensitive([str(x) for x in entities.get("locations", [])])
+    entities["organizations"] = _dedupe_case_insensitive(
+        [str(x) for x in entities.get("organizations", [])]
+    )
+    entities["locations"] = _dedupe_case_insensitive(
+        [str(x) for x in entities.get("locations", [])]
+    )
     p["entities"] = entities
 
     # numeric & nested fields
@@ -90,12 +95,14 @@ def validate_and_shape_summary(payload: SummaryJSON) -> SummaryJSON:
             value = float(value_raw)
             unit = item.get("unit")
             source_excerpt = item.get("source_excerpt")
-            norm_stats.append({
-                "label": label,
-                "value": value,
-                "unit": str(unit) if unit is not None else None,
-                "source_excerpt": str(source_excerpt) if source_excerpt is not None else None,
-            })
+            norm_stats.append(
+                {
+                    "label": label,
+                    "value": value,
+                    "unit": str(unit) if unit is not None else None,
+                    "source_excerpt": str(source_excerpt) if source_excerpt is not None else None,
+                }
+            )
         except Exception:
             continue
     p["key_stats"] = norm_stats
@@ -123,7 +130,11 @@ def validate_and_shape_summary(payload: SummaryJSON) -> SummaryJSON:
             level = "Difficult"
         else:
             level = "Very Confusing"
-    p["readability"] = {"method": str(rb.get("method") or "Flesch-Kincaid"), "score": score, "level": level}
+    p["readability"] = {
+        "method": str(rb.get("method") or "Flesch-Kincaid"),
+        "score": score,
+        "level": level,
+    }
     p.setdefault("seo_keywords", [])
 
     # Optional strict validation via Pydantic

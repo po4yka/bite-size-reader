@@ -1,9 +1,8 @@
 .PHONY: format lint type test all setup-dev venv
 
 format:
-	black .
-	isort .
 	ruff format .
+	isort .
 
 lint:
 	ruff check .

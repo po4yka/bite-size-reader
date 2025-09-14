@@ -1,11 +1,11 @@
-import unittest
-import tempfile
-import os
 import json
+import os
+import tempfile
+import unittest
 
-from app.db.database import Database
 from app.adapters.telegram_bot import TelegramBot
-from app.config import AppConfig, TelegramConfig, FirecrawlConfig, OpenRouterConfig, RuntimeConfig
+from app.config import AppConfig, FirecrawlConfig, OpenRouterConfig, RuntimeConfig, TelegramConfig
+from app.db.database import Database
 
 
 class _Ent:
@@ -46,8 +46,16 @@ def _bot_with_tmpdb(tmp_path):
     cfg = AppConfig(
         telegram=TelegramConfig(api_id=0, api_hash="", bot_token="", allowed_user_ids=tuple()),
         firecrawl=FirecrawlConfig(api_key="x"),
-        openrouter=OpenRouterConfig(api_key="y", model="m", fallback_models=tuple(), http_referer=None, x_title=None),
-        runtime=RuntimeConfig(db_path=tmp_path, log_level="INFO", request_timeout_sec=5, preferred_lang="en", debug_payloads=False),
+        openrouter=OpenRouterConfig(
+            api_key="y", model="m", fallback_models=tuple(), http_referer=None, x_title=None
+        ),
+        runtime=RuntimeConfig(
+            db_path=tmp_path,
+            log_level="INFO",
+            request_timeout_sec=5,
+            preferred_lang="en",
+            debug_payloads=False,
+        ),
     )
     from app.adapters import telegram_bot as tbmod
 
@@ -62,13 +70,23 @@ class TestMediaSnapshot(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.db_path = os.path.join(self.tmp.name, "app.db")
         self.bot, self.db = _bot_with_tmpdb(self.db_path)
-        self.req_id = self.db.create_request(type_="forward", status="pending", correlation_id=None, chat_id=1, user_id=1, route_version=1)
+        self.req_id = self.db.create_request(
+            type_="forward",
+            status="pending",
+            correlation_id=None,
+            chat_id=1,
+            user_id=1,
+            route_version=1,
+        )
 
     def tearDown(self):
         self.tmp.cleanup()
 
     def _assert_media(self, expected_type, expected_ids):
-        row = self.db.fetchone("SELECT media_type, media_file_ids_json FROM telegram_messages WHERE request_id = ?", (self.req_id,))
+        row = self.db.fetchone(
+            "SELECT media_type, media_file_ids_json FROM telegram_messages WHERE request_id = ?",
+            (self.req_id,),
+        )
         self.assertIsNotNone(row)
         self.assertEqual(row["media_type"], expected_type)
         if expected_ids:
@@ -151,7 +169,9 @@ class TestMediaSnapshot(unittest.TestCase):
                 self.caption_entities = [_Ent("url")]
 
         self.bot._persist_message_snapshot(self.req_id, Msg())
-        row = self.db.fetchone("SELECT entities_json FROM telegram_messages WHERE request_id = ?", (self.req_id,))
+        row = self.db.fetchone(
+            "SELECT entities_json FROM telegram_messages WHERE request_id = ?", (self.req_id,)
+        )
         self.assertIsNotNone(row)
         ents = json.loads(row["entities_json"]) if row["entities_json"] else []
         types = {e.get("type") for e in ents}

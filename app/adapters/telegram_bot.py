@@ -6,19 +6,13 @@ import logging
 from dataclasses import dataclass
 from typing import Any
 
-from app.config import AppConfig
-from app.core.logging_utils import setup_json_logging, generate_correlation_id
-from app.core.summary_contract import validate_and_shape_summary
-from app.core.url_utils import (
-    looks_like_url,
-    normalize_url,
-    url_hash_sha256,
-    extract_first_url,
-    extract_all_urls,
-)
-from app.core.lang import detect_language, choose_language, LANG_EN, LANG_RU
 from app.adapters.firecrawl_parser import FirecrawlClient
 from app.adapters.openrouter_client import OpenRouterClient
+from app.config import AppConfig
+from app.core.lang import LANG_RU, choose_language, detect_language
+from app.core.logging_utils import generate_correlation_id, setup_json_logging
+from app.core.summary_contract import validate_and_shape_summary
+from app.core.url_utils import extract_all_urls, looks_like_url, normalize_url, url_hash_sha256
 from app.db.database import Database
 
 try:
@@ -40,7 +34,10 @@ class TelegramBot:
 
     def __post_init__(self) -> None:  # type: ignore[override]
         setup_json_logging(self.cfg.runtime.log_level)
-        logger.info("bot_init", extra={"db_path": self.cfg.runtime.db_path, "log_level": self.cfg.runtime.log_level})
+        logger.info(
+            "bot_init",
+            extra={"db_path": self.cfg.runtime.db_path, "log_level": self.cfg.runtime.log_level},
+        )
 
         # Init clients
         self._firecrawl = FirecrawlClient(
@@ -83,6 +80,7 @@ class TelegramBot:
 
         # Register handlers only if filters are available
         if filters:
+
             @self.client.on_message(filters.private)
             async def _handler(client: Client, message: Message):  # type: ignore[valid-type]
                 await self._on_message(message)
@@ -173,12 +171,20 @@ class TelegramBot:
                     await self._safe_reply(message, "Cancelled.")
                     return
 
-            if getattr(message, "forward_from_chat", None) and getattr(message, "forward_from_message_id", None):
+            if getattr(message, "forward_from_chat", None) and getattr(
+                message, "forward_from_message_id", None
+            ):
                 await self._handle_forward_flow(message, correlation_id=correlation_id)
                 return
 
             await self._safe_reply(message, "Send a URL or forward a channel post.")
-            logger.debug("unknown_input", extra={"has_forward": bool(getattr(message, "forward_from_chat", None)), "text_len": len(text)})
+            logger.debug(
+                "unknown_input",
+                extra={
+                    "has_forward": bool(getattr(message, "forward_from_chat", None)),
+                    "text_len": len(text),
+                },
+            )
         except Exception as e:  # noqa: BLE001
             logger.exception("handler_error", extra={"cid": correlation_id})
             try:
@@ -221,14 +227,18 @@ class TelegramBot:
             # Types not available; skip
             return
 
-    async def _handle_url_flow(self, message: Any, url_text: str, *, correlation_id: str | None = None) -> None:
+    async def _handle_url_flow(
+        self, message: Any, url_text: str, *, correlation_id: str | None = None
+    ) -> None:
         norm = normalize_url(url_text)
         dedupe = url_hash_sha256(norm)
         logger.info(
-            "url_flow_detected", extra={"url": url_text, "normalized": norm, "hash": dedupe, "cid": correlation_id}
+            "url_flow_detected",
+            extra={"url": url_text, "normalized": norm, "hash": dedupe, "cid": correlation_id},
         )
         # Dedupe check
         existing_req = self.db.get_request_by_dedupe_hash(dedupe)
+        req_id: int  # Initialize variable for type checker
         if existing_req:
             req_id = int(existing_req["id"])  # reuse existing request
             self._audit(
@@ -240,7 +250,9 @@ class TelegramBot:
                 try:
                     self.db.update_request_correlation_id(req_id, correlation_id)
                 except Exception as e:  # noqa: BLE001
-                    logger.error("persist_cid_error", extra={"error": str(e), "cid": correlation_id})
+                    logger.error(
+                        "persist_cid_error", extra={"error": str(e), "cid": correlation_id}
+                    )
         else:
             # Create request row (pending)
             req_id = self.db.create_request(
@@ -252,7 +264,8 @@ class TelegramBot:
                 input_url=url_text,
                 normalized_url=norm,
                 dedupe_hash=dedupe,
-                input_message_id=int(getattr(message, "id", getattr(message, "message_id", 0))) or None,
+                input_message_id=int(getattr(message, "id", getattr(message, "message_id", 0)))
+                or None,
                 route_version=URL_ROUTE_VERSION,
             )
 
@@ -296,7 +309,9 @@ class TelegramBot:
                     message,
                     f"Failed to fetch content. Error ID: {correlation_id}",
                 )
-                logger.error("firecrawl_error", extra={"error": crawl.error_text, "cid": correlation_id})
+                logger.error(
+                    "firecrawl_error", extra={"error": crawl.error_text, "cid": correlation_id}
+                )
                 try:
                     self._audit(
                         "ERROR",
@@ -316,7 +331,10 @@ class TelegramBot:
             logger.error("persist_lang_detected_error", extra={"error": str(e)})
         chosen_lang = choose_language(self.cfg.runtime.preferred_lang, detected)
         system_prompt = await self._load_system_prompt(chosen_lang)
-        logger.debug("language_choice", extra={"detected": detected, "chosen": chosen_lang, "cid": correlation_id})
+        logger.debug(
+            "language_choice",
+            extra={"detected": detected, "chosen": chosen_lang, "cid": correlation_id},
+        )
 
         # LLM
         messages = [
@@ -381,26 +399,21 @@ class TelegramBot:
 
         shaped = validate_and_shape_summary(summary_json)
         try:
-            new_version = self.db.upsert_summary(request_id=req_id, lang=chosen_lang, json_payload=json.dumps(shaped))
+            new_version = self.db.upsert_summary(
+                request_id=req_id, lang=chosen_lang, json_payload=json.dumps(shaped)
+            )
             self.db.update_request_status(req_id, "ok")
             self._audit("INFO", "summary_upserted", {"request_id": req_id, "version": new_version})
         except Exception as e:  # noqa: BLE001
             logger.error("persist_summary_error", extra={"error": str(e), "cid": correlation_id})
         await self._reply_json(message, shaped)
 
-    async def _handle_forward_flow(self, message: Any, *, correlation_id: str | None = None) -> None:
+    async def _handle_forward_flow(
+        self, message: Any, *, correlation_id: str | None = None
+    ) -> None:
         text = (getattr(message, "text", None) or getattr(message, "caption", "") or "").strip()
         title = getattr(getattr(message, "forward_from_chat", None), "title", "")
         prompt = f"Channel: {title}\n\n{text}"
-
-        detected = detect_language(text)
-        try:
-            self.db.update_request_lang_detected(req_id, detected)
-        except Exception as e:  # noqa: BLE001
-            logger.error("persist_lang_detected_error", extra={"error": str(e)})
-        chosen_lang = choose_language(self.cfg.runtime.preferred_lang, detected)
-        system_prompt = await self._load_system_prompt(chosen_lang)
-        logger.debug("language_choice", extra={"detected": detected, "chosen": chosen_lang, "cid": correlation_id})
 
         # Create request row (pending)
         req_id = self.db.create_request(
@@ -410,7 +423,8 @@ class TelegramBot:
             chat_id=int(getattr(getattr(message, "chat", None), "id", 0)) or None,
             user_id=int(getattr(getattr(message, "from_user", None), "id", 0)) or None,
             input_message_id=int(getattr(message, "id", getattr(message, "message_id", 0))) or None,
-            fwd_from_chat_id=int(getattr(getattr(message, "forward_from_chat", None), "id", 0)) or None,
+            fwd_from_chat_id=int(getattr(getattr(message, "forward_from_chat", None), "id", 0))
+            or None,
             fwd_from_msg_id=int(getattr(message, "forward_from_message_id", 0)) or None,
             route_version=1,
         )
@@ -420,6 +434,19 @@ class TelegramBot:
             self._persist_message_snapshot(req_id, message)
         except Exception as e:  # noqa: BLE001
             logger.error("snapshot_error", extra={"error": str(e)})
+
+        # Language detection and choice
+        detected = detect_language(text)
+        try:
+            self.db.update_request_lang_detected(req_id, detected)
+        except Exception as e:  # noqa: BLE001
+            logger.error("persist_lang_detected_error", extra={"error": str(e)})
+        chosen_lang = choose_language(self.cfg.runtime.preferred_lang, detected)
+        system_prompt = await self._load_system_prompt(chosen_lang)
+        logger.debug(
+            "language_choice",
+            extra={"detected": detected, "chosen": chosen_lang, "cid": correlation_id},
+        )
 
         messages = [
             {"role": "system", "content": system_prompt},
@@ -502,7 +529,9 @@ class TelegramBot:
             logger.error("persist_llm_error", extra={"error": str(e), "cid": correlation_id})
 
         try:
-            new_version = self.db.upsert_summary(request_id=req_id, lang=chosen_lang, json_payload=json.dumps(shaped))
+            new_version = self.db.upsert_summary(
+                request_id=req_id, lang=chosen_lang, json_payload=json.dumps(shaped)
+            )
             self.db.update_request_status(req_id, "ok")
             self._audit("INFO", "summary_upserted", {"request_id": req_id, "version": new_version})
         except Exception as e:  # noqa: BLE001
@@ -524,11 +553,14 @@ class TelegramBot:
         msg_id = int(getattr(message, "id", getattr(message, "message_id", 0))) or None
         chat_id = int(getattr(getattr(message, "chat", None), "id", 0)) or None
         date_ts = int(getattr(message, "date", getattr(message, "forward_date", 0)) or 0) or None
-        text_full = (getattr(message, "text", None) or getattr(message, "caption", "") or None)
+        text_full = getattr(message, "text", None) or getattr(message, "caption", "") or None
 
         # Entities
-        entities_obj = (getattr(message, "entities", None) or []) + (getattr(message, "caption_entities", None) or [])
+        entities_obj = (getattr(message, "entities", None) or []) + (
+            getattr(message, "caption_entities", None) or []
+        )
         try:
+
             def _ent_to_dict(e: Any) -> dict:
                 if hasattr(e, "to_dict"):
                     try:
@@ -583,7 +615,9 @@ class TelegramBot:
                     media_file_ids.append(fid)
         except Exception:
             pass
-        media_file_ids_json = json.dumps(media_file_ids, ensure_ascii=False) if media_file_ids else None
+        media_file_ids_json = (
+            json.dumps(media_file_ids, ensure_ascii=False) if media_file_ids else None
+        )
 
         # Forward info
         fwd_chat = getattr(message, "forward_from_chat", None)
@@ -622,7 +656,9 @@ class TelegramBot:
 
     def _audit(self, level: str, event: str, details: dict) -> None:
         try:
-            self.db.insert_audit_log(level=level, event=event, details_json=json.dumps(details, ensure_ascii=False))
+            self.db.insert_audit_log(
+                level=level, event=event, details_json=json.dumps(details, ensure_ascii=False)
+            )
         except Exception as e:  # noqa: BLE001
             logger.error("audit_persist_failed", extra={"error": str(e), "event": event})
 
@@ -647,6 +683,7 @@ class TelegramBot:
         t = text.strip().lower()
         return t in {"n", "no", "-", "cancel", "stop", "нет", "не"}
 
+
 # Route versioning constants
 URL_ROUTE_VERSION = 1
 FORWARD_ROUTE_VERSION = 1
@@ -655,7 +692,7 @@ FORWARD_ROUTE_VERSION = 1
 async def idle() -> None:
     # Simple idle loop to keep the client running
     try:
-        while True:
+        while True:  # noqa: ASYNC110
             await asyncio.sleep(3600)
     except asyncio.CancelledError:  # pragma: no cover
         return

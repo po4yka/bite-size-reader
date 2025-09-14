@@ -1,7 +1,7 @@
-import unittest
-import tempfile
-import os
 import json
+import os
+import tempfile
+import unittest
 
 from app.db.database import Database
 
@@ -45,7 +45,14 @@ class TestDatabaseHelpers(unittest.TestCase):
         self.assertEqual(row2["correlation_id"], "zzz999")
 
     def test_crawl_result_helpers(self):
-        rid = self.db.create_request(type_="url", status="pending", correlation_id=None, chat_id=None, user_id=None, route_version=1)
+        rid = self.db.create_request(
+            type_="url",
+            status="pending",
+            correlation_id=None,
+            chat_id=None,
+            user_id=None,
+            route_version=1,
+        )
         cid = self.db.insert_crawl_result(
             request_id=rid,
             source_url="https://example.com",
@@ -70,7 +77,14 @@ class TestDatabaseHelpers(unittest.TestCase):
         self.assertEqual(row["content_markdown"], "# md")
 
     def test_summary_upsert(self):
-        rid = self.db.create_request(type_="url", status="pending", correlation_id=None, chat_id=None, user_id=None, route_version=1)
+        rid = self.db.create_request(
+            type_="url",
+            status="pending",
+            correlation_id=None,
+            chat_id=None,
+            user_id=None,
+            route_version=1,
+        )
         v1 = self.db.upsert_summary(request_id=rid, lang="en", json_payload=json.dumps({"a": 1}))
         self.assertEqual(v1, 1)
         row = self.db.get_summary_by_request(rid)
@@ -84,7 +98,14 @@ class TestDatabaseHelpers(unittest.TestCase):
         self.assertEqual(row2["version"], 2)
 
     def test_insert_llm_and_telegram_and_audit(self):
-        rid = self.db.create_request(type_="forward", status="pending", correlation_id=None, chat_id=1, user_id=2, route_version=1)
+        rid = self.db.create_request(
+            type_="forward",
+            status="pending",
+            correlation_id=None,
+            chat_id=1,
+            user_id=2,
+            route_version=1,
+        )
         # Telegram message
         mid = self.db.insert_telegram_message(
             request_id=rid,
@@ -131,7 +152,9 @@ class TestDatabaseHelpers(unittest.TestCase):
         self.assertEqual(lrow["tokens_completion"], 2)
 
         # Audit
-        aid = self.db.insert_audit_log(level="INFO", event="test", details_json=json.dumps({"x": 1}))
+        aid = self.db.insert_audit_log(
+            level="INFO", event="test", details_json=json.dumps({"x": 1})
+        )
         self.assertIsInstance(aid, int)
         arow = self.db.fetchone("SELECT * FROM audit_logs WHERE id = ?", (aid,))
         self.assertIsNotNone(arow)

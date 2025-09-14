@@ -1,8 +1,8 @@
-import unittest
 import json
+import unittest
 
-from app.adapters.firecrawl_parser import FirecrawlClient as FC, httpx as firecrawl_httpx
-from app.adapters.openrouter_client import OpenRouterClient as ORC, httpx as or_httpx
+from app.adapters.firecrawl_parser import FirecrawlClient, httpx as firecrawl_httpx
+from app.adapters.openrouter_client import OpenRouterClient, httpx as or_httpx
 
 
 class _FakeResponse:
@@ -51,7 +51,7 @@ class TestAdaptersIntegration(unittest.IsolatedAsyncioTestCase):
             )
             firecrawl_httpx.AsyncClient = lambda timeout=None: fake  # type: ignore[assignment]
 
-            client = FC(api_key="x", timeout_sec=5)
+            client = FirecrawlClient(api_key="x", timeout_sec=5)
             res = await client.scrape_markdown("https://example.com")
             self.assertEqual(res.status, "ok")
             self.assertEqual(res.http_status, 200)
@@ -65,20 +65,14 @@ class TestAdaptersIntegration(unittest.IsolatedAsyncioTestCase):
         try:
             payload = {
                 "model": "openai/gpt-5",
-                "choices": [
-                    {"message": {"content": json.dumps({"summary_250": "ok"})}}
-                ],
+                "choices": [{"message": {"content": json.dumps({"summary_250": "ok"})}}],
                 "usage": {"prompt_tokens": 10, "completion_tokens": 20},
             }
-            fake = _FakeAsyncClient(
-                response_map={"openrouter.ai": (200, payload)}
-            )
+            fake = _FakeAsyncClient(response_map={"openrouter.ai": (200, payload)})
             or_httpx.AsyncClient = lambda timeout=None: fake  # type: ignore[assignment]
 
-            client = ORC(api_key="y", model="openai/gpt-5", timeout_sec=5)
-            res = await client.chat([
-                {"role": "user", "content": "hi"}
-            ])
+            client = OpenRouterClient(api_key="y", model="openai/gpt-5", timeout_sec=5)
+            res = await client.chat([{"role": "user", "content": "hi"}])
             self.assertEqual(res.status, "ok")
             self.assertIsNotNone(res.response_text)
             self.assertEqual(res.tokens_prompt, 10)
@@ -89,4 +83,3 @@ class TestAdaptersIntegration(unittest.IsolatedAsyncioTestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

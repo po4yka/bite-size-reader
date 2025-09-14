@@ -1,13 +1,13 @@
-import unittest
-import tempfile
-import os
 import json
+import os
+import tempfile
+import unittest
 
+from app.adapters.openrouter_client import LLMCallResult
+from app.adapters.telegram_bot import TelegramBot
+from app.config import AppConfig, FirecrawlConfig, OpenRouterConfig, RuntimeConfig, TelegramConfig
 from app.core.url_utils import normalize_url, url_hash_sha256
 from app.db.database import Database
-from app.adapters.telegram_bot import TelegramBot
-from app.config import AppConfig, TelegramConfig, FirecrawlConfig, OpenRouterConfig, RuntimeConfig
-from app.adapters.openrouter_client import LLMCallResult
 
 
 class FakeMessage:
@@ -91,10 +91,20 @@ class TestDedupeReuse(unittest.IsolatedAsyncioTestCase):
 
             # Prepare config with temp DB
             cfg = AppConfig(
-                telegram=TelegramConfig(api_id=0, api_hash="", bot_token="", allowed_user_ids=tuple()),
+                telegram=TelegramConfig(
+                    api_id=0, api_hash="", bot_token="", allowed_user_ids=tuple()
+                ),
                 firecrawl=FirecrawlConfig(api_key="x"),
-                openrouter=OpenRouterConfig(api_key="y", model="m", fallback_models=tuple(), http_referer=None, x_title=None),
-                runtime=RuntimeConfig(db_path=db_path, log_level="INFO", request_timeout_sec=5, preferred_lang="en", debug_payloads=False),
+                openrouter=OpenRouterConfig(
+                    api_key="y", model="m", fallback_models=tuple(), http_referer=None, x_title=None
+                ),
+                runtime=RuntimeConfig(
+                    db_path=db_path,
+                    log_level="INFO",
+                    request_timeout_sec=5,
+                    preferred_lang="en",
+                    debug_payloads=False,
+                ),
             )
 
             # Avoid creating real Telegram client
