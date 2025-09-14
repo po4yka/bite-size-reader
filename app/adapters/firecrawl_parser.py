@@ -124,12 +124,53 @@ class FirecrawlClient:
                     preview = {
                         "keys": list(data.keys()) if isinstance(data, dict) else None,
                         "markdown_len": (
-                            len(data.get("markdown", "")) if isinstance(data, dict) else None
+                            len(data.get("markdown") or "") if isinstance(data, dict) else None
                         ),
                     }
                     self._logger.debug("firecrawl_response_payload", extra={"preview": preview})
 
                 if resp.status_code < 400:
+                    # Check if the response body contains an error even with 200 status
+                    response_error = data.get("error")
+                    if response_error and response_error.strip():
+                        last_error = response_error
+                        if self._audit:
+                            self._audit(
+                                "ERROR",
+                                "firecrawl_error",
+                                {
+                                    "attempt": attempt,
+                                    "status": resp.status_code,
+                                    "error": last_error,
+                                    "pdf": cur_pdf,
+                                    "request_id": request_id,
+                                },
+                            )
+                        self._logger.error(
+                            "firecrawl_error",
+                            extra={"status": resp.status_code, "error": last_error},
+                        )
+                        return FirecrawlResult(
+                            status="error",
+                            http_status=resp.status_code,
+                            content_markdown=data.get("markdown"),
+                            content_html=data.get("html"),
+                            structured_json=data.get("structured"),
+                            metadata_json=data.get("metadata"),
+                            links_json=data.get("links"),
+                            raw_response_json=data,
+                            latency_ms=latency,
+                            error_text=last_error,
+                            source_url=url,
+                            endpoint="/v1/scrape",
+                            options_json={
+                                "formats": ["markdown"],
+                                "mobile": cur_mobile,
+                                **({"parsers": ["pdf"]} if cur_pdf else {}),
+                            },
+                        )
+
+                    # No error in response body, treat as success
                     if self._audit:
                         self._audit(
                             "INFO",
