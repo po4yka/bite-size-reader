@@ -173,6 +173,9 @@ class FirecrawlClient:
                                 error_message = (
                                     data["data"][0].get("error") or "All data items have errors"
                                 )
+                    elif isinstance(data.get("data"), dict) and data["data"].get("error"):
+                        has_error = True
+                        error_message = data["data"].get("error") or "Data object error"
                     # Check for no content in direct response
                     elif not data.get("markdown") and not data.get("html") and "data" not in data:
                         has_error = True
@@ -216,6 +219,16 @@ class FirecrawlClient:
                                 error_content_html = first_item.get("html")
                                 error_metadata = first_item.get("metadata")
                                 error_links = first_item.get("links")
+                        if (
+                            not error_content_markdown
+                            and not error_content_html
+                            and isinstance(data.get("data"), dict)
+                        ):
+                            obj = data["data"]
+                            error_content_markdown = obj.get("markdown")
+                            error_content_html = obj.get("html")
+                            error_metadata = obj.get("metadata")
+                            error_links = obj.get("links")
 
                         return FirecrawlResult(
                             status="error",
@@ -258,6 +271,16 @@ class FirecrawlClient:
                             content_html = first_item.get("html")
                             metadata = first_item.get("metadata")
                             links = first_item.get("links")
+                    if (
+                        not content_markdown
+                        and not content_html
+                        and isinstance(data.get("data"), dict)
+                    ):
+                        obj = data["data"]
+                        content_markdown = obj.get("markdown")
+                        content_html = obj.get("html")
+                        metadata = obj.get("metadata")
+                        links = obj.get("links")
 
                     if self._audit:
                         self._audit(
