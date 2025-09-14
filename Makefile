@@ -24,8 +24,8 @@ venv:
 
 .PHONY: lock-uv lock-piptools
 lock-uv:
-	uv pip compile --python-version 3.11 pyproject.toml -o requirements.txt
-	uv pip compile --extra dev --python-version 3.11 pyproject.toml -o requirements-dev.txt
+	uv pip compile pyproject.toml -o requirements.txt
+	uv pip compile --extra dev pyproject.toml -o requirements-dev.txt
 
 lock-piptools:
 	pip install pip-tools
