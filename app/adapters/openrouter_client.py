@@ -223,6 +223,9 @@ class OpenRouterClient:
                 if self._provider_order:
                     body["route"] = {"order": list(self._provider_order)}
 
+                # Enforce JSON outputs when possible
+                body["response_format"] = {"type": "json_object"}
+
                 started = time.perf_counter()
                 try:
                     self._logger.debug(

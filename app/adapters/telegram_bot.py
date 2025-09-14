@@ -1044,6 +1044,18 @@ class TelegramBot:
             raw = llm.response_text.strip().strip("` ")
             summary_json = json.loads(raw)
         except Exception:
+            try:
+                logger.error(
+                    "json_parse_failed_preview",
+                    extra={
+                        "cid": correlation_id,
+                        "preview": (llm.response_text or "")[
+                            : self.cfg.runtime.log_truncate_length
+                        ],
+                    },
+                )
+            except Exception:
+                pass
             start = llm.response_text.find("{")
             end = llm.response_text.rfind("}")
             if start == -1 or end == -1 or end <= start:
@@ -1073,6 +1085,18 @@ class TelegramBot:
                         try:
                             summary_json = json.loads(repair.response_text.strip().strip("` "))
                         except Exception:
+                            try:
+                                logger.error(
+                                    "json_repair_parse_failed_preview",
+                                    extra={
+                                        "cid": correlation_id,
+                                        "preview": (repair.response_text or "")[
+                                            : self.cfg.runtime.log_truncate_length
+                                        ],
+                                    },
+                                )
+                            except Exception:
+                                pass
                             rs = repair.response_text.find("{")
                             re_ = repair.response_text.rfind("}")
                             if rs != -1 and re_ != -1 and re_ > rs:
