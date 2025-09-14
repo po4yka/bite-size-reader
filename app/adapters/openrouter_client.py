@@ -153,7 +153,10 @@ class OpenRouterClient:
             if not isinstance(msg["content"], str):
                 raise ValueError(f"Message {i} content must be string")
             if len(msg["content"]) > 50000:  # Prevent extremely long messages
-                raise ValueError(f"Message {i} content too long")
+                # Truncate rather than erroring out; preserve ending marker
+                msg["content"] = (
+                    msg["content"][: self._log_truncate_length] + "... [input truncated]"
+                )
 
         # Security: Validate temperature
         if not isinstance(temperature, int | float):
