@@ -9,7 +9,13 @@ from typing import Any
 from app.config import AppConfig
 from app.core.logging_utils import setup_json_logging, generate_correlation_id
 from app.core.summary_contract import validate_and_shape_summary
-from app.core.url_utils import looks_like_url, normalize_url, url_hash_sha256, extract_first_url
+from app.core.url_utils import (
+    looks_like_url,
+    normalize_url,
+    url_hash_sha256,
+    extract_first_url,
+    extract_all_urls,
+)
 from app.core.lang import detect_language, choose_language, LANG_EN, LANG_RU
 from app.adapters.firecrawl_parser import FirecrawlClient
 from app.adapters.openrouter_client import OpenRouterClient
@@ -67,6 +73,8 @@ class TelegramBot:
             )
         # simple in-memory state: users awaiting a URL after /summarize
         self._awaiting_url_users: set[int] = set()
+        # pending multiple links confirmation: uid -> list of urls
+        self._pending_multi_links: dict[int, list[str]] = {}
 
     async def start(self) -> None:
         if not self.client:
@@ -110,9 +118,13 @@ class TelegramBot:
 
             if text.startswith("/summarize"):
                 # If URL is in the same message, extract and process; otherwise set awaiting state
-                url = extract_first_url(text)
-                if url:
-                    await self._handle_url_flow(message, url, correlation_id=correlation_id)
+                urls = extract_all_urls(text)
+                if len(urls) > 1:
+                    self._pending_multi_links[uid] = urls
+                    await self._safe_reply(message, f"Process {len(urls)} links? (yes/no)")
+                    logger.debug("awaiting_multi_confirm", extra={"uid": uid, "count": len(urls)})
+                elif len(urls) == 1:
+                    await self._handle_url_flow(message, urls[0], correlation_id=correlation_id)
                 else:
                     self._awaiting_url_users.add(uid)
                     await self._safe_reply(message, "Send a URL to summarize.")
@@ -121,18 +133,45 @@ class TelegramBot:
 
             # If awaiting a URL due to prior /summarize
             if uid in self._awaiting_url_users and looks_like_url(text):
-                url = extract_first_url(text)
-                if url:
-                    self._awaiting_url_users.discard(uid)
+                urls = extract_all_urls(text)
+                self._awaiting_url_users.discard(uid)
+                if len(urls) > 1:
+                    self._pending_multi_links[uid] = urls
+                    await self._safe_reply(message, f"Process {len(urls)} links? (yes/no)")
+                    logger.debug("awaiting_multi_confirm", extra={"uid": uid, "count": len(urls)})
+                    return
+                if len(urls) == 1:
                     logger.debug("received_awaited_url", extra={"uid": uid})
-                    await self._handle_url_flow(message, url, correlation_id=correlation_id)
+                    await self._handle_url_flow(message, urls[0], correlation_id=correlation_id)
                     return
 
             if text and looks_like_url(text):
-                url = extract_first_url(text)
-                if url:
-                    await self._handle_url_flow(message, url, correlation_id=correlation_id)
+                urls = extract_all_urls(text)
+                if len(urls) > 1:
+                    self._pending_multi_links[uid] = urls
+                    await self._safe_reply(message, f"Process {len(urls)} links? (yes/no)")
+                    logger.debug("awaiting_multi_confirm", extra={"uid": uid, "count": len(urls)})
+                elif len(urls) == 1:
+                    await self._handle_url_flow(message, urls[0], correlation_id=correlation_id)
                 return
+
+            # Handle yes/no responses for pending multi-link confirmation
+            if uid in self._pending_multi_links:
+                if self._is_affirmative(text):
+                    urls = self._pending_multi_links.pop(uid)
+                    await self._safe_reply(message, f"Processing {len(urls)} links...")
+                    for u in urls:
+                        per_link_cid = generate_correlation_id()
+                        logger.debug(
+                            "processing_link",
+                            extra={"uid": uid, "url": u, "cid": per_link_cid},
+                        )
+                        await self._handle_url_flow(message, u, correlation_id=per_link_cid)
+                    return
+                if self._is_negative(text):
+                    self._pending_multi_links.pop(uid, None)
+                    await self._safe_reply(message, "Cancelled.")
+                    return
 
             if getattr(message, "forward_from_chat", None) and getattr(message, "forward_from_message_id", None):
                 await self._handle_forward_flow(message, correlation_id=correlation_id)
@@ -599,6 +638,14 @@ class TelegramBot:
         except Exception:
             # Fallback inline prompt
             return "You are a precise assistant that returns only a strict JSON object matching the provided schema."
+
+    def _is_affirmative(self, text: str) -> bool:
+        t = text.strip().lower()
+        return t in {"y", "yes", "+", "ok", "okay", "sure", "да", "ага", "угу", "👍", "✅"}
+
+    def _is_negative(self, text: str) -> bool:
+        t = text.strip().lower()
+        return t in {"n", "no", "-", "cancel", "stop", "нет", "не"}
 
 # Route versioning constants
 URL_ROUTE_VERSION = 1

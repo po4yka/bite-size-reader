@@ -69,3 +69,17 @@ def extract_first_url(text: str) -> str | None:
     val = m.group(0) if m else None
     logger.debug("extract_first_url", extra={"text_sample": text[:80], "url": val})
     return val
+
+
+def extract_all_urls(text: str) -> list[str]:
+    pattern = re.compile(r"https?://[\w\.-]+[\w\./\-?=&%#]*", re.IGNORECASE)
+    urls = pattern.findall(text) if text else []
+    # Preserve order, dedupe
+    seen = set()
+    out: list[str] = []
+    for u in urls:
+        if u not in seen:
+            seen.add(u)
+            out.append(u)
+    logger.debug("extract_all_urls", extra={"count": len(out)})
+    return out
