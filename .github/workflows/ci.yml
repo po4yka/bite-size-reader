@@ -48,12 +48,12 @@ jobs:
 
       - name: Install dependencies
         run: |
-          uv pip install -r requirements.txt -r requirements-dev.txt
+          uv pip install --system -r requirements.txt -r requirements-dev.txt
 
       - name: Remove Pydantic for no-pydantic matrix case
         if: ${{ matrix.pydantic == false }}
         run: |
-          uv pip uninstall -y pydantic || true
+          uv pip uninstall --system -y pydantic || true
 
       - name: Verify Pydantic availability
         run: |
@@ -145,8 +145,8 @@ jobs:
 
       - name: Install project and security tools
         run: |
-          uv pip install -r requirements.txt -r requirements-dev.txt
-          uv pip install bandit pip-audit safety
+          uv pip install --system -r requirements.txt -r requirements-dev.txt
+          uv pip install --system bandit pip-audit safety
 
       - name: Bandit (SAST)
         run: bandit -r app -ll

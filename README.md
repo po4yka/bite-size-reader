@@ -30,8 +30,7 @@ Repository layout
 
 Notes
 - Dependencies include Pyrogram; if using PyroTGFork, align installation accordingly.
-- This is a skeleton implementation; handlers, retries, and persistence are minimal and should be extended per SPEC.md.
-- Bot commands are registered on startup for private chats: `/help`, `/summarize` (visible in the command menu in Telegram).
+- Bot commands are registered on startup for private chats: `/help`, `/summarize`.
 
 Commands & usage
 - `/help` or `/start` — Show help and usage.

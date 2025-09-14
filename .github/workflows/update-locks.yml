@@ -35,7 +35,19 @@ jobs:
       - name: Compile locked requirements (dev)
         run: uv pip compile --extra dev pyproject.toml -o requirements-dev.txt
 
+      - name: Check for changes
+        id: changes
+        run: |
+          if git diff --quiet requirements.txt requirements-dev.txt; then
+            echo "changes=false" >> $GITHUB_OUTPUT
+            echo "No changes detected in requirements files"
+          else
+            echo "changes=true" >> $GITHUB_OUTPUT
+            echo "Changes detected in requirements files"
+          fi
+
       - name: Create Pull Request
+        if: steps.changes.outputs.changes == 'true'
         id: cpr
         uses: peter-evans/create-pull-request@v6
         with:
@@ -53,9 +65,13 @@ jobs:
             requirements-dev.txt
 
       - name: Enable auto-merge for lockfile PR
-        if: ${{ steps.cpr.outputs.pull-request-number != '' }}
+        if: steps.changes.outputs.changes == 'true' && steps.cpr.outputs.pull-request-number != ''
         uses: peter-evans/enable-pull-request-automerge@v3
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           pull-request-number: ${{ steps.cpr.outputs.pull-request-number }}
           merge-method: squash
+
+      - name: No changes detected
+        if: steps.changes.outputs.changes == 'false'
+        run: echo "Requirements files are up to date, no PR needed"
