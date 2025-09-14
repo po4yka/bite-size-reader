@@ -42,6 +42,8 @@ class OpenRouterClient:
         backoff_base: float = 0.5,
         audit: Callable[[str, str, dict[str, Any]], None] | None = None,
         debug_payloads: bool = False,
+        provider_order: list[str] | tuple[str, ...] | None = None,
+        enable_stats: bool = False,
     ) -> None:
         # Security: Validate API key presence. Length/format is enforced at config load.
         if not api_key or not isinstance(api_key, str):
@@ -91,6 +93,8 @@ class OpenRouterClient:
         self._audit = audit
         self._logger = logging.getLogger(__name__)
         self._debug_payloads = bool(debug_payloads)
+        self._provider_order = list(provider_order or [])
+        self._enable_stats = bool(enable_stats)
 
     def _get_error_message(self, status_code: int, data: dict) -> str:
         """Get descriptive error message based on HTTP status code."""
@@ -208,6 +212,9 @@ class OpenRouterClient:
                     body["top_p"] = top_p
                 if stream:
                     body["stream"] = stream
+                # Provider routing best-practice: allow order preference
+                if self._provider_order:
+                    body["route"] = {"order": list(self._provider_order)}
 
                 started = time.perf_counter()
                 try:
@@ -268,6 +275,13 @@ class OpenRouterClient:
                         text = None
 
                     usage = data.get("usage") or {}
+                    # Optional stats (provider/native tokens/cost) if present
+                    cost_usd = None
+                    if self._enable_stats:
+                        try:
+                            cost_usd = float(data.get("usage", {}).get("total_cost", 0.0))
+                        except Exception:
+                            cost_usd = None
                     # redact Authorization
                     redacted_headers = dict(headers)
                     if "Authorization" in redacted_headers:
@@ -294,7 +308,7 @@ class OpenRouterClient:
                             response_json=data,
                             tokens_prompt=usage.get("prompt_tokens"),
                             tokens_completion=usage.get("completion_tokens"),
-                            cost_usd=None,
+                            cost_usd=cost_usd,
                             latency_ms=latency,
                             error_text=None,
                             request_headers=redacted_headers,

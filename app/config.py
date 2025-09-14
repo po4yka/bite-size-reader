@@ -16,6 +16,8 @@ class OpenRouterConfig:
     max_tokens: int | None = None
     top_p: float | None = None
     temperature: float = 0.2
+    provider_order: tuple[str, ...] = ()
+    enable_stats: bool = False
 
 
 @dataclass(frozen=True)
@@ -240,6 +242,23 @@ def _validate_fallback_models(fallback_raw: str) -> tuple[str, ...]:
     return tuple(models)
 
 
+def _parse_provider_order(order_raw: str | None) -> tuple[str, ...]:
+    if not order_raw:
+        return tuple()
+    out: list[str] = []
+    for piece in order_raw.split(","):
+        slug = piece.strip()
+        if not slug:
+            continue
+        # conservative validation: allow letters, numbers, dash and colon
+        allowed = set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-:")
+        if any(ch not in allowed for ch in slug):
+            continue
+        if len(slug) <= 100:
+            out.append(slug)
+    return tuple(out)
+
+
 def load_config() -> AppConfig:
     """Load configuration from environment variables.
 
@@ -273,6 +292,8 @@ def load_config() -> AppConfig:
             max_tokens=_validate_max_tokens(os.getenv("OPENROUTER_MAX_TOKENS")),
             top_p=_validate_top_p(os.getenv("OPENROUTER_TOP_P")),
             temperature=_validate_temperature(os.getenv("OPENROUTER_TEMPERATURE")),
+            provider_order=_parse_provider_order(os.getenv("OPENROUTER_PROVIDER_ORDER")),
+            enable_stats=os.getenv("OPENROUTER_ENABLE_STATS", "0").lower() in ("1", "true", "yes"),
         )
 
         runtime = RuntimeConfig(
