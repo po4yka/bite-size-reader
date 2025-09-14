@@ -1,5 +1,6 @@
 import json
 import unittest
+from typing import Any, cast
 
 from app.adapters.firecrawl_parser import FirecrawlClient, httpx as fc_httpx
 from app.adapters.openrouter_client import OpenRouterClient, httpx as or_httpx
@@ -51,7 +52,11 @@ class TestRetries(unittest.IsolatedAsyncioTestCase):
 
         original = or_httpx.AsyncClient
         try:
-            or_httpx.AsyncClient = lambda timeout=None: _SeqAsyncClient(handler)  # type: ignore[assignment]
+
+            def _make_or_client(timeout=None):
+                return _SeqAsyncClient(handler)
+
+            or_httpx.AsyncClient = cast(Any, _make_or_client)
             client = OpenRouterClient(
                 api_key="k",
                 model="primary/model",
@@ -65,7 +70,7 @@ class TestRetries(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(res.model, "fallback/model")
             self.assertIsNotNone(res.response_text)
         finally:
-            or_httpx.AsyncClient = original  # type: ignore[assignment]
+            or_httpx.AsyncClient = cast(Any, original)
 
     async def test_firecrawl_retries_then_success(self):
         attempts = {"n": 0}
@@ -78,14 +83,18 @@ class TestRetries(unittest.IsolatedAsyncioTestCase):
 
         original = fc_httpx.AsyncClient
         try:
-            fc_httpx.AsyncClient = lambda timeout=None: _SeqAsyncClient(handler)  # type: ignore[assignment]
+
+            def _make_fc_client(timeout=None):
+                return _SeqAsyncClient(handler)
+
+            fc_httpx.AsyncClient = cast(Any, _make_fc_client)
             client = FirecrawlClient(api_key="x", timeout_sec=2, max_retries=2, backoff_base=0.0)
             res = await client.scrape_markdown("https://example.com")
             self.assertEqual(res.status, "ok")
             self.assertEqual(res.http_status, 200)
             self.assertEqual(res.content_markdown, "# ok")
         finally:
-            fc_httpx.AsyncClient = original  # type: ignore[assignment]
+            fc_httpx.AsyncClient = cast(Any, original)
 
 
 if __name__ == "__main__":

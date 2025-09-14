@@ -32,7 +32,7 @@ class TelegramBot:
     cfg: AppConfig
     db: Database
 
-    def __post_init__(self) -> None:  # type: ignore[override]
+    def __post_init__(self) -> None:
         setup_json_logging(self.cfg.runtime.log_level)
         logger.info(
             "bot_init",
@@ -80,12 +80,13 @@ class TelegramBot:
 
         # Register handlers only if filters are available
         if filters:
-
-            @self.client.on_message(filters.private)
-            async def _handler(client: Client, message: Message):  # type: ignore[valid-type]
+            # Register a simple on_message handler in private chats
+            @self.client.on_message(filters.private)  # type: ignore[misc]
+            async def _handler(client: Any, message: Any) -> None:  # noqa: ANN401
                 await self._on_message(message)
 
-        await self.client.start()  # type: ignore[union-attr]
+        client_any: Any = self.client
+        await client_any.start()
         logger.info("bot_started")
         await self._setup_bot_commands()
         await idle()
@@ -209,17 +210,18 @@ class TelegramBot:
         await self._safe_reply(message, help_text)
 
     async def _setup_bot_commands(self) -> None:
-        if not self.client or Client is object:  # type: ignore[truthy-bool]
+        if not self.client or Client is object:
             return
         try:
-            from pyrogram.types import BotCommand, BotCommandScopeAllPrivateChats  # type: ignore
+            from pyrogram.types import BotCommand, BotCommandScopeAllPrivateChats
 
             commands = [
                 BotCommand("help", "Show help and usage"),
                 BotCommand("summarize", "Summarize a URL (send URL next)"),
             ]
             try:
-                await self.client.set_bot_commands(commands, scope=BotCommandScopeAllPrivateChats())  # type: ignore[attr-defined]
+                client_any: Any = self.client
+                await client_any.set_bot_commands(commands, scope=BotCommandScopeAllPrivateChats())
                 logger.info("bot_commands_set", extra={"count": len(commands)})
             except Exception as e:  # noqa: BLE001
                 logger.warning("bot_commands_set_failed", extra={"error": str(e)})
@@ -544,7 +546,8 @@ class TelegramBot:
 
     async def _safe_reply(self, message: Any, text: str) -> None:
         try:
-            await message.reply_text(text)  # type: ignore[union-attr]
+            msg_any: Any = message
+            await msg_any.reply_text(text)
         except Exception as e:  # noqa: BLE001
             logger.error("reply_failed", extra={"error": str(e)})
 
@@ -563,7 +566,7 @@ class TelegramBot:
             def _ent_to_dict(e: Any) -> dict:
                 if hasattr(e, "to_dict"):
                     try:
-                        return e.to_dict()  # type: ignore[attr-defined]
+                        return e.to_dict()
                     except Exception:
                         pass
                 return getattr(e, "__dict__", {})
@@ -630,7 +633,7 @@ class TelegramBot:
         raw_json = None
         try:
             if hasattr(message, "to_dict"):
-                raw_json = json.dumps(message.to_dict(), ensure_ascii=False)  # type: ignore[attr-defined]
+                raw_json = json.dumps(message.to_dict(), ensure_ascii=False)
             else:
                 raw_json = None
         except Exception:

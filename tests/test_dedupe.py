@@ -110,13 +110,16 @@ class TestDedupeReuse(unittest.IsolatedAsyncioTestCase):
             # Avoid creating real Telegram client
             from app.adapters import telegram_bot as tbmod
 
-            tbmod.Client = object  # type: ignore
-            tbmod.filters = None  # type: ignore
+            setattr(tbmod, "Client", object)
+            setattr(tbmod, "filters", None)
 
             bot = TelegramBot(cfg=cfg, db=db)
             # Replace external clients with fakes
-            bot._firecrawl = FakeFirecrawl()  # type: ignore[attr-defined]
-            bot._openrouter = FakeOpenRouter()  # type: ignore[attr-defined]
+            from typing import Any, cast
+
+            bot_any = cast(Any, bot)
+            bot_any._firecrawl = FakeFirecrawl()
+            bot_any._openrouter = FakeOpenRouter()
 
             msg = FakeMessage()
             # First run: should reuse crawl and insert summary version 1

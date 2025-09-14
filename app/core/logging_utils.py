@@ -7,16 +7,16 @@ import uuid
 from typing import Any
 
 try:  # Optional: modern logging via loguru
-    from loguru import logger as loguru_logger  # type: ignore
+    from loguru import logger as loguru_logger
 
     _HAS_LOGURU = True
 except Exception:  # pragma: no cover - optional dependency
-    loguru_logger = None  # type: ignore
+    loguru_logger = None
     _HAS_LOGURU = False
 
 
 class JsonFormatter(logging.Formatter):
-    def format(self, record: logging.LogRecord) -> str:  # type: ignore[override]
+    def format(self, record: logging.LogRecord) -> str:
         base: dict[str, Any] = {
             "level": record.levelname,
             "logger": record.name,
@@ -66,22 +66,22 @@ def setup_json_logging(level: str = "INFO") -> None:
     if _HAS_LOGURU:
         # Remove existing handlers to avoid duplicate logs
         try:
-            loguru_logger.remove()  # type: ignore[attr-defined]
+            loguru_logger.remove()
         except Exception:  # pragma: no cover
             pass
         # Add JSON sink
-        loguru_logger.add(sys.stdout, serialize=True, level=level.upper())  # type: ignore[attr-defined]
+        loguru_logger.add(sys.stdout, serialize=True, level=level.upper())
 
         # Bridge stdlib logging into loguru
         class InterceptHandler(logging.Handler):  # pragma: no cover - thin glue
-            def emit(self, record: logging.LogRecord) -> None:  # type: ignore[override]
+            def emit(self, record: logging.LogRecord) -> None:
                 try:
-                    lvl = loguru_logger.level(record.levelname).name  # type: ignore[attr-defined]
+                    lvl = loguru_logger.level(record.levelname).name
                 except Exception:
                     lvl = record.levelno
                 loguru_logger.bind().opt(depth=6, exception=record.exc_info).log(
                     lvl, record.getMessage()
-                )  # type: ignore[attr-defined]
+                )
 
         root = logging.getLogger()
         root.handlers.clear()

@@ -5,12 +5,6 @@ try:
 
     PydanticAvailable = True
 except Exception:  # pragma: no cover - optional dependency
-    BaseModel = object  # type: ignore
-
-    def _field_stub(*a, **k):  # type: ignore
-        return None
-
-    Field = _field_stub  # type: ignore
     PydanticAvailable = False
 
 

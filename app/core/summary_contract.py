@@ -4,8 +4,9 @@ from typing import Any
 
 from .summary_schema import PydanticAvailable
 
-if PydanticAvailable:  # type: ignore
-    from .summary_schema import SummaryModel  # noqa: F401
+SummaryModelT: Any
+if PydanticAvailable:
+    from .summary_schema import SummaryModel as SummaryModelT
 
 
 SummaryJSON = dict[str, Any]
@@ -140,10 +141,9 @@ def validate_and_shape_summary(payload: SummaryJSON) -> SummaryJSON:
     # Optional strict validation via Pydantic
     if PydanticAvailable:
         try:
-            model = SummaryModel(**p)  # type: ignore[name-defined]
-            return model.model_dump()  # type: ignore[attr-defined]
+            model = SummaryModelT(**p)
+            # Pydantic v2: model_dump; v1: dict
+            return model.model_dump() if hasattr(model, "model_dump") else model.dict()
         except Exception:
-            # If pydantic fails, return shaped payload (still reasonably strict)
             return p
-    else:
-        return p
+    return p

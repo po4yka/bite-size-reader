@@ -48,8 +48,8 @@ def make_bot(tmp_path: str, allowed_ids):
     )
     from app.adapters import telegram_bot as tbmod
 
-    tbmod.Client = object
-    tbmod.filters = None
+    setattr(tbmod, "Client", object)
+    setattr(tbmod, "filters", None)
     return TelegramBot(cfg=cfg, db=db)
 
 

@@ -32,7 +32,7 @@ class BotSpy(TelegramBot):
         super().__init__(*a, **kw)
         self.seen_urls: list[str] = []
 
-    async def _handle_url_flow(self, message, url_text: str, **_: object):  # type: ignore[override]
+    async def _handle_url_flow(self, message, url_text: str, **_: object):
         self.seen_urls.append(url_text)
         await self._safe_reply(message, f"OK {url_text}")
 
@@ -56,8 +56,8 @@ def make_bot(tmp_path: str) -> BotSpy:
     )
     from app.adapters import telegram_bot as tbmod
 
-    tbmod.Client = object
-    tbmod.filters = None
+    setattr(tbmod, "Client", object)
+    setattr(tbmod, "filters", None)
     return BotSpy(cfg=cfg, db=db)
 
 

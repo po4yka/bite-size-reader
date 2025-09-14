@@ -28,7 +28,7 @@ class FakeMessage:
 
 
 class BoomBot(TelegramBot):
-    async def _handle_url_flow(self, message, url_text: str, **_: object):  # type: ignore[override]
+    async def _handle_url_flow(self, message, url_text: str, **_: object):
         raise RuntimeError("boom")
 
 
@@ -51,8 +51,8 @@ def make_bot(tmp_path: str) -> BoomBot:
     )
     from app.adapters import telegram_bot as tbmod
 
-    tbmod.Client = object
-    tbmod.filters = None
+    setattr(tbmod, "Client", object)
+    setattr(tbmod, "filters", None)
     return BoomBot(cfg=cfg, db=db)
 
 
