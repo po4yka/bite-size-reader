@@ -232,7 +232,7 @@ class TelegramBot:
             "- /summarize <URL> — summarize a URL.\n"
             "- /summarize_all <URLs> — summarize multiple URLs from one message.\n\n"
             "Usage:\n"
-            "- Send a URL, or forward a channel post to get a JSON summary.\n"
+            "- You can simply send a URL (or several URLs) or forward a channel post — commands are optional.\n"
             "- You can also send /summarize and then a URL in the next message.\n"
             "- Multiple links in one message are supported; I can confirm or use /summarize_all to process immediately."
         )
@@ -247,6 +247,7 @@ class TelegramBot:
             "How to use:\n"
             "- Send a URL directly, or use /summarize <URL>.\n"
             "- You can also send /summarize and then the URL in the next message.\n"
+            "- For forwarded posts, use /summarize_forward and then forward a channel post.\n"
             '- Multiple links in one message are supported: I will ask "Process N links?" or use /summarize_all to process immediately.\n\n'
             "Notes:\n"
             "- I reply with a strict JSON object.\n"
@@ -265,12 +266,14 @@ class TelegramBot:
                 BotCommand("help", "Show help and usage"),
                 BotCommand("summarize", "Summarize a URL (send URL next)"),
                 BotCommand("summarize_all", "Summarize multiple URLs from one message"),
+                BotCommand("summarize_forward", "Summarize the next forwarded channel post"),
             ]
             commands_ru = [
                 BotCommand("start", "Приветствие и инструкция"),
                 BotCommand("help", "Показать помощь и инструкцию"),
                 BotCommand("summarize", "Суммировать ссылку (или пришлите позже)"),
                 BotCommand("summarize_all", "Суммировать несколько ссылок из сообщения"),
+                BotCommand("summarize_forward", "Суммировать следующий пересланный пост"),
             ]
             try:
                 client_any: Any = self.client

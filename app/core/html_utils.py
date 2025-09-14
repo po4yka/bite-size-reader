@@ -4,13 +4,13 @@ from html import unescape
 from html.parser import HTMLParser
 
 try:
-    from lxml import html as lxml_html  # type: ignore
-    from readability import Document  # type: ignore
+    from lxml import html as lxml_html
+    from readability import Document
 
     _HAS_READABILITY = True
 except Exception:  # pragma: no cover
-    Document = None  # type: ignore
-    lxml_html = None  # type: ignore
+    Document = None
+    lxml_html = None
     _HAS_READABILITY = False
 
 
@@ -64,7 +64,7 @@ def html_to_text(html: str) -> str:
             summary_html = doc.summary() or ""
             title = (doc.title() or "").strip()
             if summary_html:
-                root = lxml_html.fromstring(summary_html)  # type: ignore[arg-type]
+                root = lxml_html.fromstring(summary_html)
                 text = root.text_content()
                 if title and title not in text:
                     text = f"{title}\n\n{text}"

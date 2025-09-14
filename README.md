@@ -38,6 +38,10 @@ Commands & usage
 - `/summarize <URL>` — Summarize a URL immediately.
 - `/summarize` — Bot will ask you to send a URL in the next message.
 - Multiple URLs in one message (or after `/summarize`): bot asks “Process N links?”; reply “yes/no”. Each link gets its own correlation ID and is processed sequentially.
+ - `/summarize_all <URLs>` — Summarize multiple URLs from one message immediately, without confirmation.
+
+Tips
+- You can simply send a URL (or several URLs) or forward a channel post — commands are optional.
 
 Errors & correlation IDs
 - All user-visible errors include `Error ID: <cid>` to correlate with logs and DB `requests.correlation_id`.

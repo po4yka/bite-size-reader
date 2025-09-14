@@ -63,6 +63,13 @@ Copy `.env.example` to `.env` and fill the values:
 4. (Optional) Format & lint: `make format && make lint && make type`
 5. Run the bot: `python bot.py`
 
+How to use (no commands needed)
+- You can simply send a URL (or several URLs in one message) or forward a channel post — the bot will summarize it.
+- Commands are optional helpers:
+  - `/summarize <URL>` or `/summarize` then send URL
+  - `/summarize_all <URLs>` to process many URLs immediately
+  - `/summarize_forward` then forward a channel post
+
 ## Docker Deployment
 1. Generate lock files (recommended):
    - With uv: `make lock-uv`
@@ -109,4 +116,3 @@ Run: `docker compose up -d --build`
 - “Failed to fetch content”: Firecrawl error; try again or check the target page access.
 - “LLM error”: OpenRouter API issue or model outage; rely on built‑in retries/fallbacks; check logs.
 - Large summaries: The bot returns JSON in a message; if too large, consider implementing file replies.
-
