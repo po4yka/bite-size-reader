@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import time
 from collections.abc import Callable
@@ -299,7 +300,53 @@ class OpenRouterClient:
                     try:
                         choices = data.get("choices") or []
                         if choices:
-                            text = choices[0].get("message", {}).get("content")
+                            message_obj = choices[0].get("message", {}) or {}
+                            content_field = message_obj.get("content")
+                            # Primary: plain string content
+                            if isinstance(content_field, str):
+                                text = content_field
+                            # Some providers return content as array of parts
+                            elif isinstance(content_field, list):
+                                try:
+                                    parts: list[str] = []
+                                    for part in content_field:
+                                        if isinstance(part, dict):
+                                            if isinstance(part.get("text"), str):
+                                                parts.append(part["text"])
+                                            elif isinstance(part.get("content"), str):
+                                                parts.append(part["content"])
+                                    if parts:
+                                        text = "\n".join(parts)
+                                except Exception:
+                                    pass
+
+                            # Structured outputs: parsed field (OpenAI/OR structured)
+                            if (not text) or (isinstance(text, str) and not text.strip()):
+                                parsed = message_obj.get("parsed")
+                                if parsed is not None:
+                                    try:
+                                        text = json.dumps(parsed, ensure_ascii=False)
+                                    except Exception:
+                                        text = str(parsed)
+
+                            # Function/tool calls: arguments may hold the JSON
+                            if (not text) or (isinstance(text, str) and not text.strip()):
+                                tool_calls = message_obj.get("tool_calls") or []
+                                if tool_calls and isinstance(tool_calls, list):
+                                    try:
+                                        first = tool_calls[0] or {}
+                                        fn = (
+                                            (first.get("function") or {})
+                                            if isinstance(first, dict)
+                                            else {}
+                                        )
+                                        args = fn.get("arguments")
+                                        if isinstance(args, str):
+                                            text = args
+                                        elif isinstance(args, dict):
+                                            text = json.dumps(args, ensure_ascii=False)
+                                    except Exception:
+                                        pass
                     except Exception:
                         text = None
 

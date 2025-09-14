@@ -1072,7 +1072,7 @@ class TelegramBot:
         except Exception as e:  # noqa: BLE001
             logger.error("persist_llm_error", extra={"error": str(e), "cid": correlation_id})
 
-        if llm.status != "ok" or not llm.response_text:
+        if llm.status != "ok":
             self.db.update_request_status(req_id, "error")
             # Detailed error message already sent above, just log for debugging
             logger.error("openrouter_error", extra={"error": llm.error_text, "cid": correlation_id})
@@ -1099,7 +1099,8 @@ class TelegramBot:
 
         # Best-effort parse + validate
         try:
-            raw = llm.response_text.strip().strip("` ")
+            llm_text = llm.response_text or ""
+            raw = llm_text.strip().strip("` ")
             summary_json = json.loads(raw)
         except Exception:
             try:
@@ -1115,8 +1116,9 @@ class TelegramBot:
                 )
             except Exception:
                 pass
-            start = llm.response_text.find("{")
-            end = llm.response_text.rfind("}")
+            llm_text = llm.response_text or ""
+            start = llm_text.find("{")
+            end = llm_text.rfind("}")
             if start == -1 or end == -1 or end <= start:
                 try:
                     logger.error(
@@ -1136,9 +1138,10 @@ class TelegramBot:
                 # Attempt one repair using assistant prefill best-practice
                 try:
                     logger.info("json_repair_attempt", extra={"cid": correlation_id})
-                    repair_messages = [
+                    llm_text = llm.response_text or ""
+                    repair_messages: list[dict[str, str]] = [
                         {"role": "system", "content": system_prompt},
-                        {"role": "assistant", "content": llm.response_text},
+                        {"role": "assistant", "content": llm_text},
                         {
                             "role": "user",
                             "content": (
@@ -1155,9 +1158,11 @@ class TelegramBot:
                             top_p=self.cfg.openrouter.top_p,
                             request_id=req_id,
                         )
-                    if repair.status == "ok" and repair.response_text:
+                    if repair.status == "ok" and (repair.response_text or "").strip():
                         try:
-                            summary_json = json.loads(repair.response_text.strip().strip("` "))
+                            summary_json = json.loads(
+                                (repair.response_text or "").strip().strip("` ")
+                            )
                         except Exception:
                             try:
                                 logger.error(
@@ -1174,10 +1179,11 @@ class TelegramBot:
                                 )
                             except Exception:
                                 pass
-                            rs = repair.response_text.find("{")
-                            re_ = repair.response_text.rfind("}")
+                            repair_text = repair.response_text or ""
+                            rs = repair_text.find("{")
+                            re_ = repair_text.rfind("}")
                             if rs != -1 and re_ != -1 and re_ > rs:
-                                summary_json = json.loads(repair.response_text[rs : re_ + 1])
+                                summary_json = json.loads(repair_text[rs : re_ + 1])
                             else:
                                 raise ValueError("repair_failed")
                     else:
@@ -1200,7 +1206,8 @@ class TelegramBot:
                         )
                     return
             else:
-                summary_json = json.loads(llm.response_text[start : end + 1])
+                llm_text = llm.response_text or ""
+                summary_json = json.loads(llm_text[start : end + 1])
 
         shaped = validate_and_shape_summary(summary_json)
 
