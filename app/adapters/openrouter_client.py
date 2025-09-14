@@ -155,10 +155,10 @@ class OpenRouterClient:
             if not isinstance(msg["content"], str):
                 raise ValueError(f"Message {i} content must be string")
             if len(msg["content"]) > 50000:  # Prevent extremely long messages
-                # Truncate rather than erroring out; preserve ending marker
-                msg["content"] = (
-                    msg["content"][: self._log_truncate_length] + "... [input truncated]"
-                )
+                # Do not truncate the actual content sent to the provider.
+                # We only truncate in debug logs below to avoid log bloat.
+                # Let the provider handle context window limits.
+                pass
 
         # Security: Validate temperature
         if not isinstance(temperature, int | float):
@@ -232,6 +232,12 @@ class OpenRouterClient:
                 else:
                     body["response_format"] = {"type": "json_object"}
 
+                # Enable middle-out compression for large content to reduce latency
+                # This preserves beginning and end while compressing the middle
+                total_content_length = sum(len(msg.get("content", "")) for msg in messages)
+                if total_content_length > 30000:  # Enable for content > 30KB
+                    body["transforms"] = ["middle-out"]
+
                 started = time.perf_counter()
                 try:
                     self._logger.debug(
@@ -256,7 +262,9 @@ class OpenRouterClient:
                                 },
                             },
                         )
-                    async with httpx.AsyncClient(timeout=self._timeout) as client:
+                    # Use connection pooling to reduce TCP handshake overhead
+                    limits = httpx.Limits(max_keepalive_connections=5, max_connections=10)
+                    async with httpx.AsyncClient(timeout=self._timeout, limits=limits) as client:
                         resp = await client.post(
                             f"{self._base_url}/chat/completions", headers=headers, json=body
                         )

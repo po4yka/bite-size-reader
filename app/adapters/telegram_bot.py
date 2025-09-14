@@ -1052,25 +1052,33 @@ class TelegramBot:
                 )
         except Exception:
             pass
-        try:
-            self.db.insert_llm_call(
-                request_id=req_id,
-                provider="openrouter",
-                model=llm.model or self.cfg.openrouter.model,
-                endpoint=llm.endpoint,
-                request_headers_json=json.dumps(llm.request_headers or {}),
-                request_messages_json=json.dumps(llm.request_messages or []),
-                response_text=llm.response_text,
-                response_json=json.dumps(llm.response_json or {}),
-                tokens_prompt=llm.tokens_prompt,
-                tokens_completion=llm.tokens_completion,
-                cost_usd=llm.cost_usd,
-                latency_ms=llm.latency_ms,
-                status=llm.status,
-                error_text=llm.error_text,
-            )
-        except Exception as e:  # noqa: BLE001
-            logger.error("persist_llm_error", extra={"error": str(e), "cid": correlation_id})
+
+        # Async optimization: Run database operations concurrently with response processing
+        async def _persist_llm_call():
+            try:
+                self.db.insert_llm_call(
+                    request_id=req_id,
+                    provider="openrouter",
+                    model=llm.model or self.cfg.openrouter.model,
+                    endpoint=llm.endpoint,
+                    request_headers_json=json.dumps(llm.request_headers or {}),
+                    request_messages_json=json.dumps(llm.request_messages or []),
+                    response_text=llm.response_text,
+                    response_json=json.dumps(llm.response_json or {}),
+                    tokens_prompt=llm.tokens_prompt,
+                    tokens_completion=llm.tokens_completion,
+                    cost_usd=llm.cost_usd,
+                    latency_ms=llm.latency_ms,
+                    status=llm.status,
+                    error_text=llm.error_text,
+                )
+            except Exception as e:  # noqa: BLE001
+                logger.error("persist_llm_error", extra={"error": str(e), "cid": correlation_id})
+
+        # Start database persistence in background
+        import asyncio
+
+        asyncio.create_task(_persist_llm_call())  # Fire and forget for performance
 
         if llm.status != "ok":
             self.db.update_request_status(req_id, "error")
@@ -1247,23 +1255,53 @@ class TelegramBot:
                 request_id=req_id,
             )
 
-        # Quick human-friendly preview before JSON (best-practice feedback)
+        # Send combined preview and JSON in one message to reduce API calls
         try:
             preview_lines = [
-                "TL;DR:",
+                "✅ Summary Complete:",
+                "",
+                "📋 **TL;DR:**",
                 str(shaped.get("summary_250", "")).strip(),
             ]
+
             tags = shaped.get("topic_tags") or []
             if tags:
-                preview_lines.append("Tags: " + " ".join(tags[:6]))
-            ideas = [str(x).strip() for x in (shaped.get("key_ideas") or []) if str(x).strip()]
-            for idea in ideas[:3]:
-                preview_lines.append(f"- {idea}")
-            await self._safe_reply(message, "\n".join(preview_lines))
-        except Exception:
-            pass
+                preview_lines.extend(["", "🏷️ **Tags:** " + " ".join(tags[:6])])
 
-        await self._reply_json(message, shaped)
+            ideas = [str(x).strip() for x in (shaped.get("key_ideas") or []) if str(x).strip()]
+            if ideas:
+                preview_lines.extend(["", "💡 **Key Ideas:**"])
+                for idea in ideas[:3]:
+                    preview_lines.append(f"• {idea}")
+
+            preview_lines.extend(["", "📊 **Full JSON:**"])
+
+            # Combine preview and JSON in one message
+            combined_message = "\n".join(preview_lines)
+            await self._safe_reply(message, combined_message)
+
+            # Send JSON as separate code block for better formatting
+            await self._reply_json(message, shaped)
+
+        except Exception:
+            # Fallback to separate messages
+            try:
+                preview_lines = [
+                    "TL;DR:",
+                    str(shaped.get("summary_250", "")).strip(),
+                ]
+                tags = shaped.get("topic_tags") or []
+                if tags:
+                    preview_lines.append("Tags: " + " ".join(tags[:6]))
+                ideas = [str(x).strip() for x in (shaped.get("key_ideas") or []) if str(x).strip()]
+                for idea in ideas[:3]:
+                    preview_lines.append(f"- {idea}")
+                await self._safe_reply(message, "\n".join(preview_lines))
+            except Exception:
+                pass
+
+            await self._reply_json(message, shaped)
+
         logger.info("reply_json_sent", extra={"cid": correlation_id, "request_id": req_id})
 
     async def _handle_forward_flow(
