@@ -815,7 +815,21 @@ class TelegramBot:
         except Exception:
             pass
 
-        # LLM
+        # LLM - truncate content if too long
+        max_content_length = 45000  # Leave some buffer for the prompt
+        if len(content_text) > max_content_length:
+            content_text = (
+                content_text[:max_content_length] + "\n\n[Content truncated due to length]"
+            )
+            logger.warning(
+                "content_truncated",
+                extra={
+                    "original_length": len(content_text),
+                    "truncated_length": max_content_length,
+                    "cid": correlation_id,
+                },
+            )
+
         messages = [
             {"role": "system", "content": system_prompt},
             {
@@ -1007,6 +1021,19 @@ class TelegramBot:
             )
         except Exception:
             pass
+
+        # LLM - truncate content if too long
+        max_content_length = 45000  # Leave some buffer for the prompt
+        if len(prompt) > max_content_length:
+            prompt = prompt[:max_content_length] + "\n\n[Content truncated due to length]"
+            logger.warning(
+                "content_truncated",
+                extra={
+                    "original_length": len(prompt),
+                    "truncated_length": max_content_length,
+                    "cid": correlation_id,
+                },
+            )
 
         messages = [
             {"role": "system", "content": system_prompt},

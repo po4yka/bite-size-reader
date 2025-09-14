@@ -199,7 +199,21 @@ class MessageEntity:
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> MessageEntity:
         """Create MessageEntity from dictionary."""
-        entity_type = MessageEntityType(data.get("type", "mention"))
+        # Handle entity type conversion more robustly
+        entity_type_str = data.get("type", "mention")
+        try:
+            # Handle both string values and enum objects
+            if hasattr(entity_type_str, "value"):
+                entity_type_str = entity_type_str.value
+            elif hasattr(entity_type_str, "name"):
+                entity_type_str = entity_type_str.name.lower()
+
+            # Convert to our enum
+            entity_type = MessageEntityType(entity_type_str.lower())
+        except (ValueError, AttributeError):
+            # Fallback to mention if type is unknown
+            entity_type = MessageEntityType.MENTION
+
         user_data = data.get("user")
         user = TelegramUser.from_dict(user_data) if user_data else None
 
