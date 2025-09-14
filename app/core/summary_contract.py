@@ -248,6 +248,34 @@ def get_summary_json_schema() -> dict[str, Any]:
 
     Prefers exporting from Pydantic if available; falls back to a static schema.
     """
+
+    def _enforce_no_additional_props(schema_obj: Any) -> Any:
+        """Recursively enforce additionalProperties: false on all object schemas.
+
+        Handles nested objects under properties, items, oneOf/anyOf/allOf, $defs/definitions.
+        """
+        if isinstance(schema_obj, dict):
+            # If this dict describes an object type, set additionalProperties: false when absent
+            if schema_obj.get("type") == "object":
+                schema_obj.setdefault("additionalProperties", False)
+
+            # Recurse common schema composition constructs
+            for key in ("properties", "$defs", "definitions"):
+                if key in schema_obj and isinstance(schema_obj[key], dict):
+                    for _, sub in list(schema_obj[key].items()):
+                        _enforce_no_additional_props(sub)
+            for key in ("items",):
+                if key in schema_obj:
+                    _enforce_no_additional_props(schema_obj[key])
+            for key in ("oneOf", "anyOf", "allOf"):
+                if key in schema_obj and isinstance(schema_obj[key], list):
+                    for sub in schema_obj[key]:
+                        _enforce_no_additional_props(sub)
+        elif isinstance(schema_obj, list):
+            for sub in schema_obj:
+                _enforce_no_additional_props(sub)
+        return schema_obj
+
     if PydanticAvailable:
         try:
             from .summary_schema import SummaryModel
@@ -260,14 +288,16 @@ def get_summary_json_schema() -> dict[str, Any]:
 
             # Ensure top-level is object and additionalProperties is controlled
             if isinstance(schema, dict):
+                schema.setdefault("$schema", "http://json-schema.org/draft-07/schema#")
                 schema.setdefault("type", "object")
-                schema.setdefault("additionalProperties", False)
+                _enforce_no_additional_props(schema)
                 return schema
         except Exception:
             pass
 
     # Static fallback schema
     return {
+        "$schema": "http://json-schema.org/draft-07/schema#",
         "type": "object",
         "additionalProperties": False,
         "properties": {

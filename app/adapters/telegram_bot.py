@@ -977,6 +977,7 @@ class TelegramBot:
                     "json_schema": {
                         "name": "summary_schema",
                         "schema": get_summary_json_schema(),
+                        "strict": True,
                     },
                 }
             except Exception:
