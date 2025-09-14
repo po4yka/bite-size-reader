@@ -39,6 +39,8 @@ class RuntimeConfig:
     preferred_lang: str
     debug_payloads: bool
     enable_textacy: bool = False
+    enable_chunking: bool = False
+    chunk_max_chars: int = 200000
 
 
 @dataclass(frozen=True)
@@ -280,6 +282,8 @@ def load_config() -> AppConfig:
             preferred_lang=_validate_lang(os.getenv("PREFERRED_LANG", "auto")),
             debug_payloads=os.getenv("DEBUG_PAYLOADS", "0").lower() in ("1", "true"),
             enable_textacy=os.getenv("TEXTACY_ENABLED", "0").lower() in ("1", "true", "yes"),
+            enable_chunking=os.getenv("CHUNKING_ENABLED", "0").lower() in ("1", "true", "yes"),
+            chunk_max_chars=int(os.getenv("CHUNK_MAX_CHARS", "200000")),
         )
 
         return AppConfig(
