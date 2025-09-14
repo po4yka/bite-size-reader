@@ -81,6 +81,7 @@ class TelegramBot:
 
         await self.client.start()  # type: ignore[union-attr]
         logger.info("bot_started")
+        await self._setup_bot_commands()
         await idle()
 
     async def _on_message(self, message: Any) -> None:
@@ -89,8 +90,15 @@ class TelegramBot:
             # Owner-only gate
             uid = int(getattr(message.from_user, "id", 0))
             if self.cfg.telegram.allowed_user_ids and uid not in self.cfg.telegram.allowed_user_ids:
-                await self._safe_reply(message, "Access denied.")
+                await self._safe_reply(
+                    message,
+                    f"This bot is private. Access denied. Error ID: {correlation_id}",
+                )
                 logger.info("access_denied", extra={"uid": uid, "cid": correlation_id})
+                try:
+                    self._audit("WARN", "access_denied", {"uid": uid, "cid": correlation_id})
+                except Exception:
+                    pass
                 return
 
             text = (getattr(message, "text", None) or getattr(message, "caption", "") or "").strip()
@@ -154,6 +162,25 @@ class TelegramBot:
             "- You can also send /summarize and then a URL in the next message."
         )
         await self._safe_reply(message, help_text)
+
+    async def _setup_bot_commands(self) -> None:
+        if not self.client or Client is object:  # type: ignore[truthy-bool]
+            return
+        try:
+            from pyrogram.types import BotCommand, BotCommandScopeAllPrivateChats  # type: ignore
+
+            commands = [
+                BotCommand("help", "Show help and usage"),
+                BotCommand("summarize", "Summarize a URL (send URL next)"),
+            ]
+            try:
+                await self.client.set_bot_commands(commands, scope=BotCommandScopeAllPrivateChats())  # type: ignore[attr-defined]
+                logger.info("bot_commands_set", extra={"count": len(commands)})
+            except Exception as e:  # noqa: BLE001
+                logger.warning("bot_commands_set_failed", extra={"error": str(e)})
+        except Exception:
+            # Types not available; skip
+            return
 
     async def _handle_url_flow(self, message: Any, url_text: str, *, correlation_id: str | None = None) -> None:
         norm = normalize_url(url_text)
