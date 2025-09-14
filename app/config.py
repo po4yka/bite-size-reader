@@ -11,6 +11,9 @@ class OpenRouterConfig:
     fallback_models: tuple[str, ...]
     http_referer: str | None
     x_title: str | None
+    max_tokens: int | None
+    top_p: float | None
+    temperature: float
 
 
 @dataclass(frozen=True)
@@ -135,6 +138,53 @@ def _validate_lang(lang: str) -> str:
     return lang
 
 
+def _validate_max_tokens(max_tokens_str: str | None) -> int | None:
+    """Validate max_tokens parameter."""
+    if not max_tokens_str:
+        return None
+    try:
+        max_tokens = int(max_tokens_str)
+        if max_tokens <= 0:
+            raise ValueError("Max tokens must be positive")
+        if max_tokens > 100000:  # Reasonable upper limit
+            raise ValueError("Max tokens too large")
+        return max_tokens
+    except ValueError as e:
+        if "invalid literal" in str(e):
+            raise ValueError("Max tokens must be a valid integer") from e
+        raise
+
+
+def _validate_top_p(top_p_str: str | None) -> float | None:
+    """Validate top_p parameter."""
+    if not top_p_str:
+        return None
+    try:
+        top_p = float(top_p_str)
+        if top_p < 0 or top_p > 1:
+            raise ValueError("Top_p must be between 0 and 1")
+        return top_p
+    except ValueError as e:
+        if "could not convert" in str(e):
+            raise ValueError("Top_p must be a valid number") from e
+        raise
+
+
+def _validate_temperature(temp_str: str | None) -> float:
+    """Validate temperature parameter."""
+    if not temp_str:
+        return 0.2  # Default value
+    try:
+        temperature = float(temp_str)
+        if temperature < 0 or temperature > 2:
+            raise ValueError("Temperature must be between 0 and 2")
+        return temperature
+    except ValueError as e:
+        if "could not convert" in str(e):
+            raise ValueError("Temperature must be a valid number") from e
+        raise
+
+
 def _validate_model_name(model: str) -> str:
     """Validate model name for security and allow OpenRouter-style IDs.
 
@@ -206,10 +256,13 @@ def load_config() -> AppConfig:
 
         openrouter = OpenRouterConfig(
             api_key=_validate_api_key(os.getenv("OPENROUTER_API_KEY", ""), "OpenRouter"),
-            model=_validate_model_name(os.getenv("OPENROUTER_MODEL", "openai/gpt-5")),
+            model=_validate_model_name(os.getenv("OPENROUTER_MODEL", "openai/gpt-4o-mini")),
             fallback_models=fallback_models,
             http_referer=os.getenv("OPENROUTER_HTTP_REFERER"),
             x_title=os.getenv("OPENROUTER_X_TITLE"),
+            max_tokens=_validate_max_tokens(os.getenv("OPENROUTER_MAX_TOKENS")),
+            top_p=_validate_top_p(os.getenv("OPENROUTER_TOP_P")),
+            temperature=_validate_temperature(os.getenv("OPENROUTER_TEMPERATURE")),
         )
 
         runtime = RuntimeConfig(

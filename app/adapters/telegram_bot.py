@@ -803,7 +803,13 @@ class TelegramBot:
             },
         ]
         async with self._ext_sem:
-            llm = await self._openrouter.chat(messages, request_id=req_id)
+            llm = await self._openrouter.chat(
+                messages,
+                temperature=self.cfg.openrouter.temperature,
+                max_tokens=self.cfg.openrouter.max_tokens,
+                top_p=self.cfg.openrouter.top_p,
+                request_id=req_id,
+            )
         # Notify: LLM finished (success or error will be handled below)
         try:
             await self._safe_reply(
@@ -989,7 +995,13 @@ class TelegramBot:
             },
         ]
         async with self._ext_sem:
-            llm = await self._openrouter.chat(messages, request_id=req_id)
+            llm = await self._openrouter.chat(
+                messages,
+                temperature=self.cfg.openrouter.temperature,
+                max_tokens=self.cfg.openrouter.max_tokens,
+                top_p=self.cfg.openrouter.top_p,
+                request_id=req_id,
+            )
         # Notify: LLM finished (forward)
         try:
             await self._safe_reply(

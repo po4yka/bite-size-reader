@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 import time
 from collections.abc import Callable
@@ -82,7 +83,7 @@ class OpenRouterClient:
         self._model = model
         self._fallback_models = validated_fallbacks
         self._timeout = int(timeout_sec)
-        self._base_url = "https://openrouter.ai/api/v1/chat/completions"
+        self._base_url = "https://openrouter.co/v1"
         self._http_referer = http_referer
         self._x_title = x_title
         self._max_retries = max(0, int(max_retries))
@@ -91,11 +92,36 @@ class OpenRouterClient:
         self._logger = logging.getLogger(__name__)
         self._debug_payloads = bool(debug_payloads)
 
+    def _get_error_message(self, status_code: int, data: dict) -> str:
+        """Get descriptive error message based on HTTP status code."""
+        error_messages = {
+            400: "Invalid or missing request parameters",
+            401: "Authentication failed (invalid or expired API key)",
+            402: "Insufficient account balance",
+            404: "Requested resource not found",
+            429: "Rate limit exceeded",
+            500: "Internal server error",
+        }
+
+        base_message = error_messages.get(status_code, f"HTTP {status_code} error")
+        api_error = (
+            data.get("error", {}).get("message")
+            if isinstance(data.get("error"), dict)
+            else data.get("error")
+        )
+
+        if api_error:
+            return f"{base_message}: {api_error}"
+        return base_message
+
     async def chat(
         self,
         messages: list[dict[str, str]],
         *,
         temperature: float = 0.2,
+        max_tokens: int | None = None,
+        top_p: float | None = None,
+        stream: bool = False,
         request_id: int | None = None,
     ) -> LLMCallResult:
         # Security: Validate messages
@@ -127,6 +153,24 @@ class OpenRouterClient:
         if temperature < 0 or temperature > 2:
             raise ValueError("Temperature must be between 0 and 2")
 
+        # Security: Validate max_tokens
+        if max_tokens is not None:
+            if not isinstance(max_tokens, int) or max_tokens <= 0:
+                raise ValueError("Max tokens must be a positive integer")
+            if max_tokens > 100000:  # Reasonable upper limit
+                raise ValueError("Max tokens too large")
+
+        # Security: Validate top_p
+        if top_p is not None:
+            if not isinstance(top_p, int | float):
+                raise ValueError("Top_p must be numeric")
+            if top_p < 0 or top_p > 1:
+                raise ValueError("Top_p must be between 0 and 1")
+
+        # Security: Validate stream
+        if not isinstance(stream, bool):
+            raise ValueError("Stream must be boolean")
+
         # Security: Validate request_id
         if request_id is not None and (not isinstance(request_id, int) or request_id <= 0):
             raise ValueError("Invalid request_id")
@@ -147,17 +191,23 @@ class OpenRouterClient:
                 headers = {
                     "Authorization": f"Bearer {self._api_key}",
                     "Content-Type": "application/json",
+                    "HTTP-Referer": self._http_referer or "https://github.com/your-repo",
+                    "X-Title": self._x_title or "Bite-Size Reader Bot",
                 }
-                if self._http_referer:
-                    headers["HTTP-Referer"] = self._http_referer
-                if self._x_title:
-                    headers["X-Title"] = self._x_title
 
                 body = {
                     "model": model,
                     "messages": messages,
                     "temperature": temperature,
                 }
+
+                # Add optional parameters
+                if max_tokens is not None:
+                    body["max_tokens"] = max_tokens
+                if top_p is not None:
+                    body["top_p"] = top_p
+                if stream:
+                    body["stream"] = stream
 
                 started = time.perf_counter()
                 try:
@@ -181,7 +231,9 @@ class OpenRouterClient:
                             },
                         )
                     async with httpx.AsyncClient(timeout=self._timeout) as client:
-                        resp = await client.post(self._base_url, headers=headers, json=body)
+                        resp = await client.post(
+                            f"{self._base_url}/chat/completions", headers=headers, json=body
+                        )
                     latency = int((time.perf_counter() - started) * 1000)
                     data = resp.json()
                     last_latency = latency
@@ -221,7 +273,8 @@ class OpenRouterClient:
                     if "Authorization" in redacted_headers:
                         redacted_headers["Authorization"] = "REDACTED"
 
-                    if status_code < 400:
+                    # Handle different HTTP status codes according to OpenRouter documentation
+                    if status_code == 200:
                         if self._audit:
                             self._audit(
                                 "INFO",
@@ -246,18 +299,14 @@ class OpenRouterClient:
                             error_text=None,
                             request_headers=redacted_headers,
                             request_messages=messages,
-                            endpoint="/api/v1/chat/completions",
+                            endpoint="/v1/chat/completions",
                         )
-                    # retryable?
-                    if status_code in (429,) or status_code >= 500:
-                        last_error_text = data.get("error") or str(data)
-                        if attempt < self._max_retries:
-                            await asyncio_sleep_backoff(self._backoff_base, attempt)
-                            continue
-                        else:
-                            break  # move to next model
-                    else:
-                        # non-retryable error, return immediately
+
+                    # Handle specific HTTP status codes according to OpenRouter documentation
+                    error_message = self._get_error_message(status_code, data)
+
+                    # Non-retryable errors (400, 401, 402, 404)
+                    if status_code in (400, 401, 402, 404):
                         if self._audit:
                             self._audit(
                                 "ERROR",
@@ -266,12 +315,10 @@ class OpenRouterClient:
                                     "attempt": attempt,
                                     "model": model,
                                     "status": status_code,
-                                    "error": data.get("error"),
+                                    "error": error_message,
                                     "request_id": request_id,
                                 },
                             )
-                        redacted_headers = dict(headers)
-                        redacted_headers["Authorization"] = "REDACTED"
                         return LLMCallResult(
                             status="error",
                             model=last_model_reported,
@@ -281,10 +328,57 @@ class OpenRouterClient:
                             tokens_completion=usage.get("completion_tokens"),
                             cost_usd=None,
                             latency_ms=latency,
-                            error_text=data.get("error") or str(data),
+                            error_text=error_message,
                             request_headers=redacted_headers,
                             request_messages=messages,
-                            endpoint="/api/v1/chat/completions",
+                            endpoint="/v1/chat/completions",
+                        )
+
+                    # Retryable errors (429, 5xx)
+                    if status_code == 429 or status_code >= 500:
+                        last_error_text = error_message
+                        if attempt < self._max_retries:
+                            # For 429, respect retry_after header if present
+                            if status_code == 429:
+                                retry_after = resp.headers.get("retry-after")
+                                if retry_after:
+                                    try:
+                                        retry_seconds = int(retry_after)
+                                        await asyncio.sleep(retry_seconds)
+                                        continue
+                                    except (ValueError, TypeError):
+                                        pass
+                            await asyncio_sleep_backoff(self._backoff_base, attempt)
+                            continue
+                        else:
+                            break  # move to next model
+                    else:
+                        # Unknown status code, treat as non-retryable error
+                        if self._audit:
+                            self._audit(
+                                "ERROR",
+                                "openrouter_error",
+                                {
+                                    "attempt": attempt,
+                                    "model": model,
+                                    "status": status_code,
+                                    "error": error_message,
+                                    "request_id": request_id,
+                                },
+                            )
+                        return LLMCallResult(
+                            status="error",
+                            model=last_model_reported,
+                            response_text=text,
+                            response_json=data,
+                            tokens_prompt=usage.get("prompt_tokens"),
+                            tokens_completion=usage.get("completion_tokens"),
+                            cost_usd=None,
+                            latency_ms=latency,
+                            error_text=error_message,
+                            request_headers=redacted_headers,
+                            request_messages=messages,
+                            endpoint="/v1/chat/completions",
                         )
                 except Exception as e:  # noqa: BLE001
                     latency = int((time.perf_counter() - started) * 1000)
@@ -339,8 +433,26 @@ class OpenRouterClient:
             error_text=last_error_text or "All retries and fallbacks exhausted",
             request_headers=redacted_headers,
             request_messages=messages,
-            endpoint="/api/v1/chat/completions",
+            endpoint="/v1/chat/completions",
         )
+
+    async def get_models(self) -> dict:
+        """Get available models from OpenRouter API."""
+        headers = {
+            "Authorization": f"Bearer {self._api_key}",
+            "Content-Type": "application/json",
+            "HTTP-Referer": self._http_referer or "https://github.com/your-repo",
+            "X-Title": self._x_title or "Bite-Size Reader Bot",
+        }
+
+        try:
+            async with httpx.AsyncClient(timeout=self._timeout) as client:
+                resp = await client.get(f"{self._base_url}/models", headers=headers)
+                resp.raise_for_status()
+                return resp.json()
+        except Exception as e:
+            self._logger.error("openrouter_models_error", extra={"error": str(e)})
+            raise
 
 
 async def asyncio_sleep_backoff(base: float, attempt: int) -> None:
