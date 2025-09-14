@@ -17,6 +17,7 @@ from app.core.html_utils import html_to_text
 from app.core.lang import LANG_RU, choose_language, detect_language
 from app.core.logging_utils import generate_correlation_id, setup_json_logging
 from app.core.summary_contract import validate_and_shape_summary
+from app.core.telegram_models import TelegramMessage
 from app.core.url_utils import extract_all_urls, looks_like_url, normalize_url, url_hash_sha256
 from app.db.database import Database
 
@@ -106,78 +107,61 @@ class TelegramBot:
         try:
             correlation_id = generate_correlation_id()
 
-            # Extract message details for logging
-            from_user_obj = getattr(message, "from_user", None)
-            uid_raw = getattr(from_user_obj, "id", 0) if from_user_obj is not None else 0
-            uid = int(uid_raw) if uid_raw is not None else 0
+            # Parse message using comprehensive model for better validation
+            telegram_message = TelegramMessage.from_pyrogram_message(message)
 
-            chat_obj = getattr(message, "chat", None)
-            chat_id_raw = getattr(chat_obj, "id", 0) if chat_obj is not None else None
-            chat_id = int(chat_id_raw) if chat_id_raw is not None else None
+            # Validate message and log any issues
+            validation_errors = telegram_message.validate()
+            if validation_errors:
+                logger.warning(
+                    "message_validation_errors",
+                    extra={
+                        "cid": correlation_id,
+                        "errors": validation_errors,
+                        "message_id": telegram_message.message_id,
+                    },
+                )
 
-            msg_id_raw = getattr(message, "id", getattr(message, "message_id", 0))
-            message_id = int(msg_id_raw) if msg_id_raw is not None else None
+            # Extract message details for logging using validated model
+            uid = telegram_message.from_user.id if telegram_message.from_user else 0
+            chat_id = telegram_message.chat.id if telegram_message.chat else None
+            message_id = telegram_message.message_id
+            text = telegram_message.get_effective_text() or ""
 
-            text = (getattr(message, "text", None) or getattr(message, "caption", "") or "").strip()
-
-            # Check for forwarded message
-            has_forward = bool(getattr(message, "forward_from_chat", None))
+            # Check for forwarded message using validated model
+            has_forward = telegram_message.is_forwarded
             forward_from_chat_id = None
             forward_from_chat_title = None
             forward_from_message_id = None
 
             if has_forward:
-                fwd_chat = getattr(message, "forward_from_chat", None)
-                forward_from_chat_id = getattr(fwd_chat, "id", None) if fwd_chat else None
-                forward_from_chat_title = getattr(fwd_chat, "title", None) if fwd_chat else None
-                forward_from_message_id = getattr(message, "forward_from_message_id", None)
+                if telegram_message.forward_from_chat:
+                    forward_from_chat_id = telegram_message.forward_from_chat.id
+                    forward_from_chat_title = telegram_message.forward_from_chat.title
+                forward_from_message_id = telegram_message.forward_from_message_id
 
-            # Detect media type
-            media_type = None
-            if getattr(message, "photo", None) is not None:
-                media_type = "photo"
-            elif getattr(message, "video", None) is not None:
-                media_type = "video"
-            elif getattr(message, "document", None) is not None:
-                media_type = "document"
-            elif getattr(message, "audio", None) is not None:
-                media_type = "audio"
-            elif getattr(message, "voice", None) is not None:
-                media_type = "voice"
-            elif getattr(message, "animation", None) is not None:
-                media_type = "animation"
-            elif getattr(message, "sticker", None) is not None:
-                media_type = "sticker"
+            # Get media type using validated model
+            media_type = telegram_message.media_type.value if telegram_message.media_type else None
 
-            # Extract entities for logging
-            entities_obj = list(getattr(message, "entities", []) or [])
-            entities_obj.extend(list(getattr(message, "caption_entities", []) or []))
+            # Extract entities for logging using validated model
             entities_json = None
-            if entities_obj:
+            entities = telegram_message.get_effective_entities()
+            if entities:
                 try:
-
-                    def _ent_to_dict(e: Any) -> dict:
-                        if hasattr(e, "to_dict"):
-                            try:
-                                return e.to_dict()
-                            except Exception:
-                                pass
-                        return getattr(e, "__dict__", {})
-
                     entities_json = json.dumps(
-                        [_ent_to_dict(e) for e in entities_obj], ensure_ascii=False
+                        [entity.__dict__ for entity in entities], ensure_ascii=False
                     )
                 except Exception:
                     entities_json = None
 
-            # Determine interaction type
+            # Determine interaction type using validated model
             interaction_type = "unknown"
             command = None
             input_url = None
 
-            if text.startswith("/"):
+            if telegram_message.is_command():
                 interaction_type = "command"
-                command = text.split()[0] if text else None
+                command = telegram_message.get_command()
             elif has_forward:
                 interaction_type = "forward"
             elif text and looks_like_url(text):
