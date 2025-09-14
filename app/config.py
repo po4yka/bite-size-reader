@@ -47,6 +47,10 @@ class AppConfig:
 
 
 def _parse_allowed_user_ids(value: str | None) -> tuple[int, ...]:
+    import logging
+
+    logger = logging.getLogger(__name__)
+    logger.info(f"Parsing ALLOWED_USER_IDS: {value}")
     if not value:
         return tuple()
     ids: list[int] = []
@@ -58,6 +62,7 @@ def _parse_allowed_user_ids(value: str | None) -> tuple[int, ...]:
             ids.append(int(piece))
         except ValueError:
             continue
+    logger.info(f"Parsed IDs: {ids}")
     return tuple(ids)
 
 

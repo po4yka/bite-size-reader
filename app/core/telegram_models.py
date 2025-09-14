@@ -80,8 +80,15 @@ class TelegramUser:
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> TelegramUser:
         """Create TelegramUser from dictionary."""
+        # Ensure ID is always an integer
+        user_id = data.get("id", 0)
+        try:
+            user_id = int(user_id)
+        except (ValueError, TypeError):
+            user_id = 0
+
         return cls(
-            id=data.get("id", 0),
+            id=user_id,
             is_bot=data.get("is_bot", False),
             first_name=data.get("first_name", ""),
             last_name=data.get("last_name"),
@@ -565,7 +572,7 @@ class TelegramMessage:
 
         return errors
 
-    def get_media_info(self) -> dict[str, Any] | None:
+    def get_media_info(self) -> dict[str, Any] | list[dict[str, Any]] | None:
         """Get media information based on media type."""
         if not self.media_type:
             return None

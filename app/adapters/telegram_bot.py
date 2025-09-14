@@ -124,6 +124,17 @@ class TelegramBot:
 
             # Extract message details for logging using validated model
             uid = telegram_message.from_user.id if telegram_message.from_user else 0
+            # Ensure uid is an integer for consistent comparison
+            try:
+                uid = int(uid)
+            except (ValueError, TypeError):
+                uid = 0
+                logger.warning(f"Invalid user ID type: {type(uid)}, setting to 0")
+
+            logger.info(f"Checking access for UID: {uid} (type: {type(uid)})")
+            logger.info(
+                f"Allowed user IDs: {self.cfg.telegram.allowed_user_ids} (type: {type(self.cfg.telegram.allowed_user_ids)})"
+            )
             chat_id = telegram_message.chat.id if telegram_message.chat else None
             message_id = telegram_message.message_id
             text = telegram_message.get_effective_text() or ""
@@ -189,7 +200,20 @@ class TelegramBot:
                 correlation_id=correlation_id,
             )
 
-            # Owner-only gate
+            # Owner-only gate - improved validation with better debugging
+            if self.cfg.telegram.allowed_user_ids:
+                logger.info(
+                    f"Access control enabled. Checking if UID {uid} is in allowed list: {self.cfg.telegram.allowed_user_ids}"
+                )
+                if uid not in self.cfg.telegram.allowed_user_ids:
+                    logger.warning(
+                        f"Access denied for UID {uid}. Not in allowed list: {self.cfg.telegram.allowed_user_ids}"
+                    )
+                else:
+                    logger.info(f"Access granted for UID {uid}. Found in allowed list.")
+            else:
+                logger.info("Access control disabled - no allowed_user_ids configured")
+
             if self.cfg.telegram.allowed_user_ids and uid not in self.cfg.telegram.allowed_user_ids:
                 await self._safe_reply(
                     message,
