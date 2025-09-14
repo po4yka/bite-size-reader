@@ -131,6 +131,7 @@ class OpenRouterClient:
         top_p: float | None = None,
         stream: bool = False,
         request_id: int | None = None,
+        response_format: dict[str, Any] | None = None,
     ) -> LLMCallResult:
         # Security: Validate messages
         if not messages or not isinstance(messages, list):
@@ -223,8 +224,12 @@ class OpenRouterClient:
                 if self._provider_order:
                     body["route"] = {"order": list(self._provider_order)}
 
-                # Enforce JSON outputs when possible
-                body["response_format"] = {"type": "json_object"}
+                # Enforce structured JSON when possible. Prefer explicit response_format.
+                # Default to json_object to reduce prose around the payload.
+                if response_format and isinstance(response_format, dict):
+                    body["response_format"] = response_format
+                else:
+                    body["response_format"] = {"type": "json_object"}
 
                 started = time.perf_counter()
                 try:
@@ -236,6 +241,8 @@ class OpenRouterClient:
                         red_header = dict(headers)
                         if "Authorization" in red_header:
                             red_header["Authorization"] = "REDACTED"
+                        preview_rf = body.get("response_format") or {}
+                        rf_type = preview_rf.get("type") if isinstance(preview_rf, dict) else None
                         self._logger.debug(
                             "openrouter_request_payload",
                             extra={
@@ -244,6 +251,7 @@ class OpenRouterClient:
                                     "model": model,
                                     "messages": messages[:3],
                                     "temperature": temperature,
+                                    "response_format_type": rf_type,
                                 },
                             },
                         )

@@ -967,12 +967,28 @@ class TelegramBot:
             },
         ]
         async with self._ext_sem:
+            # Provide structured outputs schema through response_format
+            response_format: dict[str, object] = {"type": "json_object"}
+            try:
+                from app.core.summary_contract import get_summary_json_schema
+
+                response_format = {
+                    "type": "json_schema",
+                    "json_schema": {
+                        "name": "summary_schema",
+                        "schema": get_summary_json_schema(),
+                    },
+                }
+            except Exception:
+                pass
+
             llm = await self._openrouter.chat(
                 messages,
                 temperature=self.cfg.openrouter.temperature,
-                max_tokens=self.cfg.openrouter.max_tokens,
+                max_tokens=(self.cfg.openrouter.max_tokens or 2048),
                 top_p=self.cfg.openrouter.top_p,
                 request_id=req_id,
+                response_format=response_format,
             )
         # Notify: LLM finished (success or error will be handled below)
         try:
@@ -1043,6 +1059,7 @@ class TelegramBot:
                         "preview": (llm.response_text or "")[
                             : self.cfg.runtime.log_truncate_length
                         ],
+                        "tail": (llm.response_text or "")[-self.cfg.runtime.log_truncate_length :],
                     },
                 )
             except Exception:
@@ -1050,6 +1067,21 @@ class TelegramBot:
             start = llm.response_text.find("{")
             end = llm.response_text.rfind("}")
             if start == -1 or end == -1 or end <= start:
+                try:
+                    logger.error(
+                        "json_missing_brace",
+                        extra={
+                            "cid": correlation_id,
+                            "head": (llm.response_text or "")[
+                                : self.cfg.runtime.log_truncate_length
+                            ],
+                            "tail": (llm.response_text or "")[
+                                -self.cfg.runtime.log_truncate_length :
+                            ],
+                        },
+                    )
+                except Exception:
+                    pass
                 # Attempt one repair using assistant prefill best-practice
                 try:
                     logger.info("json_repair_attempt", extra={"cid": correlation_id})
@@ -1068,7 +1100,7 @@ class TelegramBot:
                         repair = await self._openrouter.chat(
                             repair_messages,
                             temperature=self.cfg.openrouter.temperature,
-                            max_tokens=self.cfg.openrouter.max_tokens,
+                            max_tokens=(self.cfg.openrouter.max_tokens or 2048),
                             top_p=self.cfg.openrouter.top_p,
                             request_id=req_id,
                         )
@@ -1083,6 +1115,9 @@ class TelegramBot:
                                         "cid": correlation_id,
                                         "preview": (repair.response_text or "")[
                                             : self.cfg.runtime.log_truncate_length
+                                        ],
+                                        "tail": (repair.response_text or "")[
+                                            -self.cfg.runtime.log_truncate_length :
                                         ],
                                     },
                                 )

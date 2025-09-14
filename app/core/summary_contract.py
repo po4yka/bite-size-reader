@@ -241,3 +241,88 @@ def validate_and_shape_summary(payload: SummaryJSON) -> SummaryJSON:
         except Exception:
             return p
     return p
+
+
+def get_summary_json_schema() -> dict[str, Any]:
+    """Return a JSON Schema for the summary contract.
+
+    Prefers exporting from Pydantic if available; falls back to a static schema.
+    """
+    if PydanticAvailable:
+        try:
+            from .summary_schema import SummaryModel
+
+            # Pydantic v2
+            if hasattr(SummaryModel, "model_json_schema"):
+                schema = SummaryModel.model_json_schema()
+            else:  # v1
+                schema = SummaryModel.schema()
+
+            # Ensure top-level is object and additionalProperties is controlled
+            if isinstance(schema, dict):
+                schema.setdefault("type", "object")
+                schema.setdefault("additionalProperties", False)
+                return schema
+        except Exception:
+            pass
+
+    # Static fallback schema
+    return {
+        "type": "object",
+        "additionalProperties": False,
+        "properties": {
+            "summary_250": {"type": "string", "maxLength": 250},
+            "summary_1000": {"type": "string", "maxLength": 1000},
+            "key_ideas": {"type": "array", "items": {"type": "string"}},
+            "topic_tags": {"type": "array", "items": {"type": "string"}},
+            "entities": {
+                "type": "object",
+                "additionalProperties": False,
+                "properties": {
+                    "people": {"type": "array", "items": {"type": "string"}},
+                    "organizations": {"type": "array", "items": {"type": "string"}},
+                    "locations": {"type": "array", "items": {"type": "string"}},
+                },
+                "required": ["people", "organizations", "locations"],
+            },
+            "estimated_reading_time_min": {"type": "integer", "minimum": 0},
+            "key_stats": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "additionalProperties": False,
+                    "properties": {
+                        "label": {"type": "string"},
+                        "value": {"type": "number"},
+                        "unit": {"type": ["string", "null"]},
+                        "source_excerpt": {"type": ["string", "null"]},
+                    },
+                    "required": ["label", "value"],
+                },
+            },
+            "answered_questions": {"type": "array", "items": {"type": "string"}},
+            "readability": {
+                "type": "object",
+                "additionalProperties": False,
+                "properties": {
+                    "method": {"type": "string"},
+                    "score": {"type": "number"},
+                    "level": {"type": "string"},
+                },
+                "required": ["method", "score", "level"],
+            },
+            "seo_keywords": {"type": "array", "items": {"type": "string"}},
+        },
+        "required": [
+            "summary_250",
+            "summary_1000",
+            "key_ideas",
+            "topic_tags",
+            "entities",
+            "estimated_reading_time_min",
+            "key_stats",
+            "answered_questions",
+            "readability",
+            "seo_keywords",
+        ],
+    }
