@@ -135,7 +135,21 @@ class TelegramChat:
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> TelegramChat:
         """Create TelegramChat from dictionary."""
-        chat_type = ChatType(data.get("type", "private"))
+        # Handle chat type conversion more robustly
+        chat_type_str = data.get("type", "private")
+        try:
+            # Handle both string values and enum objects
+            if hasattr(chat_type_str, "value"):
+                chat_type_str = chat_type_str.value
+            elif hasattr(chat_type_str, "name"):
+                chat_type_str = chat_type_str.name.lower()
+
+            # Convert to our enum
+            chat_type = ChatType(chat_type_str.lower())
+        except (ValueError, AttributeError):
+            # Fallback to private if type is unknown
+            chat_type = ChatType.PRIVATE
+
         return cls(
             id=data.get("id", 0),
             type=chat_type,
@@ -502,10 +516,34 @@ class TelegramMessage:
 
         except Exception as e:
             logger.error("Failed to parse Telegram message", extra={"error": str(e)})
-            # Return minimal message object
+            # Return minimal message object with best-effort user extraction
+            from_user_data = getattr(message, "from_user", None)
+            from_user = None
+            if from_user_data:
+                try:
+                    # Extract user ID directly from the raw object
+                    user_id = getattr(from_user_data, "id", 0)
+                    if user_id:
+                        from_user = TelegramUser(
+                            id=int(user_id),
+                            is_bot=getattr(from_user_data, "is_bot", False),
+                            first_name=getattr(from_user_data, "first_name", ""),
+                            last_name=getattr(from_user_data, "last_name"),
+                            username=getattr(from_user_data, "username"),
+                            language_code=getattr(from_user_data, "language_code"),
+                            is_premium=getattr(from_user_data, "is_premium"),
+                            added_to_attachment_menu=getattr(
+                                from_user_data, "added_to_attachment_menu"
+                            ),
+                        )
+                except Exception as user_e:
+                    logger.warning(
+                        "Failed to extract user from failed message", extra={"error": str(user_e)}
+                    )
+
             return cls(
                 message_id=getattr(message, "id", 0),
-                from_user=None,
+                from_user=from_user,
                 date=None,
                 chat=None,
                 text=getattr(message, "text", None),
