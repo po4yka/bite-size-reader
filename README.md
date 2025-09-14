@@ -5,7 +5,7 @@ Async Telegram bot that summarizes URLs via Firecrawl + OpenRouter or summarizes
 Quick start
 - Copy `.env.example` to `.env` and fill required secrets.
 - Build and run with Docker.
- - See DEPLOYMENT.md for full setup and deployment instructions.
+- See DEPLOYMENT.md for full setup and deployment instructions.
 
 Docker
 - If you updated dependencies in `pyproject.toml`, generate lock files first: `make lock-uv` (or `make lock-piptools`).
@@ -18,7 +18,7 @@ Environment
 - `OPENROUTER_API_KEY`, `OPENROUTER_MODEL`, `OPENROUTER_HTTP_REFERER`, `OPENROUTER_X_TITLE`
 - `DB_PATH=/data/app.db`, `LOG_LEVEL=INFO`, `REQUEST_TIMEOUT_SEC=60`
 - `PREFERRED_LANG=auto` (auto|en|ru)
- - `DEBUG_PAYLOADS=0` — when `1`, logs request/response payload previews for Firecrawl/OpenRouter (with Authorization redacted)
+- `DEBUG_PAYLOADS=0` — when `1`, logs request/response payload previews for Firecrawl/OpenRouter (with Authorization redacted)
 
 Repository layout
 - `app/core` — URL normalization, summary contract, logging utils
@@ -31,7 +31,16 @@ Repository layout
 Notes
 - Dependencies include Pyrogram; if using PyroTGFork, align installation accordingly.
 - This is a skeleton implementation; handlers, retries, and persistence are minimal and should be extended per SPEC.md.
- - Bot commands are registered on startup for private chats: `/help`, `/summarize` (visible in the command menu in Telegram).
+- Bot commands are registered on startup for private chats: `/help`, `/summarize` (visible in the command menu in Telegram).
+
+Commands & usage
+- `/help` or `/start` — Show help and usage.
+- `/summarize <URL>` — Summarize a URL immediately.
+- `/summarize` — Bot will ask you to send a URL in the next message.
+- Multiple URLs in one message (or after `/summarize`): bot asks “Process N links?”; reply “yes/no”. Each link gets its own correlation ID and is processed sequentially.
+
+Errors & correlation IDs
+- All user-visible errors include `Error ID: <cid>` to correlate with logs and DB `requests.correlation_id`.
 
 Dev tooling
 - Install dev deps: `pip install -r requirements.txt -r requirements-dev.txt`
@@ -39,7 +48,11 @@ Dev tooling
 - Lint: `make lint` (ruff)
 - Type-check: `make type` (mypy)
 - Pre-commit: `pre-commit install` then commits will auto-run hooks
- - Optional: `pip install loguru` to enable Loguru-based JSON logging with stdlib bridging
+- Optional: `pip install loguru` to enable Loguru-based JSON logging with stdlib bridging
+
+Pre-commit hooks
+- Hooks run in this order to minimize churn: Ruff (with `--fix`), isort (profile=black), Black.
+- If a first run modifies files, stage the changes and run again.
 
 Local environment
 - Create venv: `make venv` (or run `scripts/create_venv.sh`)
