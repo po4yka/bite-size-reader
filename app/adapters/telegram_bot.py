@@ -231,6 +231,18 @@ class TelegramBot:
 
             # Commands
             if text.startswith("/start"):
+                logger.info(
+                    "command_start",
+                    extra={"uid": uid, "chat_id": chat_id, "cid": correlation_id},
+                )
+                try:
+                    self._audit(
+                        "INFO",
+                        "command_start",
+                        {"uid": uid, "chat_id": chat_id, "cid": correlation_id},
+                    )
+                except Exception:
+                    pass
                 await self._send_welcome(message)
                 if interaction_id:
                     self._update_user_interaction(
@@ -241,6 +253,18 @@ class TelegramBot:
                     )
                 return
             if text.startswith("/help"):
+                logger.info(
+                    "command_help",
+                    extra={"uid": uid, "chat_id": chat_id, "cid": correlation_id},
+                )
+                try:
+                    self._audit(
+                        "INFO",
+                        "command_help",
+                        {"uid": uid, "chat_id": chat_id, "cid": correlation_id},
+                    )
+                except Exception:
+                    pass
                 await self._send_help(message)
                 if interaction_id:
                     self._update_user_interaction(
@@ -267,6 +291,23 @@ class TelegramBot:
                             processing_time_ms=int((time.time() - start_time) * 1000),
                         )
                     return
+                logger.info(
+                    "command_summarize_all",
+                    extra={
+                        "uid": uid,
+                        "chat_id": chat_id,
+                        "cid": correlation_id,
+                        "count": len(urls),
+                    },
+                )
+                try:
+                    self._audit(
+                        "INFO",
+                        "command_summarize_all",
+                        {"uid": uid, "chat_id": chat_id, "cid": correlation_id, "count": len(urls)},
+                    )
+                except Exception:
+                    pass
                 await self._safe_reply(message, f"Processing {len(urls)} links...")
                 if interaction_id:
                     self._update_user_interaction(
@@ -286,6 +327,30 @@ class TelegramBot:
             if text.startswith("/summarize"):
                 # If URL is in the same message, extract and process; otherwise set awaiting state
                 urls = extract_all_urls(text)
+                logger.info(
+                    "command_summarize",
+                    extra={
+                        "uid": uid,
+                        "chat_id": chat_id,
+                        "cid": correlation_id,
+                        "with_urls": bool(urls),
+                        "count": len(urls),
+                    },
+                )
+                try:
+                    self._audit(
+                        "INFO",
+                        "command_summarize",
+                        {
+                            "uid": uid,
+                            "chat_id": chat_id,
+                            "cid": correlation_id,
+                            "with_urls": bool(urls),
+                            "count": len(urls),
+                        },
+                    )
+                except Exception:
+                    pass
                 if len(urls) > 1:
                     self._pending_multi_links[uid] = urls
                     await self._safe_reply(message, f"Process {len(urls)} links? (yes/no)")
