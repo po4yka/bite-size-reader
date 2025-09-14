@@ -101,3 +101,20 @@ def setup_json_logging(level: str = "INFO") -> None:
 def generate_correlation_id() -> str:
     """Generate a short correlation ID for tracing errors across logs and user messages."""
     return uuid.uuid4().hex[:12]
+
+
+def truncate_log_content(content: str | None, max_length: int = 1000) -> str | None:
+    """Truncate large content for logging to avoid cluttering logs.
+
+    Args:
+        content: The content to potentially truncate
+        max_length: Maximum length before truncation (default 1000)
+
+    Returns:
+        Truncated content with ellipsis if truncated, or original content if short enough
+    """
+    if not content:
+        return content
+    if len(content) <= max_length:
+        return content
+    return content[:max_length] + "... [truncated]"

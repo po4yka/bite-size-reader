@@ -9,6 +9,8 @@ from typing import Any
 
 import httpx
 
+from app.core.logging_utils import truncate_log_content
+
 
 @dataclass
 class LLMCallResult:
@@ -44,6 +46,7 @@ class OpenRouterClient:
         debug_payloads: bool = False,
         provider_order: list[str] | tuple[str, ...] | None = None,
         enable_stats: bool = False,
+        log_truncate_length: int = 1000,
     ) -> None:
         # Security: Validate API key presence. Length/format is enforced at config load.
         if not api_key or not isinstance(api_key, str):
@@ -95,6 +98,7 @@ class OpenRouterClient:
         self._debug_payloads = bool(debug_payloads)
         self._provider_order = list(provider_order or [])
         self._enable_stats = bool(enable_stats)
+        self._log_truncate_length = int(log_truncate_length)
 
     def _get_error_message(self, status_code: int, data: dict) -> str:
         """Get descriptive error message based on HTTP status code."""
@@ -258,6 +262,17 @@ class OpenRouterClient:
                         # Avoid dumping huge payloads entirely
                         try:
                             preview = data
+                            # Truncate large response content
+                            if isinstance(preview, dict) and "choices" in preview:
+                                choices = preview.get("choices", [])
+                                if choices and isinstance(choices[0], dict):
+                                    choice = choices[0]
+                                    if "message" in choice and isinstance(choice["message"], dict):
+                                        content = choice["message"].get("content")
+                                        if content:
+                                            choice["message"]["content"] = truncate_log_content(
+                                                content, self._log_truncate_length
+                                            )
                             self._logger.debug(
                                 "openrouter_response_payload", extra={"preview": preview}
                             )

@@ -43,6 +43,7 @@ class RuntimeConfig:
     enable_textacy: bool = False
     enable_chunking: bool = False
     chunk_max_chars: int = 200000
+    log_truncate_length: int = 1000
 
 
 @dataclass(frozen=True)
@@ -305,6 +306,7 @@ def load_config() -> AppConfig:
             enable_textacy=os.getenv("TEXTACY_ENABLED", "0").lower() in ("1", "true", "yes"),
             enable_chunking=os.getenv("CHUNKING_ENABLED", "0").lower() in ("1", "true", "yes"),
             chunk_max_chars=int(os.getenv("CHUNK_MAX_CHARS", "200000")),
+            log_truncate_length=int(os.getenv("LOG_TRUNCATE_LENGTH", "1000")),
         )
 
         return AppConfig(

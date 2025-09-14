@@ -58,6 +58,7 @@ class TelegramBot:
             timeout_sec=self.cfg.runtime.request_timeout_sec,
             audit=self._audit,
             debug_payloads=self.cfg.runtime.debug_payloads,
+            log_truncate_length=self.cfg.runtime.log_truncate_length,
         )
         self._openrouter = OpenRouterClient(
             api_key=self.cfg.openrouter.api_key,
@@ -70,6 +71,7 @@ class TelegramBot:
             debug_payloads=self.cfg.runtime.debug_payloads,
             provider_order=list(self.cfg.openrouter.provider_order),
             enable_stats=self.cfg.openrouter.enable_stats,
+            log_truncate_length=self.cfg.runtime.log_truncate_length,
         )
 
         # Telegram client (PyroTGFork/Pyrogram)

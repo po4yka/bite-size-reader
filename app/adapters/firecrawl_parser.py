@@ -39,6 +39,7 @@ class FirecrawlClient:
         backoff_base: float = 0.5,
         audit: Callable[[str, str, dict[str, Any]], None] | None = None,
         debug_payloads: bool = False,
+        log_truncate_length: int = 1000,
     ) -> None:
         # Security: Validate API key presence and format
         if not api_key or not isinstance(api_key, str):
@@ -68,6 +69,7 @@ class FirecrawlClient:
         self._audit = audit
         self._logger = logging.getLogger(__name__)
         self._debug_payloads = bool(debug_payloads)
+        self._log_truncate_length = int(log_truncate_length)
 
     async def scrape_markdown(
         self, url: str, *, mobile: bool = True, request_id: int | None = None
