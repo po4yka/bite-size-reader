@@ -13,7 +13,7 @@ from typing import Any
 from app.adapters.firecrawl_parser import FirecrawlClient
 from app.adapters.openrouter_client import OpenRouterClient
 from app.config import AppConfig
-from app.core.html_utils import html_to_text
+from app.core.html_utils import clean_markdown_article_text, html_to_text
 from app.core.lang import LANG_RU, choose_language, detect_language
 from app.core.logging_utils import generate_correlation_id, setup_json_logging
 from app.core.summary_contract import validate_and_shape_summary
@@ -685,7 +685,7 @@ class TelegramBot:
         ):
             md = existing_crawl.get("content_markdown")
             if md:
-                content_text = md
+                content_text = clean_markdown_article_text(md)
             else:
                 content_text = html_to_text(existing_crawl.get("content_html") or "")
             self._audit("INFO", "reuse_crawl_result", {"request_id": req_id, "cid": correlation_id})
@@ -790,7 +790,7 @@ class TelegramBot:
             except Exception:
                 pass
             if crawl.content_markdown:
-                content_text = crawl.content_markdown
+                content_text = clean_markdown_article_text(crawl.content_markdown)
             else:
                 content_text = html_to_text(crawl.content_html or "")
 

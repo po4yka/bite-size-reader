@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from html import unescape
 from html.parser import HTMLParser
 
@@ -92,3 +93,90 @@ def html_to_text(html: str) -> str:
         txt = re.sub(r"<[^>]+>", " ", txt)
         txt = unescape(txt)
         return "\n".join(line.strip() for line in txt.splitlines() if line.strip())
+
+
+def clean_markdown_article_text(markdown: str) -> str:
+    """Best-effort cleaning to extract only article text from markdown.
+
+    - Removes code blocks and images
+    - Converts links to plain text (keeps anchor text)
+    - Drops common boilerplate/UI lines (share, login, embeds, etc.)
+    - Collapses excessive whitespace
+    """
+    if not isinstance(markdown, str):
+        markdown = str(markdown) if markdown is not None else ""
+
+    text = markdown
+    # Remove fenced code blocks
+    text = re.sub(r"```[\s\S]*?```", "", text)
+    # Remove inline code spans
+    text = re.sub(r"`[^`]*`", "", text)
+    # Remove images ![alt](url)
+    text = re.sub(r"!\[[^\]]*\]\([^\)]+\)", "", text)
+    # Convert links [text](url) -> text
+    text = re.sub(r"\[([^\]]+)\]\([^\)]+\)", r"\1", text)
+    # Remove reference-style link definitions and bare image refs
+    text = re.sub(r"^\s*\[[^\]]+\]:\s*\S+\s*$", "", text, flags=re.M)
+
+    # Line-level filtering of boilerplate
+    lines = [ln.rstrip() for ln in text.splitlines()]
+    drop_prefixes = (
+        "share",
+        "watch later",
+        "copy link",
+        "include playlist",
+        "tap to unmute",
+        "you're signed out",
+        "videos you watch",
+        "search",
+        "info",
+        "shopping",
+        "cancel",
+        "confirm",
+        "subscribe",
+        "sign in",
+        "login",
+        "comments",
+        "комментарии",
+        "поделиться",
+    )
+    drop_exact = {"—", "-", "•", "* * *", "— — —"}
+
+    filtered: list[str] = []
+    for ln in lines:
+        raw = ln.strip()
+        if not raw:
+            filtered.append("")
+            continue
+        low = raw.lower()
+        if any(low.startswith(pfx) for pfx in drop_prefixes):
+            continue
+        if raw in drop_exact:
+            continue
+        # Drop plain URLs
+        if re.fullmatch(r"https?://\S+", raw):
+            continue
+        # Drop lines that are mostly punctuation bullets
+        if len(raw) <= 3 and raw.strip("•-*_") == "":
+            continue
+        filtered.append(raw)
+
+    # Collapse multiple blank lines
+    out_lines: list[str] = []
+    prev_blank = False
+    for ln in filtered:
+        if ln == "":
+            if not prev_blank:
+                out_lines.append("")
+            prev_blank = True
+        else:
+            out_lines.append(ln)
+            prev_blank = False
+
+    cleaned = "\n".join(out_lines).strip()
+    # Normalize excessive spaces within lines
+    cleaned = re.sub(r"[ \t]{2,}", " ", cleaned)
+    # Final collapse of triple newlines if any remain
+    while "\n\n\n" in cleaned:
+        cleaned = cleaned.replace("\n\n\n", "\n\n")
+    return cleaned
