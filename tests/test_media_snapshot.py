@@ -165,8 +165,8 @@ class TestMediaSnapshot(unittest.TestCase):
                 super().__init__()
                 self.text = "Hello"
                 self.caption = "World"
-                self.entities = [_Ent("bold")]
-                self.caption_entities = [_Ent("url")]
+                self.entities = (_Ent("bold"),)
+                self.caption_entities = (_Ent("url"),)
 
         self.bot._persist_message_snapshot(self.req_id, Msg())
         row = self.db.fetchone(

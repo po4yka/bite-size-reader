@@ -556,9 +556,8 @@ class TelegramBot:
         text_full = getattr(message, "text", None) or getattr(message, "caption", "") or None
 
         # Entities
-        entities_obj = (getattr(message, "entities", None) or []) + (
-            getattr(message, "caption_entities", None) or []
-        )
+        entities_obj = list(getattr(message, "entities", []) or [])
+        entities_obj.extend(list(getattr(message, "caption_entities", []) or []))
         try:
 
             def _ent_to_dict(e: Any) -> dict:
