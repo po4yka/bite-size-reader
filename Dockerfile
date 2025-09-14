@@ -7,6 +7,13 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
+# System deps for building native wheels (e.g., tgcrypto)
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+       build-essential \
+       gcc \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
@@ -19,4 +26,3 @@ ENV DB_PATH=/data/app.db \
     REQUEST_TIMEOUT_SEC=60
 
 CMD ["python", "-u", "bot.py"]
-
