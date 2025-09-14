@@ -25,6 +25,7 @@ class FirecrawlResult:
     source_url: str | None = None
     endpoint: str | None = "/v1/scrape"
     options_json: dict | None = None
+    correlation_id: str | None = None  # Firecrawl's cid field
 
 
 class FirecrawlClient:
@@ -39,9 +40,12 @@ class FirecrawlClient:
         audit: Callable[[str, str, dict[str, Any]], None] | None = None,
         debug_payloads: bool = False,
     ) -> None:
-        # Security: Validate API key presence. Length/format is enforced at config load.
+        # Security: Validate API key presence and format
         if not api_key or not isinstance(api_key, str):
             raise ValueError("API key is required")
+        # Validate Bearer token format (should start with 'fc-' for Firecrawl)
+        if not api_key.startswith("fc-"):
+            raise ValueError("API key must start with 'fc-'")
 
         # Security: Validate timeout
         if not isinstance(timeout_sec, int | float) or timeout_sec <= 0:
@@ -130,6 +134,9 @@ class FirecrawlClient:
                     self._logger.debug("firecrawl_response_payload", extra={"preview": preview})
 
                 if resp.status_code < 400:
+                    # Extract correlation ID if present
+                    correlation_id = data.get("cid")
+
                     # Check if the response body contains an error even with 200 status
                     response_error = data.get("error")
 
@@ -143,6 +150,7 @@ class FirecrawlClient:
                             "error_type": type(response_error).__name__,
                             "success_field": data.get("success"),
                             "data_field": data.get("data"),
+                            "correlation_id": correlation_id,
                         },
                     )
 
@@ -248,6 +256,7 @@ class FirecrawlClient:
                                 "mobile": cur_mobile,
                                 **({"parsers": ["pdf"]} if cur_pdf else {}),
                             },
+                            correlation_id=correlation_id,
                         )
 
                     # No error in response body, treat as success
@@ -312,10 +321,28 @@ class FirecrawlClient:
                             "mobile": cur_mobile,
                             **({"parsers": ["pdf"]} if cur_pdf else {}),
                         },
+                        correlation_id=correlation_id,
                     )
 
+                # Handle rate limiting (429) with exponential backoff
+                if resp.status_code == 429:
+                    retry_after = data.get("retry_after", 60)  # Default to 60 seconds
+                    last_error = data.get("error") or "Rate limit exceeded"
+                    if attempt < self._max_retries:
+                        self._logger.warning(
+                            "firecrawl_rate_limit",
+                            extra={
+                                "status": resp.status_code,
+                                "retry_after": retry_after,
+                                "attempt": attempt,
+                            },
+                        )
+                        # Use retry_after from response or exponential backoff
+                        delay = min(retry_after, self._backoff_base * (2**attempt))
+                        await asyncio.sleep(delay)
+                        continue
                 # Retry on 5xx
-                if resp.status_code >= 500:
+                elif resp.status_code >= 500:
                     last_error = data.get("error") or str(data)
                     if attempt < self._max_retries:
                         cur_mobile = not cur_mobile  # toggle mobile emulation on retry
@@ -323,7 +350,23 @@ class FirecrawlClient:
                             cur_pdf = not cur_pdf  # toggle pdf parser
                         await asyncio_sleep_backoff(self._backoff_base, attempt)
                         continue
-                # Non-retryable error
+                # Non-retryable error - handle specific status codes
+                error_message = data.get("error") or str(data)
+
+                # Map specific HTTP status codes to meaningful error messages
+                if resp.status_code == 400:
+                    error_message = f"Bad Request: {error_message}"
+                elif resp.status_code == 401:
+                    error_message = f"Unauthorized: {error_message}"
+                elif resp.status_code == 402:
+                    error_message = f"Payment Required: {error_message}"
+                elif resp.status_code == 404:
+                    error_message = f"Not Found: {error_message}"
+                elif resp.status_code == 429:
+                    error_message = f"Rate Limit Exceeded: {error_message}"
+                elif resp.status_code >= 500:
+                    error_message = f"Server Error: {error_message}"
+
                 if self._audit:
                     self._audit(
                         "ERROR",
@@ -331,13 +374,13 @@ class FirecrawlClient:
                         {
                             "attempt": attempt,
                             "status": resp.status_code,
-                            "error": last_error,
+                            "error": error_message,
                             "pdf": cur_pdf,
                             "request_id": request_id,
                         },
                     )
                 self._logger.error(
-                    "firecrawl_error", extra={"status": resp.status_code, "error": last_error}
+                    "firecrawl_error", extra={"status": resp.status_code, "error": error_message}
                 )
                 return FirecrawlResult(
                     status="error",
@@ -349,7 +392,7 @@ class FirecrawlClient:
                     links_json=data.get("links"),
                     raw_response_json=data,
                     latency_ms=latency,
-                    error_text=data.get("error") or str(data),
+                    error_text=error_message,
                     source_url=url,
                     endpoint="/v1/scrape",
                     options_json={
@@ -357,6 +400,7 @@ class FirecrawlClient:
                         "mobile": cur_mobile,
                         **({"parsers": ["pdf"]} if cur_pdf else {}),
                     },
+                    correlation_id=data.get("cid"),
                 )
             except Exception as e:  # noqa: BLE001
                 latency = int((time.perf_counter() - started) * 1000)
