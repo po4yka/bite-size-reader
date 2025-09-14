@@ -5,6 +5,7 @@ Async Telegram bot that summarizes URLs via Firecrawl + OpenRouter or summarizes
 Quick start
 - Copy `.env.example` to `.env` and fill required secrets.
 - Build and run with Docker.
+ - See DEPLOYMENT.md for full setup and deployment instructions.
 
 Docker
 - If you updated dependencies in `pyproject.toml`, generate lock files first: `make lock-uv` (or `make lock-piptools`).
