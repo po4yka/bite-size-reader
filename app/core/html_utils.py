@@ -21,6 +21,14 @@ except Exception:  # pragma: no cover
 _HAS_TEXTACY = True  # will be validated at runtime in functions
 
 
+_BLANK_LINE_RE = re.compile(r"\n{3,}")
+
+
+def _collapse_blank_lines(text: str) -> str:
+    """Replace runs of three or more newlines with exactly two."""
+    return _BLANK_LINE_RE.sub("\n\n", text)
+
+
 class _TextExtractor(HTMLParser):
     def __init__(self) -> None:
         super().__init__(convert_charrefs=True)
@@ -58,9 +66,7 @@ class _TextExtractor(HTMLParser):
         text = "".join(self._buf)
         text = unescape(text)
         # Normalize lines: remove 3+ newlines -> 2
-        while "\n\n\n" in text:
-            text = text.replace("\n\n\n", "\n\n")
-        return text.strip()
+        return _collapse_blank_lines(text).strip()
 
 
 def html_to_text(html: str) -> str:
@@ -77,8 +83,7 @@ def html_to_text(html: str) -> str:
                     text = f"{title}\n\n{text}"
                 # Normalize whitespace
                 text = "\n".join(line.strip() for line in text.splitlines())
-                while "\n\n\n" in text:
-                    text = text.replace("\n\n\n", "\n\n")
+                text = _collapse_blank_lines(text)
                 return text.strip()
         except Exception:
             pass
@@ -184,8 +189,7 @@ def clean_markdown_article_text(markdown: str) -> str:
     # Normalize excessive spaces within lines
     cleaned = re.sub(r"[ \t]{2,}", " ", cleaned)
     # Final collapse of triple newlines if any remain
-    while "\n\n\n" in cleaned:
-        cleaned = cleaned.replace("\n\n\n", "\n\n")
+    cleaned = _collapse_blank_lines(cleaned)
     return cleaned
 
 
@@ -221,8 +225,7 @@ def normalize_with_textacy(text: str) -> str:
     out = re.sub(r"\S+@\S+", " ", out)
     out = re.sub(r"[\u0000-\u001F\u007F]", " ", out)
     out = re.sub(r"[ \t]{2,}", " ", out)
-    while "\n\n\n" in out:
-        out = out.replace("\n\n\n", "\n\n")
+    out = _collapse_blank_lines(out)
     return out.strip()
 
 
