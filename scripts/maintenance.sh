@@ -223,11 +223,26 @@ run_security_audit() {
     fi
 
     log_info "Running pip-audit security scan (requires network)..."
-    if pip-audit -r requirements.txt -r requirements-dev.txt --strict; then
+
+    # Create filtered requirements excluding spaCy models that aren't on PyPI
+    log_info "Filtering out spaCy language models for audit..."
+    cat requirements.txt requirements-dev.txt | \
+        grep -v "en-core-web-sm" | \
+        grep -v "ru-core-news-sm" | \
+        sort -u > requirements-audit-temp.txt
+
+    # Add base spaCy and textacy packages for auditing
+    echo "spacy>=3.7,<4" >> requirements-audit-temp.txt
+    echo "textacy>=0.13,<0.14" >> requirements-audit-temp.txt
+
+    if pip-audit -r requirements-audit-temp.txt --strict; then
         log_success "Security audit passed"
     else
         log_warning "Security audit found issues (non-fatal)"
     fi
+
+    # Clean up temporary file
+    rm -f requirements-audit-temp.txt
 }
 
 run_database_migration() {

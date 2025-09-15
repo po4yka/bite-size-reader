@@ -1,0 +1,5 @@
+# pip-audit ignore file
+# These packages are spaCy language models installed from GitHub releases
+# and are not available on PyPI for security auditing
+en-core-web-sm==3.7.1
+ru-core-news-sm==3.7.0

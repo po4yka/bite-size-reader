@@ -160,7 +160,19 @@ jobs:
         run: bandit -r app -ll
 
       - name: pip-audit (dependencies)
-        run: pip-audit -r requirements.txt -r requirements-dev.txt --strict
+        run: |
+          # Filter out spaCy language models that aren't available on PyPI
+          cat requirements.txt requirements-dev.txt | \
+            grep -v "en-core-web-sm" | \
+            grep -v "ru-core-news-sm" | \
+            sort -u > requirements-audit.txt
+
+          # Add base spaCy and textacy packages for auditing
+          echo "spacy>=3.7,<4" >> requirements-audit.txt
+          echo "textacy>=0.13,<0.14" >> requirements-audit.txt
+
+          # Run security audit on PyPI packages only
+          pip-audit -r requirements-audit.txt --strict
 
       - name: Safety (dependencies)
         run: safety check --full-report || true
