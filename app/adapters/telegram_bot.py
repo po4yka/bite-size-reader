@@ -33,9 +33,9 @@ try:
     from pyrogram import Client, filters
     from pyrogram.types import Message
 except Exception:  # pragma: no cover - allow import in environments without deps
-    Client = object  # type: ignore[misc,assignment]
+    Client = object  # type: ignore
     filters = None
-    Message = object  # type: ignore[misc,assignment]
+    Message = object  # type: ignore
 
 
 logger = logging.getLogger(__name__)
