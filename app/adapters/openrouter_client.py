@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import re
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -100,6 +101,7 @@ class OpenRouterClient:
         self._provider_order = list(provider_order or [])
         self._enable_stats = bool(enable_stats)
         self._log_truncate_length = int(log_truncate_length)
+        self._rf_supported = True
 
     def _get_error_message(self, status_code: int, data: dict) -> str:
         """Get descriptive error message based on HTTP status code."""
@@ -123,6 +125,20 @@ class OpenRouterClient:
             return f"{base_message}: {api_error}"
         return base_message
 
+    def _sanitize_user_content(self, text: str) -> str:
+        patterns = [
+            r"(?i)ignore previous instructions",
+            r"(?i)forget previous instructions",
+            r"(?i)system:",
+            r"(?i)assistant:",
+            r"(?i)user:",
+            r"```",
+        ]
+        sanitized = text
+        for pat in patterns:
+            sanitized = re.sub(pat, "", sanitized)
+        return sanitized
+
     async def chat(
         self,
         messages: list[dict[str, str]],
@@ -140,7 +156,7 @@ class OpenRouterClient:
         if len(messages) > 50:  # Prevent extremely long conversations
             raise ValueError("Too many messages")
 
-        # Security: Validate message structure
+        sanitized_messages = []
         for i, msg in enumerate(messages):
             if not isinstance(msg, dict):
                 raise ValueError(f"Message {i} must be a dictionary")
@@ -159,6 +175,12 @@ class OpenRouterClient:
                 # We only truncate in debug logs below to avoid log bloat.
                 # Let the provider handle context window limits.
                 pass
+            if msg["role"] == "user":
+                sanitized_content = self._sanitize_user_content(msg["content"])
+                if sanitized_content != msg["content"]:
+                    msg = {**msg, "content": sanitized_content}
+            sanitized_messages.append(msg)
+        messages = sanitized_messages
 
         # Security: Validate temperature
         if not isinstance(temperature, int | float):
@@ -227,10 +249,12 @@ class OpenRouterClient:
 
                 # Enforce structured JSON when possible. Prefer explicit response_format.
                 # Default to json_object to reduce prose around the payload.
-                if response_format and isinstance(response_format, dict):
-                    body["response_format"] = response_format
-                else:
-                    body["response_format"] = {"type": "json_object"}
+                use_response_format = self._rf_supported
+                if use_response_format:
+                    if response_format and isinstance(response_format, dict):
+                        body["response_format"] = response_format
+                    else:
+                        body["response_format"] = {"type": "json_object"}
 
                 # Intelligent compression strategy based on OpenRouter best practices
                 # Apply middle-out compression only when content significantly exceeds context limits
@@ -364,6 +388,21 @@ class OpenRouterClient:
                             pass
 
                     status_code = resp.status_code
+                    if status_code == 400 and use_response_format:
+                        err_dump = json.dumps(data).lower()
+                        if "response_format" in err_dump:
+                            self._rf_supported = False
+                            if self._audit:
+                                self._audit(
+                                    "WARN",
+                                    "openrouter_response_format_unsupported",
+                                    {"model": model, "request_id": request_id},
+                                )
+                            self._logger.warning(
+                                "openrouter_response_format_unsupported", extra={"model": model}
+                            )
+                            if attempt < self._max_retries:
+                                continue
                     # Extract text and usage
                     text = None
                     try:
