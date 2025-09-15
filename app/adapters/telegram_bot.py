@@ -34,18 +34,19 @@ PYROGRAM_AVAILABLE: bool = True
 
 if TYPE_CHECKING:
     # Type-only imports; mypy sees these, runtime won't execute
-    from pyrogram import Client as PyroClient, filters  # pragma: no cover
-    from pyrogram.types import Message as PyroMessage  # pragma: no cover
+    from pyrogram import Client, filters  # pragma: no cover
+    from pyrogram.types import Message  # pragma: no cover
 else:
     try:
-        from pyrogram import Client as PyroClient, filters
-        from pyrogram.types import Message as PyroMessage
+        # Runtime aliases that tests can monkeypatch
+        from pyrogram import Client, filters
+        from pyrogram.types import Message
 
         PYROGRAM_AVAILABLE = True
     except Exception:  # pragma: no cover - allow import in environments without deps
-        PyroClient = object  # type: ignore[assignment]
+        Client = object  # type: ignore[assignment]
         filters = None
-        PyroMessage = object  # type: ignore[assignment]
+        Message = object  # type: ignore[assignment]
         PYROGRAM_AVAILABLE = False
 
 
@@ -93,10 +94,10 @@ class TelegramBot:
         )
 
         # Telegram client (PyroTGFork/Pyrogram)
-        if not PYROGRAM_AVAILABLE or PyroClient is object:
+        if not PYROGRAM_AVAILABLE or Client is object:
             self.client = None
         else:
-            self.client = PyroClient(
+            self.client = Client(
                 name="bite_size_reader_bot",
                 api_id=self.cfg.telegram.api_id,
                 api_hash=self.cfg.telegram.api_hash,
@@ -574,7 +575,7 @@ class TelegramBot:
         await self._safe_reply(message, welcome)
 
     async def _setup_bot_commands(self) -> None:
-        if not self.client or not PYROGRAM_AVAILABLE or PyroClient is object:
+        if not self.client or not PYROGRAM_AVAILABLE or Client is object:
             return
         try:
             from pyrogram.types import BotCommand, BotCommandScopeAllPrivateChats
