@@ -104,6 +104,51 @@ def _dedupe_case_insensitive(items: list[str]) -> list[str]:
     return out
 
 
+def _normalize_field_names(payload: SummaryJSON) -> SummaryJSON:
+    """Normalize field names from camelCase to snake_case.
+
+    Handles common field name variations that LLMs might return.
+    """
+    field_mapping = {
+        # Summary fields
+        "summary250": "summary_250",
+        "summary1000": "summary_1000",
+        "summary_250": "summary_250",  # Already correct
+        "summary_1000": "summary_1000",  # Already correct
+        # Key ideas and tags
+        "keyideas": "key_ideas",
+        "keyIdeas": "key_ideas",
+        "key_ideas": "key_ideas",  # Already correct
+        "topictags": "topic_tags",
+        "topicTags": "topic_tags",
+        "topic_tags": "topic_tags",  # Already correct
+        # Reading time
+        "estimatedreadingtimemin": "estimated_reading_time_min",
+        "estimatedReadingTimeMin": "estimated_reading_time_min",
+        "estimated_reading_time_min": "estimated_reading_time_min",  # Already correct
+        # Key stats
+        "keystats": "key_stats",
+        "keyStats": "key_stats",
+        "key_stats": "key_stats",  # Already correct
+        # Answered questions
+        "answeredquestions": "answered_questions",
+        "answeredQuestions": "answered_questions",
+        "answered_questions": "answered_questions",  # Already correct
+        # SEO keywords
+        "seokeywords": "seo_keywords",
+        "seoKeywords": "seo_keywords",
+        "seo_keywords": "seo_keywords",  # Already correct
+    }
+
+    normalized = {}
+    for key, value in payload.items():
+        # Map field names
+        normalized_key = field_mapping.get(key, key)
+        normalized[normalized_key] = value
+
+    return normalized
+
+
 def validate_and_shape_summary(payload: SummaryJSON) -> SummaryJSON:
     """Validate and shape a model-produced summary to the canonical contract.
 
@@ -119,7 +164,9 @@ def validate_and_shape_summary(payload: SummaryJSON) -> SummaryJSON:
     if len(str(payload)) > 100000:  # 100KB limit
         raise ValueError("Summary payload too large")
 
-    p: SummaryJSON = dict(payload)
+    # Normalize field names first
+    normalized_payload = _normalize_field_names(payload)
+    p: SummaryJSON = dict(normalized_payload)
 
     p["summary_250"] = _cap_text(str(p.get("summary_250", "")).strip(), 250)
     p["summary_1000"] = _cap_text(str(p.get("summary_1000", "")).strip(), 1000)
