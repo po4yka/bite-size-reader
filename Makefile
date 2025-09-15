@@ -1,4 +1,4 @@
-.PHONY: format lint type test all setup-dev venv pre-commit-install check-lock
+.PHONY: format lint type test all setup-dev venv pre-commit-install pre-commit-run check-lock
 
 format:
 	ruff format .
@@ -21,6 +21,15 @@ setup-dev:
 
 venv:
 	bash scripts/create_venv.sh
+
+.PHONY: pre-commit-install
+pre-commit-install:
+	pre-commit install --install-hooks
+	pre-commit autoupdate || true
+
+.PHONY: pre-commit-run
+pre-commit-run:
+	pre-commit run --all-files
 
 .PHONY: lock-uv lock-piptools
 lock-uv:

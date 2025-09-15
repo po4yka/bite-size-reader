@@ -12,7 +12,7 @@ from datetime import datetime
 from typing import Any
 from urllib.parse import urlparse
 
-from app.adapters.firecrawl_parser import FirecrawlClient
+from app.adapters.firecrawl_parser import FirecrawlClient, FirecrawlResult
 from app.adapters.openrouter_client import OpenRouterClient
 from app.config import AppConfig
 from app.core.html_utils import (
@@ -33,9 +33,9 @@ try:
     from pyrogram import Client, filters
     from pyrogram.types import Message
 except Exception:  # pragma: no cover - allow import in environments without deps
-    Client = object  # type: ignore
+    Client = object  # type: ignore[misc,assignment]
     filters = None
-    Message = object  # type: ignore
+    Message = object  # type: ignore[misc,assignment]
 
 
 logger = logging.getLogger(__name__)
@@ -636,6 +636,9 @@ class TelegramBot:
         correlation_id: str | None = None,
         interaction_id: int | None = None,
     ) -> None:
+        # Declare crawl variable for type checking
+        crawl: FirecrawlResult | MockCrawl
+
         norm = normalize_url(url_text)
         dedupe = url_hash_sha256(norm)
         logger.info(
@@ -747,6 +750,26 @@ class TelegramBot:
                 )
             except Exception:
                 pass
+
+            # Create a mock crawl object for consistency with the else branch
+            class MockCrawl:
+                def __init__(self, markdown, html):
+                    self.status = "ok"
+                    self.http_status = 200
+                    self.content_markdown = markdown
+                    self.content_html = html
+                    self.structured_json = None
+                    self.metadata_json = None
+                    self.links_json = None
+                    self.raw_response_json = None
+                    self.latency_ms = None
+                    self.error_text = None
+                    self.source_url = None
+                    self.endpoint = "/v1/scrape"
+                    self.options_json = None
+                    self.correlation_id = None
+
+            crawl = MockCrawl(md, html)
         else:
             # Notify: starting Firecrawl with progress indicator
             try:

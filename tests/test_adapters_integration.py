@@ -51,7 +51,7 @@ class TestAdaptersIntegration(unittest.IsolatedAsyncioTestCase):
                 }
             )
 
-            def _make_fc_client(timeout=None):
+            def _make_fc_client(*args, **kwargs):
                 return fake
 
             firecrawl_httpx.AsyncClient = cast(Any, _make_fc_client)
@@ -75,7 +75,7 @@ class TestAdaptersIntegration(unittest.IsolatedAsyncioTestCase):
             }
             fake = _FakeAsyncClient(response_map={"openrouter.ai": (200, payload)})
 
-            def _make_or_client(timeout=None):
+            def _make_or_client(*args, **kwargs):
                 return fake
 
             or_httpx.AsyncClient = cast(Any, _make_or_client)

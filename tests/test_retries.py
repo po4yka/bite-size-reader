@@ -53,7 +53,7 @@ class TestRetries(unittest.IsolatedAsyncioTestCase):
         original = or_httpx.AsyncClient
         try:
 
-            def _make_or_client(timeout=None):
+            def _make_or_client(*args, **kwargs):
                 return _SeqAsyncClient(handler)
 
             or_httpx.AsyncClient = cast(Any, _make_or_client)
@@ -87,7 +87,7 @@ class TestRetries(unittest.IsolatedAsyncioTestCase):
         original = fc_httpx.AsyncClient
         try:
 
-            def _make_fc_client(timeout=None):
+            def _make_fc_client(*args, **kwargs):
                 return _SeqAsyncClient(handler)
 
             fc_httpx.AsyncClient = cast(Any, _make_fc_client)

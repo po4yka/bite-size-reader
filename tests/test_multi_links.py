@@ -1,6 +1,7 @@
 import os
 import tempfile
 import unittest
+from typing import Any
 
 from app.adapters.telegram_bot import TelegramBot
 from app.config import AppConfig, FirecrawlConfig, OpenRouterConfig, RuntimeConfig, TelegramConfig
@@ -23,16 +24,16 @@ class FakeMessage:
         self.id = 777
         self.message_id = 777
 
-    async def reply_text(self, text):
+    async def reply_text(self, text: str) -> None:
         self._replies.append(text)
 
 
 class SpyBot(TelegramBot):
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         super().__post_init__()
         self.seen_urls: list[str] = []
 
-    async def _handle_url_flow(self, message, url_text: str, **_: object):
+    async def _handle_url_flow(self, message: Any, url_text: str, **_: object) -> None:
         self.seen_urls.append(url_text)
         await self._safe_reply(message, f"OK {url_text}")
 

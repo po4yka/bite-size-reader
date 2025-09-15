@@ -57,4 +57,3 @@ jobs:
         run: |
           echo "::warning::Repository blocks GitHub Actions from creating PRs."
           echo "Set a repo/org secret 'ACTIONS_PR_TOKEN' with 'contents' and 'pull_requests' write permissions (fine-grained PAT), or enable the setting to allow Actions to create PRs."
-
