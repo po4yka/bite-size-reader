@@ -153,6 +153,7 @@ class OpenRouterClient:
         stream: bool = False,
         request_id: int | None = None,
         response_format: dict[str, Any] | None = None,
+        model_override: str | None = None,
     ) -> LLMCallResult:
         # Security: Validate messages
         if not messages or not isinstance(messages, list):
@@ -213,13 +214,15 @@ class OpenRouterClient:
         # Security: Validate request_id
         if request_id is not None and (not isinstance(request_id, int) or request_id <= 0):
             raise ValueError("Invalid request_id")
-        models_to_try = [self._model] + self._fallback_models
+        primary_model = model_override if model_override else self._model
+        models_to_try = [primary_model] + self._fallback_models
 
         # If caller expects structured outputs via response_format and the primary model
         # is reasoning-heavy, append safe structured-output models as implicit fallbacks
         def _is_reasoning_heavy(name: str) -> bool:
             n = name.lower()
-            return any(s in n for s in ["gpt-5", "deepseek-r1", ":r1", "reasoning", "thinking"])
+            # Treat GPT-5 family as reasoning-heavy; restrict to supported set
+            return "gpt-5" in n
 
         def _append_if_missing(seq: list[str], items: list[str]) -> None:
             seen = {m for m in seq}
@@ -231,7 +234,7 @@ class OpenRouterClient:
         safe_structured_models = [
             "openai/gpt-4o-mini",
             "openai/gpt-4o",
-            "openai/o3-mini",
+            "google/gemini-2.5-pro",
         ]
 
         # Only add implicit fallbacks if structured outputs requested
@@ -295,7 +298,7 @@ class OpenRouterClient:
                         if model in [
                             "openai/gpt-4o-mini",
                             "openai/gpt-4o",
-                            "openai/o3-mini",
+                            "google/gemini-2.5-pro",
                         ]:
                             model_supports = True
                     if model_supports:
@@ -320,18 +323,16 @@ class OpenRouterClient:
                 # Apply middle-out compression only when content significantly exceeds context limits
                 total_content_length = sum(len(msg.get("content", "")) for msg in messages)
 
-                # Adaptive compression thresholds based on model capabilities
-                # Conservative approach: only compress when truly necessary
+                # Adaptive compression thresholds based on supported models
                 model_lower = model.lower()
-                if "gpt-4" in model_lower or "gpt-5" in model_lower or "claude-3" in model_lower:
-                    # Large context models: 128K+ tokens ≈ 400KB+ text
-                    compression_threshold = 350000  # 350KB
-                elif "claude-2" in model_lower or "llama" in model_lower:
-                    # Medium context models: 32K-100K tokens ≈ 200KB-300KB text
-                    compression_threshold = 250000  # 250KB
+                if "gpt-5" in model_lower:
+                    compression_threshold = 800000  # ~0.8MB for very large context
+                elif "gpt-4o" in model_lower:
+                    compression_threshold = 350000  # ~350KB for 128k
+                elif "gemini-2.5" in model_lower:
+                    compression_threshold = 1200000  # ~1.2MB for 1M tokens
                 else:
-                    # Conservative fallback for unknown models
-                    compression_threshold = 200000  # 200KB
+                    compression_threshold = 200000  # conservative fallback
 
                 if total_content_length > compression_threshold:
                     body["transforms"] = ["middle-out"]

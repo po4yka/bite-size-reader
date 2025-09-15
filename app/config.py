@@ -18,6 +18,7 @@ class OpenRouterConfig:
     temperature: float = 0.2
     provider_order: tuple[str, ...] = ()
     enable_stats: bool = False
+    long_context_model: str | None = None
 
 
 @dataclass(frozen=True)
@@ -249,8 +250,8 @@ def _validate_model_name(model: str) -> str:
 
     OpenRouter models commonly use identifiers like:
       - "openai/gpt-4o-mini"
-      - "anthropic/claude-3.5-sonnet:beta"
-      - "meta-llama/llama-3.1-8b-instruct:free"
+      - "openai/gpt-5"
+      - "google/gemini-2.5-pro"
 
     We therefore allow a conservative set of characters found in such names:
     letters, digits, dash, underscore, dot, forward slash and colon.
@@ -380,6 +381,11 @@ def load_config() -> AppConfig:
             temperature=_validate_temperature(os.getenv("OPENROUTER_TEMPERATURE")),
             provider_order=_parse_provider_order(os.getenv("OPENROUTER_PROVIDER_ORDER")),
             enable_stats=os.getenv("OPENROUTER_ENABLE_STATS", "0").lower() in ("1", "true", "yes"),
+            long_context_model=(
+                _validate_model_name(os.getenv("OPENROUTER_LONG_CONTEXT_MODEL", ""))
+                if os.getenv("OPENROUTER_LONG_CONTEXT_MODEL")
+                else None
+            ),
         )
 
         runtime = RuntimeConfig(

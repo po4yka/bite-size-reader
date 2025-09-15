@@ -9,10 +9,7 @@ class TestModelValidation(unittest.TestCase):
         valid_models = [
             "openai/gpt-4o-mini",
             "openai/gpt-5",
-            "anthropic/claude-3.5-sonnet:beta",
-            "meta-llama/llama-3.1-8b-instruct:free",
-            "google/gemini-1.5-pro-exp-0827",
-            "nousresearch/hermes-3-llama-3.1-405b:free",
+            "google/gemini-2.5-pro",
         ]
 
         for m in valid_models:
@@ -47,7 +44,7 @@ class TestModelValidation(unittest.TestCase):
             os.environ["OPENROUTER_API_KEY"] = "or_" + "c" * 20
             os.environ["OPENROUTER_MODEL"] = "openai/gpt-5"
             os.environ["OPENROUTER_FALLBACK_MODELS"] = (
-                "fallback/model,anthropic/claude-3.5-sonnet:beta, invalid|name"
+                "fallback/model,google/gemini-2.5-pro, invalid|name"
             )
 
             cfg = load_config()
@@ -56,7 +53,7 @@ class TestModelValidation(unittest.TestCase):
             # Invalid fallback (with "|") should be skipped
             self.assertEqual(
                 cfg.openrouter.fallback_models,
-                ("fallback/model", "anthropic/claude-3.5-sonnet:beta"),
+                ("fallback/model", "google/gemini-2.5-pro"),
             )
         finally:
             os.environ.clear()
