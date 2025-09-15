@@ -9,7 +9,7 @@ import os
 import time
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from urllib.parse import urlparse
 
 from app.adapters.firecrawl_parser import FirecrawlClient, FirecrawlResult
@@ -29,13 +29,24 @@ from app.core.telegram_models import TelegramMessage
 from app.core.url_utils import extract_all_urls, looks_like_url, normalize_url, url_hash_sha256
 from app.db.database import Database
 
-try:
-    from pyrogram import Client, filters
-    from pyrogram.types import Message
-except Exception:  # pragma: no cover - allow import in environments without deps
-    Client = object  # type: ignore[misc,assignment]
-    filters = None
-    Message = object  # type: ignore[misc,assignment]
+# Flag used at runtime to decide whether Telegram client is available
+PYROGRAM_AVAILABLE: bool = True
+
+if TYPE_CHECKING:
+    # Type-only imports; mypy sees these, runtime won't execute
+    from pyrogram import Client as PyroClient, filters  # pragma: no cover
+    from pyrogram.types import Message as PyroMessage  # pragma: no cover
+else:
+    try:
+        from pyrogram import Client as PyroClient, filters
+        from pyrogram.types import Message as PyroMessage
+
+        PYROGRAM_AVAILABLE = True
+    except Exception:  # pragma: no cover - allow import in environments without deps
+        PyroClient = object  # type: ignore[assignment]
+        filters = None
+        PyroMessage = object  # type: ignore[assignment]
+        PYROGRAM_AVAILABLE = False
 
 
 logger = logging.getLogger(__name__)
@@ -82,10 +93,10 @@ class TelegramBot:
         )
 
         # Telegram client (PyroTGFork/Pyrogram)
-        if Client is object:
+        if not PYROGRAM_AVAILABLE or PyroClient is object:
             self.client = None
         else:
-            self.client = Client(
+            self.client = PyroClient(
                 name="bite_size_reader_bot",
                 api_id=self.cfg.telegram.api_id,
                 api_hash=self.cfg.telegram.api_hash,
@@ -563,7 +574,7 @@ class TelegramBot:
         await self._safe_reply(message, welcome)
 
     async def _setup_bot_commands(self) -> None:
-        if not self.client or Client is object:
+        if not self.client or not PYROGRAM_AVAILABLE or PyroClient is object:
             return
         try:
             from pyrogram.types import BotCommand, BotCommandScopeAllPrivateChats
@@ -1315,12 +1326,29 @@ class TelegramBot:
                         },
                     ]
                     async with self._ext_sem:
+                        # Reuse strict JSON schema enforcement for repair
+                        repair_response_format: dict[str, object] = {"type": "json_object"}
+                        try:
+                            from app.core.summary_contract import get_summary_json_schema
+
+                            repair_response_format = {
+                                "type": "json_schema",
+                                "json_schema": {
+                                    "name": "summary_schema",
+                                    "schema": get_summary_json_schema(),
+                                    "strict": True,
+                                },
+                            }
+                        except Exception:
+                            pass
+
                         repair = await self._openrouter.chat(
                             repair_messages,
                             temperature=self.cfg.openrouter.temperature,
                             max_tokens=(self.cfg.openrouter.max_tokens or 2048),
                             top_p=self.cfg.openrouter.top_p,
                             request_id=req_id,
+                            response_format=repair_response_format,
                         )
                     if repair.status == "ok" and (repair.response_text or "").strip():
                         try:
@@ -1571,12 +1599,29 @@ class TelegramBot:
             },
         ]
         async with self._ext_sem:
+            # Provide structured outputs schema through response_format for forwarded messages
+            fwd_response_format: dict[str, object] = {"type": "json_object"}
+            try:
+                from app.core.summary_contract import get_summary_json_schema
+
+                fwd_response_format = {
+                    "type": "json_schema",
+                    "json_schema": {
+                        "name": "summary_schema",
+                        "schema": get_summary_json_schema(),
+                        "strict": True,
+                    },
+                }
+            except Exception:
+                pass
+
             llm = await self._openrouter.chat(
                 messages,
                 temperature=self.cfg.openrouter.temperature,
                 max_tokens=self.cfg.openrouter.max_tokens,
                 top_p=self.cfg.openrouter.top_p,
                 request_id=req_id,
+                response_format=fwd_response_format,
             )
         # Notify: LLM finished (forward)
         try:
@@ -1657,12 +1702,29 @@ class TelegramBot:
                         },
                     ]
                     async with self._ext_sem:
+                        # Enforce schema during repair for forwarded messages
+                        fwd_repair_response_format: dict[str, object] = {"type": "json_object"}
+                        try:
+                            from app.core.summary_contract import get_summary_json_schema
+
+                            fwd_repair_response_format = {
+                                "type": "json_schema",
+                                "json_schema": {
+                                    "name": "summary_schema",
+                                    "schema": get_summary_json_schema(),
+                                    "strict": True,
+                                },
+                            }
+                        except Exception:
+                            pass
+
                         repair = await self._openrouter.chat(
                             repair_messages,
                             temperature=self.cfg.openrouter.temperature,
                             max_tokens=self.cfg.openrouter.max_tokens,
                             top_p=self.cfg.openrouter.top_p,
                             request_id=req_id,
+                            response_format=fwd_repair_response_format,
                         )
                     if repair.status == "ok" and repair.response_text:
                         try:

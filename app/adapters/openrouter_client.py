@@ -210,6 +210,29 @@ class OpenRouterClient:
         if request_id is not None and (not isinstance(request_id, int) or request_id <= 0):
             raise ValueError("Invalid request_id")
         models_to_try = [self._model] + self._fallback_models
+
+        # If caller expects structured outputs via response_format and the primary model
+        # is reasoning-heavy, append safe structured-output models as implicit fallbacks
+        def _is_reasoning_heavy(name: str) -> bool:
+            n = name.lower()
+            return any(s in n for s in ["gpt-5", "deepseek-r1", ":r1", "reasoning", "thinking"])
+
+        def _append_if_missing(seq: list[str], items: list[str]) -> None:
+            seen = {m for m in seq}
+            for it in items:
+                if it not in seen:
+                    seq.append(it)
+                    seen.add(it)
+
+        safe_structured_models = [
+            "openai/gpt-4o-mini",
+            "openai/gpt-4o",
+            "openai/o3-mini",
+        ]
+
+        # Only add implicit fallbacks if structured outputs requested
+        if response_format is not None and _is_reasoning_heavy(self._model):
+            _append_if_missing(models_to_try, safe_structured_models)
         last_error_text = None
         last_data = None
         last_latency = None
@@ -409,27 +432,10 @@ class OpenRouterClient:
                         choices = data.get("choices") or []
                         if choices:
                             message_obj = choices[0].get("message", {}) or {}
-                            content_field = message_obj.get("content")
-                            # Primary: plain string content
-                            if isinstance(content_field, str):
-                                text = content_field
-                            # Some providers return content as array of parts
-                            elif isinstance(content_field, list):
-                                try:
-                                    parts: list[str] = []
-                                    for part in content_field:
-                                        if isinstance(part, dict):
-                                            if isinstance(part.get("text"), str):
-                                                parts.append(part["text"])
-                                            elif isinstance(part.get("content"), str):
-                                                parts.append(part["content"])
-                                    if parts:
-                                        text = "\n".join(parts)
-                                except Exception:
-                                    pass
+                            # Prefer parsed when structured outputs were requested
+                            prefer_parsed = response_format is not None
 
-                            # Structured outputs: parsed field (OpenAI/OR structured)
-                            if (not text) or (isinstance(text, str) and not text.strip()):
+                            if prefer_parsed:
                                 parsed = message_obj.get("parsed")
                                 if parsed is not None:
                                     try:
@@ -437,7 +443,27 @@ class OpenRouterClient:
                                     except Exception:
                                         text = str(parsed)
 
-                            # OpenAI reasoning field (when using structured outputs)
+                            if (not text) or (isinstance(text, str) and not text.strip()):
+                                content_field = message_obj.get("content")
+                                # Primary: plain string content
+                                if isinstance(content_field, str):
+                                    text = content_field
+                                # Some providers return content as array of parts
+                                elif isinstance(content_field, list):
+                                    try:
+                                        parts: list[str] = []
+                                        for part in content_field:
+                                            if isinstance(part, dict):
+                                                if isinstance(part.get("text"), str):
+                                                    parts.append(part["text"])
+                                                elif isinstance(part.get("content"), str):
+                                                    parts.append(part["content"])
+                                        if parts:
+                                            text = "\n".join(parts)
+                                    except Exception:
+                                        pass
+
+                            # If still nothing meaningful, try reasoning field to recover JSON
                             if (not text) or (isinstance(text, str) and not text.strip()):
                                 reasoning = message_obj.get("reasoning")
                                 if reasoning and isinstance(reasoning, str):
@@ -446,12 +472,10 @@ class OpenRouterClient:
                                     end = reasoning.rfind("}")
                                     if start != -1 and end != -1 and end > start:
                                         try:
-                                            # Try to extract JSON from reasoning
                                             potential_json = reasoning[start : end + 1]
                                             json.loads(potential_json)  # Validate it's valid JSON
                                             text = potential_json
                                         except Exception:
-                                            # If no valid JSON in reasoning, use reasoning as text
                                             text = reasoning
 
                             # Function/tool calls: arguments may hold the JSON
@@ -490,6 +514,34 @@ class OpenRouterClient:
 
                     # Handle different HTTP status codes according to OpenRouter documentation
                     if status_code == 200:
+                        # If structured outputs were requested, ensure we actually got JSON
+                        if response_format is not None:
+                            text_str = text or ""
+                            is_json = False
+                            try:
+                                json.loads(text_str)
+                                is_json = True
+                            except Exception:
+                                is_json = False
+                            if not is_json:
+                                # Treat as retryable content error to trigger fallbacks
+                                last_error_text = "structured_output_parse_error"
+                                if self._audit:
+                                    self._audit(
+                                        "WARN",
+                                        "openrouter_invalid_json_content",
+                                        {
+                                            "attempt": attempt,
+                                            "model": model,
+                                            "status": status_code,
+                                            "request_id": request_id,
+                                        },
+                                    )
+                                if attempt < self._max_retries:
+                                    await asyncio_sleep_backoff(self._backoff_base, attempt)
+                                    continue
+                                else:
+                                    break  # move to next model
                         if self._audit:
                             self._audit(
                                 "INFO",
