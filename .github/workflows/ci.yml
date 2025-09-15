@@ -29,7 +29,7 @@ jobs:
       - name: Install uv (fast Python package manager)
         uses: astral-sh/setup-uv@v4
         with:
-          version: "0.9.0"
+          version: "0.8.17"
           enable-cache: true
           cache-dependency-glob: "pyproject.toml"
 
@@ -142,7 +142,7 @@ jobs:
       - name: Install uv (fast Python package manager)
         uses: astral-sh/setup-uv@v4
         with:
-          version: "0.9.0"
+          version: "0.8.17"
           enable-cache: true
           cache-dependency-glob: "pyproject.toml"
 
