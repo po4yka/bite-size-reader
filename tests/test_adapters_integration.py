@@ -80,7 +80,14 @@ class TestAdaptersIntegration(unittest.IsolatedAsyncioTestCase):
 
             or_httpx.AsyncClient = cast(Any, _make_or_client)
 
-            client = OpenRouterClient(api_key="y", model="openai/gpt-5", timeout_sec=5)
+            client = OpenRouterClient(
+                api_key="y",
+                model="openai/gpt-5",
+                timeout_sec=5,
+                provider_order=None,
+                enable_stats=False,
+                log_truncate_length=1000,
+            )
             res = await client.chat([{"role": "user", "content": "hi"}])
             self.assertEqual(res.status, "ok")
             self.assertIsNotNone(res.response_text)

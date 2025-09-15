@@ -64,6 +64,9 @@ class TestRetries(unittest.IsolatedAsyncioTestCase):
                 timeout_sec=2,
                 max_retries=1,
                 backoff_base=0.0,
+                provider_order=None,
+                enable_stats=False,
+                log_truncate_length=1000,
             )
             res = await client.chat([{"role": "user", "content": "hi"}])
             self.assertEqual(res.status, "ok")

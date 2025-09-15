@@ -622,7 +622,9 @@ class OpenRouterClient:
         }
 
         try:
-            async with httpx.AsyncClient(timeout=self._timeout) as client:
+            # Use connection pooling to reduce TCP handshake overhead
+            limits = httpx.Limits(max_keepalive_connections=5, max_connections=10)
+            async with httpx.AsyncClient(timeout=self._timeout, limits=limits) as client:
                 resp = await client.get(f"{self._base_url}/models", headers=headers)
                 resp.raise_for_status()
                 return resp.json()

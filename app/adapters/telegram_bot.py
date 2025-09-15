@@ -32,9 +32,9 @@ try:
     from pyrogram import Client, filters
     from pyrogram.types import Message
 except Exception:  # pragma: no cover - allow import in environments without deps
-    Client = object  # type: ignore
-    filters = None  # type: ignore
-    Message = object  # type: ignore
+    Client = object
+    filters = None
+    Message = object
 
 
 logger = logging.getLogger(__name__)
@@ -689,40 +689,8 @@ class TelegramBot:
             except Exception as e:  # noqa: BLE001
                 logger.error("snapshot_error", extra={"error": str(e), "cid": correlation_id})
 
-        # Reuse existing summary if present for this request (deduped by URL hash)
-        try:
-            existing_summary = self.db.get_summary_by_request(req_id)
-        except Exception:
-            existing_summary = None
-        if existing_summary and existing_summary.get("json_payload"):
-            try:
-                shaped_cached = json.loads(existing_summary["json_payload"])
-            except Exception:
-                shaped_cached = None
-            if shaped_cached:
-                logger.info(
-                    "reuse_summary",
-                    extra={"request_id": req_id, "cid": correlation_id},
-                )
-                try:
-                    self._audit(
-                        "INFO", "reuse_summary", {"request_id": req_id, "cid": correlation_id}
-                    )
-                except Exception:
-                    pass
-                try:
-                    self.db.update_request_status(req_id, "ok")
-                except Exception:
-                    pass
-                await self._reply_json(message, shaped_cached)
-                if interaction_id:
-                    self._update_user_interaction(
-                        interaction_id=interaction_id,
-                        response_sent=True,
-                        response_type="summary",
-                        request_id=req_id,
-                    )
-                return
+        # Note: We don't reuse summaries here to allow version increment on dedupe
+        # The request is deduped (reused), but summaries are always regenerated
 
         # Firecrawl or reuse existing crawl result
         existing_crawl = self.db.get_crawl_result_by_request(req_id)

@@ -15,6 +15,17 @@ if PydanticAvailable:
 SummaryJSON = dict[str, Any]
 
 
+def _is_numeric(value: Any) -> bool:
+    """Check if a value can be converted to a float."""
+    if value is None:
+        return False
+    try:
+        float(value)
+        return True
+    except (ValueError, TypeError):
+        return False
+
+
 def _cap_text(text: str, limit: int) -> str:
     # Security: Validate inputs
     if not isinstance(text, str):
@@ -164,7 +175,7 @@ def validate_and_shape_summary(payload: SummaryJSON) -> SummaryJSON:
     level = rb.get("level")
     # Choose source: prefer summary_1000, fallback to summary_250
     read_src = p.get("summary_1000") or p.get("summary_250") or ""
-    if score_val is None or float(score_val or 0.0) == 0.0:
+    if score_val is None or not _is_numeric(score_val) or float(score_val or 0.0) == 0.0:
         score = 0.0
         try:
             # Import locally to keep optional
