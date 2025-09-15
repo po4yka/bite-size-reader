@@ -1272,11 +1272,27 @@ class TelegramBot:
                 )
             return
 
-        # Best-effort parse + validate
+        # Best-effort parse + validate (prefer structured parsed payload)
+        summary_json = None
         try:
-            llm_text = llm.response_text or ""
-            raw = llm_text.strip().strip("` ")
-            summary_json = json.loads(raw)
+            if llm.response_json and isinstance(llm.response_json, dict):
+                ch = llm.response_json.get("choices") or []
+                if ch and isinstance(ch[0], dict):
+                    msg0 = ch[0].get("message") or {}
+                    parsed0 = msg0.get("parsed")
+                    if parsed0 is not None:
+                        summary_json = (
+                            parsed0
+                            if isinstance(parsed0, dict)
+                            else json.loads(json.dumps(parsed0))
+                        )
+        except Exception:
+            summary_json = None
+        try:
+            if summary_json is None:
+                llm_text = llm.response_text or ""
+                raw = llm_text.strip().strip("` ")
+                summary_json = json.loads(raw)
         except Exception:
             try:
                 logger.error(
@@ -1343,42 +1359,62 @@ class TelegramBot:
                         except Exception:
                             pass
 
-                        repair = await self._openrouter.chat(
-                            repair_messages,
-                            temperature=self.cfg.openrouter.temperature,
-                            max_tokens=(self.cfg.openrouter.max_tokens or 2048),
-                            top_p=self.cfg.openrouter.top_p,
-                            request_id=req_id,
-                            response_format=repair_response_format,
-                        )
-                    if repair.status == "ok" and (repair.response_text or "").strip():
+                    repair = await self._openrouter.chat(
+                        repair_messages,
+                        temperature=self.cfg.openrouter.temperature,
+                        max_tokens=(self.cfg.openrouter.max_tokens or 2048),
+                        top_p=self.cfg.openrouter.top_p,
+                        request_id=req_id,
+                        response_format=repair_response_format,
+                    )
+                    if repair.status == "ok":
+                        used = False
+                        # Prefer parsed structured output if present
                         try:
-                            summary_json = json.loads(
-                                (repair.response_text or "").strip().strip("` ")
-                            )
+                            if repair.response_json and isinstance(repair.response_json, dict):
+                                rch = repair.response_json.get("choices") or []
+                                if rch and isinstance(rch[0], dict):
+                                    rmsg = rch[0].get("message") or {}
+                                    rparsed = rmsg.get("parsed")
+                                    if rparsed is not None:
+                                        summary_json = (
+                                            rparsed
+                                            if isinstance(rparsed, dict)
+                                            else json.loads(json.dumps(rparsed))
+                                        )
+                                        used = True
                         except Exception:
+                            used = False
+                        if not used and (repair.response_text or "").strip():
                             try:
-                                logger.error(
-                                    "json_repair_parse_failed_preview",
-                                    extra={
-                                        "cid": correlation_id,
-                                        "preview": (repair.response_text or "")[
-                                            : self.cfg.runtime.log_truncate_length
-                                        ],
-                                        "tail": (repair.response_text or "")[
-                                            -self.cfg.runtime.log_truncate_length :
-                                        ],
-                                    },
+                                summary_json = json.loads(
+                                    (repair.response_text or "").strip().strip("` ")
                                 )
+                                used = True
                             except Exception:
-                                pass
-                            repair_text = repair.response_text or ""
-                            rs = repair_text.find("{")
-                            re_ = repair_text.rfind("}")
-                            if rs != -1 and re_ != -1 and re_ > rs:
-                                summary_json = json.loads(repair_text[rs : re_ + 1])
-                            else:
-                                raise ValueError("repair_failed")
+                                try:
+                                    logger.error(
+                                        "json_repair_parse_failed_preview",
+                                        extra={
+                                            "cid": correlation_id,
+                                            "preview": (repair.response_text or "")[
+                                                : self.cfg.runtime.log_truncate_length
+                                            ],
+                                            "tail": (repair.response_text or "")[
+                                                -self.cfg.runtime.log_truncate_length :
+                                            ],
+                                        },
+                                    )
+                                except Exception:
+                                    pass
+                                repair_text = repair.response_text or ""
+                                rs = repair_text.find("{")
+                                re_ = repair_text.rfind("}")
+                                if rs != -1 and re_ != -1 and re_ > rs:
+                                    summary_json = json.loads(repair_text[rs : re_ + 1])
+                                    used = True
+                        if not used:
+                            raise ValueError("repair_failed")
                     else:
                         raise ValueError("repair_call_error")
                 except Exception:
@@ -1680,84 +1716,124 @@ class TelegramBot:
                 )
             return
 
+        # Prefer structured outputs parsed JSON when available
+        summary_json = None
         try:
-            raw = llm.response_text.strip().strip("` ")
-            summary_json = json.loads(raw)
+            if llm.response_json and isinstance(llm.response_json, dict):
+                ch = llm.response_json.get("choices") or []
+                if ch and isinstance(ch[0], dict):
+                    msg0 = ch[0].get("message") or {}
+                    parsed0 = msg0.get("parsed")
+                    if parsed0 is not None:
+                        summary_json = (
+                            parsed0
+                            if isinstance(parsed0, dict)
+                            else json.loads(json.dumps(parsed0))
+                        )
         except Exception:
-            start = llm.response_text.find("{")
-            end = llm.response_text.rfind("}")
-            if start == -1 or end == -1 or end <= start:
-                # Attempt one repair using assistant prefill best-practice
-                try:
-                    logger.info("json_repair_attempt", extra={"cid": correlation_id})
-                    repair_messages = [
-                        {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": messages[1]["content"]},
-                        {"role": "assistant", "content": llm.response_text},
-                        {
-                            "role": "user",
-                            "content": (
-                                "Your previous message was not a valid JSON object. "
-                                "Respond with ONLY a corrected JSON that matches the schema exactly."
-                            ),
-                        },
-                    ]
-                    async with self._ext_sem:
-                        # Enforce schema during repair for forwarded messages
-                        fwd_repair_response_format: dict[str, object] = {"type": "json_object"}
-                        try:
-                            from app.core.summary_contract import get_summary_json_schema
+            summary_json = None
+        # Fallback: try direct JSON text
+        if summary_json is None:
+            try:
+                summary_json = json.loads((llm.response_text or "").strip().strip("` "))
+            except Exception:
+                start = llm.response_text.find("{")
+                end = llm.response_text.rfind("}")
+                if start == -1 or end == -1 or end <= start:
+                    # Attempt one repair using assistant prefill best-practice
+                    try:
+                        logger.info("json_repair_attempt", extra={"cid": correlation_id})
+                        repair_messages = [
+                            {"role": "system", "content": system_prompt},
+                            {"role": "user", "content": messages[1]["content"]},
+                            {"role": "assistant", "content": llm.response_text or ""},
+                            {
+                                "role": "user",
+                                "content": (
+                                    "Your previous message was not a valid JSON object. "
+                                    "Respond with ONLY a corrected JSON that matches the schema exactly."
+                                ),
+                            },
+                        ]
+                        async with self._ext_sem:
+                            # Enforce schema during repair for forwarded messages
+                            fwd_repair_response_format: dict[str, object] = {"type": "json_object"}
+                            try:
+                                from app.core.summary_contract import get_summary_json_schema
 
-                            fwd_repair_response_format = {
-                                "type": "json_schema",
-                                "json_schema": {
-                                    "name": "summary_schema",
-                                    "schema": get_summary_json_schema(),
-                                    "strict": True,
-                                },
-                            }
-                        except Exception:
-                            pass
+                                fwd_repair_response_format = {
+                                    "type": "json_schema",
+                                    "json_schema": {
+                                        "name": "summary_schema",
+                                        "schema": get_summary_json_schema(),
+                                        "strict": True,
+                                    },
+                                }
+                            except Exception:
+                                pass
 
-                        repair = await self._openrouter.chat(
-                            repair_messages,
-                            temperature=self.cfg.openrouter.temperature,
-                            max_tokens=self.cfg.openrouter.max_tokens,
-                            top_p=self.cfg.openrouter.top_p,
-                            request_id=req_id,
-                            response_format=fwd_repair_response_format,
-                        )
-                    if repair.status == "ok" and repair.response_text:
-                        try:
-                            summary_json = json.loads(repair.response_text.strip().strip("` "))
-                        except Exception:
-                            rs = repair.response_text.find("{")
-                            re_ = repair.response_text.rfind("}")
-                            if rs != -1 and re_ != -1 and re_ > rs:
-                                summary_json = json.loads(repair.response_text[rs : re_ + 1])
-                            else:
+                            repair = await self._openrouter.chat(
+                                repair_messages,
+                                temperature=self.cfg.openrouter.temperature,
+                                max_tokens=self.cfg.openrouter.max_tokens,
+                                top_p=self.cfg.openrouter.top_p,
+                                request_id=req_id,
+                                response_format=fwd_repair_response_format,
+                            )
+                        if repair.status == "ok":
+                            used = False
+                            try:
+                                if repair.response_json and isinstance(repair.response_json, dict):
+                                    rch = repair.response_json.get("choices") or []
+                                    if rch and isinstance(rch[0], dict):
+                                        rmsg = rch[0].get("message") or {}
+                                        rparsed = rmsg.get("parsed")
+                                        if rparsed is not None:
+                                            summary_json = (
+                                                rparsed
+                                                if isinstance(rparsed, dict)
+                                                else json.loads(json.dumps(rparsed))
+                                            )
+                                            used = True
+                            except Exception:
+                                used = False
+                            if not used and (repair.response_text or "").strip():
+                                try:
+                                    summary_json = json.loads(
+                                        (repair.response_text or "").strip().strip("` ")
+                                    )
+                                    used = True
+                                except Exception:
+                                    rs = (repair.response_text or "").find("{")
+                                    re_ = (repair.response_text or "").rfind("}")
+                                    if rs != -1 and re_ != -1 and re_ > rs:
+                                        summary_json = json.loads(
+                                            (repair.response_text or "")[rs : re_ + 1]
+                                        )
+                                        used = True
+                            if not used:
                                 raise ValueError("repair_failed")
-                    else:
-                        raise ValueError("repair_call_error")
-                except Exception:
-                    self.db.update_request_status(req_id, "error")
-                    await self._safe_reply(
-                        message, f"Invalid summary format. Error ID: {correlation_id}"
-                    )
-
-                    # Update interaction with error
-                    if interaction_id:
-                        self._update_user_interaction(
-                            interaction_id=interaction_id,
-                            response_sent=True,
-                            response_type="error",
-                            error_occurred=True,
-                            error_message="Invalid summary format",
-                            request_id=req_id,
+                        else:
+                            raise ValueError("repair_call_error")
+                    except Exception:
+                        self.db.update_request_status(req_id, "error")
+                        await self._safe_reply(
+                            message, f"Invalid summary format. Error ID: {correlation_id}"
                         )
-                    return
-            else:
-                summary_json = json.loads(llm.response_text[start : end + 1])
+
+                        # Update interaction with error
+                        if interaction_id:
+                            self._update_user_interaction(
+                                interaction_id=interaction_id,
+                                response_sent=True,
+                                response_type="error",
+                                error_occurred=True,
+                                error_message="Invalid summary format",
+                                request_id=req_id,
+                            )
+                        return
+                else:
+                    summary_json = json.loads(llm.response_text[start : end + 1])
 
         shaped = validate_and_shape_summary(summary_json)
         try:
