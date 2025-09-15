@@ -15,12 +15,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: '3.11'
 
@@ -50,7 +50,7 @@ jobs:
       - name: Create Pull Request (using PAT if provided)
         if: steps.changes.outputs.changes == 'true' && secrets.ACTIONS_PR_TOKEN != ''
         id: cpr
-        uses: peter-evans/create-pull-request@v6
+        uses: peter-evans/create-pull-request@v7
         with:
           token: ${{ secrets.ACTIONS_PR_TOKEN }}
           commit-message: "chore(lock): update requirements via uv compile"
@@ -70,7 +70,7 @@ jobs:
         if: steps.changes.outputs.changes == 'true' && (secrets.ACTIONS_PR_TOKEN == '')
         id: cpr_fallback
         continue-on-error: true
-        uses: peter-evans/create-pull-request@v6
+        uses: peter-evans/create-pull-request@v7
         with:
           commit-message: "chore(lock): update requirements via uv compile"
           title: "chore(lock): update requirements"
@@ -93,7 +93,7 @@ jobs:
 
       - name: Enable auto-merge for lockfile PR
         if: steps.changes.outputs.changes == 'true' && steps.cpr.outputs.pull-request-number != ''
-        uses: peter-evans/enable-pull-request-automerge@v3
+        uses: peter-evans/enable-pull-request-automerge@v4
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           pull-request-number: ${{ steps.cpr.outputs.pull-request-number }}

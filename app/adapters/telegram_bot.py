@@ -1304,6 +1304,7 @@ class TelegramBot:
                     llm_text = llm.response_text or ""
                     repair_messages: list[dict[str, str]] = [
                         {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_content},
                         {"role": "assistant", "content": llm_text},
                         {
                             "role": "user",
@@ -1645,6 +1646,7 @@ class TelegramBot:
                     logger.info("json_repair_attempt", extra={"cid": correlation_id})
                     repair_messages = [
                         {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": messages[1]["content"]},
                         {"role": "assistant", "content": llm.response_text},
                         {
                             "role": "user",

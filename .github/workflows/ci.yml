@@ -19,17 +19,17 @@ jobs:
         pydantic: [true, false]
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python-version }}
 
       - name: Install uv (fast Python package manager)
-        uses: astral-sh/setup-uv@v3
+        uses: astral-sh/setup-uv@v4
         with:
-          version: "0.8.17"
+          version: "0.9.0"
           enable-cache: true
           cache-dependency-glob: "pyproject.toml"
 
@@ -91,17 +91,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
+        uses: docker/setup-qemu-action@v4
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Log in to GHCR
         if: ${{ github.event_name != 'pull_request' && vars.PUBLISH_DOCKER == 'true' }}
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -109,7 +109,7 @@ jobs:
 
       - name: Generate image tags
         id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
           images: |
             ghcr.io/${{ github.repository }}
@@ -118,7 +118,7 @@ jobs:
             type=sha,format=long
 
       - name: Build (and optionally push) Docker image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: ./Dockerfile
@@ -132,17 +132,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: '3.11'
 
       - name: Install uv (fast Python package manager)
-        uses: astral-sh/setup-uv@v3
+        uses: astral-sh/setup-uv@v4
         with:
-          version: "0.8.17"
+          version: "0.9.0"
           enable-cache: true
           cache-dependency-glob: "pyproject.toml"
 
@@ -181,18 +181,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout (full history)
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
       - name: Gitleaks (workspace)
         if: ${{ github.event_name == 'pull_request' }}
-        uses: gitleaks/gitleaks-action@v2
+        uses: gitleaks/gitleaks-action@v3
         with:
           args: detect --source . --no-git --redact --verbose --report-format sarif --report-path results-workspace.sarif
 
       - name: Gitleaks (history)
         if: ${{ github.event_name != 'pull_request' }}
-        uses: gitleaks/gitleaks-action@v2
+        uses: gitleaks/gitleaks-action@v3
         with:
           args: detect --redact --verbose --report-format sarif --report-path results-history.sarif

@@ -12,7 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Git user
         run: |
@@ -20,7 +20,7 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
       - name: Set up UV
-        uses: astral-sh/setup-uv@v3
+        uses: astral-sh/setup-uv@v4
 
       - name: Install Python 3.11
         run: uv python install 3.11
@@ -32,7 +32,7 @@ jobs:
 
       - name: Create Pull Request (using PAT if provided)
         if: ${{ secrets.ACTIONS_PR_TOKEN != '' }}
-        uses: peter-evans/create-pull-request@v6
+        uses: peter-evans/create-pull-request@v7
         with:
           token: ${{ secrets.ACTIONS_PR_TOKEN }}
           commit-message: "chore(ci): regenerate lockfiles via uv"
@@ -44,7 +44,7 @@ jobs:
       - name: Create Pull Request (best-effort with GITHUB_TOKEN)
         if: ${{ secrets.ACTIONS_PR_TOKEN == '' }}
         continue-on-error: true
-        uses: peter-evans/create-pull-request@v6
+        uses: peter-evans/create-pull-request@v7
         with:
           commit-message: "chore(ci): regenerate lockfiles via uv"
           title: "chore(ci): regenerate lockfiles via uv"

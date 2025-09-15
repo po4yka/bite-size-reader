@@ -55,6 +55,9 @@ dev = [
 
 [package.dev-dependencies]
 dev = [
+    { name = "isort" },
+    { name = "mypy" },
+    { name = "pre-commit" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
     { name = "ruff" },
@@ -64,14 +67,14 @@ dev = [
 requires-dist = [
     { name = "en-core-web-sm", url = "https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.7.1/en_core_web_sm-3.7.1-py3-none-any.whl" },
     { name = "httpx", specifier = ">=0.27" },
-    { name = "isort", marker = "extra == 'dev'", specifier = ">=5.13.2" },
-    { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.10.0" },
-    { name = "pre-commit", marker = "extra == 'dev'", specifier = ">=3.7.1" },
+    { name = "isort", marker = "extra == 'dev'", specifier = ">=6.0.1" },
+    { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.18.1" },
+    { name = "pre-commit", marker = "extra == 'dev'", specifier = ">=4.3.0" },
     { name = "pydantic", specifier = ">=2.6" },
     { name = "pyrogram", specifier = ">=2.0" },
     { name = "readability-lxml", specifier = "==0.8.4.1" },
     { name = "ru-core-news-sm", url = "https://github.com/explosion/spacy-models/releases/download/ru_core_news_sm-3.7.0/ru_core_news_sm-3.7.0-py3-none-any.whl" },
-    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.5.4" },
+    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.13.0" },
     { name = "spacy", specifier = ">=3.7,<4" },
     { name = "textacy", specifier = ">=0.13,<0.14" },
     { name = "tgcrypto", specifier = ">=1.2" },
@@ -80,9 +83,12 @@ provides-extras = ["dev"]
 
 [package.metadata.requires-dev]
 dev = [
+    { name = "isort", specifier = ">=6.0.1" },
+    { name = "mypy", specifier = ">=1.18.1" },
+    { name = "pre-commit", specifier = ">=4.3.0" },
     { name = "pytest", specifier = ">=8.4.2" },
     { name = "pytest-asyncio", specifier = ">=0.24.0" },
-    { name = "ruff", specifier = ">=0.6.9" },
+    { name = "ruff", specifier = ">=0.13.0" },
 ]
 
 [[package]]
