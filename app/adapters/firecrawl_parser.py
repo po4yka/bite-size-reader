@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import time
 from collections.abc import Callable
@@ -119,6 +120,10 @@ class FirecrawlClient:
             max_keepalive_connections=self._max_keepalive_connections,
             keepalive_expiry=self._keepalive_expiry,
         )
+        self._client = httpx.AsyncClient(timeout=self._timeout, limits=self._limits)
+
+    async def aclose(self) -> None:
+        await self._client.aclose()
 
     async def scrape_markdown(
         self, url: str, *, mobile: bool = True, request_id: int | None = None
@@ -161,15 +166,44 @@ class FirecrawlClient:
             )
             started = time.perf_counter()
             try:
-                async with httpx.AsyncClient(timeout=self._timeout, limits=self._limits) as client:
-                    json_body = {**body_base, "mobile": cur_mobile}
-                    if cur_pdf:
-                        json_body["parsers"] = ["pdf"]
-                    if self._debug_payloads:
-                        self._logger.debug("firecrawl_request_payload", extra={"json": json_body})
-                    resp = await client.post(self._base_url, headers=headers, json=json_body)
+                json_body = {**body_base, "mobile": cur_mobile}
+                if cur_pdf:
+                    json_body["parsers"] = ["pdf"]
+                if self._debug_payloads:
+                    self._logger.debug("firecrawl_request_payload", extra={"json": json_body})
+                resp = await self._client.post(self._base_url, headers=headers, json=json_body)
                 latency = int((time.perf_counter() - started) * 1000)
-                data = resp.json()
+                try:
+                    data = resp.json()
+                except json.JSONDecodeError as e:
+                    last_error = f"invalid_json: {e}"
+                    last_latency = latency
+                    self._logger.error(
+                        "firecrawl_invalid_json",
+                        extra={"error": str(e), "status": resp.status_code},
+                    )
+                    if attempt < self._max_retries:
+                        await asyncio_sleep_backoff(self._backoff_base, attempt)
+                        continue
+                    return FirecrawlResult(
+                        status="error",
+                        http_status=resp.status_code,
+                        content_markdown=None,
+                        content_html=None,
+                        structured_json=None,
+                        metadata_json=None,
+                        links_json=None,
+                        raw_response_json=None,
+                        latency_ms=latency,
+                        error_text=last_error,
+                        source_url=url,
+                        endpoint="/v1/scrape",
+                        options_json={
+                            "formats": ["markdown", "html"],
+                            "mobile": cur_mobile,
+                            **({"parsers": ["pdf"]} if cur_pdf else {}),
+                        },
+                    )
                 last_data = data
                 last_latency = latency
                 self._logger.debug(
