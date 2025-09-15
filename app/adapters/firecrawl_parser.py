@@ -85,7 +85,7 @@ class FirecrawlClient:
             raise ValueError("Invalid request_id")
 
         headers = {"Authorization": f"Bearer {self._api_key}"}
-        body_base = {"url": url, "formats": ["markdown"]}
+        body_base = {"url": url, "formats": ["markdown", "html"]}
         last_data = None
         last_latency = None
         last_error = None
@@ -254,7 +254,7 @@ class FirecrawlClient:
                             source_url=url,
                             endpoint="/v1/scrape",
                             options_json={
-                                "formats": ["markdown"],
+                                "formats": ["markdown", "html"],
                                 "mobile": cur_mobile,
                                 **({"parsers": ["pdf"]} if cur_pdf else {}),
                             },
@@ -319,7 +319,7 @@ class FirecrawlClient:
                         source_url=url,
                         endpoint="/v1/scrape",
                         options_json={
-                            "formats": ["markdown"],
+                            "formats": ["markdown", "html"],
                             "mobile": cur_mobile,
                             **({"parsers": ["pdf"]} if cur_pdf else {}),
                         },
@@ -398,7 +398,7 @@ class FirecrawlClient:
                     source_url=url,
                     endpoint="/v1/scrape",
                     options_json={
-                        "formats": ["markdown"],
+                        "formats": ["markdown", "html"],
                         "mobile": cur_mobile,
                         **({"parsers": ["pdf"]} if cur_pdf else {}),
                     },
@@ -439,7 +439,7 @@ class FirecrawlClient:
             source_url=url,
             endpoint="/v1/scrape",
             options_json={
-                "formats": ["markdown"],
+                "formats": ["markdown", "html"],
                 "mobile": cur_mobile,
                 **({"parsers": ["pdf"]} if pdf_hint else {}),
             },

@@ -10,6 +10,7 @@ import time
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
+from urllib.parse import urlparse
 
 from app.adapters.firecrawl_parser import FirecrawlClient
 from app.adapters.openrouter_client import OpenRouterClient
@@ -635,9 +636,16 @@ class TelegramBot:
             "url_flow_detected",
             extra={"url": url_text, "normalized": norm, "hash": dedupe, "cid": correlation_id},
         )
-        # Notify: request accepted
+        # Notify: request accepted with URL preview
         try:
-            await self._safe_reply(message, "Accepted. Fetching content...")
+            url_domain = urlparse(norm).netloc if norm else "unknown"
+            await self._safe_reply(
+                message,
+                f"✅ **Request Accepted**\n"
+                f"🌐 Domain: `{url_domain}`\n"
+                f"🔗 URL: `{norm[:60]}{'...' if len(norm) > 60 else ''}`\n"
+                f"📋 Status: Fetching content...",
+            )
         except Exception:
             pass
         # Dedupe check
@@ -698,10 +706,27 @@ class TelegramBot:
             existing_crawl.get("content_markdown") or existing_crawl.get("content_html")
         ):
             md = existing_crawl.get("content_markdown")
-            if md:
+            html = existing_crawl.get("content_html")
+
+            # Process content with HTML fallback for empty markdown
+            if md and md.strip():
                 content_text = clean_markdown_article_text(md)
+                content_source = "markdown"
+            elif html and html.strip():
+                content_text = html_to_text(html)
+                content_source = "html"
+                logger.info(
+                    "html_fallback_used_existing",
+                    extra={
+                        "cid": correlation_id,
+                        "reason": "markdown_empty_or_missing",
+                        "html_len": len(html),
+                        "cleaned_text_len": len(content_text),
+                    },
+                )
             else:
-                content_text = html_to_text(existing_crawl.get("content_html") or "")
+                content_text = ""
+                content_source = "none"
             # Optional normalization (feature-flagged)
             try:
                 if getattr(self.cfg.runtime, "enable_textacy", False):
@@ -717,9 +742,14 @@ class TelegramBot:
             except Exception:
                 pass
         else:
-            # Notify: starting Firecrawl
+            # Notify: starting Firecrawl with progress indicator
             try:
-                await self._safe_reply(message, "Fetching via Firecrawl...")
+                await self._safe_reply(
+                    message,
+                    "🕷️ **Firecrawl Extraction**\n"
+                    "📡 Connecting to Firecrawl API...\n"
+                    "⏱️ This may take 10-30 seconds",
+                )
             except Exception:
                 pass
             async with self._ext_sem:
@@ -760,7 +790,11 @@ class TelegramBot:
                 },
             )
 
-            if crawl.status != "ok" or not (crawl.content_markdown or crawl.content_html):
+            # Check if we have any usable content
+            has_markdown = bool(crawl.content_markdown and crawl.content_markdown.strip())
+            has_html = bool(crawl.content_html and crawl.content_html.strip())
+
+            if crawl.status != "ok" or not (has_markdown or has_html):
                 self.db.update_request_status(req_id, "error")
                 await self._safe_reply(
                     message,
@@ -773,6 +807,8 @@ class TelegramBot:
                         "cid": correlation_id,
                         "status": crawl.status,
                         "http_status": crawl.http_status,
+                        "has_markdown": has_markdown,
+                        "has_html": has_html,
                     },
                 )
                 try:
@@ -800,19 +836,57 @@ class TelegramBot:
                 excerpt_len = (len(crawl.content_markdown) if crawl.content_markdown else 0) or (
                     len(crawl.content_html) if crawl.content_html else 0
                 )
+                latency_sec = (crawl.latency_ms or 0) / 1000.0
                 await self._safe_reply(
                     message,
-                    (
-                        f"Fetched ✓ (HTTP {crawl.http_status or 'n/a'}, "
-                        f"~{excerpt_len} chars, {crawl.latency_ms or 0} ms)."
-                    ),
+                    f"✅ **Content Extracted Successfully**\n"
+                    f"📊 Size: ~{excerpt_len:,} characters\n"
+                    f"⏱️ Extraction time: {latency_sec:.1f}s\n"
+                    f"📋 Status: Processing content...",
                 )
             except Exception:
                 pass
-            if crawl.content_markdown:
+            # Process content with HTML fallback for empty markdown
+            if crawl.content_markdown and crawl.content_markdown.strip():
                 content_text = clean_markdown_article_text(crawl.content_markdown)
+                content_source = "markdown"
+            elif crawl.content_html and crawl.content_html.strip():
+                content_text = html_to_text(crawl.content_html)
+                content_source = "html"
+                logger.info(
+                    "html_fallback_used",
+                    extra={
+                        "cid": correlation_id,
+                        "reason": "markdown_empty_or_missing",
+                        "html_len": len(crawl.content_html),
+                        "cleaned_text_len": len(content_text),
+                    },
+                )
+                # Notify user that HTML fallback was used
+                try:
+                    await self._safe_reply(
+                        message,
+                        f"🔄 **Content Processing Update**\n"
+                        f"📄 Markdown extraction was empty\n"
+                        f"🛠️ Using HTML content extraction\n"
+                        f"📊 Processing {len(content_text):,} characters...",
+                    )
+                except Exception:
+                    pass
             else:
-                content_text = html_to_text(crawl.content_html or "")
+                # This should not happen due to validation above, but handle gracefully
+                content_text = ""
+                content_source = "none"
+                logger.error(
+                    "no_content_available",
+                    extra={
+                        "cid": correlation_id,
+                        "markdown_len": len(crawl.content_markdown)
+                        if crawl.content_markdown
+                        else 0,
+                        "html_len": len(crawl.content_html) if crawl.content_html else 0,
+                    },
+                )
             # Optional normalization (feature-flagged)
             try:
                 if getattr(self.cfg.runtime, "enable_textacy", False):
@@ -832,11 +906,18 @@ class TelegramBot:
             "language_choice",
             extra={"detected": detected, "chosen": chosen_lang, "cid": correlation_id},
         )
-        # Notify: language detected
+        # Notify: language detected with content preview
         try:
+            content_preview = (
+                content_text[:150] + "..." if len(content_text) > 150 else content_text
+            )
             await self._safe_reply(
                 message,
-                f"Language detected: {detected or 'unknown'}. Generating summary...",
+                f"🌍 **Language Detection**\n"
+                f"📝 Detected: `{detected or 'unknown'}`\n"
+                f"📄 Content preview:\n"
+                f"```\n{content_preview}\n```\n"
+                f"🤖 Status: Preparing for AI analysis...",
             )
         except Exception:
             pass
@@ -862,23 +943,26 @@ class TelegramBot:
             if enable_chunking and content_len > max_chars and (chunks or []):
                 await self._safe_reply(
                     message,
-                    (
-                        f"Content length: ~{content_len:,} chars. "
-                        f"Chunking into {len(chunks or [])} parts (≤2000 chars each) + final merge."
-                    ),
+                    f"📚 **Content Analysis**\n"
+                    f"📊 Length: {content_len:,} characters\n"
+                    f"🔀 Processing: Chunked analysis ({len(chunks or [])} chunks)\n"
+                    f"⚡ Status: Sending to AI model...",
                 )
             elif not enable_chunking and content_len > max_chars:
                 await self._safe_reply(
                     message,
-                    (
-                        f"Content length: ~{content_len:,} chars exceeds {max_chars:,}. "
-                        "Chunking is disabled; attempting single-pass summary."
-                    ),
+                    f"📚 **Content Analysis**\n"
+                    f"📊 Length: {content_len:,} characters (exceeds {max_chars:,})\n"
+                    f"🔀 Processing: Single-pass (chunking disabled)\n"
+                    f"⚡ Status: Sending to AI model...",
                 )
             else:
                 await self._safe_reply(
                     message,
-                    f"Content length: ~{content_len:,} chars. Single-pass summary.",
+                    f"📚 **Content Analysis**\n"
+                    f"📊 Length: {content_len:,} characters\n"
+                    f"🔀 Processing: Single-pass summary\n"
+                    f"⚡ Status: Sending to AI model...",
                 )
             logger.info(
                 "content_handling",
@@ -924,6 +1008,48 @@ class TelegramBot:
             text_for_summary = merged_context
 
         # Validate content before sending to LLM
+        if not text_for_summary or not text_for_summary.strip():
+            logger.error(
+                "empty_content_for_llm",
+                extra={
+                    "cid": correlation_id,
+                    "content_source": content_source,
+                    "original_markdown_len": len(crawl.content_markdown)
+                    if crawl.content_markdown
+                    else 0,
+                    "original_html_len": len(crawl.content_html) if crawl.content_html else 0,
+                    "processed_content_len": len(content_text),
+                },
+            )
+            self.db.update_request_status(req_id, "error")
+            await self._safe_reply(
+                message,
+                f"❌ **Content Extraction Failed**\n\n"
+                f"🚨 **Possible Causes:**\n"
+                f"• Website blocking automated access\n"
+                f"• Content behind paywall/login\n"
+                f"• Non-text content (images, videos)\n"
+                f"• Temporary server issues\n"
+                f"• Invalid or inaccessible URL\n\n"
+                f"💡 **Suggestions:**\n"
+                f"• Try a different URL\n"
+                f"• Check if content is publicly accessible\n"
+                f"• Ensure URL points to text-based content\n\n"
+                f"🆔 Error ID: `{correlation_id}`",
+            )
+
+            # Update interaction with error
+            if interaction_id:
+                self._update_user_interaction(
+                    interaction_id=interaction_id,
+                    response_sent=True,
+                    response_type="error",
+                    error_occurred=True,
+                    error_message="No meaningful content extracted from URL",
+                    request_id=req_id,
+                )
+            return
+
         user_content = (
             f"Analyze the following content and output ONLY a valid JSON object that matches the system contract exactly. "
             f"Respond in {'Russian' if chosen_lang == LANG_RU else 'English'}. Do NOT include any text outside the JSON.\n\n"
@@ -943,6 +1069,11 @@ class TelegramBot:
                     else text_for_summary
                 ),
                 "has_content": bool(text_for_summary.strip()),
+                "content_source": content_source,
+                "original_markdown_len": len(crawl.content_markdown)
+                if crawl.content_markdown
+                else 0,
+                "original_html_len": len(crawl.content_html) if crawl.content_html else 0,
             },
         )
 
@@ -950,6 +1081,19 @@ class TelegramBot:
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_content},
         ]
+
+        # Notify: Starting LLM call
+        try:
+            await self._safe_reply(
+                message,
+                f"🤖 **AI Analysis Starting**\n"
+                f"🧠 Model: `{self.cfg.openrouter.model}`\n"
+                f"📊 Content: {len(text_for_summary):,} characters\n"
+                f"⏱️ This may take 30-60 seconds...",
+            )
+        except Exception:
+            pass
+
         async with self._ext_sem:
             # Provide structured outputs schema through response_format
             response_format: dict[str, object] = {"type": "json_object"}
@@ -977,7 +1121,6 @@ class TelegramBot:
             )
         # Notify: LLM finished (success or error will be handled below)
         try:
-            status_emoji = "✅" if llm.status == "ok" else "❌"
             model_name = llm.model or self.cfg.openrouter.model
             latency_sec = (llm.latency_ms or 0) / 1000.0
 
@@ -987,12 +1130,12 @@ class TelegramBot:
                 cost_info = f", ${llm.cost_usd:.4f}" if llm.cost_usd else ""
                 await self._safe_reply(
                     message,
-                    (
-                        f"{status_emoji} LLM call completed successfully\n"
-                        f"Model: {model_name}\n"
-                        f"Latency: {latency_sec:.1f}s\n"
-                        f"Tokens: {tokens_used:,}{cost_info}"
-                    ),
+                    f"🤖 **AI Analysis Complete**\n"
+                    f"✅ Status: Success\n"
+                    f"🧠 Model: `{model_name}`\n"
+                    f"⏱️ Processing time: {latency_sec:.1f}s\n"
+                    f"🔢 Tokens used: {tokens_used:,}{cost_info}\n"
+                    f"📋 Status: Generating summary...",
                 )
             else:
                 # Error message with detailed error information
@@ -1026,13 +1169,12 @@ class TelegramBot:
                 error_text = "\n".join(error_details) if error_details else "Unknown error"
                 await self._safe_reply(
                     message,
-                    (
-                        f"{status_emoji} LLM call failed\n"
-                        f"Model: {model_name}\n"
-                        f"Latency: {latency_sec:.1f}s\n"
-                        f"{error_text}\n"
-                        f"Error ID: {correlation_id}"
-                    ),
+                    f"🤖 **AI Analysis Failed**\n"
+                    f"❌ Status: Error\n"
+                    f"🧠 Model: `{model_name}`\n"
+                    f"⏱️ Processing time: {latency_sec:.1f}s\n"
+                    f"🚨 Error: {error_text}\n"
+                    f"🆔 Error ID: `{correlation_id}`",
                 )
         except Exception:
             pass
@@ -1239,10 +1381,20 @@ class TelegramBot:
                 request_id=req_id,
             )
 
-        # Send combined preview and JSON in one message to reduce API calls
+        # Send enhanced summary with performance metrics
         try:
+            # Calculate processing metrics
+            total_time = (llm.latency_ms or 0) / 1000.0
+            tokens_used = (llm.tokens_prompt or 0) + (llm.tokens_completion or 0)
+            cost_info = f" (${llm.cost_usd:.4f})" if llm.cost_usd else ""
+
             preview_lines = [
-                "✅ Summary Complete:",
+                "🎉 **Summary Complete!**",
+                "",
+                "⏱️ **Processing Stats:**",
+                f"• Time: {total_time:.1f}s",
+                f"• Tokens: {tokens_used:,}{cost_info}",
+                f"• Model: {llm.model or 'unknown'}",
                 "",
                 "📋 **TL;DR:**",
                 str(shaped.get("summary_250", "")).strip(),
