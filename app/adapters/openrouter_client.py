@@ -302,7 +302,7 @@ class OpenRouterClient:
                             content = debug_msg.get("content", "")
                             if len(content) > 200:  # Truncate for logging only
                                 debug_msg["content"] = (
-                                    content[:100] + f"... [+{len(content)-100} chars]"
+                                    content[:100] + f"... [+{len(content) - 100} chars]"
                                 )
                             debug_msg["content_length"] = str(len(content))
                             debug_messages.append(debug_msg)
