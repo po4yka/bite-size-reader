@@ -6,7 +6,6 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
 WORKDIR /app
-om
 # System deps for building native wheels (e.g., spaCy deps, tgcrypto)
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
