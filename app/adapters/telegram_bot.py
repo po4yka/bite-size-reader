@@ -60,6 +60,12 @@ class TelegramBot:
             audit=self._audit,
             debug_payloads=self.cfg.runtime.debug_payloads,
             log_truncate_length=self.cfg.runtime.log_truncate_length,
+            # Connection pooling configuration
+            max_connections=self.cfg.firecrawl.max_connections,
+            max_keepalive_connections=self.cfg.firecrawl.max_keepalive_connections,
+            keepalive_expiry=self.cfg.firecrawl.keepalive_expiry,
+            credit_warning_threshold=self.cfg.firecrawl.credit_warning_threshold,
+            credit_critical_threshold=self.cfg.firecrawl.credit_critical_threshold,
         )
         self._openrouter = OpenRouterClient(
             api_key=self.cfg.openrouter.api_key,

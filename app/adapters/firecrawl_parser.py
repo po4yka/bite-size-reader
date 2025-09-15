@@ -40,6 +40,13 @@ class FirecrawlClient:
         audit: Callable[[str, str, dict[str, Any]], None] | None = None,
         debug_payloads: bool = False,
         log_truncate_length: int = 1000,
+        # Connection pooling parameters
+        max_connections: int = 10,
+        max_keepalive_connections: int = 5,
+        keepalive_expiry: float = 30.0,
+        # Credit monitoring
+        credit_warning_threshold: int = 1000,
+        credit_critical_threshold: int = 100,
     ) -> None:
         # Security: Validate API key presence and format
         if not api_key or not isinstance(api_key, str):
@@ -61,6 +68,34 @@ class FirecrawlClient:
         if not isinstance(backoff_base, int | float) or backoff_base < 0:
             raise ValueError("Backoff base must be non-negative")
 
+        # Validate connection pooling parameters
+        if not isinstance(max_connections, int) or max_connections < 1 or max_connections > 100:
+            raise ValueError("Max connections must be between 1 and 100")
+        if (
+            not isinstance(max_keepalive_connections, int)
+            or max_keepalive_connections < 1
+            or max_keepalive_connections > 50
+        ):
+            raise ValueError("Max keepalive connections must be between 1 and 50")
+        if (
+            not isinstance(keepalive_expiry, int | float)
+            or keepalive_expiry < 1.0
+            or keepalive_expiry > 300.0
+        ):
+            raise ValueError("Keepalive expiry must be between 1.0 and 300.0 seconds")
+        if (
+            not isinstance(credit_warning_threshold, int)
+            or credit_warning_threshold < 1
+            or credit_warning_threshold > 10000
+        ):
+            raise ValueError("Credit warning threshold must be between 1 and 10000")
+        if (
+            not isinstance(credit_critical_threshold, int)
+            or credit_critical_threshold < 1
+            or credit_critical_threshold > 1000
+        ):
+            raise ValueError("Credit critical threshold must be between 1 and 1000")
+
         self._api_key = api_key
         self._timeout = int(timeout_sec)
         self._base_url = "https://api.firecrawl.dev/v1/scrape"
@@ -70,6 +105,20 @@ class FirecrawlClient:
         self._logger = logging.getLogger(__name__)
         self._debug_payloads = bool(debug_payloads)
         self._log_truncate_length = int(log_truncate_length)
+
+        # Connection pooling configuration
+        self._max_connections = int(max_connections)
+        self._max_keepalive_connections = int(max_keepalive_connections)
+        self._keepalive_expiry = float(keepalive_expiry)
+        self._credit_warning_threshold = int(credit_warning_threshold)
+        self._credit_critical_threshold = int(credit_critical_threshold)
+
+        # Create httpx connection pool
+        self._limits = httpx.Limits(
+            max_connections=self._max_connections,
+            max_keepalive_connections=self._max_keepalive_connections,
+            keepalive_expiry=self._keepalive_expiry,
+        )
 
     async def scrape_markdown(
         self, url: str, *, mobile: bool = True, request_id: int | None = None
@@ -112,7 +161,7 @@ class FirecrawlClient:
             )
             started = time.perf_counter()
             try:
-                async with httpx.AsyncClient(timeout=self._timeout) as client:
+                async with httpx.AsyncClient(timeout=self._timeout, limits=self._limits) as client:
                     json_body = {**body_base, "mobile": cur_mobile}
                     if cur_pdf:
                         json_body["parsers"] = ["pdf"]

@@ -23,6 +23,18 @@ class OpenRouterConfig:
 @dataclass(frozen=True)
 class FirecrawlConfig:
     api_key: str
+    # Connection pooling settings
+    max_connections: int = 10
+    max_keepalive_connections: int = 5
+    keepalive_expiry: float = 30.0
+    # Retry configuration
+    retry_max_attempts: int = 3
+    retry_initial_delay: float = 1.0
+    retry_max_delay: float = 10.0
+    retry_backoff_factor: float = 2.0
+    # Credit monitoring
+    credit_warning_threshold: int = 1000
+    credit_critical_threshold: int = 100
 
 
 @dataclass(frozen=True)
@@ -198,6 +210,40 @@ def _validate_temperature(temp_str: str | None) -> float:
         raise
 
 
+def _validate_connection_pool_param_int(
+    value_str: str | None, param_name: str, min_val: int, max_val: int, default: int
+) -> int:
+    """Validate connection pool parameter that should be an int."""
+    if not value_str:
+        return default
+    try:
+        value = int(value_str)
+        if value < min_val or value > max_val:
+            raise ValueError(f"{param_name} must be between {min_val} and {max_val}")
+        return value
+    except ValueError as e:
+        if "could not convert" in str(e) or "invalid literal" in str(e):
+            raise ValueError(f"{param_name} must be a valid integer") from e
+        raise
+
+
+def _validate_connection_pool_param_float(
+    value_str: str | None, param_name: str, min_val: float, max_val: float, default: float
+) -> float:
+    """Validate connection pool parameter that should be a float."""
+    if not value_str:
+        return default
+    try:
+        value = float(value_str)
+        if value < min_val or value > max_val:
+            raise ValueError(f"{param_name} must be between {min_val} and {max_val}")
+        return value
+    except ValueError as e:
+        if "could not convert" in str(e) or "invalid literal" in str(e):
+            raise ValueError(f"{param_name} must be a valid number") from e
+        raise
+
+
 def _validate_model_name(model: str) -> str:
     """Validate model name for security and allow OpenRouter-style IDs.
 
@@ -279,7 +325,46 @@ def load_config() -> AppConfig:
         )
 
         firecrawl = FirecrawlConfig(
-            api_key=_validate_api_key(os.getenv("FIRECRAWL_API_KEY", ""), "Firecrawl")
+            api_key=_validate_api_key(os.getenv("FIRECRAWL_API_KEY", ""), "Firecrawl"),
+            max_connections=_validate_connection_pool_param_int(
+                os.getenv("FIRECRAWL_MAX_CONNECTIONS"), "Max connections", 1, 100, 10
+            ),
+            max_keepalive_connections=_validate_connection_pool_param_int(
+                os.getenv("FIRECRAWL_MAX_KEEPALIVE_CONNECTIONS"),
+                "Max keepalive connections",
+                1,
+                50,
+                5,
+            ),
+            keepalive_expiry=_validate_connection_pool_param_float(
+                os.getenv("FIRECRAWL_KEEPALIVE_EXPIRY"), "Keepalive expiry", 1.0, 300.0, 30.0
+            ),
+            retry_max_attempts=_validate_connection_pool_param_int(
+                os.getenv("FIRECRAWL_RETRY_MAX_ATTEMPTS"), "Retry max attempts", 0, 10, 3
+            ),
+            retry_initial_delay=_validate_connection_pool_param_float(
+                os.getenv("FIRECRAWL_RETRY_INITIAL_DELAY"), "Retry initial delay", 0.1, 60.0, 1.0
+            ),
+            retry_max_delay=_validate_connection_pool_param_float(
+                os.getenv("FIRECRAWL_RETRY_MAX_DELAY"), "Retry max delay", 1.0, 300.0, 10.0
+            ),
+            retry_backoff_factor=_validate_connection_pool_param_float(
+                os.getenv("FIRECRAWL_RETRY_BACKOFF_FACTOR"), "Retry backoff factor", 1.0, 10.0, 2.0
+            ),
+            credit_warning_threshold=_validate_connection_pool_param_int(
+                os.getenv("FIRECRAWL_CREDIT_WARNING_THRESHOLD"),
+                "Credit warning threshold",
+                1,
+                10000,
+                1000,
+            ),
+            credit_critical_threshold=_validate_connection_pool_param_int(
+                os.getenv("FIRECRAWL_CREDIT_CRITICAL_THRESHOLD"),
+                "Credit critical threshold",
+                1,
+                1000,
+                100,
+            ),
         )
 
         fallback_models = _validate_fallback_models(os.getenv("OPENROUTER_FALLBACK_MODELS", ""))

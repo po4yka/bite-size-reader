@@ -5,7 +5,6 @@ import sqlite3
 from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import cast
 
 SCHEMA_SQL = r"""
 PRAGMA journal_mode=WAL;
@@ -251,7 +250,7 @@ class Database:
                 ),
             )
             conn.commit()
-            rid = cast(int, cur.lastrowid)
+            rid = cur.lastrowid
             self._logger.info(
                 "request_created",
                 extra={"id": rid, "type": type_, "status": status, "cid": correlation_id},
@@ -316,7 +315,7 @@ class Database:
                 ),
             )
             conn.commit()
-            mid = cast(int, cur.lastrowid)
+            mid = cur.lastrowid
             self._logger.debug(
                 "telegram_snapshot_inserted", extra={"request_id": request_id, "row_id": mid}
             )
@@ -369,7 +368,7 @@ class Database:
                 ),
             )
             conn.commit()
-            cid = cast(int, cur.lastrowid)
+            cid = cur.lastrowid
             self._logger.debug(
                 "crawl_result_inserted",
                 extra={"request_id": request_id, "row_id": cid, "status": status},
@@ -420,7 +419,7 @@ class Database:
                 ),
             )
             conn.commit()
-            lid = cast(int, cur.lastrowid)
+            lid = cur.lastrowid
             self._logger.debug(
                 "llm_call_inserted",
                 extra={"request_id": request_id, "row_id": lid, "status": status},
@@ -439,7 +438,7 @@ class Database:
         with self.connect() as conn:
             cur = conn.execute(sql, (request_id, lang, json_payload, version))
             conn.commit()
-            sid = cast(int, cur.lastrowid)
+            sid = cur.lastrowid
             self._logger.info(
                 "summary_inserted", extra={"request_id": request_id, "version": version}
             )
@@ -467,6 +466,6 @@ class Database:
         with self.connect() as conn:
             cur = conn.execute(sql, (level, event, details_json))
             conn.commit()
-            aid = cast(int, cur.lastrowid)
+            aid = cur.lastrowid
             self._logger.debug("audit_logged", extra={"id": aid, "event": event, "level": level})
             return aid
