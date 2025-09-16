@@ -11,6 +11,7 @@ from typing import Any
 
 import httpx
 
+from app.core.json_utils import extract_json
 from app.core.logging_utils import truncate_log_content
 
 
@@ -237,6 +238,7 @@ class OpenRouterClient:
         last_data = None
         last_latency = None
         last_model_reported = None
+        last_response_text = None
 
         for model in models_to_try:
             for attempt in range(self._max_retries + 1):
@@ -499,6 +501,9 @@ class OpenRouterClient:
                     except Exception:
                         text = None
 
+                    if isinstance(text, str):
+                        last_response_text = text
+
                     usage = data.get("usage") or {}
                     # Optional stats (provider/native tokens/cost) if present
                     cost_usd = None
@@ -517,15 +522,18 @@ class OpenRouterClient:
                         # If structured outputs were requested, ensure we actually got JSON
                         if response_format is not None:
                             text_str = text or ""
-                            is_json = False
-                            try:
-                                json.loads(text_str)
-                                is_json = True
-                            except Exception:
-                                is_json = False
-                            if not is_json:
-                                # Treat as retryable content error to trigger fallbacks
+                            parsed = extract_json(text_str)
+                            if parsed is not None:
+                                try:
+                                    text = json.dumps(parsed, ensure_ascii=False)
+                                    last_response_text = text
+                                except Exception:
+                                    last_response_text = text_str
+                            else:
                                 last_error_text = "structured_output_parse_error"
+                                last_data = data
+                                last_latency = latency
+                                last_response_text = text_str or None
                                 if self._audit:
                                     self._audit(
                                         "WARN",
@@ -537,11 +545,7 @@ class OpenRouterClient:
                                             "request_id": request_id,
                                         },
                                     )
-                                if attempt < self._max_retries:
-                                    await asyncio_sleep_backoff(self._backoff_base, attempt)
-                                    continue
-                                else:
-                                    break  # move to next model
+                                break
                         if self._audit:
                             self._audit(
                                 "INFO",
@@ -691,7 +695,7 @@ class OpenRouterClient:
         return LLMCallResult(
             status="error",
             model=last_model_reported,
-            response_text=None,
+            response_text=last_response_text,
             response_json=last_data,
             tokens_prompt=None,
             tokens_completion=None,

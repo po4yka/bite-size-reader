@@ -75,6 +75,58 @@ class TestRetries(unittest.IsolatedAsyncioTestCase):
         finally:
             or_httpx.AsyncClient = cast(Any, original)
 
+    async def test_structured_output_parse_error_triggers_fallback(self):
+        attempts: list[str] = []
+
+        async def handler(url, headers, payload):
+            model = payload.get("model")
+            attempts.append(model)
+            if model == "primary/model":
+                return _Resp(
+                    200,
+                    {
+                        "model": model,
+                        "choices": [{"message": {"content": "not json"}}],
+                        "usage": {"prompt_tokens": 2, "completion_tokens": 3},
+                    },
+                )
+            return _Resp(
+                200,
+                {
+                    "model": model,
+                    "choices": [{"message": {"content": json.dumps({"summary_250": "ok"})}}],
+                    "usage": {"prompt_tokens": 3, "completion_tokens": 4},
+                },
+            )
+
+        original = or_httpx.AsyncClient
+        try:
+
+            def _make_or_client(*args, **kwargs):
+                return _SeqAsyncClient(handler)
+
+            or_httpx.AsyncClient = cast(Any, _make_or_client)
+            client = OpenRouterClient(
+                api_key="k",
+                model="primary/model",
+                fallback_models=["fallback/model"],
+                timeout_sec=2,
+                max_retries=0,
+                backoff_base=0.0,
+                provider_order=None,
+                enable_stats=False,
+                log_truncate_length=1000,
+            )
+            res = await client.chat(
+                [{"role": "user", "content": "hi"}],
+                response_format={"type": "json_object"},
+            )
+            self.assertEqual(res.status, "ok")
+            self.assertEqual(res.model, "fallback/model")
+            self.assertEqual(attempts, ["primary/model", "fallback/model"])
+        finally:
+            or_httpx.AsyncClient = cast(Any, original)
+
     async def test_firecrawl_retries_then_success(self):
         attempts = {"n": 0}
 
