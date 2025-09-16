@@ -322,7 +322,8 @@ class OpenRouterClient:
                     else:
                         body["response_format"] = {"type": "json_object"}
                     rf_included = True
-                    # Do not force require_parameters=true to avoid router 404 when no provider supports all params
+                    # When structured outputs are requested, prefer providers that support all parameters
+                    provider_prefs["require_parameters"] = True
                 # Attach provider preferences if any
                 if provider_prefs:
                     body["provider"] = provider_prefs
@@ -594,6 +595,18 @@ class OpenRouterClient:
                                 except Exception:
                                     last_response_text = text_str
                             else:
+                                # If provider returned 200 but content isn't valid JSON, try a single in-place downgrade
+                                # from json_schema to json_object for this model/attempt.
+                                if rf_mode_current == "json_schema" and attempt < self._max_retries:
+                                    rf_mode_current = "json_object"
+                                    if self._audit:
+                                        self._audit(
+                                            "WARN",
+                                            "openrouter_downgrade_on_200_invalid_json",
+                                            {"model": model, "request_id": request_id},
+                                        )
+                                    await asyncio_sleep_backoff(self._backoff_base, attempt)
+                                    continue
                                 last_error_text = "structured_output_parse_error"
                                 last_data = data
                                 last_latency = latency
