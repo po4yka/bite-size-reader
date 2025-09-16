@@ -75,12 +75,13 @@ def setup_json_logging(level: str = "INFO") -> None:
         # Bridge stdlib logging into loguru
         class InterceptHandler(logging.Handler):  # pragma: no cover - thin glue
             def emit(self, record: logging.LogRecord) -> None:
+                level_to_use: int | str
                 try:
-                    lvl = loguru_logger.level(record.levelname).name
+                    level_to_use = loguru_logger.level(record.levelname).name
                 except Exception:
-                    lvl = record.levelno
+                    level_to_use = record.levelno
                 loguru_logger.bind().opt(depth=6, exception=record.exc_info).log(
-                    lvl, record.getMessage()
+                    level_to_use, record.getMessage()
                 )
 
         root = logging.getLogger()
