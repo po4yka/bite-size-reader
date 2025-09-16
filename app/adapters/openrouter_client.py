@@ -664,6 +664,9 @@ class OpenRouterClient:
                     else:
                         break  # next model
 
+            if last_error_text == "structured_output_parse_error":
+                break
+
             # moving to fallback model
             if self._audit and model != models_to_try[-1]:
                 self._audit(

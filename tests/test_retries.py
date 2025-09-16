@@ -76,7 +76,7 @@ class TestRetries(unittest.IsolatedAsyncioTestCase):
         finally:
             or_httpx.AsyncClient = cast(Any, original)
 
-    async def test_structured_output_parse_error_triggers_fallback(self):
+    async def test_structured_output_parse_error_returns_response_without_fallback(self):
         attempts: list[str] = []
 
         async def handler(url, headers, payload):
@@ -122,9 +122,11 @@ class TestRetries(unittest.IsolatedAsyncioTestCase):
                 [{"role": "user", "content": "hi"}],
                 response_format={"type": "json_object"},
             )
-            self.assertEqual(res.status, "ok")
-            self.assertEqual(res.model, "fallback/model")
-            self.assertEqual(attempts, ["primary/model", "fallback/model"])
+            self.assertEqual(res.status, "error")
+            self.assertEqual(res.error_text, "structured_output_parse_error")
+            self.assertEqual(res.model, "primary/model")
+            self.assertEqual(res.response_text, "not json")
+            self.assertEqual(attempts, ["primary/model"])
         finally:
             or_httpx.AsyncClient = cast(Any, original)
 

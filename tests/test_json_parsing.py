@@ -162,6 +162,57 @@ class TestJsonParsing(unittest.TestCase):
 
         asyncio.run(run_test())
 
+    @patch("app.adapters.telegram_bot.OpenRouterClient")
+    def test_forward_salvage_from_structured_error(self, mock_openrouter_client) -> None:
+        async def run_test() -> None:
+            bot = TelegramBot(self.cfg, self.db)
+            mock_llm_response = MagicMock()
+            mock_llm_response.status = "error"
+            mock_llm_response.error_text = "structured_output_parse_error"
+            mock_llm_response.response_text = (
+                '```json\n{"summary_250": "Forward", "summary_1000": "Full"}\n```'
+            )
+            mock_llm_response.model = "primary/model"
+            mock_llm_response.tokens_prompt = 12
+            mock_llm_response.tokens_completion = 7
+            mock_llm_response.cost_usd = 0.03
+            mock_llm_response.latency_ms = 1200
+            mock_llm_response.request_headers = {}
+            mock_llm_response.request_messages = []
+            mock_llm_response.response_json = {}
+
+            mock_openrouter_instance = mock_openrouter_client.return_value
+            mock_openrouter_instance.chat = AsyncMock(return_value=mock_llm_response)
+            bot._openrouter = mock_openrouter_instance
+
+            bot._safe_reply = AsyncMock()  # type: ignore[method-assign]
+            bot._reply_json = AsyncMock()  # type: ignore[method-assign]
+
+            self.db.create_request.return_value = 1
+            self.db.upsert_summary.return_value = 1
+
+            message = MagicMock()
+            message.text = "Some forwarded text"
+            message.caption = None
+            message.forward_from_chat = MagicMock()
+            message.forward_from_chat.title = "Channel"
+            message.forward_from_chat.id = 10
+            message.forward_from_message_id = 20
+            message.chat = MagicMock()
+            message.chat.id = 5
+            message.id = 123
+            message.from_user = MagicMock()
+            message.from_user.id = 7
+
+            await bot._handle_forward_flow(message, correlation_id="cid", interaction_id=None)
+
+            mock_openrouter_instance.chat.assert_awaited_once()
+            bot._reply_json.assert_called_once()
+            summary_json = bot._reply_json.call_args[0][1]
+            self.assertEqual(summary_json["summary_250"], "Forward")
+
+        asyncio.run(run_test())
+
 
 class TestExtractJson(unittest.TestCase):
     def test_extracts_from_code_fence(self) -> None:

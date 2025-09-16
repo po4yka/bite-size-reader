@@ -1491,6 +1491,23 @@ class TelegramBot:
             )
         except Exception:
             pass
+
+        structured_parse_error = (
+            llm.status != "ok"
+            and llm.error_text == "structured_output_parse_error"
+            and bool(llm.response_text)
+        )
+        parse_error_salvaged = False
+        summary_json: dict[str, Any] | None = None
+        if llm.status == "ok" and llm.response_text:
+            summary_json = extract_json(llm.response_text or "")
+        elif structured_parse_error:
+            summary_json = extract_json(llm.response_text or "")
+            if summary_json is not None:
+                parse_error_salvaged = True
+                llm.status = "ok"
+                llm.error_text = None
+
         if llm.status != "ok" or not llm.response_text:
             # persist LLM call as error, then reply
             try:
@@ -1536,84 +1553,34 @@ class TelegramBot:
                 )
             return
 
-        try:
-            raw = llm.response_text.strip().strip("` ")
-            summary_json = json.loads(raw)
-        except Exception:
-            start = llm.response_text.find("{")
-            end = llm.response_text.rfind("}")
-            if start == -1 or end == -1 or end <= start:
-                # Attempt one repair using assistant prefill best-practice
-                try:
-                    logger.info("json_repair_attempt", extra={"cid": correlation_id})
-                    repair_messages = [
-                        {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": messages[1]["content"]},
-                        {"role": "assistant", "content": llm.response_text},
-                        {
-                            "role": "user",
-                            "content": (
-                                "Your previous message was not a valid JSON object. "
-                                "Respond with ONLY a corrected JSON that matches the schema exactly."
-                            ),
-                        },
-                    ]
-                    async with self._ext_sem:
-                        # Enforce schema during repair for forwarded messages
-                        fwd_repair_response_format: dict[str, object] = {"type": "json_object"}
-                        try:
-                            from app.core.summary_contract import get_summary_json_schema
+        if summary_json is None:
+            self.db.update_request_status(req_id, "error")
+            await self._safe_reply(message, f"Invalid summary format. Error ID: {correlation_id}")
 
-                            fwd_repair_response_format = {
-                                "type": "json_schema",
-                                "json_schema": {
-                                    "name": "summary_schema",
-                                    "schema": get_summary_json_schema(),
-                                    "strict": True,
-                                },
-                            }
-                        except Exception:
-                            pass
+            if interaction_id:
+                self._update_user_interaction(
+                    interaction_id=interaction_id,
+                    response_sent=True,
+                    response_type="error",
+                    error_occurred=True,
+                    error_message="Invalid summary format",
+                    request_id=req_id,
+                )
+            return
 
-                        repair = await self._openrouter.chat(
-                            repair_messages,
-                            temperature=self.cfg.openrouter.temperature,
-                            max_tokens=self.cfg.openrouter.max_tokens,
-                            top_p=self.cfg.openrouter.top_p,
-                            request_id=req_id,
-                            response_format=fwd_repair_response_format,
-                        )
-                    if repair.status == "ok" and repair.response_text:
-                        try:
-                            summary_json = json.loads(repair.response_text.strip().strip("` "))
-                        except Exception:
-                            rs = repair.response_text.find("{")
-                            re_ = repair.response_text.rfind("}")
-                            if rs != -1 and re_ != -1 and re_ > rs:
-                                summary_json = json.loads(repair.response_text[rs : re_ + 1])
-                            else:
-                                raise ValueError("repair_failed")
-                    else:
-                        raise ValueError("repair_call_error")
-                except Exception:
-                    self.db.update_request_status(req_id, "error")
-                    await self._safe_reply(
-                        message, f"Invalid summary format. Error ID: {correlation_id}"
-                    )
-
-                    # Update interaction with error
-                    if interaction_id:
-                        self._update_user_interaction(
-                            interaction_id=interaction_id,
-                            response_sent=True,
-                            response_type="error",
-                            error_occurred=True,
-                            error_message="Invalid summary format",
-                            request_id=req_id,
-                        )
-                    return
-            else:
-                summary_json = json.loads(llm.response_text[start : end + 1])
+        if parse_error_salvaged:
+            logger.info(
+                "structured_output_salvaged",
+                extra={"cid": correlation_id, "model": llm.model},
+            )
+            try:
+                self._audit(
+                    "INFO",
+                    "structured_output_salvaged",
+                    {"request_id": req_id, "cid": correlation_id, "model": llm.model},
+                )
+            except Exception:
+                pass
 
         shaped = validate_and_shape_summary(summary_json)
         try:
