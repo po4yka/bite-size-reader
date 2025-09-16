@@ -1,4 +1,5 @@
 import asyncio
+import types
 import unittest
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -192,6 +193,43 @@ class TestJsonRepair(unittest.TestCase):
             self.assertIn(
                 "Your previous message was not a valid JSON object", repair_messages[3]["content"]
             )
+
+        asyncio.run(run_test())
+
+    @patch("app.adapters.telegram_bot.OpenRouterClient")
+    def test_local_json_repair_library_used(self, mock_openrouter_client):
+        async def run_test():
+            self.bot = TelegramBot(self.cfg, self.db)
+
+            mock_llm_response = MagicMock()
+            mock_llm_response.status = "ok"
+            mock_llm_response.response_text = '{"summary_250": "One" "summary_1000": "Two"}'
+            mock_llm_response.response_json = None
+
+            mock_openrouter_instance = mock_openrouter_client.return_value
+            mock_openrouter_instance.chat = AsyncMock(return_value=mock_llm_response)
+            self.bot._openrouter = mock_openrouter_instance
+
+            self.bot._safe_reply = AsyncMock()
+            self.bot._reply_json = AsyncMock()
+            self.bot.db.get_request_by_dedupe_hash.return_value = None
+            self.bot.db.create_request.return_value = 1
+            self.bot.db.get_crawl_result_by_request.return_value = {
+                "content_markdown": "Some content"
+            }
+
+            fixed_payload = '{"summary_250": "One", "summary_1000": "Two"}'
+
+            with patch.dict(
+                "sys.modules",
+                {"json_repair": types.SimpleNamespace(repair_json=lambda _: fixed_payload)},
+                clear=False,
+            ):
+                message = MagicMock()
+                await self.bot._handle_url_flow(message, "http://example.com")
+
+            self.bot._reply_json.assert_called_once()
+            self.assertEqual(mock_openrouter_instance.chat.await_count, 1)
 
         asyncio.run(run_test())
 
