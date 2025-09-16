@@ -238,7 +238,7 @@ class OpenRouterClient:
         ]
 
         # Only add implicit fallbacks if structured outputs requested
-        if response_format is not None and _is_reasoning_heavy(self._model):
+        if response_format is not None and _is_reasoning_heavy(primary_model):
             _append_if_missing(models_to_try, safe_structured_models)
         last_error_text = None
         last_data = None
