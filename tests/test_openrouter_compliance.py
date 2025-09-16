@@ -15,7 +15,7 @@ class TestOpenRouterCompliance(unittest.TestCase):
         self.client = OpenRouterClient(
             api_key="sk-or-test-key",
             model="openai/gpt-4o-mini",
-            fallback_models=["anthropic/claude-3.5-sonnet"],
+            fallback_models=["google/gemini-2.5-pro"],
             http_referer="https://github.com/test-repo",
             x_title="Test Bot",
             timeout_sec=30,
@@ -320,7 +320,7 @@ class TestOpenRouterCompliance(unittest.TestCase):
                 mock_response.json.return_value = {
                     "data": [
                         {"id": "openai/gpt-4o-mini", "name": "GPT-4o Mini"},
-                        {"id": "anthropic/claude-3.5-sonnet", "name": "Claude 3.5 Sonnet"},
+                        {"id": "google/gemini-2.5-pro", "name": "Gemini 2.5 Pro"},
                     ]
                 }
                 mock_client.return_value.__aenter__.return_value.get = AsyncMock(
@@ -353,7 +353,7 @@ class TestOpenRouterCompliance(unittest.TestCase):
                             return_value={
                                 "choices": [{"message": {"content": "Fallback response"}}],
                                 "usage": {"prompt_tokens": 10, "completion_tokens": 5},
-                                "model": "anthropic/claude-3.5-sonnet",
+                                "model": "google/gemini-2.5-pro",
                             }
                         ),
                     ),
@@ -367,7 +367,7 @@ class TestOpenRouterCompliance(unittest.TestCase):
 
                     self.assertEqual(result.status, "ok")
                     self.assertEqual(result.response_text, "Fallback response")
-                    self.assertEqual(result.model, "anthropic/claude-3.5-sonnet")
+                    self.assertEqual(result.model, "google/gemini-2.5-pro")
 
         asyncio.run(_test())
 
