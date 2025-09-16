@@ -1,0 +1,231 @@
+import asyncio
+import unittest
+from unittest.mock import AsyncMock, MagicMock, patch
+
+from app.adapters.telegram_bot import TelegramBot
+from app.config import AppConfig
+from app.core.json_utils import extract_json
+from app.db.database import Database
+
+
+class TestJsonParsing(unittest.TestCase):
+    def setUp(self) -> None:
+        telegram_cfg = MagicMock()
+        telegram_cfg.api_id = "123"
+        telegram_cfg.api_hash = "abc"
+        telegram_cfg.bot_token = "token"
+        telegram_cfg.allowed_user_ids = [1]
+
+        firecrawl_cfg = MagicMock()
+        firecrawl_cfg.api_key = "fc-key"
+        firecrawl_cfg.max_connections = 1
+        firecrawl_cfg.max_keepalive_connections = 1
+        firecrawl_cfg.keepalive_expiry = 1
+        firecrawl_cfg.credit_warning_threshold = 1
+        firecrawl_cfg.credit_critical_threshold = 1
+
+        openrouter_cfg = MagicMock()
+        openrouter_cfg.api_key = "sk-or-v1-abc"
+        openrouter_cfg.model = "model"
+        openrouter_cfg.fallback_models = []
+        openrouter_cfg.http_referer = "ref"
+        openrouter_cfg.x_title = "title"
+        openrouter_cfg.provider_order = []
+        openrouter_cfg.enable_stats = False
+
+        runtime_cfg = MagicMock()
+        runtime_cfg.log_level = "INFO"
+        runtime_cfg.db_path = ":memory:"
+        runtime_cfg.request_timeout_sec = 5
+        runtime_cfg.debug_payloads = False
+        runtime_cfg.log_truncate_length = 100
+
+        self.cfg = AppConfig(telegram_cfg, firecrawl_cfg, openrouter_cfg, runtime_cfg)
+        self.db = MagicMock(spec=Database)
+
+    @patch("app.adapters.telegram_bot.OpenRouterClient")
+    def test_local_repair_success(self, mock_openrouter_client) -> None:
+        async def run_test() -> None:
+            bot = TelegramBot(self.cfg, self.db)
+            mock_llm_response = MagicMock()
+            mock_llm_response.status = "ok"
+            mock_llm_response.response_text = '{"summary_250": "This is a truncated summary..."'
+
+            mock_openrouter_instance = mock_openrouter_client.return_value
+            mock_openrouter_instance.chat = AsyncMock(return_value=mock_llm_response)
+            bot._openrouter = mock_openrouter_instance
+
+            bot._safe_reply = AsyncMock()  # type: ignore[method-assign]
+            bot._reply_json = AsyncMock()  # type: ignore[method-assign]
+            self.db.get_request_by_dedupe_hash.return_value = None
+            self.db.create_request.return_value = 1
+            self.db.get_crawl_result_by_request.return_value = {"content_markdown": "Some content"}
+
+            message = MagicMock()
+            await bot._handle_url_flow(message, "http://example.com")
+
+            mock_openrouter_instance.chat.assert_awaited_once()
+            bot._reply_json.assert_called_once()
+
+        asyncio.run(run_test())
+
+    @patch("app.adapters.telegram_bot.OpenRouterClient")
+    def test_local_repair_failure(self, mock_openrouter_client) -> None:
+        async def run_test() -> None:
+            bot = TelegramBot(self.cfg, self.db)
+            mock_llm_response = MagicMock()
+            mock_llm_response.status = "ok"
+            mock_llm_response.response_text = "Still not valid JSON"
+
+            mock_openrouter_instance = mock_openrouter_client.return_value
+            mock_openrouter_instance.chat = AsyncMock(return_value=mock_llm_response)
+            bot._openrouter = mock_openrouter_instance
+
+            bot._safe_reply = AsyncMock()  # type: ignore[method-assign]
+            self.db.get_request_by_dedupe_hash.return_value = None
+            self.db.create_request.return_value = 1
+            self.db.get_crawl_result_by_request.return_value = {"content_markdown": "Some content"}
+
+            message = MagicMock()
+            await bot._handle_url_flow(message, "http://example.com")
+
+            bot._safe_reply.assert_any_call(message, "Invalid summary format. Error ID: None")
+
+        asyncio.run(run_test())
+
+    @patch("app.adapters.telegram_bot.OpenRouterClient")
+    def test_parsing_with_extra_text(self, mock_openrouter_client) -> None:
+        async def run_test() -> None:
+            bot = TelegramBot(self.cfg, self.db)
+            mock_llm_response = MagicMock()
+            mock_llm_response.status = "ok"
+            mock_llm_response.response_text = 'Here is the JSON: {"summary_250": "Summary"}'
+
+            mock_openrouter_instance = mock_openrouter_client.return_value
+            mock_openrouter_instance.chat = AsyncMock(return_value=mock_llm_response)
+            bot._openrouter = mock_openrouter_instance
+
+            bot._safe_reply = AsyncMock()  # type: ignore[method-assign]
+            bot._reply_json = AsyncMock()  # type: ignore[method-assign]
+            self.db.get_request_by_dedupe_hash.return_value = None
+            self.db.create_request.return_value = 1
+            self.db.get_crawl_result_by_request.return_value = {"content_markdown": "Some content"}
+
+            message = MagicMock()
+            await bot._handle_url_flow(message, "http://example.com")
+
+            bot._reply_json.assert_called_once()
+            summary_json = bot._reply_json.call_args[0][1]
+            self.assertEqual(summary_json["summary_250"], "Summary")
+
+        asyncio.run(run_test())
+
+    @patch("app.adapters.telegram_bot.OpenRouterClient")
+    def test_salvage_from_structured_error(self, mock_openrouter_client) -> None:
+        async def run_test() -> None:
+            bot = TelegramBot(self.cfg, self.db)
+            mock_llm_response = MagicMock()
+            mock_llm_response.status = "error"
+            mock_llm_response.error_text = "structured_output_parse_error"
+            mock_llm_response.response_text = (
+                '```json\n{"summary_250": "Fixed", "summary_1000": "Complete"}\n```'
+            )
+            mock_llm_response.model = "primary/model"
+            mock_llm_response.tokens_prompt = 10
+            mock_llm_response.tokens_completion = 5
+            mock_llm_response.cost_usd = 0.02
+            mock_llm_response.latency_ms = 1500
+            mock_llm_response.request_headers = {}
+            mock_llm_response.request_messages = []
+            mock_llm_response.response_json = {}
+
+            mock_openrouter_instance = mock_openrouter_client.return_value
+            mock_openrouter_instance.chat = AsyncMock(return_value=mock_llm_response)
+            bot._openrouter = mock_openrouter_instance
+            
+            bot._safe_reply = AsyncMock()  # type: ignore[method-assign]
+            bot._reply_json = AsyncMock()  # type: ignore[method-assign]
+            self.db.get_request_by_dedupe_hash.return_value = None
+            self.db.create_request.return_value = 1
+            self.db.get_crawl_result_by_request.return_value = {"content_markdown": "Some content"}
+
+            message = MagicMock()
+            await bot._handle_url_flow(message, "http://example.com")
+
+            bot._reply_json.assert_called_once()
+            summary_json = bot._reply_json.call_args[0][1]
+            self.assertEqual(summary_json["summary_250"], "Fixed")
+            # Ensure we did not send the invalid summary format error
+            for call_args in bot._safe_reply.await_args_list:
+                if len(call_args.args) >= 2 and isinstance(call_args.args[1], str):
+                    self.assertNotIn("Invalid summary format", call_args.args[1])
+
+        asyncio.run(run_test())
+
+    @patch("app.adapters.telegram_bot.OpenRouterClient")
+    def test_forward_salvage_from_structured_error(self, mock_openrouter_client) -> None:
+        async def run_test() -> None:
+            bot = TelegramBot(self.cfg, self.db)
+            mock_llm_response = MagicMock()
+            mock_llm_response.status = "error"
+            mock_llm_response.error_text = "structured_output_parse_error"
+            mock_llm_response.response_text = (
+                '```json\n{"summary_250": "Forward", "summary_1000": "Full"}\n```'
+            )
+            mock_llm_response.model = "primary/model"
+            mock_llm_response.tokens_prompt = 12
+            mock_llm_response.tokens_completion = 7
+            mock_llm_response.cost_usd = 0.03
+            mock_llm_response.latency_ms = 1200
+            mock_llm_response.request_headers = {}
+            mock_llm_response.request_messages = []
+            mock_llm_response.response_json = {}
+
+            mock_openrouter_instance = mock_openrouter_client.return_value
+            mock_openrouter_instance.chat = AsyncMock(return_value=mock_llm_response)
+            bot._openrouter = mock_openrouter_instance
+
+            bot._safe_reply = AsyncMock()  # type: ignore[method-assign]
+            bot._reply_json = AsyncMock()  # type: ignore[method-assign]
+
+            self.db.create_request.return_value = 1
+            self.db.upsert_summary.return_value = 1
+
+            message = MagicMock()
+            message.text = "Some forwarded text"
+            message.caption = None
+            message.forward_from_chat = MagicMock()
+            message.forward_from_chat.title = "Channel"
+            message.forward_from_chat.id = 10
+            message.forward_from_message_id = 20
+            message.chat = MagicMock()
+            message.chat.id = 5
+            message.id = 123
+            message.from_user = MagicMock()
+            message.from_user.id = 7
+
+            await bot._handle_forward_flow(message, correlation_id="cid", interaction_id=None)
+
+            mock_openrouter_instance.chat.assert_awaited_once()
+            bot._reply_json.assert_called_once()
+            summary_json = bot._reply_json.call_args[0][1]
+            self.assertEqual(summary_json["summary_250"], "Forward")
+
+        asyncio.run(run_test())
+
+
+class TestExtractJson(unittest.TestCase):
+    def test_extracts_from_code_fence(self) -> None:
+        payload = 'Here you go:\n```json\n{"a": 1}\n```'
+        self.assertEqual(extract_json(payload), {"a": 1})
+
+    def test_balances_braces(self) -> None:
+        payload = '{"a": "incomplete"'
+        self.assertEqual(extract_json(payload), {"a": "incomplete"})
+
+    def test_returns_none_for_non_objects(self) -> None:
+        self.assertIsNone(extract_json("[1, 2, 3]"))
+
+
+if __name__ == "__main__":
+    unittest.main()

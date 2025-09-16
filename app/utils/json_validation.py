@@ -6,9 +6,10 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from app.core.summary_contract import validate_and_shape_summary
+from app.core.json_utils import extract_json
 
 
-@dataclass(slots=True)
+@dataclass
 class SummaryJsonParseResult:
     """Result of attempting to shape a summary JSON payload."""
 
@@ -50,6 +51,17 @@ def parse_summary_response(
         if shaped is not None:
             return SummaryJsonParseResult(parsed, shaped, used_fix, errors)
         errors.append(f"{label}_validation_failed: {val_err}")
+
+    # Local heuristic fallback: try robust extract_json without extra LLM calls
+    try:
+        extracted = extract_json(response_text or "")
+    except Exception:
+        extracted = None
+    if isinstance(extracted, dict):
+        shaped, val_err = _shape_candidate(extracted)
+        if shaped is not None:
+            return SummaryJsonParseResult(extracted, shaped, True, errors)
+        errors.append(f"extract_json_validation_failed: {val_err}")
 
     repair_candidate, repair_err, _ = _attempt_local_repair(response_text)
     if repair_candidate is not None:

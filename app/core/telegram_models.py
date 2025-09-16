@@ -571,7 +571,8 @@ class TelegramMessage:
                 result[field_name] = field_value.value
             elif isinstance(field_value, datetime):
                 result[field_name] = field_value.isoformat()
-            elif isinstance(field_value, TelegramUser | TelegramChat):
+            elif isinstance(field_value, (TelegramUser, TelegramChat)):  # noqa: UP038
+                # noqa: UP038
                 result[field_name] = field_value.__dict__
             elif isinstance(field_value, list):
                 result[field_name] = [
@@ -650,7 +651,7 @@ class TelegramMessage:
         }
 
         result = media_map.get(self.media_type)
-        return result if isinstance(result, dict | list) else None
+        return result if isinstance(result, (dict, list)) else None  # noqa: UP038  # noqa: UP038
 
     def get_effective_text(self) -> str | None:
         """Get the effective text content (text or caption)."""
