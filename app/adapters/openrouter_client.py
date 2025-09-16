@@ -262,6 +262,24 @@ class OpenRouterClient:
                         "openrouter_attempt",
                         {"attempt": attempt, "model": model, "request_id": request_id},
                     )
+                # If structured outputs requested, proactively skip models that don't support it
+                # based on the capabilities probe to avoid 404 routing errors.
+                try:
+                    if requested_rf:
+                        await self._ensure_structured_supported_models()
+                        supported = self._structured_supported_models
+                        if isinstance(supported, set) and supported and (model not in supported):
+                            if self._audit:
+                                self._audit(
+                                    "WARN",
+                                    "openrouter_skip_model_no_structured_outputs",
+                                    {"model": model, "request_id": request_id},
+                                )
+                            # Skip to next model without attempting this one
+                            break
+                except Exception:
+                    # If probe fails, proceed as usual
+                    pass
                 headers = {
                     "Authorization": f"Bearer {self._api_key}",
                     "Content-Type": "application/json",
@@ -282,9 +300,10 @@ class OpenRouterClient:
                     body["top_p"] = top_p
                 if stream:
                     body["stream"] = stream
-                # Provider routing best-practice: allow order preference
+                # Provider routing per OpenRouter docs
+                provider_prefs: dict[str, Any] = {}
                 if self._provider_order:
-                    body["route"] = {"order": list(self._provider_order)}
+                    provider_prefs["order"] = list(self._provider_order)
 
                 # Include response_format whenever requested. This ensures that if the caller
                 # expects structured output, a plain-text response will be treated as an error
@@ -303,11 +322,10 @@ class OpenRouterClient:
                     else:
                         body["response_format"] = {"type": "json_object"}
                     rf_included = True
-                    # Provider hint: best-effort; safe if ignored by backend
-                    try:
-                        body["provider"] = {"require_parameters": True}
-                    except Exception:
-                        pass
+                    # Do not force require_parameters=true to avoid router 404 when no provider supports all params
+                # Attach provider preferences if any
+                if provider_prefs:
+                    body["provider"] = provider_prefs
 
                 # Intelligent compression strategy based on OpenRouter best practices
                 # Apply middle-out compression only when content significantly exceeds context limits
@@ -622,8 +640,8 @@ class OpenRouterClient:
                     # Handle specific HTTP status codes according to OpenRouter documentation
                     error_message = self._get_error_message(status_code, data)
 
-                    # Non-retryable errors (400, 401, 402, 404)
-                    if status_code in (400, 401, 402, 404):
+                    # Non-retryable errors (400, 401, 402) → return immediately
+                    if status_code in (400, 401, 402):
                         if self._audit:
                             self._audit(
                                 "ERROR",
@@ -636,6 +654,44 @@ class OpenRouterClient:
                                     "request_id": request_id,
                                 },
                             )
+                        return LLMCallResult(
+                            status="error",
+                            model=last_model_reported,
+                            response_text=text,
+                            response_json=data,
+                            tokens_prompt=usage.get("prompt_tokens"),
+                            tokens_completion=usage.get("completion_tokens"),
+                            cost_usd=None,
+                            latency_ms=latency,
+                            error_text=error_message,
+                            request_headers=redacted_headers,
+                            request_messages=messages,
+                            endpoint="/api/v1/chat/completions",
+                        )
+
+                    # 404: provider routing could not find an endpoint for requested parameters.
+                    # If additional models are available (explicit or implicit fallbacks), move on to the next model.
+                    if status_code == 404:
+                        last_error_text = error_message
+                        has_more_models = model != models_to_try[-1]
+                        if self._audit:
+                            self._audit(
+                                "ERROR" if not has_more_models else "WARN",
+                                "openrouter_not_found_try_fallback"
+                                if has_more_models
+                                else "openrouter_error",
+                                {
+                                    "attempt": attempt,
+                                    "model": model,
+                                    "status": status_code,
+                                    "error": error_message,
+                                    "request_id": request_id,
+                                },
+                            )
+                        if has_more_models:
+                            # Stop retrying this model; try the next one in models_to_try
+                            break
+                        # No more models to try → return error
                         return LLMCallResult(
                             status="error",
                             model=last_model_reported,

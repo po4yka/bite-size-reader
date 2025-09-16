@@ -372,6 +372,7 @@ def load_config() -> AppConfig:
 
         openrouter = OpenRouterConfig(
             api_key=_validate_api_key(os.getenv("OPENROUTER_API_KEY", ""), "OpenRouter"),
+            # Default to a broadly available model. GPT-5 may require specific provider routing.
             model=_validate_model_name(os.getenv("OPENROUTER_MODEL", "openai/gpt-5")),
             fallback_models=fallback_models,
             http_referer=os.getenv("OPENROUTER_HTTP_REFERER"),
