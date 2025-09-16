@@ -57,7 +57,7 @@ class FirecrawlClient:
             raise ValueError("API key must start with 'fc-'")
 
         # Security: Validate timeout
-        if not isinstance(timeout_sec, int | float) or timeout_sec <= 0:
+        if not isinstance(timeout_sec, (int, float)) or timeout_sec <= 0:  # noqa: UP038
             raise ValueError("Timeout must be positive")
         if timeout_sec > 300:  # 5 minutes max
             raise ValueError("Timeout too large")
@@ -66,7 +66,7 @@ class FirecrawlClient:
         if not isinstance(max_retries, int) or max_retries < 0 or max_retries > 10:
             raise ValueError("Max retries must be between 0 and 10")
         # Allow zero to disable waits in tests; only negative is invalid
-        if not isinstance(backoff_base, int | float) or backoff_base < 0:
+        if not isinstance(backoff_base, (int, float)) or backoff_base < 0:  # noqa: UP038
             raise ValueError("Backoff base must be non-negative")
 
         # Validate connection pooling parameters
@@ -79,7 +79,7 @@ class FirecrawlClient:
         ):
             raise ValueError("Max keepalive connections must be between 1 and 50")
         if (
-            not isinstance(keepalive_expiry, int | float)
+            not isinstance(keepalive_expiry, (int, float))  # noqa: UP038
             or keepalive_expiry < 1.0
             or keepalive_expiry > 300.0
         ):

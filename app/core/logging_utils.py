@@ -53,7 +53,8 @@ class JsonFormatter(logging.Formatter):
                 "process",
             ):
                 base[key] = value
-        return json.dumps(base, ensure_ascii=False)
+        # Be resilient to non-JSON-serializable extras (e.g., MagicMocks in tests)
+        return json.dumps(base, ensure_ascii=False, default=str)
 
 
 def setup_json_logging(level: str = "INFO") -> None:

@@ -75,7 +75,7 @@ class OpenRouterClient:
             raise ValueError("X-Title too long")
 
         # Security: Validate timeout
-        if not isinstance(timeout_sec, int | float) or timeout_sec <= 0:
+        if not isinstance(timeout_sec, (int, float)) or timeout_sec <= 0:  # noqa: UP038
             raise ValueError("Timeout must be positive")
         if timeout_sec > 300:  # 5 minutes max
             raise ValueError("Timeout too large")
@@ -84,7 +84,7 @@ class OpenRouterClient:
         if not isinstance(max_retries, int) or max_retries < 0 or max_retries > 10:
             raise ValueError("Max retries must be between 0 and 10")
         # Allow zero to disable waits in tests; only negative is invalid
-        if not isinstance(backoff_base, int | float) or backoff_base < 0:
+        if not isinstance(backoff_base, (int, float)) or backoff_base < 0:  # noqa: UP038
             raise ValueError("Backoff base must be non-negative")
 
         self._api_key = api_key
@@ -119,7 +119,8 @@ class OpenRouterClient:
             500: "Internal server error",
         }
 
-        base_message = error_messages.get(status_code, f"HTTP {status_code} error")
+        base_message = error_messages.get(
+            status_code, f"HTTP {status_code} error")
         api_error = (
             data.get("error", {}).get("message")
             if isinstance(data.get("error"), dict)
@@ -189,7 +190,8 @@ class OpenRouterClient:
         messages = sanitized_messages
 
         # Security: Validate temperature
-        if not isinstance(temperature, int | float):
+        if not isinstance(temperature, (int, float)):  # noqa: UP038
+            # noqa: UP038
             raise ValueError("Temperature must be numeric")
         if temperature < 0 or temperature > 2:
             raise ValueError("Temperature must be between 0 and 2")
@@ -203,7 +205,8 @@ class OpenRouterClient:
 
         # Security: Validate top_p
         if top_p is not None:
-            if not isinstance(top_p, int | float):
+            if not isinstance(top_p, (int, float)):  # noqa: UP038
+                # noqa: UP038
                 raise ValueError("Top_p must be numeric")
             if top_p < 0 or top_p > 1:
                 raise ValueError("Top_p must be between 0 and 1")
@@ -249,16 +252,19 @@ class OpenRouterClient:
 
         for model in models_to_try:
             # Track response_format mode per model: may downgrade json_schema -> json_object
-            requested_rf = response_format if isinstance(response_format, dict) else None
+            requested_rf = response_format if isinstance(
+                response_format, dict) else None
             rf_mode_current: str | None = None
             if requested_rf:
-                rf_mode_current = str(requested_rf.get("type") or "json_object")
+                rf_mode_current = str(
+                    requested_rf.get("type") or "json_object")
             for attempt in range(self._max_retries + 1):
                 if self._audit:
                     self._audit(
                         "INFO",
                         "openrouter_attempt",
-                        {"attempt": attempt, "model": model, "request_id": request_id},
+                        {"attempt": attempt, "model": model,
+                            "request_id": request_id},
                     )
                 headers = {
                     "Authorization": f"Bearer {self._api_key}",
@@ -284,46 +290,33 @@ class OpenRouterClient:
                 if self._provider_order:
                     body["route"] = {"order": list(self._provider_order)}
 
-                # Include response_format only if the model supports structured outputs
+                # Include response_format whenever requested. This ensures that if the caller
+                # expects structured output, a plain-text response will be treated as an error
+                # (structured_output_parse_error) and we will not silently fall back to other models.
                 rf_included = False
-                want_rf = self._rf_supported and bool(requested_rf)
+                want_rf = bool(requested_rf)
                 if want_rf:
+                    if requested_rf and isinstance(requested_rf, dict):
+                        # Possibly downgraded mode
+                        if rf_mode_current == "json_schema":
+                            body["response_format"] = requested_rf
+                        elif rf_mode_current == "json_object":
+                            body["response_format"] = {"type": "json_object"}
+                        else:
+                            body["response_format"] = requested_rf
+                    else:
+                        body["response_format"] = {"type": "json_object"}
+                    rf_included = True
+                    # Provider hint: best-effort; safe if ignored by backend
                     try:
-                        await self._ensure_structured_supported_models()
+                        body["provider"] = {"require_parameters": True}
                     except Exception:
                         pass
-                    model_supports = False
-                    if isinstance(self._structured_supported_models, set):
-                        model_supports = model in self._structured_supported_models
-                    # Conservative allowlist of models known to support structured outputs well
-                    if not model_supports:
-                        if model in [
-                            "openai/gpt-4o-mini",
-                            "openai/gpt-4o",
-                            "google/gemini-2.5-pro",
-                        ]:
-                            model_supports = True
-                    if model_supports:
-                        if requested_rf and isinstance(requested_rf, dict):
-                            # Possibly downgraded mode
-                            if rf_mode_current == "json_schema":
-                                body["response_format"] = requested_rf
-                            elif rf_mode_current == "json_object":
-                                body["response_format"] = {"type": "json_object"}
-                            else:
-                                body["response_format"] = requested_rf
-                        else:
-                            body["response_format"] = {"type": "json_object"}
-                        rf_included = True
-                        # Provider hint to strictly require parameters when supported
-                        try:
-                            body["provider"] = {"require_parameters": True}
-                        except Exception:
-                            pass
 
                 # Intelligent compression strategy based on OpenRouter best practices
                 # Apply middle-out compression only when content significantly exceeds context limits
-                total_content_length = sum(len(msg.get("content", "")) for msg in messages)
+                total_content_length = sum(
+                    len(msg.get("content", "")) for msg in messages)
 
                 # Adaptive compression thresholds based on supported models
                 model_lower = model.lower()
@@ -361,7 +354,8 @@ class OpenRouterClient:
                                 "model": model,
                                 "compression_applied": False,
                                 "percentage_of_threshold": round(
-                                    (total_content_length / compression_threshold) * 100, 1
+                                    (total_content_length /
+                                     compression_threshold) * 100, 1
                                 ),
                             },
                         )
@@ -370,16 +364,19 @@ class OpenRouterClient:
                 try:
                     self._logger.debug(
                         "openrouter_request",
-                        extra={"model": model, "attempt": attempt, "messages_len": len(messages)},
+                        extra={"model": model, "attempt": attempt,
+                               "messages_len": len(messages)},
                     )
                     if self._debug_payloads:
                         red_header = dict(headers)
                         if "Authorization" in red_header:
                             red_header["Authorization"] = "REDACTED"
                         preview_rf = body.get("response_format") or {}
-                        rf_type = preview_rf.get("type") if isinstance(preview_rf, dict) else None
+                        rf_type = preview_rf.get("type") if isinstance(
+                            preview_rf, dict) else None
                         # Calculate content lengths for verification
-                        content_lengths = [len(msg.get("content", "")) for msg in messages]
+                        content_lengths = [len(msg.get("content", ""))
+                                           for msg in messages]
                         total_content = sum(content_lengths)
 
                         # Show truncated messages for debug but include content length info
@@ -389,7 +386,8 @@ class OpenRouterClient:
                             content = debug_msg.get("content", "")
                             if len(content) > 200:  # Truncate for logging only
                                 debug_msg["content"] = (
-                                    content[:100] + f"... [+{len(content) - 100} chars]"
+                                    content[:100] +
+                                    f"... [+{len(content) - 100} chars]"
                                 )
                             debug_msg["content_length"] = str(len(content))
                             debug_messages.append(debug_msg)
@@ -410,7 +408,8 @@ class OpenRouterClient:
                             },
                         )
                     # Use connection pooling to reduce TCP handshake overhead
-                    limits = httpx.Limits(max_keepalive_connections=5, max_connections=10)
+                    limits = httpx.Limits(
+                        max_keepalive_connections=5, max_connections=10)
                     async with httpx.AsyncClient(timeout=self._timeout, limits=limits) as client:
                         resp = await client.post(
                             f"{self._base_url}/chat/completions", headers=headers, json=body
@@ -438,7 +437,8 @@ class OpenRouterClient:
                                 if choices and isinstance(choices[0], dict):
                                     choice = choices[0]
                                     if "message" in choice and isinstance(choice["message"], dict):
-                                        msg_content: Any = choice["message"].get("content")
+                                        msg_content: Any = choice["message"].get(
+                                            "content")
                                         if msg_content and isinstance(msg_content, str):
                                             truncated_content = truncate_log_content(
                                                 msg_content, self._log_truncate_length
@@ -455,7 +455,8 @@ class OpenRouterClient:
                         err_dump = json.dumps(data).lower()
                         if "response_format" in err_dump:
                             # If json_schema appears unsupported, gracefully downgrade to json_object
-                            prev_mode = rf_mode_current or (requested_rf or {}).get("type")
+                            prev_mode = rf_mode_current or (
+                                requested_rf or {}).get("type")
                             if (prev_mode or "").lower() == "json_schema":
                                 rf_mode_current = "json_object"
                                 if self._audit:
@@ -498,7 +499,8 @@ class OpenRouterClient:
                                 parsed = message_obj.get("parsed")
                                 if parsed is not None:
                                     try:
-                                        text = json.dumps(parsed, ensure_ascii=False)
+                                        text = json.dumps(
+                                            parsed, ensure_ascii=False)
                                     except Exception:
                                         text = str(parsed)
 
@@ -516,7 +518,8 @@ class OpenRouterClient:
                                                 if isinstance(part.get("text"), str):
                                                     parts.append(part["text"])
                                                 elif isinstance(part.get("content"), str):
-                                                    parts.append(part["content"])
+                                                    parts.append(
+                                                        part["content"])
                                         if parts:
                                             text = "\n".join(parts)
                                     except Exception:
@@ -531,15 +534,17 @@ class OpenRouterClient:
                                     end = reasoning.rfind("}")
                                     if start != -1 and end != -1 and end > start:
                                         try:
-                                            potential_json = reasoning[start : end + 1]
-                                            json.loads(potential_json)  # Validate it's valid JSON
+                                            potential_json = reasoning[start: end + 1]
+                                            # Validate it's valid JSON
+                                            json.loads(potential_json)
                                             text = potential_json
                                         except Exception:
                                             text = reasoning
 
                             # Function/tool calls: arguments may hold the JSON
                             if (not text) or (isinstance(text, str) and not text.strip()):
-                                tool_calls = message_obj.get("tool_calls") or []
+                                tool_calls = message_obj.get(
+                                    "tool_calls") or []
                                 if tool_calls and isinstance(tool_calls, list):
                                     try:
                                         first = tool_calls[0] or {}
@@ -552,7 +557,8 @@ class OpenRouterClient:
                                         if isinstance(args, str):
                                             text = args
                                         elif isinstance(args, dict):
-                                            text = json.dumps(args, ensure_ascii=False)
+                                            text = json.dumps(
+                                                args, ensure_ascii=False)
                                     except Exception:
                                         pass
                     except Exception:
@@ -566,7 +572,8 @@ class OpenRouterClient:
                     cost_usd = None
                     if self._enable_stats:
                         try:
-                            cost_usd = float(data.get("usage", {}).get("total_cost", 0.0))
+                            cost_usd = float(
+                                data.get("usage", {}).get("total_cost", 0.0))
                         except Exception:
                             cost_usd = None
                     # redact Authorization
@@ -582,7 +589,8 @@ class OpenRouterClient:
                             parsed = extract_json(text_str)
                             if parsed is not None:
                                 try:
-                                    text = json.dumps(parsed, ensure_ascii=False)
+                                    text = json.dumps(
+                                        parsed, ensure_ascii=False)
                                     last_response_text = text
                                 except Exception:
                                     last_response_text = text_str
@@ -786,7 +794,8 @@ class OpenRouterClient:
             "X-Title": self._x_title or "Bite-Size Reader Bot",
         }
         try:
-            limits = httpx.Limits(max_keepalive_connections=5, max_connections=10)
+            limits = httpx.Limits(
+                max_keepalive_connections=5, max_connections=10)
             async with httpx.AsyncClient(timeout=self._timeout, limits=limits) as client:
                 resp = await client.get(
                     f"{self._base_url}/models?supported_parameters=structured_outputs",
@@ -804,7 +813,8 @@ class OpenRouterClient:
                 for it in arr or []:
                     try:
                         if isinstance(it, dict):
-                            mid = it.get("id") or it.get("name") or it.get("model") or None
+                            mid = it.get("id") or it.get(
+                                "name") or it.get("model") or None
                             if isinstance(mid, str) and mid:
                                 models.add(mid)
                     except Exception:
@@ -818,7 +828,8 @@ class OpenRouterClient:
         except Exception as e:  # noqa: BLE001
             # Don't fail the request; just log and continue without capabilities
             self._capabilities_last_load = now
-            self._logger.warning("openrouter_capabilities_probe_failed", extra={"error": str(e)})
+            self._logger.warning(
+                "openrouter_capabilities_probe_failed", extra={"error": str(e)})
 
     async def get_models(self) -> dict:
         """Get available models from OpenRouter API."""
@@ -831,13 +842,15 @@ class OpenRouterClient:
 
         try:
             # Use connection pooling to reduce TCP handshake overhead
-            limits = httpx.Limits(max_keepalive_connections=5, max_connections=10)
+            limits = httpx.Limits(
+                max_keepalive_connections=5, max_connections=10)
             async with httpx.AsyncClient(timeout=self._timeout, limits=limits) as client:
                 resp = await client.get(f"{self._base_url}/models", headers=headers)
                 resp.raise_for_status()
                 return resp.json()
         except Exception as e:
-            self._logger.error("openrouter_models_error", extra={"error": str(e)})
+            self._logger.error("openrouter_models_error",
+                               extra={"error": str(e)})
             raise
 
 
