@@ -1,3 +1,4 @@
+# json: used to craft serialized payloads that mirror OpenRouter responses.
 import json
 import unittest
 from typing import Any, cast
