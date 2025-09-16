@@ -103,6 +103,10 @@ class OpenRouterClient:
         self._enable_stats = bool(enable_stats)
         self._log_truncate_length = int(log_truncate_length)
         self._rf_supported = True
+        # Cache capabilities: which models support structured outputs
+        self._structured_supported_models: set[str] | None = None
+        self._capabilities_last_load: float = 0.0
+        self._capabilities_ttl_sec: int = 3600
 
     def _get_error_message(self, status_code: int, data: dict) -> str:
         """Get descriptive error message based on HTTP status code."""
@@ -150,6 +154,7 @@ class OpenRouterClient:
         stream: bool = False,
         request_id: int | None = None,
         response_format: dict[str, Any] | None = None,
+        model_override: str | None = None,
     ) -> LLMCallResult:
         # Security: Validate messages
         if not messages or not isinstance(messages, list):
@@ -210,13 +215,15 @@ class OpenRouterClient:
         # Security: Validate request_id
         if request_id is not None and (not isinstance(request_id, int) or request_id <= 0):
             raise ValueError("Invalid request_id")
-        models_to_try = [self._model] + self._fallback_models
+        primary_model = model_override if model_override else self._model
+        models_to_try = [primary_model] + self._fallback_models
 
         # If caller expects structured outputs via response_format and the primary model
         # is reasoning-heavy, append safe structured-output models as implicit fallbacks
         def _is_reasoning_heavy(name: str) -> bool:
             n = name.lower()
-            return any(s in n for s in ["gpt-5", "deepseek-r1", ":r1", "reasoning", "thinking"])
+            # Treat GPT-5 family as reasoning-heavy; restrict to supported set
+            return "gpt-5" in n
 
         def _append_if_missing(seq: list[str], items: list[str]) -> None:
             seen = {m for m in seq}
@@ -228,11 +235,11 @@ class OpenRouterClient:
         safe_structured_models = [
             "openai/gpt-4o-mini",
             "openai/gpt-4o",
-            "openai/o3-mini",
+            "google/gemini-2.5-pro",
         ]
 
         # Only add implicit fallbacks if structured outputs requested
-        if response_format is not None and _is_reasoning_heavy(self._model):
+        if response_format is not None and _is_reasoning_heavy(primary_model):
             _append_if_missing(models_to_try, safe_structured_models)
         last_error_text = None
         last_data = None
@@ -241,6 +248,11 @@ class OpenRouterClient:
         last_response_text = None
 
         for model in models_to_try:
+            # Track response_format mode per model: may downgrade json_schema -> json_object
+            requested_rf = response_format if isinstance(response_format, dict) else None
+            rf_mode_current: str | None = None
+            if requested_rf:
+                rf_mode_current = str(requested_rf.get("type") or "json_object")
             for attempt in range(self._max_retries + 1):
                 if self._audit:
                     self._audit(
@@ -272,31 +284,57 @@ class OpenRouterClient:
                 if self._provider_order:
                     body["route"] = {"order": list(self._provider_order)}
 
-                # Enforce structured JSON when possible. Prefer explicit response_format.
-                # Default to json_object to reduce prose around the payload.
-                use_response_format = self._rf_supported
-                if use_response_format:
-                    if response_format and isinstance(response_format, dict):
-                        body["response_format"] = response_format
-                    else:
-                        body["response_format"] = {"type": "json_object"}
+                # Include response_format only if the model supports structured outputs
+                rf_included = False
+                want_rf = self._rf_supported and bool(requested_rf)
+                if want_rf:
+                    try:
+                        await self._ensure_structured_supported_models()
+                    except Exception:
+                        pass
+                    model_supports = False
+                    if isinstance(self._structured_supported_models, set):
+                        model_supports = model in self._structured_supported_models
+                    # Conservative allowlist of models known to support structured outputs well
+                    if not model_supports:
+                        if model in [
+                            "openai/gpt-4o-mini",
+                            "openai/gpt-4o",
+                            "google/gemini-2.5-pro",
+                        ]:
+                            model_supports = True
+                    if model_supports:
+                        if requested_rf and isinstance(requested_rf, dict):
+                            # Possibly downgraded mode
+                            if rf_mode_current == "json_schema":
+                                body["response_format"] = requested_rf
+                            elif rf_mode_current == "json_object":
+                                body["response_format"] = {"type": "json_object"}
+                            else:
+                                body["response_format"] = requested_rf
+                        else:
+                            body["response_format"] = {"type": "json_object"}
+                        rf_included = True
+                        # Provider hint to strictly require parameters when supported
+                        try:
+                            body["provider"] = {"require_parameters": True}
+                        except Exception:
+                            pass
 
                 # Intelligent compression strategy based on OpenRouter best practices
                 # Apply middle-out compression only when content significantly exceeds context limits
                 total_content_length = sum(len(msg.get("content", "")) for msg in messages)
 
-                # Adaptive compression thresholds based on model capabilities
-                # Conservative approach: only compress when truly necessary
+                # Adaptive compression thresholds based on supported models
                 model_lower = model.lower()
-                if "gpt-4" in model_lower or "gpt-5" in model_lower or "claude-3" in model_lower:
-                    # Large context models: 128K+ tokens ≈ 400KB+ text
-                    compression_threshold = 350000  # 350KB
-                elif "claude-2" in model_lower or "llama" in model_lower:
-                    # Medium context models: 32K-100K tokens ≈ 200KB-300KB text
-                    compression_threshold = 250000  # 250KB
+                if "gpt-5" in model_lower:
+                    compression_threshold = 800000  # ~0.8MB for very large context
+                elif "gpt-4o" in model_lower:
+                    compression_threshold = 350000  # ~350KB for 128k
+                elif "gemini-2.5" in model_lower:
+                    compression_threshold = 1200000  # ~1.2MB for 1M tokens
                 else:
-                    # Conservative fallback for unknown models
-                    compression_threshold = 200000  # 200KB
+                    compression_threshold = 200000  # conservative fallback
 
                 if total_content_length > compression_threshold:
                     body["transforms"] = ["middle-out"]
@@ -413,9 +451,27 @@ class OpenRouterClient:
                             pass
 
                     status_code = resp.status_code
-                    if status_code == 400 and use_response_format:
+                    if status_code == 400 and rf_included:
                         err_dump = json.dumps(data).lower()
                         if "response_format" in err_dump:
+                            # If json_schema appears unsupported, gracefully downgrade to json_object
+                            prev_mode = rf_mode_current or (requested_rf or {}).get("type")
+                            if (prev_mode or "").lower() == "json_schema":
+                                rf_mode_current = "json_object"
+                                if self._audit:
+                                    self._audit(
+                                        "WARN",
+                                        "openrouter_downgrade_json_schema_to_object",
+                                        {"model": model, "request_id": request_id},
+                                    )
+                                self._logger.warning(
+                                    "downgrade_response_format", extra={"model": model}
+                                )
+                                if attempt < self._max_retries:
+                                    # Retry same model with json_object
+                                    await asyncio_sleep_backoff(self._backoff_base, attempt)
+                                    continue
+                            # If even json_object seems unsupported, disable RF for subsequent attempts
                             self._rf_supported = False
                             if self._audit:
                                 self._audit(
@@ -427,6 +483,7 @@ class OpenRouterClient:
                                 "openrouter_response_format_unsupported", extra={"model": model}
                             )
                             if attempt < self._max_retries:
+                                await asyncio_sleep_backoff(self._backoff_base, attempt)
                                 continue
                     # Extract text and usage
                     text = None
@@ -434,8 +491,8 @@ class OpenRouterClient:
                         choices = data.get("choices") or []
                         if choices:
                             message_obj = choices[0].get("message", {}) or {}
-                            # Prefer parsed when structured outputs were requested
-                            prefer_parsed = response_format is not None
+                            # Prefer parsed when structured outputs were included
+                            prefer_parsed = rf_included
 
                             if prefer_parsed:
                                 parsed = message_obj.get("parsed")
@@ -519,8 +576,8 @@ class OpenRouterClient:
 
                     # Handle different HTTP status codes according to OpenRouter documentation
                     if status_code == 200:
-                        # If structured outputs were requested, ensure we actually got JSON
-                        if response_format is not None:
+                        # If structured outputs were included, ensure we actually got JSON
+                        if rf_included:
                             text_str = text or ""
                             parsed = extract_json(text_str)
                             if parsed is not None:
@@ -709,6 +766,59 @@ class OpenRouterClient:
             request_messages=messages,
             endpoint="/v1/chat/completions",
         )
+
+    async def _ensure_structured_supported_models(self) -> None:
+        """Fetch and cache the set of models supporting structured outputs.
+
+        Uses OpenRouter's models endpoint with supported_parameters=structured_outputs.
+        Caches results for a TTL to avoid repeated network calls.
+        """
+        now = time.time()
+        if (
+            self._structured_supported_models is not None
+            and (now - self._capabilities_last_load) < self._capabilities_ttl_sec
+        ):
+            return
+        headers = {
+            "Authorization": f"Bearer {self._api_key}",
+            "Content-Type": "application/json",
+            "HTTP-Referer": self._http_referer or "https://github.com/your-repo",
+            "X-Title": self._x_title or "Bite-Size Reader Bot",
+        }
+        try:
+            limits = httpx.Limits(max_keepalive_connections=5, max_connections=10)
+            async with httpx.AsyncClient(timeout=self._timeout, limits=limits) as client:
+                resp = await client.get(
+                    f"{self._base_url}/models?supported_parameters=structured_outputs",
+                    headers=headers,
+                )
+                resp.raise_for_status()
+                payload = resp.json()
+                arr = []
+                if isinstance(payload, dict):
+                    if isinstance(payload.get("data"), list):
+                        arr = payload.get("data")
+                    elif isinstance(payload.get("models"), list):
+                        arr = payload.get("models")
+                models: set[str] = set()
+                for it in arr or []:
+                    try:
+                        if isinstance(it, dict):
+                            mid = it.get("id") or it.get("name") or it.get("model") or None
+                            if isinstance(mid, str) and mid:
+                                models.add(mid)
+                    except Exception:
+                        continue
+                if models:
+                    self._structured_supported_models = models
+                else:
+                    # Keep None to indicate unknown; don't overwrite with empty set
+                    self._structured_supported_models = self._structured_supported_models
+                self._capabilities_last_load = now
+        except Exception as e:  # noqa: BLE001
+            # Don't fail the request; just log and continue without capabilities
+            self._capabilities_last_load = now
+            self._logger.warning("openrouter_capabilities_probe_failed", extra={"error": str(e)})
 
     async def get_models(self) -> dict:
         """Get available models from OpenRouter API."""
