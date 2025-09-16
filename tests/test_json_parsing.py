@@ -142,7 +142,7 @@ class TestJsonParsing(unittest.TestCase):
             mock_openrouter_instance = mock_openrouter_client.return_value
             mock_openrouter_instance.chat = AsyncMock(return_value=mock_llm_response)
             bot._openrouter = mock_openrouter_instance
-            
+
             bot._safe_reply = AsyncMock()  # type: ignore[method-assign]
             bot._reply_json = AsyncMock()  # type: ignore[method-assign]
             self.db.get_request_by_dedupe_hash.return_value = None

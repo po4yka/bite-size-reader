@@ -15,7 +15,6 @@ from urllib.parse import urlparse
 from app.adapters.firecrawl_parser import FirecrawlClient, FirecrawlResult
 from app.adapters.openrouter_client import OpenRouterClient
 from app.config import AppConfig
-from app.core.json_utils import extract_json
 from app.core.html_utils import (
     chunk_sentences,
     clean_markdown_article_text,
@@ -23,6 +22,7 @@ from app.core.html_utils import (
     normalize_with_textacy,
     split_sentences,
 )
+from app.core.json_utils import extract_json
 from app.core.lang import LANG_RU, choose_language, detect_language
 from app.core.logging_utils import generate_correlation_id, setup_json_logging
 from app.core.summary_aggregate import aggregate_chunk_summaries
@@ -99,7 +99,7 @@ class TelegramBot:
         # Telegram client (PyroTGFork/Pyrogram)
         if not PYROGRAM_AVAILABLE or Client is object:
             self.client = None
-        elif parse_result is not None and parse_result.shaped is None:
+        else:
             self.client = Client(
                 name="bite_size_reader_bot",
                 api_id=self.cfg.telegram.api_id,
@@ -288,9 +288,9 @@ class TelegramBot:
                     logger.warning(
                         f"Access denied for UID {uid}. Not in allowed list: {self.cfg.telegram.allowed_user_ids}"
                     )
-                elif parse_result is not None and parse_result.shaped is None:
+                else:
                     logger.info(f"Access granted for UID {uid}. Found in allowed list.")
-            elif parse_result is not None and parse_result.shaped is None:
+            else:
                 logger.info("Access control disabled - no allowed_user_ids configured")
 
             if self.cfg.telegram.allowed_user_ids and uid not in self.cfg.telegram.allowed_user_ids:
@@ -456,7 +456,7 @@ class TelegramBot:
                         correlation_id=correlation_id,
                         interaction_id=interaction_id,
                     )
-                elif parse_result is not None and parse_result.shaped is None:
+                else:
                     self._awaiting_url_users.add(uid)
                     await self._safe_reply(message, "Send a URL to summarize.")
                     logger.debug("awaiting_url", extra={"uid": uid})
@@ -735,7 +735,7 @@ class TelegramBot:
                     logger.error(
                         "persist_cid_error", extra={"error": str(e), "cid": correlation_id}
                     )
-        elif parse_result is not None and parse_result.shaped is None:
+        else:
             # Create request row (pending)
             chat_obj = getattr(message, "chat", None)
             chat_id_raw = getattr(chat_obj, "id", 0) if chat_obj is not None else None
@@ -794,7 +794,7 @@ class TelegramBot:
                         "cleaned_text_len": len(content_text),
                     },
                 )
-            elif parse_result is not None and parse_result.shaped is None:
+            else:
                 content_text = ""
                 content_source = "none"
             # Optional normalization (feature-flagged)
@@ -831,7 +831,7 @@ class TelegramBot:
                     self.correlation_id = None
 
             crawl = MockCrawl(md, html)
-        elif parse_result is not None and parse_result.shaped is None:
+        else:
             # Notify: starting Firecrawl with progress indicator
             try:
                 await self._safe_reply(
@@ -963,7 +963,7 @@ class TelegramBot:
                     )
                 except Exception:
                     pass
-            elif parse_result is not None and parse_result.shaped is None:
+            else:
                 # This should not happen due to validation above, but handle gracefully
                 content_text = ""
                 content_source = "none"
@@ -1021,8 +1021,10 @@ class TelegramBot:
         # Choose model to estimate context threshold: prefer long_context_model if configured and string
         _lc_model = getattr(self.cfg.openrouter, "long_context_model", None)
         _primary_model = getattr(self.cfg.openrouter, "model", "")
-        threshold_model = _lc_model if isinstance(_lc_model, str) and _lc_model else (
-            _primary_model if isinstance(_primary_model, str) else ""
+        threshold_model = (
+            _lc_model
+            if isinstance(_lc_model, str) and _lc_model
+            else (_primary_model if isinstance(_primary_model, str) else "")
         )
         max_chars = self._estimate_max_chars_for_model(threshold_model, configured_max)
         content_len = len(content_text)
@@ -1061,7 +1063,7 @@ class TelegramBot:
                     f"🔀 Processing: Single-pass (chunking disabled)\n"
                     f"⚡ Status: Sending to AI model...",
                 )
-            elif parse_result is not None and parse_result.shaped is None:
+            else:
                 await self._safe_reply(
                     message,
                     f"📚 **Content Analysis**\n"
@@ -1357,13 +1359,16 @@ class TelegramBot:
             )
         # Special-case salvage: provider signaled structured output parse error but included usable text
         salvage_shaped: dict[str, Any] | None = None
-        logger.info("salvage_debug", extra={
-            "llm_status": llm.status,
-            "llm_error_text": llm.error_text,
-            "status_check": llm.status != "ok",
-            "error_check": (llm.error_text or "") == "structured_output_parse_error",
-            "cid": correlation_id
-        })
+        logger.info(
+            "salvage_debug",
+            extra={
+                "llm_status": llm.status,
+                "llm_error_text": llm.error_text,
+                "status_check": llm.status != "ok",
+                "error_check": (llm.error_text or "") == "structured_output_parse_error",
+                "cid": correlation_id,
+            },
+        )
         if llm.status != "ok" and (llm.error_text or "") == "structured_output_parse_error":
             try:
                 # Try robust local parsing first
@@ -1384,7 +1389,7 @@ class TelegramBot:
             if llm.status == "ok":
                 # Success message with token usage and cost
                 tokens_used = (llm.tokens_prompt or 0) + (llm.tokens_completion or 0)
-                cost_info = f", ${llm.cost_usd:.4f}" if llm.cost_usd else ""
+                cost_info = f" (${llm.cost_usd:.4f})" if llm.cost_usd else ""
                 await self._safe_reply(
                     message,
                     f"🤖 **AI Analysis Complete**\n"
@@ -1394,7 +1399,7 @@ class TelegramBot:
                     f"🔢 Tokens used: {tokens_used:,}{cost_info}\n"
                     f"📋 Status: Generating summary...",
                 )
-            elif parse_result is not None and parse_result.shaped is None:
+            else:
                 # Error message with detailed error information
                 error_details = []
                 if llm.error_text:
@@ -1491,20 +1496,23 @@ class TelegramBot:
 
         # Best-effort parse + validate using robust parser first
         summary_shaped: dict[str, Any] | None = salvage_shaped
-        logger.info("summary_shaped_debug", extra={
-            "salvage_shaped": salvage_shaped is not None,
-            "summary_shaped": summary_shaped is not None,
-            "cid": correlation_id
-        })
+        logger.info(
+            "summary_shaped_debug",
+            extra={
+                "salvage_shaped": salvage_shaped is not None,
+                "summary_shaped": summary_shaped is not None,
+                "cid": correlation_id,
+            },
+        )
 
         # 2) If not parsed yet, try robust parser with optional local fixes
         if summary_shaped is None:
             logger.info("summary_shaped_is_none_parsing", extra={"cid": correlation_id})
             parse_result = parse_summary_response(llm.response_json, llm.response_text)
-        elif parse_result is not None and parse_result.shaped is None:
+        else:
             logger.info("summary_shaped_is_not_none_skipping_parse", extra={"cid": correlation_id})
             parse_result = None
-        
+
         # Skip repair logic if we already have a valid summary from salvage
         if summary_shaped is not None:
             logger.info("skipping_repair_logic_salvage_success", extra={"cid": correlation_id})
@@ -1518,9 +1526,11 @@ class TelegramBot:
                     )
                 except Exception:
                     pass
-            elif parse_result is not None and parse_result.shaped is None:
+            else:
                 # If important fields are missing/empty after clean parse, attempt one repair call
-                needs_repair = not (summary_shaped.get("summary_250") and summary_shaped.get("summary_1000"))
+                needs_repair = not (
+                    summary_shaped.get("summary_250") and summary_shaped.get("summary_1000")
+                )
                 if needs_repair:
                     try:
                         logger.info(
@@ -1528,7 +1538,7 @@ class TelegramBot:
                             extra={"cid": correlation_id, "reason": "missing_required_fields"},
                         )
                         llm_text = llm.response_text or ""
-                        repair_messages: list[dict[str, str]] = [
+                        repair_messages_1: list[dict[str, str]] = [
                             {"role": "system", "content": system_prompt},
                             {"role": "user", "content": user_content},
                             {"role": "assistant", "content": llm_text},
@@ -1541,11 +1551,11 @@ class TelegramBot:
                             },
                         ]
                         async with self._sem():
-                            repair_response_format: dict[str, object] = {"type": "json_object"}
+                            repair_response_format_1: dict[str, object] = {"type": "json_object"}
                             try:
                                 from app.core.summary_contract import get_summary_json_schema
 
-                                repair_response_format = {
+                                repair_response_format_1 = {
                                     "type": "json_schema",
                                     "json_schema": {
                                         "name": "summary_schema",
@@ -1557,12 +1567,12 @@ class TelegramBot:
                                 pass
 
                             repair = await self._openrouter.chat(
-                                repair_messages,
+                                repair_messages_1,
                                 temperature=self.cfg.openrouter.temperature,
                                 max_tokens=(self.cfg.openrouter.max_tokens or 2048),
                                 top_p=self.cfg.openrouter.top_p,
                                 request_id=req_id,
-                                response_format=repair_response_format,
+                                response_format=repair_response_format_1,
                             )
                         if repair.status == "ok":
                             repair_result = parse_summary_response(
@@ -1578,13 +1588,15 @@ class TelegramBot:
                                         )
                                     except Exception:
                                         pass
-                            elif parse_result is not None and parse_result.shaped is None:
+                            else:
                                 try:
                                     logger.error(
                                         "json_repair_parse_failed_preview",
                                         extra={
                                             "cid": correlation_id,
-                                            "errors": repair_result.errors[-5:],
+                                            "errors": repair_result.errors[-5:]
+                                            if repair_result.errors
+                                            else None,
                                             "preview": (repair.response_text or "")[
                                                 : self.cfg.runtime.log_truncate_length
                                             ],
@@ -1613,13 +1625,13 @@ class TelegramBot:
                                 request_id=req_id,
                             )
                         return
-        elif parse_result is not None and parse_result.shaped is None:
+        else:
             try:
                 logger.error(
                     "summary_json_invalid",
                     extra={
                         "cid": correlation_id,
-                        "errors": parse_result.errors[-5:],
+                        "errors": parse_result.errors[-5:] if parse_result.errors else None,
                         "preview": (llm.response_text or "")[
                             : self.cfg.runtime.log_truncate_length
                         ],
@@ -1638,7 +1650,7 @@ class TelegramBot:
                     },
                 )
                 llm_text = llm.response_text or ""
-                repair_messages: list[dict[str, str]] = [
+                repair_messages_2: list[dict[str, str]] = [
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_content},
                     {"role": "assistant", "content": llm_text},
@@ -1652,11 +1664,11 @@ class TelegramBot:
                 ]
                 async with self._sem():
                     # Reuse strict JSON schema enforcement for repair
-                    repair_response_format: dict[str, object] = {"type": "json_object"}
+                    repair_response_format_2: dict[str, object] = {"type": "json_object"}
                     try:
                         from app.core.summary_contract import get_summary_json_schema
 
-                        repair_response_format = {
+                        repair_response_format_2 = {
                             "type": "json_schema",
                             "json_schema": {
                                 "name": "summary_schema",
@@ -1668,12 +1680,12 @@ class TelegramBot:
                         pass
 
                     repair = await self._openrouter.chat(
-                        repair_messages,
+                        repair_messages_2,
                         temperature=self.cfg.openrouter.temperature,
                         max_tokens=(self.cfg.openrouter.max_tokens or 2048),
                         top_p=self.cfg.openrouter.top_p,
                         request_id=req_id,
-                        response_format=repair_response_format,
+                        response_format=repair_response_format_2,
                     )
                 if repair.status == "ok":
                     repair_result = parse_summary_response(
@@ -1689,13 +1701,15 @@ class TelegramBot:
                                 )
                             except Exception:
                                 pass
-                    elif parse_result is not None and parse_result.shaped is None:
+                    else:
                         try:
                             logger.error(
                                 "json_repair_parse_failed_preview",
                                 extra={
                                     "cid": correlation_id,
-                                    "errors": repair_result.errors[-5:],
+                                    "errors": repair_result.errors[-5:]
+                                    if repair_result.errors
+                                    else None,
                                     "preview": (repair.response_text or "")[
                                         : self.cfg.runtime.log_truncate_length
                                     ],
@@ -1707,7 +1721,7 @@ class TelegramBot:
                         except Exception:
                             pass
                         raise ValueError("repair_failed")
-                elif parse_result is not None and parse_result.shaped is None:
+                else:
                     raise ValueError("repair_call_error")
             except Exception:
                 self.db.update_request_status(req_id, "error")
@@ -1742,7 +1756,7 @@ class TelegramBot:
                     request_id=req_id,
                 )
             return
-        elif parse_result is not None and parse_result.shaped is None:
+        else:
             logger.info("summary_shaped_is_not_none", extra={"cid": correlation_id})
 
         # Enhanced llm_finished log with summary details
@@ -1975,10 +1989,7 @@ class TelegramBot:
         try:
             await self._safe_reply(
                 message,
-                (
-                    "LLM call finished"
-                    f" ({'ok' if llm.status == 'ok' else 'error'}, {llm.latency_ms or 0} ms)."
-                ),
+                f"LLM call finished ({'ok' if llm.status == 'ok' else 'error'}, {llm.latency_ms or 0} ms).",
             )
         except Exception:
             pass
@@ -2018,7 +2029,7 @@ class TelegramBot:
             except Exception as e:  # noqa: BLE001
                 logger.error("persist_llm_error", extra={"error": str(e), "cid": correlation_id})
             self.db.update_request_status(req_id, "error")
-            await self._safe_reply(message, f"LLM error. Error ID: {correlation_id}")
+            await self._safe_reply(message, "LLM error. Error ID: {correlation_id}")
             logger.error("openrouter_error", extra={"error": llm.error_text, "cid": correlation_id})
             try:
                 self._audit(
@@ -2067,15 +2078,17 @@ class TelegramBot:
                     )
                 except Exception:
                     pass
-            elif parse_result is not None and parse_result.shaped is None:
-                needs_repair = not (forward_shaped.get("summary_250") and forward_shaped.get("summary_1000"))
+            else:
+                needs_repair = not (
+                    forward_shaped.get("summary_250") and forward_shaped.get("summary_1000")
+                )
                 if needs_repair:
                     try:
                         logger.info(
                             "json_repair_attempt",
                             extra={"cid": correlation_id, "reason": "missing_required_fields"},
                         )
-                        repair_messages = [
+                        repair_messages_3 = [
                             {"role": "system", "content": system_prompt},
                             {"role": "user", "content": messages[1]["content"]},
                             {"role": "assistant", "content": llm.response_text or ""},
@@ -2088,11 +2101,13 @@ class TelegramBot:
                             },
                         ]
                         async with self._sem():
-                            fwd_repair_response_format: dict[str, object] = {"type": "json_object"}
+                            fwd_repair_response_format_1: dict[str, object] = {
+                                "type": "json_object"
+                            }
                             try:
                                 from app.core.summary_contract import get_summary_json_schema
 
-                                fwd_repair_response_format = {
+                                fwd_repair_response_format_1 = {
                                     "type": "json_schema",
                                     "json_schema": {
                                         "name": "summary_schema",
@@ -2104,12 +2119,12 @@ class TelegramBot:
                                 pass
 
                             repair = await self._openrouter.chat(
-                                repair_messages,
+                                repair_messages_3,
                                 temperature=self.cfg.openrouter.temperature,
                                 max_tokens=self.cfg.openrouter.max_tokens,
                                 top_p=self.cfg.openrouter.top_p,
                                 request_id=req_id,
-                                response_format=fwd_repair_response_format,
+                                response_format=fwd_repair_response_format_1,
                             )
                         if repair.status == "ok":
                             repair_result = parse_summary_response(
@@ -2121,17 +2136,22 @@ class TelegramBot:
                                     try:
                                         logger.info(
                                             "json_local_fix_applied",
-                                            extra={"cid": correlation_id, "stage": "repair_forwarded"},
+                                            extra={
+                                                "cid": correlation_id,
+                                                "stage": "repair_forwarded",
+                                            },
                                         )
                                     except Exception:
                                         pass
-                            elif parse_result is not None and parse_result.shaped is None:
+                            else:
                                 try:
                                     logger.error(
                                         "json_repair_parse_failed_preview",
                                         extra={
                                             "cid": correlation_id,
-                                            "errors": repair_result.errors[-5:],
+                                            "errors": repair_result.errors[-5:]
+                                            if repair_result.errors
+                                            else None,
                                             "preview": (repair.response_text or "")[
                                                 : self.cfg.runtime.log_truncate_length
                                             ],
@@ -2160,13 +2180,13 @@ class TelegramBot:
                                 request_id=req_id,
                             )
                         return
-        elif parse_result is not None and parse_result.shaped is None:
+        else:
             try:
                 logger.error(
                     "summary_json_invalid",
                     extra={
                         "cid": correlation_id,
-                        "errors": parse_result.errors[-5:],
+                        "errors": parse_result.errors[-5:] if parse_result.errors else None,
                         "preview": (llm.response_text or "")[
                             : self.cfg.runtime.log_truncate_length
                         ],
@@ -2184,7 +2204,7 @@ class TelegramBot:
                         "reason": parse_result.errors[-3:] if parse_result.errors else None,
                     },
                 )
-                repair_messages = [
+                repair_messages_4 = [
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": messages[1]["content"]},
                     {"role": "assistant", "content": llm.response_text or ""},
@@ -2198,11 +2218,11 @@ class TelegramBot:
                 ]
                 async with self._sem():
                     # Enforce schema during repair for forwarded messages
-                    fwd_repair_response_format: dict[str, object] = {"type": "json_object"}
+                    fwd_repair_response_format_2: dict[str, object] = {"type": "json_object"}
                     try:
                         from app.core.summary_contract import get_summary_json_schema
 
-                        fwd_repair_response_format = {
+                        fwd_repair_response_format_2 = {
                             "type": "json_schema",
                             "json_schema": {
                                 "name": "summary_schema",
@@ -2214,12 +2234,12 @@ class TelegramBot:
                         pass
 
                     repair = await self._openrouter.chat(
-                        repair_messages,
+                        repair_messages_4,
                         temperature=self.cfg.openrouter.temperature,
                         max_tokens=self.cfg.openrouter.max_tokens,
                         top_p=self.cfg.openrouter.top_p,
                         request_id=req_id,
-                        response_format=fwd_repair_response_format,
+                        response_format=fwd_repair_response_format_2,
                     )
                 if repair.status == "ok":
                     repair_result = parse_summary_response(
@@ -2235,13 +2255,15 @@ class TelegramBot:
                                 )
                             except Exception:
                                 pass
-                    elif parse_result is not None and parse_result.shaped is None:
+                    else:
                         try:
                             logger.error(
                                 "json_repair_parse_failed_preview",
                                 extra={
                                     "cid": correlation_id,
-                                    "errors": repair_result.errors[-5:],
+                                    "errors": repair_result.errors[-5:]
+                                    if repair_result.errors
+                                    else None,
                                     "preview": (repair.response_text or "")[
                                         : self.cfg.runtime.log_truncate_length
                                     ],
@@ -2253,7 +2275,7 @@ class TelegramBot:
                         except Exception:
                             pass
                         raise ValueError("repair_failed")
-                elif parse_result is not None and parse_result.shaped is None:
+                else:
                     raise ValueError("repair_call_error")
             except Exception:
                 self.db.update_request_status(req_id, "error")
@@ -2364,7 +2386,7 @@ class TelegramBot:
             msg_any: Any = message
             if parse_mode:
                 await msg_any.reply_text(text, parse_mode=parse_mode)
-            elif parse_result is not None and parse_result.shaped is None:
+            else:
                 await msg_any.reply_text(text)
             try:
                 logger.debug("reply_text_sent", extra={"length": len(text)})
@@ -2500,9 +2522,9 @@ class TelegramBot:
                 # Check if the result is actually serializable (not a MagicMock)
                 if isinstance(message_dict, dict):
                     raw_json = json.dumps(message_dict, ensure_ascii=False)
-                elif parse_result is not None and parse_result.shaped is None:
+                else:
                     raw_json = None
-            elif parse_result is not None and parse_result.shaped is None:
+            else:
                 raw_json = None
         except Exception:
             raw_json = None

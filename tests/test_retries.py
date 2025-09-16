@@ -57,7 +57,7 @@ class TestRetries(unittest.IsolatedAsyncioTestCase):
             def _make_or_client(*args, **kwargs):
                 return _SeqAsyncClient(handler)
 
-            or_httpx.AsyncClient = cast(Any, _make_or_client)
+            setattr(or_httpx, "AsyncClient", cast(Any, _make_or_client))
             client = OpenRouterClient(
                 api_key="k",
                 model="primary/model",
@@ -74,9 +74,9 @@ class TestRetries(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(res.model, "fallback/model")
             self.assertIsNotNone(res.response_text)
         finally:
-            or_httpx.AsyncClient = cast(Any, original)
+            setattr(or_httpx, "AsyncClient", cast(Any, original))
 
-    async def test_structured_output_parse_error_returns_response_without_fallback(self):
+    async def test_structured_output_parse_error_returns_response_without_fallback(self) -> None:
         attempts: list[str] = []
 
         async def handler(url, headers, payload):
@@ -106,7 +106,7 @@ class TestRetries(unittest.IsolatedAsyncioTestCase):
             def _make_or_client(*args, **kwargs):
                 return _SeqAsyncClient(handler)
 
-            or_httpx.AsyncClient = cast(Any, _make_or_client)
+            setattr(or_httpx, "AsyncClient", cast(Any, _make_or_client))
             client = OpenRouterClient(
                 api_key="k",
                 model="primary/model",
@@ -128,7 +128,7 @@ class TestRetries(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(res.response_text, "not json")
             self.assertEqual(attempts, ["primary/model"])
         finally:
-            or_httpx.AsyncClient = cast(Any, original)
+            setattr(or_httpx, "AsyncClient", cast(Any, original))
 
     async def test_firecrawl_retries_then_success(self):
         attempts = {"n": 0}
