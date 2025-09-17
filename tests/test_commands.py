@@ -3,7 +3,7 @@ import tempfile
 import unittest
 from typing import Any
 
-from app.adapters.telegram_bot import TelegramBot
+from app.adapters.telegram.telegram_bot import TelegramBot
 from app.config import AppConfig, FirecrawlConfig, OpenRouterConfig, RuntimeConfig, TelegramConfig
 from app.db.database import Database
 

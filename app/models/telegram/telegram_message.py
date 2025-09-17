@@ -1,4 +1,4 @@
-"""Telegram message data models and validation based on official Telegram Bot API."""
+"""Telegram Message model with comprehensive validation."""
 
 from __future__ import annotations
 
@@ -8,249 +8,12 @@ from datetime import datetime
 from enum import Enum
 from typing import Any
 
+from app.models.telegram.telegram_chat import TelegramChat
+from app.models.telegram.telegram_entity import MessageEntity
+from app.models.telegram.telegram_enums import MediaType
+from app.models.telegram.telegram_user import TelegramUser
+
 logger = logging.getLogger(__name__)
-
-
-class ChatType(Enum):
-    """Telegram chat types."""
-
-    PRIVATE = "private"
-    GROUP = "group"
-    SUPERGROUP = "supergroup"
-    CHANNEL = "channel"
-
-
-class MessageEntityType(Enum):
-    """Telegram message entity types."""
-
-    MENTION = "mention"
-    HASHTAG = "hashtag"
-    CASHTAG = "cashtag"
-    BOT_COMMAND = "bot_command"
-    URL = "url"
-    EMAIL = "email"
-    PHONE_NUMBER = "phone_number"
-    BOLD = "bold"
-    ITALIC = "italic"
-    UNDERLINE = "underline"
-    STRIKETHROUGH = "strikethrough"
-    SPOILER = "spoiler"
-    CODE = "code"
-    PRE = "pre"
-    TEXT_LINK = "text_link"
-    TEXT_MENTION = "text_mention"
-    CUSTOM_EMOJI = "custom_emoji"
-
-
-class MediaType(Enum):
-    """Telegram media types."""
-
-    PHOTO = "photo"
-    VIDEO = "video"
-    AUDIO = "audio"
-    DOCUMENT = "document"
-    STICKER = "sticker"
-    VOICE = "voice"
-    VIDEO_NOTE = "video_note"
-    ANIMATION = "animation"
-    CONTACT = "contact"
-    LOCATION = "location"
-    VENUE = "venue"
-    POLL = "poll"
-    DICE = "dice"
-    GAME = "game"
-    INVOICE = "invoice"
-    SUCCESSFUL_PAYMENT = "successful_payment"
-    STORY = "story"
-
-
-@dataclass
-class TelegramUser:
-    """Telegram User object."""
-
-    id: int
-    is_bot: bool
-    first_name: str
-    last_name: str | None = None
-    username: str | None = None
-    language_code: str | None = None
-    is_premium: bool | None = None
-    added_to_attachment_menu: bool | None = None
-
-    @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> TelegramUser:
-        """Create TelegramUser from dictionary."""
-        # Ensure ID is always an integer
-        user_id = data.get("id", 0)
-        try:
-            user_id = int(user_id)
-        except (ValueError, TypeError):
-            user_id = 0
-
-        return cls(
-            id=user_id,
-            is_bot=data.get("is_bot", False),
-            first_name=data.get("first_name", ""),
-            last_name=data.get("last_name"),
-            username=data.get("username"),
-            language_code=data.get("language_code"),
-            is_premium=data.get("is_premium"),
-            added_to_attachment_menu=data.get("added_to_attachment_menu"),
-        )
-
-
-@dataclass
-class TelegramChat:
-    """Telegram Chat object."""
-
-    id: int
-    type: ChatType
-    title: str | None = None
-    username: str | None = None
-    first_name: str | None = None
-    last_name: str | None = None
-    is_forum: bool | None = None
-    photo: dict[str, Any] | None = None
-    active_usernames: list[str] | None = None
-    emoji_status_custom_emoji_id: str | None = None
-    bio: str | None = None
-    has_private_forwards: bool | None = None
-    has_restricted_voice_and_video_messages: bool | None = None
-    join_to_send_messages: bool | None = None
-    join_by_request: bool | None = None
-    description: str | None = None
-    invite_link: str | None = None
-    pinned_message: dict[str, Any] | None = None
-    permissions: dict[str, Any] | None = None
-    slow_mode_delay: int | None = None
-    message_auto_delete_time: int | None = None
-    has_aggressive_anti_spam_enabled: bool | None = None
-    has_hidden_members: bool | None = None
-    has_protected_content: bool | None = None
-    sticker_set_name: str | None = None
-    can_set_sticker_set: bool | None = None
-    linked_chat_id: int | None = None
-    location: dict[str, Any] | None = None
-
-    @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> TelegramChat:
-        """Create TelegramChat from dictionary."""
-        # Handle chat type conversion more robustly
-        chat_type_str = data.get("type", "private")
-        try:
-            # Handle both string values and enum objects
-            if hasattr(chat_type_str, "value"):
-                chat_type_str = chat_type_str.value
-            elif hasattr(chat_type_str, "name"):
-                chat_type_str = chat_type_str.name.lower()
-
-            # Convert to our enum
-            chat_type = ChatType(chat_type_str.lower())
-        except (ValueError, AttributeError):
-            # Fallback to private if type is unknown
-            chat_type = ChatType.PRIVATE
-
-        return cls(
-            id=data.get("id", 0),
-            type=chat_type,
-            title=data.get("title"),
-            username=data.get("username"),
-            first_name=data.get("first_name"),
-            last_name=data.get("last_name"),
-            is_forum=data.get("is_forum"),
-            photo=data.get("photo"),
-            active_usernames=data.get("active_usernames"),
-            emoji_status_custom_emoji_id=data.get("emoji_status_custom_emoji_id"),
-            bio=data.get("bio"),
-            has_private_forwards=data.get("has_private_forwards"),
-            has_restricted_voice_and_video_messages=data.get(
-                "has_restricted_voice_and_video_messages"
-            ),
-            join_to_send_messages=data.get("join_to_send_messages"),
-            join_by_request=data.get("join_by_request"),
-            description=data.get("description"),
-            invite_link=data.get("invite_link"),
-            pinned_message=data.get("pinned_message"),
-            permissions=data.get("permissions"),
-            slow_mode_delay=data.get("slow_mode_delay"),
-            message_auto_delete_time=data.get("message_auto_delete_time"),
-            has_aggressive_anti_spam_enabled=data.get("has_aggressive_anti_spam_enabled"),
-            has_hidden_members=data.get("has_hidden_members"),
-            has_protected_content=data.get("has_protected_content"),
-            sticker_set_name=data.get("sticker_set_name"),
-            can_set_sticker_set=data.get("can_set_sticker_set"),
-            linked_chat_id=data.get("linked_chat_id"),
-            location=data.get("location"),
-        )
-
-
-@dataclass
-class MessageEntity:
-    """Telegram MessageEntity object."""
-
-    type: MessageEntityType
-    offset: int
-    length: int
-    url: str | None = None
-    user: TelegramUser | None = None
-    language: str | None = None
-    custom_emoji_id: str | None = None
-
-    @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> MessageEntity:
-        """Create MessageEntity from dictionary."""
-        # Handle entity type conversion more robustly
-        entity_type_str = data.get("type", "mention")
-        try:
-            # Handle both string values and enum objects
-            if hasattr(entity_type_str, "value"):
-                entity_type_str = entity_type_str.value
-            elif hasattr(entity_type_str, "name"):
-                entity_type_str = entity_type_str.name.lower()
-
-            # Convert to our enum
-            entity_type = MessageEntityType(entity_type_str.lower())
-        except (ValueError, AttributeError):
-            # Fallback to mention if type is unknown
-            entity_type = MessageEntityType.MENTION
-
-        user_data = data.get("user")
-        user = TelegramUser.from_dict(user_data) if user_data else None
-
-        return cls(
-            type=entity_type,
-            offset=data.get("offset", 0),
-            length=data.get("length", 0),
-            url=data.get("url"),
-            user=user,
-            language=data.get("language"),
-            custom_emoji_id=data.get("custom_emoji_id"),
-        )
-
-
-@dataclass
-class ForwardInfo:
-    """Telegram forward information."""
-
-    from_chat: TelegramChat | None = None
-    from_message_id: int | None = None
-    signature: str | None = None
-    sender_name: str | None = None
-    date: datetime | None = None
-
-    @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> ForwardInfo:
-        """Create ForwardInfo from dictionary."""
-        from_chat_data = data.get("from_chat")
-        from_chat = TelegramChat.from_dict(from_chat_data) if from_chat_data else None
-
-        return cls(
-            from_chat=from_chat,
-            from_message_id=data.get("from_message_id"),
-            signature=data.get("signature"),
-            sender_name=data.get("sender_name"),
-            date=data.get("date"),
-        )
 
 
 @dataclass
@@ -563,6 +326,89 @@ class TelegramMessage:
                 text=getattr(message, "text", None),
             )
 
+    def _set_computed_fields(self) -> None:
+        """Set computed fields based on message content."""
+        # Determine media type
+        if self.photo:
+            self.media_type = MediaType.PHOTO
+        elif self.video:
+            self.media_type = MediaType.VIDEO
+        elif self.audio:
+            self.media_type = MediaType.AUDIO
+        elif self.document:
+            self.media_type = MediaType.DOCUMENT
+        elif self.sticker:
+            self.media_type = MediaType.STICKER
+        elif self.voice:
+            self.media_type = MediaType.VOICE
+        elif self.video_note:
+            self.media_type = MediaType.VIDEO_NOTE
+        elif self.animation:
+            self.media_type = MediaType.ANIMATION
+        elif self.contact:
+            self.media_type = MediaType.CONTACT
+        elif self.location:
+            self.media_type = MediaType.LOCATION
+        elif self.venue:
+            self.media_type = MediaType.VENUE
+        elif self.poll:
+            self.media_type = MediaType.POLL
+        elif self.dice:
+            self.media_type = MediaType.DICE
+        elif self.game:
+            self.media_type = MediaType.GAME
+        elif self.invoice:
+            self.media_type = MediaType.INVOICE
+        elif self.successful_payment:
+            self.media_type = MediaType.SUCCESSFUL_PAYMENT
+        elif self.story:
+            self.media_type = MediaType.STORY
+
+        # Set boolean flags
+        self.is_forwarded = bool(
+            self.forward_from or self.forward_from_chat or self.forward_from_message_id
+        )
+        self.is_reply = bool(self.reply_to_message)
+        self.is_edited = bool(self.edit_date)
+        self.has_media = self.media_type is not None
+        self.has_text = bool(self.text and self.text.strip())
+        self.has_caption = bool(self.caption and self.caption.strip())
+
+    def get_effective_text(self) -> str | None:
+        """Get the effective text content (text or caption)."""
+        return self.text or self.caption
+
+    def get_effective_entities(self) -> list[MessageEntity]:
+        """Get the effective entities (text entities or caption entities)."""
+        if self.text and self.entities:
+            return self.entities
+        elif self.caption and self.caption_entities:
+            return self.caption_entities
+        return []
+
+    def is_command(self) -> bool:
+        """Check if message is a bot command."""
+        text = self.get_effective_text()
+        if not text:
+            return False
+        return text.startswith("/")
+
+    def get_command(self) -> str | None:
+        """Extract command from message text."""
+        text = self.get_effective_text()
+        if not text or not text.startswith("/"):
+            return None
+
+        # Extract command (first word without the /)
+        parts = text.split()
+        if parts:
+            command = parts[0]
+            # Handle @botname suffix
+            if "@" in command:
+                command = command.split("@")[0]
+            return command
+        return None
+
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for serialization."""
         result = {}
@@ -571,8 +417,7 @@ class TelegramMessage:
                 result[field_name] = field_value.value
             elif isinstance(field_value, datetime):
                 result[field_name] = field_value.isoformat()
-            elif isinstance(field_value, (TelegramUser, TelegramChat)):  # noqa: UP038
-                # noqa: UP038
+            elif isinstance(field_value, TelegramUser | TelegramChat):
                 result[field_name] = field_value.__dict__
             elif isinstance(field_value, list):
                 result[field_name] = [
@@ -581,49 +426,6 @@ class TelegramMessage:
             else:
                 result[field_name] = field_value
         return result
-
-    def validate(self) -> list[str]:
-        """Validate the message and return list of validation errors."""
-        errors = []
-
-        # Basic validation
-        if not self.message_id:
-            errors.append("Message ID is required")
-
-        if not self.from_user and not self.chat:
-            errors.append("Either from_user or chat must be present")
-
-        # Text validation
-        if not self.text and not self.caption and not self.has_media:
-            errors.append("Message must have text, caption, or media content")
-
-        # Entity validation
-        for entity in self.entities:
-            if entity.offset < 0:
-                errors.append(f"Entity offset must be non-negative, got {entity.offset}")
-            if entity.length <= 0:
-                errors.append(f"Entity length must be positive, got {entity.length}")
-            if self.text and entity.offset + entity.length > len(self.text):
-                errors.append("Entity extends beyond text length")
-
-        # Caption entity validation
-        for entity in self.caption_entities:
-            if entity.offset < 0:
-                errors.append(f"Caption entity offset must be non-negative, got {entity.offset}")
-            if entity.length <= 0:
-                errors.append(f"Caption entity length must be positive, got {entity.length}")
-            if self.caption and entity.offset + entity.length > len(self.caption):
-                errors.append("Caption entity extends beyond caption length")
-
-        # Media validation
-        if self.has_media and not self.media_type:
-            errors.append("Media type must be specified when media is present")
-
-        # Forward validation
-        if self.is_forwarded and not (self.forward_from or self.forward_from_chat):
-            errors.append("Forwarded message must have forward source")
-
-        return errors
 
     def get_media_info(self) -> dict[str, Any] | list[dict[str, Any]] | None:
         """Get media information based on media type."""
@@ -651,35 +453,7 @@ class TelegramMessage:
         }
 
         result = media_map.get(self.media_type)
-        return result if isinstance(result, (dict, list)) else None  # noqa: UP038  # noqa: UP038
-
-    def get_effective_text(self) -> str | None:
-        """Get the effective text content (text or caption)."""
-        return self.text or self.caption
-
-    def get_effective_entities(self) -> list[MessageEntity]:
-        """Get the effective entities (entities or caption_entities)."""
-        return self.entities if self.text else self.caption_entities
-
-    def is_command(self) -> bool:
-        """Check if message is a bot command."""
-        if not self.text:
-            return False
-
-        for entity in self.entities:
-            if entity.type == MessageEntityType.BOT_COMMAND:
-                return True
-        return False
-
-    def get_command(self) -> str | None:
-        """Get the bot command if present."""
-        if not self.text:
-            return None
-
-        for entity in self.entities:
-            if entity.type == MessageEntityType.BOT_COMMAND:
-                return self.text[entity.offset : entity.offset + entity.length]
-        return None
+        return result if isinstance(result, dict | list) else None
 
     def get_urls(self) -> list[str]:
         """Extract URLs from text and entities."""
@@ -687,6 +461,8 @@ class TelegramMessage:
 
         if not self.text:
             return urls
+
+        from app.core.telegram_enums import MessageEntityType
 
         for entity in self.entities:
             if entity.type in [MessageEntityType.URL, MessageEntityType.TEXT_LINK]:
@@ -700,3 +476,56 @@ class TelegramMessage:
                     urls.append(url.strip())
 
         return urls
+
+    def validate(self) -> list[str]:
+        """Validate message data and return list of validation errors."""
+        errors = []
+
+        # Basic validation
+        if not isinstance(self.message_id, int) or self.message_id <= 0:
+            errors.append("Message ID is required")
+
+        # User validation
+        if self.from_user:
+            if not isinstance(self.from_user.id, int) or self.from_user.id <= 0:
+                errors.append("Invalid from_user.id")
+            if not self.from_user.first_name:
+                errors.append("Missing from_user.first_name")
+
+        # Chat validation
+        if self.chat:
+            if not isinstance(self.chat.id, int):
+                errors.append("Invalid chat.id")
+
+        # Content validation
+        if not self.text and not self.caption and not self.has_media:
+            errors.append("Message must have text, caption, or media content")
+
+        # Entity validation
+        text_len = len(self.text or "")
+        for i, entity in enumerate(self.entities):
+            offset = entity.offset if isinstance(entity.offset, int) else -1
+            length = entity.length if isinstance(entity.length, int) else 0
+            end = offset + length
+
+            if offset < 0 or offset >= text_len:
+                errors.append(f"Entity {i} offset out of range")
+            if length <= 0:
+                errors.append(f"Entity {i} length invalid")
+            if end > text_len:
+                errors.append("Entity extends beyond text length")
+
+        caption_len = len(self.caption or "")
+        for i, entity in enumerate(self.caption_entities):
+            offset = entity.offset if isinstance(entity.offset, int) else -1
+            length = entity.length if isinstance(entity.length, int) else 0
+            end = offset + length
+
+            if offset < 0 or offset >= caption_len:
+                errors.append(f"Caption entity {i} offset out of range")
+            if length <= 0:
+                errors.append(f"Caption entity {i} length invalid")
+            if end > caption_len:
+                errors.append("Caption entity extends beyond text length")
+
+        return errors

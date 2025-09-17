@@ -3,8 +3,8 @@ import os
 import tempfile
 import unittest
 
-from app.adapters.openrouter_client import LLMCallResult
-from app.adapters.telegram_bot import TelegramBot
+from app.adapters.openrouter.openrouter_client import LLMCallResult
+from app.adapters.telegram.telegram_bot import TelegramBot
 from app.config import AppConfig, FirecrawlConfig, OpenRouterConfig, RuntimeConfig, TelegramConfig
 from app.core.url_utils import normalize_url, url_hash_sha256
 from app.db.database import Database

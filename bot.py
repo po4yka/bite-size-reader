@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import logging
 
-from app.adapters.telegram_bot import TelegramBot
+from app.adapters.telegram.telegram_bot import TelegramBot
 from app.config import load_config
 from app.db.database import Database
 
