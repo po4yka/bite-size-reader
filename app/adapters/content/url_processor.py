@@ -4,15 +4,15 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import TYPE_CHECKING, Any
 from collections.abc import Callable
+from typing import TYPE_CHECKING, Any
 
 from app.adapters.content.content_chunker import ContentChunker
 from app.adapters.content.content_extractor import ContentExtractor
-from app.adapters.external.firecrawl_parser import FirecrawlClient
 from app.adapters.content.llm_summarizer import LLMSummarizer
-from app.adapters.telegram.message_persistence import MessagePersistence
+from app.adapters.external.firecrawl_parser import FirecrawlClient
 from app.adapters.openrouter.openrouter_client import OpenRouterClient
+from app.adapters.telegram.message_persistence import MessagePersistence
 from app.config import AppConfig
 from app.core.lang import choose_language
 from app.db.database import Database

@@ -14,9 +14,9 @@ from app.config import AppConfig
 from app.db.database import Database
 
 if TYPE_CHECKING:
-    from app.adapters.telegram.forward_processor import ForwardProcessor
-    from app.adapters.external.response_formatter import ResponseFormatter
     from app.adapters.content.url_processor import URLProcessor
+    from app.adapters.external.response_formatter import ResponseFormatter
+    from app.adapters.telegram.forward_processor import ForwardProcessor
 
 logger = logging.getLogger(__name__)
 

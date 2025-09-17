@@ -4,16 +4,16 @@ from __future__ import annotations
 
 import logging
 import time
-from typing import TYPE_CHECKING, Any
 from collections.abc import Callable
+from typing import TYPE_CHECKING, Any
 
 from app.config import AppConfig
 from app.core.logging_utils import generate_correlation_id
 from app.core.url_utils import extract_all_urls
 
 if TYPE_CHECKING:
-    from app.adapters.external.response_formatter import ResponseFormatter
     from app.adapters.content.url_processor import URLProcessor
+    from app.adapters.external.response_formatter import ResponseFormatter
 
 logger = logging.getLogger(__name__)
 

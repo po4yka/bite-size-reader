@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
 from collections.abc import Callable
+from typing import TYPE_CHECKING, Any
 
 from app.adapters.telegram.forward_content_processor import ForwardContentProcessor
 from app.adapters.telegram.forward_summarizer import ForwardSummarizer
@@ -11,8 +11,8 @@ from app.config import AppConfig
 from app.db.database import Database
 
 if TYPE_CHECKING:
-    from app.adapters.openrouter.openrouter_client import OpenRouterClient
     from app.adapters.external.response_formatter import ResponseFormatter
+    from app.adapters.openrouter.openrouter_client import OpenRouterClient
 
 
 class ForwardProcessor:

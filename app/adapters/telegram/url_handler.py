@@ -10,8 +10,8 @@ from app.core.logging_utils import generate_correlation_id
 from app.core.url_utils import extract_all_urls
 
 if TYPE_CHECKING:
-    from app.adapters.external.response_formatter import ResponseFormatter
     from app.adapters.content.url_processor import URLProcessor
+    from app.adapters.external.response_formatter import ResponseFormatter
 
 logger = logging.getLogger(__name__)
 

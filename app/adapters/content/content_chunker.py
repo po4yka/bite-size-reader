@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import TYPE_CHECKING, Any
 from collections.abc import Callable
+from typing import TYPE_CHECKING, Any
 
 from app.config import AppConfig
 from app.core.html_utils import chunk_sentences, split_sentences
@@ -14,8 +14,8 @@ from app.core.summary_aggregate import aggregate_chunk_summaries
 from app.core.summary_contract import validate_and_shape_summary
 
 if TYPE_CHECKING:
-    from app.adapters.openrouter.openrouter_client import OpenRouterClient
     from app.adapters.external.response_formatter import ResponseFormatter
+    from app.adapters.openrouter.openrouter_client import OpenRouterClient
 
 logger = logging.getLogger(__name__)
 

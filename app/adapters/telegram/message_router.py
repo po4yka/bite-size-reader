@@ -4,20 +4,20 @@ from __future__ import annotations
 
 import logging
 import time
-from typing import TYPE_CHECKING, Any
 from collections.abc import Callable
+from typing import TYPE_CHECKING, Any
 
 from app.config import AppConfig
 from app.core.logging_utils import generate_correlation_id
-from app.models.telegram.telegram_models import TelegramMessage
 from app.core.url_utils import extract_all_urls, looks_like_url
 from app.db.database import Database
+from app.models.telegram.telegram_models import TelegramMessage
 
 if TYPE_CHECKING:
+    from app.adapters.external.response_formatter import ResponseFormatter
     from app.adapters.telegram.access_controller import AccessController
     from app.adapters.telegram.command_processor import CommandProcessor
     from app.adapters.telegram.forward_processor import ForwardProcessor
-    from app.adapters.external.response_formatter import ResponseFormatter
     from app.adapters.telegram.url_handler import URLHandler
 
 logger = logging.getLogger(__name__)

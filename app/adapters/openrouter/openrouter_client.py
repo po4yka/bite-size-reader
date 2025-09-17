@@ -9,11 +9,11 @@ from typing import Any
 import httpx
 
 from app.adapters.openrouter.error_handler import ErrorHandler
-from app.models.llm.llm_models import ChatRequest, LLMCallResult
 from app.adapters.openrouter.model_capabilities import ModelCapabilities
 from app.adapters.openrouter.payload_logger import PayloadLogger
 from app.adapters.openrouter.request_builder import RequestBuilder
 from app.adapters.openrouter.response_processor import ResponseProcessor
+from app.models.llm.llm_models import ChatRequest, LLMCallResult
 
 
 class OpenRouterClient:

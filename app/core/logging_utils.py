@@ -6,11 +6,11 @@ import os
 import sys
 import time
 import uuid
+from collections.abc import Callable, Generator
 from contextlib import contextmanager
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 from functools import wraps
 from typing import Any, TypeVar
-from collections.abc import Callable, Generator
 
 try:  # Optional: modern logging via loguru
     from loguru import logger as loguru_logger

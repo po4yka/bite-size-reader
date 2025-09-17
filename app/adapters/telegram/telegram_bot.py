@@ -7,13 +7,13 @@ import logging
 import os
 from dataclasses import dataclass
 
+from app.adapters.content.url_processor import URLProcessor
 from app.adapters.external.firecrawl_parser import FirecrawlClient
+from app.adapters.external.response_formatter import ResponseFormatter
+from app.adapters.openrouter.openrouter_client import OpenRouterClient
 from app.adapters.telegram.forward_processor import ForwardProcessor
 from app.adapters.telegram.message_handler import MessageHandler
-from app.adapters.openrouter.openrouter_client import OpenRouterClient
-from app.adapters.external.response_formatter import ResponseFormatter
 from app.adapters.telegram.telegram_client import TelegramClient
-from app.adapters.content.url_processor import URLProcessor
 from app.config import AppConfig
 from app.core.logging_utils import setup_json_logging
 from app.db.database import Database

@@ -5,8 +5,8 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-from typing import TYPE_CHECKING, Any
 from collections.abc import Callable
+from typing import TYPE_CHECKING, Any
 
 from app.config import AppConfig
 from app.core.json_utils import extract_json
@@ -16,8 +16,8 @@ from app.db.database import Database
 from app.utils.json_validation import parse_summary_response
 
 if TYPE_CHECKING:
-    from app.adapters.openrouter.openrouter_client import OpenRouterClient
     from app.adapters.external.response_formatter import ResponseFormatter
+    from app.adapters.openrouter.openrouter_client import OpenRouterClient
 
 logger = logging.getLogger(__name__)
 
