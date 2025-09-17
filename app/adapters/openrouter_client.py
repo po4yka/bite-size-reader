@@ -199,16 +199,15 @@ class OpenRouterClient:
         # Fallback to known models list
         return model in self._known_structured_models
 
-    def _build_response_format(self, response_format: dict[str, Any] | None, mode: str) -> dict[str, Any] | None:
+    def _build_response_format(
+        self, response_format: dict[str, Any] | None, mode: str
+    ) -> dict[str, Any] | None:
         """Build response format based on mode and input."""
         if not response_format or not self._enable_structured_outputs:
             return None
 
         if mode == "json_schema" and "schema" in response_format:
-            return {
-                "type": "json_schema",
-                "json_schema": response_format
-            }
+            return {"type": "json_schema", "json_schema": response_format}
         elif mode == "json_object" or "schema" not in response_format:
             return {"type": "json_object"}
         else:
@@ -352,10 +351,11 @@ class OpenRouterClient:
         models_to_try = [primary_model] + self._fallback_models
 
         # Add structured output fallbacks if needed
-        if (response_format is not None and
-            self._enable_structured_outputs and
-            self._is_reasoning_heavy_model(primary_model)):
-
+        if (
+            response_format is not None
+            and self._enable_structured_outputs
+            and self._is_reasoning_heavy_model(primary_model)
+        ):
             safe_models = self._get_safe_structured_fallbacks()
             for safe_model in safe_models:
                 if safe_model not in models_to_try:
@@ -525,7 +525,11 @@ class OpenRouterClient:
                                     )
                                 self._logger.warning(
                                     "downgrade_response_format",
-                                    extra={"model": model, "from": "json_schema", "to": "json_object"}
+                                    extra={
+                                        "model": model,
+                                        "from": "json_schema",
+                                        "to": "json_object",
+                                    },
                                 )
                                 if attempt < self._max_retries:
                                     await self._sleep_backoff(attempt)
@@ -590,10 +594,11 @@ class OpenRouterClient:
                                     last_response_text = text_str
                             else:
                                 # Invalid JSON with structured outputs - try fallback
-                                if (self._auto_fallback_structured and
-                                    rf_mode_current == "json_schema" and
-                                    attempt < self._max_retries):
-
+                                if (
+                                    self._auto_fallback_structured
+                                    and rf_mode_current == "json_schema"
+                                    and attempt < self._max_retries
+                                ):
                                     rf_mode_current = "json_object"
                                     if self._audit:
                                         self._audit(
@@ -671,8 +676,14 @@ class OpenRouterClient:
                                 },
                             )
                         return self._build_error_result(
-                            last_model_reported, text, data, usage, latency,
-                            error_message, redacted_headers, messages
+                            last_model_reported,
+                            text,
+                            data,
+                            usage,
+                            latency,
+                            error_message,
+                            redacted_headers,
+                            messages,
                         )
 
                     # 404: Try next model if available
@@ -682,7 +693,9 @@ class OpenRouterClient:
                         if self._audit:
                             self._audit(
                                 "ERROR" if not has_more_models else "WARN",
-                                "openrouter_not_found_try_fallback" if has_more_models else "openrouter_error",
+                                "openrouter_not_found_try_fallback"
+                                if has_more_models
+                                else "openrouter_error",
                                 {
                                     "attempt": attempt,
                                     "model": model,
@@ -695,8 +708,14 @@ class OpenRouterClient:
                             break  # Try next model
 
                         return self._build_error_result(
-                            last_model_reported, text, data, usage, latency,
-                            error_message, redacted_headers, messages
+                            last_model_reported,
+                            text,
+                            data,
+                            usage,
+                            latency,
+                            error_message,
+                            redacted_headers,
+                            messages,
                         )
 
                     # Retryable errors (429, 5xx)
@@ -732,8 +751,14 @@ class OpenRouterClient:
                             },
                         )
                     return self._build_error_result(
-                        last_model_reported, text, data, usage, latency,
-                        error_message, redacted_headers, messages
+                        last_model_reported,
+                        text,
+                        data,
+                        usage,
+                        latency,
+                        error_message,
+                        redacted_headers,
+                        messages,
                     )
 
                 except Exception as e:
@@ -742,7 +767,7 @@ class OpenRouterClient:
                     last_error_text = str(e)
                     self._logger.error(
                         "openrouter_exception",
-                        extra={"error": str(e), "attempt": attempt, "model": model}
+                        extra={"error": str(e), "attempt": attempt, "model": model},
                     )
                     if attempt < self._max_retries:
                         await self._sleep_backoff(attempt)
@@ -940,11 +965,7 @@ class OpenRouterClient:
                 for item in data_array:
                     try:
                         if isinstance(item, dict):
-                            model_id = (
-                                item.get("id") or
-                                item.get("name") or
-                                item.get("model")
-                            )
+                            model_id = item.get("id") or item.get("name") or item.get("model")
                             if isinstance(model_id, str) and model_id:
                                 models.add(model_id)
                     except Exception:
@@ -954,7 +975,7 @@ class OpenRouterClient:
                     self._structured_supported_models = models
                     self._logger.debug(
                         "structured_outputs_capabilities_loaded",
-                        extra={"models_count": len(models)}
+                        extra={"models_count": len(models)},
                     )
                 else:
                     # Keep existing cache or use known models as fallback
@@ -962,7 +983,7 @@ class OpenRouterClient:
                         self._structured_supported_models = self._known_structured_models.copy()
                         self._logger.warning(
                             "using_fallback_structured_models",
-                            extra={"models_count": len(self._structured_supported_models)}
+                            extra={"models_count": len(self._structured_supported_models)},
                         )
 
                 self._capabilities_last_load = now
@@ -975,7 +996,7 @@ class OpenRouterClient:
 
             self._logger.warning(
                 "openrouter_capabilities_probe_failed",
-                extra={"error": str(e), "using_fallback": True}
+                extra={"error": str(e), "using_fallback": True},
             )
 
     async def get_models(self) -> dict:
