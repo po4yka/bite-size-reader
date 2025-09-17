@@ -90,13 +90,11 @@ class TelegramMessage:
 
             # Extract user information
             from_user_data = getattr(message, "from_user", None)
-            from_user = TelegramUser.from_dict(
-                from_user_data.__dict__) if from_user_data else None
+            from_user = TelegramUser.from_dict(from_user_data.__dict__) if from_user_data else None
 
             # Extract chat information
             chat_data = getattr(message, "chat", None)
-            chat = TelegramChat.from_dict(
-                chat_data.__dict__) if chat_data else None
+            chat = TelegramChat.from_dict(chat_data.__dict__) if chat_data else None
 
             # Extract text content
             text = getattr(message, "text", None)
@@ -107,25 +105,19 @@ class TelegramMessage:
             entities_data = getattr(message, "entities", []) or []
             for entity in entities_data:
                 try:
-                    entity_dict = entity.__dict__ if hasattr(
-                        entity, "__dict__") else {}
+                    entity_dict = entity.__dict__ if hasattr(entity, "__dict__") else {}
                     entities.append(MessageEntity.from_dict(entity_dict))
                 except Exception as e:
-                    logger.warning("Failed to parse entity",
-                                   extra={"error": str(e)})
+                    logger.warning("Failed to parse entity", extra={"error": str(e)})
 
             caption_entities = []
-            caption_entities_data = getattr(
-                message, "caption_entities", []) or []
+            caption_entities_data = getattr(message, "caption_entities", []) or []
             for entity in caption_entities_data:
                 try:
-                    entity_dict = entity.__dict__ if hasattr(
-                        entity, "__dict__") else {}
-                    caption_entities.append(
-                        MessageEntity.from_dict(entity_dict))
+                    entity_dict = entity.__dict__ if hasattr(entity, "__dict__") else {}
+                    caption_entities.append(MessageEntity.from_dict(entity_dict))
                 except Exception as e:
-                    logger.warning("Failed to parse caption entity", extra={
-                                   "error": str(e)})
+                    logger.warning("Failed to parse caption entity", extra={"error": str(e)})
 
             # Extract media information
             photo = getattr(message, "photo", None)
@@ -149,8 +141,7 @@ class TelegramMessage:
             # Extract forward information
             forward_from = getattr(message, "forward_from", None)
             forward_from_chat = getattr(message, "forward_from_chat", None)
-            forward_from_message_id = getattr(
-                message, "forward_from_message_id", None)
+            forward_from_message_id = getattr(message, "forward_from_message_id", None)
             forward_signature = getattr(message, "forward_signature", None)
             forward_sender_name = getattr(message, "forward_sender_name", None)
             forward_date = getattr(message, "forward_date", None)
@@ -161,21 +152,17 @@ class TelegramMessage:
             media_group_id = getattr(message, "media_group_id", None)
             author_signature = getattr(message, "author_signature", None)
             via_bot = getattr(message, "via_bot", None)
-            has_protected_content = getattr(
-                message, "has_protected_content", None)
+            has_protected_content = getattr(message, "has_protected_content", None)
             connected_website = getattr(message, "connected_website", None)
             reply_markup = getattr(message, "reply_markup", None)
             views = getattr(message, "views", None)
             via_bot_user_id = getattr(message, "via_bot_user_id", None)
             effect_id = getattr(message, "effect_id", None)
-            link_preview_options = getattr(
-                message, "link_preview_options", None)
-            show_caption_above_media = getattr(
-                message, "show_caption_above_media", None)
+            link_preview_options = getattr(message, "link_preview_options", None)
+            show_caption_above_media = getattr(message, "show_caption_above_media", None)
 
             # Convert media objects to dictionaries for serialization
-            photo_list = [
-                photo_size.__dict__ for photo_size in photo] if photo else None
+            photo_list = [photo_size.__dict__ for photo_size in photo] if photo else None
             video_dict = video.__dict__ if video else None
             audio_dict = audio.__dict__ if audio else None
             document_dict = document.__dict__ if document else None
@@ -195,15 +182,12 @@ class TelegramMessage:
 
             # Convert user objects
             forward_from_user = (
-                TelegramUser.from_dict(
-                    forward_from.__dict__) if forward_from else None
+                TelegramUser.from_dict(forward_from.__dict__) if forward_from else None
             )
             forward_from_chat_obj = (
-                TelegramChat.from_dict(
-                    forward_from_chat.__dict__) if forward_from_chat else None
+                TelegramChat.from_dict(forward_from_chat.__dict__) if forward_from_chat else None
             )
-            via_bot_user = TelegramUser.from_dict(
-                via_bot.__dict__) if via_bot else None
+            via_bot_user = TelegramUser.from_dict(via_bot.__dict__) if via_bot else None
 
             # Convert reply message
             reply_to_message_dict = reply_to_message.__dict__ if reply_to_message else None
@@ -308,8 +292,7 @@ class TelegramMessage:
             )
 
         except Exception as e:
-            logger.error("Failed to parse Telegram message",
-                         extra={"error": str(e)})
+            logger.error("Failed to parse Telegram message", extra={"error": str(e)})
             # Return minimal message object with best-effort user extraction
             from_user_data = getattr(message, "from_user", None)
             from_user = None
@@ -321,12 +304,10 @@ class TelegramMessage:
                         from_user = TelegramUser(
                             id=int(user_id),
                             is_bot=getattr(from_user_data, "is_bot", False),
-                            first_name=getattr(
-                                from_user_data, "first_name", ""),
+                            first_name=getattr(from_user_data, "first_name", ""),
                             last_name=getattr(from_user_data, "last_name"),
                             username=getattr(from_user_data, "username"),
-                            language_code=getattr(
-                                from_user_data, "language_code"),
+                            language_code=getattr(from_user_data, "language_code"),
                             is_premium=getattr(from_user_data, "is_premium"),
                             added_to_attachment_menu=getattr(
                                 from_user_data, "added_to_attachment_menu"
@@ -487,8 +468,7 @@ class TelegramMessage:
             if entity.type in [MessageEntityType.URL, MessageEntityType.TEXT_LINK]:
                 if entity.type == MessageEntityType.URL:
                     # Extract URL from text using entity bounds
-                    url = self.text[entity.offset: entity.offset +
-                                    entity.length]
+                    url = self.text[entity.offset : entity.offset + entity.length]
                 else:  # TEXT_LINK
                     # Use the URL from the entity
                     url = entity.url or ""

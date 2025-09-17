@@ -69,8 +69,7 @@ class TelegramChat:
             is_forum=data.get("is_forum"),
             photo=data.get("photo"),
             active_usernames=data.get("active_usernames"),
-            emoji_status_custom_emoji_id=data.get(
-                "emoji_status_custom_emoji_id"),
+            emoji_status_custom_emoji_id=data.get("emoji_status_custom_emoji_id"),
             bio=data.get("bio"),
             has_private_forwards=data.get("has_private_forwards"),
             has_restricted_voice_and_video_messages=data.get(
@@ -84,8 +83,7 @@ class TelegramChat:
             permissions=data.get("permissions"),
             slow_mode_delay=data.get("slow_mode_delay"),
             message_auto_delete_time=data.get("message_auto_delete_time"),
-            has_aggressive_anti_spam_enabled=data.get(
-                "has_aggressive_anti_spam_enabled"),
+            has_aggressive_anti_spam_enabled=data.get("has_aggressive_anti_spam_enabled"),
             has_hidden_members=data.get("has_hidden_members"),
             has_protected_content=data.get("has_protected_content"),
             sticker_set_name=data.get("sticker_set_name"),

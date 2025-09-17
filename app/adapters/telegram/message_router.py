@@ -76,8 +76,7 @@ class MessageRouter:
                 uid = int(uid)
             except (ValueError, TypeError):
                 uid = 0
-                logger.warning(
-                    f"Invalid user ID type: {type(uid)}, setting to 0")
+                logger.warning(f"Invalid user ID type: {type(uid)}, setting to 0")
 
             logger.info(f"Checking access for UID: {uid} (type: {type(uid)})")
             logger.info(
@@ -150,8 +149,7 @@ class MessageRouter:
         except Exception as e:  # noqa: BLE001
             logger.exception("handler_error", extra={"cid": correlation_id})
             try:
-                self._audit("ERROR", "unhandled_error", {
-                            "cid": correlation_id, "error": str(e)})
+                self._audit("ERROR", "unhandled_error", {"cid": correlation_id, "error": str(e)})
             except Exception:
                 pass
             await self.response_formatter.safe_reply(
@@ -203,8 +201,7 @@ class MessageRouter:
                 message, text, uid, correlation_id, interaction_id, start_time
             )
             if action == "multi_confirm":
-                self.url_handler.add_pending_multi_links(
-                    uid, extract_all_urls(text))
+                self.url_handler.add_pending_multi_links(uid, extract_all_urls(text))
             elif action == "awaiting_url":
                 self.url_handler.add_awaiting_user(uid)
             return
@@ -303,6 +300,5 @@ class MessageRouter:
         # The current database schema doesn't include user_interactions table
         logger.debug(
             "user_interaction_update_placeholder",
-            extra={"interaction_id": interaction_id,
-                   "response_type": response_type},
+            extra={"interaction_id": interaction_id, "response_type": response_type},
         )

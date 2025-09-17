@@ -23,8 +23,7 @@ class ForwardInfo:
     def from_dict(cls, data: dict[str, Any]) -> ForwardInfo:
         """Create ForwardInfo from dictionary."""
         from_chat_data = data.get("from_chat")
-        from_chat = TelegramChat.from_dict(
-            from_chat_data) if from_chat_data else None
+        from_chat = TelegramChat.from_dict(from_chat_data) if from_chat_data else None
 
         return cls(
             from_chat=from_chat,
