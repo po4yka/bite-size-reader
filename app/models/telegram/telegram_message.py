@@ -402,7 +402,7 @@ class TelegramMessage:
         # Extract command (first word without the /)
         parts = text.split()
         if parts:
-            command = parts[0][1:]  # Remove the /
+            command = parts[0]
             # Handle @botname suffix
             if "@" in command:
                 command = command.split("@")[0]
@@ -483,7 +483,7 @@ class TelegramMessage:
 
         # Basic validation
         if not isinstance(self.message_id, int) or self.message_id <= 0:
-            errors.append("Invalid message_id")
+            errors.append("Message ID is required")
 
         # User validation
         if self.from_user:
@@ -499,21 +499,33 @@ class TelegramMessage:
 
         # Content validation
         if not self.text and not self.caption and not self.has_media:
-            errors.append("Message has no content (text, caption, or media)")
+            errors.append("Message must have text, caption, or media content")
 
         # Entity validation
         text_len = len(self.text or "")
         for i, entity in enumerate(self.entities):
-            if entity.offset < 0 or entity.offset >= text_len:
+            offset = entity.offset if isinstance(entity.offset, int) else -1
+            length = entity.length if isinstance(entity.length, int) else 0
+            end = offset + length
+
+            if offset < 0 or offset >= text_len:
                 errors.append(f"Entity {i} offset out of range")
-            if entity.length <= 0 or (entity.offset + entity.length) > text_len:
+            if length <= 0:
                 errors.append(f"Entity {i} length invalid")
+            if end > text_len:
+                errors.append("Entity extends beyond text length")
 
         caption_len = len(self.caption or "")
         for i, entity in enumerate(self.caption_entities):
-            if entity.offset < 0 or entity.offset >= caption_len:
+            offset = entity.offset if isinstance(entity.offset, int) else -1
+            length = entity.length if isinstance(entity.length, int) else 0
+            end = offset + length
+
+            if offset < 0 or offset >= caption_len:
                 errors.append(f"Caption entity {i} offset out of range")
-            if entity.length <= 0 or (entity.offset + entity.length) > caption_len:
+            if length <= 0:
                 errors.append(f"Caption entity {i} length invalid")
+            if end > caption_len:
+                errors.append("Caption entity extends beyond text length")
 
         return errors

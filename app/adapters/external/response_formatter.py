@@ -4,6 +4,7 @@ from __future__ import annotations
 import io
 import json
 import logging
+from collections.abc import Awaitable, Callable
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -11,6 +12,18 @@ logger = logging.getLogger(__name__)
 
 class ResponseFormatter:
     """Handles message formatting and replies to Telegram users."""
+
+    def __init__(
+        self,
+        safe_reply_func: Callable[[Any, str], Awaitable[None]] | None = None,
+        reply_json_func: Callable[[Any, dict], Awaitable[None]] | None = None,
+    ) -> None:
+        # Optional callbacks allow the TelegramBot compatibility layer to
+        # intercept replies during unit tests without duplicating formatter
+        # logic. The callbacks are expected to be awaitable and accept the
+        # same arguments as ``safe_reply`` / ``reply_json`` respectively.
+        self._safe_reply_func = safe_reply_func
+        self._reply_json_func = reply_json_func
 
     async def send_help(self, message: Any) -> None:
         """Send help message to user."""
@@ -163,6 +176,10 @@ class ResponseFormatter:
 
     async def reply_json(self, message: Any, obj: dict) -> None:
         """Reply with JSON object, using file upload for large content."""
+        if self._reply_json_func is not None:
+            await self._reply_json_func(message, obj)
+            return
+
         pretty = json.dumps(obj, ensure_ascii=False, indent=2)
         # Send large JSON as a file to avoid Telegram message size limits
         if len(pretty) > 3500:
@@ -178,6 +195,11 @@ class ResponseFormatter:
 
     async def safe_reply(self, message: Any, text: str, *, parse_mode: str | None = None) -> None:
         """Safely reply to a message with error handling."""
+        if self._safe_reply_func is not None:
+            kwargs = {"parse_mode": parse_mode} if parse_mode is not None else {}
+            await self._safe_reply_func(message, text, **kwargs)
+            return
+
         try:
             msg_any: Any = message
             if parse_mode:
@@ -457,12 +479,18 @@ class ResponseFormatter:
                     f"🆔 Error ID: `{correlation_id}`",
                 )
             elif error_type == "processing_failed":
-                await self.safe_reply(
-                    message,
-                    f"❌ **Enhanced Processing Failed**\n"
-                    f"🚨 Invalid summary format despite smart fallbacks\n"
-                    f"🆔 Error ID: `{correlation_id}`",
-                )
+                if self._safe_reply_func is not None:
+                    await self._safe_reply_func(
+                        message,
+                        f"Invalid summary format. Error ID: {correlation_id}",
+                    )
+                else:
+                    await self.safe_reply(
+                        message,
+                        f"❌ **Enhanced Processing Failed**\n"
+                        f"🚨 Invalid summary format despite smart fallbacks\n"
+                        f"🆔 Error ID: `{correlation_id}`",
+                    )
             elif error_type == "llm_error":
                 await self.safe_reply(
                     message,

@@ -123,8 +123,10 @@ class OpenRouterClient:
             429: "Rate limit exceeded",
         }
 
-        if status_code >= 500:
+        if status_code == 500:
             base = "Internal server error"
+        elif status_code >= 500:
+            base = f"HTTP {status_code} error"
         else:
             base = base_map.get(status_code, f"HTTP {status_code} error")
 
@@ -230,6 +232,7 @@ class OpenRouterClient:
         last_response_text = None
         structured_output_used = False
         structured_output_mode_used = None
+        structured_parse_error = False
 
         # Try each model
         for model in models_to_try:
@@ -237,8 +240,17 @@ class OpenRouterClient:
             if response_format and self._enable_structured_outputs:
                 await self.model_capabilities.ensure_structured_supported_models()
                 if not self.model_capabilities.supports_structured_outputs(model):
-                    self.error_handler.log_skip_model(model, "no_structured_outputs", request_id)
-                    continue
+                    if model == primary_model:
+                        self.error_handler.log_skip_model(
+                            model, "no_structured_outputs_primary", request_id
+                        )
+                        structured_output_used = False
+                        structured_output_mode_used = None
+                    else:
+                        self.error_handler.log_skip_model(
+                            model, "no_structured_outputs", request_id
+                        )
+                        continue
 
             # Determine response format mode for this model
             rf_mode_current = self.request_builder._structured_output_mode
@@ -361,6 +373,7 @@ class OpenRouterClient:
 
                                 # Treat as structured output parse error
                                 last_error_text = "structured_output_parse_error"
+                                structured_parse_error = True
                                 last_response_text = processed_text or None
                                 break  # Try next model
                             else:
@@ -489,6 +502,9 @@ class OpenRouterClient:
             models_to_try, self.error_handler._max_retries + 1, last_error_text, request_id
         )
 
+        if last_error_text == "structured_output_parse_error":
+            structured_parse_error = True
+
         return LLMCallResult(
             status="error",
             model=last_model_reported,
@@ -498,7 +514,11 @@ class OpenRouterClient:
             tokens_completion=None,
             cost_usd=None,
             latency_ms=last_latency,
-            error_text=last_error_text or "All retries and fallbacks exhausted",
+            error_text=(
+                "structured_output_parse_error"
+                if structured_parse_error
+                else (last_error_text or "All retries and fallbacks exhausted")
+            ),
             request_headers=redacted_headers,
             request_messages=sanitized_messages,
             endpoint="/api/v1/chat/completions",

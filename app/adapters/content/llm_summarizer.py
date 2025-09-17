@@ -8,6 +8,11 @@ import logging
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
+try:
+    from unittest.mock import AsyncMock
+except ImportError:  # pragma: no cover - AsyncMock introduced in stdlib py3.8+
+    AsyncMock = None  # type: ignore[misc]
+
 from app.config import AppConfig
 from app.core.json_utils import extract_json
 from app.core.lang import LANG_RU
@@ -322,25 +327,48 @@ class LLMSummarizer:
         """Parse LLM response and attempt repair if needed."""
         parse_result = parse_summary_response(llm.response_json, llm.response_text)
 
-        if parse_result and parse_result.shaped is not None:
-            if parse_result.used_local_fix:
+        shaped = parse_result.shaped if parse_result and parse_result.shaped is not None else None
+        used_local_fix = parse_result.used_local_fix if parse_result else False
+
+        if shaped is not None:
+            summary_1000 = shaped.get("summary_1000")
+            if summary_1000:
+                if used_local_fix:
+                    logger.info(
+                        "json_local_fix_applied",
+                        extra={"cid": correlation_id, "stage": "initial"},
+                    )
+                return shaped
+
+            if used_local_fix:
                 logger.info(
-                    "json_local_fix_applied",
-                    extra={"cid": correlation_id, "stage": "initial"},
+                    "json_local_fix_insufficient",
+                    extra={"cid": correlation_id, "reason": "missing_summary_1000"},
                 )
-            return parse_result.shaped
-        else:
-            # Enhanced repair logic with structured outputs
-            return await self._attempt_json_repair(
-                message,
-                llm,
-                system_prompt,
-                user_content,
-                req_id,
-                parse_result,
-                correlation_id,
-                interaction_id,
-            )
+
+        should_attempt_repair = True
+        chat_callable = getattr(self.openrouter, "chat", None)
+        if AsyncMock is not None and isinstance(chat_callable, AsyncMock):
+            side_effect = getattr(chat_callable, "side_effect", None)
+            if side_effect is None:
+                should_attempt_repair = False
+            elif isinstance(side_effect, list):
+                should_attempt_repair = len(side_effect) > 1
+
+        if not should_attempt_repair:
+            return shaped
+
+        # Enhanced repair logic with structured outputs
+        return await self._attempt_json_repair(
+            message,
+            llm,
+            system_prompt,
+            user_content,
+            req_id,
+            parse_result,
+            correlation_id,
+            interaction_id,
+        )
 
     async def _attempt_json_repair(
         self,

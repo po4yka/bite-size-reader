@@ -8,7 +8,12 @@ import time
 import uuid
 from collections.abc import Callable, Generator
 from contextlib import contextmanager
-from datetime import UTC, datetime
+from datetime import datetime
+
+try:  # Python 3.11+ compatibility shim for timezone constant
+    from datetime import UTC
+except ImportError:  # pragma: no cover - Python < 3.11 fallback
+    UTC = UTC
 from functools import wraps
 from typing import Any, TypeVar
 
