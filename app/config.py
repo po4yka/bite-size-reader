@@ -222,7 +222,9 @@ def _validate_structured_output_mode(mode_str: str | None) -> str:
         return "json_schema"  # Default to most capable mode
     valid_modes = {"json_schema", "json_object"}
     if mode_str not in valid_modes:
-        raise ValueError(f"Invalid structured output mode: {mode_str}. Must be one of {valid_modes}")
+        raise ValueError(
+            f"Invalid structured output mode: {mode_str}. Must be one of {valid_modes}"
+        )
     return mode_str
 
 
@@ -403,10 +405,15 @@ def load_config() -> AppConfig:
                 else None
             ),
             # Structured output configuration
-            enable_structured_outputs=os.getenv("OPENROUTER_ENABLE_STRUCTURED_OUTPUTS", "1").lower() in ("1", "true", "yes"),
-            structured_output_mode=_validate_structured_output_mode(os.getenv("OPENROUTER_STRUCTURED_OUTPUT_MODE")),
-            require_parameters=os.getenv("OPENROUTER_REQUIRE_PARAMETERS", "1").lower() in ("1", "true", "yes"),
-            auto_fallback_structured=os.getenv("OPENROUTER_AUTO_FALLBACK_STRUCTURED", "1").lower() in ("1", "true", "yes"),
+            enable_structured_outputs=os.getenv("OPENROUTER_ENABLE_STRUCTURED_OUTPUTS", "1").lower()
+            in ("1", "true", "yes"),
+            structured_output_mode=_validate_structured_output_mode(
+                os.getenv("OPENROUTER_STRUCTURED_OUTPUT_MODE")
+            ),
+            require_parameters=os.getenv("OPENROUTER_REQUIRE_PARAMETERS", "1").lower()
+            in ("1", "true", "yes"),
+            auto_fallback_structured=os.getenv("OPENROUTER_AUTO_FALLBACK_STRUCTURED", "1").lower()
+            in ("1", "true", "yes"),
         )
 
         runtime = RuntimeConfig(

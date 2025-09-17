@@ -2,8 +2,8 @@ import json
 import unittest
 from typing import Any, cast
 
-from app.adapters.firecrawl_parser import FirecrawlClient, httpx as firecrawl_httpx
-from app.adapters.openrouter_client import OpenRouterClient, httpx as or_httpx
+from app.adapters.external.firecrawl_parser import FirecrawlClient, httpx as firecrawl_httpx
+from app.adapters.openrouter.openrouter_client import OpenRouterClient, httpx as or_httpx
 
 
 class _FakeResponse:

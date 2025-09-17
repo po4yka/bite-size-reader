@@ -3,7 +3,7 @@ import types
 import unittest
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from app.adapters.telegram_bot import TelegramBot
+from app.adapters.telegram.telegram_bot import TelegramBot
 from app.config import AppConfig
 from app.db.database import Database
 

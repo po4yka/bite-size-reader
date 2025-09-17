@@ -7,9 +7,10 @@ import sys
 import time
 import uuid
 from contextlib import contextmanager
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 from functools import wraps
-from typing import Any, Callable, Generator, TypeVar
+from typing import Any, TypeVar
+from collections.abc import Callable, Generator
 
 try:  # Optional: modern logging via loguru
     from loguru import logger as loguru_logger
@@ -20,7 +21,7 @@ except Exception:  # pragma: no cover - optional dependency
     _HAS_LOGURU = False
 
 # Type variable for decorators
-F = TypeVar('F', bound=Callable[..., Any])
+F = TypeVar("F", bound=Callable[..., Any])
 
 
 class EnhancedJsonFormatter(logging.Formatter):
@@ -30,12 +31,12 @@ class EnhancedJsonFormatter(logging.Formatter):
         super().__init__()
         self.include_location = include_location
         self.include_process_info = include_process_info
-        self.hostname = os.uname().nodename if hasattr(os, 'uname') else 'unknown'
+        self.hostname = os.uname().nodename if hasattr(os, "uname") else "unknown"
 
     def format(self, record: logging.LogRecord) -> str:
         # Base fields with ISO timestamp
         base: dict[str, Any] = {
-            "timestamp": datetime.fromtimestamp(record.created, tz=timezone.utc).isoformat(),
+            "timestamp": datetime.fromtimestamp(record.created, tz=UTC).isoformat(),
             "level": record.levelname,
             "logger": record.name,
             "message": record.getMessage(),
@@ -44,21 +45,25 @@ class EnhancedJsonFormatter(logging.Formatter):
 
         # Add location information if enabled
         if self.include_location:
-            base.update({
-                "module": record.module,
-                "function": record.funcName,
-                "line": record.lineno,
-                "pathname": record.pathname,
-            })
+            base.update(
+                {
+                    "module": record.module,
+                    "function": record.funcName,
+                    "line": record.lineno,
+                    "pathname": record.pathname,
+                }
+            )
 
         # Add process information if enabled
         if self.include_process_info:
-            base.update({
-                "process": record.process,
-                "process_name": getattr(record, 'processName', 'MainProcess'),
-                "thread": record.thread,
-                "thread_name": getattr(record, 'threadName', 'MainThread'),
-            })
+            base.update(
+                {
+                    "process": record.process,
+                    "process_name": getattr(record, "processName", "MainProcess"),
+                    "thread": record.thread,
+                    "thread_name": getattr(record, "threadName", "MainThread"),
+                }
+            )
 
         # Add exception information
         if record.exc_info:
@@ -79,10 +84,28 @@ class EnhancedJsonFormatter(logging.Formatter):
 
         # Standard logging fields to exclude
         standard_fields = {
-            'args', 'msg', 'name', 'levelno', 'levelname', 'pathname', 'filename',
-            'module', 'exc_info', 'exc_text', 'stack_info', 'lineno', 'funcName',
-            'created', 'msecs', 'relativeCreated', 'thread', 'threadName',
-            'processName', 'process', 'getMessage', 'message'
+            "args",
+            "msg",
+            "name",
+            "levelno",
+            "levelname",
+            "pathname",
+            "filename",
+            "module",
+            "exc_info",
+            "exc_text",
+            "stack_info",
+            "lineno",
+            "funcName",
+            "created",
+            "msecs",
+            "relativeCreated",
+            "thread",
+            "threadName",
+            "processName",
+            "process",
+            "getMessage",
+            "message",
         }
 
         for key, value in record.__dict__.items():
@@ -90,11 +113,24 @@ class EnhancedJsonFormatter(logging.Formatter):
                 continue
 
             # Categorize special fields
-            if key in ('latency_ms', 'processing_time_ms', 'tokens_prompt', 'tokens_completion',
-                      'cost_usd', 'request_duration', 'response_time'):
+            if key in (
+                "latency_ms",
+                "processing_time_ms",
+                "tokens_prompt",
+                "tokens_completion",
+                "cost_usd",
+                "request_duration",
+                "response_time",
+            ):
                 performance_fields[key] = value
-            elif key in ('structured_output_used', 'structured_output_mode', 'response_format_type',
-                        'schema_validation', 'json_repair_attempts', 'fallback_mode'):
+            elif key in (
+                "structured_output_used",
+                "structured_output_mode",
+                "response_format_type",
+                "schema_validation",
+                "json_repair_attempts",
+                "fallback_mode",
+            ):
                 structured_output_fields[key] = value
             else:
                 extra_fields[key] = value
@@ -108,23 +144,27 @@ class EnhancedJsonFormatter(logging.Formatter):
             base["extra"] = extra_fields
 
         # Add correlation tracking
-        if hasattr(record, 'correlation_id') or hasattr(record, 'cid'):
-            base["correlation_id"] = getattr(record, 'correlation_id', None) or getattr(record, 'cid', None)
+        if hasattr(record, "correlation_id") or hasattr(record, "cid"):
+            base["correlation_id"] = getattr(record, "correlation_id", None) or getattr(
+                record, "cid", None
+            )
 
-        if hasattr(record, 'request_id'):
+        if hasattr(record, "request_id"):
             base["request_id"] = record.request_id
 
-        if hasattr(record, 'user_id'):
+        if hasattr(record, "user_id"):
             base["user_id"] = record.user_id
 
         # Be resilient to non-JSON-serializable values
-        return json.dumps(base, ensure_ascii=False, default=self._json_serializer, separators=(',', ':'))
+        return json.dumps(
+            base, ensure_ascii=False, default=self._json_serializer, separators=(",", ":")
+        )
 
     def _json_serializer(self, obj: Any) -> str:
         """Custom JSON serializer for non-standard types."""
-        if hasattr(obj, '__dict__'):
+        if hasattr(obj, "__dict__"):
             return f"<{obj.__class__.__name__}>"
-        if hasattr(obj, '__str__'):
+        if hasattr(obj, "__str__"):
             return str(obj)
         return f"<non-serializable: {type(obj).__name__}>"
 
@@ -174,7 +214,7 @@ class StructuredLogger:
         finally:
             self._active_contexts.pop(context_id, None)
 
-    def bind(self, **kwargs) -> 'BoundLogger':
+    def bind(self, **kwargs) -> BoundLogger:
         """Create a bound logger with persistent context."""
         return BoundLogger(self, kwargs)
 
@@ -206,7 +246,7 @@ class BoundLogger:
         merged = {**self.context, **kwargs}
         self.parent._log(logging.CRITICAL, message, **merged)
 
-    def bind(self, **kwargs) -> 'BoundLogger':
+    def bind(self, **kwargs) -> BoundLogger:
         """Create a new bound logger with additional context."""
         merged = {**self.context, **kwargs}
         return BoundLogger(self.parent, merged)
@@ -300,10 +340,28 @@ def setup_json_logging(
                 # Extract extra fields
                 extra = {}
                 standard_fields = {
-                    'args', 'msg', 'name', 'levelno', 'levelname', 'pathname', 'filename',
-                    'module', 'exc_info', 'exc_text', 'stack_info', 'lineno', 'funcName',
-                    'created', 'msecs', 'relativeCreated', 'thread', 'threadName',
-                    'processName', 'process', 'getMessage', 'message'
+                    "args",
+                    "msg",
+                    "name",
+                    "levelno",
+                    "levelname",
+                    "pathname",
+                    "filename",
+                    "module",
+                    "exc_info",
+                    "exc_text",
+                    "stack_info",
+                    "lineno",
+                    "funcName",
+                    "created",
+                    "msecs",
+                    "relativeCreated",
+                    "thread",
+                    "threadName",
+                    "processName",
+                    "process",
+                    "getMessage",
+                    "message",
                 }
 
                 for key, value in record.__dict__.items():
@@ -311,10 +369,9 @@ def setup_json_logging(
                         continue
                     extra[key] = value
 
-                loguru_logger.bind(**extra).opt(
-                    depth=6,
-                    exception=record.exc_info
-                ).log(level_to_use, record.getMessage())
+                loguru_logger.bind(**extra).opt(depth=6, exception=record.exc_info).log(
+                    level_to_use, record.getMessage()
+                )
 
         root = logging.getLogger()
         root.handlers.clear()
@@ -331,7 +388,7 @@ def setup_json_logging(
                 "log_file": log_file,
                 "max_file_size": max_file_size,
                 "retention": retention,
-            }
+            },
         )
         return
 
@@ -343,8 +400,7 @@ def setup_json_logging(
     console_handler = logging.StreamHandler(sys.stdout)
     console_handler.setFormatter(
         EnhancedJsonFormatter(
-            include_location=include_location,
-            include_process_info=include_process_info
+            include_location=include_location, include_process_info=include_process_info
         )
     )
     root.handlers.clear()
@@ -353,15 +409,15 @@ def setup_json_logging(
     # File handler if specified
     if log_file:
         from logging.handlers import RotatingFileHandler
+
         file_handler = RotatingFileHandler(
             log_file,
             maxBytes=100 * 1024 * 1024,  # 100MB
-            backupCount=5
+            backupCount=5,
         )
         file_handler.setFormatter(
             EnhancedJsonFormatter(
-                include_location=include_location,
-                include_process_info=include_process_info
+                include_location=include_location, include_process_info=include_process_info
             )
         )
         root.addHandler(file_handler)
@@ -376,7 +432,7 @@ def setup_json_logging(
                 "include_process_info": include_process_info,
                 "log_file": log_file,
             }
-        }
+        },
     )
 
 
@@ -411,7 +467,7 @@ def truncate_log_content(content: str | None, max_length: int = 1000) -> str | N
         truncated = content[:truncate_at]
 
         # Find last space within reasonable distance
-        last_space = truncated.rfind(' ', max(0, truncate_at - 50))
+        last_space = truncated.rfind(" ", max(0, truncate_at - 50))
         if last_space > truncate_at - 100:
             truncated = truncated[:last_space]
 
@@ -422,6 +478,7 @@ def truncate_log_content(content: str | None, max_length: int = 1000) -> str | N
 
 def log_performance(func: F) -> F:
     """Decorator to automatically log function performance metrics."""
+
     @wraps(func)
     def sync_wrapper(*args, **kwargs):
         logger = get_logger(func.__module__)
@@ -482,6 +539,7 @@ def log_performance(func: F) -> F:
 
     # Return appropriate wrapper based on function type
     import asyncio
+
     if asyncio.iscoroutinefunction(func):
         return async_wrapper  # type: ignore
     else:
@@ -493,7 +551,7 @@ def log_operation(
     operation_name: str,
     logger: StructuredLogger | None = None,
     level: int = logging.INFO,
-    **context
+    **context,
 ) -> Generator[dict[str, Any], None, None]:
     """Context manager for logging operations with automatic timing and error handling.
 
@@ -508,11 +566,12 @@ def log_operation(
     """
     if logger is None:
         import inspect
+
         frame = inspect.currentframe()
         if frame and frame.f_back:
-            module_name = frame.f_back.f_globals.get('__name__', 'unknown')
+            module_name = frame.f_back.f_globals.get("__name__", "unknown")
         else:
-            module_name = 'unknown'
+            module_name = "unknown"
         logger = get_logger(module_name)
 
     start_time = time.perf_counter()
@@ -523,7 +582,7 @@ def log_operation(
         logging.DEBUG,
         f"Starting operation: {operation_name}",
         correlation_id=correlation_id,
-        **operation_context
+        **operation_context,
     )
 
     try:
@@ -536,7 +595,7 @@ def log_operation(
             correlation_id=correlation_id,
             duration_ms=duration_ms,
             success=True,
-            **operation_context
+            **operation_context,
         )
 
     except Exception as e:
@@ -548,16 +607,13 @@ def log_operation(
             success=False,
             error_type=type(e).__name__,
             error_message=str(e),
-            **operation_context
+            **operation_context,
         )
         raise
 
 
 def log_structured_output_event(
-    logger: StructuredLogger,
-    event_type: str,
-    success: bool,
-    **details
+    logger: StructuredLogger, event_type: str, success: bool, **details
 ) -> None:
     """Log structured output related events with consistent format.
 
@@ -570,13 +626,7 @@ def log_structured_output_event(
     level = logging.INFO if success else logging.WARNING
     message = f"Structured output {event_type} {'succeeded' if success else 'failed'}"
 
-    logger._log(
-        level,
-        message,
-        structured_output_event=event_type,
-        success=success,
-        **details
-    )
+    logger._log(level, message, structured_output_event=event_type, success=success, **details)
 
 
 # Convenience function for backward compatibility
@@ -587,16 +637,16 @@ def setup_logging(level: str = "INFO") -> None:
 
 # Export commonly used items
 __all__ = [
-    'setup_json_logging',
-    'setup_logging',
-    'get_logger',
-    'StructuredLogger',
-    'BoundLogger',
-    'generate_correlation_id',
-    'generate_request_id',
-    'truncate_log_content',
-    'log_performance',
-    'log_operation',
-    'log_structured_output_event',
-    'EnhancedJsonFormatter',
+    "setup_json_logging",
+    "setup_logging",
+    "get_logger",
+    "StructuredLogger",
+    "BoundLogger",
+    "generate_correlation_id",
+    "generate_request_id",
+    "truncate_log_content",
+    "log_performance",
+    "log_operation",
+    "log_structured_output_event",
+    "EnhancedJsonFormatter",
 ]

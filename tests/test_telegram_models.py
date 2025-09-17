@@ -4,7 +4,7 @@ import unittest
 from datetime import datetime
 from unittest.mock import Mock
 
-from app.core.telegram_models import (
+from app.models.telegram.telegram_models import (
     ChatType,
     MediaType,
     MessageEntity,

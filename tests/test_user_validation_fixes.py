@@ -5,9 +5,9 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from app.adapters.telegram_bot import TelegramBot
+from app.adapters.telegram.telegram_bot import TelegramBot
 from app.config import AppConfig, FirecrawlConfig, OpenRouterConfig, RuntimeConfig, TelegramConfig
-from app.core.telegram_models import ChatType, TelegramMessage, TelegramUser
+from app.models.telegram.telegram_models import ChatType, TelegramMessage, TelegramUser
 from app.db.database import Database
 
 

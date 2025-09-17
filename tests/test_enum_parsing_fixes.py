@@ -2,7 +2,7 @@
 
 import unittest
 
-from app.core.telegram_models import ChatType, MessageEntity, MessageEntityType, TelegramChat
+from app.models.telegram.telegram_models import ChatType, MessageEntity, MessageEntityType, TelegramChat
 
 
 class TestChatTypeEnumParsing(unittest.TestCase):

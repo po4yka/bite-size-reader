@@ -4,7 +4,7 @@ import asyncio
 import unittest
 from unittest.mock import AsyncMock, Mock, patch
 
-from app.adapters.openrouter_client import OpenRouterClient
+from app.adapters.openrouter.openrouter_client import OpenRouterClient
 
 
 class TestOpenRouterCompliance(unittest.TestCase):
