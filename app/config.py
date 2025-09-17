@@ -19,6 +19,11 @@ class OpenRouterConfig:
     provider_order: tuple[str, ...] = ()
     enable_stats: bool = False
     long_context_model: str | None = None
+    # Structured output settings
+    enable_structured_outputs: bool = True
+    structured_output_mode: str = "json_schema"  # "json_schema" or "json_object"
+    require_parameters: bool = True  # Prefer providers that support all parameters
+    auto_fallback_structured: bool = True  # Auto-fallback to json_object if json_schema fails
 
 
 @dataclass(frozen=True)
@@ -211,6 +216,16 @@ def _validate_temperature(temp_str: str | None) -> float:
         raise
 
 
+def _validate_structured_output_mode(mode_str: str | None) -> str:
+    """Validate structured output mode."""
+    if not mode_str:
+        return "json_schema"  # Default to most capable mode
+    valid_modes = {"json_schema", "json_object"}
+    if mode_str not in valid_modes:
+        raise ValueError(f"Invalid structured output mode: {mode_str}. Must be one of {valid_modes}")
+    return mode_str
+
+
 def _validate_connection_pool_param_int(
     value_str: str | None, param_name: str, min_val: int, max_val: int, default: int
 ) -> int:
@@ -387,6 +402,11 @@ def load_config() -> AppConfig:
                 if os.getenv("OPENROUTER_LONG_CONTEXT_MODEL")
                 else None
             ),
+            # Structured output configuration
+            enable_structured_outputs=os.getenv("OPENROUTER_ENABLE_STRUCTURED_OUTPUTS", "1").lower() in ("1", "true", "yes"),
+            structured_output_mode=_validate_structured_output_mode(os.getenv("OPENROUTER_STRUCTURED_OUTPUT_MODE")),
+            require_parameters=os.getenv("OPENROUTER_REQUIRE_PARAMETERS", "1").lower() in ("1", "true", "yes"),
+            auto_fallback_structured=os.getenv("OPENROUTER_AUTO_FALLBACK_STRUCTURED", "1").lower() in ("1", "true", "yes"),
         )
 
         runtime = RuntimeConfig(

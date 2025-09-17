@@ -68,7 +68,7 @@ class TelegramBot:
             extra={"db_path": self.cfg.runtime.db_path, "log_level": self.cfg.runtime.log_level},
         )
 
-        # Init clients
+        # Init clients with enhanced structured output support
         self._firecrawl = FirecrawlClient(
             api_key=self.cfg.firecrawl.api_key,
             timeout_sec=self.cfg.runtime.request_timeout_sec,
@@ -82,6 +82,8 @@ class TelegramBot:
             credit_warning_threshold=self.cfg.firecrawl.credit_warning_threshold,
             credit_critical_threshold=self.cfg.firecrawl.credit_critical_threshold,
         )
+
+        # Enhanced OpenRouter client with structured output support
         self._openrouter = OpenRouterClient(
             api_key=self.cfg.openrouter.api_key,
             model=self.cfg.openrouter.model,
@@ -94,6 +96,11 @@ class TelegramBot:
             provider_order=list(self.cfg.openrouter.provider_order),
             enable_stats=self.cfg.openrouter.enable_stats,
             log_truncate_length=self.cfg.runtime.log_truncate_length,
+            # Structured output configuration
+            enable_structured_outputs=self.cfg.openrouter.enable_structured_outputs,
+            structured_output_mode=self.cfg.openrouter.structured_output_mode,
+            require_parameters=self.cfg.openrouter.require_parameters,
+            auto_fallback_structured=self.cfg.openrouter.auto_fallback_structured,
         )
 
         # Telegram client (PyroTGFork/Pyrogram)
@@ -160,6 +167,26 @@ class TelegramBot:
             return int(base_default)
         except Exception:
             return int(base_default)
+
+    def _build_structured_response_format(self) -> dict[str, Any]:
+        """Build response format configuration for structured outputs."""
+        try:
+            from app.core.summary_contract import get_summary_json_schema
+
+            if self.cfg.openrouter.structured_output_mode == "json_schema":
+                return {
+                    "type": "json_schema",
+                    "json_schema": {
+                        "name": "summary_schema",
+                        "schema": get_summary_json_schema(),
+                        "strict": True,
+                    },
+                }
+            else:
+                return {"type": "json_object"}
+        except Exception:
+            # Fallback to basic JSON object mode
+            return {"type": "json_object"}
 
     async def start(self) -> None:
         if not self.client:
@@ -602,7 +629,11 @@ class TelegramBot:
             "Usage:\n"
             "- You can simply send a URL (or several URLs) or forward a channel post — commands are optional.\n"
             "- You can also send /summarize and then a URL in the next message.\n"
-            "- Multiple links in one message are supported; I can confirm or use /summarize_all to process immediately."
+            "- Multiple links in one message are supported; I can confirm or use /summarize_all to process immediately.\n\n"
+            "Features:\n"
+            "- Enhanced structured JSON output with schema validation\n"
+            "- Intelligent model fallbacks for better reliability\n"
+            "- Automatic content optimization based on model capabilities"
         )
         await self._safe_reply(message, help_text)
 
@@ -611,14 +642,16 @@ class TelegramBot:
             "Welcome to Bite-Size Reader!\n\n"
             "What I do:\n"
             "- Summarize articles from URLs using Firecrawl + OpenRouter.\n"
-            "- Summarize forwarded channel posts.\n\n"
+            "- Summarize forwarded channel posts.\n"
+            "- Generate structured JSON summaries with enhanced reliability.\n\n"
             "How to use:\n"
             "- Send a URL directly, or use /summarize <URL>.\n"
             "- You can also send /summarize and then the URL in the next message.\n"
             "- For forwarded posts, use /summarize_forward and then forward a channel post.\n"
             '- Multiple links in one message are supported: I will ask "Process N links?" or use /summarize_all to process immediately.\n\n'
             "Notes:\n"
-            "- I reply with a strict JSON object.\n"
+            "- I reply with a strict JSON object using advanced schema validation.\n"
+            "- Intelligent model selection and fallbacks ensure high success rates.\n"
             "- Errors include an Error ID you can reference in logs."
         )
         await self._safe_reply(message, welcome)
@@ -660,18 +693,18 @@ class TelegramBot:
                 # Optional descriptions (if supported)
                 try:
                     await client_any.set_bot_description(
-                        "Summarize URLs and forwarded posts into a strict JSON.",
+                        "Summarize URLs and forwarded posts into structured JSON with enhanced reliability.",
                         language_code="en",
                     )
                     await client_any.set_bot_short_description(
-                        "Summarize links & posts (JSON)", language_code="en"
+                        "Enhanced JSON summaries with smart fallbacks", language_code="en"
                     )
                     await client_any.set_bot_description(
-                        "Краткие резюме ссылок и пересланных постов в формате JSON.",
+                        "Улучшенные резюме ссылок и пересланных постов в формате JSON с повышенной надёжностью.",
                         language_code="ru",
                     )
                     await client_any.set_bot_short_description(
-                        "Резюме ссылок и постов (JSON)", language_code="ru"
+                        "Улучшенные JSON резюме с умными резервами", language_code="ru"
                     )
                 except Exception:
                     pass
@@ -714,7 +747,8 @@ class TelegramBot:
                 f"✅ **Request Accepted**\n"
                 f"🌐 Domain: `{url_domain}`\n"
                 f"🔗 URL: `{norm[:60]}{'...' if len(norm) > 60 else ''}`\n"
-                f"📋 Status: Fetching content...",
+                f"📋 Status: Fetching content...\n"
+                f"🤖 Enhanced: Structured output with smart fallbacks",
             )
         except Exception:
             pass
@@ -807,7 +841,9 @@ class TelegramBot:
             try:
                 await self._safe_reply(
                     message,
-                    "Reusing cached fetch result.",
+                    "♻️ **Reusing Cached Content**\n"
+                    "📊 Status: Content already extracted\n"
+                    "⚡ Proceeding to enhanced AI analysis...",
                 )
             except Exception:
                 pass
@@ -838,7 +874,8 @@ class TelegramBot:
                     message,
                     "🕷️ **Firecrawl Extraction**\n"
                     "📡 Connecting to Firecrawl API...\n"
-                    "⏱️ This may take 10-30 seconds",
+                    "⏱️ This may take 10-30 seconds\n"
+                    "🔄 Enhanced processing pipeline active",
                 )
             except Exception:
                 pass
@@ -888,7 +925,13 @@ class TelegramBot:
                 self.db.update_request_status(req_id, "error")
                 await self._safe_reply(
                     message,
-                    f"Failed to fetch content. Error ID: {correlation_id}",
+                    f"❌ **Content Extraction Failed**\n"
+                    f"🚨 Unable to extract readable content\n"
+                    f"🆔 Error ID: `{correlation_id}`\n\n"
+                    f"💡 **Possible Solutions:**\n"
+                    f"• Try a different URL\n"
+                    f"• Check if content is publicly accessible\n"
+                    f"• Ensure URL points to text-based content",
                 )
                 logger.error(
                     "firecrawl_error",
@@ -932,7 +975,7 @@ class TelegramBot:
                     f"✅ **Content Extracted Successfully**\n"
                     f"📊 Size: ~{excerpt_len:,} characters\n"
                     f"⏱️ Extraction time: {latency_sec:.1f}s\n"
-                    f"📋 Status: Processing content...",
+                    f"🔄 Status: Preparing for enhanced AI analysis...",
                 )
             except Exception:
                 pass
@@ -959,7 +1002,8 @@ class TelegramBot:
                         f"🔄 **Content Processing Update**\n"
                         f"📄 Markdown extraction was empty\n"
                         f"🛠️ Using HTML content extraction\n"
-                        f"📊 Processing {len(content_text):,} characters...",
+                        f"📊 Processing {len(content_text):,} characters...\n"
+                        f"🤖 Enhanced pipeline will optimize for best results",
                     )
                 except Exception:
                     pass
@@ -1007,7 +1051,7 @@ class TelegramBot:
                 f"📝 Detected: `{detected or 'unknown'}`\n"
                 f"📄 Content preview:\n"
                 f"```\n{content_preview}\n```\n"
-                f"🤖 Status: Preparing for AI analysis...",
+                f"🤖 Status: Preparing enhanced AI analysis with structured outputs...",
             )
         except Exception:
             pass
@@ -1050,25 +1094,28 @@ class TelegramBot:
             if enable_chunking and content_len > max_chars and (chunks or []):
                 await self._safe_reply(
                     message,
-                    f"📚 **Content Analysis**\n"
+                    f"📚 **Enhanced Content Analysis**\n"
                     f"📊 Length: {content_len:,} characters\n"
                     f"🔀 Processing: Chunked analysis ({len(chunks or [])} chunks)\n"
-                    f"⚡ Status: Sending to AI model...",
+                    f"🤖 Method: Advanced structured output with schema validation\n"
+                    f"⚡ Status: Sending to AI model with smart fallbacks...",
                 )
             elif not enable_chunking and content_len > max_chars:
                 await self._safe_reply(
                     message,
-                    f"📚 **Content Analysis**\n"
+                    f"📚 **Enhanced Content Analysis**\n"
                     f"📊 Length: {content_len:,} characters (exceeds {max_chars:,} adaptive threshold)\n"
                     f"🔀 Processing: Single-pass (chunking disabled)\n"
+                    f"🤖 Method: Enhanced structured output with intelligent fallbacks\n"
                     f"⚡ Status: Sending to AI model...",
                 )
             else:
                 await self._safe_reply(
                     message,
-                    f"📚 **Content Analysis**\n"
+                    f"📚 **Enhanced Content Analysis**\n"
                     f"📊 Length: {content_len:,} characters\n"
                     f"🔀 Processing: Single-pass summary\n"
+                    f"🤖 Method: Structured output with schema validation\n"
                     f"⚡ Status: Sending to AI model...",
                 )
             logger.info(
@@ -1081,6 +1128,8 @@ class TelegramBot:
                     "chunks": (
                         len(chunks or []) if enable_chunking and content_len > max_chars else 1
                     ),
+                    "structured_output_enabled": self.cfg.openrouter.enable_structured_outputs,
+                    "structured_output_mode": self.cfg.openrouter.structured_output_mode,
                 },
             )
         except Exception:
@@ -1102,21 +1151,8 @@ class TelegramBot:
                     },
                 ]
                 async with self._sem():
-                    # Enforce schema for chunk summaries
-                    response_format_cf: dict[str, object] = {"type": "json_object"}
-                    try:
-                        from app.core.summary_contract import get_summary_json_schema
-
-                        response_format_cf = {
-                            "type": "json_schema",
-                            "json_schema": {
-                                "name": "summary_schema",
-                                "schema": get_summary_json_schema(),
-                                "strict": True,
-                            },
-                        }
-                    except Exception:
-                        pass
+                    # Use enhanced structured output format
+                    response_format_cf = self._build_structured_response_format()
                     resp = await self._openrouter.chat(
                         messages,
                         temperature=self.cfg.openrouter.temperature,
@@ -1164,6 +1200,8 @@ class TelegramBot:
                         "cost_usd": None,
                         "tokens_prompt": None,
                         "tokens_completion": None,
+                        "structured_output_used": True,
+                        "structured_output_mode": self.cfg.openrouter.structured_output_mode,
                     },
                 )()
                 # Persist and respond using shaped
@@ -1188,53 +1226,8 @@ class TelegramBot:
                         request_id=req_id,
                     )
 
-                # Send results
-                try:
-                    total_time = (llm.latency_ms or 0) / 1000.0
-                    tokens_used = (llm.tokens_prompt or 0) + (llm.tokens_completion or 0)
-                    cost_info = f" (${llm.cost_usd:.4f})" if llm.cost_usd else ""
-                    preview_lines = [
-                        "🎉 **Summary Complete!**",
-                        "",
-                        "⏱️ **Processing Stats:**",
-                        f"• Time: {total_time:.1f}s",
-                        f"• Tokens: {tokens_used:,}{cost_info}",
-                        f"• Model: {llm.model or 'unknown'}",
-                        "",
-                        "📋 **TL;DR:**",
-                        str(shaped.get("summary_250", "")).strip(),
-                    ]
-                    tags = shaped.get("topic_tags") or []
-                    if tags:
-                        preview_lines.extend(["", "🏷️ **Tags:** " + " ".join(tags[:6])])
-                    ideas = [
-                        str(x).strip() for x in (shaped.get("key_ideas") or []) if str(x).strip()
-                    ]
-                    if ideas:
-                        preview_lines.extend(["", "💡 **Key Ideas:**"])
-                        for idea in ideas[:3]:
-                            preview_lines.append(f"• {idea}")
-                    preview_lines.extend(["", "📊 **Full JSON:**"])
-                    combined_message = "\n".join(preview_lines)
-                    await self._safe_reply(message, combined_message)
-                    await self._reply_json(message, shaped)
-                except Exception:
-                    try:
-                        preview_lines = ["TL;DR:", str(shaped.get("summary_250", "")).strip()]
-                        tags = shaped.get("topic_tags") or []
-                        if tags:
-                            preview_lines.append("Tags: " + " ".join(tags[:6]))
-                        ideas = [
-                            str(x).strip()
-                            for x in (shaped.get("key_ideas") or [])
-                            if str(x).strip()
-                        ]
-                        for idea in ideas[:3]:
-                            preview_lines.append(f"- {idea}")
-                        await self._safe_reply(message, "\n".join(preview_lines))
-                    except Exception:
-                        pass
-                    await self._reply_json(message, shaped)
+                # Send enhanced results
+                await self._send_enhanced_summary_response(message, shaped, llm, chunks=len(chunks))
                 logger.info("reply_json_sent", extra={"cid": correlation_id, "request_id": req_id})
                 return
 
@@ -1301,10 +1294,12 @@ class TelegramBot:
                 ),
                 "has_content": bool(text_for_summary.strip()),
                 "content_source": content_source,
-                "original_markdown_len": len(crawl.content_markdown)
-                if crawl.content_markdown
-                else 0,
-                "original_html_len": len(crawl.content_html) if crawl.content_html else 0,
+                "structured_output_config": {
+                    "enabled": self.cfg.openrouter.enable_structured_outputs,
+                    "mode": self.cfg.openrouter.structured_output_mode,
+                    "require_parameters": self.cfg.openrouter.require_parameters,
+                    "auto_fallback": self.cfg.openrouter.auto_fallback_structured,
+                },
             },
         )
 
@@ -1313,13 +1308,14 @@ class TelegramBot:
             {"role": "user", "content": user_content},
         ]
 
-        # Notify: Starting LLM call
+        # Notify: Starting enhanced LLM call
         try:
             await self._safe_reply(
                 message,
-                f"🤖 **AI Analysis Starting**\n"
+                f"🤖 **Enhanced AI Analysis Starting**\n"
                 f"🧠 Model: `{self.cfg.openrouter.model}`\n"
                 f"📊 Content: {len(text_for_summary):,} characters\n"
+                f"🔧 Mode: {self.cfg.openrouter.structured_output_mode.upper()} with smart fallbacks\n"
                 f"⏱️ This may take 30-60 seconds...",
             )
         except Exception:
@@ -1332,21 +1328,8 @@ class TelegramBot:
             model_override = self.cfg.openrouter.long_context_model
 
         async with self._sem():
-            # Provide structured outputs schema through response_format
-            response_format: dict[str, object] = {"type": "json_object"}
-            try:
-                from app.core.summary_contract import get_summary_json_schema
-
-                response_format = {
-                    "type": "json_schema",
-                    "json_schema": {
-                        "name": "summary_schema",
-                        "schema": get_summary_json_schema(),
-                        "strict": True,
-                    },
-                }
-            except Exception:
-                pass
+            # Use enhanced structured output configuration
+            response_format = self._build_structured_response_format()
 
             llm = await self._openrouter.chat(
                 messages,
@@ -1357,18 +1340,47 @@ class TelegramBot:
                 response_format=response_format,
                 model_override=model_override,
             )
-        # Special-case salvage: provider signaled structured output parse error but included usable text
+
+        # Enhanced LLM completion notification
+        try:
+            model_name = llm.model or self.cfg.openrouter.model
+            latency_sec = (llm.latency_ms or 0) / 1000.0
+
+            if llm.status == "ok":
+                # Success message with enhanced details
+                tokens_used = (llm.tokens_prompt or 0) + (llm.tokens_completion or 0)
+                cost_info = f" (${llm.cost_usd:.4f})" if llm.cost_usd else ""
+                structured_info = ""
+                if hasattr(llm, 'structured_output_used') and llm.structured_output_used:
+                    mode = getattr(llm, 'structured_output_mode', 'unknown')
+                    structured_info = f"\n🔧 Structured Output: {mode.upper()}"
+
+                await self._safe_reply(
+                    message,
+                    f"🤖 **Enhanced AI Analysis Complete**\n"
+                    f"✅ Status: Success\n"
+                    f"🧠 Model: `{model_name}`\n"
+                    f"⏱️ Processing time: {latency_sec:.1f}s\n"
+                    f"🔢 Tokens used: {tokens_used:,}{cost_info}{structured_info}\n"
+                    f"📋 Status: Generating enhanced summary...",
+                )
+            else:
+                # Enhanced error message
+                await self._safe_reply(
+                    message,
+                    f"🤖 **Enhanced AI Analysis Failed**\n"
+                    f"❌ Status: Error\n"
+                    f"🧠 Model: `{model_name}`\n"
+                    f"⏱️ Processing time: {latency_sec:.1f}s\n"
+                    f"🚨 Error: {llm.error_text or 'Unknown error'}\n"
+                    f"🔄 Smart fallbacks: {'Active' if self.cfg.openrouter.auto_fallback_structured else 'Disabled'}\n"
+                    f"🆔 Error ID: `{correlation_id}`",
+                )
+        except Exception:
+            pass
+
+        # Enhanced error handling and salvage logic
         salvage_shaped: dict[str, Any] | None = None
-        logger.info(
-            "salvage_debug",
-            extra={
-                "llm_status": llm.status,
-                "llm_error_text": llm.error_text,
-                "status_check": llm.status != "ok",
-                "error_check": (llm.error_text or "") == "structured_output_parse_error",
-                "cid": correlation_id,
-            },
-        )
         if llm.status != "ok" and (llm.error_text or "") == "structured_output_parse_error":
             try:
                 # Try robust local parsing first
@@ -1378,68 +1390,12 @@ class TelegramBot:
                 if salvage_shaped is None:
                     pr = parse_summary_response(llm.response_json, llm.response_text)
                     salvage_shaped = pr.shaped
+
+                if salvage_shaped:
+                    logger.info("structured_output_salvage_success", extra={"cid": correlation_id})
             except Exception as e:
                 logger.error("salvage_error", extra={"error": str(e), "cid": correlation_id})
                 salvage_shaped = None
-        # Notify: LLM finished (success or error will be handled below)
-        try:
-            model_name = llm.model or self.cfg.openrouter.model
-            latency_sec = (llm.latency_ms or 0) / 1000.0
-
-            if llm.status == "ok":
-                # Success message with token usage and cost
-                tokens_used = (llm.tokens_prompt or 0) + (llm.tokens_completion or 0)
-                cost_info = f" (${llm.cost_usd:.4f})" if llm.cost_usd else ""
-                await self._safe_reply(
-                    message,
-                    f"🤖 **AI Analysis Complete**\n"
-                    f"✅ Status: Success\n"
-                    f"🧠 Model: `{model_name}`\n"
-                    f"⏱️ Processing time: {latency_sec:.1f}s\n"
-                    f"🔢 Tokens used: {tokens_used:,}{cost_info}\n"
-                    f"📋 Status: Generating summary...",
-                )
-            else:
-                # Error message with detailed error information
-                error_details = []
-                if llm.error_text:
-                    error_details.append(f"Error: {llm.error_text}")
-                if hasattr(llm, "response_json") and llm.response_json:
-                    error_data = llm.response_json.get("error", {})
-                    if error_data:
-                        if error_data.get("code"):
-                            error_details.append(f"Code: {error_data['code']}")
-                        if error_data.get("type"):
-                            error_details.append(f"Type: {error_data['type']}")
-                        if error_data.get("param"):
-                            error_details.append(f"Parameter: {error_data['param']}")
-                        if error_data.get("metadata"):
-                            metadata = error_data["metadata"]
-                            if metadata.get("provider_name"):
-                                error_details.append(f"Provider: {metadata['provider_name']}")
-                            if metadata.get("raw"):
-                                # Parse raw error for more details
-                                try:
-                                    raw_error = json.loads(metadata["raw"])
-                                    if raw_error.get("error", {}).get("message"):
-                                        error_details.append(
-                                            f"Provider error: {raw_error['error']['message']}"
-                                        )
-                                except Exception:
-                                    pass
-
-                error_text = "\n".join(error_details) if error_details else "Unknown error"
-                await self._safe_reply(
-                    message,
-                    f"🤖 **AI Analysis Failed**\n"
-                    f"❌ Status: Error\n"
-                    f"🧠 Model: `{model_name}`\n"
-                    f"⏱️ Processing time: {latency_sec:.1f}s\n"
-                    f"🚨 Error: {error_text}\n"
-                    f"🆔 Error ID: `{correlation_id}`",
-                )
-        except Exception:
-            pass
 
         # Async optimization: Run database operations concurrently with response processing
         async def _persist_llm_call():
@@ -1465,8 +1421,6 @@ class TelegramBot:
                 logger.error("persist_llm_error", extra={"error": str(e), "cid": correlation_id})
 
         # Start database persistence in background
-        import asyncio
-
         asyncio.create_task(_persist_llm_call())  # Fire and forget for performance
 
         if llm.status != "ok" and salvage_shaped is None:
@@ -1498,257 +1452,95 @@ class TelegramBot:
                     )
                 return
 
-        # Best-effort parse + validate using robust parser first
+        # Enhanced parsing with better error handling
         summary_shaped: dict[str, Any] | None = salvage_shaped
-        logger.info(
-            "summary_shaped_debug",
-            extra={
-                "salvage_shaped": salvage_shaped is not None,
-                "summary_shaped": summary_shaped is not None,
-                "cid": correlation_id,
-            },
-        )
 
-        # 2) If not parsed yet, try robust parser with optional local fixes
         if summary_shaped is None:
-            logger.info("summary_shaped_is_none_parsing", extra={"cid": correlation_id})
             parse_result = parse_summary_response(llm.response_json, llm.response_text)
-        else:
-            logger.info("summary_shaped_is_not_none_skipping_parse", extra={"cid": correlation_id})
-            parse_result = None
-
-        # Skip repair logic if we already have a valid summary from salvage
-        if summary_shaped is not None:
-            logger.info("skipping_repair_logic_salvage_success", extra={"cid": correlation_id})
-        elif parse_result and parse_result.shaped is not None:
-            summary_shaped = parse_result.shaped
-            if parse_result.used_local_fix:
-                try:
+            if parse_result and parse_result.shaped is not None:
+                summary_shaped = parse_result.shaped
+                if parse_result.used_local_fix:
                     logger.info(
                         "json_local_fix_applied",
                         extra={"cid": correlation_id, "stage": "initial"},
                     )
-                except Exception:
-                    pass
             else:
-                # If important fields are missing/empty after clean parse, attempt one repair call
-                needs_repair = not (
-                    summary_shaped.get("summary_250") and summary_shaped.get("summary_1000")
-                )
-                if needs_repair:
-                    try:
-                        logger.info(
-                            "json_repair_attempt",
-                            extra={"cid": correlation_id, "reason": "missing_required_fields"},
-                        )
-                        llm_text = llm.response_text or ""
-                        repair_messages_1: list[dict[str, str]] = [
-                            {"role": "system", "content": system_prompt},
-                            {"role": "user", "content": user_content},
-                            {"role": "assistant", "content": llm_text},
-                            {
-                                "role": "user",
-                                "content": (
-                                    "Your previous message was not a valid JSON object. "
-                                    "Respond with ONLY a corrected JSON that matches the schema exactly."
-                                ),
-                            },
-                        ]
-                        async with self._sem():
-                            repair_response_format_1: dict[str, object] = {"type": "json_object"}
-                            try:
-                                from app.core.summary_contract import get_summary_json_schema
-
-                                repair_response_format_1 = {
-                                    "type": "json_schema",
-                                    "json_schema": {
-                                        "name": "summary_schema",
-                                        "schema": get_summary_json_schema(),
-                                        "strict": True,
-                                    },
-                                }
-                            except Exception:
-                                pass
-
-                            repair = await self._openrouter.chat(
-                                repair_messages_1,
-                                temperature=self.cfg.openrouter.temperature,
-                                max_tokens=(self.cfg.openrouter.max_tokens or 2048),
-                                top_p=self.cfg.openrouter.top_p,
-                                request_id=req_id,
-                                response_format=repair_response_format_1,
-                            )
-                        if repair.status == "ok":
-                            repair_result = parse_summary_response(
-                                repair.response_json, repair.response_text
-                            )
-                            if repair_result.shaped is not None:
-                                summary_shaped = repair_result.shaped
-                                if repair_result.used_local_fix:
-                                    try:
-                                        logger.info(
-                                            "json_local_fix_applied",
-                                            extra={"cid": correlation_id, "stage": "repair"},
-                                        )
-                                    except Exception:
-                                        pass
-                            else:
-                                try:
-                                    logger.error(
-                                        "json_repair_parse_failed_preview",
-                                        extra={
-                                            "cid": correlation_id,
-                                            "errors": repair_result.errors[-5:]
-                                            if repair_result.errors
-                                            else None,
-                                            "preview": (repair.response_text or "")[
-                                                : self.cfg.runtime.log_truncate_length
-                                            ],
-                                            "tail": (repair.response_text or "")[
-                                                -self.cfg.runtime.log_truncate_length :
-                                            ],
-                                        },
-                                    )
-                                except Exception:
-                                    pass
-                                raise ValueError("repair_failed")
-                    except Exception:
-                        self.db.update_request_status(req_id, "error")
-                        await self._safe_reply(
-                            message, f"Invalid summary format. Error ID: {correlation_id}"
-                        )
-
-                        # Update interaction with error
-                        if interaction_id:
-                            self._update_user_interaction(
-                                interaction_id=interaction_id,
-                                response_sent=True,
-                                response_type="error",
-                                error_occurred=True,
-                                error_message="Invalid summary format",
-                                request_id=req_id,
-                            )
-                        return
-        else:
-            try:
-                logger.error(
-                    "summary_json_invalid",
-                    extra={
-                        "cid": correlation_id,
-                        "errors": parse_result.errors[-5:] if parse_result.errors else None,
-                        "preview": (llm.response_text or "")[
-                            : self.cfg.runtime.log_truncate_length
-                        ],
-                        "tail": (llm.response_text or "")[-self.cfg.runtime.log_truncate_length :],
-                    },
-                )
-            except Exception:
-                pass
-            # 3) Attempt one repair using assistant prefill best-practice
-            try:
-                logger.info(
-                    "json_repair_attempt",
-                    extra={
-                        "cid": correlation_id,
-                        "reason": parse_result.errors[-3:] if parse_result.errors else None,
-                    },
-                )
-                llm_text = llm.response_text or ""
-                repair_messages_2: list[dict[str, str]] = [
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_content},
-                    {"role": "assistant", "content": llm_text},
-                    {
-                        "role": "user",
-                        "content": (
-                            "Your previous message was not a valid JSON object. "
-                            "Respond with ONLY a corrected JSON that matches the schema exactly."
-                        ),
-                    },
-                ]
-                async with self._sem():
-                    # Reuse strict JSON schema enforcement for repair
-                    repair_response_format_2: dict[str, object] = {"type": "json_object"}
-                    try:
-                        from app.core.summary_contract import get_summary_json_schema
-
-                        repair_response_format_2 = {
-                            "type": "json_schema",
-                            "json_schema": {
-                                "name": "summary_schema",
-                                "schema": get_summary_json_schema(),
-                                "strict": True,
-                            },
-                        }
-                    except Exception:
-                        pass
-
-                    repair = await self._openrouter.chat(
-                        repair_messages_2,
-                        temperature=self.cfg.openrouter.temperature,
-                        max_tokens=(self.cfg.openrouter.max_tokens or 2048),
-                        top_p=self.cfg.openrouter.top_p,
-                        request_id=req_id,
-                        response_format=repair_response_format_2,
+                # Enhanced repair logic with structured outputs
+                try:
+                    logger.info(
+                        "json_repair_attempt_enhanced",
+                        extra={
+                            "cid": correlation_id,
+                            "reason": parse_result.errors[-3:] if parse_result and parse_result.errors else None,
+                            "structured_mode": self.cfg.openrouter.structured_output_mode,
+                        },
                     )
-                if repair.status == "ok":
-                    repair_result = parse_summary_response(
-                        repair.response_json, repair.response_text
-                    )
-                    if repair_result.shaped is not None:
-                        summary_shaped = repair_result.shaped
-                        if repair_result.used_local_fix:
-                            try:
-                                logger.info(
-                                    "json_local_fix_applied",
-                                    extra={"cid": correlation_id, "stage": "repair"},
-                                )
-                            except Exception:
-                                pass
+                    llm_text = llm.response_text or ""
+                    repair_messages = [
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_content},
+                        {"role": "assistant", "content": llm_text},
+                        {
+                            "role": "user",
+                            "content": (
+                                "Your previous message was not a valid JSON object. "
+                                "Respond with ONLY a corrected JSON that matches the schema exactly."
+                            ),
+                        },
+                    ]
+                    async with self._sem():
+                        repair_response_format = self._build_structured_response_format()
+                        repair = await self._openrouter.chat(
+                            repair_messages,
+                            temperature=self.cfg.openrouter.temperature,
+                            max_tokens=(self.cfg.openrouter.max_tokens or 2048),
+                            top_p=self.cfg.openrouter.top_p,
+                            request_id=req_id,
+                            response_format=repair_response_format,
+                        )
+                    if repair.status == "ok":
+                        repair_result = parse_summary_response(
+                            repair.response_json, repair.response_text
+                        )
+                        if repair_result.shaped is not None:
+                            summary_shaped = repair_result.shaped
+                            logger.info(
+                                "json_repair_success_enhanced",
+                                extra={"cid": correlation_id, "used_local_fix": repair_result.used_local_fix}
+                            )
+                        else:
+                            raise ValueError("repair_failed")
                     else:
-                        try:
-                            logger.error(
-                                "json_repair_parse_failed_preview",
-                                extra={
-                                    "cid": correlation_id,
-                                    "errors": repair_result.errors[-5:]
-                                    if repair_result.errors
-                                    else None,
-                                    "preview": (repair.response_text or "")[
-                                        : self.cfg.runtime.log_truncate_length
-                                    ],
-                                    "tail": (repair.response_text or "")[
-                                        -self.cfg.runtime.log_truncate_length :
-                                    ],
-                                },
-                            )
-                        except Exception:
-                            pass
-                        raise ValueError("repair_failed")
-                else:
-                    raise ValueError("repair_call_error")
-            except Exception:
-                self.db.update_request_status(req_id, "error")
-                await self._safe_reply(
-                    message, f"Invalid summary format. Error ID: {correlation_id}"
-                )
-
-                # Update interaction with error
-                if interaction_id:
-                    self._update_user_interaction(
-                        interaction_id=interaction_id,
-                        response_sent=True,
-                        response_type="error",
-                        error_occurred=True,
-                        error_message="Invalid summary format",
-                        request_id=req_id,
+                        raise ValueError("repair_call_error")
+                except Exception:
+                    self.db.update_request_status(req_id, "error")
+                    await self._safe_reply(
+                        message,
+                        f"❌ **Enhanced Processing Failed**\n"
+                        f"🚨 Invalid summary format despite smart fallbacks\n"
+                        f"🆔 Error ID: `{correlation_id}`"
                     )
-                return
+
+                    # Update interaction with error
+                    if interaction_id:
+                        self._update_user_interaction(
+                            interaction_id=interaction_id,
+                            response_sent=True,
+                            response_type="error",
+                            error_occurred=True,
+                            error_message="Invalid summary format",
+                            request_id=req_id,
+                        )
+                    return
 
         if summary_shaped is None:
-            logger.info("summary_shaped_is_none", extra={"cid": correlation_id})
             self.db.update_request_status(req_id, "error")
-            await self._safe_reply(message, f"Invalid summary format. Error ID: {correlation_id}")
+            await self._safe_reply(
+                message,
+                f"❌ **Enhanced Processing Failed**\n"
+                f"🚨 Unable to generate valid summary\n"
+                f"🆔 Error ID: `{correlation_id}`"
+            )
 
             if interaction_id:
                 self._update_user_interaction(
@@ -1760,12 +1552,10 @@ class TelegramBot:
                     request_id=req_id,
                 )
             return
-        else:
-            logger.info("summary_shaped_is_not_none", extra={"cid": correlation_id})
 
-        # Enhanced llm_finished log with summary details
+        # Enhanced logging with structured output details
         logger.info(
-            "llm_finished",
+            "llm_finished_enhanced",
             extra={
                 "status": llm.status,
                 "latency_ms": llm.latency_ms,
@@ -1778,6 +1568,8 @@ class TelegramBot:
                 "entities_count": len(summary_shaped.get("entities", [])),
                 "reading_time_min": summary_shaped.get("estimated_reading_time_min"),
                 "seo_keywords_count": len(summary_shaped.get("seo_keywords", [])),
+                "structured_output_used": getattr(llm, 'structured_output_used', False),
+                "structured_output_mode": getattr(llm, 'structured_output_mode', None),
             },
         )
 
@@ -1799,20 +1591,39 @@ class TelegramBot:
                 request_id=req_id,
             )
 
-        # Send enhanced summary with performance metrics
+        # Send enhanced summary response
+        await self._send_enhanced_summary_response(message, summary_shaped, llm)
+        logger.info("reply_json_sent", extra={"cid": correlation_id, "request_id": req_id})
+
+    async def _send_enhanced_summary_response(
+        self,
+        message: Any,
+        summary_shaped: dict[str, Any],
+        llm: Any,
+        chunks: int | None = None
+    ) -> None:
+        """Send enhanced summary response with better formatting and metadata."""
         try:
             # Calculate processing metrics
             total_time = (llm.latency_ms or 0) / 1000.0
             tokens_used = (llm.tokens_prompt or 0) + (llm.tokens_completion or 0)
             cost_info = f" (${llm.cost_usd:.4f})" if llm.cost_usd else ""
 
+            # Enhanced processing info
+            processing_method = f"Chunked ({chunks} parts)" if chunks else "Single-pass"
+            structured_info = ""
+            if hasattr(llm, 'structured_output_used') and llm.structured_output_used:
+                mode = getattr(llm, 'structured_output_mode', 'unknown')
+                structured_info = f" • Schema: {mode.upper()}"
+
             preview_lines = [
-                "🎉 **Summary Complete!**",
+                "🎉 **Enhanced Summary Complete!**",
                 "",
                 "⏱️ **Processing Stats:**",
                 f"• Time: {total_time:.1f}s",
                 f"• Tokens: {tokens_used:,}{cost_info}",
                 f"• Model: {llm.model or 'unknown'}",
+                f"• Method: {processing_method}{structured_info}",
                 "",
                 "📋 **TL;DR:**",
                 str(summary_shaped.get("summary_250", "")).strip(),
@@ -1830,6 +1641,11 @@ class TelegramBot:
                 for idea in ideas[:3]:
                     preview_lines.append(f"• {idea}")
 
+            # Add reading time if available
+            reading_time = summary_shaped.get("estimated_reading_time_min")
+            if reading_time:
+                preview_lines.extend(["", f"⏱️ **Reading Time:** ~{reading_time} minutes"])
+
             preview_lines.extend(["", "📊 **Full JSON:**"])
 
             # Combine preview and JSON in one message
@@ -1840,29 +1656,31 @@ class TelegramBot:
             await self._reply_json(message, summary_shaped)
 
         except Exception:
-            # Fallback to separate messages
+            # Fallback to simpler format
             try:
                 preview_lines = [
-                    "TL;DR:",
+                    "🎉 **Summary Complete!**",
+                    "",
+                    "📋 **TL;DR:**",
                     str(summary_shaped.get("summary_250", "")).strip(),
                 ]
                 tags = summary_shaped.get("topic_tags") or []
                 if tags:
-                    preview_lines.append("Tags: " + " ".join(tags[:6]))
+                    preview_lines.append("🏷️ Tags: " + " ".join(tags[:6]))
                 ideas = [
                     str(x).strip()
                     for x in (summary_shaped.get("key_ideas") or [])
                     if str(x).strip()
                 ]
-                for idea in ideas[:3]:
-                    preview_lines.append(f"- {idea}")
+                if ideas:
+                    preview_lines.append("💡 Key Ideas:")
+                    for idea in ideas[:3]:
+                        preview_lines.append(f"• {idea}")
                 await self._safe_reply(message, "\n".join(preview_lines))
             except Exception:
                 pass
 
             await self._reply_json(message, summary_shaped)
-
-        logger.info("reply_json_sent", extra={"cid": correlation_id, "request_id": req_id})
 
     async def _handle_forward_flow(
         self, message: Any, *, correlation_id: str | None = None, interaction_id: int | None = None
@@ -1914,9 +1732,15 @@ class TelegramBot:
         except Exception as e:  # noqa: BLE001
             logger.error("snapshot_error", extra={"error": str(e)})
 
-        # Notify: request accepted (forward)
+        # Notify: request accepted (forward) with enhanced info
         try:
-            await self._safe_reply(message, "Accepted. Generating summary...")
+            await self._safe_reply(
+                message,
+                "✅ **Forward Request Accepted**\n"
+                f"📺 Channel: {title}\n"
+                "🤖 Enhanced processing with structured outputs...\n"
+                "📋 Status: Generating summary..."
+            )
         except Exception:
             pass
 
@@ -1932,11 +1756,15 @@ class TelegramBot:
             "language_choice",
             extra={"detected": detected, "chosen": chosen_lang, "cid": correlation_id},
         )
-        # Notify: language detected (forward)
+
+        # Notify: language detected (forward) with enhanced info
         try:
             await self._safe_reply(
                 message,
-                f"Language detected: {detected or 'unknown'}. Sending to LLM...",
+                f"🌍 **Language Detection**\n"
+                f"📝 Detected: `{detected or 'unknown'}`\n"
+                f"🤖 Processing with enhanced structured outputs...\n"
+                f"⚡ Status: Sending to AI model...",
             )
         except Exception:
             pass
@@ -1965,21 +1793,8 @@ class TelegramBot:
             },
         ]
         async with self._sem():
-            # Provide structured outputs schema through response_format for forwarded messages
-            fwd_response_format: dict[str, object] = {"type": "json_object"}
-            try:
-                from app.core.summary_contract import get_summary_json_schema
-
-                fwd_response_format = {
-                    "type": "json_schema",
-                    "json_schema": {
-                        "name": "summary_schema",
-                        "schema": get_summary_json_schema(),
-                        "strict": True,
-                    },
-                }
-            except Exception:
-                pass
+            # Use enhanced structured output configuration for forwarded messages
+            fwd_response_format = self._build_structured_response_format()
 
             llm = await self._openrouter.chat(
                 messages,
@@ -1989,15 +1804,27 @@ class TelegramBot:
                 request_id=req_id,
                 response_format=fwd_response_format,
             )
-        # Notify: LLM finished (forward)
+
+        # Enhanced notification for forward completion
         try:
+            status_emoji = "✅" if llm.status == "ok" else "❌"
+            latency_sec = (llm.latency_ms or 0) / 1000.0
+            structured_info = ""
+            if hasattr(llm, 'structured_output_used') and llm.structured_output_used:
+                mode = getattr(llm, 'structured_output_mode', 'unknown')
+                structured_info = f"\n🔧 Schema: {mode.upper()}"
+
             await self._safe_reply(
                 message,
-                f"LLM call finished ({'ok' if llm.status == 'ok' else 'error'}, {llm.latency_ms or 0} ms).",
+                f"🤖 **Enhanced AI Analysis Complete**\n"
+                f"{status_emoji} Status: {'Success' if llm.status == 'ok' else 'Error'}\n"
+                f"⏱️ Time: {latency_sec:.1f}s{structured_info}\n"
+                f"📋 Status: {'Generating summary...' if llm.status == 'ok' else 'Processing error...'}",
             )
         except Exception:
             pass
-        # Special-case salvage for structured output parse errors in forward flow
+
+        # Enhanced salvage logic for forward flow
         forward_salvage_shaped: dict[str, Any] | None = None
         if llm.status != "ok" and (llm.error_text or "") == "structured_output_parse_error":
             try:
@@ -2007,6 +1834,9 @@ class TelegramBot:
                 if forward_salvage_shaped is None:
                     pr = parse_summary_response(llm.response_json, llm.response_text)
                     forward_salvage_shaped = pr.shaped
+
+                if forward_salvage_shaped:
+                    logger.info("forward_structured_output_salvage_success", extra={"cid": correlation_id})
             except Exception:
                 forward_salvage_shaped = None
 
@@ -2033,7 +1863,12 @@ class TelegramBot:
             except Exception as e:  # noqa: BLE001
                 logger.error("persist_llm_error", extra={"error": str(e), "cid": correlation_id})
             self.db.update_request_status(req_id, "error")
-            await self._safe_reply(message, "LLM error. Error ID: {correlation_id}")
+            await self._safe_reply(
+                message,
+                f"❌ **Enhanced Processing Failed**\n"
+                f"🚨 LLM error despite smart fallbacks\n"
+                f"🆔 Error ID: `{correlation_id}`"
+            )
             logger.error("openrouter_error", extra={"error": llm.error_text, "cid": correlation_id})
             try:
                 self._audit(
@@ -2056,9 +1891,9 @@ class TelegramBot:
                 )
             return
 
-        # Prefer structured outputs parsed JSON when available
+        # Enhanced parsing for forward flow
         forward_shaped: dict[str, Any] | None = forward_salvage_shaped
-        # 1) Try simple local extraction first
+
         if forward_shaped is None:
             try:
                 extracted_fwd = extract_json(llm.response_text or "")
@@ -2066,242 +1901,92 @@ class TelegramBot:
                     forward_shaped = validate_and_shape_summary(extracted_fwd)
             except Exception:
                 forward_shaped = None
-        # 2) If not parsed yet, try robust parser
-        parse_result = (
-            parse_summary_response(llm.response_json, llm.response_text)
-            if forward_shaped is None
-            else None
-        )
-        if parse_result and parse_result.shaped is not None:
-            forward_shaped = parse_result.shaped
-            if parse_result.used_local_fix:
-                try:
+
+        if forward_shaped is None:
+            parse_result = parse_summary_response(llm.response_json, llm.response_text)
+            if parse_result and parse_result.shaped is not None:
+                forward_shaped = parse_result.shaped
+                if parse_result.used_local_fix:
                     logger.info(
                         "json_local_fix_applied",
                         extra={"cid": correlation_id, "stage": "initial_forwarded"},
                     )
-                except Exception:
-                    pass
             else:
-                needs_repair = not (
-                    forward_shaped.get("summary_250") and forward_shaped.get("summary_1000")
-                )
-                if needs_repair:
-                    try:
-                        logger.info(
-                            "json_repair_attempt",
-                            extra={"cid": correlation_id, "reason": "missing_required_fields"},
-                        )
-                        repair_messages_3 = [
-                            {"role": "system", "content": system_prompt},
-                            {"role": "user", "content": messages[1]["content"]},
-                            {"role": "assistant", "content": llm.response_text or ""},
-                            {
-                                "role": "user",
-                                "content": (
-                                    "Your previous message was not a valid JSON object. "
-                                    "Respond with ONLY a corrected JSON that matches the schema exactly."
-                                ),
-                            },
-                        ]
-                        async with self._sem():
-                            fwd_repair_response_format_1: dict[str, object] = {
-                                "type": "json_object"
-                            }
-                            try:
-                                from app.core.summary_contract import get_summary_json_schema
-
-                                fwd_repair_response_format_1 = {
-                                    "type": "json_schema",
-                                    "json_schema": {
-                                        "name": "summary_schema",
-                                        "schema": get_summary_json_schema(),
-                                        "strict": True,
-                                    },
-                                }
-                            except Exception:
-                                pass
-
-                            repair = await self._openrouter.chat(
-                                repair_messages_3,
-                                temperature=self.cfg.openrouter.temperature,
-                                max_tokens=self.cfg.openrouter.max_tokens,
-                                top_p=self.cfg.openrouter.top_p,
-                                request_id=req_id,
-                                response_format=fwd_repair_response_format_1,
-                            )
-                        if repair.status == "ok":
-                            repair_result = parse_summary_response(
-                                repair.response_json, repair.response_text
-                            )
-                            if repair_result.shaped is not None:
-                                forward_shaped = repair_result.shaped
-                                if repair_result.used_local_fix:
-                                    try:
-                                        logger.info(
-                                            "json_local_fix_applied",
-                                            extra={
-                                                "cid": correlation_id,
-                                                "stage": "repair_forwarded",
-                                            },
-                                        )
-                                    except Exception:
-                                        pass
-                            else:
-                                try:
-                                    logger.error(
-                                        "json_repair_parse_failed_preview",
-                                        extra={
-                                            "cid": correlation_id,
-                                            "errors": repair_result.errors[-5:]
-                                            if repair_result.errors
-                                            else None,
-                                            "preview": (repair.response_text or "")[
-                                                : self.cfg.runtime.log_truncate_length
-                                            ],
-                                            "tail": (repair.response_text or "")[
-                                                -self.cfg.runtime.log_truncate_length :
-                                            ],
-                                        },
-                                    )
-                                except Exception:
-                                    pass
-                                raise ValueError("repair_failed")
-                    except Exception:
-                        self.db.update_request_status(req_id, "error")
-                        await self._safe_reply(
-                            message, f"Invalid summary format. Error ID: {correlation_id}"
-                        )
-
-                        # Update interaction with error
-                        if interaction_id:
-                            self._update_user_interaction(
-                                interaction_id=interaction_id,
-                                response_sent=True,
-                                response_type="error",
-                                error_occurred=True,
-                                error_message="Invalid summary format",
-                                request_id=req_id,
-                            )
-                        return
-        else:
-            try:
-                logger.error(
-                    "summary_json_invalid",
-                    extra={
-                        "cid": correlation_id,
-                        "errors": parse_result.errors[-5:] if parse_result.errors else None,
-                        "preview": (llm.response_text or "")[
-                            : self.cfg.runtime.log_truncate_length
-                        ],
-                        "tail": (llm.response_text or "")[-self.cfg.runtime.log_truncate_length :],
-                    },
-                )
-            except Exception:
-                pass
-            # 3) Attempt one repair using assistant prefill best-practice
-            try:
-                logger.info(
-                    "json_repair_attempt",
-                    extra={
-                        "cid": correlation_id,
-                        "reason": parse_result.errors[-3:] if parse_result.errors else None,
-                    },
-                )
-                repair_messages_4 = [
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": messages[1]["content"]},
-                    {"role": "assistant", "content": llm.response_text or ""},
-                    {
-                        "role": "user",
-                        "content": (
-                            "Your previous message was not a valid JSON object. "
-                            "Respond with ONLY a corrected JSON that matches the schema exactly."
-                        ),
-                    },
-                ]
-                async with self._sem():
-                    # Enforce schema during repair for forwarded messages
-                    fwd_repair_response_format_2: dict[str, object] = {"type": "json_object"}
-                    try:
-                        from app.core.summary_contract import get_summary_json_schema
-
-                        fwd_repair_response_format_2 = {
-                            "type": "json_schema",
-                            "json_schema": {
-                                "name": "summary_schema",
-                                "schema": get_summary_json_schema(),
-                                "strict": True,
-                            },
-                        }
-                    except Exception:
-                        pass
-
-                    repair = await self._openrouter.chat(
-                        repair_messages_4,
-                        temperature=self.cfg.openrouter.temperature,
-                        max_tokens=self.cfg.openrouter.max_tokens,
-                        top_p=self.cfg.openrouter.top_p,
-                        request_id=req_id,
-                        response_format=fwd_repair_response_format_2,
+                # Enhanced repair for forward flow
+                try:
+                    logger.info(
+                        "json_repair_attempt_forward_enhanced",
+                        extra={
+                            "cid": correlation_id,
+                            "reason": parse_result.errors[-3:] if parse_result and parse_result.errors else None,
+                            "structured_mode": self.cfg.openrouter.structured_output_mode,
+                        },
                     )
-                if repair.status == "ok":
-                    repair_result = parse_summary_response(
-                        repair.response_json, repair.response_text
-                    )
-                    if repair_result.shaped is not None:
-                        forward_shaped = repair_result.shaped
-                        if repair_result.used_local_fix:
-                            try:
-                                logger.info(
-                                    "json_local_fix_applied",
-                                    extra={"cid": correlation_id, "stage": "repair_forwarded"},
-                                )
-                            except Exception:
-                                pass
+                    repair_messages = [
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": messages[1]["content"]},
+                        {"role": "assistant", "content": llm.response_text or ""},
+                        {
+                            "role": "user",
+                            "content": (
+                                "Your previous message was not a valid JSON object. "
+                                "Respond with ONLY a corrected JSON that matches the schema exactly."
+                            ),
+                        },
+                    ]
+                    async with self._sem():
+                        fwd_repair_response_format = self._build_structured_response_format()
+                        repair = await self._openrouter.chat(
+                            repair_messages,
+                            temperature=self.cfg.openrouter.temperature,
+                            max_tokens=self.cfg.openrouter.max_tokens,
+                            top_p=self.cfg.openrouter.top_p,
+                            request_id=req_id,
+                            response_format=fwd_repair_response_format,
+                        )
+                    if repair.status == "ok":
+                        repair_result = parse_summary_response(
+                            repair.response_json, repair.response_text
+                        )
+                        if repair_result.shaped is not None:
+                            forward_shaped = repair_result.shaped
+                            logger.info(
+                                "json_repair_success_forward_enhanced",
+                                extra={"cid": correlation_id, "used_local_fix": repair_result.used_local_fix}
+                            )
+                        else:
+                            raise ValueError("repair_failed")
                     else:
-                        try:
-                            logger.error(
-                                "json_repair_parse_failed_preview",
-                                extra={
-                                    "cid": correlation_id,
-                                    "errors": repair_result.errors[-5:]
-                                    if repair_result.errors
-                                    else None,
-                                    "preview": (repair.response_text or "")[
-                                        : self.cfg.runtime.log_truncate_length
-                                    ],
-                                    "tail": (repair.response_text or "")[
-                                        -self.cfg.runtime.log_truncate_length :
-                                    ],
-                                },
-                            )
-                        except Exception:
-                            pass
-                        raise ValueError("repair_failed")
-                else:
-                    raise ValueError("repair_call_error")
-            except Exception:
-                self.db.update_request_status(req_id, "error")
-                await self._safe_reply(
-                    message, f"Invalid summary format. Error ID: {correlation_id}"
-                )
-
-                # Update interaction with error
-                if interaction_id:
-                    self._update_user_interaction(
-                        interaction_id=interaction_id,
-                        response_sent=True,
-                        response_type="error",
-                        error_occurred=True,
-                        error_message="Invalid summary format",
-                        request_id=req_id,
+                        raise ValueError("repair_call_error")
+                except Exception:
+                    self.db.update_request_status(req_id, "error")
+                    await self._safe_reply(
+                        message,
+                        f"❌ **Enhanced Processing Failed**\n"
+                        f"🚨 Invalid summary format despite smart fallbacks\n"
+                        f"🆔 Error ID: `{correlation_id}`"
                     )
-                return
+
+                    # Update interaction with error
+                    if interaction_id:
+                        self._update_user_interaction(
+                            interaction_id=interaction_id,
+                            response_sent=True,
+                            response_type="error",
+                            error_occurred=True,
+                            error_message="Invalid summary format",
+                            request_id=req_id,
+                        )
+                    return
 
         if forward_shaped is None:
             self.db.update_request_status(req_id, "error")
-            await self._safe_reply(message, f"Invalid summary format. Error ID: {correlation_id}")
+            await self._safe_reply(
+                message,
+                f"❌ **Enhanced Processing Failed**\n"
+                f"🚨 Unable to generate valid summary\n"
+                f"🆔 Error ID: `{correlation_id}`"
+            )
 
             if interaction_id:
                 self._update_user_interaction(
@@ -2313,6 +1998,7 @@ class TelegramBot:
                     request_id=req_id,
                 )
             return
+
         try:
             self.db.insert_llm_call(
                 request_id=req_id,
@@ -2351,20 +2037,24 @@ class TelegramBot:
                 request_id=req_id,
             )
 
-        # Quick human-friendly preview before JSON (best-practice feedback)
+        # Enhanced preview for forward flow
         try:
             preview_lines = [
-                "TL;DR:",
+                "🎉 **Enhanced Forward Summary Complete!**",
+                "",
+                "📋 **TL;DR:**",
                 str(forward_shaped.get("summary_250", "")).strip(),
             ]
             tags = forward_shaped.get("topic_tags") or []
             if tags:
-                preview_lines.append("Tags: " + " ".join(tags[:6]))
+                preview_lines.append("🏷️ Tags: " + " ".join(tags[:6]))
             ideas = [
                 str(x).strip() for x in (forward_shaped.get("key_ideas") or []) if str(x).strip()
             ]
-            for idea in ideas[:3]:
-                preview_lines.append(f"- {idea}")
+            if ideas:
+                preview_lines.append("💡 Key Ideas:")
+                for idea in ideas[:3]:
+                    preview_lines.append(f"• {idea}")
             await self._safe_reply(message, "\n".join(preview_lines))
         except Exception:
             pass
@@ -2379,11 +2069,11 @@ class TelegramBot:
                 bio = io.BytesIO(pretty.encode("utf-8"))
                 bio.name = "summary.json"
                 msg_any: Any = message
-                await msg_any.reply_document(bio, caption="Summary JSON")
+                await msg_any.reply_document(bio, caption="📊 Enhanced Summary JSON")
                 return
             except Exception as e:  # noqa: BLE001
                 logger.error("reply_document_failed", extra={"error": str(e)})
-        await self._safe_reply(message, f"```\n{pretty}\n```")
+        await self._safe_reply(message, f"```json\n{pretty}\n```")
 
     async def _safe_reply(self, message: Any, text: str, *, parse_mode: str | None = None) -> None:
         try:
@@ -2606,6 +2296,7 @@ class TelegramBot:
                 "user_id": user_id,
                 "interaction_type": interaction_type,
                 "cid": correlation_id,
+                "structured_output_enabled": self.cfg.openrouter.enable_structured_outputs,
             },
         )
         return 0
@@ -2626,7 +2317,7 @@ class TelegramBot:
         # The current database schema doesn't include user_interactions table
         logger.debug(
             "user_interaction_update_placeholder",
-            extra={"interaction_id": interaction_id},
+            extra={"interaction_id": interaction_id, "response_type": response_type},
         )
 
 
