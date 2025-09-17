@@ -52,7 +52,7 @@ class RequestBuilder:
                 raise ValueError(f"Message {i} content must be string")
 
         # Validate other parameters
-        if not isinstance(request.temperature, (int, float)):
+        if not isinstance(request.temperature, int | float):
             raise ValueError("Temperature must be numeric")
         if request.temperature < 0 or request.temperature > 2:
             raise ValueError("Temperature must be between 0 and 2")
@@ -64,7 +64,7 @@ class RequestBuilder:
                 raise ValueError("Max tokens too large")
 
         if request.top_p is not None:
-            if not isinstance(request.top_p, (int, float)):
+            if not isinstance(request.top_p, int | float):
                 raise ValueError("Top_p must be numeric")
             if request.top_p < 0 or request.top_p > 1:
                 raise ValueError("Top_p must be between 0 and 1")

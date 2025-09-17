@@ -417,7 +417,7 @@ class TelegramMessage:
                 result[field_name] = field_value.value
             elif isinstance(field_value, datetime):
                 result[field_name] = field_value.isoformat()
-            elif isinstance(field_value, (TelegramUser, TelegramChat)):
+            elif isinstance(field_value, TelegramUser | TelegramChat):
                 result[field_name] = field_value.__dict__
             elif isinstance(field_value, list):
                 result[field_name] = [
@@ -453,7 +453,7 @@ class TelegramMessage:
         }
 
         result = media_map.get(self.media_type)
-        return result if isinstance(result, (dict, list)) else None
+        return result if isinstance(result, dict | list) else None
 
     def get_urls(self) -> list[str]:
         """Extract URLs from text and entities."""

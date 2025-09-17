@@ -97,6 +97,41 @@ class OpenRouterClient:
             log_truncate_length=log_truncate_length,
         )
 
+    def _get_error_message(self, status_code: int, data: dict[str, Any] | None) -> str:
+        """Return a human-friendly error message for an HTTP status.
+
+        This mirrors the expectations asserted in tests by mapping common
+        statuses to stable, descriptive messages and appending any message
+        provided by the API payload when present.
+        """
+        # Extract optional message from payload (string or nested {error: {message}})
+        payload_message: str | None = None
+        if data:
+            err = data.get("error")
+            if isinstance(err, dict):
+                msg = err.get("message")
+                if isinstance(msg, str) and msg:
+                    payload_message = msg
+            elif isinstance(err, str) and err:
+                payload_message = err
+
+        base_map: dict[int, str] = {
+            400: "Invalid or missing request parameters",
+            401: "Authentication failed",
+            402: "Insufficient account balance",
+            404: "Requested resource not found",
+            429: "Rate limit exceeded",
+        }
+
+        if status_code >= 500:
+            base = "Internal server error"
+        else:
+            base = base_map.get(status_code, f"HTTP {status_code} error")
+
+        if payload_message:
+            return f"{base}: {payload_message}"
+        return base
+
     def _validate_init_params(
         self,
         api_key: str,
@@ -127,7 +162,7 @@ class OpenRouterClient:
             raise ValueError("X-Title too long")
 
         # Security: Validate timeout
-        if not isinstance(timeout_sec, (int, float)) or timeout_sec <= 0:
+        if not isinstance(timeout_sec, int | float) or timeout_sec <= 0:
             raise ValueError("Timeout must be positive")
         if timeout_sec > 300:  # 5 minutes max
             raise ValueError("Timeout too large")
@@ -135,7 +170,7 @@ class OpenRouterClient:
         # Security: Validate retry parameters
         if not isinstance(max_retries, int) or max_retries < 0 or max_retries > 10:
             raise ValueError("Max retries must be between 0 and 10")
-        if not isinstance(backoff_base, (int, float)) or backoff_base < 0:
+        if not isinstance(backoff_base, int | float) or backoff_base < 0:
             raise ValueError("Backoff base must be non-negative")
 
         # Validate structured output settings
