@@ -1470,29 +1470,33 @@ class TelegramBot:
         asyncio.create_task(_persist_llm_call())  # Fire and forget for performance
 
         if llm.status != "ok" and salvage_shaped is None:
-            self.db.update_request_status(req_id, "error")
-            # Detailed error message already sent above, just log for debugging
-            logger.error("openrouter_error", extra={"error": llm.error_text, "cid": correlation_id})
-            try:
-                self._audit(
-                    "ERROR",
-                    "openrouter_error",
-                    {"request_id": req_id, "cid": correlation_id, "error": llm.error_text},
+            # Allow JSON repair flow for structured_output_parse_error instead of returning early
+            if (llm.error_text or "") != "structured_output_parse_error":
+                self.db.update_request_status(req_id, "error")
+                # Detailed error message already sent above, just log for debugging
+                logger.error(
+                    "openrouter_error", extra={"error": llm.error_text, "cid": correlation_id}
                 )
-            except Exception:
-                pass
+                try:
+                    self._audit(
+                        "ERROR",
+                        "openrouter_error",
+                        {"request_id": req_id, "cid": correlation_id, "error": llm.error_text},
+                    )
+                except Exception:
+                    pass
 
-            # Update interaction with error
-            if interaction_id:
-                self._update_user_interaction(
-                    interaction_id=interaction_id,
-                    response_sent=True,
-                    response_type="error",
-                    error_occurred=True,
-                    error_message=f"LLM error: {llm.error_text or 'Unknown error'}",
-                    request_id=req_id,
-                )
-            return
+                # Update interaction with error
+                if interaction_id:
+                    self._update_user_interaction(
+                        interaction_id=interaction_id,
+                        response_sent=True,
+                        response_type="error",
+                        error_occurred=True,
+                        error_message=f"LLM error: {llm.error_text or 'Unknown error'}",
+                        request_id=req_id,
+                    )
+                return
 
         # Best-effort parse + validate using robust parser first
         summary_shaped: dict[str, Any] | None = salvage_shaped
