@@ -97,7 +97,7 @@ class LLMSummarizer:
             llm = await self.openrouter.chat(
                 messages,
                 temperature=self.cfg.openrouter.temperature,
-                max_tokens=(self.cfg.openrouter.max_tokens or 2048),
+                max_tokens=self.cfg.openrouter.max_tokens,
                 top_p=self.cfg.openrouter.top_p,
                 request_id=req_id,
                 response_format=response_format,
@@ -209,6 +209,16 @@ class LLMSummarizer:
             )
 
         if summary_shaped is None:
+            summary_shaped = await self._try_fallback_models(
+                message,
+                system_prompt,
+                user_content,
+                req_id,
+                correlation_id,
+                interaction_id,
+            )
+
+        if summary_shaped is None:
             await self._handle_parsing_failure(message, req_id, correlation_id, interaction_id)
             return None
 
@@ -294,11 +304,42 @@ class LLMSummarizer:
         self.db.update_request_status(req_id, "error")
         logger.error("openrouter_error", extra={"error": llm.error_text, "cid": correlation_id})
 
+        error_details_parts: list[str] = []
+        if getattr(llm, "error_context", None):
+            ctx = llm.error_context or {}
+            status_code = ctx.get("status_code")
+            if status_code is not None:
+                error_details_parts.append(f"HTTP {status_code}")
+            base = ctx.get("message")
+            if base:
+                error_details_parts.append(str(base))
+            api_error = ctx.get("api_error")
+            if api_error and api_error not in error_details_parts:
+                error_details_parts.append(str(api_error))
+            provider = ctx.get("provider")
+            if provider:
+                error_details_parts.append(f"Provider: {provider}")
+
+        if llm.error_text and llm.error_text not in error_details_parts:
+            error_details_parts.append(str(llm.error_text))
+
+        error_details = " | ".join(error_details_parts) if error_details_parts else None
+
         try:
             self._audit(
                 "ERROR",
                 "openrouter_error",
                 {"request_id": req_id, "cid": correlation_id, "error": llm.error_text},
+            )
+        except Exception:
+            pass
+
+        try:
+            await self.response_formatter.send_error_notification(
+                message,
+                "llm_error",
+                correlation_id or "unknown",
+                details=error_details,
             )
         except Exception:
             pass
@@ -310,7 +351,7 @@ class LLMSummarizer:
                 response_sent=True,
                 response_type="error",
                 error_occurred=True,
-                error_message=f"LLM error: {llm.error_text or 'Unknown error'}",
+                error_message=error_details or f"LLM error: {llm.error_text or 'Unknown error'}",
                 request_id=req_id,
             )
 
@@ -368,7 +409,95 @@ class LLMSummarizer:
             parse_result,
             correlation_id,
             interaction_id,
+            model_override=llm.model,
         )
+
+    async def _try_fallback_models(
+        self,
+        message: Any,
+        system_prompt: str,
+        user_content: str,
+        req_id: int,
+        correlation_id: str | None,
+        interaction_id: int | None,
+    ) -> dict[str, Any] | None:
+        """Attempt summarization with configured fallback models."""
+        fallback_models = [
+            model
+            for model in self.cfg.openrouter.fallback_models
+            if model and model != self.cfg.openrouter.model
+        ]
+        if not fallback_models:
+            return None
+
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_content},
+        ]
+        response_format = self._build_structured_response_format()
+
+        for model_name in fallback_models:
+            logger.info(
+                "llm_fallback_attempt",
+                extra={"cid": correlation_id, "model": model_name, "request_id": req_id},
+            )
+
+            async with self._sem():
+                llm = await self.openrouter.chat(
+                    messages,
+                    temperature=self.cfg.openrouter.temperature,
+                    max_tokens=self.cfg.openrouter.max_tokens,
+                    top_p=self.cfg.openrouter.top_p,
+                    request_id=req_id,
+                    response_format=response_format,
+                    model_override=model_name,
+                )
+
+            asyncio.create_task(self._persist_llm_call(llm, req_id, correlation_id))
+            await self.response_formatter.send_llm_completion_notification(
+                message, llm, correlation_id
+            )
+
+            if llm.status != "ok":
+                salvage = None
+                if (llm.error_text or "") == "structured_output_parse_error":
+                    salvage = await self._attempt_salvage_parsing(llm, correlation_id)
+                if salvage:
+                    self._log_llm_finished(llm, salvage, correlation_id)
+                    return salvage
+
+                logger.warning(
+                    "llm_fallback_failed",
+                    extra={
+                        "cid": correlation_id,
+                        "model": model_name,
+                        "status": llm.status,
+                        "error": llm.error_text,
+                    },
+                )
+                continue
+
+            parse_result = parse_summary_response(llm.response_json, llm.response_text)
+            shaped = parse_result.shaped if parse_result else None
+
+            if shaped is None:
+                shaped = await self._attempt_json_repair(
+                    message,
+                    llm,
+                    system_prompt,
+                    user_content,
+                    req_id,
+                    parse_result,
+                    correlation_id,
+                    interaction_id,
+                    model_override=model_name,
+                )
+
+            if shaped is not None:
+                self._log_llm_finished(llm, shaped, correlation_id)
+                return shaped
+
+        return None
 
     async def _attempt_json_repair(
         self,
@@ -380,6 +509,8 @@ class LLMSummarizer:
         parse_result: Any,
         correlation_id: str | None,
         interaction_id: int | None,
+        *,
+        model_override: str | None = None,
     ) -> dict[str, Any] | None:
         """Attempt to repair invalid JSON response."""
         try:
@@ -413,10 +544,11 @@ class LLMSummarizer:
                 repair = await self.openrouter.chat(
                     repair_messages,
                     temperature=self.cfg.openrouter.temperature,
-                    max_tokens=(self.cfg.openrouter.max_tokens or 2048),
+                    max_tokens=self.cfg.openrouter.max_tokens,
                     top_p=self.cfg.openrouter.top_p,
                     request_id=req_id,
                     response_format=repair_response_format,
+                    model_override=model_override,
                 )
 
             if repair.status == "ok":
@@ -448,7 +580,10 @@ class LLMSummarizer:
         """Handle JSON repair failure."""
         self.db.update_request_status(req_id, "error")
         await self.response_formatter.send_error_notification(
-            message, "processing_failed", correlation_id
+            message,
+            "processing_failed",
+            correlation_id or "unknown",
+            details="Unable to repair invalid JSON returned by the model",
         )
 
         # Update interaction with error
@@ -472,7 +607,10 @@ class LLMSummarizer:
         """Handle final parsing failure."""
         self.db.update_request_status(req_id, "error")
         await self.response_formatter.send_error_notification(
-            message, "processing_failed", correlation_id
+            message,
+            "processing_failed",
+            correlation_id or "unknown",
+            details="Model did not produce valid summary output after retries",
         )
 
         if interaction_id:

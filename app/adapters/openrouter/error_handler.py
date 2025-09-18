@@ -112,6 +112,8 @@ class ErrorHandler:
         error_message: str,
         headers: dict,
         messages: list[dict],
+        *,
+        error_context: dict | None = None,
     ) -> LLMCallResult:
         """Build error result consistently."""
         return LLMCallResult(
@@ -129,6 +131,7 @@ class ErrorHandler:
             endpoint="/api/v1/chat/completions",
             structured_output_used=False,
             structured_output_mode=None,
+            error_context=error_context,
         )
 
     def log_attempt(self, attempt: int, model: str, request_id: int | None = None) -> None:

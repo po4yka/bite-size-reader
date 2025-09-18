@@ -165,8 +165,8 @@ class ResponseProcessor:
             return "response_format" in err_dump
         return False
 
-    def get_error_message(self, status_code: int, data: dict) -> str:
-        """Get descriptive error message based on HTTP status code."""
+    def get_error_context(self, status_code: int, data: dict) -> dict[str, Any]:
+        """Return structured error context for logging and user messaging."""
         error_messages = {
             400: "Invalid or missing request parameters",
             401: "Authentication failed (invalid or expired API key)",
@@ -177,12 +177,28 @@ class ResponseProcessor:
         }
 
         base_message = error_messages.get(status_code, f"HTTP {status_code} error")
-        api_error = (
-            data.get("error", {}).get("message")
-            if isinstance(data.get("error"), dict)
-            else data.get("error")
-        )
+        api_error = None
+        if isinstance(data, dict):
+            raw_error = data.get("error")
+            if isinstance(raw_error, dict):
+                api_error = raw_error.get("message") or raw_error.get("code")
+            elif isinstance(raw_error, str):
+                api_error = raw_error
 
-        if api_error:
-            return f"{base_message}: {api_error}"
-        return base_message
+        provider = None
+        if isinstance(data, dict):
+            provider = data.get("provider")
+        provider_detail = None
+        if isinstance(provider, dict):
+            provider_detail = provider.get("name") or provider.get("id")
+        elif isinstance(provider, str):
+            provider_detail = provider
+
+        context = {
+            "status_code": status_code,
+            "message": base_message,
+            "api_error": api_error,
+        }
+        if provider_detail:
+            context["provider"] = provider_detail
+        return context

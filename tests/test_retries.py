@@ -126,7 +126,7 @@ class TestRetries(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(res.error_text, "structured_output_parse_error")
             self.assertEqual(res.model, "primary/model")
             self.assertEqual(res.response_text, "not json")
-            self.assertEqual(attempts, ["primary/model"])
+            self.assertEqual(attempts, ["primary/model", "fallback/model"])
         finally:
             setattr(or_httpx, "AsyncClient", cast(Any, original))
 

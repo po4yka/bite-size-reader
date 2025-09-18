@@ -479,23 +479,25 @@ class ResponseFormatter:
                     f"🆔 Error ID: `{correlation_id}`",
                 )
             elif error_type == "processing_failed":
+                detail_block = f"\n🔍 Reason: {details}" if details else ""
                 if self._safe_reply_func is not None:
                     await self._safe_reply_func(
                         message,
-                        f"Invalid summary format. Error ID: {correlation_id}",
+                        f"Invalid summary format. Error ID: {correlation_id}{detail_block}",
                     )
                 else:
                     await self.safe_reply(
                         message,
                         f"❌ **Enhanced Processing Failed**\n"
-                        f"🚨 Invalid summary format despite smart fallbacks\n"
+                        f"🚨 Invalid summary format despite smart fallbacks{detail_block}\n"
                         f"🆔 Error ID: `{correlation_id}`",
                     )
             elif error_type == "llm_error":
+                detail_block = f"\n🔍 Provider response: {details}" if details else ""
                 await self.safe_reply(
                     message,
                     f"❌ **Enhanced Processing Failed**\n"
-                    f"🚨 LLM error despite smart fallbacks\n"
+                    f"🚨 LLM error despite smart fallbacks{detail_block}\n"
                     f"🆔 Error ID: `{correlation_id}`",
                 )
             else:

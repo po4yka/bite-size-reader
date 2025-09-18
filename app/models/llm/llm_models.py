@@ -24,6 +24,7 @@ class LLMCallResult:
     endpoint: str | None = "/api/v1/chat/completions"
     structured_output_used: bool = False
     structured_output_mode: str | None = None
+    error_context: dict[str, Any] | None = None
 
 
 @dataclass

@@ -238,6 +238,7 @@ class OpenRouterClient:
         structured_output_used = False
         structured_output_mode_used = None
         structured_parse_error = False
+        last_error_context: dict[str, Any] | None = None
 
         # Try each model
         for model in models_to_try:
@@ -489,7 +490,9 @@ class OpenRouterClient:
                         )
 
                     # Handle various error codes
-                    error_message = self.response_processor.get_error_message(status_code, data)
+                    error_context = self.response_processor.get_error_context(status_code, data)
+                    last_error_context = error_context
+                    error_message = error_context["message"]
 
                     # Non-retryable errors
                     if self.error_handler.is_non_retryable_error(status_code):
@@ -506,6 +509,7 @@ class OpenRouterClient:
                             error_message,
                             redacted_headers,
                             sanitized_messages,
+                            error_context=error_context,
                         )
 
                     # 404: Try next model if available
@@ -558,11 +562,13 @@ class OpenRouterClient:
                             error_message,
                             redacted_headers,
                             sanitized_messages,
+                            error_context=error_context,
                         )
 
                     # Retryable errors
                     if self.error_handler.should_retry(status_code, attempt):
                         last_error_text = error_message
+                        last_error_context = error_context
                         if status_code == 429:
                             await self.error_handler.handle_rate_limit(resp.headers)
                         else:
@@ -585,12 +591,18 @@ class OpenRouterClient:
                         error_message,
                         redacted_headers,
                         sanitized_messages,
+                        error_context=error_context,
                     )
 
                 except Exception as e:
                     latency = int((time.perf_counter() - started) * 1000)
                     last_latency = latency
                     last_error_text = str(e)
+                    last_error_context = {
+                        "status_code": None,
+                        "message": "Client exception",
+                        "api_error": str(e),
+                    }
                     if attempt < self.error_handler._max_retries:
                         await self.error_handler.sleep_backoff(attempt)
                         continue
@@ -640,6 +652,7 @@ class OpenRouterClient:
             endpoint="/api/v1/chat/completions",
             structured_output_used=structured_output_used,
             structured_output_mode=structured_output_mode_used,
+            error_context=last_error_context,
         )
 
     async def get_models(self) -> dict[str, Any]:
