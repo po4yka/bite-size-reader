@@ -130,6 +130,166 @@ class TestRetries(unittest.IsolatedAsyncioTestCase):
         finally:
             setattr(or_httpx, "AsyncClient", cast(Any, original))
 
+    async def test_truncated_completion_triggers_retry_with_downgrade(self) -> None:
+        attempts: list[dict[str, Any]] = []
+
+        async def handler(url, headers, payload):
+            attempts.append(payload)
+            finish_reason = "length" if len(attempts) == 1 else "stop"
+            native_finish = "MAX_TOKENS" if len(attempts) == 1 else "STOP"
+
+            if len(attempts) == 1:
+                content = '{\n  "summary_250": "partial"\n'
+            else:
+                content = json.dumps({"summary_250": "ok", "summary_1000": "full"})
+
+            return _Resp(
+                200,
+                {
+                    "model": payload.get("model"),
+                    "choices": [
+                        {
+                            "message": {"content": content},
+                            "finish_reason": finish_reason,
+                            "native_finish_reason": native_finish,
+                        }
+                    ],
+                    "usage": {},
+                },
+            )
+
+        original = or_httpx.AsyncClient
+        try:
+
+            def _make_or_client(*args, **kwargs):
+                return _SeqAsyncClient(handler)
+
+            setattr(or_httpx, "AsyncClient", cast(Any, _make_or_client))
+            client = OpenRouterClient(
+                api_key="k",
+                model="primary/model",
+                fallback_models=[],
+                timeout_sec=2,
+                max_retries=1,
+                backoff_base=0.0,
+                provider_order=None,
+                enable_stats=False,
+                log_truncate_length=1000,
+            )
+
+            schema = {
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "test",
+                    "schema": {
+                        "type": "object",
+                        "properties": {
+                            "summary_250": {"type": "string"},
+                            "summary_1000": {"type": "string"},
+                        },
+                        "required": ["summary_250", "summary_1000"],
+                    },
+                    "strict": True,
+                },
+            }
+
+            result = await client.chat(
+                [{"role": "user", "content": "hi"}],
+                response_format=schema,
+            )
+
+            self.assertEqual(result.status, "ok")
+            self.assertEqual(len(attempts), 2)
+            self.assertEqual(result.model, "primary/model")
+            # Second attempt should downgrade to json_object
+            second_rf = attempts[1].get("response_format")
+            self.assertIsNotNone(second_rf)
+            self.assertEqual(second_rf.get("type"), "json_object")
+        finally:
+            setattr(or_httpx, "AsyncClient", cast(Any, original))
+
+    async def test_structured_outputs_404_downgrades_before_fallback(self) -> None:
+        attempts: list[dict[str, Any]] = []
+
+        async def handler(url, headers, payload):
+            attempts.append(payload)
+            if len(attempts) == 1:
+                return _Resp(
+                    404,
+                    {
+                        "error": {
+                            "message": "No endpoints found that can handle the requested parameters."
+                        }
+                    },
+                )
+
+            return _Resp(
+                200,
+                {
+                    "model": payload.get("model"),
+                    "choices": [
+                        {
+                            "message": {
+                                "content": json.dumps({"summary_250": "ok", "summary_1000": "full"})
+                            }
+                        }
+                    ],
+                    "usage": {},
+                },
+            )
+
+        original = or_httpx.AsyncClient
+        try:
+
+            def _make_or_client(*args, **kwargs):
+                return _SeqAsyncClient(handler)
+
+            setattr(or_httpx, "AsyncClient", cast(Any, _make_or_client))
+            client = OpenRouterClient(
+                api_key="k",
+                model="primary/model",
+                fallback_models=["fallback/model"],
+                timeout_sec=2,
+                max_retries=1,
+                backoff_base=0.0,
+                provider_order=None,
+                enable_stats=False,
+                log_truncate_length=1000,
+            )
+
+            schema = {
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "test",
+                    "schema": {
+                        "type": "object",
+                        "properties": {
+                            "summary_250": {"type": "string"},
+                            "summary_1000": {"type": "string"},
+                        },
+                        "required": ["summary_250", "summary_1000"],
+                    },
+                    "strict": True,
+                },
+            }
+
+            result = await client.chat(
+                [{"role": "user", "content": "hi"}],
+                response_format=schema,
+            )
+
+            self.assertEqual(result.status, "ok")
+            self.assertEqual(len(attempts), 2)
+            self.assertEqual(result.model, "primary/model")
+            first_rf = attempts[0].get("response_format")
+            self.assertIsNotNone(first_rf)
+            self.assertEqual(first_rf.get("type"), "json_schema")
+            second_rf = attempts[1].get("response_format")
+            self.assertIsNotNone(second_rf)
+            self.assertEqual(second_rf.get("type"), "json_object")
+        finally:
+            setattr(or_httpx, "AsyncClient", cast(Any, original))
+
     async def test_firecrawl_retries_then_success(self):
         attempts = {"n": 0}
 

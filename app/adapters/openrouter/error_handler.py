@@ -266,3 +266,32 @@ class ErrorHandler:
             )
 
         self._logger.warning("disable_structured_outputs", extra={"model": model})
+
+    def log_truncated_completion(
+        self,
+        model: str,
+        finish_reason: str | None,
+        native_finish_reason: str | None,
+        request_id: int | None = None,
+    ) -> None:
+        """Log when a completion stops because of output length limits."""
+        if self._audit:
+            self._audit(
+                "WARN",
+                "openrouter_truncated_completion",
+                {
+                    "model": model,
+                    "finish_reason": finish_reason,
+                    "native_finish_reason": native_finish_reason,
+                    "request_id": request_id,
+                },
+            )
+
+        self._logger.warning(
+            "completion_truncated",
+            extra={
+                "model": model,
+                "finish_reason": finish_reason,
+                "native_finish_reason": native_finish_reason,
+            },
+        )

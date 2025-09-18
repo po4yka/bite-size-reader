@@ -217,12 +217,17 @@ class OpenRouterClient:
 
         self.request_builder.validate_chat_request(request)
         sanitized_messages = self.request_builder.sanitize_messages(messages)
+        message_lengths = [len(str(msg.get("content", ""))) for msg in sanitized_messages]
+        message_roles = [msg.get("role", "?") for msg in sanitized_messages]
+        total_chars = sum(message_lengths)
 
         # Determine models to try
         primary_model = model_override if model_override else self._model
         models_to_try = self.model_capabilities.build_model_fallback_list(
             primary_model, self._fallback_models, response_format, self._enable_structured_outputs
         )
+        builder_rf_mode_original = self.request_builder._structured_output_mode
+        response_format_initial = response_format if isinstance(response_format, dict) else None
 
         # Track state across attempts
         last_error_text = None
@@ -253,17 +258,18 @@ class OpenRouterClient:
                         continue
 
             # Determine response format mode for this model
-            rf_mode_current = self.request_builder._structured_output_mode
-            requested_rf = response_format if isinstance(response_format, dict) else None
+            rf_mode_current = builder_rf_mode_original
+            response_format_current = response_format_initial
 
             # Retry logic for each model
             for attempt in range(self.error_handler._max_retries + 1):
                 self.error_handler.log_attempt(attempt, model, request_id)
 
                 # Build request components
+                self.request_builder._structured_output_mode = rf_mode_current
                 headers = self.request_builder.build_headers()
                 body = self.request_builder.build_request_body(
-                    model, sanitized_messages, request, requested_rf
+                    model, sanitized_messages, request, response_format_current
                 )
 
                 # Apply content compression if needed
@@ -285,7 +291,15 @@ class OpenRouterClient:
                 started = time.perf_counter()
                 try:
                     self.payload_logger.log_request(
-                        model, attempt, len(sanitized_messages), rf_included, rf_mode_current
+                        model=model,
+                        attempt=attempt,
+                        request_id=request_id,
+                        message_lengths=message_lengths,
+                        message_roles=message_roles,
+                        total_chars=total_chars,
+                        structured_output=rf_included,
+                        rf_mode=rf_mode_current,
+                        transforms=body.get("transforms"),
                     )
 
                     if self.payload_logger._debug_payloads:
@@ -305,8 +319,6 @@ class OpenRouterClient:
                     last_latency = latency
                     last_data = data
                     last_model_reported = data.get("model", model)
-
-                    self.payload_logger.log_response(resp.status_code, latency, last_model_reported)
 
                     if self.payload_logger._debug_payloads:
                         self.payload_logger.log_response_payload(data)
@@ -331,6 +343,8 @@ class OpenRouterClient:
                             else:
                                 rf_included = False
                                 structured_output_used = False
+                                structured_output_mode_used = None
+                                response_format_current = None
                                 self.error_handler.log_structured_outputs_disabled(
                                     model, request_id
                                 )
@@ -346,16 +360,83 @@ class OpenRouterClient:
                     if isinstance(text, str):
                         last_response_text = text
 
+                    finish_reason = None
+                    native_finish = None
+                    choices = data.get("choices") if isinstance(data, dict) else None
+                    if isinstance(choices, list) and choices:
+                        first_choice = choices[0] or {}
+                        if isinstance(first_choice, dict):
+                            finish_reason = first_choice.get("finish_reason")
+                            native_finish = first_choice.get("native_finish_reason")
+
+                    truncated, truncated_finish, truncated_native = (
+                        self.response_processor.is_completion_truncated(data)
+                    )
+                    finish_reason = finish_reason or truncated_finish
+                    native_finish = native_finish or truncated_native
+
+                    tokens_prompt = usage.get("prompt_tokens") if isinstance(usage, dict) else None
+                    tokens_completion = (
+                        usage.get("completion_tokens") if isinstance(usage, dict) else None
+                    )
+                    tokens_total = usage.get("total_tokens") if isinstance(usage, dict) else None
+
+                    self.payload_logger.log_response(
+                        status=status_code,
+                        latency_ms=latency,
+                        model=last_model_reported,
+                        attempt=attempt,
+                        request_id=request_id,
+                        truncated=truncated,
+                        finish_reason=finish_reason,
+                        native_finish_reason=native_finish,
+                        tokens_prompt=tokens_prompt,
+                        tokens_completion=tokens_completion,
+                        tokens_total=tokens_total,
+                        cost_usd=cost_usd,
+                        structured_output=rf_included,
+                        rf_mode=rf_mode_current,
+                    )
+
                     # Prepare redacted headers
                     redacted_headers = self.request_builder.get_redacted_headers(headers)
 
                     # Handle successful response
                     if status_code == 200:
+                        if truncated:
+                            last_error_text = "completion_truncated"
+                            if isinstance(text, str):
+                                last_response_text = text
+                            self.error_handler.log_truncated_completion(
+                                model, finish_reason, native_finish, request_id
+                            )
+
+                            if rf_included and response_format_current:
+                                if rf_mode_current == "json_schema":
+                                    rf_mode_current = "json_object"
+                                    self.error_handler.log_response_format_downgrade(
+                                        model, "json_schema", "json_object", request_id
+                                    )
+                                elif rf_mode_current == "json_object":
+                                    rf_included = False
+                                    structured_output_used = False
+                                    structured_output_mode_used = None
+                                    response_format_current = None
+                                    self.error_handler.log_structured_outputs_disabled(
+                                        model, request_id
+                                    )
+
+                            if attempt < self.error_handler._max_retries:
+                                await self.error_handler.sleep_backoff(attempt)
+                                continue
+
+                            break
+
                         # Validate structured output if expected
-                        if rf_included and requested_rf:
+                        if rf_included and response_format_current:
                             is_valid, processed_text = (
                                 self.response_processor.validate_structured_response(
-                                    text, rf_included, requested_rf
+                                    text, rf_included, response_format_current
                                 )
                             )
                             if not is_valid:
@@ -389,7 +470,7 @@ class OpenRouterClient:
                             structured_output_mode_used,
                             request_id,
                         )
-
+                        self.request_builder._structured_output_mode = builder_rf_mode_original
                         return LLMCallResult(
                             status="ok",
                             model=last_model_reported,
@@ -415,6 +496,7 @@ class OpenRouterClient:
                         self.error_handler.log_error(
                             attempt, model, status_code, error_message, request_id
                         )
+                        self.request_builder._structured_output_mode = builder_rf_mode_original
                         return self.error_handler.build_error_result(
                             last_model_reported,
                             text,
@@ -434,9 +516,39 @@ class OpenRouterClient:
                         self.error_handler.log_error(
                             attempt, model, status_code, error_message, request_id, severity
                         )
+
+                        handled_parameters_error = False
+                        if (
+                            rf_included
+                            and response_format_current
+                            and isinstance(error_message, str)
+                            and "no endpoints found" in error_message.lower()
+                        ):
+                            if rf_mode_current == "json_schema":
+                                rf_mode_current = "json_object"
+                                self.error_handler.log_response_format_downgrade(
+                                    model, "json_schema", "json_object", request_id
+                                )
+                                handled_parameters_error = True
+                            elif rf_mode_current == "json_object":
+                                rf_included = False
+                                structured_output_used = False
+                                structured_output_mode_used = None
+                                response_format_current = None
+                                self.error_handler.log_structured_outputs_disabled(
+                                    model, request_id
+                                )
+                                handled_parameters_error = True
+
+                        if handled_parameters_error and attempt < self.error_handler._max_retries:
+                            await self.error_handler.sleep_backoff(attempt)
+                            continue
+
                         if has_more_models:
+                            self.request_builder._structured_output_mode = builder_rf_mode_original
                             break  # Try next model
 
+                        self.request_builder._structured_output_mode = builder_rf_mode_original
                         return self.error_handler.build_error_result(
                             last_model_reported,
                             text,
@@ -463,6 +575,7 @@ class OpenRouterClient:
                     self.error_handler.log_error(
                         attempt, model, status_code, error_message, request_id
                     )
+                    self.request_builder._structured_output_mode = builder_rf_mode_original
                     return self.error_handler.build_error_result(
                         last_model_reported,
                         text,
@@ -483,6 +596,8 @@ class OpenRouterClient:
                         continue
                     else:
                         break  # Try next model
+
+            self.request_builder._structured_output_mode = builder_rf_mode_original
 
             # Break if structured output parse error (don't try other models)
             if last_error_text == "structured_output_parse_error":
@@ -505,6 +620,7 @@ class OpenRouterClient:
         if last_error_text == "structured_output_parse_error":
             structured_parse_error = True
 
+        self.request_builder._structured_output_mode = builder_rf_mode_original
         return LLMCallResult(
             status="error",
             model=last_model_reported,

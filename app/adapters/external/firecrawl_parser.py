@@ -10,6 +10,8 @@ from typing import Any
 
 import httpx
 
+from app.core.logging_utils import truncate_log_content
+
 
 @dataclass
 class FirecrawlResult:
@@ -162,7 +164,13 @@ class FirecrawlClient:
                 )
             self._logger.debug(
                 "firecrawl_request",
-                extra={"attempt": attempt, "url": url, "mobile": cur_mobile, "pdf": cur_pdf},
+                extra={
+                    "attempt": attempt,
+                    "url": url,
+                    "mobile": cur_mobile,
+                    "pdf": cur_pdf,
+                    "request_id": request_id,
+                },
             )
             started = time.perf_counter()
             try:
@@ -207,7 +215,12 @@ class FirecrawlClient:
                 last_data = data
                 last_latency = latency
                 self._logger.debug(
-                    "firecrawl_response", extra={"status": resp.status_code, "latency_ms": latency}
+                    "firecrawl_response",
+                    extra={
+                        "status": resp.status_code,
+                        "latency_ms": latency,
+                        "request_id": request_id,
+                    },
                 )
                 if self._debug_payloads:
                     preview = {
@@ -226,6 +239,16 @@ class FirecrawlClient:
                     response_error = data.get("error")
 
                     # Debug logging to understand the response structure
+                    markdown_len = (
+                        len(data.get("markdown") or "") if isinstance(data, dict) else None
+                    )
+                    html_len = len(data.get("html") or "") if isinstance(data, dict) else None
+                    data_items = None
+                    if isinstance(data.get("data"), list):
+                        data_items = len(data["data"])
+                    elif isinstance(data.get("data"), dict):
+                        data_items = 1
+
                     self._logger.debug(
                         "firecrawl_response_debug",
                         extra={
@@ -234,7 +257,9 @@ class FirecrawlClient:
                             "error_field": response_error,
                             "error_type": type(response_error).__name__,
                             "success_field": data.get("success"),
-                            "data_field": data.get("data"),
+                            "markdown_len": markdown_len,
+                            "html_len": html_len,
+                            "data_items": data_items,
                             "correlation_id": correlation_id,
                         },
                     )
@@ -323,6 +348,22 @@ class FirecrawlClient:
                             error_metadata = obj.get("metadata")
                             error_links = obj.get("links")
 
+                        summary_preview_source = error_content_markdown or error_content_html or ""
+                        self._logger.info(
+                            "firecrawl_result_summary",
+                            extra={
+                                "status": "error",
+                                "http_status": resp.status_code,
+                                "latency_ms": latency,
+                                "markdown_len": len(error_content_markdown or ""),
+                                "html_len": len(error_content_html or ""),
+                                "correlation_id": correlation_id,
+                                "request_id": request_id,
+                                "error": last_error,
+                                "excerpt": truncate_log_content(summary_preview_source, 160),
+                            },
+                        )
+
                         return FirecrawlResult(
                             status="error",
                             http_status=resp.status_code,
@@ -388,6 +429,20 @@ class FirecrawlClient:
                                 "request_id": request_id,
                             },
                         )
+                    summary_preview_source = content_markdown or content_html or ""
+                    self._logger.info(
+                        "firecrawl_result_summary",
+                        extra={
+                            "status": "ok",
+                            "http_status": resp.status_code,
+                            "latency_ms": latency,
+                            "markdown_len": len(content_markdown or ""),
+                            "html_len": len(content_html or ""),
+                            "correlation_id": correlation_id,
+                            "request_id": request_id,
+                            "excerpt": truncate_log_content(summary_preview_source, 160),
+                        },
+                    )
                     return FirecrawlResult(
                         status="ok",
                         http_status=resp.status_code,
@@ -467,6 +522,21 @@ class FirecrawlClient:
                 self._logger.error(
                     "firecrawl_error", extra={"status": resp.status_code, "error": error_message}
                 )
+                summary_preview_source = data.get("markdown") or data.get("html") or ""
+                self._logger.info(
+                    "firecrawl_result_summary",
+                    extra={
+                        "status": "error",
+                        "http_status": resp.status_code,
+                        "latency_ms": latency,
+                        "markdown_len": len(data.get("markdown") or ""),
+                        "html_len": len(data.get("html") or ""),
+                        "correlation_id": data.get("cid") if isinstance(data, dict) else None,
+                        "request_id": request_id,
+                        "error": error_message,
+                        "excerpt": truncate_log_content(summary_preview_source, 160),
+                    },
+                )
                 return FirecrawlResult(
                     status="error",
                     http_status=resp.status_code,
@@ -508,6 +578,27 @@ class FirecrawlClient:
                 "firecrawl_exhausted",
                 {"attempts": self._max_retries + 1, "error": last_error, "request_id": request_id},
             )
+        last_markdown = None
+        last_html = None
+        last_correlation = None
+        if isinstance(last_data, dict):
+            last_markdown = last_data.get("markdown")
+            last_html = last_data.get("html")
+            last_correlation = last_data.get("cid")
+        self._logger.info(
+            "firecrawl_result_summary",
+            extra={
+                "status": "error",
+                "http_status": None,
+                "latency_ms": last_latency,
+                "markdown_len": len(last_markdown or ""),
+                "html_len": len(last_html or ""),
+                "correlation_id": last_correlation,
+                "request_id": request_id,
+                "error": last_error,
+                "excerpt": truncate_log_content(last_markdown or last_html or "", 160),
+            },
+        )
         return FirecrawlResult(
             status="error",
             http_status=None,

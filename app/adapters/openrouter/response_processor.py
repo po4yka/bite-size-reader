@@ -126,6 +126,36 @@ class ResponseProcessor:
             # Invalid JSON with structured outputs
             return False, text_str
 
+    def is_completion_truncated(self, data: dict) -> tuple[bool, str | None, str | None]:
+        """Inspect response metadata and determine if the completion was truncated."""
+
+        try:
+            choices = data.get("choices") or []
+            if not choices:
+                return False, None, None
+
+            first = choices[0] or {}
+            finish_reason = first.get("finish_reason")
+            native_finish_reason = first.get("native_finish_reason")
+
+            finish_reason_str = finish_reason if isinstance(finish_reason, str) else None
+            native_reason_str = (
+                native_finish_reason if isinstance(native_finish_reason, str) else None
+            )
+
+            truncated = False
+            if finish_reason_str:
+                truncated = finish_reason_str.lower() in {"length", "max_tokens"}
+
+            if native_reason_str and not truncated:
+                normalized_native = native_reason_str.replace("-", "_").lower()
+                if any(term in normalized_native for term in ("max_token", "length")):
+                    truncated = True
+
+            return truncated, finish_reason_str, native_reason_str
+        except Exception:
+            return False, None, None
+
     def should_downgrade_response_format(
         self, status_code: int, data: dict, rf_included: bool
     ) -> bool:
