@@ -522,11 +522,23 @@ class OpenRouterClient:
                         )
 
                         handled_parameters_error = False
+                        api_error_lower = (
+                            str(error_context.get("api_error", "")).lower()
+                            if isinstance(error_context, dict)
+                            else ""
+                        )
                         if (
                             rf_included
                             and response_format_current
-                            and isinstance(error_message, str)
-                            and "no endpoints found" in error_message.lower()
+                            and (
+                                status_code == 404
+                                or (
+                                    isinstance(error_message, str)
+                                    and "no endpoints found" in error_message.lower()
+                                )
+                                or "no endpoints found" in api_error_lower
+                                or "does not support structured" in api_error_lower
+                            )
                         ):
                             if rf_mode_current == "json_schema":
                                 rf_mode_current = "json_object"

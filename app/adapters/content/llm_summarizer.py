@@ -222,6 +222,16 @@ class LLMSummarizer:
             await self._handle_parsing_failure(message, req_id, correlation_id, interaction_id)
             return None
 
+        if not any(
+            str(summary_shaped.get(key, "")).strip() for key in ("summary_1000", "summary_250")
+        ):
+            logger.error(
+                "summary_fields_empty_final",
+                extra={"cid": correlation_id, "model": getattr(llm, "model", None)},
+            )
+            await self._handle_parsing_failure(message, req_id, correlation_id, interaction_id)
+            return None
+
         # Log enhanced results
         self._log_llm_finished(llm, summary_shaped, correlation_id)
 
@@ -373,7 +383,8 @@ class LLMSummarizer:
 
         if shaped is not None:
             summary_1000 = shaped.get("summary_1000")
-            if summary_1000:
+            summary_250 = shaped.get("summary_250")
+            if any(str(x).strip() for x in (summary_1000, summary_250)):
                 if used_local_fix:
                     logger.info(
                         "json_local_fix_applied",
@@ -386,6 +397,14 @@ class LLMSummarizer:
                     "json_local_fix_insufficient",
                     extra={"cid": correlation_id, "reason": "missing_summary_1000"},
                 )
+
+            logger.warning(
+                "summary_fields_empty",
+                extra={"cid": correlation_id, "stage": "initial"},
+            )
+            if parse_result and parse_result.errors is not None:
+                parse_result.errors.append("missing_summary_fields")
+            shaped = None
 
         should_attempt_repair = True
         chat_callable = getattr(self.openrouter, "chat", None)
@@ -494,8 +513,14 @@ class LLMSummarizer:
                 )
 
             if shaped is not None:
-                self._log_llm_finished(llm, shaped, correlation_id)
-                return shaped
+                if any(str(shaped.get(key, "")).strip() for key in ("summary_1000", "summary_250")):
+                    self._log_llm_finished(llm, shaped, correlation_id)
+                    return shaped
+
+                logger.warning(
+                    "summary_fields_empty",
+                    extra={"cid": correlation_id, "stage": "fallback", "model": model_name},
+                )
 
         return None
 
@@ -533,8 +558,14 @@ class LLMSummarizer:
                 {
                     "role": "user",
                     "content": (
-                        "Your previous message was not a valid JSON object. "
-                        "Respond with ONLY a corrected JSON that matches the schema exactly."
+                        "Your previous message was not a valid JSON object."
+                        " Respond with ONLY a corrected JSON that matches the schema exactly."
+                        " Ensure `summary_250` and `summary_1000` contain non-empty informative text."
+                        if parse_result and "missing_summary_fields" in (parse_result.errors or [])
+                        else (
+                            "Your previous message was not a valid JSON object. "
+                            "Respond with ONLY a corrected JSON that matches the schema exactly."
+                        )
                     ),
                 },
             ]

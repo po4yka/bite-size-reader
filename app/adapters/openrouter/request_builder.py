@@ -140,6 +140,8 @@ class RequestBuilder:
             built_rf = self._build_response_format(response_format, self._structured_output_mode)
             if built_rf:
                 body["response_format"] = built_rf
+                if built_rf.get("type") == "json_schema":
+                    body["structured_outputs"] = True
                 if self._require_parameters:
                     provider_prefs["require_parameters"] = True
 
