@@ -97,6 +97,7 @@ class ResponseFormatter:
             ]
             if tags:
                 combined_lines.append("🏷️ Tags: " + " ".join(tags))
+                combined_lines.append("")
 
             entities = summary_shaped.get("entities") or {}
             if isinstance(entities, dict):
@@ -114,10 +115,12 @@ class ResponseFormatter:
                     ent_parts.append("🌍 " + ", ".join(locs[:10]))
                 if ent_parts:
                     combined_lines.append("🧭 Entities: " + " | ".join(ent_parts))
+                    combined_lines.append("")
 
             reading_time = summary_shaped.get("estimated_reading_time_min")
             if reading_time:
                 combined_lines.append(f"⏱️ Reading time: ~{reading_time} min")
+                combined_lines.append("")
 
             key_stats = summary_shaped.get("key_stats") or []
             if isinstance(key_stats, list) and key_stats:
@@ -131,6 +134,7 @@ class ResponseFormatter:
                             ks_lines.append(f"• {label}: {value} {unit}".rstrip())
                 if len(ks_lines) > 1:
                     combined_lines.extend(ks_lines)
+                    combined_lines.append("")
 
             readability = summary_shaped.get("readability") or {}
             if isinstance(readability, dict):
@@ -140,15 +144,20 @@ class ResponseFormatter:
                 details = [str(x) for x in (method, score, level) if x is not None]
                 if details:
                     combined_lines.append("🧮 Readability: " + ", ".join(map(str, details)))
+                    combined_lines.append("")
 
             seo = [
                 str(x).strip() for x in (summary_shaped.get("seo_keywords") or []) if str(x).strip()
             ]
             if seo:
                 combined_lines.append("🔎 SEO Keywords: " + ", ".join(seo[:20]))
+                combined_lines.append("")
 
             if combined_lines:
-                await self._send_long_text(message, "\n".join(combined_lines).strip())
+                # Remove trailing empty lines
+                while combined_lines and not combined_lines[-1]:
+                    combined_lines.pop()
+                await self._send_long_text(message, "\n".join(combined_lines))
 
             # Send separated summary fields (summary_250, summary_500, summary_1000, ...)
             summary_fields = [
@@ -218,6 +227,7 @@ class ResponseFormatter:
             ]
             if tags:
                 combined_lines.append("🏷️ Tags: " + " ".join(tags))
+                combined_lines.append("")
 
             entities = forward_shaped.get("entities") or {}
             if isinstance(entities, dict):
@@ -235,10 +245,12 @@ class ResponseFormatter:
                     ent_parts.append("🌍 " + ", ".join(locs[:10]))
                 if ent_parts:
                     combined_lines.append("🧭 Entities: " + " | ".join(ent_parts))
+                    combined_lines.append("")
 
             reading_time = forward_shaped.get("estimated_reading_time_min")
             if reading_time:
                 combined_lines.append(f"⏱️ Reading time: ~{reading_time} min")
+                combined_lines.append("")
 
             key_stats = forward_shaped.get("key_stats") or []
             if isinstance(key_stats, list) and key_stats:
@@ -252,6 +264,7 @@ class ResponseFormatter:
                             ks_lines.append(f"• {label}: {value} {unit}".rstrip())
                 if len(ks_lines) > 1:
                     combined_lines.extend(ks_lines)
+                    combined_lines.append("")
 
             readability = forward_shaped.get("readability") or {}
             if isinstance(readability, dict):
@@ -261,15 +274,20 @@ class ResponseFormatter:
                 details = [str(x) for x in (method, score, level) if x is not None]
                 if details:
                     combined_lines.append("🧮 Readability: " + ", ".join(map(str, details)))
+                    combined_lines.append("")
 
             seo = [
                 str(x).strip() for x in (forward_shaped.get("seo_keywords") or []) if str(x).strip()
             ]
             if seo:
                 combined_lines.append("🔎 SEO Keywords: " + ", ".join(seo[:20]))
+                combined_lines.append("")
 
             if combined_lines:
-                await self._send_long_text(message, "\n".join(combined_lines).strip())
+                # Remove trailing empty lines
+                while combined_lines and not combined_lines[-1]:
+                    combined_lines.pop()
+                await self._send_long_text(message, "\n".join(combined_lines))
 
             # Separated summary fields
             summary_fields = [
