@@ -4,7 +4,9 @@ from __future__ import annotations
 import io
 import json
 import logging
+import re
 from collections.abc import Awaitable, Callable
+from datetime import datetime
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -67,81 +69,129 @@ class ResponseFormatter:
     async def send_enhanced_summary_response(
         self, message: Any, summary_shaped: dict[str, Any], llm: Any, chunks: int | None = None
     ) -> None:
-        """Send enhanced summary response with better formatting and metadata."""
+        """Send enhanced summary where each top-level JSON field is a separate message,
+        then attach the full JSON as a .json document with a descriptive filename."""
         try:
-            # Calculate processing metrics
-            total_time = (llm.latency_ms or 0) / 1000.0
-            tokens_used = (llm.tokens_prompt or 0) + (llm.tokens_completion or 0)
-            cost_info = f" (${llm.cost_usd:.4f})" if llm.cost_usd else ""
+            # Optional short header
+            try:
+                method = f"Chunked ({chunks} parts)" if chunks else "Single-pass"
+                model_name = getattr(llm, "model", None)
+                header = (
+                    f"🎉 Summary Ready\n🧠 Model: {model_name or 'unknown'}\n🔧 Method: {method}"
+                )
+                await self.safe_reply(message, header)
+            except Exception:
+                pass
 
-            # Enhanced processing info
-            processing_method = f"Chunked ({chunks} parts)" if chunks else "Single-pass"
-            structured_info = ""
-            if hasattr(llm, "structured_output_used") and llm.structured_output_used:
-                mode = getattr(llm, "structured_output_mode", "unknown")
-                structured_info = f" • Schema: {mode.upper()}"
+            # 1) TL;DR
+            tl_dr = str(summary_shaped.get("summary_250", "")).strip()
+            if tl_dr:
+                await self._send_long_text(message, f"📋 TL;DR:\n{tl_dr}")
 
-            preview_lines = [
-                "🎉 **Enhanced Summary Complete!**",
-                "",
-                "⏱️ **Processing Stats:**",
-                f"• Time: {total_time:.1f}s",
-                f"• Tokens: {tokens_used:,}{cost_info}",
-                f"• Model: {llm.model or 'unknown'}",
-                f"• Method: {processing_method}{structured_info}",
-                "",
-                "📋 **TL;DR:**",
-                str(summary_shaped.get("summary_250", "")).strip(),
+            # 2) Extended summary
+            extended = str(summary_shaped.get("summary_1000", "")).strip()
+            if extended:
+                await self._send_long_text(message, f"🧾 Extended Summary:\n{extended}")
+
+            # 3) Tags
+            tags = [
+                str(t).strip() for t in (summary_shaped.get("topic_tags") or []) if str(t).strip()
             ]
-
-            tags = summary_shaped.get("topic_tags") or []
             if tags:
-                preview_lines.extend(["", "🏷️ **Tags:** " + " ".join(tags[:6])])
+                await self._send_long_text(message, "🏷️ Tags: " + " ".join(tags))
 
+            # 4) Key ideas
             ideas = [
                 str(x).strip() for x in (summary_shaped.get("key_ideas") or []) if str(x).strip()
             ]
             if ideas:
-                preview_lines.extend(["", "💡 **Key Ideas:**"])
-                for idea in ideas[:3]:
-                    preview_lines.append(f"• {idea}")
+                chunk: list[str] = []
+                for idea in ideas:
+                    chunk.append(f"• {idea}")
+                    if sum(len(c) + 1 for c in chunk) > 3000:
+                        await self._send_long_text(message, "💡 Key Ideas:\n" + "\n".join(chunk))
+                        chunk = []
+                if chunk:
+                    await self._send_long_text(message, "💡 Key Ideas:\n" + "\n".join(chunk))
 
-            # Add reading time if available
+            # 5) Entities
+            entities = summary_shaped.get("entities") or {}
+            if isinstance(entities, dict):
+                people = [str(x).strip() for x in (entities.get("people") or []) if str(x).strip()]
+                orgs = [
+                    str(x).strip() for x in (entities.get("organizations") or []) if str(x).strip()
+                ]
+                locs = [str(x).strip() for x in (entities.get("locations") or []) if str(x).strip()]
+                lines: list[str] = []
+                if people:
+                    lines.append("👤 People:")
+                    lines.extend([f"• {x}" for x in people])
+                if orgs:
+                    lines.append("🏢 Organizations:")
+                    lines.extend([f"• {x}" for x in orgs])
+                if locs:
+                    lines.append("🌍 Locations:")
+                    lines.extend([f"• {x}" for x in locs])
+                if lines:
+                    await self._send_long_text(message, "🧭 Entities:\n" + "\n".join(lines))
+
+            # 6) Reading time
             reading_time = summary_shaped.get("estimated_reading_time_min")
             if reading_time:
-                preview_lines.extend(["", f"⏱️ **Reading Time:** ~{reading_time} minutes"])
+                await self.safe_reply(message, f"⏱️ Estimated reading time: ~{reading_time} min")
 
-            preview_lines.extend(["", "📊 **Full JSON:**"])
+            # 7) Key stats
+            key_stats = summary_shaped.get("key_stats") or []
+            if isinstance(key_stats, list) and key_stats:
+                parts: list[str] = ["📈 Key Stats:"]
+                for ks in key_stats:
+                    if isinstance(ks, dict):
+                        label = str(ks.get("label", "")).strip()
+                        value = ks.get("value")
+                        unit = str(ks.get("unit", "")).strip()
+                        if label and value is not None:
+                            parts.append(f"• {label}: {value} {unit}".rstrip())
+                await self._send_long_text(message, "\n".join(parts))
 
-            # Combine preview and JSON in one message
-            combined_message = "\n".join(preview_lines)
-            await self.safe_reply(message, combined_message)
+            # 8) Answered questions
+            questions = [
+                str(x).strip()
+                for x in (summary_shaped.get("answered_questions") or [])
+                if str(x).strip()
+            ]
+            if questions:
+                await self._send_long_text(
+                    message, "❓ Answered Questions:\n" + "\n".join([f"• {q}" for q in questions])
+                )
 
-            # Send JSON as separate code block for better formatting
+            # 9) Readability
+            readability = summary_shaped.get("readability") or {}
+            if isinstance(readability, dict):
+                method = readability.get("method")
+                score = readability.get("score")
+                level = readability.get("level")
+                details = [str(x) for x in (method, score, level) if x is not None]
+                if details:
+                    await self.safe_reply(
+                        message, "🧮 Readability: " + ", ".join(map(str, details))
+                    )
+
+            # 10) SEO keywords
+            seo = [
+                str(x).strip() for x in (summary_shaped.get("seo_keywords") or []) if str(x).strip()
+            ]
+            if seo:
+                await self._send_long_text(message, "🔎 SEO Keywords: " + ", ".join(seo))
+
+            # Finally attach full JSON as a document with a descriptive filename
             await self.reply_json(message, summary_shaped)
 
         except Exception:
             # Fallback to simpler format
             try:
-                preview_lines = [
-                    "🎉 **Summary Complete!**",
-                    "",
-                    "📋 **TL;DR:**",
-                    str(summary_shaped.get("summary_250", "")).strip(),
-                ]
-                tags = summary_shaped.get("topic_tags") or []
-                if tags:
-                    preview_lines.append("🏷️ Tags: " + " ".join(tags[:6]))
-                ideas = [
-                    str(x).strip()
-                    for x in (summary_shaped.get("key_ideas") or [])
-                    if str(x).strip()
-                ]
-                if ideas:
-                    preview_lines.append("💡 Key Ideas:")
-                    for idea in ideas[:3]:
-                        preview_lines.append(f"• {idea}")
-                await self.safe_reply(message, "\n".join(preview_lines))
+                tl_dr = str(summary_shaped.get("summary_250", "")).strip()
+                if tl_dr:
+                    await self.safe_reply(message, f"📋 TL;DR:\n{tl_dr}")
             except Exception:
                 pass
 
@@ -150,25 +200,31 @@ class ResponseFormatter:
     async def send_forward_summary_response(
         self, message: Any, forward_shaped: dict[str, Any]
     ) -> None:
-        """Send enhanced preview for forward flow."""
+        """Send forward summary with per-field messages, then attach full JSON file."""
         try:
-            preview_lines = [
-                "🎉 **Enhanced Forward Summary Complete!**",
-                "",
-                "📋 **TL;DR:**",
-                str(forward_shaped.get("summary_250", "")).strip(),
+            await self.safe_reply(message, "🎉 Forward Summary Ready")
+
+            tl_dr = str(forward_shaped.get("summary_250", "")).strip()
+            if tl_dr:
+                await self._send_long_text(message, f"📋 TL;DR:\n{tl_dr}")
+
+            extended = str(forward_shaped.get("summary_1000", "")).strip()
+            if extended:
+                await self._send_long_text(message, f"🧾 Extended Summary:\n{extended}")
+
+            tags = [
+                str(t).strip() for t in (forward_shaped.get("topic_tags") or []) if str(t).strip()
             ]
-            tags = forward_shaped.get("topic_tags") or []
             if tags:
-                preview_lines.append("🏷️ Tags: " + " ".join(tags[:6]))
+                await self._send_long_text(message, "🏷️ Tags: " + " ".join(tags))
+
             ideas = [
                 str(x).strip() for x in (forward_shaped.get("key_ideas") or []) if str(x).strip()
             ]
             if ideas:
-                preview_lines.append("💡 Key Ideas:")
-                for idea in ideas[:3]:
-                    preview_lines.append(f"• {idea}")
-            await self.safe_reply(message, "\n".join(preview_lines))
+                await self._send_long_text(
+                    message, "💡 Key Ideas:\n" + "\n".join([f"• {i}" for i in ideas])
+                )
         except Exception:
             pass
 
@@ -181,16 +237,15 @@ class ResponseFormatter:
             return
 
         pretty = json.dumps(obj, ensure_ascii=False, indent=2)
-        # Send large JSON as a file to avoid Telegram message size limits
-        if len(pretty) > 3500:
-            try:
-                bio = io.BytesIO(pretty.encode("utf-8"))
-                bio.name = "summary.json"
-                msg_any: Any = message
-                await msg_any.reply_document(bio, caption="📊 Enhanced Summary JSON")
-                return
-            except Exception as e:  # noqa: BLE001
-                logger.error("reply_document_failed", extra={"error": str(e)})
+        # Prefer sending as a document always to avoid size limits
+        try:
+            bio = io.BytesIO(pretty.encode("utf-8"))
+            bio.name = self._build_json_filename(obj)
+            msg_any: Any = message
+            await msg_any.reply_document(bio, caption="📊 Full Summary JSON attached")
+            return
+        except Exception as e:  # noqa: BLE001
+            logger.error("reply_document_failed", extra={"error": str(e)})
         await self.safe_reply(message, f"```json\n{pretty}\n```")
 
     async def safe_reply(self, message: Any, text: str, *, parse_mode: str | None = None) -> None:
@@ -231,6 +286,56 @@ class ResponseFormatter:
             )
         except Exception:
             pass
+
+    def _slugify(self, text: str, *, max_len: int = 60) -> str:
+        """Create a filesystem-friendly slug from text."""
+        text = text.strip().lower()
+        # Replace non-word characters with hyphens
+        text = re.sub(r"[^\w\-\s]", "", text)
+        text = re.sub(r"[\s_]+", "-", text)
+        text = re.sub(r"-+", "-", text).strip("-")
+        if len(text) > max_len:
+            text = text[:max_len].rstrip("-")
+        return text or "summary"
+
+    async def _send_long_text(self, message: Any, text: str) -> None:
+        """Send text, splitting into multiple messages if too long for Telegram."""
+        max_len = 3500
+        if len(text) <= max_len:
+            await self.safe_reply(message, text)
+            return
+        # Split on paragraph boundaries
+        parts = text.split("\n\n")
+        buf: list[str] = []
+        length = 0
+        for p in parts:
+            seg = (p + "\n\n") if p else "\n\n"
+            if length + len(seg) > max_len and buf:
+                await self.safe_reply(message, "".join(buf).rstrip())
+                buf = []
+                length = 0
+            buf.append(seg)
+            length += len(seg)
+        if buf:
+            await self.safe_reply(message, "".join(buf).rstrip())
+
+    def _build_json_filename(self, obj: dict) -> str:
+        """Build a descriptive filename for the JSON attachment."""
+        # Prefer SEO keywords; fallback to first words of TL;DR
+        seo = obj.get("seo_keywords") or []
+        base: str | None = None
+        if isinstance(seo, list) and seo:
+            base = "-".join(self._slugify(str(x)) for x in seo[:3] if str(x).strip())
+        if not base:
+            tl = str(obj.get("summary_250", "")).strip()
+            if tl:
+                # Use first 6 words
+                words = re.findall(r"\w+", tl)[:6]
+                base = self._slugify("-".join(words))
+        if not base:
+            base = "summary"
+        timestamp = datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
+        return f"{base}-{timestamp}.json"
 
     async def send_firecrawl_start_notification(self, message: Any) -> None:
         """Send Firecrawl start notification."""
