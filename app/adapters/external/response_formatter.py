@@ -5,6 +5,7 @@ import io
 import json
 import logging
 import re
+import unicodedata
 from collections.abc import Awaitable, Callable
 from datetime import datetime
 from typing import Any
@@ -88,7 +89,8 @@ class ResponseFormatter:
 
             tl_dr = str(summary_shaped.get("summary_250", "")).strip()
             if tl_dr:
-                combined_lines.extend(["📋 TL;DR:", tl_dr, ""])
+                tl_dr_clean = self._sanitize_summary_text(tl_dr)
+                combined_lines.extend(["📋 TL;DR:", tl_dr_clean, ""])
 
             tags = [
                 str(t).strip() for t in (summary_shaped.get("topic_tags") or []) if str(t).strip()
@@ -164,6 +166,7 @@ class ResponseFormatter:
             for key in sorted(summary_fields, key=_key_num):
                 content = str(summary_shaped.get(key, "")).strip()
                 if content:
+                    content = self._sanitize_summary_text(content)
                     await self._send_long_text(
                         message,
                         f"🧾 Summary {key.split('_', 1)[1]}:\n{content}",
@@ -207,7 +210,8 @@ class ResponseFormatter:
             combined_lines: list[str] = []
             tl_dr = str(forward_shaped.get("summary_250", "")).strip()
             if tl_dr:
-                combined_lines.extend(["📋 TL;DR:", tl_dr, ""])
+                tl_dr_clean = self._sanitize_summary_text(tl_dr)
+                combined_lines.extend(["📋 TL;DR:", tl_dr_clean, ""])
 
             tags = [
                 str(t).strip() for t in (forward_shaped.get("topic_tags") or []) if str(t).strip()
@@ -283,6 +287,7 @@ class ResponseFormatter:
             for key in sorted(summary_fields, key=_key_num_f):
                 content = str(forward_shaped.get(key, "")).strip()
                 if content:
+                    content = self._sanitize_summary_text(content)
                     await self._send_long_text(
                         message,
                         f"🧾 Summary {key.split('_', 1)[1]}:\n{content}",
@@ -406,6 +411,30 @@ class ResponseFormatter:
             base = "summary"
         timestamp = datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
         return f"{base}-{timestamp}.json"
+
+    def _sanitize_summary_text(self, text: str) -> str:
+        """Normalize and clean summary text for safe sending.
+
+        - Normalize to NFC
+        - Remove control characters
+        - Drop trailing isolated CJK run (1-3 chars) that looks like a stray token
+        """
+        try:
+            s = unicodedata.normalize("NFC", text)
+        except Exception:
+            s = text
+        # Remove control and non-printable chars
+        s = "".join(ch for ch in s if unicodedata.category(ch)[0] != "C")
+
+        # If string ends with 1-3 CJK chars and preceding 15 chars have no CJK, drop the tail
+        tail_match = re.search(r"([\u4E00-\u9FFF]{1,3})$", s)
+        if tail_match:
+            start = max(0, len(s) - 20)
+            window = s[start : len(s) - len(tail_match.group(1))]
+            if not re.search(r"[\u4E00-\u9FFF]", window):
+                s = s[: -len(tail_match.group(1))].rstrip("-—")
+
+        return s.strip()
 
     async def send_firecrawl_start_notification(self, message: Any) -> None:
         """Send Firecrawl start notification."""
