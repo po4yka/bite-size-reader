@@ -194,6 +194,65 @@ class Database:
             cur = conn.execute(sql, tuple(params or ()))
             return cur.fetchone()
 
+    def get_database_overview(self) -> dict[str, object]:
+        """Return high-level statistics about the current database state."""
+        overview: dict[str, object] = {"path": self.path}
+        db_path = Path(self.path)
+        overview["db_size_bytes"] = db_path.stat().st_size if db_path.exists() else 0
+
+        with self.connect() as conn:
+            tables: dict[str, int] = {}
+            rows = conn.execute(
+                "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'"
+            )
+            table_names = [row[0] for row in rows.fetchall() if isinstance(row[0], str)]
+            for name in table_names:
+                if not self._is_valid_identifier(name):
+                    continue
+                count_row = conn.execute(f"SELECT COUNT(*) AS cnt FROM {name}").fetchone()
+                tables[name] = int(count_row["cnt"]) if count_row else 0
+            overview["tables"] = tables
+
+            if "requests" in tables:
+                status_rows = conn.execute(
+                    "SELECT status, COUNT(*) AS cnt FROM requests GROUP BY status"
+                ).fetchall()
+                overview["requests_by_status"] = {
+                    str(row["status"] or "unknown"): int(row["cnt"]) for row in status_rows
+                }
+                last_request = conn.execute(
+                    "SELECT created_at FROM requests ORDER BY created_at DESC LIMIT 1"
+                ).fetchone()
+                overview["last_request_at"] = last_request["created_at"] if last_request else None
+            else:
+                overview["requests_by_status"] = {}
+                overview["last_request_at"] = None
+
+            if "summaries" in tables:
+                last_summary = conn.execute(
+                    "SELECT created_at FROM summaries ORDER BY created_at DESC LIMIT 1"
+                ).fetchone()
+                overview["last_summary_at"] = last_summary["created_at"] if last_summary else None
+            else:
+                overview["last_summary_at"] = None
+
+            if "audit_logs" in tables:
+                last_audit = conn.execute(
+                    "SELECT ts FROM audit_logs ORDER BY ts DESC LIMIT 1"
+                ).fetchone()
+                overview["last_audit_at"] = last_audit["ts"] if last_audit else None
+            else:
+                overview["last_audit_at"] = None
+
+        table_counts = overview.get("tables")
+        if isinstance(table_counts, dict):
+            overview["total_requests"] = int(table_counts.get("requests", 0))
+            overview["total_summaries"] = int(table_counts.get("summaries", 0))
+        else:
+            overview["total_requests"] = 0
+            overview["total_summaries"] = 0
+        return overview
+
     def get_request_by_dedupe_hash(self, dedupe_hash: str) -> dict | None:
         row = self.fetchone("SELECT * FROM requests WHERE dedupe_hash = ?", (dedupe_hash,))
         return dict(row) if row else None

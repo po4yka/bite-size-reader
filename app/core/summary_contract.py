@@ -314,7 +314,7 @@ def validate_and_shape_summary(payload: SummaryJSON) -> SummaryJSON:
     p.setdefault("key_points_to_remember", [])
 
     # Validate and clean new fields
-    if not isinstance(p["confidence"], (int, float)) or not (0.0 <= p["confidence"] <= 1.0):
+    if not isinstance(p["confidence"], int | float) or not (0.0 <= p["confidence"] <= 1.0):
         p["confidence"] = 1.0
 
     if p["hallucination_risk"] not in ["low", "med", "high"]:

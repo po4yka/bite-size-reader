@@ -14,6 +14,7 @@ from app.core.url_utils import extract_all_urls
 if TYPE_CHECKING:
     from app.adapters.content.url_processor import URLProcessor
     from app.adapters.external.response_formatter import ResponseFormatter
+    from app.db.database import Database
 
 logger = logging.getLogger(__name__)
 
@@ -25,11 +26,13 @@ class CommandProcessor:
         self,
         cfg: AppConfig,
         response_formatter: ResponseFormatter,
+        db: Database,
         url_processor: URLProcessor,
         audit_func: Callable[[str, str, dict], None],
     ) -> None:
         self.cfg = cfg
         self.response_formatter = response_formatter
+        self.db = db
         self.url_processor = url_processor
         self._audit = audit_func
 
@@ -80,6 +83,32 @@ class CommandProcessor:
                 interaction_id=interaction_id,
                 response_sent=True,
                 response_type="help",
+                processing_time_ms=int((time.time() - start_time) * 1000),
+            )
+
+    async def handle_dbinfo_command(
+        self, message: Any, uid: int, correlation_id: str, interaction_id: int, start_time: float
+    ) -> None:
+        """Handle /dbinfo command."""
+        chat_id = getattr(getattr(message, "chat", None), "id", None)
+        logger.info(
+            "command_dbinfo",
+            extra={"uid": uid, "chat_id": chat_id, "cid": correlation_id},
+        )
+        try:
+            self._audit(
+                "INFO", "command_dbinfo", {"uid": uid, "chat_id": chat_id, "cid": correlation_id}
+            )
+        except Exception:
+            pass
+
+        overview = self.db.get_database_overview()
+        await self.response_formatter.send_db_overview(message, overview)
+        if interaction_id:
+            self._update_user_interaction(
+                interaction_id=interaction_id,
+                response_sent=True,
+                response_type="dbinfo",
                 processing_time_ms=int((time.time() - start_time) * 1000),
             )
 

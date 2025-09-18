@@ -190,6 +190,12 @@ class MessageRouter:
             )
             return
 
+        if text.startswith("/dbinfo"):
+            await self.command_processor.handle_dbinfo_command(
+                message, uid, correlation_id, interaction_id, start_time
+            )
+            return
+
         if text.startswith("/summarize_all"):
             await self.command_processor.handle_summarize_all_command(
                 message, text, uid, correlation_id, interaction_id, start_time

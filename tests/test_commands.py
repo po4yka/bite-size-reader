@@ -96,6 +96,27 @@ class TestCommands(unittest.IsolatedAsyncioTestCase):
             self.assertIn(url, bot.seen_urls)
             self.assertNotIn(uid, bot._awaiting_url_users)
 
+    async def test_dbinfo_command(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            db_path = os.path.join(tmp, "app.db")
+            bot = make_bot(db_path)
+            request_id = bot.db.create_request(
+                type_="url",
+                status="completed",
+                correlation_id="cid",
+                chat_id=1,
+                user_id=1,
+                input_url="https://example.com",
+            )
+            bot.db.insert_summary(request_id=request_id, lang="en", json_payload="{}")
+            bot.db.insert_audit_log(level="INFO", event="test", details_json="{}")
+
+            msg = FakeMessage("/dbinfo")
+            await bot._on_message(msg)
+            self.assertTrue(any("Database Overview" in reply for reply in msg._replies))
+            self.assertTrue(any("Requests by status" in reply for reply in msg._replies))
+            self.assertTrue(any("Totals" in reply for reply in msg._replies))
+
 
 if __name__ == "__main__":
     unittest.main()

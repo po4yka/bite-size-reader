@@ -45,6 +45,7 @@ class MessageHandler:
         self.command_processor = CommandProcessor(
             cfg=cfg,
             response_formatter=response_formatter,
+            db=db,
             url_processor=url_processor,
             audit_func=self._audit,
         )

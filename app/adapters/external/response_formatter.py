@@ -43,7 +43,8 @@ class ResponseFormatter:
             "Features:\n"
             "- Enhanced structured JSON output with schema validation\n"
             "- Intelligent model fallbacks for better reliability\n"
-            "- Automatic content optimization based on model capabilities"
+            "- Automatic content optimization based on model capabilities\n"
+            "- /dbinfo — quick database health snapshot"
         )
         await self.safe_reply(message, help_text)
 
@@ -59,13 +60,69 @@ class ResponseFormatter:
             "- Send a URL directly, or use /summarize <URL>.\n"
             "- You can also send /summarize and then the URL in the next message.\n"
             "- For forwarded posts, use /summarize_forward and then forward a channel post.\n"
-            '- Multiple links in one message are supported: I will ask "Process N links?" or use /summarize_all to process immediately.\n\n'
+            '- Multiple links in one message are supported: I will ask "Process N links?" or use /summarize_all to process immediately.\n'
+            "- /dbinfo shares a quick snapshot of the internal database so you can monitor storage.\n\n"
             "Notes:\n"
             "- I reply with a strict JSON object using advanced schema validation.\n"
             "- Intelligent model selection and fallbacks ensure high success rates.\n"
             "- Errors include an Error ID you can reference in logs."
         )
         await self.safe_reply(message, welcome)
+
+    async def send_db_overview(self, message: Any, overview: dict[str, object]) -> None:
+        """Send an overview of the database state."""
+        lines = ["📚 Database Overview"]
+
+        path = overview.get("path")
+        if isinstance(path, str) and path:
+            lines.append(f"Path: `{path}`")
+
+        size_bytes = overview.get("db_size_bytes")
+        if isinstance(size_bytes, int) and size_bytes >= 0:
+            pretty_size = self._format_bytes(size_bytes)
+            lines.append(f"Size: {pretty_size} ({size_bytes:,} bytes)")
+
+        table_counts = overview.get("tables")
+        if isinstance(table_counts, dict) and table_counts:
+            lines.append("")
+            lines.append("Tables:")
+            for name in sorted(table_counts):
+                lines.append(f"- {name}: {table_counts[name]}")
+
+        total_requests = overview.get("total_requests")
+        total_summaries = overview.get("total_summaries")
+        totals: list[str] = []
+        if isinstance(total_requests, int):
+            totals.append(f"Requests: {total_requests}")
+        if isinstance(total_summaries, int):
+            totals.append(f"Summaries: {total_summaries}")
+        if totals:
+            lines.append("")
+            lines.append("Totals: " + ", ".join(totals))
+
+        statuses = overview.get("requests_by_status")
+        if isinstance(statuses, dict) and statuses:
+            lines.append("")
+            lines.append("Requests by status:")
+            for status in sorted(statuses):
+                label = status or "unknown"
+                lines.append(f"- {label}: {statuses[status]}")
+
+        last_request = overview.get("last_request_at")
+        last_summary = overview.get("last_summary_at")
+        last_audit = overview.get("last_audit_at")
+        timeline_parts: list[str] = []
+        if isinstance(last_request, str) and last_request:
+            timeline_parts.append(f"Last request: {last_request}")
+        if isinstance(last_summary, str) and last_summary:
+            timeline_parts.append(f"Last summary: {last_summary}")
+        if isinstance(last_audit, str) and last_audit:
+            timeline_parts.append(f"Last audit log: {last_audit}")
+        if timeline_parts:
+            lines.append("")
+            lines.extend(timeline_parts)
+
+        await self.safe_reply(message, "\n".join(lines))
 
     async def send_enhanced_summary_response(
         self, message: Any, summary_shaped: dict[str, Any], llm: Any, chunks: int | None = None
@@ -178,7 +235,7 @@ class ResponseFormatter:
             # Confidence & Risk
             confidence = summary_shaped.get("confidence", 1.0)
             risk = summary_shaped.get("hallucination_risk", "low")
-            if isinstance(confidence, (int, float)) and confidence < 1.0:
+            if isinstance(confidence, int | float) and confidence < 1.0:
                 combined_lines.append(f"🎯 Confidence: {confidence:.1%}")
             if risk != "low":
                 risk_emoji = "⚠️" if risk == "med" else "🚨"
@@ -341,7 +398,7 @@ class ResponseFormatter:
 
             confidence = forward_shaped.get("confidence", 1.0)
             risk = forward_shaped.get("hallucination_risk", "low")
-            if isinstance(confidence, (int, float)) and confidence < 1.0:
+            if isinstance(confidence, int | float) and confidence < 1.0:
                 combined_lines.append(f"🎯 Confidence: {confidence:.1%}")
             if risk != "low":
                 risk_emoji = "⚠️" if risk == "med" else "🚨"
@@ -499,6 +556,18 @@ class ResponseFormatter:
         timestamp = datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
         return f"{base}-{timestamp}.json"
 
+    def _format_bytes(self, size: int) -> str:
+        """Convert byte count into a human-readable string."""
+        units = ["B", "KB", "MB", "GB", "TB"]
+        value = float(size)
+        for unit in units:
+            if value < 1024 or unit == units[-1]:
+                if unit == "B":
+                    return f"{int(value)} {unit}"
+                return f"{value:.1f} {unit}"
+            value /= 1024
+        return f"{value:.1f} TB"
+
     def _sanitize_summary_text(self, text: str) -> str:
         """Normalize and clean summary text for safe sending.
 
@@ -578,7 +647,7 @@ class ResponseFormatter:
                     if isinstance(tax, dict) and tax.get("label"):
                         label = str(tax["label"]).strip()
                         score = tax.get("score", 0.0)
-                        if isinstance(score, (int, float)) and score > 0:
+                        if isinstance(score, int | float) and score > 0:
                             tax_lines.append(f"• {label} ({score:.1%})")
                         else:
                             tax_lines.append(f"• {label}")
