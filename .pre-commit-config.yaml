@@ -18,6 +18,7 @@ repos:
       - id: mypy
         additional_dependencies: []
         args:
+          - --no-incremental
           - --pretty
           - --show-error-codes
           - --ignore-missing-imports

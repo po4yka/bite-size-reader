@@ -2,10 +2,12 @@
 from __future__ import annotations
 
 import asyncio
+import io
 import json
 import logging
 import os
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Any, cast
 
 from app.adapters.content.url_processor import URLProcessor
@@ -42,7 +44,10 @@ class TelegramBot:
         setup_json_logging(self.cfg.runtime.log_level)
         logger.info(
             "bot_init",
-            extra={"db_path": self.cfg.runtime.db_path, "log_level": self.cfg.runtime.log_level},
+            extra={
+                "db_path": self.cfg.runtime.db_path,
+                "log_level": self.cfg.runtime.log_level,
+            },
         )
 
         # Reflect monkeypatches from tests into the telegram_client module so
@@ -203,13 +208,57 @@ class TelegramBot:
         *,
         metadata: dict[str, Any] | None = None,
     ) -> None:
-        """Reply with JSON payload (legacy-compatible helper)."""
+        """Reply with JSON payload as a document with descriptive filename.
+
+        Falls back to plain text if document upload fails.
+        """
         try:
-            text = json.dumps(payload, ensure_ascii=False)
+            pretty = json.dumps(payload, ensure_ascii=False, indent=2)
+
+            # Build a descriptive filename based on SEO keywords or TL;DR
+            def _slugify(text: str, max_len: int = 60) -> str:
+                import re as _re
+
+                s = text.strip().lower()
+                s = _re.sub(r"[^\w\-\s]", "", s)
+                s = _re.sub(r"[\s_]+", "-", s)
+                s = _re.sub(r"-+", "-", s).strip("-")
+                if len(s) > max_len:
+                    s = s[:max_len].rstrip("-")
+                return s or "summary"
+
+            base: str | None = None
+            seo = payload.get("seo_keywords") or []
+            if isinstance(seo, list) and seo:
+                base = "-".join(_slugify(str(x)) for x in seo[:3] if str(x).strip())
+            if not base:
+                tl = str(payload.get("summary_250", "")).strip()
+                if tl:
+                    import re as _re
+
+                    words = _re.findall(r"\w+", tl)[:6]
+                    base = _slugify("-".join(words))
+            if not base:
+                base = "summary"
+            ts = datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
+            filename = f"{base}-{ts}.json"
+
+            if hasattr(message, "reply_document"):
+                bio = io.BytesIO(pretty.encode("utf-8"))
+                bio.name = filename
+                await message.reply_document(bio, caption="📊 Full Summary JSON attached")
+                return
+
+            # Fallback to text
             if hasattr(message, "reply_text"):
-                await message.reply_text(text)
+                await message.reply_text(f"```json\n{pretty}\n```")
         except Exception:  # noqa: BLE001
-            pass
+            try:
+                text = json.dumps(payload, ensure_ascii=False)
+                if hasattr(message, "reply_text"):
+                    await message.reply_text(text)
+            except Exception:
+                pass
         _ = metadata
 
     async def handle_url_flow(
