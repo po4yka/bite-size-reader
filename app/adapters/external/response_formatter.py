@@ -616,15 +616,22 @@ class ResponseFormatter:
                     message, "✨ Highlights:\n" + "\n".join([f"• {h}" for h in highlights[:10]])
                 )
 
-            # Questions answered
-            questions = [
-                str(q).strip() for q in (shaped.get("questions_answered") or []) if str(q).strip()
-            ]
-            if questions:
-                await self._send_long_text(
-                    message,
-                    "❓ Questions Answered:\n" + "\n".join([f"• {q}" for q in questions[:10]]),
-                )
+            # Questions answered (as Q&A pairs)
+            questions_answered = shaped.get("questions_answered") or []
+            if isinstance(questions_answered, list) and questions_answered:
+                qa_lines = ["❓ Questions Answered:"]
+                for i, qa in enumerate(questions_answered[:10], 1):
+                    if isinstance(qa, dict):
+                        question = str(qa.get("question", "")).strip()
+                        answer = str(qa.get("answer", "")).strip()
+                        if question:
+                            qa_lines.append(f"\n{i}. **Q:** {question}")
+                            if answer:
+                                qa_lines.append(f"   **A:** {answer}")
+                            else:
+                                qa_lines.append("   **A:** _(No answer provided)_")
+                if len(qa_lines) > 1:
+                    await self._send_long_text(message, "\n".join(qa_lines))
 
             # Key points to remember
             key_points = [

@@ -38,6 +38,10 @@ if PydanticAvailable:
         text: str
         source_span: str | None = None
 
+    class QuestionAnswer(BaseModel):
+        question: str
+        answer: str
+
     class TopicTaxonomy(BaseModel):
         label: str
         score: float = 0.0
@@ -68,7 +72,7 @@ if PydanticAvailable:
         metadata: Metadata = Field(default_factory=Metadata)
         extractive_quotes: list[ExtractiveQuote] = Field(default_factory=list)
         highlights: list[str] = Field(default_factory=list)
-        questions_answered: list[str] = Field(default_factory=list)
+        questions_answered: list[QuestionAnswer] = Field(default_factory=list)
         categories: list[str] = Field(default_factory=list)
         topic_taxonomy: list[TopicTaxonomy] = Field(default_factory=list)
         hallucination_risk: str = Field(default="low")  # low/med/high

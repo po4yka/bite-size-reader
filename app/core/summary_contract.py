@@ -330,9 +330,42 @@ def validate_and_shape_summary(payload: SummaryJSON) -> SummaryJSON:
         if isinstance(q, dict) and str(q.get("text", "")).strip()
     ]
     p["highlights"] = [str(h).strip() for h in (p.get("highlights") or []) if str(h).strip()]
-    p["questions_answered"] = [
-        str(q).strip() for q in (p.get("questions_answered") or []) if str(q).strip()
-    ]
+
+    # Clean questions_answered as question-answer pairs
+    clean_qa = []
+    for qa in p.get("questions_answered") or []:
+        if isinstance(qa, dict):
+            question = str(qa.get("question", "")).strip()
+            answer = str(qa.get("answer", "")).strip()
+            if question and answer:
+                clean_qa.append({"question": question, "answer": answer})
+        elif isinstance(qa, str):
+            # Handle legacy format or single strings - try to split on common patterns
+            qa_str = str(qa).strip()
+            if qa_str:
+                # Look for patterns like "Q: ... A: ..." or "Question: ... Answer: ..."
+                import re
+
+                qa_patterns = [
+                    r"Q:\s*(.+?)\s*A:\s*(.+)",
+                    r"Question:\s*(.+?)\s*Answer:\s*(.+)",
+                    r"(.+?)\?\s*(.+)",  # Question ending with ? followed by answer
+                ]
+                matched = False
+                for pattern in qa_patterns:
+                    match = re.search(pattern, qa_str, re.IGNORECASE | re.DOTALL)
+                    if match:
+                        question = match.group(1).strip()
+                        answer = match.group(2).strip()
+                        if question and answer:
+                            clean_qa.append({"question": question, "answer": answer})
+                            matched = True
+                            break
+                # If no pattern matched, treat as a question without answer
+                if not matched:
+                    clean_qa.append({"question": qa_str, "answer": ""})
+    p["questions_answered"] = clean_qa
+
     p["categories"] = [str(c).strip() for c in (p.get("categories") or []) if str(c).strip()]
     p["key_points_to_remember"] = [
         str(kp).strip() for kp in (p.get("key_points_to_remember") or []) if str(kp).strip()
@@ -532,7 +565,18 @@ def get_summary_json_schema() -> dict[str, Any]:
                 },
             },
             "highlights": {"type": "array", "items": {"type": "string"}},
-            "questions_answered": {"type": "array", "items": {"type": "string"}},
+            "questions_answered": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "additionalProperties": False,
+                    "properties": {
+                        "question": {"type": "string"},
+                        "answer": {"type": "string"},
+                    },
+                    "required": ["question", "answer"],
+                },
+            },
             "categories": {"type": "array", "items": {"type": "string"}},
             "topic_taxonomy": {
                 "type": "array",
