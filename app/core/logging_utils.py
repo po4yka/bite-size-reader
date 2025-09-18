@@ -383,6 +383,14 @@ def setup_json_logging(
         root.setLevel(lvl)
         root.addHandler(EnhancedInterceptHandler())
 
+        # Reduce noise from verbose third-party loggers
+        for noisy_logger in (
+            "pyrogram",
+            "pyrogram.session",
+            "pyrogram.session.session",
+        ):
+            logging.getLogger(noisy_logger).setLevel(logging.INFO)
+
         # Log setup completion
         loguru_logger.info(
             "Enhanced JSON logging initialized with loguru",
@@ -439,6 +447,13 @@ def setup_json_logging(
             }
         },
     )
+
+    for noisy_logger in (
+        "pyrogram",
+        "pyrogram.session",
+        "pyrogram.session.session",
+    ):
+        logging.getLogger(noisy_logger).setLevel(logging.INFO)
 
 
 def generate_correlation_id() -> str:
