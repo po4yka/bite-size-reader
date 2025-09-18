@@ -153,6 +153,39 @@ class ResponseFormatter:
                 combined_lines.append("🔎 SEO Keywords: " + ", ".join(seo[:20]))
                 combined_lines.append("")
 
+            # Metadata
+            metadata = summary_shaped.get("metadata") or {}
+            if isinstance(metadata, dict):
+                meta_parts = []
+                if metadata.get("title"):
+                    meta_parts.append(f"📰 {metadata['title']}")
+                if metadata.get("author"):
+                    meta_parts.append(f"✍️ {metadata['author']}")
+                if metadata.get("domain"):
+                    meta_parts.append(f"🌐 {metadata['domain']}")
+                if meta_parts:
+                    combined_lines.extend(meta_parts)
+                    combined_lines.append("")
+
+            # Categories & Topic Taxonomy
+            categories = [
+                str(c).strip() for c in (summary_shaped.get("categories") or []) if str(c).strip()
+            ]
+            if categories:
+                combined_lines.append("📁 Categories: " + ", ".join(categories[:10]))
+                combined_lines.append("")
+
+            # Confidence & Risk
+            confidence = summary_shaped.get("confidence", 1.0)
+            risk = summary_shaped.get("hallucination_risk", "low")
+            if isinstance(confidence, (int, float)) and confidence < 1.0:
+                combined_lines.append(f"🎯 Confidence: {confidence:.1%}")
+            if risk != "low":
+                risk_emoji = "⚠️" if risk == "med" else "🚨"
+                combined_lines.append(f"{risk_emoji} Hallucination risk: {risk}")
+            if confidence < 1.0 or risk != "low":
+                combined_lines.append("")
+
             if combined_lines:
                 # Remove trailing empty lines
                 while combined_lines and not combined_lines[-1]:
@@ -194,6 +227,9 @@ class ResponseFormatter:
                         chunk = []
                 if chunk:
                     await self._send_long_text(message, "💡 Key Ideas:\n" + "\n".join(chunk))
+
+            # Send new field messages
+            await self._send_new_field_messages(message, summary_shaped)
 
             # Finally attach full JSON as a document with a descriptive filename
             await self.reply_json(message, summary_shaped)
@@ -283,6 +319,36 @@ class ResponseFormatter:
                 combined_lines.append("🔎 SEO Keywords: " + ", ".join(seo[:20]))
                 combined_lines.append("")
 
+            # Metadata for forward posts
+            metadata = forward_shaped.get("metadata") or {}
+            if isinstance(metadata, dict):
+                meta_parts = []
+                if metadata.get("title"):
+                    meta_parts.append(f"📰 {metadata['title']}")
+                if metadata.get("author"):
+                    meta_parts.append(f"✍️ {metadata['author']}")
+                if meta_parts:
+                    combined_lines.extend(meta_parts)
+                    combined_lines.append("")
+
+            # Categories & Risk for forwards
+            categories = [
+                str(c).strip() for c in (forward_shaped.get("categories") or []) if str(c).strip()
+            ]
+            if categories:
+                combined_lines.append("📁 Categories: " + ", ".join(categories[:10]))
+                combined_lines.append("")
+
+            confidence = forward_shaped.get("confidence", 1.0)
+            risk = forward_shaped.get("hallucination_risk", "low")
+            if isinstance(confidence, (int, float)) and confidence < 1.0:
+                combined_lines.append(f"🎯 Confidence: {confidence:.1%}")
+            if risk != "low":
+                risk_emoji = "⚠️" if risk == "med" else "🚨"
+                combined_lines.append(f"{risk_emoji} Hallucination risk: {risk}")
+            if confidence < 1.0 or risk != "low":
+                combined_lines.append("")
+
             if combined_lines:
                 # Remove trailing empty lines
                 while combined_lines and not combined_lines[-1]:
@@ -318,6 +384,9 @@ class ResponseFormatter:
                 await self._send_long_text(
                     message, "💡 Key Ideas:\n" + "\n".join([f"• {i}" for i in ideas])
                 )
+
+            # Send new field messages for forwards
+            await self._send_new_field_messages(message, forward_shaped)
         except Exception:
             pass
 
@@ -453,6 +522,90 @@ class ResponseFormatter:
                 s = s[: -len(tail_match.group(1))].rstrip("-—")
 
         return s.strip()
+
+    async def _send_new_field_messages(self, message: Any, shaped: dict[str, Any]) -> None:
+        """Send messages for new fields like extractive quotes, highlights, etc."""
+        try:
+            # Extractive quotes
+            quotes = shaped.get("extractive_quotes") or []
+            if isinstance(quotes, list) and quotes:
+                quote_lines = ["💬 Key Quotes:"]
+                for i, quote in enumerate(quotes[:5], 1):
+                    if isinstance(quote, dict) and quote.get("text"):
+                        text = str(quote["text"]).strip()
+                        if text:
+                            quote_lines.append(f'{i}. "{text}"')
+                if len(quote_lines) > 1:
+                    await self._send_long_text(message, "\n".join(quote_lines))
+
+            # Highlights
+            highlights = [
+                str(h).strip() for h in (shaped.get("highlights") or []) if str(h).strip()
+            ]
+            if highlights:
+                await self._send_long_text(
+                    message, "✨ Highlights:\n" + "\n".join([f"• {h}" for h in highlights[:10]])
+                )
+
+            # Questions answered
+            questions = [
+                str(q).strip() for q in (shaped.get("questions_answered") or []) if str(q).strip()
+            ]
+            if questions:
+                await self._send_long_text(
+                    message,
+                    "❓ Questions Answered:\n" + "\n".join([f"• {q}" for q in questions[:10]]),
+                )
+
+            # Key points to remember
+            key_points = [
+                str(kp).strip()
+                for kp in (shaped.get("key_points_to_remember") or [])
+                if str(kp).strip()
+            ]
+            if key_points:
+                await self._send_long_text(
+                    message,
+                    "🎯 Key Points to Remember:\n"
+                    + "\n".join([f"• {kp}" for kp in key_points[:10]]),
+                )
+
+            # Topic taxonomy (if present and not empty)
+            taxonomy = shaped.get("topic_taxonomy") or []
+            if isinstance(taxonomy, list) and taxonomy:
+                tax_lines = ["🏷️ Topic Classification:"]
+                for tax in taxonomy[:5]:
+                    if isinstance(tax, dict) and tax.get("label"):
+                        label = str(tax["label"]).strip()
+                        score = tax.get("score", 0.0)
+                        if isinstance(score, (int, float)) and score > 0:
+                            tax_lines.append(f"• {label} ({score:.1%})")
+                        else:
+                            tax_lines.append(f"• {label}")
+                if len(tax_lines) > 1:
+                    await self._send_long_text(message, "\n".join(tax_lines))
+
+            # Forwarded post extras
+            fwd_extras = shaped.get("forwarded_post_extras")
+            if isinstance(fwd_extras, dict):
+                fwd_parts = []
+                if fwd_extras.get("channel_title"):
+                    fwd_parts.append(f"📺 Channel: {fwd_extras['channel_title']}")
+                if fwd_extras.get("channel_username"):
+                    fwd_parts.append(f"@{fwd_extras['channel_username']}")
+                hashtags = [
+                    str(h).strip() for h in (fwd_extras.get("hashtags") or []) if str(h).strip()
+                ]
+                if hashtags:
+                    fwd_parts.append(
+                        "Tags: "
+                        + " ".join([f"#{h}" if not h.startswith("#") else h for h in hashtags[:5]])
+                    )
+                if fwd_parts:
+                    await self._send_long_text(message, "📤 Forward Info:\n" + "\n".join(fwd_parts))
+
+        except Exception:
+            pass
 
     async def send_firecrawl_start_notification(self, message: Any) -> None:
         """Send Firecrawl start notification."""

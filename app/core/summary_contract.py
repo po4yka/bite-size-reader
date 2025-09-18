@@ -138,6 +138,19 @@ def _normalize_field_names(payload: SummaryJSON) -> SummaryJSON:
         "seokeywords": "seo_keywords",
         "seoKeywords": "seo_keywords",
         "seo_keywords": "seo_keywords",  # Already correct
+        # New fields
+        "extractivequotes": "extractive_quotes",
+        "extractiveQuotes": "extractive_quotes",
+        "questionsanswered": "questions_answered",
+        "questionsAnswered": "questions_answered",
+        "topictaxonomy": "topic_taxonomy",
+        "topicTaxonomy": "topic_taxonomy",
+        "hallucinationrisk": "hallucination_risk",
+        "hallucinationRisk": "hallucination_risk",
+        "forwardedpostextras": "forwarded_post_extras",
+        "forwardedPostExtras": "forwarded_post_extras",
+        "keypointstoremember": "key_points_to_remember",
+        "keyPointsToRemember": "key_points_to_remember",
     }
 
     normalized = {}
@@ -288,6 +301,56 @@ def validate_and_shape_summary(payload: SummaryJSON) -> SummaryJSON:
         except Exception:
             pass
 
+    # Handle new fields with defaults
+    p.setdefault("metadata", {})
+    p.setdefault("extractive_quotes", [])
+    p.setdefault("highlights", [])
+    p.setdefault("questions_answered", [])
+    p.setdefault("categories", [])
+    p.setdefault("topic_taxonomy", [])
+    p.setdefault("hallucination_risk", "low")
+    p.setdefault("confidence", 1.0)
+    p.setdefault("forwarded_post_extras", None)
+    p.setdefault("key_points_to_remember", [])
+
+    # Validate and clean new fields
+    if not isinstance(p["confidence"], (int, float)) or not (0.0 <= p["confidence"] <= 1.0):
+        p["confidence"] = 1.0
+
+    if p["hallucination_risk"] not in ["low", "med", "high"]:
+        p["hallucination_risk"] = "low"
+
+    # Clean lists
+    p["extractive_quotes"] = [
+        {
+            "text": str(q.get("text", "")).strip(),
+            "source_span": str(q.get("source_span", "")).strip() or None,
+        }
+        for q in (p.get("extractive_quotes") or [])
+        if isinstance(q, dict) and str(q.get("text", "")).strip()
+    ]
+    p["highlights"] = [str(h).strip() for h in (p.get("highlights") or []) if str(h).strip()]
+    p["questions_answered"] = [
+        str(q).strip() for q in (p.get("questions_answered") or []) if str(q).strip()
+    ]
+    p["categories"] = [str(c).strip() for c in (p.get("categories") or []) if str(c).strip()]
+    p["key_points_to_remember"] = [
+        str(kp).strip() for kp in (p.get("key_points_to_remember") or []) if str(kp).strip()
+    ]
+
+    # Clean topic_taxonomy
+    clean_taxonomy = []
+    for tax in p.get("topic_taxonomy") or []:
+        if isinstance(tax, dict) and str(tax.get("label", "")).strip():
+            clean_taxonomy.append(
+                {
+                    "label": str(tax["label"]).strip(),
+                    "score": float(tax.get("score", 0.0)) if _is_numeric(tax.get("score")) else 0.0,
+                    "path": str(tax.get("path", "")).strip() or None,
+                }
+            )
+    p["topic_taxonomy"] = clean_taxonomy
+
     # Optional strict validation via Pydantic
     if PydanticAvailable:
         try:
@@ -436,6 +499,79 @@ def get_summary_json_schema() -> dict[str, Any]:
                 "required": ["method", "score", "level"],
             },
             "seo_keywords": {"type": "array", "items": {"type": "string"}},
+            "metadata": {
+                "type": "object",
+                "additionalProperties": False,
+                "properties": {
+                    "title": {"type": ["string", "null"]},
+                    "canonical_url": {"type": ["string", "null"]},
+                    "domain": {"type": ["string", "null"]},
+                    "author": {"type": ["string", "null"]},
+                    "published_at": {"type": ["string", "null"]},
+                    "last_updated": {"type": ["string", "null"]},
+                },
+                "required": [
+                    "title",
+                    "canonical_url",
+                    "domain",
+                    "author",
+                    "published_at",
+                    "last_updated",
+                ],
+            },
+            "extractive_quotes": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "additionalProperties": False,
+                    "properties": {
+                        "text": {"type": "string"},
+                        "source_span": {"type": ["string", "null"]},
+                    },
+                    "required": ["text", "source_span"],
+                },
+            },
+            "highlights": {"type": "array", "items": {"type": "string"}},
+            "questions_answered": {"type": "array", "items": {"type": "string"}},
+            "categories": {"type": "array", "items": {"type": "string"}},
+            "topic_taxonomy": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "additionalProperties": False,
+                    "properties": {
+                        "label": {"type": "string"},
+                        "score": {"type": "number", "minimum": 0, "maximum": 1},
+                        "path": {"type": ["string", "null"]},
+                    },
+                    "required": ["label", "score", "path"],
+                },
+            },
+            "hallucination_risk": {"type": "string", "enum": ["low", "med", "high"]},
+            "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+            "forwarded_post_extras": {
+                "type": ["object", "null"],
+                "additionalProperties": False,
+                "properties": {
+                    "channel_id": {"type": ["integer", "null"]},
+                    "channel_title": {"type": ["string", "null"]},
+                    "channel_username": {"type": ["string", "null"]},
+                    "message_id": {"type": ["integer", "null"]},
+                    "post_datetime": {"type": ["string", "null"]},
+                    "hashtags": {"type": "array", "items": {"type": "string"}},
+                    "mentions": {"type": "array", "items": {"type": "string"}},
+                },
+                "required": [
+                    "channel_id",
+                    "channel_title",
+                    "channel_username",
+                    "message_id",
+                    "post_datetime",
+                    "hashtags",
+                    "mentions",
+                ],
+            },
+            "key_points_to_remember": {"type": "array", "items": {"type": "string"}},
         },
         "required": [
             "summary_250",
@@ -448,5 +584,15 @@ def get_summary_json_schema() -> dict[str, Any]:
             "answered_questions",
             "readability",
             "seo_keywords",
+            "metadata",
+            "extractive_quotes",
+            "highlights",
+            "questions_answered",
+            "categories",
+            "topic_taxonomy",
+            "hallucination_risk",
+            "confidence",
+            "forwarded_post_extras",
+            "key_points_to_remember",
         ],
     }
