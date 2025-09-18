@@ -83,24 +83,93 @@ class ResponseFormatter:
             except Exception:
                 pass
 
-            # 1) TL;DR
+            # Combined first message: TL;DR, Tags, Entities, Reading Time, Key Stats, Readability, SEO
+            combined_lines: list[str] = []
+
             tl_dr = str(summary_shaped.get("summary_250", "")).strip()
             if tl_dr:
-                await self._send_long_text(message, f"📋 TL;DR:\n{tl_dr}")
+                combined_lines.extend(["📋 TL;DR:", tl_dr, ""])
 
-            # 2) Extended summary
-            extended = str(summary_shaped.get("summary_1000", "")).strip()
-            if extended:
-                await self._send_long_text(message, f"🧾 Extended Summary:\n{extended}")
-
-            # 3) Tags
             tags = [
                 str(t).strip() for t in (summary_shaped.get("topic_tags") or []) if str(t).strip()
             ]
             if tags:
-                await self._send_long_text(message, "🏷️ Tags: " + " ".join(tags))
+                combined_lines.append("🏷️ Tags: " + " ".join(tags))
 
-            # 4) Key ideas
+            entities = summary_shaped.get("entities") or {}
+            if isinstance(entities, dict):
+                people = [str(x).strip() for x in (entities.get("people") or []) if str(x).strip()]
+                orgs = [
+                    str(x).strip() for x in (entities.get("organizations") or []) if str(x).strip()
+                ]
+                locs = [str(x).strip() for x in (entities.get("locations") or []) if str(x).strip()]
+                ent_parts: list[str] = []
+                if people:
+                    ent_parts.append("👤 " + ", ".join(people[:10]))
+                if orgs:
+                    ent_parts.append("🏢 " + ", ".join(orgs[:10]))
+                if locs:
+                    ent_parts.append("🌍 " + ", ".join(locs[:10]))
+                if ent_parts:
+                    combined_lines.append("🧭 Entities: " + " | ".join(ent_parts))
+
+            reading_time = summary_shaped.get("estimated_reading_time_min")
+            if reading_time:
+                combined_lines.append(f"⏱️ Reading time: ~{reading_time} min")
+
+            key_stats = summary_shaped.get("key_stats") or []
+            if isinstance(key_stats, list) and key_stats:
+                ks_lines: list[str] = ["📈 Key Stats:"]
+                for ks in key_stats[:10]:
+                    if isinstance(ks, dict):
+                        label = str(ks.get("label", "")).strip()
+                        value = ks.get("value")
+                        unit = str(ks.get("unit", "")).strip()
+                        if label and value is not None:
+                            ks_lines.append(f"• {label}: {value} {unit}".rstrip())
+                if len(ks_lines) > 1:
+                    combined_lines.extend(ks_lines)
+
+            readability = summary_shaped.get("readability") or {}
+            if isinstance(readability, dict):
+                method = readability.get("method")
+                score = readability.get("score")
+                level = readability.get("level")
+                details = [str(x) for x in (method, score, level) if x is not None]
+                if details:
+                    combined_lines.append("🧮 Readability: " + ", ".join(map(str, details)))
+
+            seo = [
+                str(x).strip() for x in (summary_shaped.get("seo_keywords") or []) if str(x).strip()
+            ]
+            if seo:
+                combined_lines.append("🔎 SEO Keywords: " + ", ".join(seo[:20]))
+
+            if combined_lines:
+                await self._send_long_text(message, "\n".join(combined_lines).strip())
+
+            # Send separated summary fields (summary_250, summary_500, summary_1000, ...)
+            summary_fields = [
+                k
+                for k in summary_shaped.keys()
+                if k.startswith("summary_") and k.split("_", 1)[1].isdigit()
+            ]
+
+            def _key_num(k: str) -> int:
+                try:
+                    return int(k.split("_", 1)[1])
+                except Exception:
+                    return 0
+
+            for key in sorted(summary_fields, key=_key_num):
+                content = str(summary_shaped.get(key, "")).strip()
+                if content:
+                    await self._send_long_text(
+                        message,
+                        f"🧾 Summary {key.split('_', 1)[1]}:\n{content}",
+                    )
+
+            # Key ideas as separate messages
             ideas = [
                 str(x).strip() for x in (summary_shaped.get("key_ideas") or []) if str(x).strip()
             ]
@@ -113,75 +182,6 @@ class ResponseFormatter:
                         chunk = []
                 if chunk:
                     await self._send_long_text(message, "💡 Key Ideas:\n" + "\n".join(chunk))
-
-            # 5) Entities
-            entities = summary_shaped.get("entities") or {}
-            if isinstance(entities, dict):
-                people = [str(x).strip() for x in (entities.get("people") or []) if str(x).strip()]
-                orgs = [
-                    str(x).strip() for x in (entities.get("organizations") or []) if str(x).strip()
-                ]
-                locs = [str(x).strip() for x in (entities.get("locations") or []) if str(x).strip()]
-                lines: list[str] = []
-                if people:
-                    lines.append("👤 People:")
-                    lines.extend([f"• {x}" for x in people])
-                if orgs:
-                    lines.append("🏢 Organizations:")
-                    lines.extend([f"• {x}" for x in orgs])
-                if locs:
-                    lines.append("🌍 Locations:")
-                    lines.extend([f"• {x}" for x in locs])
-                if lines:
-                    await self._send_long_text(message, "🧭 Entities:\n" + "\n".join(lines))
-
-            # 6) Reading time
-            reading_time = summary_shaped.get("estimated_reading_time_min")
-            if reading_time:
-                await self.safe_reply(message, f"⏱️ Estimated reading time: ~{reading_time} min")
-
-            # 7) Key stats
-            key_stats = summary_shaped.get("key_stats") or []
-            if isinstance(key_stats, list) and key_stats:
-                parts: list[str] = ["📈 Key Stats:"]
-                for ks in key_stats:
-                    if isinstance(ks, dict):
-                        label = str(ks.get("label", "")).strip()
-                        value = ks.get("value")
-                        unit = str(ks.get("unit", "")).strip()
-                        if label and value is not None:
-                            parts.append(f"• {label}: {value} {unit}".rstrip())
-                await self._send_long_text(message, "\n".join(parts))
-
-            # 8) Answered questions
-            questions = [
-                str(x).strip()
-                for x in (summary_shaped.get("answered_questions") or [])
-                if str(x).strip()
-            ]
-            if questions:
-                await self._send_long_text(
-                    message, "❓ Answered Questions:\n" + "\n".join([f"• {q}" for q in questions])
-                )
-
-            # 9) Readability
-            readability = summary_shaped.get("readability") or {}
-            if isinstance(readability, dict):
-                method = readability.get("method")
-                score = readability.get("score")
-                level = readability.get("level")
-                details = [str(x) for x in (method, score, level) if x is not None]
-                if details:
-                    await self.safe_reply(
-                        message, "🧮 Readability: " + ", ".join(map(str, details))
-                    )
-
-            # 10) SEO keywords
-            seo = [
-                str(x).strip() for x in (summary_shaped.get("seo_keywords") or []) if str(x).strip()
-            ]
-            if seo:
-                await self._send_long_text(message, "🔎 SEO Keywords: " + ", ".join(seo))
 
             # Finally attach full JSON as a document with a descriptive filename
             await self.reply_json(message, summary_shaped)
@@ -204,19 +204,89 @@ class ResponseFormatter:
         try:
             await self.safe_reply(message, "🎉 Forward Summary Ready")
 
+            combined_lines: list[str] = []
             tl_dr = str(forward_shaped.get("summary_250", "")).strip()
             if tl_dr:
-                await self._send_long_text(message, f"📋 TL;DR:\n{tl_dr}")
-
-            extended = str(forward_shaped.get("summary_1000", "")).strip()
-            if extended:
-                await self._send_long_text(message, f"🧾 Extended Summary:\n{extended}")
+                combined_lines.extend(["📋 TL;DR:", tl_dr, ""])
 
             tags = [
                 str(t).strip() for t in (forward_shaped.get("topic_tags") or []) if str(t).strip()
             ]
             if tags:
-                await self._send_long_text(message, "🏷️ Tags: " + " ".join(tags))
+                combined_lines.append("🏷️ Tags: " + " ".join(tags))
+
+            entities = forward_shaped.get("entities") or {}
+            if isinstance(entities, dict):
+                people = [str(x).strip() for x in (entities.get("people") or []) if str(x).strip()]
+                orgs = [
+                    str(x).strip() for x in (entities.get("organizations") or []) if str(x).strip()
+                ]
+                locs = [str(x).strip() for x in (entities.get("locations") or []) if str(x).strip()]
+                ent_parts: list[str] = []
+                if people:
+                    ent_parts.append("👤 " + ", ".join(people[:10]))
+                if orgs:
+                    ent_parts.append("🏢 " + ", ".join(orgs[:10]))
+                if locs:
+                    ent_parts.append("🌍 " + ", ".join(locs[:10]))
+                if ent_parts:
+                    combined_lines.append("🧭 Entities: " + " | ".join(ent_parts))
+
+            reading_time = forward_shaped.get("estimated_reading_time_min")
+            if reading_time:
+                combined_lines.append(f"⏱️ Reading time: ~{reading_time} min")
+
+            key_stats = forward_shaped.get("key_stats") or []
+            if isinstance(key_stats, list) and key_stats:
+                ks_lines: list[str] = ["📈 Key Stats:"]
+                for ks in key_stats[:10]:
+                    if isinstance(ks, dict):
+                        label = str(ks.get("label", "")).strip()
+                        value = ks.get("value")
+                        unit = str(ks.get("unit", "")).strip()
+                        if label and value is not None:
+                            ks_lines.append(f"• {label}: {value} {unit}".rstrip())
+                if len(ks_lines) > 1:
+                    combined_lines.extend(ks_lines)
+
+            readability = forward_shaped.get("readability") or {}
+            if isinstance(readability, dict):
+                method = readability.get("method")
+                score = readability.get("score")
+                level = readability.get("level")
+                details = [str(x) for x in (method, score, level) if x is not None]
+                if details:
+                    combined_lines.append("🧮 Readability: " + ", ".join(map(str, details)))
+
+            seo = [
+                str(x).strip() for x in (forward_shaped.get("seo_keywords") or []) if str(x).strip()
+            ]
+            if seo:
+                combined_lines.append("🔎 SEO Keywords: " + ", ".join(seo[:20]))
+
+            if combined_lines:
+                await self._send_long_text(message, "\n".join(combined_lines).strip())
+
+            # Separated summary fields
+            summary_fields = [
+                k
+                for k in forward_shaped.keys()
+                if k.startswith("summary_") and k.split("_", 1)[1].isdigit()
+            ]
+
+            def _key_num_f(k: str) -> int:
+                try:
+                    return int(k.split("_", 1)[1])
+                except Exception:
+                    return 0
+
+            for key in sorted(summary_fields, key=_key_num_f):
+                content = str(forward_shaped.get(key, "")).strip()
+                if content:
+                    await self._send_long_text(
+                        message,
+                        f"🧾 Summary {key.split('_', 1)[1]}:\n{content}",
+                    )
 
             ideas = [
                 str(x).strip() for x in (forward_shaped.get("key_ideas") or []) if str(x).strip()
