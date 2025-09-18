@@ -1,17 +1,14 @@
 from __future__ import annotations
 
+import datetime as dt
 import json
 import logging
 import os
 import sys
 import uuid
-from datetime import datetime
-
-try:  # Python 3.11+ compatibility shim for timezone constant
-    from datetime import UTC
-except ImportError:  # pragma: no cover - Python < 3.11 fallback
-    UTC = UTC
 from typing import Any
+
+UTC = getattr(dt, "UTC", getattr(dt, "timezone").utc)
 
 try:  # Optional: modern logging via loguru
     from loguru import logger as loguru_logger
@@ -34,7 +31,7 @@ class EnhancedJsonFormatter(logging.Formatter):
     def format(self, record: logging.LogRecord) -> str:
         # Base fields with ISO timestamp
         base: dict[str, Any] = {
-            "timestamp": datetime.fromtimestamp(record.created, tz=UTC).isoformat(),
+            "timestamp": dt.datetime.fromtimestamp(record.created, tz=UTC).isoformat(),
             "level": record.levelname,
             "logger": record.name,
             "message": record.getMessage(),

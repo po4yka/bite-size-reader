@@ -28,6 +28,10 @@ class ResponseFormatter:
         self._safe_reply_func = safe_reply_func
         self._reply_json_func = reply_json_func
 
+        # Telegram silently rejects messages above ~4096 characters.
+        # Keep a safety margin to avoid hitting the hard limit.
+        self.MAX_MESSAGE_CHARS = 3500
+
     async def send_help(self, message: Any) -> None:
         """Send help message to user."""
         help_text = (
@@ -276,9 +280,10 @@ class ResponseFormatter:
                 content = str(summary_shaped.get(key, "")).strip()
                 if content:
                     content = self._sanitize_summary_text(content)
-                    await self._send_long_text(
+                    await self._send_labelled_text(
                         message,
-                        f"🧾 Summary {key.split('_', 1)[1]}:\n{content}",
+                        f"🧾 Summary {key.split('_', 1)[1]}",
+                        content,
                     )
 
             # Key ideas as separate messages
@@ -439,9 +444,10 @@ class ResponseFormatter:
                 content = str(forward_shaped.get(key, "")).strip()
                 if content:
                     content = self._sanitize_summary_text(content)
-                    await self._send_long_text(
+                    await self._send_labelled_text(
                         message,
-                        f"🧾 Summary {key.split('_', 1)[1]}:\n{content}",
+                        f"🧾 Summary {key.split('_', 1)[1]}",
+                        content,
                     )
 
             ideas = [
@@ -529,24 +535,26 @@ class ResponseFormatter:
 
     async def _send_long_text(self, message: Any, text: str) -> None:
         """Send text, splitting into multiple messages if too long for Telegram."""
-        max_len = 3500
-        if len(text) <= max_len:
-            await self.safe_reply(message, text)
+        for chunk in self._chunk_text(text, max_len=self.MAX_MESSAGE_CHARS):
+            if chunk:
+                await self.safe_reply(message, chunk)
+
+    async def _send_labelled_text(self, message: Any, label: str, body: str) -> None:
+        """Send labelled text, splitting into continuation messages when needed."""
+        body = body.strip()
+        if not body:
             return
-        # Split on paragraph boundaries
-        parts = text.split("\n\n")
-        buf: list[str] = []
-        length = 0
-        for p in parts:
-            seg = (p + "\n\n") if p else "\n\n"
-            if length + len(seg) > max_len and buf:
-                await self.safe_reply(message, "".join(buf).rstrip())
-                buf = []
-                length = 0
-            buf.append(seg)
-            length += len(seg)
-        if buf:
-            await self.safe_reply(message, "".join(buf).rstrip())
+        label_clean = label.rstrip(":")
+        primary_title = f"{label_clean}:"
+        chunk_limit = max(200, self.MAX_MESSAGE_CHARS - len(primary_title) - 20)
+        chunks = self._chunk_text(body, max_len=chunk_limit)
+        if not chunks:
+            return
+
+        await self.safe_reply(message, f"{primary_title}\n{chunks[0]}")
+        for idx, chunk in enumerate(chunks[1:], start=2):
+            continuation_title = f"{label_clean} (cont. {idx}):"
+            await self.safe_reply(message, f"{continuation_title}\n{chunk}")
 
     def _build_json_filename(self, obj: dict) -> str:
         """Build a descriptive filename for the JSON attachment."""
@@ -577,6 +585,47 @@ class ResponseFormatter:
                 return f"{value:.1f} {unit}"
             value /= 1024
         return f"{value:.1f} TB"
+
+    def _chunk_text(self, text: str, *, max_len: int) -> list[str]:
+        """Split text into chunks respecting Telegram's message length limit."""
+        text = text.strip()
+        if not text:
+            return []
+
+        chunks: list[str] = []
+        remaining = text
+        while len(remaining) > max_len:
+            split_idx = self._find_split_index(remaining, max_len)
+            chunk = remaining[:split_idx].rstrip("\n")
+            if not chunk:
+                chunk = remaining[:max_len]
+                split_idx = max_len
+            chunks.append(chunk)
+            remaining = remaining[split_idx:]
+            remaining = remaining.lstrip(" \n\r")
+        if remaining:
+            chunks.append(remaining)
+        return chunks
+
+    def _find_split_index(self, text: str, limit: int) -> int:
+        """Find a sensible split index before the limit."""
+        min_split = max(20, limit // 4)
+        delimiters = [
+            "\n\n",
+            "\n",
+            ". ",
+            "! ",
+            "? ",
+            "; ",
+            ": ",
+            ", ",
+            " ",
+        ]
+        for delim in delimiters:
+            idx = text.rfind(delim, 0, limit)
+            if idx >= min_split:
+                return min(limit, idx + len(delim))
+        return limit
 
     def _sanitize_summary_text(self, text: str) -> str:
         """Normalize and clean summary text for safe sending.
