@@ -54,18 +54,9 @@ class URLHandler:
         self._awaiting_url_users.discard(uid)
 
         if len(urls) > 1:
-            self._pending_multi_links[uid] = urls
-            await self.response_formatter.safe_reply(
-                message, f"Process {len(urls)} links? (yes/no)"
+            await self._request_multi_link_confirmation(
+                message, uid, urls, interaction_id, start_time
             )
-            logger.debug("awaiting_multi_confirm", extra={"uid": uid, "count": len(urls)})
-            if interaction_id:
-                self._update_user_interaction(
-                    interaction_id=interaction_id,
-                    response_sent=True,
-                    response_type="confirmation",
-                    processing_time_ms=int((time.time() - start_time) * 1000),
-                )
             return
 
         if len(urls) == 1:
@@ -90,19 +81,12 @@ class URLHandler:
         urls = extract_all_urls(text)
 
         if len(urls) > 1:
-            self._pending_multi_links[uid] = urls
-            await self.response_formatter.safe_reply(
-                message, f"Process {len(urls)} links? (yes/no)"
+            await self._request_multi_link_confirmation(
+                message, uid, urls, interaction_id, start_time
             )
-            logger.debug("awaiting_multi_confirm", extra={"uid": uid, "count": len(urls)})
-            if interaction_id:
-                self._update_user_interaction(
-                    interaction_id=interaction_id,
-                    response_sent=True,
-                    response_type="confirmation",
-                    processing_time_ms=int((time.time() - start_time) * 1000),
-                )
-        elif len(urls) == 1:
+            return
+
+        if len(urls) == 1:
             await self.url_processor.handle_url_flow(
                 message,
                 urls[0],
@@ -120,7 +104,9 @@ class URLHandler:
         start_time: float,
     ) -> None:
         """Handle yes/no confirmation for multiple links."""
-        if self._is_affirmative(text):
+        normalized = self._normalize_response(text)
+
+        if self._is_affirmative(normalized):
             urls = self._pending_multi_links.pop(uid)
             await self.response_formatter.safe_reply(message, f"Processing {len(urls)} links...")
             if interaction_id:
@@ -139,7 +125,7 @@ class URLHandler:
                 await self.url_processor.handle_url_flow(message, u, correlation_id=per_link_cid)
             return
 
-        if self._is_negative(text):
+        if self._is_negative(normalized):
             self._pending_multi_links.pop(uid, None)
             await self.response_formatter.safe_reply(message, "Cancelled.")
             if interaction_id:
@@ -158,15 +144,35 @@ class URLHandler:
         """Check if user has pending multi-link confirmation."""
         return uid in self._pending_multi_links
 
+    def _normalize_response(self, text: str) -> str:
+        return text.strip().lower()
+
     def _is_affirmative(self, text: str) -> bool:
         """Check if text is an affirmative response."""
-        t = text.strip().lower()
-        return t in {"y", "yes", "+", "ok", "okay", "sure", "да", "ага", "угу", "👍", "✅"}
+        return text in {"y", "yes", "+", "ok", "okay", "sure", "да", "ага", "угу", "👍", "✅"}
 
     def _is_negative(self, text: str) -> bool:
         """Check if text is a negative response."""
-        t = text.strip().lower()
-        return t in {"n", "no", "-", "cancel", "stop", "нет", "не"}
+        return text in {"n", "no", "-", "cancel", "stop", "нет", "не"}
+
+    async def _request_multi_link_confirmation(
+        self,
+        message: Any,
+        uid: int,
+        urls: list[str],
+        interaction_id: int,
+        start_time: float,
+    ) -> None:
+        self._pending_multi_links[uid] = urls
+        await self.response_formatter.safe_reply(message, f"Process {len(urls)} links? (yes/no)")
+        logger.debug("awaiting_multi_confirm", extra={"uid": uid, "count": len(urls)})
+        if interaction_id:
+            self._update_user_interaction(
+                interaction_id=interaction_id,
+                response_sent=True,
+                response_type="confirmation",
+                processing_time_ms=int((time.time() - start_time) * 1000),
+            )
 
     def _update_user_interaction(
         self,

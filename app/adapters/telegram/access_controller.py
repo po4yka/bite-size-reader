@@ -32,43 +32,37 @@ class AccessController:
         self, uid: int, message: Any, correlation_id: str, interaction_id: int, start_time: float
     ) -> bool:
         """Check if user has access to the bot."""
-        # Owner-only gate - improved validation with better debugging
-        if self.cfg.telegram.allowed_user_ids:
-            logger.info(
-                f"Access control enabled. Checking if UID {uid} is in allowed list: {self.cfg.telegram.allowed_user_ids}"
-            )
-            if uid not in self.cfg.telegram.allowed_user_ids:
-                logger.warning(
-                    f"Access denied for UID {uid}. Not in allowed list: {self.cfg.telegram.allowed_user_ids}"
-                )
-            else:
-                logger.info(f"Access granted for UID {uid}. Found in allowed list.")
-        else:
+        allowed_ids = self.cfg.telegram.allowed_user_ids
+        if not allowed_ids:
             logger.info("Access control disabled - no allowed_user_ids configured")
+            return True
 
-        if self.cfg.telegram.allowed_user_ids and uid not in self.cfg.telegram.allowed_user_ids:
-            await self.response_formatter.safe_reply(
-                message,
-                f"This bot is private. Access denied. Error ID: {correlation_id}",
+        if uid in allowed_ids:
+            logger.info("access_granted", extra={"uid": uid})
+            return True
+
+        logger.warning("access_denied_list_mismatch", extra={"uid": uid, "allowed": allowed_ids})
+        try:
+            self._audit("WARN", "access_denied", {"uid": uid, "cid": correlation_id})
+        except Exception:
+            pass
+
+        await self.response_formatter.safe_reply(
+            message,
+            f"This bot is private. Access denied. Error ID: {correlation_id}",
+        )
+        logger.info("access_denied", extra={"uid": uid, "cid": correlation_id})
+
+        if interaction_id:
+            self._update_user_interaction(
+                interaction_id=interaction_id,
+                response_sent=True,
+                response_type="error",
+                error_occurred=True,
+                error_message="Access denied",
+                processing_time_ms=int((time.time() - start_time) * 1000),
             )
-            logger.info("access_denied", extra={"uid": uid, "cid": correlation_id})
-            try:
-                self._audit("WARN", "access_denied", {"uid": uid, "cid": correlation_id})
-            except Exception:
-                pass
-
-            # Update interaction with access denied
-            if interaction_id:
-                self._update_user_interaction(
-                    interaction_id=interaction_id,
-                    response_sent=True,
-                    response_type="error",
-                    error_occurred=True,
-                    error_message="Access denied",
-                    processing_time_ms=int((time.time() - start_time) * 1000),
-                )
-            return False
-        return True
+        return False
 
     def _update_user_interaction(
         self,
