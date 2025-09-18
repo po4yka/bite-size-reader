@@ -73,9 +73,9 @@ class ResponseFormatter:
         """Send an overview of the database state."""
         lines = ["📚 Database Overview"]
 
-        path = overview.get("path")
-        if isinstance(path, str) and path:
-            lines.append(f"Path: `{path}`")
+        path_display = overview.get("path_display") or overview.get("path")
+        if isinstance(path_display, str) and path_display:
+            lines.append(f"Path: `{path_display}`")
 
         size_bytes = overview.get("db_size_bytes")
         if isinstance(size_bytes, int) and size_bytes >= 0:
@@ -88,6 +88,9 @@ class ResponseFormatter:
             lines.append("Tables:")
             for name in sorted(table_counts):
                 lines.append(f"- {name}: {table_counts[name]}")
+            truncated = overview.get("tables_truncated")
+            if isinstance(truncated, int) and truncated > 0:
+                lines.append(f"- ...and {truncated} more (not displayed)")
 
         total_requests = overview.get("total_requests")
         total_summaries = overview.get("total_summaries")
@@ -121,6 +124,13 @@ class ResponseFormatter:
         if timeline_parts:
             lines.append("")
             lines.extend(timeline_parts)
+
+        errors = overview.get("errors")
+        if isinstance(errors, list) and errors:
+            lines.append("")
+            lines.append("Warnings:")
+            for err in errors[:5]:
+                lines.append(f"- {err}")
 
         await self.safe_reply(message, "\n".join(lines))
 

@@ -4,18 +4,14 @@ import json
 import logging
 import os
 import sys
-import time
 import uuid
-from collections.abc import Callable, Generator
-from contextlib import contextmanager
 from datetime import datetime
 
 try:  # Python 3.11+ compatibility shim for timezone constant
     from datetime import UTC
 except ImportError:  # pragma: no cover - Python < 3.11 fallback
     UTC = UTC
-from functools import wraps
-from typing import Any, TypeVar
+from typing import Any
 
 try:  # Optional: modern logging via loguru
     from loguru import logger as loguru_logger
@@ -24,9 +20,6 @@ try:  # Optional: modern logging via loguru
 except Exception:  # pragma: no cover - optional dependency
     loguru_logger = None
     _HAS_LOGURU = False
-
-# Type variable for decorators
-F = TypeVar("F", bound=Callable[..., Any])
 
 
 class EnhancedJsonFormatter(logging.Formatter):
@@ -172,94 +165,6 @@ class EnhancedJsonFormatter(logging.Formatter):
         if hasattr(obj, "__str__"):
             return str(obj)
         return f"<non-serializable: {type(obj).__name__}>"
-
-
-class StructuredLogger:
-    """Enhanced logger wrapper with structured output tracking and performance monitoring."""
-
-    def __init__(self, name: str):
-        self.logger = logging.getLogger(name)
-        self._active_contexts: dict[str, dict[str, Any]] = {}
-
-    def debug(self, message: str, **kwargs) -> None:
-        self._log(logging.DEBUG, message, **kwargs)
-
-    def info(self, message: str, **kwargs) -> None:
-        self._log(logging.INFO, message, **kwargs)
-
-    def warning(self, message: str, **kwargs) -> None:
-        self._log(logging.WARNING, message, **kwargs)
-
-    def error(self, message: str, **kwargs) -> None:
-        self._log(logging.ERROR, message, **kwargs)
-
-    def critical(self, message: str, **kwargs) -> None:
-        self._log(logging.CRITICAL, message, **kwargs)
-
-    def _log(self, level: int, message: str, **kwargs) -> None:
-        """Enhanced logging with context merging."""
-        # Merge active contexts
-        merged_extra = {}
-        for context in self._active_contexts.values():
-            merged_extra.update(context)
-        merged_extra.update(kwargs)
-
-        # Create log record with extra fields
-        if merged_extra:
-            self.logger.log(level, message, extra=merged_extra)
-        else:
-            self.logger.log(level, message)
-
-    @contextmanager
-    def context(self, context_id: str, **context_data) -> Generator[None, None, None]:
-        """Add contextual information to all logs within this block."""
-        self._active_contexts[context_id] = context_data
-        try:
-            yield
-        finally:
-            self._active_contexts.pop(context_id, None)
-
-    def bind(self, **kwargs) -> BoundLogger:
-        """Create a bound logger with persistent context."""
-        return BoundLogger(self, kwargs)
-
-
-class BoundLogger:
-    """Logger with bound context that persists across calls."""
-
-    def __init__(self, parent: StructuredLogger, context: dict[str, Any]):
-        self.parent = parent
-        self.context = context
-
-    def debug(self, message: str, **kwargs) -> None:
-        merged = {**self.context, **kwargs}
-        self.parent._log(logging.DEBUG, message, **merged)
-
-    def info(self, message: str, **kwargs) -> None:
-        merged = {**self.context, **kwargs}
-        self.parent._log(logging.INFO, message, **merged)
-
-    def warning(self, message: str, **kwargs) -> None:
-        merged = {**self.context, **kwargs}
-        self.parent._log(logging.WARNING, message, **merged)
-
-    def error(self, message: str, **kwargs) -> None:
-        merged = {**self.context, **kwargs}
-        self.parent._log(logging.ERROR, message, **merged)
-
-    def critical(self, message: str, **kwargs) -> None:
-        merged = {**self.context, **kwargs}
-        self.parent._log(logging.CRITICAL, message, **merged)
-
-    def bind(self, **kwargs) -> BoundLogger:
-        """Create a new bound logger with additional context."""
-        merged = {**self.context, **kwargs}
-        return BoundLogger(self.parent, merged)
-
-
-def get_logger(name: str) -> StructuredLogger:
-    """Get an enhanced structured logger instance."""
-    return StructuredLogger(name)
 
 
 def setup_json_logging(
@@ -461,11 +366,6 @@ def generate_correlation_id() -> str:
     return uuid.uuid4().hex[:12]
 
 
-def generate_request_id() -> str:
-    """Generate a longer request ID for detailed request tracking."""
-    return uuid.uuid4().hex
-
-
 def truncate_log_content(content: str | None, max_length: int = 1000) -> str | None:
     """Truncate large content for logging to avoid cluttering logs.
 
@@ -496,177 +396,10 @@ def truncate_log_content(content: str | None, max_length: int = 1000) -> str | N
     return content[:max_length] + "..."
 
 
-def log_performance(func: F) -> F:
-    """Decorator to automatically log function performance metrics."""
-
-    @wraps(func)
-    def sync_wrapper(*args, **kwargs):
-        logger = get_logger(func.__module__)
-        start_time = time.perf_counter()
-
-        try:
-            result = func(*args, **kwargs)
-            duration_ms = int((time.perf_counter() - start_time) * 1000)
-
-            logger.info(
-                f"Function {func.__name__} completed",
-                function_name=func.__name__,
-                duration_ms=duration_ms,
-                success=True,
-            )
-            return result
-        except Exception as e:
-            duration_ms = int((time.perf_counter() - start_time) * 1000)
-            logger.error(
-                f"Function {func.__name__} failed",
-                function_name=func.__name__,
-                duration_ms=duration_ms,
-                success=False,
-                error_type=type(e).__name__,
-                error_message=str(e),
-            )
-            raise
-
-    @wraps(func)
-    async def async_wrapper(*args, **kwargs):
-        logger = get_logger(func.__module__)
-        start_time = time.perf_counter()
-
-        try:
-            result = await func(*args, **kwargs)
-            duration_ms = int((time.perf_counter() - start_time) * 1000)
-
-            logger.info(
-                f"Async function {func.__name__} completed",
-                function_name=func.__name__,
-                duration_ms=duration_ms,
-                success=True,
-                is_async=True,
-            )
-            return result
-        except Exception as e:
-            duration_ms = int((time.perf_counter() - start_time) * 1000)
-            logger.error(
-                f"Async function {func.__name__} failed",
-                function_name=func.__name__,
-                duration_ms=duration_ms,
-                success=False,
-                error_type=type(e).__name__,
-                error_message=str(e),
-                is_async=True,
-            )
-            raise
-
-    # Return appropriate wrapper based on function type
-    import asyncio
-
-    if asyncio.iscoroutinefunction(func):
-        return async_wrapper  # type: ignore
-    else:
-        return sync_wrapper  # type: ignore
-
-
-@contextmanager
-def log_operation(
-    operation_name: str,
-    logger: StructuredLogger | None = None,
-    level: int = logging.INFO,
-    **context,
-) -> Generator[dict[str, Any], None, None]:
-    """Context manager for logging operations with automatic timing and error handling.
-
-    Args:
-        operation_name: Name of the operation being logged
-        logger: Logger instance (will create one if not provided)
-        level: Log level for success messages
-        **context: Additional context to include in logs
-
-    Yields:
-        Dictionary that can be updated with additional context during operation
-    """
-    if logger is None:
-        import inspect
-
-        frame = inspect.currentframe()
-        if frame and frame.f_back:
-            module_name = frame.f_back.f_globals.get("__name__", "unknown")
-        else:
-            module_name = "unknown"
-        logger = get_logger(module_name)
-
-    start_time = time.perf_counter()
-    operation_context = {"operation": operation_name, **context}
-    correlation_id = generate_correlation_id()
-
-    logger._log(
-        logging.DEBUG,
-        f"Starting operation: {operation_name}",
-        correlation_id=correlation_id,
-        **operation_context,
-    )
-
-    try:
-        yield operation_context
-
-        duration_ms = int((time.perf_counter() - start_time) * 1000)
-        logger._log(
-            level,
-            f"Operation completed: {operation_name}",
-            correlation_id=correlation_id,
-            duration_ms=duration_ms,
-            success=True,
-            **operation_context,
-        )
-
-    except Exception as e:
-        duration_ms = int((time.perf_counter() - start_time) * 1000)
-        logger.error(
-            f"Operation failed: {operation_name}",
-            correlation_id=correlation_id,
-            duration_ms=duration_ms,
-            success=False,
-            error_type=type(e).__name__,
-            error_message=str(e),
-            **operation_context,
-        )
-        raise
-
-
-def log_structured_output_event(
-    logger: StructuredLogger, event_type: str, success: bool, **details
-) -> None:
-    """Log structured output related events with consistent format.
-
-    Args:
-        logger: Logger instance
-        event_type: Type of structured output event (e.g., 'schema_validation', 'json_repair', 'fallback')
-        success: Whether the event was successful
-        **details: Additional event details
-    """
-    level = logging.INFO if success else logging.WARNING
-    message = f"Structured output {event_type} {'succeeded' if success else 'failed'}"
-
-    logger._log(level, message, structured_output_event=event_type, success=success, **details)
-
-
-# Convenience function for backward compatibility
-def setup_logging(level: str = "INFO") -> None:
-    """Backward compatibility wrapper for setup_json_logging."""
-    setup_json_logging(level=level)
-
-
 # Export commonly used items
 __all__ = [
     "setup_json_logging",
-    "setup_logging",
-    "get_logger",
-    "StructuredLogger",
-    "BoundLogger",
     "generate_correlation_id",
-    "generate_request_id",
     "truncate_log_content",
-    "log_performance",
-    "log_operation",
-    "log_structured_output_event",
     "EnhancedJsonFormatter",
 ]

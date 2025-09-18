@@ -102,7 +102,25 @@ class CommandProcessor:
         except Exception:
             pass
 
-        overview = self.db.get_database_overview()
+        try:
+            overview = self.db.get_database_overview()
+        except Exception as exc:  # noqa: BLE001 - defensive catch
+            logger.exception("command_dbinfo_failed", extra={"cid": correlation_id})
+            await self.response_formatter.safe_reply(
+                message,
+                "⚠️ Unable to read database overview right now. Check bot logs for details.",
+            )
+            if interaction_id:
+                self._update_user_interaction(
+                    interaction_id=interaction_id,
+                    response_sent=True,
+                    response_type="dbinfo_error",
+                    error_occurred=True,
+                    error_message=str(exc)[:500],
+                    processing_time_ms=int((time.time() - start_time) * 1000),
+                )
+            return
+
         await self.response_formatter.send_db_overview(message, overview)
         if interaction_id:
             self._update_user_interaction(

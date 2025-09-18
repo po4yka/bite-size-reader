@@ -5,6 +5,7 @@ import sqlite3
 from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 SCHEMA_SQL = r"""
 PRAGMA journal_mode=WAL;
@@ -194,64 +195,129 @@ class Database:
             cur = conn.execute(sql, tuple(params or ()))
             return cur.fetchone()
 
-    def get_database_overview(self) -> dict[str, object]:
-        """Return high-level statistics about the current database state."""
-        overview: dict[str, object] = {"path": self.path}
+    def get_database_overview(self) -> dict[str, Any]:
+        """Return high-level statistics about the current database state with error tolerance."""
+        overview: dict[str, Any] = {
+            "path": self.path,
+            "path_display": self._mask_path(self.path),
+            "errors": [],
+            "tables": {},
+            "requests_by_status": {},
+            "last_request_at": None,
+            "last_summary_at": None,
+            "last_audit_at": None,
+            "tables_truncated": 0,
+        }
+        errors: list[str] = overview["errors"]
+
         db_path = Path(self.path)
-        overview["db_size_bytes"] = db_path.stat().st_size if db_path.exists() else 0
-
-        with self.connect() as conn:
-            tables: dict[str, int] = {}
-            rows = conn.execute(
-                "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'"
-            )
-            table_names = [row[0] for row in rows.fetchall() if isinstance(row[0], str)]
-            for name in table_names:
-                if not self._is_valid_identifier(name):
-                    continue
-                count_row = conn.execute(f"SELECT COUNT(*) AS cnt FROM {name}").fetchone()
-                tables[name] = int(count_row["cnt"]) if count_row else 0
-            overview["tables"] = tables
-
-            if "requests" in tables:
-                status_rows = conn.execute(
-                    "SELECT status, COUNT(*) AS cnt FROM requests GROUP BY status"
-                ).fetchall()
-                overview["requests_by_status"] = {
-                    str(row["status"] or "unknown"): int(row["cnt"]) for row in status_rows
-                }
-                last_request = conn.execute(
-                    "SELECT created_at FROM requests ORDER BY created_at DESC LIMIT 1"
-                ).fetchone()
-                overview["last_request_at"] = last_request["created_at"] if last_request else None
+        try:
+            if db_path.exists():
+                overview["db_size_bytes"] = db_path.stat().st_size
             else:
-                overview["requests_by_status"] = {}
-                overview["last_request_at"] = None
+                overview["db_size_bytes"] = 0
+        except OSError as exc:  # pragma: no cover - filesystem race
+            overview["db_size_bytes"] = 0
+            errors.append("Could not read database file size")
+            self._logger.warning("db_size_stat_failed", extra={"error": str(exc)})
 
-            if "summaries" in tables:
-                last_summary = conn.execute(
-                    "SELECT created_at FROM summaries ORDER BY created_at DESC LIMIT 1"
-                ).fetchone()
-                overview["last_summary_at"] = last_summary["created_at"] if last_summary else None
-            else:
-                overview["last_summary_at"] = None
+        try:
+            with self.connect() as conn:
+                tables: dict[str, int] = {}
+                try:
+                    rows = conn.execute(
+                        "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'"
+                    )
+                    table_names = [row[0] for row in rows.fetchall() if isinstance(row[0], str)]
+                except sqlite3.Error as exc:  # pragma: no cover - unlikely
+                    errors.append("Failed to enumerate tables")
+                    self._logger.error("db_tables_list_failed", extra={"error": str(exc)})
+                    table_names = []
 
-            if "audit_logs" in tables:
-                last_audit = conn.execute(
-                    "SELECT ts FROM audit_logs ORDER BY ts DESC LIMIT 1"
-                ).fetchone()
-                overview["last_audit_at"] = last_audit["ts"] if last_audit else None
-            else:
-                overview["last_audit_at"] = None
+                max_tables = 25
+                for name in table_names[:max_tables]:
+                    if not self._is_valid_identifier(name):
+                        continue
+                    try:
+                        count_row = conn.execute(f"SELECT COUNT(*) AS cnt FROM {name}").fetchone()
+                        tables[name] = int(count_row["cnt"]) if count_row else 0
+                    except sqlite3.Error as exc:  # pragma: no cover - corrupted table
+                        errors.append(f"Failed to count rows for table '{name}'")
+                        self._logger.error(
+                            "db_table_count_failed",
+                            extra={"table": name, "error": str(exc)},
+                        )
+                if len(table_names) > max_tables:
+                    overview["tables_truncated"] = len(table_names) - max_tables
+                overview["tables"] = tables
 
-        table_counts = overview.get("tables")
-        if isinstance(table_counts, dict):
-            overview["total_requests"] = int(table_counts.get("requests", 0))
-            overview["total_summaries"] = int(table_counts.get("summaries", 0))
+                if "requests" in tables:
+                    try:
+                        status_rows = conn.execute(
+                            "SELECT status, COUNT(*) AS cnt FROM requests GROUP BY status"
+                        ).fetchall()
+                        overview["requests_by_status"] = {
+                            str(row["status"] or "unknown"): int(row["cnt"]) for row in status_rows
+                        }
+                    except sqlite3.Error as exc:  # pragma: no cover
+                        errors.append("Failed to aggregate request statuses")
+                        self._logger.error("db_requests_status_failed", extra={"error": str(exc)})
+                    overview["last_request_at"] = self._fetch_single_value(
+                        conn,
+                        "SELECT created_at FROM requests ORDER BY created_at DESC LIMIT 1",
+                    )
+
+                if "summaries" in tables:
+                    overview["last_summary_at"] = self._fetch_single_value(
+                        conn,
+                        "SELECT created_at FROM summaries ORDER BY created_at DESC LIMIT 1",
+                    )
+
+                if "audit_logs" in tables:
+                    overview["last_audit_at"] = self._fetch_single_value(
+                        conn,
+                        "SELECT ts FROM audit_logs ORDER BY ts DESC LIMIT 1",
+                    )
+        except sqlite3.Error as exc:
+            errors.append("Failed to query database overview")
+            self._logger.error("db_overview_failed", extra={"error": str(exc)})
+
+        tables = overview.get("tables")
+        if isinstance(tables, dict):
+            overview["total_requests"] = int(tables.get("requests", 0))
+            overview["total_summaries"] = int(tables.get("summaries", 0))
         else:
             overview["total_requests"] = 0
             overview["total_summaries"] = 0
+
+        if not errors:
+            overview.pop("errors")
+        if not overview.get("tables_truncated"):
+            overview.pop("tables_truncated", None)
         return overview
+
+    def _fetch_single_value(self, conn: sqlite3.Connection, sql: str) -> Any:
+        """Helper to safely fetch a single value, returning None on failure."""
+        try:
+            row = conn.execute(sql).fetchone()
+        except sqlite3.Error as exc:  # pragma: no cover
+            self._logger.error("db_fetch_single_failed", extra={"sql": sql, "error": str(exc)})
+            return None
+        return row[0] if row else None
+
+    def _mask_path(self, path: str) -> str:
+        """Return a shortened path representation to avoid leaking full filesystem layout."""
+        try:
+            p = Path(path)
+            name = p.name
+            if not name:
+                return str(p)
+            parent = p.parent.name
+            if parent:
+                return f".../{parent}/{name}"
+            return name
+        except Exception:  # pragma: no cover - defensive
+            return "..."
 
     def get_request_by_dedupe_hash(self, dedupe_hash: str) -> dict | None:
         row = self.fetchone("SELECT * FROM requests WHERE dedupe_hash = ?", (dedupe_hash,))

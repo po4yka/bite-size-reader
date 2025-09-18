@@ -116,6 +116,7 @@ class TestCommands(unittest.IsolatedAsyncioTestCase):
             self.assertTrue(any("Database Overview" in reply for reply in msg._replies))
             self.assertTrue(any("Requests by status" in reply for reply in msg._replies))
             self.assertTrue(any("Totals" in reply for reply in msg._replies))
+            self.assertFalse(any(db_path in reply for reply in msg._replies))
 
 
 if __name__ == "__main__":
