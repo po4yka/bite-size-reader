@@ -93,7 +93,11 @@ class RequestBuilder:
             if msg["role"] == "user":
                 sanitized_content = msg["content"]
                 for pat in patterns:
-                    sanitized_content = re.sub(pat, "", sanitized_content)
+                    sanitized_content = re.sub(
+                        pat,
+                        "",
+                        sanitized_content,
+                    )
                 if sanitized_content != msg["content"]:
                     msg = {**msg, "content": sanitized_content}
             sanitized_messages.append(msg)
@@ -104,7 +108,7 @@ class RequestBuilder:
         return {
             "Authorization": f"Bearer {self._api_key}",
             "Content-Type": "application/json",
-            "HTTP-Referer": self._http_referer or "https://github.com/your-repo",
+            "HTTP-Referer": (self._http_referer or "https://github.com/your-repo"),
             "X-Title": self._x_title or "Bite-Size Reader Bot",
         }
 
@@ -140,10 +144,6 @@ class RequestBuilder:
             built_rf = self._build_response_format(response_format, self._structured_output_mode)
             if built_rf:
                 body["response_format"] = built_rf
-                if built_rf.get("type") == "json_schema":
-                    body["structured_outputs"] = True
-                if self._require_parameters:
-                    provider_prefs["require_parameters"] = True
 
         # Attach provider preferences
         if provider_prefs:
@@ -154,16 +154,51 @@ class RequestBuilder:
     def _build_response_format(
         self, response_format: dict[str, Any] | None, mode: str
     ) -> dict[str, Any] | None:
-        """Build response format based on mode and input."""
+        """Build response format based on mode and input.
+
+        Rules:
+        - If caller passes a fully wrapped object (has "type"), pass through.
+        - If caller passes a raw JSON Schema, wrap into OpenRouter shape when
+          mode == json_schema.
+        - If mode == json_object, request a generic JSON object.
+        """
         if not response_format or not self._enable_structured_outputs:
             return None
 
-        if mode == "json_schema" and "schema" in response_format:
-            return {"type": "json_schema", "json_schema": response_format}
-        elif mode == "json_object" or "schema" not in response_format:
-            return {"type": "json_object"}
-        else:
+        # Pass-through for already-wrapped response_format
+        rf_type = response_format.get("type") if isinstance(response_format, dict) else None
+        if isinstance(rf_type, str) and rf_type in {
+            "json_schema",
+            "json_object",
+        }:
             return response_format
+
+        # Caller provided a raw schema or helper dict; wrap appropriately
+        if mode == "json_schema":
+            # Accept either {schema: {...}, name?, strict?} or a plain
+            # JSON Schema
+            json_schema_block = (
+                response_format.get("schema") if isinstance(response_format, dict) else None
+            )
+            schema_obj = (
+                json_schema_block if isinstance(json_schema_block, dict) else response_format
+            )
+            name_val = response_format.get("name") if isinstance(response_format, dict) else None
+            strict_val = (
+                response_format.get("strict") if isinstance(response_format, dict) else None
+            )
+
+            return {
+                "type": "json_schema",
+                "json_schema": {
+                    "name": name_val or "schema",
+                    "strict": (True if strict_val is None else bool(strict_val)),
+                    "schema": (schema_obj if isinstance(schema_obj, dict) else {}),
+                },
+            }
+
+        # Fallback to basic JSON object request
+        return {"type": "json_object"}
 
     def should_apply_compression(
         self, messages: list[dict[str, str]], model: str

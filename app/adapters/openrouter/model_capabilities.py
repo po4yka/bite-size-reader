@@ -36,16 +36,10 @@ class ModelCapabilities:
         # Known models that support structured outputs (fallback list)
         self._known_structured_models = {
             "openai/gpt-4o",
-            "openai/gpt-4o-mini",
-            "openai/gpt-4o-2024-08-06",
-            "openai/gpt-4o-2024-11-20",
             "openai/gpt-5",
             "openai/gpt-5-mini",
             "openai/gpt-5-nano",
             "google/gemini-2.5-pro",
-            "google/gemini-2.5-flash",
-            "anthropic/claude-3-5-sonnet",
-            "anthropic/claude-3-5-haiku",
         }
 
     def is_reasoning_heavy_model(self, model: str) -> bool:
@@ -57,7 +51,6 @@ class ModelCapabilities:
     def get_safe_structured_fallbacks(self) -> list[str]:
         """Get list of models known to support structured outputs reliably."""
         return [
-            "openai/gpt-4o-mini",
             "openai/gpt-4o",
             "google/gemini-2.5-pro",
         ]
