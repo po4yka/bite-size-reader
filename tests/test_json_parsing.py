@@ -1,4 +1,5 @@
 import asyncio
+import json
 import unittest
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -32,6 +33,14 @@ class TestJsonParsing(unittest.TestCase):
         openrouter_cfg.x_title = "title"
         openrouter_cfg.provider_order = []
         openrouter_cfg.enable_stats = False
+        openrouter_cfg.max_tokens = 1024
+        openrouter_cfg.top_p = 1.0
+        openrouter_cfg.temperature = 0.5
+        openrouter_cfg.enable_structured_outputs = True
+        openrouter_cfg.structured_output_mode = "json_schema"
+        openrouter_cfg.require_parameters = True
+        openrouter_cfg.auto_fallback_structured = True
+        openrouter_cfg.long_context_model = None
 
         runtime_cfg = MagicMock()
         runtime_cfg.log_level = "INFO"
@@ -39,9 +48,41 @@ class TestJsonParsing(unittest.TestCase):
         runtime_cfg.request_timeout_sec = 5
         runtime_cfg.debug_payloads = False
         runtime_cfg.log_truncate_length = 100
+        runtime_cfg.preferred_lang = "en"
 
         self.cfg = AppConfig(telegram_cfg, firecrawl_cfg, openrouter_cfg, runtime_cfg)
         self.db = MagicMock(spec=Database)
+
+    def _make_insights_response(self) -> MagicMock:
+        payload = {
+            "topic_overview": "Context summary",
+            "new_facts": [
+                {
+                    "fact": "Example new fact",
+                    "why_it_matters": "Illustrates behaviour",
+                    "source_hint": "General knowledge",
+                    "confidence": 0.7,
+                }
+            ],
+            "open_questions": ["What is the long-term impact?"],
+            "suggested_sources": ["Official report"],
+            "caution": "Check for recent updates beyond the model cutoff.",
+        }
+
+        mock = MagicMock()
+        mock.status = "ok"
+        mock.response_text = json.dumps(payload, ensure_ascii=False)
+        mock.response_json = {"choices": [{"message": {"parsed": payload}}]}
+        mock.model = "model"
+        mock.tokens_prompt = 5
+        mock.tokens_completion = 5
+        mock.cost_usd = 0.01
+        mock.latency_ms = 500
+        mock.endpoint = "/api/v1/chat/completions"
+        mock.request_headers = {}
+        mock.request_messages = []
+        mock.error_text = None
+        return mock
 
     @patch("app.adapters.telegram_bot.OpenRouterClient")
     def test_local_repair_success(self, mock_openrouter_client) -> None:
@@ -50,9 +91,23 @@ class TestJsonParsing(unittest.TestCase):
             mock_llm_response = MagicMock()
             mock_llm_response.status = "ok"
             mock_llm_response.response_text = '{"summary_250": "This is a truncated summary..."'
+            mock_llm_response.response_json = {"choices": []}
+            mock_llm_response.model = "model"
+            mock_llm_response.tokens_prompt = 10
+            mock_llm_response.tokens_completion = 5
+            mock_llm_response.cost_usd = 0.02
+            mock_llm_response.latency_ms = 1200
+            mock_llm_response.endpoint = "/api/v1/chat/completions"
+            mock_llm_response.request_headers = {}
+            mock_llm_response.request_messages = []
+            mock_llm_response.error_text = None
+
+            insights_response = self._make_insights_response()
 
             mock_openrouter_instance = mock_openrouter_client.return_value
-            mock_openrouter_instance.chat = AsyncMock(return_value=mock_llm_response)
+            mock_openrouter_instance.chat = AsyncMock(
+                side_effect=[mock_llm_response, insights_response]
+            )
             bot._openrouter = mock_openrouter_instance
 
             bot._safe_reply = AsyncMock()  # type: ignore[method-assign]
@@ -60,11 +115,13 @@ class TestJsonParsing(unittest.TestCase):
             self.db.get_request_by_dedupe_hash.return_value = None
             self.db.create_request.return_value = 1
             self.db.get_crawl_result_by_request.return_value = {"content_markdown": "Some content"}
+            self.db.get_summary_by_request.return_value = None
+            self.db.upsert_summary.return_value = 1
 
             message = MagicMock()
             await bot._handle_url_flow(message, "http://example.com")
 
-            mock_openrouter_instance.chat.assert_awaited_once()
+            self.assertEqual(mock_openrouter_instance.chat.await_count, 2)
             bot._reply_json.assert_called_once()
 
         asyncio.run(run_test())
@@ -85,11 +142,15 @@ class TestJsonParsing(unittest.TestCase):
             self.db.get_request_by_dedupe_hash.return_value = None
             self.db.create_request.return_value = 1
             self.db.get_crawl_result_by_request.return_value = {"content_markdown": "Some content"}
+            self.db.get_summary_by_request.return_value = None
 
             message = MagicMock()
             await bot._handle_url_flow(message, "http://example.com")
 
-            bot._safe_reply.assert_any_call(message, "Invalid summary format. Error ID: None")
+            messages = [
+                call.args[1] for call in bot._safe_reply.await_args_list if len(call.args) >= 2
+            ]
+            self.assertTrue(any("Invalid summary format" in str(msg) for msg in messages))
 
         asyncio.run(run_test())
 
@@ -100,9 +161,23 @@ class TestJsonParsing(unittest.TestCase):
             mock_llm_response = MagicMock()
             mock_llm_response.status = "ok"
             mock_llm_response.response_text = 'Here is the JSON: {"summary_250": "Summary"}'
+            mock_llm_response.response_json = {"choices": []}
+            mock_llm_response.model = "model"
+            mock_llm_response.tokens_prompt = 10
+            mock_llm_response.tokens_completion = 5
+            mock_llm_response.cost_usd = 0.02
+            mock_llm_response.latency_ms = 1100
+            mock_llm_response.endpoint = "/api/v1/chat/completions"
+            mock_llm_response.request_headers = {}
+            mock_llm_response.request_messages = []
+            mock_llm_response.error_text = None
+
+            insights_response = self._make_insights_response()
 
             mock_openrouter_instance = mock_openrouter_client.return_value
-            mock_openrouter_instance.chat = AsyncMock(return_value=mock_llm_response)
+            mock_openrouter_instance.chat = AsyncMock(
+                side_effect=[mock_llm_response, insights_response]
+            )
             bot._openrouter = mock_openrouter_instance
 
             bot._safe_reply = AsyncMock()  # type: ignore[method-assign]
@@ -110,10 +185,13 @@ class TestJsonParsing(unittest.TestCase):
             self.db.get_request_by_dedupe_hash.return_value = None
             self.db.create_request.return_value = 1
             self.db.get_crawl_result_by_request.return_value = {"content_markdown": "Some content"}
+            self.db.get_summary_by_request.return_value = None
+            self.db.upsert_summary.return_value = 1
 
             message = MagicMock()
             await bot._handle_url_flow(message, "http://example.com")
 
+            self.assertEqual(mock_openrouter_instance.chat.await_count, 2)
             bot._reply_json.assert_called_once()
             summary_json = bot._reply_json.call_args[0][1]
             self.assertEqual(summary_json["summary_250"], "Summary")
@@ -139,8 +217,12 @@ class TestJsonParsing(unittest.TestCase):
             mock_llm_response.request_messages = []
             mock_llm_response.response_json = {}
 
+            insights_response = self._make_insights_response()
+
             mock_openrouter_instance = mock_openrouter_client.return_value
-            mock_openrouter_instance.chat = AsyncMock(return_value=mock_llm_response)
+            mock_openrouter_instance.chat = AsyncMock(
+                side_effect=[mock_llm_response, insights_response]
+            )
             bot._openrouter = mock_openrouter_instance
 
             bot._safe_reply = AsyncMock()  # type: ignore[method-assign]
@@ -148,10 +230,13 @@ class TestJsonParsing(unittest.TestCase):
             self.db.get_request_by_dedupe_hash.return_value = None
             self.db.create_request.return_value = 1
             self.db.get_crawl_result_by_request.return_value = {"content_markdown": "Some content"}
+            self.db.get_summary_by_request.return_value = None
+            self.db.upsert_summary.return_value = 1
 
             message = MagicMock()
             await bot._handle_url_flow(message, "http://example.com")
 
+            self.assertEqual(mock_openrouter_instance.chat.await_count, 2)
             bot._reply_json.assert_called_once()
             summary_json = bot._reply_json.call_args[0][1]
             self.assertEqual(summary_json["summary_250"], "Fixed")
@@ -181,8 +266,12 @@ class TestJsonParsing(unittest.TestCase):
             mock_llm_response.request_messages = []
             mock_llm_response.response_json = {}
 
+            insights_response = self._make_insights_response()
+
             mock_openrouter_instance = mock_openrouter_client.return_value
-            mock_openrouter_instance.chat = AsyncMock(return_value=mock_llm_response)
+            mock_openrouter_instance.chat = AsyncMock(
+                side_effect=[mock_llm_response, insights_response]
+            )
             bot._openrouter = mock_openrouter_instance
 
             bot._safe_reply = AsyncMock()  # type: ignore[method-assign]
@@ -190,6 +279,7 @@ class TestJsonParsing(unittest.TestCase):
 
             self.db.create_request.return_value = 1
             self.db.upsert_summary.return_value = 1
+            self.db.get_summary_by_request.return_value = None
 
             message = MagicMock()
             message.text = "Some forwarded text"

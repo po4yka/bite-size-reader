@@ -106,6 +106,7 @@ CREATE TABLE IF NOT EXISTS summaries (
   request_id INTEGER UNIQUE,
   lang TEXT,
   json_payload TEXT,
+  insights_json TEXT,
   version INTEGER DEFAULT 1,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
@@ -136,6 +137,7 @@ class Database:
             conn.executescript(SCHEMA_SQL)
             # Ensure backward-compatible schema updates
             self._ensure_column(conn, "requests", "correlation_id", "TEXT")
+            self._ensure_column(conn, "summaries", "insights_json", "TEXT")
             conn.commit()
         self._logger.info("db_migrated", extra={"path": self.path})
 
@@ -578,11 +580,15 @@ class Database:
         request_id: int,
         lang: str,
         json_payload: str,
+        insights_json: str | None = None,
         version: int = 1,
     ) -> int:
-        sql = "INSERT INTO summaries (request_id, lang, json_payload, version) VALUES (?, ?, ?, ?)"
+        sql = (
+            "INSERT INTO summaries (request_id, lang, json_payload, insights_json, version) "
+            "VALUES (?, ?, ?, ?, ?)"
+        )
         with self.connect() as conn:
-            cur = conn.execute(sql, (request_id, lang, json_payload, version))
+            cur = conn.execute(sql, (request_id, lang, json_payload, insights_json, version))
             conn.commit()
             sid = cur.lastrowid
             self._logger.info(
@@ -590,13 +596,23 @@ class Database:
             )
             return sid
 
-    def upsert_summary(self, *, request_id: int, lang: str, json_payload: str) -> int:
+    def upsert_summary(
+        self,
+        *,
+        request_id: int,
+        lang: str,
+        json_payload: str,
+        insights_json: str | None = None,
+    ) -> int:
         existing = self.get_summary_by_request(request_id)
         if existing:
             new_version = int(existing.get("version", 1)) + 1
-            sql = "UPDATE summaries SET lang = ?, json_payload = ?, version = ?, created_at = CURRENT_TIMESTAMP WHERE request_id = ?"
+            sql = (
+                "UPDATE summaries SET lang = ?, json_payload = ?, insights_json = ?, version = ?, "
+                "created_at = CURRENT_TIMESTAMP WHERE request_id = ?"
+            )
             with self.connect() as conn:
-                conn.execute(sql, (lang, json_payload, new_version, request_id))
+                conn.execute(sql, (lang, json_payload, insights_json, new_version, request_id))
                 conn.commit()
             self._logger.info(
                 "summary_updated", extra={"request_id": request_id, "version": new_version}
@@ -604,8 +620,22 @@ class Database:
             return new_version
         else:
             return self.insert_summary(
-                request_id=request_id, lang=lang, json_payload=json_payload, version=1
+                request_id=request_id,
+                lang=lang,
+                json_payload=json_payload,
+                insights_json=insights_json,
+                version=1,
             )
+
+    def update_summary_insights(self, request_id: int, insights_json: str | None) -> None:
+        sql = "UPDATE summaries SET insights_json = ?, created_at = created_at WHERE request_id = ?"
+        with self.connect() as conn:
+            conn.execute(sql, (insights_json, request_id))
+            conn.commit()
+        self._logger.debug(
+            "summary_insights_updated",
+            extra={"request_id": request_id, "has_insights": bool(insights_json)},
+        )
 
     def insert_audit_log(self, *, level: str, event: str, details_json: str | None = None) -> int:
         sql = "INSERT INTO audit_logs (level, event, details_json) VALUES (?, ?, ?)"

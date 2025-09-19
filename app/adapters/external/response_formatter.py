@@ -317,6 +317,101 @@ class ResponseFormatter:
 
             await self.reply_json(message, summary_shaped)
 
+    async def send_additional_insights_message(
+        self, message: Any, insights: dict[str, Any], correlation_id: str | None = None
+    ) -> None:
+        """Send follow-up message summarizing additional research insights."""
+        try:
+            lines: list[str] = ["🔍 Additional Research Highlights"]
+
+            if correlation_id:
+                lines.append(f"🆔 Correlation ID: `{correlation_id}`")
+                lines.append("")
+
+            overview = insights.get("topic_overview")
+            if isinstance(overview, str) and overview.strip():
+                lines.append("🧭 Overview:")
+                lines.append(self._sanitize_summary_text(overview.strip()))
+                lines.append("")
+
+            facts = insights.get("new_facts")
+            if isinstance(facts, list) and facts:
+                lines.append("📌 Fresh Facts:")
+                for idx, fact in enumerate(facts[:5], start=1):
+                    if not isinstance(fact, dict):
+                        continue
+                    fact_text = str(fact.get("fact", "")).strip()
+                    if not fact_text:
+                        continue
+                    fact_line = f"{idx}. {self._sanitize_summary_text(fact_text)}"
+
+                    why_matters = str(fact.get("why_it_matters", "")).strip()
+                    if why_matters:
+                        fact_line += (
+                            f"\n   • Why it matters: {self._sanitize_summary_text(why_matters)}"
+                        )
+
+                    source_hint = str(fact.get("source_hint", "")).strip()
+                    if source_hint:
+                        fact_line += (
+                            f"\n   • Source hint: {self._sanitize_summary_text(source_hint)}"
+                        )
+
+                    confidence = fact.get("confidence")
+                    if confidence is not None:
+                        try:
+                            conf_val = float(confidence)
+                            fact_line += f"\n   • Confidence: {conf_val:.0%}"
+                        except Exception:
+                            fact_line += (
+                                f"\n   • Confidence: {self._sanitize_summary_text(str(confidence))}"
+                            )
+
+                    lines.append(fact_line)
+                lines.append("")
+
+            open_questions = insights.get("open_questions")
+            if isinstance(open_questions, list):
+                cleaned_questions = [
+                    self._sanitize_summary_text(str(q).strip())
+                    for q in open_questions
+                    if str(q).strip()
+                ]
+                if cleaned_questions:
+                    lines.append("❓ Open Questions:")
+                    for question in cleaned_questions[:5]:
+                        lines.append(f"- {question}")
+                    lines.append("")
+
+            suggested_sources = insights.get("suggested_sources")
+            if isinstance(suggested_sources, list):
+                cleaned_sources = [
+                    self._sanitize_summary_text(str(src).strip())
+                    for src in suggested_sources
+                    if str(src).strip()
+                ]
+                if cleaned_sources:
+                    lines.append("🔗 Suggested Follow-up:")
+                    for src in cleaned_sources[:5]:
+                        lines.append(f"- {src}")
+                    lines.append("")
+
+            caution = insights.get("caution")
+            if isinstance(caution, str) and caution.strip():
+                lines.append("⚠️ Caveats:")
+                lines.append(self._sanitize_summary_text(caution.strip()))
+                lines.append("")
+
+            while lines and not lines[-1].strip():
+                lines.pop()
+
+            if len(lines) == 1:
+                lines.append("No additional research insights were available.")
+
+            await self.safe_reply(message, "\n".join(lines))
+        except Exception:
+            pass
+
     async def send_forward_summary_response(
         self, message: Any, forward_shaped: dict[str, Any]
     ) -> None:

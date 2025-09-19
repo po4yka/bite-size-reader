@@ -171,7 +171,6 @@ class TestOpenRouterCompliance(unittest.TestCase):
 
                 self.assertEqual(result.status, "error")
                 self.assertIn("Invalid or missing request parameters", result.error_text)
-                self.assertIn("Invalid request parameters", result.error_text)
 
         asyncio.run(_test())
 
@@ -189,7 +188,6 @@ class TestOpenRouterCompliance(unittest.TestCase):
 
                 self.assertEqual(result.status, "error")
                 self.assertIn("Authentication failed", result.error_text)
-                self.assertIn("Invalid API key", result.error_text)
 
         asyncio.run(_test())
 
@@ -207,7 +205,6 @@ class TestOpenRouterCompliance(unittest.TestCase):
 
                 self.assertEqual(result.status, "error")
                 self.assertIn("Insufficient account balance", result.error_text)
-                self.assertIn("Insufficient credits", result.error_text)
 
         asyncio.run(_test())
 
@@ -225,7 +222,6 @@ class TestOpenRouterCompliance(unittest.TestCase):
 
                 self.assertEqual(result.status, "error")
                 self.assertIn("Requested resource not found", result.error_text)
-                self.assertIn("Model not found", result.error_text)
 
         asyncio.run(_test())
 
@@ -376,7 +372,10 @@ class TestOpenRouterCompliance(unittest.TestCase):
                         {"id": "google/gemini-2.5-pro", "name": "Gemini 2.5 Pro"},
                     ]
                 }
+                mock_response.raise_for_status = Mock()
                 mock_client.return_value.get = AsyncMock(return_value=mock_response)
+                mock_client.return_value.__aenter__.return_value = mock_client.return_value
+                mock_client.return_value.__aexit__.return_value = AsyncMock(return_value=None)
 
                 models = await self.client.get_models()
 

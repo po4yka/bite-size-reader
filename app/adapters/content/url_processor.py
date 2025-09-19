@@ -194,6 +194,13 @@ class URLProcessor:
                         correlation_id,
                         interaction_id,
                     )
+                    await self._handle_additional_insights(
+                        message,
+                        content_text,
+                        chosen_lang,
+                        req_id,
+                        correlation_id,
+                    )
                     return
                 else:
                     # Fallback to single-pass if chunking failed
@@ -217,6 +224,13 @@ class URLProcessor:
                 # Send enhanced summary response (LLM result is handled in summarizer)
                 await self.response_formatter.send_enhanced_summary_response(message, shaped, None)
                 logger.info("reply_json_sent", extra={"cid": correlation_id, "request_id": req_id})
+                await self._handle_additional_insights(
+                    message,
+                    content_text,
+                    chosen_lang,
+                    req_id,
+                    correlation_id,
+                )
 
         except ValueError as e:
             # Handle known errors (like Firecrawl failures)
@@ -279,6 +293,39 @@ class URLProcessor:
         )
         logger.info("reply_json_sent", extra={"cid": correlation_id, "request_id": req_id})
 
+    async def _handle_additional_insights(
+        self,
+        message: Any,
+        content_text: str,
+        chosen_lang: str,
+        req_id: int,
+        correlation_id: str | None,
+    ) -> None:
+        """Generate and persist additional insights using the LLM."""
+        try:
+            insights = await self.llm_summarizer.generate_additional_insights(
+                message,
+                content_text=content_text,
+                chosen_lang=chosen_lang,
+                req_id=req_id,
+                correlation_id=correlation_id,
+            )
+            if insights:
+                try:
+                    self.db.update_summary_insights(
+                        req_id, json.dumps(insights, ensure_ascii=False)
+                    )
+                except Exception as exc:  # noqa: BLE001
+                    logger.error(
+                        "persist_insights_error",
+                        extra={"cid": correlation_id, "error": str(exc)},
+                    )
+        except Exception as exc:  # noqa: BLE001
+            logger.error(
+                "insights_flow_error",
+                extra={"cid": correlation_id, "error": str(exc)},
+            )
+
     async def _load_system_prompt(self, lang: str) -> str:
         """Load system prompt file based on language."""
         return _get_system_prompt(lang)
@@ -331,6 +378,21 @@ class URLProcessor:
         )
         await self.response_formatter.send_cached_summary_notification(message)
         await self.response_formatter.send_enhanced_summary_response(message, shaped, None)
+
+        insights_raw = summary_row.get("insights_json")
+        if isinstance(insights_raw, str) and insights_raw.strip():
+            try:
+                insights_payload = json.loads(insights_raw)
+                if isinstance(insights_payload, dict):
+                    await self.response_formatter.send_additional_insights_message(
+                        message, insights_payload, correlation_id
+                    )
+            except json.JSONDecodeError:
+                logger.warning(
+                    "cached_insights_decode_failed",
+                    extra={"request_id": req_id, "cid": correlation_id},
+                )
+
         self.db.update_request_status(req_id, "ok")
 
         self._audit(

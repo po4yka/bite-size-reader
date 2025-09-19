@@ -747,3 +747,186 @@ class LLMSummarizer:
             "user_interaction_update_placeholder",
             extra={"interaction_id": interaction_id, "response_type": response_type},
         )
+
+    async def generate_additional_insights(
+        self,
+        message: Any,
+        *,
+        content_text: str,
+        chosen_lang: str,
+        req_id: int,
+        correlation_id: str | None,
+    ) -> dict[str, Any] | None:
+        """Call OpenRouter to obtain additional researched insights for the article."""
+        if not content_text.strip():
+            return None
+
+        system_prompt = self._build_insights_system_prompt(chosen_lang)
+        user_prompt = self._build_insights_user_prompt(content_text, chosen_lang)
+
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ]
+
+        try:
+            async with self._sem():
+                llm = await self.openrouter.chat(
+                    messages,
+                    temperature=self.cfg.openrouter.temperature,
+                    max_tokens=self._select_max_tokens(content_text),
+                    top_p=self.cfg.openrouter.top_p,
+                    request_id=req_id,
+                    response_format=self._build_insights_response_format(),
+                    model_override=self.cfg.openrouter.model,
+                )
+
+            asyncio.create_task(self._persist_llm_call(llm, req_id, correlation_id))
+
+            if llm.status != "ok":
+                logger.warning(
+                    "insights_llm_error",
+                    extra={
+                        "cid": correlation_id,
+                        "status": llm.status,
+                        "error": llm.error_text,
+                    },
+                )
+                return None
+
+            insights = self._parse_insights_response(llm.response_json, llm.response_text)
+            if not insights:
+                logger.warning("insights_parse_failed", extra={"cid": correlation_id})
+                return None
+
+            await self.response_formatter.send_additional_insights_message(
+                message, insights, correlation_id
+            )
+            return insights
+
+        except Exception as exc:  # noqa: BLE001
+            logger.exception(
+                "insights_generation_failed", extra={"cid": correlation_id, "error": str(exc)}
+            )
+            return None
+
+    def _build_insights_system_prompt(self, lang: str) -> str:
+        """Return system prompt instructing additional insight behaviour."""
+        if lang == LANG_RU:
+            return (
+                "Ты аналитик-исследователь. Используя статью и проверенные знания,"
+                " дай свежие факты, контекст и вопросы по теме. Отмечай низкую уверенность"
+                " и строго соблюдай требуемую JSON-схему."
+            )
+        return (
+            "You are an investigative research analyst. Combine the article with your tested"
+            " knowledge to surface fresh facts, context, recent developments, and open"
+            " questions. Flag any low-confidence items and answer using the JSON schema."
+        )
+
+    def _build_insights_user_prompt(self, content_text: str, lang: str) -> str:
+        """Return user prompt used for additional insights."""
+        lang_label = "Russian" if lang == LANG_RU else "English"
+        return (
+            "Provide concise research insights that extend beyond the literal article text."
+            " Include relevant historical context, recent developments (up to your knowledge"
+            " cut-off), market or technical implications, and unanswered questions."
+            " Mark any uncertain statements as low confidence."
+            f" Respond in {lang_label}."
+            "\n\nARTICLE CONTENT START\n"
+            f"{content_text}\n"
+            "ARTICLE CONTENT END"
+        )
+
+    def _build_insights_response_format(self) -> dict[str, Any]:
+        """Build response format configuration for insights request."""
+        return {
+            "type": "json_schema",
+            "json_schema": {
+                "name": "insights_schema",
+                "strict": True,
+                "schema": {
+                    "type": "object",
+                    "additionalProperties": False,
+                    "properties": {
+                        "topic_overview": {"type": "string"},
+                        "new_facts": {
+                            "type": "array",
+                            "minItems": 1,
+                            "maxItems": 5,
+                            "items": {
+                                "type": "object",
+                                "additionalProperties": False,
+                                "properties": {
+                                    "fact": {"type": "string"},
+                                    "why_it_matters": {"type": ["string", "null"]},
+                                    "source_hint": {"type": ["string", "null"]},
+                                    "confidence": {"type": ["number", "string", "null"]},
+                                },
+                                "required": ["fact"],
+                            },
+                        },
+                        "open_questions": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                        },
+                        "suggested_sources": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                        },
+                        "caution": {"type": ["string", "null"]},
+                    },
+                    "required": ["topic_overview", "new_facts"],
+                },
+            },
+        }
+
+    def _parse_insights_response(
+        self, response_json: Any, response_text: str | None
+    ) -> dict[str, Any] | None:
+        """Parse structured insights payload from LLM output."""
+        candidate: dict[str, Any] | None = None
+
+        if isinstance(response_json, dict):
+            choices = response_json.get("choices")
+            if isinstance(choices, list) and choices:
+                first = choices[0] or {}
+                if isinstance(first, dict):
+                    message = first.get("message") or {}
+                    if isinstance(message, dict):
+                        parsed = message.get("parsed")
+                        if isinstance(parsed, dict):
+                            candidate = parsed
+                        elif parsed is not None:
+                            try:
+                                loaded = json.loads(json.dumps(parsed))
+                                if isinstance(loaded, dict):
+                                    candidate = loaded
+                            except Exception:  # noqa: BLE001
+                                candidate = None
+                        if candidate is None:
+                            content = message.get("content")
+                            if isinstance(content, str):
+                                candidate = extract_json(content) or None
+
+        if candidate is None and response_text:
+            textracted = extract_json(response_text)
+            if isinstance(textracted, dict):
+                candidate = textracted
+
+        if not isinstance(candidate, dict):
+            return None
+
+        facts = candidate.get("new_facts")
+        if isinstance(facts, list):
+            cleaned: list[dict[str, Any]] = []
+            for fact in facts:
+                if not isinstance(fact, dict):
+                    continue
+                fact_text = str(fact.get("fact", "")).strip()
+                if not fact_text:
+                    continue
+                cleaned.append(fact)
+            candidate["new_facts"] = cleaned
+
+        return candidate if candidate.get("new_facts") else None

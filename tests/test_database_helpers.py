@@ -91,11 +91,17 @@ class TestDatabaseHelpers(unittest.TestCase):
         self.assertIsNotNone(row)
         self.assertEqual(row["version"], 1)
         self.assertEqual(row["lang"], "en")
+        self.assertIsNone(row["insights_json"])
 
         v2 = self.db.upsert_summary(request_id=rid, lang="en", json_payload=json.dumps({"a": 2}))
         self.assertEqual(v2, 2)
         row2 = self.db.get_summary_by_request(rid)
         self.assertEqual(row2["version"], 2)
+
+        insights_payload = json.dumps({"topic_overview": "Context", "new_facts": []})
+        self.db.update_summary_insights(rid, insights_payload)
+        row3 = self.db.get_summary_by_request(rid)
+        self.assertEqual(row3["insights_json"], insights_payload)
 
     def test_insert_llm_and_telegram_and_audit(self):
         rid = self.db.create_request(
