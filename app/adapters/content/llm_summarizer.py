@@ -497,7 +497,7 @@ class LLMSummarizer:
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_content},
         ]
-        response_format = self._build_structured_response_format()
+        response_format = self._build_structured_response_format(mode="json_object")
 
         for model_name in fallback_models:
             logger.info(
@@ -617,7 +617,7 @@ class LLMSummarizer:
             ]
 
             async with self._sem():
-                repair_response_format = self._build_structured_response_format()
+                repair_response_format = self._build_structured_response_format(mode="json_object")
                 repair = await self.openrouter.chat(
                     repair_messages,
                     temperature=self.cfg.openrouter.temperature,
@@ -723,12 +723,14 @@ class LLMSummarizer:
             },
         )
 
-    def _build_structured_response_format(self) -> dict[str, Any]:
+    def _build_structured_response_format(self, mode: str | None = None) -> dict[str, Any]:
         """Build response format configuration for structured outputs."""
         try:
             from app.core.summary_contract import get_summary_json_schema
 
-            if self.cfg.openrouter.structured_output_mode == "json_schema":
+            current_mode = mode or self.cfg.openrouter.structured_output_mode
+
+            if current_mode == "json_schema":
                 return {
                     "type": "json_schema",
                     "json_schema": {
