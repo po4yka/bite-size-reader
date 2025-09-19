@@ -315,6 +315,9 @@ class URLProcessor:
                 correlation_id=correlation_id,
             )
             if insights:
+                await self.response_formatter.send_additional_insights_message(
+                    message, insights, correlation_id
+                )
                 try:
                     self.db.update_summary_insights(
                         req_id, json.dumps(insights, ensure_ascii=False)

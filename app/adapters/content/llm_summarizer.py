@@ -46,6 +46,7 @@ class LLMSummarizer:
         self._audit = audit_func
         self._sem = sem
         self._last_llm_result: Any | None = None
+        self._last_insights: dict[str, Any] | None = None
 
     async def summarize_content(
         self,
@@ -96,6 +97,7 @@ class LLMSummarizer:
             response_format = self._build_structured_response_format()
             max_tokens = self._select_max_tokens(content_text)
             self._last_llm_result = None
+            self._last_insights = None
 
             llm = await self.openrouter.chat(
                 messages,
@@ -273,8 +275,12 @@ class LLMSummarizer:
 
         # Persist summary
         try:
+            insights_json = json.dumps(self._last_insights) if self._last_insights else None
             new_version = self.db.upsert_summary(
-                request_id=req_id, lang=chosen_lang, json_payload=json.dumps(summary_shaped)
+                request_id=req_id,
+                lang=chosen_lang,
+                json_payload=json.dumps(summary_shaped),
+                insights_json=insights_json,
             )
             self.db.update_request_status(req_id, "ok")
             self._audit("INFO", "summary_upserted", {"request_id": req_id, "version": new_version})
@@ -810,17 +816,17 @@ class LLMSummarizer:
             insights = self._parse_insights_response(llm.response_json, llm.response_text)
             if not insights:
                 logger.warning("insights_parse_failed", extra={"cid": correlation_id})
+                self._last_insights = None
                 return None
 
-            await self.response_formatter.send_additional_insights_message(
-                message, insights, correlation_id
-            )
+            self._last_insights = insights
             return insights
 
         except Exception as exc:  # noqa: BLE001
             logger.exception(
                 "insights_generation_failed", extra={"cid": correlation_id, "error": str(exc)}
             )
+            self._last_insights = None
             return None
 
     def _build_insights_system_prompt(self, lang: str) -> str:
@@ -893,6 +899,10 @@ class LLMSummarizer:
                 },
             },
         }
+
+    @property
+    def last_insights(self) -> dict[str, Any] | None:
+        return self._last_insights
 
     def _parse_insights_response(
         self, response_json: Any, response_text: str | None
