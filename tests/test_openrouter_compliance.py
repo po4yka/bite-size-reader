@@ -1,6 +1,7 @@
 """Test OpenRouter API compliance according to official documentation."""
 
 import asyncio
+import json
 import unittest
 from unittest.mock import AsyncMock, Mock, patch
 
@@ -287,6 +288,78 @@ class TestOpenRouterCompliance(unittest.TestCase):
                 self.assertEqual(result.tokens_completion, 5)
                 self.assertEqual(result.model, "openai/gpt-4o-mini")
                 self.assertEqual(result.endpoint, "/api/v1/chat/completions")
+
+        asyncio.run(_test())
+
+    def test_structured_output_content_with_json_part(self) -> None:
+        """Ensure content lists containing JSON parts are parsed correctly."""
+
+        async def _test() -> None:
+            with patch("httpx.AsyncClient") as mock_client:
+                mock_response = Mock()
+                mock_response.status_code = 200
+                mock_response.json.return_value = {
+                    "id": "test-response",
+                    "model": "openai/gpt-5",
+                    "usage": {
+                        "prompt_tokens": 10,
+                        "completion_tokens": 5,
+                        "total_tokens": 15,
+                    },
+                    "choices": [
+                        {
+                            "message": {
+                                "role": "assistant",
+                                "content": [
+                                    {"type": "reasoning", "text": "Planning structured output"},
+                                    {
+                                        "type": "output_json",
+                                        "json": {
+                                            "summary_250": "Short summary",
+                                            "summary_1000": "Longer summary",
+                                        },
+                                    },
+                                ],
+                            },
+                            "finish_reason": "stop",
+                            "native_finish_reason": "completed",
+                        }
+                    ],
+                }
+                mock_client.return_value.post = AsyncMock(return_value=mock_response)
+                mock_models_response = Mock()
+                mock_models_response.status_code = 200
+                mock_models_response.json.return_value = {"data": []}
+                mock_models_response.raise_for_status = Mock()
+                mock_client.return_value.get = AsyncMock(return_value=mock_models_response)
+                mock_client.return_value.__aenter__.return_value = mock_client.return_value
+                mock_client.return_value.__aexit__.return_value = AsyncMock(return_value=None)
+
+                response_format = {
+                    "type": "json_schema",
+                    "json_schema": {
+                        "name": "summary_schema",
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "summary_250": {"type": "string"},
+                                "summary_1000": {"type": "string"},
+                            },
+                            "required": ["summary_250", "summary_1000"],
+                        },
+                    },
+                }
+
+                result = await self.client.chat(
+                    [{"role": "user", "content": "Hello"}],
+                    response_format=response_format,
+                )
+
+                self.assertEqual(result.status, "ok")
+                self.assertIsNotNone(result.response_text)
+                parsed = json.loads(result.response_text or "{}")
+                self.assertEqual(parsed["summary_250"], "Short summary")
+                self.assertEqual(parsed["summary_1000"], "Longer summary")
 
         asyncio.run(_test())
 

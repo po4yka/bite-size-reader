@@ -34,17 +34,94 @@ class ResponseProcessor:
             if isinstance(content_field, str):
                 text = content_field
             elif isinstance(content_field, list):
-                # Handle content as array of parts
+                json_segments: list[str] = []
+                text_segments: list[str] = []
+                seen_json: set[str] = set()
+
+                def append_json(value: Any) -> None:
+                    json_str: str | None = None
+                    if isinstance(value, dict | list):
+                        try:
+                            json_str = json.dumps(value, ensure_ascii=False)
+                        except Exception:
+                            return
+                    elif isinstance(value, str):
+                        stripped = value.strip()
+                        if not stripped:
+                            return
+                        try:
+                            parsed_value = json.loads(stripped)
+                        except Exception:
+                            return
+                        if isinstance(parsed_value, dict | list):
+                            json_str = json.dumps(parsed_value, ensure_ascii=False)
+                        else:
+                            return
+                    else:
+                        return
+
+                    if json_str and json_str not in seen_json:
+                        seen_json.add(json_str)
+                        json_segments.append(json_str)
+
+                def append_text(value: str) -> None:
+                    stripped = value.strip()
+                    if stripped:
+                        text_segments.append(stripped)
+
+                def maybe_append_text_or_json(value: str) -> None:
+                    stripped = value.strip()
+                    if not stripped:
+                        return
+                    try:
+                        parsed_value = json.loads(stripped)
+                    except Exception:
+                        append_text(stripped)
+                        return
+                    if isinstance(parsed_value, dict | list):
+                        append_json(parsed_value)
+                    else:
+                        append_text(stripped)
+
+                def walk_content(part: Any) -> None:
+                    if isinstance(part, dict):
+                        for key in ("json", "parsed", "arguments", "output"):
+                            if key in part:
+                                append_json(part[key])
+
+                        function_block = part.get("function")
+                        if isinstance(function_block, dict):
+                            append_json(function_block.get("arguments"))
+
+                        tool_calls = part.get("tool_calls")
+                        if isinstance(tool_calls, list):
+                            for call in tool_calls:
+                                walk_content(call)
+
+                        for key in ("text", "content", "reasoning"):
+                            value = part.get(key)
+                            if isinstance(value, str):
+                                maybe_append_text_or_json(value)
+                            elif isinstance(value, list | dict):
+                                walk_content(value)
+
+                        for key in ("data", "payload", "message"):
+                            nested = part.get(key)
+                            if isinstance(nested, dict | list):
+                                append_json(nested)
+
+                    elif isinstance(part, list):
+                        for item in part:
+                            walk_content(item)
+                    elif isinstance(part, str):
+                        append_text(part)
+
                 try:
-                    parts: list[str] = []
-                    for part in content_field:
-                        if isinstance(part, dict):
-                            if isinstance(part.get("text"), str):
-                                parts.append(part["text"])
-                            elif isinstance(part.get("content"), str):
-                                parts.append(part["content"])
-                    if parts:
-                        text = "\n".join(parts)
+                    walk_content(content_field)
+                    if json_segments:
+                        text = "\n".join(json_segments)
+                    elif text_segments:
+                        text = "\n".join(text_segments)
                 except Exception:
                     pass
 
