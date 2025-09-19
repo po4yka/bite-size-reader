@@ -241,7 +241,8 @@ class Database:
                     try:
                         safe_table = self._quote_identifier(name)
                         sql = "SELECT COUNT(*) AS cnt FROM " + safe_table
-                        count_row = conn.execute(sql).fetchone()
+                        # B608: Table name has been validated and quoted, preventing injection.
+                        count_row = conn.execute(sql).fetchone()  # nosec B608
                         tables[name] = int(count_row["cnt"]) if count_row else 0
                     except sqlite3.Error as exc:  # pragma: no cover - corrupted table
                         errors.append(f"Failed to count rows for table '{name}'")
