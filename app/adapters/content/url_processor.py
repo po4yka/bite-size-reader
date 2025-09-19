@@ -221,8 +221,12 @@ class URLProcessor:
             )
 
             if shaped:
-                # Send enhanced summary response (LLM result is handled in summarizer)
-                await self.response_formatter.send_enhanced_summary_response(message, shaped, None)
+                llm_result = self.llm_summarizer.last_llm_result
+                await self.response_formatter.send_enhanced_summary_response(
+                    message,
+                    shaped,
+                    llm_result,
+                )
                 logger.info("reply_json_sent", extra={"cid": correlation_id, "request_id": req_id})
                 await self._handle_additional_insights(
                     message,

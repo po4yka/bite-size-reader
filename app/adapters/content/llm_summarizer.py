@@ -45,6 +45,7 @@ class LLMSummarizer:
         self.response_formatter = response_formatter
         self._audit = audit_func
         self._sem = sem
+        self._last_llm_result: Any | None = None
 
     async def summarize_content(
         self,
@@ -94,6 +95,7 @@ class LLMSummarizer:
             # Use enhanced structured output configuration
             response_format = self._build_structured_response_format()
             max_tokens = self._select_max_tokens(content_text)
+            self._last_llm_result = None
 
             llm = await self.openrouter.chat(
                 messages,
@@ -104,6 +106,8 @@ class LLMSummarizer:
                 response_format=response_format,
                 model_override=model_override,
             )
+
+            self._last_llm_result = llm
 
         # Enhanced LLM completion notification
         await self.response_formatter.send_llm_completion_notification(message, llm, correlation_id)
@@ -509,6 +513,8 @@ class LLMSummarizer:
                 message, llm, correlation_id
             )
 
+            self._last_llm_result = llm
+
             if llm.status != "ok":
                 salvage = None
                 if (llm.error_text or "") == "structured_output_parse_error":
@@ -747,6 +753,11 @@ class LLMSummarizer:
             "user_interaction_update_placeholder",
             extra={"interaction_id": interaction_id, "response_type": response_type},
         )
+
+    @property
+    def last_llm_result(self) -> Any | None:
+        """Return the most recent LLM call result for summarization."""
+        return self._last_llm_result
 
     async def generate_additional_insights(
         self,
