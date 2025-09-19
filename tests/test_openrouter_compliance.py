@@ -23,6 +23,10 @@ class TestOpenRouterCompliance(unittest.TestCase):
             debug_payloads=True,
         )
 
+    def tearDown(self) -> None:
+        """Ensure resources created by the client are closed."""
+        asyncio.run(self.client.aclose())
+
     def test_correct_api_endpoint(self) -> None:
         """Test that the correct API endpoint is used."""
 
@@ -34,14 +38,12 @@ class TestOpenRouterCompliance(unittest.TestCase):
                     "choices": [{"message": {"content": "Test response"}}],
                     "usage": {"prompt_tokens": 10, "completion_tokens": 5},
                 }
-                mock_client.return_value.__aenter__.return_value.post = AsyncMock(
-                    return_value=mock_response
-                )
+                mock_client.return_value.post = AsyncMock(return_value=mock_response)
 
                 await self.client.chat([{"role": "user", "content": "Hello"}])
 
                 # Verify the correct endpoint is called
-                call_args = mock_client.return_value.__aenter__.return_value.post.call_args
+                call_args = mock_client.return_value.post.call_args
                 self.assertEqual(call_args[0][0], "https://openrouter.ai/api/v1/chat/completions")
 
         asyncio.run(_test())
@@ -57,14 +59,12 @@ class TestOpenRouterCompliance(unittest.TestCase):
                     "choices": [{"message": {"content": "Test response"}}],
                     "usage": {"prompt_tokens": 10, "completion_tokens": 5},
                 }
-                mock_client.return_value.__aenter__.return_value.post = AsyncMock(
-                    return_value=mock_response
-                )
+                mock_client.return_value.post = AsyncMock(return_value=mock_response)
 
                 await self.client.chat([{"role": "user", "content": "Hello"}])
 
                 # Verify Authorization header
-                call_args = mock_client.return_value.__aenter__.return_value.post.call_args
+                call_args = mock_client.return_value.post.call_args
                 headers = call_args[1]["headers"]
                 self.assertEqual(headers["Authorization"], "Bearer sk-or-test-key")
 
@@ -81,9 +81,7 @@ class TestOpenRouterCompliance(unittest.TestCase):
                     "choices": [{"message": {"content": "Test response"}}],
                     "usage": {"prompt_tokens": 10, "completion_tokens": 5},
                 }
-                mock_client.return_value.__aenter__.return_value.post = AsyncMock(
-                    return_value=mock_response
-                )
+                mock_client.return_value.post = AsyncMock(return_value=mock_response)
 
                 messages = [
                     {"role": "system", "content": "You are a helpful assistant."},
@@ -92,7 +90,7 @@ class TestOpenRouterCompliance(unittest.TestCase):
                 await self.client.chat(messages, temperature=0.7, max_tokens=100)
 
                 # Verify request body structure
-                call_args = mock_client.return_value.__aenter__.return_value.post.call_args
+                call_args = mock_client.return_value.post.call_args
                 body = call_args[1]["json"]
                 self.assertEqual(body["model"], "openai/gpt-4o-mini")
                 self.assertEqual(body["messages"], messages)
@@ -112,9 +110,7 @@ class TestOpenRouterCompliance(unittest.TestCase):
                     "choices": [{"message": {"content": "Test response"}}],
                     "usage": {"prompt_tokens": 10, "completion_tokens": 5},
                 }
-                mock_client.return_value.__aenter__.return_value.post = AsyncMock(
-                    return_value=mock_response
-                )
+                mock_client.return_value.post = AsyncMock(return_value=mock_response)
 
                 await self.client.chat(
                     [{"role": "user", "content": "Hello"}],
@@ -125,7 +121,7 @@ class TestOpenRouterCompliance(unittest.TestCase):
                 )
 
                 # Verify optional parameters
-                call_args = mock_client.return_value.__aenter__.return_value.post.call_args
+                call_args = mock_client.return_value.post.call_args
                 body = call_args[1]["json"]
                 self.assertEqual(body["temperature"], 0.5)
                 self.assertEqual(body["max_tokens"], 50)
@@ -145,14 +141,12 @@ class TestOpenRouterCompliance(unittest.TestCase):
                     "choices": [{"message": {"content": "Test response"}}],
                     "usage": {"prompt_tokens": 10, "completion_tokens": 5},
                 }
-                mock_client.return_value.__aenter__.return_value.post = AsyncMock(
-                    return_value=mock_response
-                )
+                mock_client.return_value.post = AsyncMock(return_value=mock_response)
 
                 await self.client.chat([{"role": "user", "content": "Hello"}])
 
                 # Verify headers
-                call_args = mock_client.return_value.__aenter__.return_value.post.call_args
+                call_args = mock_client.return_value.post.call_args
                 headers = call_args[1]["headers"]
                 self.assertEqual(headers["Content-Type"], "application/json")
                 self.assertEqual(headers["HTTP-Referer"], "https://github.com/test-repo")
@@ -170,9 +164,7 @@ class TestOpenRouterCompliance(unittest.TestCase):
                 mock_response.json.return_value = {
                     "error": {"message": "Invalid request parameters"}
                 }
-                mock_client.return_value.__aenter__.return_value.post = AsyncMock(
-                    return_value=mock_response
-                )
+                mock_client.return_value.post = AsyncMock(return_value=mock_response)
 
                 result = await self.client.chat([{"role": "user", "content": "Hello"}])
 
@@ -190,9 +182,7 @@ class TestOpenRouterCompliance(unittest.TestCase):
                 mock_response = Mock()
                 mock_response.status_code = 401
                 mock_response.json.return_value = {"error": {"message": "Invalid API key"}}
-                mock_client.return_value.__aenter__.return_value.post = AsyncMock(
-                    return_value=mock_response
-                )
+                mock_client.return_value.post = AsyncMock(return_value=mock_response)
 
                 result = await self.client.chat([{"role": "user", "content": "Hello"}])
 
@@ -210,9 +200,7 @@ class TestOpenRouterCompliance(unittest.TestCase):
                 mock_response = Mock()
                 mock_response.status_code = 402
                 mock_response.json.return_value = {"error": {"message": "Insufficient credits"}}
-                mock_client.return_value.__aenter__.return_value.post = AsyncMock(
-                    return_value=mock_response
-                )
+                mock_client.return_value.post = AsyncMock(return_value=mock_response)
 
                 result = await self.client.chat([{"role": "user", "content": "Hello"}])
 
@@ -230,9 +218,7 @@ class TestOpenRouterCompliance(unittest.TestCase):
                 mock_response = Mock()
                 mock_response.status_code = 404
                 mock_response.json.return_value = {"error": {"message": "Model not found"}}
-                mock_client.return_value.__aenter__.return_value.post = AsyncMock(
-                    return_value=mock_response
-                )
+                mock_client.return_value.post = AsyncMock(return_value=mock_response)
 
                 result = await self.client.chat([{"role": "user", "content": "Hello"}])
 
@@ -251,9 +237,7 @@ class TestOpenRouterCompliance(unittest.TestCase):
                 mock_response.status_code = 429
                 mock_response.headers = {"retry-after": "5"}
                 mock_response.json.return_value = {"error": {"message": "Rate limit exceeded"}}
-                mock_client.return_value.__aenter__.return_value.post = AsyncMock(
-                    return_value=mock_response
-                )
+                mock_client.return_value.post = AsyncMock(return_value=mock_response)
 
                 with patch("asyncio.sleep") as mock_sleep:
                     await self.client.chat([{"role": "user", "content": "Hello"}])
@@ -271,9 +255,7 @@ class TestOpenRouterCompliance(unittest.TestCase):
                 mock_response = Mock()
                 mock_response.status_code = 500
                 mock_response.json.return_value = {"error": {"message": "Internal server error"}}
-                mock_client.return_value.__aenter__.return_value.post = AsyncMock(
-                    return_value=mock_response
-                )
+                mock_client.return_value.post = AsyncMock(return_value=mock_response)
 
                 with patch("asyncio.sleep") as mock_sleep:
                     await self.client.chat([{"role": "user", "content": "Hello"}])
@@ -295,9 +277,7 @@ class TestOpenRouterCompliance(unittest.TestCase):
                     "usage": {"prompt_tokens": 10, "completion_tokens": 5},
                     "model": "openai/gpt-4o-mini",
                 }
-                mock_client.return_value.__aenter__.return_value.post = AsyncMock(
-                    return_value=mock_response
-                )
+                mock_client.return_value.post = AsyncMock(return_value=mock_response)
 
                 result = await self.client.chat([{"role": "user", "content": "Hello"}])
 
@@ -323,14 +303,12 @@ class TestOpenRouterCompliance(unittest.TestCase):
                         {"id": "google/gemini-2.5-pro", "name": "Gemini 2.5 Pro"},
                     ]
                 }
-                mock_client.return_value.__aenter__.return_value.get = AsyncMock(
-                    return_value=mock_response
-                )
+                mock_client.return_value.get = AsyncMock(return_value=mock_response)
 
                 models = await self.client.get_models()
 
                 # Verify models endpoint is called
-                call_args = mock_client.return_value.__aenter__.return_value.get.call_args
+                call_args = mock_client.return_value.get.call_args
                 self.assertEqual(call_args[0][0], "https://openrouter.ai/api/v1/models")
 
                 # Verify response
@@ -358,9 +336,7 @@ class TestOpenRouterCompliance(unittest.TestCase):
                         ),
                     ),
                 ]
-                mock_client.return_value.__aenter__.return_value.post = AsyncMock(
-                    side_effect=mock_responses
-                )
+                mock_client.return_value.post = AsyncMock(side_effect=mock_responses)
 
                 with patch("asyncio.sleep"):
                     result = await self.client.chat([{"role": "user", "content": "Hello"}])

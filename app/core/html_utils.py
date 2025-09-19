@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import re
+from functools import lru_cache
 from html import unescape
 from html.parser import HTMLParser
+from threading import Lock
 
 # ruff: noqa: E501
 
@@ -22,6 +24,7 @@ _HAS_TEXTACY = True  # will be validated at runtime in functions
 
 
 _BLANK_LINE_RE = re.compile(r"\n{3,}")
+_SPACY_SENTENCIZER_LOCK = Lock()
 
 
 def _collapse_blank_lines(text: str) -> str:
@@ -241,11 +244,7 @@ def split_sentences(text: str, lang: str = "en") -> list[str]:
         return []
 
     try:  # pragma: no cover - optional dependency
-        import spacy
-
-        nlp = spacy.blank(lang)
-        if "sentencizer" not in nlp.pipe_names:
-            nlp.add_pipe("sentencizer")
+        nlp = _get_spacy_sentencizer(lang)
         doc = nlp(text)
         return [sent.text.strip() for sent in doc.sents if sent.text.strip()]
     except Exception:
@@ -279,3 +278,15 @@ def chunk_sentences(sentences: list[str], max_chars: int = 2000) -> list[str]:
     if buf:
         chunks.append(" ".join(buf))
     return chunks
+
+
+@lru_cache(maxsize=4)
+def _get_spacy_sentencizer(lang: str):
+    """Return a cached spaCy blank pipeline with a sentencizer component."""
+    with _SPACY_SENTENCIZER_LOCK:
+        import spacy
+
+        nlp = spacy.blank(lang)
+        if "sentencizer" not in nlp.pipe_names:
+            nlp.add_pipe("sentencizer")
+        return nlp

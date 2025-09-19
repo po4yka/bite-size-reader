@@ -782,6 +782,16 @@ class ResponseFormatter:
         except Exception:
             pass
 
+    async def send_cached_summary_notification(self, message: Any) -> None:
+        """Inform the user that a cached summary is being reused."""
+        try:
+            await self.safe_reply(
+                message,
+                "♻️ **Using Cached Summary**\n⚡ Delivered instantly without extra processing",
+            )
+        except Exception:
+            pass
+
     async def send_html_fallback_notification(self, message: Any, content_len: int) -> None:
         """Send HTML fallback notification."""
         try:

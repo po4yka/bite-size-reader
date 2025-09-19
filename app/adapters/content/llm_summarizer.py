@@ -93,11 +93,12 @@ class LLMSummarizer:
         async with self._sem():
             # Use enhanced structured output configuration
             response_format = self._build_structured_response_format()
+            max_tokens = self._select_max_tokens(content_text)
 
             llm = await self.openrouter.chat(
                 messages,
                 temperature=self.cfg.openrouter.temperature,
-                max_tokens=self.cfg.openrouter.max_tokens,
+                max_tokens=max_tokens,
                 top_p=self.cfg.openrouter.top_p,
                 request_id=req_id,
                 response_format=response_format,
@@ -118,6 +119,37 @@ class LLMSummarizer:
             correlation_id,
             interaction_id,
         )
+
+    def _select_max_tokens(self, content_text: str) -> int | None:
+        """Choose an appropriate max_tokens budget based on content size."""
+        configured = self.cfg.openrouter.max_tokens
+
+        approx_input_tokens = max(1, len(content_text) // 4)
+        dynamic_budget = max(256, min(2048, approx_input_tokens // 3 + 256))
+
+        if configured is None:
+            logger.debug(
+                "max_tokens_dynamic",
+                extra={
+                    "content_len": len(content_text),
+                    "approx_input_tokens": approx_input_tokens,
+                    "selected": dynamic_budget,
+                },
+            )
+            return dynamic_budget
+
+        selected = max(128, min(configured, dynamic_budget))
+
+        logger.debug(
+            "max_tokens_adjusted",
+            extra={
+                "content_len": len(content_text),
+                "approx_input_tokens": approx_input_tokens,
+                "configured": configured,
+                "selected": selected,
+            },
+        )
+        return selected
 
     async def _handle_empty_content_error(
         self,

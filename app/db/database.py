@@ -331,6 +331,18 @@ class Database:
         row = self.fetchone("SELECT * FROM summaries WHERE request_id = ?", (request_id,))
         return dict(row) if row else None
 
+    def get_request_by_forward(
+        self, fwd_from_chat_id: int | None, fwd_from_msg_id: int | None
+    ) -> dict | None:
+        """Fetch a cached request for a forwarded message if available."""
+        if fwd_from_chat_id is None or fwd_from_msg_id is None:
+            return None
+        row = self.fetchone(
+            "SELECT * FROM requests WHERE fwd_from_chat_id = ? AND fwd_from_msg_id = ? ORDER BY id DESC LIMIT 1",
+            (fwd_from_chat_id, fwd_from_msg_id),
+        )
+        return dict(row) if row else None
+
     # Convenience insert/update helpers for core flows
 
     def create_request(

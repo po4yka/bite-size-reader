@@ -2,6 +2,7 @@ import json
 import os
 import tempfile
 import unittest
+from typing import Any, cast
 
 from app.adapters.openrouter.openrouter_client import LLMCallResult
 from app.adapters.telegram.telegram_bot import TelegramBot
@@ -24,14 +25,41 @@ class FakeMessage:
         self._replies.append(text)
 
 
+class FakeForwardMessage(FakeMessage):
+    def __init__(self, chat_id: int, fwd_chat_id: int, fwd_msg_id: int, text: str, title: str = ""):
+        super().__init__()
+
+        class _Chat:
+            def __init__(self, cid: int) -> None:
+                self.id = cid
+
+        class _User:
+            id = 42
+
+        class _FwdChat:
+            def __init__(self, cid: int, title: str) -> None:
+                self.id = cid
+                self.title = title
+
+        self.chat = _Chat(chat_id)
+        self.from_user = _User()
+        self.forward_from_chat = _FwdChat(fwd_chat_id, title)
+        self.forward_from_message_id = fwd_msg_id
+        self.text = text
+
+
 class FakeFirecrawl:
     async def scrape_markdown(self, url: str, request_id=None):  # noqa: ARG002
         raise AssertionError("Firecrawl should not be called on dedupe hit")
 
 
 class FakeOpenRouter:
+    def __init__(self) -> None:
+        self.calls = 0
+
     async def chat(self, messages, request_id=None, **kwargs):  # noqa: ARG002
         # return minimal valid JSON content
+        self.calls += 1
         content = json.dumps({"summary_250": "ok", "summary_1000": "ok"})
         return LLMCallResult(
             status="ok",
@@ -122,11 +150,10 @@ class TestDedupeReuse(unittest.IsolatedAsyncioTestCase):
 
             bot = TelegramBot(cfg=cfg, db=db)
             # Replace external clients with fakes
-            from typing import Any, cast
-
             bot_any = cast(Any, bot)
             bot_any._firecrawl = FakeFirecrawl()
-            bot_any._openrouter = FakeOpenRouter()
+            fake_or = FakeOpenRouter()
+            bot_any._openrouter = fake_or
 
             msg = FakeMessage()
             # First run: should reuse crawl and insert summary version 1
@@ -138,13 +165,96 @@ class TestDedupeReuse(unittest.IsolatedAsyncioTestCase):
             row = db.get_request_by_dedupe_hash(dedupe)
             self.assertEqual(row["correlation_id"], "cid1")
 
-            # Second run: dedupe again; summary version should increment
+            # Second run: dedupe again; summary should be served from cache without a new call
             await bot._handle_url_flow(msg, url, correlation_id="cid2")
             s2 = db.get_summary_by_request(req_id)
             self.assertIsNotNone(s2)
-            self.assertEqual(int(s2["version"]), 2)
+            self.assertEqual(int(s2["version"]), 1)
             row2 = db.get_request_by_dedupe_hash(dedupe)
             self.assertEqual(row2["correlation_id"], "cid2")
+            self.assertEqual(fake_or.calls, 1)
+
+    async def test_forward_cached_summary_reuse(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            db_path = os.path.join(tmp, "app.db")
+            db = Database(db_path)
+            db.migrate()
+
+            fwd_chat_id = 777
+            fwd_msg_id = 888
+
+            req_id = db.create_request(
+                type_="forward",
+                status="ok",
+                correlation_id="orig",
+                chat_id=1,
+                user_id=1,
+                input_message_id=5,
+                fwd_from_chat_id=fwd_chat_id,
+                fwd_from_msg_id=fwd_msg_id,
+                route_version=1,
+            )
+            db.insert_summary(
+                request_id=req_id,
+                lang="en",
+                json_payload=json.dumps({"summary_250": "cached", "summary_1000": "cached"}),
+            )
+
+            cfg = AppConfig(
+                telegram=TelegramConfig(
+                    api_id=0, api_hash="", bot_token="", allowed_user_ids=tuple()
+                ),
+                firecrawl=FirecrawlConfig(api_key="fc-dummy-key"),
+                openrouter=OpenRouterConfig(
+                    api_key="y",
+                    model="m",
+                    fallback_models=tuple(),
+                    http_referer=None,
+                    x_title=None,
+                    max_tokens=1024,
+                    top_p=1.0,
+                    temperature=0.8,
+                ),
+                runtime=RuntimeConfig(
+                    db_path=db_path,
+                    log_level="INFO",
+                    request_timeout_sec=5,
+                    preferred_lang="en",
+                    debug_payloads=False,
+                ),
+            )
+
+            from app.adapters import telegram_bot as tbmod
+
+            setattr(tbmod, "Client", object)
+            setattr(tbmod, "filters", None)
+
+            bot = TelegramBot(cfg=cfg, db=db)
+
+            class FailOpenRouter:
+                async def chat(self, *_, **__):  # noqa: ANN002
+                    raise AssertionError("LLM should not run for cached forward summaries")
+
+            bot_any = cast(Any, bot)
+            bot_any._openrouter = FailOpenRouter()
+
+            msg = FakeForwardMessage(
+                chat_id=1,
+                fwd_chat_id=fwd_chat_id,
+                fwd_msg_id=fwd_msg_id,
+                text="Forwarded content",
+                title="Channel",
+            )
+
+            await bot._handle_forward_flow(msg, correlation_id="newcid")
+
+            cached_summary = db.get_summary_by_request(req_id)
+            self.assertIsNotNone(cached_summary)
+            self.assertEqual(int(cached_summary["version"]), 1)
+
+            existing_request = db.get_request_by_forward(fwd_chat_id, fwd_msg_id)
+            self.assertIsNotNone(existing_request)
+            self.assertEqual(existing_request["correlation_id"], "newcid")
 
 
 if __name__ == "__main__":

@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import inspect
 import time
 from collections.abc import Callable
+from threading import Lock
 from typing import Any
 
 import httpx
@@ -96,6 +98,36 @@ class OpenRouterClient:
             debug_payloads=debug_payloads,
             log_truncate_length=log_truncate_length,
         )
+
+        # Reuse a single AsyncClient instance per OpenRouterClient to share connection pools
+        self._client_init_lock = Lock()
+        self._limits = httpx.Limits(max_keepalive_connections=5, max_connections=10)
+        self._client: httpx.AsyncClient | None = None
+
+    async def aclose(self) -> None:
+        """Close the underlying HTTP client."""
+        client = self._client
+        if client is not None:
+            closer = getattr(client, "aclose", None)
+            if callable(closer):
+                result = closer()
+                if inspect.isawaitable(result):
+                    await result
+            self._client = None
+
+    def _ensure_client(self) -> httpx.AsyncClient:
+        """Lazily construct a pooled AsyncClient instance."""
+        client = self._client
+        if client is not None:
+            return client
+        with self._client_init_lock:
+            client = self._client
+            if client is None:
+                client = httpx.AsyncClient(
+                    base_url=self._base_url, timeout=self._timeout, limits=self._limits
+                )
+                self._client = client
+        return client
 
     def _get_error_message(self, status_code: int, data: dict[str, Any] | None) -> str:
         """Return a human-friendly error message for an HTTP status.
@@ -241,6 +273,8 @@ class OpenRouterClient:
         last_error_context: dict[str, Any] | None = None
 
         # Try each model
+        client = self._ensure_client()
+
         for model in models_to_try:
             # Skip models that don't support structured outputs if required
             if response_format and self._enable_structured_outputs:
@@ -308,12 +342,9 @@ class OpenRouterClient:
                             headers, body, sanitized_messages, rf_mode_current
                         )
 
-                    # Use connection pooling
-                    limits = httpx.Limits(max_keepalive_connections=5, max_connections=10)
-                    async with httpx.AsyncClient(timeout=self._timeout, limits=limits) as client:
-                        resp = await client.post(
-                            f"{self._base_url}/chat/completions", headers=headers, json=body
-                        )
+                    resp = await client.post(
+                        f"{self._base_url}/chat/completions", headers=headers, json=body
+                    )
 
                     latency = int((time.perf_counter() - started) * 1000)
                     data = resp.json()

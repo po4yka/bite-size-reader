@@ -95,6 +95,32 @@ class ForwardContentProcessor:
         fwd_msg_id_raw = getattr(message, "forward_from_message_id", 0)
         fwd_from_msg_id = int(fwd_msg_id_raw) if fwd_msg_id_raw is not None else None
 
+        existing_req: dict | None = None
+        if fwd_from_chat_id is not None and fwd_from_msg_id is not None:
+            existing_req = self.db.get_request_by_forward(fwd_from_chat_id, fwd_from_msg_id)
+
+        if existing_req is not None:
+            req_id = int(existing_req["id"])
+            self._audit(
+                "INFO",
+                "forward_request_dedupe_hit",
+                {
+                    "request_id": req_id,
+                    "fwd_chat_id": fwd_from_chat_id,
+                    "fwd_msg_id": fwd_from_msg_id,
+                    "cid": correlation_id,
+                },
+            )
+            if correlation_id:
+                try:
+                    self.db.update_request_correlation_id(req_id, correlation_id)
+                except Exception as exc:  # noqa: BLE001
+                    logger.error(
+                        "persist_cid_error",
+                        extra={"error": str(exc), "cid": correlation_id},
+                    )
+            return req_id
+
         req_id = self.db.create_request(
             type_="forward",
             status="pending",
