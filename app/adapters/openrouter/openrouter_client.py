@@ -369,8 +369,13 @@ class OpenRouterClient:
                         if should_downgrade:
                             if new_mode:
                                 rf_mode_current = new_mode
+                                if new_mode == "json_object":
+                                    response_format_current = {"type": "json_object"}
                                 self.error_handler.log_response_format_downgrade(
-                                    model, "json_schema", "json_object", request_id
+                                    model,
+                                    "json_schema",
+                                    new_mode,
+                                    request_id,
                                 )
                             else:
                                 rf_included = False
@@ -446,8 +451,12 @@ class OpenRouterClient:
                             if rf_included and response_format_current:
                                 if rf_mode_current == "json_schema":
                                     rf_mode_current = "json_object"
+                                    response_format_current = {"type": "json_object"}
                                     self.error_handler.log_response_format_downgrade(
-                                        model, "json_schema", "json_object", request_id
+                                        model,
+                                        "json_schema",
+                                        "json_object",
+                                        request_id,
                                     )
                                 elif rf_mode_current == "json_object":
                                     rf_included = False
@@ -478,8 +487,12 @@ class OpenRouterClient:
                                     and attempt < self.error_handler._max_retries
                                 ):
                                     rf_mode_current = "json_object"
+                                    response_format_current = {"type": "json_object"}
                                     self.error_handler.log_response_format_downgrade(
-                                        model, "json_schema", "json_object", request_id
+                                        model,
+                                        "json_schema",
+                                        "json_object",
+                                        request_id,
                                     )
                                     await self.error_handler.sleep_backoff(attempt)
                                     continue
@@ -573,8 +586,12 @@ class OpenRouterClient:
                         ):
                             if rf_mode_current == "json_schema":
                                 rf_mode_current = "json_object"
+                                response_format_current = {"type": "json_object"}
                                 self.error_handler.log_response_format_downgrade(
-                                    model, "json_schema", "json_object", request_id
+                                    model,
+                                    "json_schema",
+                                    "json_object",
+                                    request_id,
                                 )
                                 handled_parameters_error = True
                             elif rf_mode_current == "json_object":
