@@ -78,9 +78,32 @@ def parse_summary_response(
 def _shape_candidate(candidate: dict[str, Any]) -> tuple[dict[str, Any] | None, str | None]:
     try:
         shaped = validate_and_shape_summary(candidate)
+        finalize_summary_texts(shaped)
         return shaped, None
     except Exception as exc:  # noqa: BLE001
         return None, str(exc)
+
+
+def finalize_summary_texts(summary: dict[str, Any]) -> None:
+    for key in ("summary_250", "summary_1000"):
+        raw = summary.get(key)
+        if not isinstance(raw, str):
+            continue
+        cleaned = raw.strip()
+        if cleaned and cleaned[-1] not in ".!?…":
+            last = max(
+                cleaned.rfind("."),
+                cleaned.rfind("!"),
+                cleaned.rfind("?"),
+                cleaned.rfind("…"),
+            )
+            if last != -1 and last >= len(cleaned) // 3:
+                cleaned = cleaned[: last + 1].rstrip()
+            else:
+                cleaned = cleaned.rstrip("-—")
+                if cleaned and cleaned[-1] not in ".!?…":
+                    cleaned = cleaned + "."
+        summary[key] = cleaned
 
 
 def _extract_structured_dict(response_json: Any) -> dict[str, Any] | None:
@@ -208,4 +231,4 @@ def _attempt_local_repair(
     return parsed, None, True
 
 
-__all__ = ["SummaryJsonParseResult", "parse_summary_response"]
+__all__ = ["SummaryJsonParseResult", "parse_summary_response", "finalize_summary_texts"]

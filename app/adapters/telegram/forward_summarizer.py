@@ -12,7 +12,7 @@ from app.core.json_utils import extract_json
 from app.core.lang import LANG_RU
 from app.core.summary_contract import validate_and_shape_summary
 from app.db.database import Database
-from app.utils.json_validation import parse_summary_response
+from app.utils.json_validation import finalize_summary_texts, parse_summary_response
 
 if TYPE_CHECKING:
     from app.adapters.external.response_formatter import ResponseFormatter
@@ -143,6 +143,7 @@ class ForwardSummarizer:
             parsed = extract_json(llm.response_text or "")
             if isinstance(parsed, dict):
                 forward_salvage_shaped = validate_and_shape_summary(parsed)
+                finalize_summary_texts(forward_salvage_shaped)
                 if forward_salvage_shaped:
                     return forward_salvage_shaped
 
@@ -150,6 +151,7 @@ class ForwardSummarizer:
             forward_salvage_shaped = pr.shaped
 
             if forward_salvage_shaped:
+                finalize_summary_texts(forward_salvage_shaped)
                 logger.info(
                     "forward_structured_output_salvage_success", extra={"cid": correlation_id}
                 )

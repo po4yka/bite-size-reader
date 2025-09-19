@@ -744,7 +744,18 @@ class ResponseFormatter:
             if not re.search(r"[\u4E00-\u9FFF]", window):
                 s = s[: -len(tail_match.group(1))].rstrip("-—")
 
-        return s.strip()
+        s = s.strip()
+
+        if s and s[-1] not in ".!?…":
+            last_sentence_end = max(s.rfind("."), s.rfind("!"), s.rfind("?"), s.rfind("…"))
+            if last_sentence_end != -1 and last_sentence_end >= len(s) // 3:
+                s = s[: last_sentence_end + 1].rstrip()
+            else:
+                s = s.rstrip("-—")
+                if s and s[-1] not in ".!?…":
+                    s = s + "."
+
+        return s
 
     async def _send_new_field_messages(self, message: Any, shaped: dict[str, Any]) -> None:
         """Send messages for new fields like extractive quotes, highlights, etc."""

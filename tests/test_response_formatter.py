@@ -33,3 +33,14 @@ async def test_labelled_summary_chunks_preserve_content() -> None:
     original_collapsed = " ".join(body.split())
     combined_collapsed = " ".join(" ".join(reconstructed).split())
     assert combined_collapsed == original_collapsed
+
+
+def test_sanitize_summary_text_trims_incomplete_tail() -> None:
+    formatter = ResponseFormatter()
+    raw = (
+        "Статья объясняет, почему естественный язык становится новым языком программирования."
+        " Роль 개발"
+    )
+    cleaned = formatter._sanitize_summary_text(raw)
+    assert cleaned.endswith("программирования.")
+    assert "개발" not in cleaned

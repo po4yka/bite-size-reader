@@ -194,7 +194,7 @@ class TestJsonParsing(unittest.TestCase):
             self.assertEqual(mock_openrouter_instance.chat.await_count, 2)
             bot._reply_json.assert_called_once()
             summary_json = bot._reply_json.call_args[0][1]
-            self.assertEqual(summary_json["summary_250"], "Summary")
+            self.assertEqual(summary_json["summary_250"], "Summary.")
 
         asyncio.run(run_test())
 
@@ -239,7 +239,7 @@ class TestJsonParsing(unittest.TestCase):
             self.assertEqual(mock_openrouter_instance.chat.await_count, 2)
             bot._reply_json.assert_called_once()
             summary_json = bot._reply_json.call_args[0][1]
-            self.assertEqual(summary_json["summary_250"], "Fixed")
+            self.assertEqual(summary_json["summary_250"], "Fixed.")
             # Ensure we did not send the invalid summary format error
             for call_args in bot._safe_reply.await_args_list:
                 if len(call_args.args) >= 2 and isinstance(call_args.args[1], str):
