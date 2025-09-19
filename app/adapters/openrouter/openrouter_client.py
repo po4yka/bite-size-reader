@@ -6,6 +6,7 @@ import time
 import weakref
 from collections.abc import AsyncGenerator, Callable
 from contextlib import asynccontextmanager
+from importlib.util import find_spec
 from threading import Lock
 from typing import Any
 
@@ -19,6 +20,14 @@ from app.adapters.openrouter.response_processor import ResponseProcessor
 from app.models.llm.llm_models import ChatRequest, LLMCallResult
 
 logger = logging.getLogger(__name__)
+
+
+HTTP2_AVAILABLE = find_spec("h2") is not None
+
+if not HTTP2_AVAILABLE:
+    logger.warning(
+        "HTTP/2 support disabled because the 'h2' package is not installed; falling back to HTTP/1.1"
+    )
 
 
 class OpenRouterClient:
@@ -177,7 +186,7 @@ class OpenRouterClient:
                     timeout=self._timeout,
                     limits=self._limits,
                     # Additional performance settings
-                    http2=True,  # Enable HTTP/2 for better performance
+                    http2=HTTP2_AVAILABLE,
                     follow_redirects=True,
                 )
                 self._client_pool[self._client_key] = client
