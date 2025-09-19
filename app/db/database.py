@@ -239,7 +239,9 @@ class Database:
                     if not self._is_valid_identifier(name):
                         continue
                     try:
-                        count_row = conn.execute(f"SELECT COUNT(*) AS cnt FROM {name}").fetchone()
+                        safe_table = self._quote_identifier(name)
+                        sql = "SELECT COUNT(*) AS cnt FROM " + safe_table
+                        count_row = conn.execute(sql).fetchone()
                         tables[name] = int(count_row["cnt"]) if count_row else 0
                     except sqlite3.Error as exc:  # pragma: no cover - corrupted table
                         errors.append(f"Failed to count rows for table '{name}'")
@@ -330,6 +332,11 @@ class Database:
     def get_summary_by_request(self, request_id: int) -> dict | None:
         row = self.fetchone("SELECT * FROM summaries WHERE request_id = ?", (request_id,))
         return dict(row) if row else None
+
+    def _quote_identifier(self, identifier: str) -> str:
+        """Return a safely quoted SQLite identifier."""
+        escaped = identifier.replace('"', '""')
+        return '"' + escaped + '"'
 
     def get_request_by_forward(
         self, fwd_from_chat_id: int | None, fwd_from_msg_id: int | None
