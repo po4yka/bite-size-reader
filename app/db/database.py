@@ -240,8 +240,9 @@ class Database:
                         continue
                     try:
                         safe_table = self._quote_identifier(name)
-                        sql = "SELECT COUNT(*) AS cnt FROM " + safe_table
-                        # B608: Table name has been validated and quoted, preventing injection.
+                        sql = "SELECT COUNT(*) AS cnt FROM " + safe_table  # nosec B608
+                        # The table name is validated and quoted via _quote_identifier,
+                        # which prevents SQL injection despite the dynamic query string.
                         count_row = conn.execute(sql).fetchone()  # nosec B608
                         tables[name] = int(count_row["cnt"]) if count_row else 0
                     except sqlite3.Error as exc:  # pragma: no cover - corrupted table
