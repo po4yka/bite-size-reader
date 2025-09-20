@@ -137,10 +137,12 @@ class ContentChunker:
             async with self._sem():
                 # Use enhanced structured output format
                 response_format_cf = self._build_structured_response_format()
+                # Use dynamic token budget based on chunk size
+                chunk_tokens = max(1024, min(4096, len(chunk) // 4 + 1024))
                 resp = await self.openrouter.chat(
                     messages,
                     temperature=self.cfg.openrouter.temperature,
-                    max_tokens=self.cfg.openrouter.max_tokens,
+                    max_tokens=chunk_tokens,
                     top_p=self.cfg.openrouter.top_p,
                     request_id=req_id,
                     response_format=response_format_cf,

@@ -306,6 +306,11 @@ class URLProcessor:
         correlation_id: str | None,
     ) -> None:
         """Generate and persist additional insights using the LLM."""
+        logger.info(
+            "insights_flow_started",
+            extra={"cid": correlation_id, "content_len": len(content_text), "lang": chosen_lang},
+        )
+
         try:
             insights = await self.llm_summarizer.generate_additional_insights(
                 message,
@@ -314,21 +319,43 @@ class URLProcessor:
                 req_id=req_id,
                 correlation_id=correlation_id,
             )
+
             if insights:
+                logger.info(
+                    "insights_generated_successfully",
+                    extra={
+                        "cid": correlation_id,
+                        "facts_count": len(insights.get("new_facts", [])),
+                        "has_overview": bool(insights.get("topic_overview")),
+                    },
+                )
+
                 await self.response_formatter.send_additional_insights_message(
                     message, insights, correlation_id
                 )
+
+                logger.info("insights_message_sent", extra={"cid": correlation_id})
+
                 try:
                     self.db.update_summary_insights(
                         req_id, json.dumps(insights, ensure_ascii=False)
+                    )
+                    logger.debug(
+                        "insights_persisted", extra={"cid": correlation_id, "request_id": req_id}
                     )
                 except Exception as exc:  # noqa: BLE001
                     logger.error(
                         "persist_insights_error",
                         extra={"cid": correlation_id, "error": str(exc)},
                     )
+            else:
+                logger.warning(
+                    "insights_generation_returned_empty",
+                    extra={"cid": correlation_id, "reason": "LLM returned None or empty insights"},
+                )
+
         except Exception as exc:  # noqa: BLE001
-            logger.error(
+            logger.exception(
                 "insights_flow_error",
                 extra={"cid": correlation_id, "error": str(exc)},
             )

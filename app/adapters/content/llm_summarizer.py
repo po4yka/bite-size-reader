@@ -131,8 +131,8 @@ class LLMSummarizer:
         configured = self.cfg.openrouter.max_tokens
 
         approx_input_tokens = max(1, len(content_text) // 4)
-        # Increase dynamic budget to handle larger responses and avoid truncation
-        dynamic_budget = max(1024, min(4096, approx_input_tokens // 2 + 1024))
+        # Significantly increased budget for comprehensive summaries and complex content
+        dynamic_budget = max(2048, min(8192, approx_input_tokens // 2 + 2048))
 
         if configured is None:
             logger.debug(
@@ -145,7 +145,7 @@ class LLMSummarizer:
             )
             return dynamic_budget
 
-        selected = max(1024, min(configured, dynamic_budget))
+        selected = max(2048, min(configured, dynamic_budget))
 
         logger.debug(
             "max_tokens_adjusted",
@@ -153,6 +153,41 @@ class LLMSummarizer:
                 "content_len": len(content_text),
                 "approx_input_tokens": approx_input_tokens,
                 "configured": configured,
+                "selected": selected,
+            },
+        )
+        return selected
+
+    def _select_insights_max_tokens(self, content_text: str) -> int | None:
+        """Choose an appropriate max_tokens budget for insights generation."""
+        configured = self.cfg.openrouter.max_tokens
+
+        # Insights typically need more tokens than summaries for detailed analysis
+        approx_input_tokens = max(1, len(content_text) // 4)
+        # Much higher budget for insights: comprehensive facts, analysis, and research details
+        dynamic_budget = max(3072, min(12288, approx_input_tokens // 2 + 3072))
+
+        if configured is None:
+            logger.debug(
+                "insights_max_tokens_dynamic",
+                extra={
+                    "content_len": len(content_text),
+                    "approx_input_tokens": approx_input_tokens,
+                    "selected": dynamic_budget,
+                },
+            )
+            return dynamic_budget
+
+        # Use much higher minimum for insights than regular summaries
+        selected = max(3072, min(configured, dynamic_budget))
+
+        logger.debug(
+            "insights_max_tokens_adjusted",
+            extra={
+                "content_len": len(content_text),
+                "approx_input_tokens": approx_input_tokens,
+                "configured": configured,
+                "dynamic": dynamic_budget,
                 "selected": selected,
             },
         )
@@ -527,7 +562,7 @@ class LLMSummarizer:
                 llm = await self.openrouter.chat(
                     messages,
                     temperature=self.cfg.openrouter.temperature,
-                    max_tokens=self.cfg.openrouter.max_tokens,
+                    max_tokens=self._select_max_tokens(user_content),
                     top_p=self.cfg.openrouter.top_p,
                     request_id=req_id,
                     response_format=response_format,
@@ -639,7 +674,7 @@ class LLMSummarizer:
                 repair = await self.openrouter.chat(
                     repair_messages,
                     temperature=self.cfg.openrouter.temperature,
-                    max_tokens=self.cfg.openrouter.max_tokens,
+                    max_tokens=self._select_max_tokens(user_content),
                     top_p=self.cfg.openrouter.top_p,
                     request_id=req_id,
                     response_format=repair_response_format,
@@ -830,7 +865,7 @@ class LLMSummarizer:
                         llm = await self.openrouter.chat(
                             messages,
                             temperature=self.cfg.openrouter.temperature,
-                            max_tokens=self._select_max_tokens(content_text),
+                            max_tokens=self._select_insights_max_tokens(content_text),
                             top_p=self.cfg.openrouter.top_p,
                             request_id=req_id,
                             response_format=response_format,

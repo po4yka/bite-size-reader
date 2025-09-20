@@ -79,10 +79,12 @@ class ForwardSummarizer:
             # Use enhanced structured output configuration for forwarded messages
             fwd_response_format = self._build_structured_response_format()
 
+            # Use dynamic token budget based on content length
+            forward_tokens = max(2048, min(6144, len(prompt) // 4 + 2048))
             llm = await self.openrouter.chat(
                 messages,
                 temperature=self.cfg.openrouter.temperature,
-                max_tokens=self.cfg.openrouter.max_tokens,
+                max_tokens=forward_tokens,
                 top_p=self.cfg.openrouter.top_p,
                 request_id=req_id,
                 response_format=fwd_response_format,
@@ -278,10 +280,13 @@ class ForwardSummarizer:
             ]
             async with self._sem():
                 fwd_repair_response_format = self._build_structured_response_format()
+                # Use dynamic token budget for repair attempts
+                original_content = messages[1]["content"] if len(messages) > 1 else ""
+                repair_tokens = max(2048, min(6144, len(original_content) // 4 + 2048))
                 repair = await self.openrouter.chat(
                     repair_messages,
                     temperature=self.cfg.openrouter.temperature,
-                    max_tokens=self.cfg.openrouter.max_tokens,
+                    max_tokens=repair_tokens,
                     top_p=self.cfg.openrouter.top_p,
                     request_id=req_id,
                     response_format=fwd_repair_response_format,
