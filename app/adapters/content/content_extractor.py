@@ -200,7 +200,36 @@ class ContentExtractor:
             pass
 
         self._audit("INFO", "reuse_crawl_result", {"request_id": None, "cid": correlation_id})
-        await self.response_formatter.send_content_reuse_notification(message)
+
+        options_obj = None
+        correlation_from_raw = None
+        try:
+            options_raw = existing_crawl.get("options_json")
+            if options_raw:
+                options_obj = json.loads(options_raw)
+        except Exception:
+            options_obj = None
+
+        try:
+            raw_payload = existing_crawl.get("raw_response_json")
+            if raw_payload:
+                parsed_raw = json.loads(raw_payload)
+                if isinstance(parsed_raw, dict):
+                    correlation_from_raw = parsed_raw.get("cid")
+        except Exception:
+            correlation_from_raw = None
+
+        latency_val = existing_crawl.get("latency_ms")
+        latency_sec = (latency_val / 1000.0) if isinstance(latency_val, int | float) else None
+
+        await self.response_formatter.send_content_reuse_notification(
+            message,
+            http_status=existing_crawl.get("http_status"),
+            crawl_status=existing_crawl.get("status"),
+            latency_sec=latency_sec,
+            correlation_id=correlation_from_raw,
+            options=options_obj,
+        )
 
         return content_text, content_source
 
@@ -321,7 +350,14 @@ class ContentExtractor:
         )
         latency_sec = (crawl.latency_ms or 0) / 1000.0
         await self.response_formatter.send_firecrawl_success_notification(
-            message, excerpt_len, latency_sec
+            message,
+            excerpt_len,
+            latency_sec,
+            http_status=crawl.http_status,
+            crawl_status=crawl.status,
+            correlation_id=crawl.correlation_id,
+            endpoint=crawl.endpoint,
+            options=crawl.options_json,
         )
 
         # Process content with HTML fallback for empty markdown

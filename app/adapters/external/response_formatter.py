@@ -915,29 +915,87 @@ class ResponseFormatter:
             pass
 
     async def send_firecrawl_success_notification(
-        self, message: Any, excerpt_len: int, latency_sec: float
+        self,
+        message: Any,
+        excerpt_len: int,
+        latency_sec: float,
+        *,
+        http_status: int | None = None,
+        crawl_status: str | None = None,
+        correlation_id: str | None = None,
+        endpoint: str | None = None,
+        options: dict[str, Any] | None = None,
     ) -> None:
-        """Send Firecrawl success notification."""
+        """Send Firecrawl success notification with crawl metadata."""
         try:
-            await self.safe_reply(
-                message,
-                f"✅ **Content Extracted Successfully**\n"
-                f"📊 Size: ~{excerpt_len:,} characters\n"
-                f"⏱️ Extraction time: {latency_sec:.1f}s\n"
-                f"🔄 Status: Preparing for enhanced AI analysis...",
-            )
+            lines = [
+                "✅ **Content Extracted Successfully**",
+                f"📊 Size: ~{excerpt_len:,} characters",
+                f"⏱️ Extraction time: {latency_sec:.1f}s",
+            ]
+
+            status_bits: list[str] = []
+            if http_status is not None:
+                status_bits.append(f"HTTP {http_status}")
+            if crawl_status:
+                status_bits.append(crawl_status)
+            if status_bits:
+                lines.append("📶 Firecrawl: " + " | ".join(status_bits))
+
+            if endpoint:
+                lines.append(f"🌐 Endpoint: {endpoint}")
+
+            option_line = self._format_firecrawl_options(options)
+            if option_line:
+                lines.append(f"⚙️ Options: {option_line}")
+
+            if correlation_id:
+                lines.append(f"🆔 Firecrawl CID: `{correlation_id}`")
+
+            lines.append("🔄 Status: Preparing for enhanced AI analysis...")
+
+            await self.safe_reply(message, "\n".join(lines))
         except Exception:
             pass
 
-    async def send_content_reuse_notification(self, message: Any) -> None:
-        """Send content reuse notification."""
+    async def send_content_reuse_notification(
+        self,
+        message: Any,
+        *,
+        http_status: int | None = None,
+        crawl_status: str | None = None,
+        latency_sec: float | None = None,
+        correlation_id: str | None = None,
+        options: dict[str, Any] | None = None,
+    ) -> None:
+        """Send content reuse notification with cached crawl metadata."""
         try:
-            await self.safe_reply(
-                message,
-                "♻️ **Reusing Cached Content**\n"
-                "📊 Status: Content already extracted\n"
-                "⚡ Proceeding to enhanced AI analysis...",
-            )
+            lines = [
+                "♻️ **Reusing Cached Content**",
+                "📊 Status: Content already extracted",
+            ]
+
+            status_bits: list[str] = []
+            if http_status is not None:
+                status_bits.append(f"HTTP {http_status}")
+            if crawl_status:
+                status_bits.append(crawl_status)
+            if status_bits:
+                lines.append("📶 Firecrawl (cached): " + " | ".join(status_bits))
+
+            if latency_sec is not None:
+                lines.append(f"⏱️ Original extraction: {latency_sec:.1f}s")
+
+            option_line = self._format_firecrawl_options(options)
+            if option_line:
+                lines.append(f"⚙️ Options: {option_line}")
+
+            if correlation_id:
+                lines.append(f"🆔 Firecrawl CID: `{correlation_id}`")
+
+            lines.append("⚡ Proceeding to enhanced AI analysis...")
+
+            await self.safe_reply(message, "\n".join(lines))
         except Exception:
             pass
 
@@ -1047,23 +1105,38 @@ class ResponseFormatter:
             latency_sec = (llm.latency_ms or 0) / 1000.0
 
             if llm.status == "ok":
-                # Success message with enhanced details
-                tokens_used = (llm.tokens_prompt or 0) + (llm.tokens_completion or 0)
-                cost_info = f" (${llm.cost_usd:.4f})" if llm.cost_usd else ""
-                structured_info = ""
-                if hasattr(llm, "structured_output_used") and llm.structured_output_used:
-                    mode = getattr(llm, "structured_output_mode", "unknown")
-                    structured_info = f"\n🔧 Structured Output: {mode.upper()}"
+                prompt_tokens = llm.tokens_prompt or 0
+                completion_tokens = llm.tokens_completion or 0
+                tokens_used = prompt_tokens + completion_tokens
 
-                await self.safe_reply(
-                    message,
-                    f"🤖 **Enhanced AI Analysis Complete**\n"
-                    f"✅ Status: Success\n"
-                    f"🧠 Model: `{model_name}`\n"
-                    f"⏱️ Processing time: {latency_sec:.1f}s\n"
-                    f"🔢 Tokens used: {tokens_used:,}{cost_info}{structured_info}\n"
-                    f"📋 Status: Generating enhanced summary...",
-                )
+                lines = [
+                    "🤖 **Enhanced AI Analysis Complete**",
+                    "✅ Status: Success",
+                    f"🧠 Model: `{model_name}`",
+                    f"⏱️ Processing time: {latency_sec:.1f}s",
+                    (
+                        "🔢 Tokens — prompt: "
+                        f"{prompt_tokens:,} • completion: {completion_tokens:,} "
+                        f"(total: {tokens_used:,})"
+                    ),
+                ]
+
+                if llm.cost_usd is not None:
+                    lines.append(f"💲 Estimated cost: ${llm.cost_usd:.4f}")
+
+                if getattr(llm, "structured_output_used", False):
+                    mode = getattr(llm, "structured_output_mode", "unknown")
+                    lines.append(f"🔧 Structured output: {mode.upper()}")
+
+                if llm.endpoint:
+                    lines.append(f"🌐 Endpoint: {llm.endpoint}")
+
+                if correlation_id:
+                    lines.append(f"🆔 Request ID: `{correlation_id}`")
+
+                lines.append("📋 Status: Generating enhanced summary...")
+
+                await self.safe_reply(message, "\n".join(lines))
             else:
                 # Enhanced error message
                 await self.safe_reply(
@@ -1078,6 +1151,49 @@ class ResponseFormatter:
                 )
         except Exception:
             pass
+
+    def _format_firecrawl_options(self, options: dict[str, Any] | None) -> str | None:
+        if not isinstance(options, dict) or not options:
+            return None
+
+        parts: list[str] = []
+
+        mobile = options.get("mobile")
+        if isinstance(mobile, bool):
+            parts.append("mobile=on" if mobile else "mobile=off")
+
+        formats = options.get("formats")
+        if isinstance(formats, list | tuple):
+            fmt_values = [str(v).strip() for v in formats if str(v).strip()]
+            if fmt_values:
+                parts.append("formats=" + ", ".join(fmt_values[:5]))
+
+        parsers = options.get("parsers")
+        if isinstance(parsers, list | tuple):
+            parser_values = [str(v).strip() for v in parsers if str(v).strip()]
+            if parser_values:
+                parts.append("parsers=" + ", ".join(parser_values[:5]))
+
+        for key, value in options.items():
+            if key in {"mobile", "formats", "parsers"}:
+                continue
+            if isinstance(value, bool):
+                parts.append(f"{key}={'on' if value else 'off'}")
+            elif isinstance(value, int | float):
+                parts.append(f"{key}={value}")
+            elif isinstance(value, str):
+                clean = value.strip()
+                if clean:
+                    parts.append(f"{key}={clean}")
+            elif isinstance(value, list | tuple):
+                clean_values = [str(v).strip() for v in value if str(v).strip()]
+                if clean_values:
+                    parts.append(f"{key}=" + ", ".join(clean_values[:5]))
+
+        if not parts:
+            return None
+
+        return "; ".join(parts)
 
     async def send_forward_accepted_notification(self, message: Any, title: str) -> None:
         """Send forward request accepted notification."""
