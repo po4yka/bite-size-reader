@@ -244,6 +244,31 @@ class URLProcessor:
                     correlation_id,
                 )
 
+                # Generate a standalone custom article based on extracted topics/tags
+                try:
+                    topics = shaped.get("key_ideas") or []
+                    tags = shaped.get("topic_tags") or []
+                    if (topics or tags) and isinstance(topics, list) and isinstance(tags, list):
+                        await self.response_formatter.safe_reply(
+                            message,
+                            "📝 Crafting a standalone article from topics & tags…",
+                        )
+                        article = await self.llm_summarizer.generate_custom_article(
+                            message,
+                            chosen_lang=chosen_lang,
+                            req_id=req_id,
+                            topics=[str(x) for x in topics if str(x).strip()],
+                            tags=[str(x) for x in tags if str(x).strip()],
+                            correlation_id=correlation_id,
+                        )
+                        if article:
+                            await self.response_formatter.send_custom_article(message, article)
+                except Exception as exc:  # noqa: BLE001
+                    logger.error(
+                        "custom_article_flow_error",
+                        extra={"cid": correlation_id, "error": str(exc)},
+                    )
+
         except ValueError as e:
             # Handle known errors (like Firecrawl failures)
             logger.error("url_flow_error", extra={"error": str(e), "cid": correlation_id})

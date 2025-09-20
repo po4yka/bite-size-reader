@@ -438,6 +438,33 @@ class ResponseFormatter:
         except Exception:
             pass
 
+    async def send_custom_article(self, message: Any, article: dict[str, Any]) -> None:
+        """Send the custom generated article with a nice header and downloadable JSON."""
+        try:
+            title = str(article.get("title", "")).strip() or "Custom Article"
+            subtitle = str(article.get("subtitle", "") or "").strip()
+            body = str(article.get("article_markdown", "")).strip()
+            highlights = [
+                str(x).strip() for x in (article.get("highlights") or []) if str(x).strip()
+            ]
+
+            header = f"📝 {title}"
+            if subtitle:
+                header += f"\n_{subtitle}_"
+            await self.safe_reply(message, header, parse_mode="Markdown")
+
+            if body:
+                await self._send_long_text(message, body)
+
+            if highlights:
+                await self._send_long_text(
+                    message, "⭐ Key Highlights:\n" + "\n".join([f"• {h}" for h in highlights[:10]])
+                )
+
+            await self.reply_json(message, article)
+        except Exception:
+            pass
+
     async def send_forward_summary_response(
         self, message: Any, forward_shaped: dict[str, Any]
     ) -> None:

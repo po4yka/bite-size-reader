@@ -158,6 +158,152 @@ class LLMSummarizer:
         )
         return selected
 
+    async def generate_custom_article(
+        self,
+        message: Any,
+        *,
+        chosen_lang: str,
+        req_id: int,
+        topics: list[str] | None,
+        tags: list[str] | None,
+        correlation_id: str | None,
+    ) -> dict[str, Any] | None:
+        """Generate a standalone article based on extracted topics and tags.
+
+        This is a separate OpenRouter call intended to craft a fresh piece that
+        focuses on the most important and interesting facts, not limited to the
+        literal source text.
+        """
+        topics = [str(t).strip() for t in (topics or []) if str(t).strip()]
+        tags = [str(t).strip() for t in (tags or []) if str(t).strip()]
+
+        system_prompt = self._build_article_system_prompt(chosen_lang)
+        user_prompt = self._build_article_user_prompt(topics, tags, chosen_lang)
+
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ]
+
+        try:
+            response_format = self._build_article_response_format()
+            max_tokens = self._select_insights_max_tokens(" ".join(topics + tags))
+
+            async with self._sem():
+                llm = await self.openrouter.chat(
+                    messages,
+                    temperature=self.cfg.openrouter.temperature,
+                    max_tokens=max_tokens,
+                    top_p=self.cfg.openrouter.top_p,
+                    request_id=req_id,
+                    response_format=response_format,
+                )
+
+            asyncio.create_task(self._persist_llm_call(llm, req_id, correlation_id))
+            if llm.status != "ok":
+                logger.warning(
+                    "custom_article_llm_error",
+                    extra={"cid": correlation_id, "error": llm.error_text},
+                )
+                return None
+
+            article = self._parse_article_response(llm.response_json, llm.response_text)
+            if not article:
+                logger.warning("custom_article_parse_failed", extra={"cid": correlation_id})
+                return None
+            return article
+        except Exception as exc:  # noqa: BLE001
+            logger.exception(
+                "custom_article_generation_failed",
+                extra={"cid": correlation_id, "error": str(exc)},
+            )
+            return None
+
+    def _build_article_system_prompt(self, lang: str) -> str:
+        if lang == LANG_RU:
+            return (
+                "Ты опытный редактор и аналитик. На основе тем и тэгов сформируй"
+                " самостоятельную статью с самыми важными и интересными фактами."
+                " Пиши связно и структурировано, с коротким подзаголовком и маркированными"
+                " списками там, где это уместно. Верни строго JSON по схеме."
+            )
+        return (
+            "You are an expert editor and analyst. Using the provided topics and tags,"
+            " craft a standalone article that highlights the most important and"
+            " interesting facts. Keep it structured with a short subtitle and use"
+            " bullet points when helpful. Return strictly as JSON per the schema."
+        )
+
+    def _build_article_user_prompt(self, topics: list[str], tags: list[str], lang: str) -> str:
+        lang_label = "Russian" if lang == LANG_RU else "English"
+        topics_text = "\n".join(f"- {t}" for t in topics[:12]) or "- (none)"
+        tags_text = "\n".join(f"- {t}" for t in tags[:12]) or "- (none)"
+        return f"Respond in {lang_label}.\nTOPICS:\n{topics_text}\n\nTAGS:\n{tags_text}\n"
+
+    def _build_article_response_format(self) -> dict[str, Any]:
+        return {
+            "type": "json_schema",
+            "json_schema": {
+                "name": "custom_article_schema",
+                "strict": True,
+                "schema": {
+                    "type": "object",
+                    "additionalProperties": False,
+                    "properties": {
+                        "title": {"type": "string"},
+                        "subtitle": {"type": ["string", "null"]},
+                        "article_markdown": {"type": "string"},
+                        "highlights": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                        },
+                        "suggested_sources": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                        },
+                    },
+                    "required": ["title", "article_markdown"],
+                },
+            },
+        }
+
+    def _parse_article_response(
+        self, response_json: Any, response_text: str | None
+    ) -> dict[str, Any] | None:
+        candidate: dict[str, Any] | None = None
+        if isinstance(response_json, dict):
+            choices = response_json.get("choices") or []
+            if choices:
+                message = (choices[0] or {}).get("message") or {}
+                parsed = message.get("parsed")
+                if isinstance(parsed, dict):
+                    candidate = parsed
+                elif isinstance(parsed, str):
+                    try:
+                        loaded = json.loads(parsed)
+                        candidate = loaded if isinstance(loaded, dict) else None
+                    except Exception:
+                        candidate = None
+                if candidate is None:
+                    content = message.get("content")
+                    if isinstance(content, str):
+                        from app.core.json_utils import extract_json  # local import
+
+                        candidate = extract_json(content) or None
+        if candidate is None and response_text:
+            from app.core.json_utils import extract_json  # local import
+
+            textracted = extract_json(response_text)
+            if isinstance(textracted, dict):
+                candidate = textracted
+        if not isinstance(candidate, dict):
+            return None
+        title = str(candidate.get("title", "")).strip()
+        body = str(candidate.get("article_markdown", "")).strip()
+        if not title or not body:
+            return None
+        return candidate
+
     def _select_insights_max_tokens(self, content_text: str) -> int | None:
         """Choose an appropriate max_tokens budget for insights generation."""
         configured = self.cfg.openrouter.max_tokens
