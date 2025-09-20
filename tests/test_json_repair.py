@@ -32,6 +32,14 @@ class TestJsonRepair(unittest.TestCase):
         openrouter_cfg.x_title = "title"
         openrouter_cfg.provider_order = []
         openrouter_cfg.enable_stats = False
+        openrouter_cfg.max_tokens = 4096
+        openrouter_cfg.temperature = 0.7
+        openrouter_cfg.top_p = 1.0
+        openrouter_cfg.enable_structured_outputs = True
+        openrouter_cfg.structured_output_mode = "json_schema"
+        openrouter_cfg.require_parameters = True
+        openrouter_cfg.auto_fallback_structured = True
+        openrouter_cfg.long_context_model = None
 
         runtime_cfg = MagicMock()
         runtime_cfg.log_level = "INFO"
@@ -39,6 +47,7 @@ class TestJsonRepair(unittest.TestCase):
         runtime_cfg.request_timeout_sec = 5
         runtime_cfg.debug_payloads = False
         runtime_cfg.log_truncate_length = 100
+        runtime_cfg.preferred_lang = "en"
 
         self.cfg = AppConfig(telegram_cfg, firecrawl_cfg, openrouter_cfg, runtime_cfg)
         self.db = MagicMock(spec=Database)
@@ -66,6 +75,8 @@ class TestJsonRepair(unittest.TestCase):
                 side_effect=[mock_llm_response_initial, mock_llm_response_repair]
             )
             self.bot._openrouter = mock_openrouter_instance
+            self.bot.url_processor.llm_summarizer.openrouter = mock_openrouter_instance
+            self.bot.url_processor.content_chunker.openrouter = mock_openrouter_instance
 
             # Mock other dependencies
             self.bot._safe_reply = AsyncMock()
@@ -95,7 +106,7 @@ class TestJsonRepair(unittest.TestCase):
             # Mock two failed responses
             mock_llm_response_initial = MagicMock()
             mock_llm_response_initial.status = "ok"
-            mock_llm_response_initial.response_text = '{"summary_250": "Truncated..."'
+            mock_llm_response_initial.response_text = "This is not JSON at all"
 
             mock_llm_response_repair = MagicMock()
             mock_llm_response_repair.status = "ok"
@@ -106,8 +117,11 @@ class TestJsonRepair(unittest.TestCase):
                 side_effect=[mock_llm_response_initial, mock_llm_response_repair]
             )
             self.bot._openrouter = mock_openrouter_instance
+            self.bot.url_processor.llm_summarizer.openrouter = mock_openrouter_instance
+            self.bot.url_processor.content_chunker.openrouter = mock_openrouter_instance
 
             self.bot._safe_reply = AsyncMock()
+            self.bot.response_formatter._safe_reply_func = self.bot._safe_reply
             self.bot.db.get_request_by_dedupe_hash.return_value = None
             self.bot.db.create_request.return_value = 1
             self.bot.db.get_crawl_result_by_request.return_value = {
@@ -118,7 +132,9 @@ class TestJsonRepair(unittest.TestCase):
             await self.bot._handle_url_flow(message, "http://example.com")
 
             # Assert that an error message was sent
-            self.bot._safe_reply.assert_any_call(message, "Invalid summary format. Error ID: None")
+            self.bot._safe_reply.assert_any_call(
+                message, "Invalid summary format. Error ID: unknown"
+            )
 
         asyncio.run(run_test())
 
@@ -133,6 +149,8 @@ class TestJsonRepair(unittest.TestCase):
             mock_openrouter_instance = mock_openrouter_client.return_value
             mock_openrouter_instance.chat = AsyncMock(return_value=mock_llm_response)
             self.bot._openrouter = mock_openrouter_instance
+            self.bot.url_processor.llm_summarizer.openrouter = mock_openrouter_instance
+            self.bot.url_processor.content_chunker.openrouter = mock_openrouter_instance
 
             self.bot._safe_reply = AsyncMock()
             self.bot._reply_json = AsyncMock()
@@ -168,6 +186,8 @@ class TestJsonRepair(unittest.TestCase):
                 side_effect=[mock_llm_response_initial, mock_llm_response_repair]
             )
             self.bot._openrouter = mock_openrouter_instance
+            self.bot.url_processor.llm_summarizer.openrouter = mock_openrouter_instance
+            self.bot.url_processor.content_chunker.openrouter = mock_openrouter_instance
 
             self.bot._safe_reply = AsyncMock()
             self.bot._reply_json = AsyncMock()
@@ -209,6 +229,8 @@ class TestJsonRepair(unittest.TestCase):
             mock_openrouter_instance = mock_openrouter_client.return_value
             mock_openrouter_instance.chat = AsyncMock(return_value=mock_llm_response)
             self.bot._openrouter = mock_openrouter_instance
+            self.bot.url_processor.llm_summarizer.openrouter = mock_openrouter_instance
+            self.bot.url_processor.content_chunker.openrouter = mock_openrouter_instance
 
             self.bot._safe_reply = AsyncMock()
             self.bot._reply_json = AsyncMock()

@@ -224,6 +224,8 @@ class TestJsonParsing(unittest.TestCase):
                 side_effect=[mock_llm_response, insights_response]
             )
             bot._openrouter = mock_openrouter_instance
+            bot.url_processor.llm_summarizer.openrouter = mock_openrouter_instance
+            bot.url_processor.content_chunker.openrouter = mock_openrouter_instance
 
             bot._safe_reply = AsyncMock()  # type: ignore[method-assign]
             bot._reply_json = AsyncMock()  # type: ignore[method-assign]

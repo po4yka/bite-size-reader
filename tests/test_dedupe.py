@@ -106,6 +106,7 @@ class TestDedupeReuse(unittest.IsolatedAsyncioTestCase):
                 http_status=200,
                 status="ok",
                 options_json=json.dumps({"formats": ["markdown"], "mobile": True}),
+                correlation_id="firecrawl-cid",
                 content_markdown="# cached",
                 content_html=None,
                 structured_json=json.dumps({}),

@@ -45,7 +45,7 @@ class TestOpenRouterCompliance(unittest.TestCase):
 
                 # Verify the correct endpoint is called
                 call_args = mock_client.return_value.post.call_args
-                self.assertEqual(call_args[0][0], "https://openrouter.ai/api/v1/chat/completions")
+                self.assertEqual(call_args[0][0], "/chat/completions")
 
         asyncio.run(_test())
 

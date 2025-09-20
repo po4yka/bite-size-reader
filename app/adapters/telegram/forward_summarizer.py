@@ -189,6 +189,11 @@ class ForwardSummarizer:
                 latency_ms=llm.latency_ms,
                 status=llm.status,
                 error_text=llm.error_text,
+                structured_output_used=getattr(llm, "structured_output_used", None),
+                structured_output_mode=getattr(llm, "structured_output_mode", None),
+                error_context_json=json.dumps(getattr(llm, "error_context", {}) or {}, default=str)
+                if getattr(llm, "error_context", None) is not None
+                else None,
             )
         except Exception as e:  # noqa: BLE001
             logger.error("persist_llm_error", extra={"error": str(e), "cid": correlation_id})
@@ -374,16 +379,21 @@ class ForwardSummarizer:
                 provider="openrouter",
                 model=llm.model or self.cfg.openrouter.model,
                 endpoint=llm.endpoint,
-                request_headers_json=json.dumps(llm.request_headers or {}),
-                request_messages_json=json.dumps([m for m in messages]),
+                request_headers_json=json.dumps(llm.request_headers or {}, default=str),
+                request_messages_json=json.dumps([m for m in messages], default=str),
                 response_text=llm.response_text,
-                response_json=json.dumps(llm.response_json or {}),
+                response_json=json.dumps(llm.response_json or {}, default=str),
                 tokens_prompt=llm.tokens_prompt,
                 tokens_completion=llm.tokens_completion,
                 cost_usd=llm.cost_usd,
                 latency_ms=llm.latency_ms,
                 status=llm.status,
                 error_text=llm.error_text,
+                structured_output_used=getattr(llm, "structured_output_used", None),
+                structured_output_mode=getattr(llm, "structured_output_mode", None),
+                error_context_json=json.dumps(getattr(llm, "error_context", {}) or {}, default=str)
+                if getattr(llm, "error_context", None) is not None
+                else None,
             )
         except Exception as e:  # noqa: BLE001
             logger.error("persist_llm_error", extra={"error": str(e), "cid": correlation_id})

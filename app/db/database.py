@@ -71,6 +71,7 @@ CREATE TABLE IF NOT EXISTS crawl_results (
   http_status INTEGER,
   status TEXT,
   options_json TEXT,
+  correlation_id TEXT,
   content_markdown TEXT,
   content_html TEXT,
   structured_json TEXT,
@@ -98,6 +99,9 @@ CREATE TABLE IF NOT EXISTS llm_calls (
   latency_ms INTEGER,
   status TEXT,
   error_text TEXT,
+  structured_output_used INTEGER,
+  structured_output_mode TEXT,
+  error_context_json TEXT,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -138,6 +142,10 @@ class Database:
             # Ensure backward-compatible schema updates
             self._ensure_column(conn, "requests", "correlation_id", "TEXT")
             self._ensure_column(conn, "summaries", "insights_json", "TEXT")
+            self._ensure_column(conn, "crawl_results", "correlation_id", "TEXT")
+            self._ensure_column(conn, "llm_calls", "structured_output_used", "INTEGER")
+            self._ensure_column(conn, "llm_calls", "structured_output_mode", "TEXT")
+            self._ensure_column(conn, "llm_calls", "error_context_json", "TEXT")
             conn.commit()
         self._logger.info("db_migrated", extra={"path": self.path})
 
@@ -478,6 +486,7 @@ class Database:
         http_status: int | None,
         status: str,
         options_json: str | None,
+        correlation_id: str | None,
         content_markdown: str | None,
         content_html: str | None,
         structured_json: str | None,
@@ -490,9 +499,9 @@ class Database:
     ) -> int:
         sql = (
             "INSERT INTO crawl_results (request_id, source_url, endpoint, http_status, status, options_json, "
-            "content_markdown, content_html, structured_json, metadata_json, links_json, screenshots_paths_json, "
-            "raw_response_json, latency_ms, error_text) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+            "correlation_id, content_markdown, content_html, structured_json, metadata_json, links_json, "
+            "screenshots_paths_json, raw_response_json, latency_ms, error_text) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
         )
         with self.connect() as conn:
             cur = conn.execute(
@@ -504,6 +513,7 @@ class Database:
                     http_status,
                     status,
                     options_json,
+                    correlation_id,
                     content_markdown,
                     content_html,
                     structured_json,
@@ -540,11 +550,15 @@ class Database:
         latency_ms: int | None,
         status: str,
         error_text: str | None,
+        structured_output_used: bool | None,
+        structured_output_mode: str | None,
+        error_context_json: str | None,
     ) -> int:
         sql = (
             "INSERT INTO llm_calls (request_id, provider, model, endpoint, request_headers_json, request_messages_json, "
-            "response_text, response_json, tokens_prompt, tokens_completion, cost_usd, latency_ms, status, error_text) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+            "response_text, response_json, tokens_prompt, tokens_completion, cost_usd, latency_ms, status, error_text, "
+            "structured_output_used, structured_output_mode, error_context_json) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
         )
         with self.connect() as conn:
             cur = conn.execute(
@@ -564,6 +578,11 @@ class Database:
                     latency_ms,
                     status,
                     error_text,
+                    int(structured_output_used)
+                    if isinstance(structured_output_used, bool)
+                    else None,
+                    structured_output_mode,
+                    error_context_json,
                 ),
             )
             conn.commit()

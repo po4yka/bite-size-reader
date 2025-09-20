@@ -532,6 +532,11 @@ class LLMSummarizer:
                 latency_ms=llm.latency_ms,
                 status=llm.status,
                 error_text=llm.error_text,
+                structured_output_used=getattr(llm, "structured_output_used", None),
+                structured_output_mode=getattr(llm, "structured_output_mode", None),
+                error_context_json=json.dumps(getattr(llm, "error_context", {}) or {}, default=str)
+                if getattr(llm, "error_context", None) is not None
+                else None,
             )
         except Exception as e:  # noqa: BLE001
             logger.error("persist_llm_error", extra={"error": str(e), "cid": correlation_id})

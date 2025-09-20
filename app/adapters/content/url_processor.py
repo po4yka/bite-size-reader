@@ -228,14 +228,16 @@ class URLProcessor:
                     llm_result,
                 )
                 logger.info("reply_json_sent", extra={"cid": correlation_id, "request_id": req_id})
-            # Notify user that we will attempt to generate extra research insights
-            try:
-                await self.response_formatter.safe_reply(
-                    message,
-                    "🧠 Generating additional research insights…",
-                )
-            except Exception:
-                pass
+
+                # Notify user that we will attempt to generate extra research insights
+                try:
+                    await self.response_formatter.safe_reply(
+                        message,
+                        "🧠 Generating additional research insights…",
+                    )
+                except Exception:
+                    pass
+
                 await self._handle_additional_insights(
                     message,
                     content_text,

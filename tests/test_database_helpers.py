@@ -60,6 +60,7 @@ class TestDatabaseHelpers(unittest.TestCase):
             http_status=200,
             status="ok",
             options_json=json.dumps({}),
+            correlation_id="fc-123",
             content_markdown="# md",
             content_html=None,
             structured_json=json.dumps({}),
@@ -75,6 +76,7 @@ class TestDatabaseHelpers(unittest.TestCase):
         self.assertIsNotNone(row)
         self.assertEqual(row["http_status"], 200)
         self.assertEqual(row["content_markdown"], "# md")
+        self.assertEqual(row["correlation_id"], "fc-123")
 
     def test_summary_upsert(self):
         rid = self.db.create_request(
@@ -150,12 +152,18 @@ class TestDatabaseHelpers(unittest.TestCase):
             latency_ms=50,
             status="ok",
             error_text=None,
+            structured_output_used=True,
+            structured_output_mode="json_schema",
+            error_context_json=json.dumps({"status_code": 200}),
         )
         self.assertIsInstance(lid, int)
         lrow = self.db.fetchone("SELECT * FROM llm_calls WHERE id = ?", (lid,))
         self.assertIsNotNone(lrow)
         self.assertEqual(lrow["status"], "ok")
         self.assertEqual(lrow["tokens_completion"], 2)
+        self.assertEqual(lrow["structured_output_used"], 1)
+        self.assertEqual(lrow["structured_output_mode"], "json_schema")
+        self.assertEqual(json.loads(lrow["error_context_json"]), {"status_code": 200})
 
         # Audit
         aid = self.db.insert_audit_log(

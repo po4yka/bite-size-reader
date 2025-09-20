@@ -202,7 +202,7 @@ class ContentExtractor:
         self._audit("INFO", "reuse_crawl_result", {"request_id": None, "cid": correlation_id})
 
         options_obj = None
-        correlation_from_raw = None
+        correlation_from_raw = existing_crawl.get("correlation_id")
         try:
             options_raw = existing_crawl.get("options_json")
             if options_raw:
@@ -210,14 +210,15 @@ class ContentExtractor:
         except Exception:
             options_obj = None
 
-        try:
-            raw_payload = existing_crawl.get("raw_response_json")
-            if raw_payload:
-                parsed_raw = json.loads(raw_payload)
-                if isinstance(parsed_raw, dict):
-                    correlation_from_raw = parsed_raw.get("cid")
-        except Exception:
-            correlation_from_raw = None
+        if not correlation_from_raw:
+            try:
+                raw_payload = existing_crawl.get("raw_response_json")
+                if raw_payload:
+                    parsed_raw = json.loads(raw_payload)
+                    if isinstance(parsed_raw, dict):
+                        correlation_from_raw = parsed_raw.get("cid")
+            except Exception:
+                correlation_from_raw = None
 
         latency_val = existing_crawl.get("latency_ms")
         latency_sec = (latency_val / 1000.0) if isinstance(latency_val, int | float) else None
@@ -257,6 +258,7 @@ class ContentExtractor:
                 http_status=crawl.http_status,
                 status=crawl.status,
                 options_json=json.dumps(crawl.options_json or {}),
+                correlation_id=crawl.correlation_id,
                 content_markdown=crawl.content_markdown,
                 content_html=crawl.content_html,
                 structured_json=json.dumps(crawl.structured_json or {}),
