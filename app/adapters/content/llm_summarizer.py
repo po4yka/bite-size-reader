@@ -131,7 +131,8 @@ class LLMSummarizer:
         configured = self.cfg.openrouter.max_tokens
 
         approx_input_tokens = max(1, len(content_text) // 4)
-        dynamic_budget = max(256, min(2048, approx_input_tokens // 3 + 256))
+        # Increase dynamic budget to handle larger responses and avoid truncation
+        dynamic_budget = max(1024, min(4096, approx_input_tokens // 2 + 1024))
 
         if configured is None:
             logger.debug(
@@ -144,7 +145,7 @@ class LLMSummarizer:
             )
             return dynamic_budget
 
-        selected = max(128, min(configured, dynamic_budget))
+        selected = max(1024, min(configured, dynamic_budget))
 
         logger.debug(
             "max_tokens_adjusted",

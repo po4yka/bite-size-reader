@@ -111,6 +111,7 @@ def _normalize_field_names(payload: SummaryJSON) -> SummaryJSON:
     """
     field_mapping = {
         # Summary fields
+        "summary": "summary_1000",  # Map generic "summary" to summary_1000
         "summary250": "summary_250",
         "summary1000": "summary_1000",
         "summary_250": "summary_250",  # Already correct
@@ -181,8 +182,20 @@ def validate_and_shape_summary(payload: SummaryJSON) -> SummaryJSON:
     normalized_payload = _normalize_field_names(payload)
     p: SummaryJSON = dict(normalized_payload)
 
-    p["summary_250"] = _cap_text(str(p.get("summary_250", "")).strip(), 250)
-    p["summary_1000"] = _cap_text(str(p.get("summary_1000", "")).strip(), 1000)
+    # Handle summary fields with fallback logic
+    summary_1000 = str(p.get("summary_1000", "")).strip()
+    summary_250 = str(p.get("summary_250", "")).strip()
+
+    # If summary_1000 is empty but we have a generic summary, use it
+    if not summary_1000 and "summary" in normalized_payload:
+        summary_1000 = str(normalized_payload.get("summary", "")).strip()
+
+    # If summary_250 is empty, derive it from summary_1000
+    if not summary_250 and summary_1000:
+        summary_250 = _cap_text(summary_1000, 250)
+
+    p["summary_250"] = _cap_text(summary_250, 250)
+    p["summary_1000"] = _cap_text(summary_1000, 1000)
 
     p["key_ideas"] = [str(x).strip() for x in p.get("key_ideas", []) if str(x).strip()]
     p["topic_tags"] = _hash_tagify([str(x) for x in p.get("topic_tags", [])])
