@@ -933,11 +933,17 @@ class LLMSummarizer:
                 "Ты аналитик-исследователь. Используя статью и проверенные знания,"
                 " дай свежие факты, контекст и вопросы по теме. Отмечай низкую уверенность"
                 " и строго соблюдай требуемую JSON-схему."
+                " Добавь разделы: 'expansion_topics' (новые направления/темы для обсуждения,"
+                " не основанные напрямую на тексте) и 'next_exploration' (что изучить далее:"
+                " гипотезы, эксперименты, источники и метрики)."
             )
         return (
             "You are an investigative research analyst. Combine the article with your tested"
             " knowledge to surface fresh facts, context, recent developments, and open"
             " questions. Flag any low-confidence items and answer using the JSON schema."
+            " Include sections: 'expansion_topics' (new, beyond-text themes worth exploring)"
+            " and 'next_exploration' (what to explore next: hypotheses, experiments, sources,"
+            " and metrics)."
         )
 
     def _build_insights_user_prompt(self, content_text: str, lang: str) -> str:
@@ -949,6 +955,11 @@ class LLMSummarizer:
             " cut-off), market or technical implications, and unanswered questions."
             " Mark any uncertain statements as low confidence."
             f" Respond in {lang_label}."
+            "\n\nAdditionally, produce two extra sections:"
+            "\n- expansion_topics: 5-8 brief items that expand the topic beyond the article,"
+            " focusing on adjacent ideas, trends, or synthesis."
+            "\n- next_exploration: 5-8 concrete next steps (what to research/experiment),"
+            " each a short bullet (1 line)."
             "\n\nARTICLE CONTENT START\n"
             f"{content_text}\n"
             "ARTICLE CONTENT END"
@@ -991,8 +1002,16 @@ class LLMSummarizer:
                             "items": {"type": "string"},
                         },
                         "caution": {"type": ["string", "null"]},
+                        "expansion_topics": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                        },
+                        "next_exploration": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                        },
                     },
-                    "required": ["topic_overview", "new_facts"],
+                    "required": ["topic_overview"],
                 },
             },
         }

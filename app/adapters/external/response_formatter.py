@@ -396,6 +396,32 @@ class ResponseFormatter:
                         lines.append(f"- {src}")
                     lines.append("")
 
+            # New: Expansion topics beyond the original text
+            expansion = insights.get("expansion_topics")
+            if isinstance(expansion, list):
+                exp_clean = [
+                    self._sanitize_summary_text(str(x).strip()) for x in expansion if str(x).strip()
+                ]
+                if exp_clean:
+                    lines.append("🧠 Expansion Topics (beyond the article):")
+                    for item in exp_clean[:8]:
+                        lines.append(f"- {item}")
+                    lines.append("")
+
+            # New: What to explore next
+            next_steps = insights.get("next_exploration")
+            if isinstance(next_steps, list):
+                nxt_clean = [
+                    self._sanitize_summary_text(str(x).strip())
+                    for x in next_steps
+                    if str(x).strip()
+                ]
+                if nxt_clean:
+                    lines.append("🚀 What to explore next:")
+                    for step in nxt_clean[:8]:
+                        lines.append(f"- {step}")
+                    lines.append("")
+
             caution = insights.get("caution")
             if isinstance(caution, str) and caution.strip():
                 lines.append("⚠️ Caveats:")
