@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import os
 from dataclasses import dataclass
 
@@ -324,7 +325,10 @@ def _parse_provider_order(order_raw: str | None) -> tuple[str, ...]:
     return tuple(out)
 
 
-def load_config() -> AppConfig:
+logger = logging.getLogger(__name__)
+
+
+def load_config(*, allow_stub_telegram: bool = False) -> AppConfig:
     """Load configuration from environment variables.
 
     Required values:
@@ -333,14 +337,38 @@ def load_config() -> AppConfig:
     - OPENROUTER_API_KEY
 
     Optional values have sensible defaults based on SPEC.md.
+    When ``allow_stub_telegram`` is True, placeholder Telegram credentials are
+    generated if the related environment variables are absent. This is useful
+    for local CLI tooling where the Telegram client is not started.
     """
     try:
+        api_id_raw = os.getenv("API_ID")
+        api_hash_raw = os.getenv("API_HASH")
+        bot_token_raw = os.getenv("BOT_TOKEN")
+
+        using_stub_telegram = False
+        if allow_stub_telegram:
+            if not api_id_raw:
+                api_id_raw = "1"
+                using_stub_telegram = True
+            if not api_hash_raw:
+                api_hash_raw = "test_api_hash_placeholder_value___"
+                using_stub_telegram = True
+            if not bot_token_raw:
+                bot_token_raw = "1000000000:TESTTOKENPLACEHOLDER1234567890ABC"
+                using_stub_telegram = True
+
         telegram = TelegramConfig(
-            api_id=_validate_api_id(os.getenv("API_ID", "0")),
-            api_hash=_validate_api_key(os.getenv("API_HASH", ""), "API Hash"),
-            bot_token=_validate_bot_token(os.getenv("BOT_TOKEN", "")),
+            api_id=_validate_api_id(api_id_raw or "0"),
+            api_hash=_validate_api_key(api_hash_raw or "", "API Hash"),
+            bot_token=_validate_bot_token(bot_token_raw or ""),
             allowed_user_ids=_parse_allowed_user_ids(os.getenv("ALLOWED_USER_IDS")),
         )
+
+        if using_stub_telegram:
+            logger.warning(
+                "Using stub Telegram credentials: real API_ID/API_HASH/BOT_TOKEN were not provided"
+            )
 
         firecrawl = FirecrawlConfig(
             api_key=_validate_api_key(os.getenv("FIRECRAWL_API_KEY", ""), "Firecrawl"),

@@ -40,6 +40,14 @@ Commands & usage
 - Multiple URLs in one message (or after `/summarize`): bot asks “Process N links?”; reply “yes/no”. Each link gets its own correlation ID and is processed sequentially.
  - `/summarize_all <URLs>` — Summarize multiple URLs from one message immediately, without confirmation.
 
+Local CLI summary runner
+- With the same environment variables exported (Firecrawl + OpenRouter keys, DB path, etc.), run `python -m app.cli.summary --url https://example.com/article`.
+- Pass full message text instead of `--url` to mimic Telegram input, e.g. `python -m app.cli.summary "/summary https://example.com"`.
+- The CLI loads environment variables from `.env` in your current directory (or project root) automatically; override with `--env-file path/to/.env` if needed.
+- Add `--accept-multiple` to auto-confirm when multiple URLs are supplied, `--json-path summary.json` to write the final JSON to disk, and `--log-level DEBUG` for verbose traces.
+- The insights stage mirrors production: it retries with JSON-schema first, then falls back to JSON-object mode and configured fallback models before giving up, which reduces `structured_output_parse_error` failures during research add-ons.
+- The CLI generates stub Telegram credentials automatically, so no real bot token is required for local runs.
+
 Tips
 - You can simply send a URL (or several URLs) or forward a channel post — commands are optional.
 

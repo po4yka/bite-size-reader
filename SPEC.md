@@ -350,7 +350,11 @@ classDiagram
    - Body: `model`, `messages` (system+user), sensible `temperature`.
    - Persist **full** response (including `usage`).
 5) Validate/shape **Summary JSON**, store in `summaries`, reply to user.
-6) Log audit events with correlation IDs; record latencies.
+6) Optional **additional insights** call:
+   - Reuse article content to request contextual insights (recent facts, open questions).
+   - Attempt structured `json_schema` response first; if `structured_output_parse_error` occurs, retry with JSON-object mode and configured fallback models before abandoning.
+   - Persist successful insights payload alongside the summary version.
+7) Log audit events with correlation IDs; record latencies.
 
 ### Forwarded message flow
 1) Detect forwarded message via `forward_from_chat`, `forward_from_message_id`, `forward_date`; snapshot **entire `Message`** object (text, entities, media ids, raw JSON).
@@ -420,12 +424,22 @@ LOG_LEVEL=INFO
 REQUEST_TIMEOUT_SEC=60
 ```
 
+> Local CLI runs (`python -m app.cli.summary`) automatically load environment variables from a `.env` file in the current directory or repository root before invoking `load_config`. You can override the location with `--env-file path/to/.env`.
+
 ## Dockerization
 
-- Single image (multi‑stage): build -> `python:slim` runtime.
+- Single image (multi-stage): build -> `python:slim` runtime.
 - Mount volume for `/data/app.db`.
-- Healthcheck: lightweight DB read and Telegram self‑ping (optional).
+- Healthcheck: lightweight DB read and Telegram self-ping (optional).
 - Log to stdout; rotate in container runtime if needed.
+
+## Local CLI harness
+
+- Command: `python -m app.cli.summary [--url URL | message text]`.
+- Automatically loads `.env` configuration (current directory or repo root) prior to `load_config`; override with `--env-file`.
+- Injects stub Telegram credentials when they are absent so the rest of the pipeline can run unchanged.
+- Mirrors production behavior: URL dedupe, Firecrawl reuse, structured summary with repair/fallbacks, and optional insights generation.
+- Insights requests retry with structured `json_schema` first, downgrade to `json_object`, and cycle through configured fallback models to minimize `structured_output_parse_error` failures.
 
 ## Testing
 

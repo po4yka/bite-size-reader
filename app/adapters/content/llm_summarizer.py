@@ -256,19 +256,27 @@ class LLMSummarizer:
                 interaction_id,
             )
 
-        if summary_shaped is None:
-            await self._handle_parsing_failure(message, req_id, correlation_id, interaction_id)
-            return None
-
-        if not any(
+        if summary_shaped is None or not any(
             str(summary_shaped.get(key, "")).strip() for key in ("summary_1000", "summary_250")
         ):
             logger.error(
                 "summary_fields_empty_final",
                 extra={"cid": correlation_id, "model": getattr(llm, "model", None)},
             )
-            await self._handle_parsing_failure(message, req_id, correlation_id, interaction_id)
-            return None
+            summary_shaped = await self._try_fallback_models(
+                message,
+                system_prompt,
+                user_content,
+                req_id,
+                correlation_id,
+                interaction_id,
+            )
+
+            if summary_shaped is None or not any(
+                str(summary_shaped.get(key, "")).strip() for key in ("summary_1000", "summary_250")
+            ):
+                await self._handle_parsing_failure(message, req_id, correlation_id, interaction_id)
+                return None
 
         # Log enhanced results
         self._log_llm_finished(llm, summary_shaped, correlation_id)
@@ -463,7 +471,7 @@ class LLMSummarizer:
             return shaped
 
         # Enhanced repair logic with structured outputs
-        return await self._attempt_json_repair(
+        repaired = await self._attempt_json_repair(
             message,
             llm,
             system_prompt,
@@ -474,6 +482,15 @@ class LLMSummarizer:
             interaction_id,
             model_override=llm.model,
         )
+        if repaired is not None and not any(
+            str(repaired.get(key, "")).strip() for key in ("summary_1000", "summary_250")
+        ):
+            logger.warning(
+                "summary_fields_empty",
+                extra={"cid": correlation_id, "stage": "repair"},
+            )
+            return None
+        return repaired
 
     async def _try_fallback_models(
         self,
@@ -791,38 +808,80 @@ class LLMSummarizer:
         ]
 
         try:
-            async with self._sem():
-                llm = await self.openrouter.chat(
-                    messages,
-                    temperature=self.cfg.openrouter.temperature,
-                    max_tokens=self._select_max_tokens(content_text),
-                    top_p=self.cfg.openrouter.top_p,
-                    request_id=req_id,
-                    response_format=self._build_insights_response_format(),
-                    model_override=self.cfg.openrouter.model,
-                )
+            response_formats: list[dict[str, Any]] = []
+            primary_format = self._build_insights_response_format()
+            response_formats.append(primary_format)
+            if primary_format.get("type") != "json_object":
+                response_formats.append({"type": "json_object"})
 
-            asyncio.create_task(self._persist_llm_call(llm, req_id, correlation_id))
+            candidate_models: list[str] = [self.cfg.openrouter.model]
+            candidate_models.extend(
+                [
+                    model
+                    for model in self.cfg.openrouter.fallback_models
+                    if model and model not in candidate_models
+                ]
+            )
 
-            if llm.status != "ok":
-                logger.warning(
-                    "insights_llm_error",
-                    extra={
-                        "cid": correlation_id,
-                        "status": llm.status,
-                        "error": llm.error_text,
-                    },
-                )
-                return None
+            for model_name in candidate_models:
+                for response_format in response_formats:
+                    async with self._sem():
+                        llm = await self.openrouter.chat(
+                            messages,
+                            temperature=self.cfg.openrouter.temperature,
+                            max_tokens=self._select_max_tokens(content_text),
+                            top_p=self.cfg.openrouter.top_p,
+                            request_id=req_id,
+                            response_format=response_format,
+                            model_override=model_name,
+                        )
 
-            insights = self._parse_insights_response(llm.response_json, llm.response_text)
-            if not insights:
-                logger.warning("insights_parse_failed", extra={"cid": correlation_id})
-                self._last_insights = None
-                return None
+                    asyncio.create_task(self._persist_llm_call(llm, req_id, correlation_id))
 
-            self._last_insights = insights
-            return insights
+                    if llm.status != "ok":
+                        structured_error = (llm.error_text or "") == "structured_output_parse_error"
+                        logger.warning(
+                            "insights_llm_error",
+                            extra={
+                                "cid": correlation_id,
+                                "status": llm.status,
+                                "error": llm.error_text,
+                                "model": model_name,
+                                "response_format": response_format.get("type"),
+                            },
+                        )
+                        if structured_error:
+                            # Try the next response format or model
+                            continue
+                        return None
+
+                    insights = self._parse_insights_response(llm.response_json, llm.response_text)
+                    if not insights:
+                        logger.warning(
+                            "insights_parse_failed",
+                            extra={
+                                "cid": correlation_id,
+                                "model": model_name,
+                                "response_format": response_format.get("type"),
+                            },
+                        )
+                        # Try next combination
+                        continue
+
+                    logger.info(
+                        "insights_generation_success",
+                        extra={
+                            "cid": correlation_id,
+                            "model": model_name,
+                            "response_format": response_format.get("type"),
+                            "facts_count": len(insights.get("new_facts", []) or []),
+                        },
+                    )
+                    self._last_insights = insights
+                    return insights
+
+            self._last_insights = None
+            return None
 
         except Exception as exc:  # noqa: BLE001
             logger.exception(
