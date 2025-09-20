@@ -1037,6 +1037,7 @@ class LLMSummarizer:
         if not isinstance(candidate, dict):
             return None
 
+        # Normalize and clean new_facts list (if present)
         facts = candidate.get("new_facts")
         if isinstance(facts, list):
             cleaned: list[dict[str, Any]] = []
@@ -1049,4 +1050,7 @@ class LLMSummarizer:
                 cleaned.append(fact)
             candidate["new_facts"] = cleaned
 
-        return candidate if candidate.get("new_facts") else None
+        # Return the candidate even if new_facts is empty; the formatter will
+        # still send a graceful message and this ensures the follow-up message
+        # is not silently suppressed.
+        return candidate
