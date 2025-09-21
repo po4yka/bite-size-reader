@@ -379,7 +379,7 @@ class MessageRouter:
         interaction_id: int,
         start_time: float,
     ) -> None:
-        """Process URLs sequentially with progress bar updates."""
+        """Process URLs sequentially with detailed status updates."""
         total = len(urls)
 
         for i, url in enumerate(urls, 1):
@@ -387,6 +387,14 @@ class MessageRouter:
                 "processing_url_from_file",
                 extra={"url": url, "progress": f"{i}/{total}", "cid": correlation_id},
             )
+
+            # Send status update for current URL being processed
+            try:
+                domain = url.split("/")[2] if len(url.split("/")) > 2 else "unknown"
+                status_msg = f"🔗 Processing {i}/{total}: {domain}"
+                await self.response_formatter.safe_reply(message, status_msg)
+            except Exception:
+                pass
 
             # Process URL without sending Telegram responses
             await self._process_url_silently(message, url, correlation_id, interaction_id)
@@ -425,12 +433,9 @@ class MessageRouter:
             progress_bar = self._create_progress_bar(current, total)
             progress_text = f"🔄 Processing links: {current}/{total}\n{progress_bar}"
 
-            # Get chat ID from message
-            chat_id = getattr(message, "chat", None)
-            if chat_id and hasattr(chat_id, "id"):
-                await self.response_formatter.edit_message(
-                    chat_id.id, progress_msg_id, progress_text
-                )
+            # Send a new progress update message instead of editing
+            # This provides better visibility during batch processing
+            await self.response_formatter.safe_reply(message, progress_text)
         except Exception as e:
             logger.warning("progress_update_failed", extra={"error": str(e)})
 
