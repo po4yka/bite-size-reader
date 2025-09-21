@@ -80,18 +80,22 @@ class TelegramClient:
             commands_en = [
                 BotCommand("start", "Welcome and instructions"),
                 BotCommand("help", "Show help and usage"),
-                BotCommand("dbinfo", "Show database overview"),
-                BotCommand("summarize", "Summarize a URL (send URL next)"),
+                BotCommand("summarize", "Summarize a URL"),
                 BotCommand("summarize_all", "Summarize multiple URLs from one message"),
-                BotCommand("summarize_forward", "Summarize the next forwarded channel post"),
+                BotCommand("unread", "Show list of unread articles"),
+                BotCommand("read", "Mark article as read and view it"),
+                BotCommand("dbinfo", "Show database overview"),
             ]
             commands_ru = [
                 BotCommand("start", "Приветствие и инструкция"),
                 BotCommand("help", "Показать помощь и инструкцию"),
-                BotCommand("dbinfo", "Показать состояние базы данных"),
                 BotCommand("summarize", "Суммировать ссылку (или пришлите позже)"),
                 BotCommand("summarize_all", "Суммировать несколько ссылок из сообщения"),
-                BotCommand("summarize_forward", "Суммировать следующий пересланный пост"),
+                BotCommand("unread", "Показать список непрочитанных статей"),
+                BotCommand(
+                    "read", "Отметить статью как прочитанную и просмотреть (используйте /read <ID>)"
+                ),
+                BotCommand("dbinfo", "Показать состояние базы данных"),
             ]
             try:
                 client_any: Any = self.client
