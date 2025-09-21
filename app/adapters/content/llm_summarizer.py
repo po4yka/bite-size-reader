@@ -174,7 +174,9 @@ class LLMSummarizer:
             self._last_llm_result = llm
 
         # Enhanced LLM completion notification
-        await self.response_formatter.send_llm_completion_notification(message, llm, correlation_id)
+        await self.response_formatter.send_llm_completion_notification(
+            message, llm, correlation_id, silent=silent
+        )
 
         # Process LLM response
         return await self._process_llm_response(
@@ -187,6 +189,7 @@ class LLMSummarizer:
             chosen_lang,
             correlation_id,
             interaction_id,
+            silent=silent,
         )
 
     def _select_max_tokens(self, content_text: str) -> int | None:
@@ -606,6 +609,8 @@ class LLMSummarizer:
         chosen_lang: str,
         correlation_id: str | None,
         interaction_id: int | None,
+        *,
+        silent: bool = False,
     ) -> dict[str, Any] | None:
         """Process LLM response and handle errors/repairs."""
         # Enhanced error handling and salvage logic
@@ -638,6 +643,7 @@ class LLMSummarizer:
                 req_id,
                 correlation_id,
                 interaction_id,
+                silent=silent,
             )
 
         if summary_shaped is None or not any(
@@ -654,6 +660,7 @@ class LLMSummarizer:
                 req_id,
                 correlation_id,
                 interaction_id,
+                silent=silent,
             )
 
             if summary_shaped is None or not any(
@@ -1234,6 +1241,8 @@ class LLMSummarizer:
         req_id: int,
         correlation_id: str | None,
         interaction_id: int | None,
+        *,
+        silent: bool = False,
     ) -> dict[str, Any] | None:
         """Attempt summarization with configured fallback models."""
         fallback_models = [
@@ -1269,7 +1278,7 @@ class LLMSummarizer:
 
             asyncio.create_task(self._persist_llm_call(llm, req_id, correlation_id))
             await self.response_formatter.send_llm_completion_notification(
-                message, llm, correlation_id
+                message, llm, correlation_id, silent=silent
             )
 
             self._last_llm_result = llm

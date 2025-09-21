@@ -64,7 +64,9 @@ class ContentExtractor:
         )
 
         # Notify: request accepted with URL preview
-        await self.response_formatter.send_url_accepted_notification(message, norm, correlation_id)
+        await self.response_formatter.send_url_accepted_notification(
+            message, norm, correlation_id, silent=silent
+        )
 
         # Handle request deduplication and creation
         req_id = await self._handle_request_dedupe_or_create(
@@ -235,6 +237,7 @@ class ContentExtractor:
             latency_sec=latency_sec,
             correlation_id=correlation_from_raw,
             options=options_obj,
+            silent=silent,
         )
 
         return content_text, content_source

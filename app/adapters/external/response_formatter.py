@@ -1024,8 +1024,11 @@ class ResponseFormatter:
         latency_sec: float | None = None,
         correlation_id: str | None = None,
         options: dict[str, Any] | None = None,
+        silent: bool = False,
     ) -> None:
         """Send content reuse notification with cached crawl metadata."""
+        if silent:
+            return
         try:
             lines = [
                 "♻️ **Reusing Cached Content**",
@@ -1175,9 +1178,11 @@ class ResponseFormatter:
             pass
 
     async def send_llm_completion_notification(
-        self, message: Any, llm: Any, correlation_id: str
+        self, message: Any, llm: Any, correlation_id: str, *, silent: bool = False
     ) -> None:
         """Send LLM completion notification."""
+        if silent:
+            return
         try:
             model_name = llm.model or "unknown"
             latency_sec = (llm.latency_ms or 0) / 1000.0
