@@ -31,6 +31,7 @@ class TelegramMessage:
 
     # Media fields
     photo: list[dict[str, Any]] | None = None
+    photo_list: list[dict[str, Any]] | None = None  # Serialized photo data
     video: dict[str, Any] | None = None
     audio: dict[str, Any] | None = None
     document: dict[str, Any] | None = None
@@ -345,18 +346,71 @@ class TelegramMessage:
                     except Exception:
                         pass  # Give up on user extraction
 
+            # Extract media attributes for error case
+            photo_raw = getattr(message, "photo", None)
+
+            # Handle photo serialization for error case
+            photo_list = None
+            if photo_raw:
+                try:
+                    # Handle both single Photo objects and lists of PhotoSize objects
+                    if isinstance(photo_raw, list):
+                        photo_list = [photo_size.__dict__ for photo_size in photo_raw]
+                    else:
+                        # Single Photo object - convert to list with single item
+                        photo_list = [photo_raw.__dict__]
+                except (AttributeError, TypeError) as e:
+                    logger.warning(f"Failed to process photo object in error case: {e}")
+                    photo_list = None
+
+            video = getattr(message, "video", None)
+            audio = getattr(message, "audio", None)
+            document = getattr(message, "document", None)
+            sticker = getattr(message, "sticker", None)
+            voice = getattr(message, "voice", None)
+            video_note = getattr(message, "video_note", None)
+            animation = getattr(message, "animation", None)
+            contact = getattr(message, "contact", None)
+            location = getattr(message, "location", None)
+            venue = getattr(message, "venue", None)
+            poll = getattr(message, "poll", None)
+            dice = getattr(message, "dice", None)
+            game = getattr(message, "game", None)
+            invoice = getattr(message, "invoice", None)
+            successful_payment = getattr(message, "successful_payment", None)
+            story = getattr(message, "story", None)
+
             return cls(
                 message_id=getattr(message, "id", 0),
                 from_user=from_user,
                 date=None,
                 chat=None,
                 text=getattr(message, "text", None),
+                caption=getattr(message, "caption", None),
+                photo=photo_raw,
+                photo_list=photo_list,
+                video=video,
+                audio=audio,
+                document=document,
+                sticker=sticker,
+                voice=voice,
+                video_note=video_note,
+                animation=animation,
+                contact=contact,
+                location=location,
+                venue=venue,
+                poll=poll,
+                dice=dice,
+                game=game,
+                invoice=invoice,
+                successful_payment=successful_payment,
+                story=story,
             )
 
     def _set_computed_fields(self) -> None:
         """Set computed fields based on message content."""
         # Determine media type
-        if self.photo:
+        if self.photo or self.photo_list:
             self.media_type = MediaType.PHOTO
         elif self.video:
             self.media_type = MediaType.VIDEO
@@ -525,7 +579,8 @@ class TelegramMessage:
                 errors.append("Invalid chat.id")
 
         # Content validation
-        if not self.text and not self.caption and not self.has_media:
+        has_valid_content = self.text or self.caption or self.has_media or self.photo_list
+        if not has_valid_content:
             errors.append("Message must have text, caption, or media content")
 
         # Entity validation
