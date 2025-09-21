@@ -136,7 +136,7 @@ class URLProcessor:
                     content_text[:150] + "..." if len(content_text) > 150 else content_text
                 )
                 await self.response_formatter.send_language_detection_notification(
-                    message, detected, content_preview
+                    message, detected, content_preview, silent=silent
                 )
 
             # Check if content should be chunked
@@ -157,15 +157,15 @@ class URLProcessor:
                 chunks = None
 
             # Inform the user how the content will be handled (skip if silent)
-            if not silent:
-                await self.response_formatter.send_content_analysis_notification(
-                    message,
-                    len(content_text),
-                    max_chars,
-                    should_chunk,
-                    chunks,
-                    self.cfg.openrouter.structured_output_mode,
-                )
+            await self.response_formatter.send_content_analysis_notification(
+                message,
+                len(content_text),
+                max_chars,
+                should_chunk,
+                chunks,
+                self.cfg.openrouter.structured_output_mode,
+                silent=silent,
+            )
 
             logger.info(
                 "content_handling",
@@ -485,7 +485,7 @@ class URLProcessor:
             await self.response_formatter.send_url_accepted_notification(
                 message, norm, correlation_id or ""
             )
-            await self.response_formatter.send_cached_summary_notification(message)
+            await self.response_formatter.send_cached_summary_notification(message, silent=silent)
             await self.response_formatter.send_enhanced_summary_response(message, shaped, None)
 
             insights_raw = summary_row.get("insights_json")

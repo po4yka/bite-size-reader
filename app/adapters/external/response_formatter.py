@@ -1030,8 +1030,10 @@ class ResponseFormatter:
         except Exception:
             pass
 
-    async def send_cached_summary_notification(self, message: Any) -> None:
+    async def send_cached_summary_notification(self, message: Any, *, silent: bool = False) -> None:
         """Inform the user that a cached summary is being reused."""
+        if silent:
+            return
         try:
             await self.safe_reply(
                 message,
@@ -1040,8 +1042,12 @@ class ResponseFormatter:
         except Exception:
             pass
 
-    async def send_html_fallback_notification(self, message: Any, content_len: int) -> None:
+    async def send_html_fallback_notification(
+        self, message: Any, content_len: int, *, silent: bool = False
+    ) -> None:
         """Send HTML fallback notification."""
+        if silent:
+            return
         try:
             await self.safe_reply(
                 message,
@@ -1055,9 +1061,11 @@ class ResponseFormatter:
             pass
 
     async def send_language_detection_notification(
-        self, message: Any, detected: str | None, content_preview: str
+        self, message: Any, detected: str | None, content_preview: str, *, silent: bool = False
     ) -> None:
         """Send language detection notification."""
+        if silent:
+            return
         try:
             await self.safe_reply(
                 message,
@@ -1078,8 +1086,12 @@ class ResponseFormatter:
         enable_chunking: bool,
         chunks: list[str] | None,
         structured_output_mode: str,
+        *,
+        silent: bool = False,
     ) -> None:
         """Send content analysis notification."""
+        if silent:
+            return
         try:
             if enable_chunking and content_len > max_chars and (chunks or []):
                 await self.safe_reply(

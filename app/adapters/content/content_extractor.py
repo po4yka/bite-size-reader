@@ -399,7 +399,7 @@ class ContentExtractor:
             )
             # Notify user that HTML fallback was used
             await self.response_formatter.send_html_fallback_notification(
-                message, len(content_text)
+                message, len(content_text), silent=silent
             )
         else:
             # This should not happen due to validation above, but handle gracefully
