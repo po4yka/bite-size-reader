@@ -415,17 +415,12 @@ def load_config(*, allow_stub_telegram: bool = False) -> AppConfig:
             ),
         )
 
-        fallback_models = _validate_fallback_models(
-            os.getenv(
-                "OPENROUTER_FALLBACK_MODELS",
-                "openai/gpt-4o-mini,google/gemini-2.5-pro,anthropic/claude-3.5-sonnet",
-            )
-        )
+        fallback_models = _validate_fallback_models(os.getenv("OPENROUTER_FALLBACK_MODELS", ""))
 
         openrouter = OpenRouterConfig(
             api_key=_validate_api_key(os.getenv("OPENROUTER_API_KEY", ""), "OpenRouter"),
-            # Default to a fast, widely available model. GPT-5 is slow due to routing complexity.
-            model=_validate_model_name(os.getenv("OPENROUTER_MODEL", "openai/gpt-4o")),
+            # Default to a broadly available model. GPT-5 may require specific provider routing.
+            model=_validate_model_name(os.getenv("OPENROUTER_MODEL", "openai/gpt-5")),
             fallback_models=fallback_models,
             http_referer=os.getenv("OPENROUTER_HTTP_REFERER"),
             x_title=os.getenv("OPENROUTER_X_TITLE"),

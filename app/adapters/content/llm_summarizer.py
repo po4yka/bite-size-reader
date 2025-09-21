@@ -80,15 +80,10 @@ class LLMSummarizer:
             {"role": "user", "content": user_content},
         ]
 
-        # Smart model selection based on content size for better performance
-        selected_model = self._select_model_for_content_size(
-            self.cfg.openrouter.model, content_text
-        )
-
         # Notify: Starting enhanced LLM call
         await self.response_formatter.send_llm_start_notification(
             message,
-            selected_model,
+            self.cfg.openrouter.model,
             len(content_text),
             self.cfg.openrouter.structured_output_mode,
             silent=silent,
@@ -103,7 +98,7 @@ class LLMSummarizer:
         async with self._sem():
             # Use enhanced structured output configuration
             response_format = self._build_structured_response_format()
-            max_tokens = self._select_max_tokens(content_text, selected_model)
+            max_tokens = self._select_max_tokens(content_text)
             self._last_llm_result = None
             self._last_insights = None
 
@@ -134,14 +129,14 @@ class LLMSummarizer:
             interaction_id,
         )
 
-    def _select_max_tokens(self, content_text: str, selected_model: str) -> int | None:
+    def _select_max_tokens(self, content_text: str) -> int | None:
         """Choose an appropriate max_tokens budget based on content size."""
         configured = self.cfg.openrouter.max_tokens
 
         approx_input_tokens = max(1, len(content_text) // 4)
 
         # GPT-5 specific optimizations: allow much larger token budgets
-        if "gpt-5" in selected_model.lower():
+        if "gpt-5" in self.cfg.openrouter.model.lower():
             # GPT-5 can handle much larger responses - allow up to 32k tokens
             dynamic_budget = max(4096, min(32768, approx_input_tokens // 2 + 4096))
             # Override configured limit for GPT-5 if it's too restrictive
@@ -149,7 +144,7 @@ class LLMSummarizer:
                 logger.info(
                     "gpt5_max_tokens_override",
                     extra={
-                        "model": selected_model,
+                        "model": self.cfg.openrouter.model,
                         "original_configured": configured,
                         "new_budget": dynamic_budget,
                     },
@@ -217,13 +212,7 @@ class LLMSummarizer:
             if primary_format.get("type") != "json_object":
                 response_formats.append({"type": "json_object"})
 
-            selection_seed = " ".join(topics + tags)
-            selected_model = self._select_model_by_size(
-                self.cfg.openrouter.model,
-                selection_seed or "custom article request",
-            )
-
-            candidate_models: list[str] = [selected_model]
+            candidate_models: list[str] = [self.cfg.openrouter.model]
             candidate_models.extend(
                 [
                     model
@@ -862,14 +851,11 @@ class LLMSummarizer:
                 extra={"cid": correlation_id, "model": model_name, "request_id": req_id},
             )
 
-            # Select appropriate model for the content size
-            selected_model = self._select_model_for_content_size(model_name, user_content)
-
             async with self._sem():
                 llm = await self.openrouter.chat(
                     messages,
                     temperature=self.cfg.openrouter.temperature,
-                    max_tokens=self._select_max_tokens(user_content, selected_model),
+                    max_tokens=self._select_max_tokens(user_content),
                     top_p=self.cfg.openrouter.top_p,
                     request_id=req_id,
                     response_format=response_format,
@@ -976,17 +962,12 @@ class LLMSummarizer:
                 },
             ]
 
-            # Select appropriate model for repair attempt
-            selected_model = self._select_model_for_content_size(
-                model_override or self.cfg.openrouter.model, user_content
-            )
-
             async with self._sem():
                 repair_response_format = self._build_structured_response_format(mode="json_object")
                 repair = await self.openrouter.chat(
                     repair_messages,
                     temperature=self.cfg.openrouter.temperature,
-                    max_tokens=self._select_max_tokens(user_content, selected_model),
+                    max_tokens=self._select_max_tokens(user_content),
                     top_p=self.cfg.openrouter.top_p,
                     request_id=req_id,
                     response_format=repair_response_format,
@@ -1162,10 +1143,7 @@ class LLMSummarizer:
             if primary_format.get("type") != "json_object":
                 response_formats.append({"type": "json_object"})
 
-            # Smart model selection for insights generation
-            selected_model = self._select_model_by_size(self.cfg.openrouter.model, content_text)
-
-            candidate_models: list[str] = [selected_model]
+            candidate_models: list[str] = [self.cfg.openrouter.model]
             candidate_models.extend(
                 [
                     model
@@ -1342,65 +1320,6 @@ class LLMSummarizer:
     @property
     def last_insights(self) -> dict[str, Any] | None:
         return self._last_insights
-
-    def _select_model_for_content_size(self, primary_model: str, content_text: str) -> str:
-        """Select appropriate model based on content size for optimal performance.
-
-        Args:
-            primary_model: The primary model to use
-            content_text: The content to summarize
-
-        Returns:
-            Model name optimized for content size
-        """
-        return self._select_model_by_size(primary_model, content_text)
-
-    def _select_model_by_size(self, primary_model: str, content_text: str) -> str:
-        """Core model selection logic based on content size."""
-        content_len = len(content_text)
-        approx_tokens = max(1, content_len // 4)
-
-        # Fast models for shorter content (better latency)
-        if approx_tokens < 2000:  # ~8K characters
-            # For short content, prefer fast models
-            fast_models = ["openai/gpt-4o-mini", "google/gemini-2.5-pro"]
-            for model in fast_models:
-                if model in self.cfg.openrouter.fallback_models or model == primary_model:
-                    logger.info(
-                        "model_selection_short_content",
-                        extra={
-                            "selected_model": model,
-                            "content_len": content_len,
-                            "approx_tokens": approx_tokens,
-                        },
-                    )
-                    return model
-
-        # Medium models for medium content
-        elif approx_tokens < 8000:  # ~32K characters
-            medium_models = ["openai/gpt-4o", "anthropic/claude-3.5-sonnet"]
-            for model in medium_models:
-                if model in self.cfg.openrouter.fallback_models or model == primary_model:
-                    logger.info(
-                        "model_selection_medium_content",
-                        extra={
-                            "selected_model": model,
-                            "content_len": content_len,
-                            "approx_tokens": approx_tokens,
-                        },
-                    )
-                    return model
-
-        # Use primary model for large content (may need GPT-5's capacity)
-        logger.info(
-            "model_selection_large_content",
-            extra={
-                "selected_model": primary_model,
-                "content_len": content_len,
-                "approx_tokens": approx_tokens,
-            },
-        )
-        return primary_model
 
     def _parse_insights_response(
         self, response_json: Any, response_text: str | None
