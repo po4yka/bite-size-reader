@@ -20,6 +20,7 @@ class ResponseFormatter:
         self,
         safe_reply_func: Callable[[Any, str], Awaitable[None]] | None = None,
         reply_json_func: Callable[[Any, dict], Awaitable[None]] | None = None,
+        telegram_client: Any = None,
     ) -> None:
         # Optional callbacks allow the TelegramBot compatibility layer to
         # intercept replies during unit tests without duplicating formatter
@@ -27,6 +28,7 @@ class ResponseFormatter:
         # same arguments as ``safe_reply`` / ``reply_json`` respectively.
         self._safe_reply_func = safe_reply_func
         self._reply_json_func = reply_json_func
+        self._telegram_client = telegram_client
 
         # Telegram silently rejects messages above ~4096 characters.
         # Keep a safety margin to avoid hitting the hard limit.
@@ -683,9 +685,19 @@ class ResponseFormatter:
 
     async def edit_message(self, chat_id: int, message_id: int, text: str) -> None:
         """Edit an existing message in Telegram."""
-        # For now, we'll send a new message with progress update instead of editing
-        # This is a temporary workaround until we properly wire up the Telegram client
-        pass
+        try:
+            if self._telegram_client and hasattr(self._telegram_client, "client"):
+                client = self._telegram_client.client
+                if client and hasattr(client, "edit_message_text"):
+                    await client.edit_message_text(
+                        chat_id=chat_id, message_id=message_id, text=text
+                    )
+                    return
+        except Exception as e:
+            logger.warning(
+                "edit_message_failed",
+                extra={"error": str(e), "chat_id": chat_id, "message_id": message_id},
+            )
 
     async def send_url_accepted_notification(
         self, message: Any, norm: str, correlation_id: str, *, silent: bool = False

@@ -101,6 +101,7 @@ class TelegramBot:
         self.response_formatter = ResponseFormatter(
             safe_reply_func=self._safe_reply,
             reply_json_func=self._reply_json,
+            # telegram_client will be set later after initialization
         )
 
         self.url_processor = URLProcessor(
@@ -141,6 +142,9 @@ class TelegramBot:
 
         self.telegram_client = TelegramClient(cfg=self.cfg)
         self._sync_client_dependencies()
+
+        # Set telegram client on response formatter for message editing
+        self.response_formatter._telegram_client = self.telegram_client
 
     def _sem(self) -> asyncio.Semaphore:
         """Lazy-create a semaphore when an event loop is running.
