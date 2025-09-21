@@ -652,6 +652,21 @@ class ResponseFormatter:
         except Exception as e:  # noqa: BLE001
             logger.error("reply_failed", extra={"error": str(e)})
 
+    async def edit_message(self, chat_id: int, message_id: int, text: str) -> None:
+        """Edit an existing message in Telegram."""
+        try:
+            # Import the bot from telegram client module
+            from app.adapters.telegram import telegram_client as telegram_client_module
+
+            client = getattr(telegram_client_module, "client", None)
+            if client and hasattr(client, "edit_message_text"):
+                await client.edit_message_text(chat_id=chat_id, message_id=message_id, text=text)
+        except Exception as e:
+            logger.warning(
+                "edit_message_failed",
+                extra={"error": str(e), "chat_id": chat_id, "message_id": message_id},
+            )
+
     async def send_url_accepted_notification(
         self, message: Any, norm: str, correlation_id: str
     ) -> None:

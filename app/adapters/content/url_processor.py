@@ -94,13 +94,19 @@ class URLProcessor:
         *,
         correlation_id: str | None = None,
         interaction_id: int | None = None,
+        silent: bool = False,
     ) -> None:
-        """Handle complete URL processing flow from extraction to summarization."""
+        """Handle complete URL processing flow from extraction to summarization.
+
+        Args:
+            silent: If True, suppress all Telegram responses and only persist to database
+        """
         if await self._maybe_reply_with_cached_summary(
             message,
             url_text,
             correlation_id=correlation_id,
             interaction_id=interaction_id,
+            silent=silent,
         ):
             return
 
@@ -124,13 +130,14 @@ class URLProcessor:
                 extra={"detected": detected, "chosen": chosen_lang, "cid": correlation_id},
             )
 
-            # Notify: language detected with content preview
-            content_preview = (
-                content_text[:150] + "..." if len(content_text) > 150 else content_text
-            )
-            await self.response_formatter.send_language_detection_notification(
-                message, detected, content_preview
-            )
+            # Notify: language detected with content preview (skip if silent)
+            if not silent:
+                content_preview = (
+                    content_text[:150] + "..." if len(content_text) > 150 else content_text
+                )
+                await self.response_formatter.send_language_detection_notification(
+                    message, detected, content_preview
+                )
 
             # Check if content should be chunked
             should_chunk, max_chars, chunks = self.content_chunker.should_chunk_content(
@@ -149,15 +156,16 @@ class URLProcessor:
                 should_chunk = False
                 chunks = None
 
-            # Inform the user how the content will be handled
-            await self.response_formatter.send_content_analysis_notification(
-                message,
-                len(content_text),
-                max_chars,
-                should_chunk,
-                chunks,
-                self.cfg.openrouter.structured_output_mode,
-            )
+            # Inform the user how the content will be handled (skip if silent)
+            if not silent:
+                await self.response_formatter.send_content_analysis_notification(
+                    message,
+                    len(content_text),
+                    max_chars,
+                    should_chunk,
+                    chunks,
+                    self.cfg.openrouter.structured_output_mode,
+                )
 
             logger.info(
                 "content_handling",
@@ -183,7 +191,7 @@ class URLProcessor:
                     # Create stub LLM result for consistency
                     llm = self._create_chunk_llm_stub()
 
-                    # Persist and respond
+                    # Persist and respond (skip Telegram responses if silent)
                     await self._persist_and_respond_chunked(
                         message,
                         req_id,
@@ -193,14 +201,16 @@ class URLProcessor:
                         len(chunks),
                         correlation_id,
                         interaction_id,
+                        silent=silent,
                     )
-                    await self._handle_additional_insights(
-                        message,
-                        content_text,
-                        chosen_lang,
-                        req_id,
-                        correlation_id,
-                    )
+                    if not silent:
+                        await self._handle_additional_insights(
+                            message,
+                            content_text,
+                            chosen_lang,
+                            req_id,
+                            correlation_id,
+                        )
                     return
                 else:
                     # Fallback to single-pass if chunking failed
@@ -222,53 +232,71 @@ class URLProcessor:
 
             if shaped:
                 llm_result = self.llm_summarizer.last_llm_result
-                await self.response_formatter.send_enhanced_summary_response(
-                    message,
-                    shaped,
-                    llm_result,
-                )
-                logger.info("reply_json_sent", extra={"cid": correlation_id, "request_id": req_id})
 
-                # Notify user that we will attempt to generate extra research insights
-                try:
-                    await self.response_formatter.safe_reply(
+                # Skip Telegram responses if silent
+                if not silent:
+                    await self.response_formatter.send_enhanced_summary_response(
                         message,
-                        "🧠 Generating additional research insights…",
+                        shaped,
+                        llm_result,
                     )
-                except Exception:
-                    pass
+                    logger.info(
+                        "reply_json_sent", extra={"cid": correlation_id, "request_id": req_id}
+                    )
 
-                await self._handle_additional_insights(
-                    message,
-                    content_text,
-                    chosen_lang,
-                    req_id,
-                    correlation_id,
-                )
-
-                # Generate a standalone custom article based on extracted topics/tags
-                try:
-                    topics = shaped.get("key_ideas") or []
-                    tags = shaped.get("topic_tags") or []
-                    if (topics or tags) and isinstance(topics, list) and isinstance(tags, list):
+                    # Notify user that we will attempt to generate extra research insights
+                    try:
                         await self.response_formatter.safe_reply(
                             message,
-                            "📝 Crafting a standalone article from topics & tags…",
+                            "🧠 Generating additional research insights…",
                         )
-                        article = await self.llm_summarizer.generate_custom_article(
-                            message,
-                            chosen_lang=chosen_lang,
-                            req_id=req_id,
-                            topics=[str(x) for x in topics if str(x).strip()],
-                            tags=[str(x) for x in tags if str(x).strip()],
-                            correlation_id=correlation_id,
+                    except Exception:
+                        pass
+
+                    await self._handle_additional_insights(
+                        message,
+                        content_text,
+                        chosen_lang,
+                        req_id,
+                        correlation_id,
+                    )
+
+                    # Generate a standalone custom article based on extracted topics/tags
+                    try:
+                        topics = shaped.get("key_ideas") or []
+                        tags = shaped.get("topic_tags") or []
+                        if (topics or tags) and isinstance(topics, list) and isinstance(tags, list):
+                            await self.response_formatter.safe_reply(
+                                message,
+                                "📝 Crafting a standalone article from topics & tags…",
+                            )
+                            article = await self.llm_summarizer.generate_custom_article(
+                                message,
+                                chosen_lang=chosen_lang,
+                                req_id=req_id,
+                                topics=[str(x) for x in topics if str(x).strip()],
+                                tags=[str(x) for x in tags if str(x).strip()],
+                                correlation_id=correlation_id,
+                            )
+                            if article:
+                                await self.response_formatter.send_custom_article(message, article)
+                    except Exception as exc:  # noqa: BLE001
+                        logger.error(
+                            "custom_article_flow_error",
+                            extra={"cid": correlation_id, "error": str(exc)},
                         )
-                        if article:
-                            await self.response_formatter.send_custom_article(message, article)
-                except Exception as exc:  # noqa: BLE001
-                    logger.error(
-                        "custom_article_flow_error",
-                        extra={"cid": correlation_id, "error": str(exc)},
+                else:
+                    # Silent mode: just persist without responses
+                    new_version = self.db.upsert_summary(
+                        request_id=req_id, lang=chosen_lang, json_payload=json.dumps(shaped)
+                    )
+                    self.db.update_request_status(req_id, "ok")
+                    self._audit(
+                        "INFO", "summary_upserted", {"request_id": req_id, "version": new_version}
+                    )
+                    logger.info(
+                        "silent_summary_persisted",
+                        extra={"cid": correlation_id, "request_id": req_id},
                     )
 
         except ValueError as e:
@@ -307,6 +335,7 @@ class URLProcessor:
         chunk_count: int,
         correlation_id: str | None,
         interaction_id: int | None,
+        silent: bool = False,
     ) -> None:
         """Persist chunked results and send response."""
         try:
@@ -326,11 +355,12 @@ class URLProcessor:
                 request_id=req_id,
             )
 
-        # Send enhanced results
-        await self.response_formatter.send_enhanced_summary_response(
-            message, shaped, llm, chunks=chunk_count
-        )
-        logger.info("reply_json_sent", extra={"cid": correlation_id, "request_id": req_id})
+        # Send enhanced results (skip if silent)
+        if not silent:
+            await self.response_formatter.send_enhanced_summary_response(
+                message, shaped, llm, chunks=chunk_count
+            )
+            logger.info("reply_json_sent", extra={"cid": correlation_id, "request_id": req_id})
 
     async def _handle_additional_insights(
         self,
@@ -406,6 +436,7 @@ class URLProcessor:
         *,
         correlation_id: str | None,
         interaction_id: int | None,
+        silent: bool = False,
     ) -> bool:
         """Return True if an existing summary was reused."""
         try:
@@ -442,25 +473,27 @@ class URLProcessor:
             except Exception as exc:  # noqa: BLE001
                 logger.error("persist_cid_error", extra={"error": str(exc), "cid": correlation_id})
 
-        await self.response_formatter.send_url_accepted_notification(
-            message, norm, correlation_id or ""
-        )
-        await self.response_formatter.send_cached_summary_notification(message)
-        await self.response_formatter.send_enhanced_summary_response(message, shaped, None)
+        # Skip Telegram responses if silent
+        if not silent:
+            await self.response_formatter.send_url_accepted_notification(
+                message, norm, correlation_id or ""
+            )
+            await self.response_formatter.send_cached_summary_notification(message)
+            await self.response_formatter.send_enhanced_summary_response(message, shaped, None)
 
-        insights_raw = summary_row.get("insights_json")
-        if isinstance(insights_raw, str) and insights_raw.strip():
-            try:
-                insights_payload = json.loads(insights_raw)
-                if isinstance(insights_payload, dict):
-                    await self.response_formatter.send_additional_insights_message(
-                        message, insights_payload, correlation_id
+            insights_raw = summary_row.get("insights_json")
+            if isinstance(insights_raw, str) and insights_raw.strip():
+                try:
+                    insights_payload = json.loads(insights_raw)
+                    if isinstance(insights_payload, dict):
+                        await self.response_formatter.send_additional_insights_message(
+                            message, insights_payload, correlation_id
+                        )
+                except json.JSONDecodeError:
+                    logger.warning(
+                        "cached_insights_decode_failed",
+                        extra={"request_id": req_id, "cid": correlation_id},
                     )
-            except json.JSONDecodeError:
-                logger.warning(
-                    "cached_insights_decode_failed",
-                    extra={"request_id": req_id, "cid": correlation_id},
-                )
 
         self.db.update_request_status(req_id, "ok")
 

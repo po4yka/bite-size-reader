@@ -46,6 +46,9 @@ class MessageRouter:
         self.response_formatter = response_formatter
         self._audit = audit_func
 
+        # Store reference to URL processor for silent processing
+        self._url_processor = url_handler.url_processor
+
     async def route_message(self, message: Any) -> None:
         """Main message routing entry point."""
         start_time = time.time()
@@ -245,6 +248,11 @@ class MessageRouter:
             )
             return
 
+        # Handle document files (.txt files containing URLs)
+        if self._is_txt_file_with_urls(message):
+            await self._handle_document_file(message, correlation_id, interaction_id, start_time)
+            return
+
         # Default response for unknown input
         await self.response_formatter.safe_reply(message, "Send a URL or forward a channel post.")
         logger.debug(
@@ -261,6 +269,168 @@ class MessageRouter:
                 response_type="unknown_input",
                 processing_time_ms=int((time.time() - start_time) * 1000),
             )
+
+    def _is_txt_file_with_urls(self, message: Any) -> bool:
+        """Check if message contains a .txt document that likely contains URLs."""
+        if not hasattr(message, "document"):
+            return False
+
+        document = getattr(message, "document", None)
+        if not document or not hasattr(document, "file_name"):
+            return False
+
+        file_name = document.file_name
+        # Check if it's a .txt file
+        return file_name.lower().endswith(".txt")
+
+    async def _handle_document_file(
+        self,
+        message: Any,
+        correlation_id: str,
+        interaction_id: int,
+        start_time: float,
+    ) -> None:
+        """Handle .txt file processing (files containing URLs)."""
+        try:
+            # Download and parse the file
+            file_path = await self._download_file(message)
+            if not file_path:
+                await self.response_formatter.safe_reply(message, "Failed to download the file.")
+                return
+
+            # Parse URLs from the file
+            urls = self._parse_txt_file(file_path)
+            if not urls:
+                await self.response_formatter.safe_reply(
+                    message, "No valid URLs found in the file."
+                )
+                return
+
+            # Send initial confirmation message
+            await self.response_formatter.safe_reply(
+                message, f"📄 File accepted. Processing {len(urls)} links."
+            )
+
+            # Process URLs sequentially with progress updates
+            # Note: We can't update progress bar without message_id, so we'll skip it
+            await self._process_urls_sequentially(
+                message,
+                urls,
+                None,  # No progress bar updates for now
+                correlation_id,
+                interaction_id,
+                start_time,
+            )
+
+            # Send completion message
+            await self.response_formatter.safe_reply(
+                message, f"✅ All {len(urls)} links have been processed."
+            )
+
+        except Exception:
+            logger.exception("document_file_processing_error", extra={"cid": correlation_id})
+            await self.response_formatter.safe_reply(
+                message, "An error occurred while processing the file."
+            )
+
+    async def _download_file(self, message: Any) -> str | None:
+        """Download document file to temporary location."""
+        try:
+            # Get file path from Telegram
+            document = getattr(message, "document", None)
+            if not document:
+                return None
+
+            # Download file using bot's get_file method
+            file_info = await message.download()
+            return str(file_info) if file_info else None
+
+        except Exception as e:
+            logger.error("file_download_failed", extra={"error": str(e)})
+            return None
+
+    def _parse_txt_file(self, file_path: str) -> list[str]:
+        """Parse URLs from .txt file."""
+        urls = []
+        try:
+            with open(file_path, encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if line and line.startswith("http"):
+                        urls.append(line)
+        except Exception as e:
+            logger.error("file_parse_error", extra={"error": str(e), "file_path": file_path})
+        return urls
+
+    async def _process_urls_sequentially(
+        self,
+        message: Any,
+        urls: list[str],
+        progress_msg_id: int | None,
+        correlation_id: str,
+        interaction_id: int,
+        start_time: float,
+    ) -> None:
+        """Process URLs sequentially with progress bar updates."""
+        total = len(urls)
+
+        for i, url in enumerate(urls, 1):
+            logger.info(
+                "processing_url_from_file",
+                extra={"url": url, "progress": f"{i}/{total}", "cid": correlation_id},
+            )
+
+            # Process URL without sending Telegram responses
+            await self._process_url_silently(message, url, correlation_id, interaction_id)
+
+            # Update progress bar
+            if progress_msg_id:
+                await self._update_progress_bar(message, progress_msg_id, i, total)
+
+        if interaction_id:
+            self._update_user_interaction(
+                interaction_id=interaction_id,
+                response_sent=True,
+                response_type="batch_processing_complete",
+                processing_time_ms=int((time.time() - start_time) * 1000),
+            )
+
+    async def _process_url_silently(
+        self,
+        message: Any,
+        url: str,
+        correlation_id: str,
+        interaction_id: int,
+    ) -> None:
+        """Process a single URL without sending Telegram responses."""
+        # Call the URL processor's handle_url_flow method with silent=True
+        await self._url_processor.handle_url_flow(
+            message, url, correlation_id=correlation_id, interaction_id=interaction_id, silent=True
+        )
+
+    async def _update_progress_bar(
+        self, message: Any, progress_msg_id: int, current: int, total: int
+    ) -> None:
+        """Update progress bar message in Telegram."""
+        try:
+            # Create progress bar
+            progress_bar = self._create_progress_bar(current, total)
+            progress_text = f"🔄 Processing links: {current}/{total}\n{progress_bar}"
+
+            # Get chat ID from message
+            chat_id = getattr(message, "chat", None)
+            if chat_id and hasattr(chat_id, "id"):
+                await self.response_formatter.edit_message(
+                    chat_id.id, progress_msg_id, progress_text
+                )
+        except Exception as e:
+            logger.warning("progress_update_failed", extra={"error": str(e)})
+
+    def _create_progress_bar(self, current: int, total: int, width: int = 20) -> str:
+        """Create a simple text progress bar."""
+        filled = int(width * current / total)
+        empty = width - filled
+        return "█" * filled + "░" * empty
 
     def _log_user_interaction(
         self,
