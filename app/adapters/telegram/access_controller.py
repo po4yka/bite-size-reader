@@ -28,20 +28,25 @@ class AccessController:
         self.response_formatter = response_formatter
         self._audit = audit_func
 
+        if not self.cfg.telegram.allowed_user_ids:
+            raise RuntimeError(
+                "Telegram access control requires ALLOWED_USER_IDS to be configured."
+            )
+
     async def check_access(
         self, uid: int, message: Any, correlation_id: str, interaction_id: int, start_time: float
     ) -> bool:
         """Check if user has access to the bot."""
         allowed_ids = self.cfg.telegram.allowed_user_ids
-        if not allowed_ids:
-            logger.info("Access control disabled - no allowed_user_ids configured")
-            return True
 
         if uid in allowed_ids:
             logger.info("access_granted", extra={"uid": uid})
             return True
 
-        logger.warning("access_denied_list_mismatch", extra={"uid": uid, "allowed": allowed_ids})
+        logger.warning(
+            "access_denied_list_mismatch",
+            extra={"uid": uid, "allowed_count": len(allowed_ids)},
+        )
         try:
             self._audit("WARN", "access_denied", {"uid": uid, "cid": correlation_id})
         except Exception:

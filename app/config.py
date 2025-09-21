@@ -74,10 +74,7 @@ class AppConfig:
 
 
 def _parse_allowed_user_ids(value: str | None) -> tuple[int, ...]:
-    import logging
-
-    logger = logging.getLogger(__name__)
-    logger.info(f"Parsing ALLOWED_USER_IDS: {value}")
+    """Parse and validate comma-separated user IDs without logging secrets."""
     if not value:
         return tuple()
     ids: list[int] = []
@@ -89,7 +86,6 @@ def _parse_allowed_user_ids(value: str | None) -> tuple[int, ...]:
             ids.append(int(piece))
         except ValueError:
             continue
-    logger.info(f"Parsed IDs: {ids}")
     return tuple(ids)
 
 
@@ -368,6 +364,12 @@ def load_config(*, allow_stub_telegram: bool = False) -> AppConfig:
         if using_stub_telegram:
             logger.warning(
                 "Using stub Telegram credentials: real API_ID/API_HASH/BOT_TOKEN were not provided"
+            )
+
+        if not telegram.allowed_user_ids and not allow_stub_telegram:
+            raise RuntimeError(
+                "ALLOWED_USER_IDS must contain at least one Telegram user ID; "
+                "set the environment variable to a comma-separated list."
             )
 
         firecrawl = FirecrawlConfig(

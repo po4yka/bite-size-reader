@@ -121,9 +121,7 @@ class TestDedupeReuse(unittest.IsolatedAsyncioTestCase):
 
             # Prepare config with temp DB
             cfg = AppConfig(
-                telegram=TelegramConfig(
-                    api_id=0, api_hash="", bot_token="", allowed_user_ids=tuple()
-                ),
+                telegram=TelegramConfig(api_id=0, api_hash="", bot_token="", allowed_user_ids=(1,)),
                 firecrawl=FirecrawlConfig(api_key="fc-dummy-key"),
                 openrouter=OpenRouterConfig(
                     api_key="y",
@@ -206,9 +204,7 @@ class TestDedupeReuse(unittest.IsolatedAsyncioTestCase):
             )
 
             cfg = AppConfig(
-                telegram=TelegramConfig(
-                    api_id=0, api_hash="", bot_token="", allowed_user_ids=tuple()
-                ),
+                telegram=TelegramConfig(api_id=0, api_hash="", bot_token="", allowed_user_ids=(1,)),
                 firecrawl=FirecrawlConfig(api_key="fc-dummy-key"),
                 openrouter=OpenRouterConfig(
                     api_key="y",

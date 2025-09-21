@@ -67,7 +67,7 @@ def make_bot(tmp_path: str) -> SpyBot:
     db = Database(tmp_path)
     db.migrate()
     cfg = AppConfig(
-        telegram=TelegramConfig(api_id=0, api_hash="", bot_token="", allowed_user_ids=tuple()),
+        telegram=TelegramConfig(api_id=0, api_hash="", bot_token="", allowed_user_ids=(1,)),
         firecrawl=FirecrawlConfig(api_key="fc-dummy-key"),
         openrouter=OpenRouterConfig(
             api_key="y",

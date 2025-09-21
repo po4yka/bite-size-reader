@@ -268,17 +268,11 @@ class TestUserValidationFixes(unittest.IsolatedAsyncioTestCase):
         user_none = TelegramUser.from_dict(user_data_none)
         self.assertEqual(user_none.id, 0)  # Should fallback to 0
 
-    async def test_empty_allowed_user_ids(self):
-        """Test behavior with empty allowed user IDs list."""
+    async def test_empty_allowed_user_ids_raises(self):
+        """Empty allowed user IDs should now be rejected during initialization."""
         with tempfile.TemporaryDirectory() as tmp:
-            # Empty allowed user IDs should allow all users
-            bot = make_bot(os.path.join(tmp, "app.db"), allowed_ids=[])
-
-            msg = FakeMessage("/help", uid=99999)
-            await bot._on_message(msg)
-
-            # Should be allowed when no restrictions
-            self.assertTrue(any("commands" in reply.lower() for reply in msg._replies))
+            with self.assertRaises(RuntimeError):
+                make_bot(os.path.join(tmp, "app.db"), allowed_ids=[])
 
     async def test_user_validation_logging(self):
         """Test that user validation logging works correctly."""

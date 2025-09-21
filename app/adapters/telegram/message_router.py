@@ -85,9 +85,6 @@ class MessageRouter:
                 return
 
             logger.info(f"Checking access for UID: {uid} (type: {type(uid)})")
-            logger.info(
-                f"Allowed user IDs: {self.cfg.telegram.allowed_user_ids} (type: {type(self.cfg.telegram.allowed_user_ids)})"
-            )
             chat_id = telegram_message.chat.id if telegram_message.chat else None
             message_id = telegram_message.message_id
             text = telegram_message.get_effective_text() or ""
