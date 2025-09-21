@@ -400,7 +400,10 @@ class ForwardSummarizer:
 
         try:
             new_version = self.db.upsert_summary(
-                request_id=req_id, lang=chosen_lang, json_payload=json.dumps(forward_shaped)
+                request_id=req_id,
+                lang=chosen_lang,
+                json_payload=json.dumps(forward_shaped),
+                is_read=True,
             )
             self.db.update_request_status(req_id, "ok")
             self._audit("INFO", "summary_upserted", {"request_id": req_id, "version": new_version})

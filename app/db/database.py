@@ -113,6 +113,7 @@ CREATE TABLE IF NOT EXISTS summaries (
   json_payload TEXT,
   insights_json TEXT,
   version INTEGER DEFAULT 1,
+  is_read INTEGER DEFAULT 0,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -143,6 +144,7 @@ class Database:
             # Ensure backward-compatible schema updates
             self._ensure_column(conn, "requests", "correlation_id", "TEXT")
             self._ensure_column(conn, "summaries", "insights_json", "TEXT")
+            self._ensure_column(conn, "summaries", "is_read", "INTEGER")
             self._ensure_column(conn, "crawl_results", "correlation_id", "TEXT")
             self._ensure_column(conn, "llm_calls", "structured_output_used", "INTEGER")
             self._ensure_column(conn, "llm_calls", "structured_output_mode", "TEXT")
@@ -604,17 +606,21 @@ class Database:
         json_payload: str,
         insights_json: str | None = None,
         version: int = 1,
+        is_read: bool = False,
     ) -> int:
         sql = (
-            "INSERT INTO summaries (request_id, lang, json_payload, insights_json, version) "
-            "VALUES (?, ?, ?, ?, ?)"
+            "INSERT INTO summaries (request_id, lang, json_payload, insights_json, version, is_read) "
+            "VALUES (?, ?, ?, ?, ?, ?)"
         )
         with self.connect() as conn:
-            cur = conn.execute(sql, (request_id, lang, json_payload, insights_json, version))
+            cur = conn.execute(
+                sql, (request_id, lang, json_payload, insights_json, version, int(is_read))
+            )
             conn.commit()
             sid = cur.lastrowid
             self._logger.info(
-                "summary_inserted", extra={"request_id": request_id, "version": version}
+                "summary_inserted",
+                extra={"request_id": request_id, "version": version, "is_read": is_read},
             )
             return sid
 
@@ -625,19 +631,23 @@ class Database:
         lang: str,
         json_payload: str,
         insights_json: str | None = None,
+        is_read: bool = False,
     ) -> int:
         existing = self.get_summary_by_request(request_id)
         if existing:
             new_version = int(existing.get("version", 1)) + 1
             sql = (
-                "UPDATE summaries SET lang = ?, json_payload = ?, insights_json = ?, version = ?, "
+                "UPDATE summaries SET lang = ?, json_payload = ?, insights_json = ?, version = ?, is_read = ?, "
                 "created_at = CURRENT_TIMESTAMP WHERE request_id = ?"
             )
             with self.connect() as conn:
-                conn.execute(sql, (lang, json_payload, insights_json, new_version, request_id))
+                conn.execute(
+                    sql, (lang, json_payload, insights_json, new_version, int(is_read), request_id)
+                )
                 conn.commit()
             self._logger.info(
-                "summary_updated", extra={"request_id": request_id, "version": new_version}
+                "summary_updated",
+                extra={"request_id": request_id, "version": new_version, "is_read": is_read},
             )
             return new_version
         else:
@@ -647,6 +657,7 @@ class Database:
                 json_payload=json_payload,
                 insights_json=insights_json,
                 version=1,
+                is_read=is_read,
             )
 
     def update_summary_insights(self, request_id: int, insights_json: str | None) -> None:
@@ -658,6 +669,42 @@ class Database:
             "summary_insights_updated",
             extra={"request_id": request_id, "has_insights": bool(insights_json)},
         )
+
+    def get_unread_summaries(self, limit: int = 10) -> list[dict[str, Any]]:
+        """Get unread article summaries ordered by creation date."""
+        sql = """
+            SELECT s.*, r.input_url, r.normalized_url
+            FROM summaries s
+            JOIN requests r ON s.request_id = r.id
+            WHERE s.is_read = 0
+            ORDER BY s.created_at DESC
+            LIMIT ?
+        """
+        with self.connect() as conn:
+            cur = conn.execute(sql, (limit,))
+            rows = cur.fetchall()
+            return [dict(row) for row in rows]
+
+    def get_unread_summary_by_request_id(self, request_id: int) -> dict | None:
+        """Get a specific unread summary by request_id."""
+        row = self.fetchone(
+            "SELECT s.*, r.input_url, r.normalized_url FROM summaries s JOIN requests r ON s.request_id = r.id WHERE s.request_id = ? AND s.is_read = 0",
+            (request_id,),
+        )
+        return dict(row) if row else None
+
+    def mark_summary_as_read(self, request_id: int) -> None:
+        """Mark a summary as read."""
+        sql = "UPDATE summaries SET is_read = 1 WHERE request_id = ?"
+        with self.connect() as conn:
+            conn.execute(sql, (request_id,))
+            conn.commit()
+        self._logger.debug("summary_marked_read", extra={"request_id": request_id})
+
+    def get_read_status(self, request_id: int) -> bool:
+        """Check if a summary has been read."""
+        row = self.fetchone("SELECT is_read FROM summaries WHERE request_id = ?", (request_id,))
+        return bool(row["is_read"]) if row else False
 
     def insert_audit_log(self, *, level: str, event: str, details_json: str | None = None) -> int:
         sql = "INSERT INTO audit_logs (level, event, details_json) VALUES (?, ?, ?)"

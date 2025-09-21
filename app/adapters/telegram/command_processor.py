@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import time
 from collections.abc import Callable
@@ -278,3 +279,178 @@ class CommandProcessor:
             "user_interaction_update_placeholder",
             extra={"interaction_id": interaction_id, "response_type": response_type},
         )
+
+    async def handle_unread_command(
+        self, message: Any, uid: int, correlation_id: str, interaction_id: int, start_time: float
+    ) -> None:
+        """Handle /unread command - retrieve unread articles."""
+        chat_id = getattr(getattr(message, "chat", None), "id", None)
+        logger.info(
+            "command_unread",
+            extra={"uid": uid, "chat_id": chat_id, "cid": correlation_id},
+        )
+        try:
+            self._audit(
+                "INFO", "command_unread", {"uid": uid, "chat_id": chat_id, "cid": correlation_id}
+            )
+        except Exception:
+            pass
+
+        try:
+            # Get unread summaries
+            unread_summaries = self.db.get_unread_summaries(limit=5)
+
+            if not unread_summaries:
+                await self.response_formatter.safe_reply(
+                    message, "📖 No unread articles found. All caught up!"
+                )
+                return
+
+            # Send a message with the list of unread articles
+            response_lines = ["📚 **Unread Articles:**"]
+            for i, summary in enumerate(unread_summaries, 1):
+                request_id = summary.get("request_id")
+                input_url = summary.get("input_url", "Unknown URL")
+                created_at = summary.get("created_at", "Unknown date")
+
+                # Extract title from metadata if available
+                json_payload = summary.get("json_payload", "{}")
+                try:
+                    payload = json.loads(json_payload) if json_payload else {}
+                    title = payload.get("metadata", {}).get("title", input_url)
+                except (json.JSONDecodeError, TypeError):
+                    title = input_url
+
+                response_lines.append(
+                    f"{i}. **{title}**\n"
+                    f"   🔗 {input_url}\n"
+                    f"   📅 {created_at}\n"
+                    f"   🆔 Request ID: `{request_id}`"
+                )
+
+            response_lines.append(
+                "\n💡 **Tip:** Send `/read <request_id>` to mark an article as read and view it."
+            )
+
+            await self.response_formatter.safe_reply(message, "\n".join(response_lines))
+
+            if interaction_id:
+                self._update_user_interaction(
+                    interaction_id=interaction_id,
+                    response_sent=True,
+                    response_type="unread_list",
+                    processing_time_ms=int((time.time() - start_time) * 1000),
+                )
+
+        except Exception as exc:  # noqa: BLE001 - defensive catch
+            logger.exception("command_unread_failed", extra={"cid": correlation_id})
+            await self.response_formatter.safe_reply(
+                message,
+                "⚠️ Unable to retrieve unread articles right now. Check bot logs for details.",
+            )
+            if interaction_id:
+                self._update_user_interaction(
+                    interaction_id=interaction_id,
+                    response_sent=True,
+                    response_type="error",
+                    error_occurred=True,
+                    error_message=str(exc)[:500],
+                    processing_time_ms=int((time.time() - start_time) * 1000),
+                )
+
+    async def handle_read_command(
+        self,
+        message: Any,
+        text: str,
+        uid: int,
+        correlation_id: str,
+        interaction_id: int,
+        start_time: float,
+    ) -> None:
+        """Handle /read <request_id> command - mark article as read and send it."""
+        chat_id = getattr(getattr(message, "chat", None), "id", None)
+        logger.info(
+            "command_read",
+            extra={"uid": uid, "chat_id": chat_id, "cid": correlation_id, "text": text[:100]},
+        )
+        try:
+            self._audit(
+                "INFO",
+                "command_read",
+                {"uid": uid, "chat_id": chat_id, "cid": correlation_id, "text": text[:100]},
+            )
+        except Exception:
+            pass
+
+        try:
+            # Extract request_id from command text
+            parts = text.split()
+            if len(parts) < 2:
+                await self.response_formatter.safe_reply(
+                    message, "❌ Usage: `/read <request_id>`\n\nExample: `/read 123`"
+                )
+                return
+
+            try:
+                request_id = int(parts[1])
+            except ValueError:
+                await self.response_formatter.safe_reply(
+                    message, "❌ Invalid request ID. Must be a number.\n\nExample: `/read 123`"
+                )
+                return
+
+            # Get the unread summary
+            summary = self.db.get_unread_summary_by_request_id(request_id)
+            if not summary:
+                await self.response_formatter.safe_reply(
+                    message, f"❌ Article with ID `{request_id}` not found or already read."
+                )
+                return
+
+            # Parse the summary payload
+            json_payload = summary.get("json_payload", "{}")
+            try:
+                shaped = json.loads(json_payload) if json_payload else {}
+            except json.JSONDecodeError:
+                await self.response_formatter.safe_reply(
+                    message, f"❌ Error reading article data for ID `{request_id}`."
+                )
+                return
+
+            # Mark as read
+            self.db.mark_summary_as_read(request_id)
+
+            # Send the article
+            input_url = summary.get("input_url", "Unknown URL")
+            await self.response_formatter.safe_reply(
+                message, f"📖 **Reading Article** (ID: `{request_id}`)\n🔗 {input_url}"
+            )
+
+            # Send the summary
+            if shaped:
+                await self.response_formatter.send_enhanced_summary_response(message, shaped, None)
+
+            if interaction_id:
+                self._update_user_interaction(
+                    interaction_id=interaction_id,
+                    response_sent=True,
+                    response_type="read_article",
+                    request_id=request_id,
+                    processing_time_ms=int((time.time() - start_time) * 1000),
+                )
+
+        except Exception as exc:  # noqa: BLE001 - defensive catch
+            logger.exception("command_read_failed", extra={"cid": correlation_id})
+            await self.response_formatter.safe_reply(
+                message,
+                "⚠️ Unable to read the article right now. Check bot logs for details.",
+            )
+            if interaction_id:
+                self._update_user_interaction(
+                    interaction_id=interaction_id,
+                    response_sent=True,
+                    response_type="error",
+                    error_occurred=True,
+                    error_message=str(exc)[:500],
+                    processing_time_ms=int((time.time() - start_time) * 1000),
+                )

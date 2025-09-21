@@ -288,7 +288,10 @@ class URLProcessor:
                 else:
                     # Silent mode: just persist without responses
                     new_version = self.db.upsert_summary(
-                        request_id=req_id, lang=chosen_lang, json_payload=json.dumps(shaped)
+                        request_id=req_id,
+                        lang=chosen_lang,
+                        json_payload=json.dumps(shaped),
+                        is_read=False,
                     )
                     self.db.update_request_status(req_id, "ok")
                     self._audit(
@@ -340,7 +343,10 @@ class URLProcessor:
         """Persist chunked results and send response."""
         try:
             new_version = self.db.upsert_summary(
-                request_id=req_id, lang=chosen_lang, json_payload=json.dumps(shaped)
+                request_id=req_id,
+                lang=chosen_lang,
+                json_payload=json.dumps(shaped),
+                is_read=not silent,
             )
             self.db.update_request_status(req_id, "ok")
             self._audit("INFO", "summary_upserted", {"request_id": req_id, "version": new_version})

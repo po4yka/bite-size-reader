@@ -609,6 +609,7 @@ class LLMSummarizer:
                 lang=chosen_lang,
                 json_payload=json.dumps(summary_shaped),
                 insights_json=insights_json,
+                is_read=True,  # LLM summarizer is for direct processing
             )
             self.db.update_request_status(req_id, "ok")
             self._audit("INFO", "summary_upserted", {"request_id": req_id, "version": new_version})
