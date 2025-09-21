@@ -186,32 +186,68 @@ class LLMSummarizer:
         ]
 
         try:
-            response_format = self._build_article_response_format()
+            response_formats: list[dict[str, Any]] = []
+            primary_format = self._build_article_response_format()
+            response_formats.append(primary_format)
+            if primary_format.get("type") != "json_object":
+                response_formats.append({"type": "json_object"})
+
+            candidate_models: list[str] = [self.cfg.openrouter.model]
+            candidate_models.extend(
+                [
+                    model
+                    for model in self.cfg.openrouter.fallback_models
+                    if model and model not in candidate_models
+                ]
+            )
+
             max_tokens = self._select_insights_max_tokens(" ".join(topics + tags))
 
-            async with self._sem():
-                llm = await self.openrouter.chat(
-                    messages,
-                    temperature=self.cfg.openrouter.temperature,
-                    max_tokens=max_tokens,
-                    top_p=self.cfg.openrouter.top_p,
-                    request_id=req_id,
-                    response_format=response_format,
-                )
+            for model_name in candidate_models:
+                for response_format in response_formats:
+                    async with self._sem():
+                        llm = await self.openrouter.chat(
+                            messages,
+                            temperature=self.cfg.openrouter.temperature,
+                            max_tokens=max_tokens,
+                            top_p=self.cfg.openrouter.top_p,
+                            request_id=req_id,
+                            response_format=response_format,
+                            model_override=model_name,
+                        )
 
-            asyncio.create_task(self._persist_llm_call(llm, req_id, correlation_id))
-            if llm.status != "ok":
-                logger.warning(
-                    "custom_article_llm_error",
-                    extra={"cid": correlation_id, "error": llm.error_text},
-                )
-                return None
+                    asyncio.create_task(self._persist_llm_call(llm, req_id, correlation_id))
 
-            article = self._parse_article_response(llm.response_json, llm.response_text)
-            if not article:
-                logger.warning("custom_article_parse_failed", extra={"cid": correlation_id})
-                return None
-            return article
+                    if llm.status != "ok":
+                        structured_error = (llm.error_text or "") == "structured_output_parse_error"
+                        logger.warning(
+                            "custom_article_llm_error",
+                            extra={
+                                "cid": correlation_id,
+                                "error": llm.error_text,
+                                "model": model_name,
+                                "response_format": response_format.get("type"),
+                            },
+                        )
+                        if structured_error:
+                            continue
+                        return None
+
+                    article = self._parse_article_response(llm.response_json, llm.response_text)
+                    if not article:
+                        logger.warning(
+                            "custom_article_parse_failed",
+                            extra={
+                                "cid": correlation_id,
+                                "model": model_name,
+                                "response_format": response_format.get("type"),
+                            },
+                        )
+                        continue
+                    return article
+
+            logger.warning("custom_article_generation_exhausted", extra={"cid": correlation_id})
+            return None
         except Exception as exc:  # noqa: BLE001
             logger.exception(
                 "custom_article_generation_failed",
@@ -238,7 +274,21 @@ class LLMSummarizer:
         lang_label = "Russian" if lang == LANG_RU else "English"
         topics_text = "\n".join(f"- {t}" for t in topics[:12]) or "- (none)"
         tags_text = "\n".join(f"- {t}" for t in tags[:12]) or "- (none)"
-        return f"Respond in {lang_label}.\nTOPICS:\n{topics_text}\n\nTAGS:\n{tags_text}\n"
+        return (
+            f"Respond in {lang_label}."
+            "\nReturn JSON only with exactly these keys (no extras):"
+            '\n{\n  "title": string,\n  "subtitle": string | null,\n  "article_markdown": string,\n  "highlights": [string],\n  "suggested_sources": [string]\n}'
+            "\nGuidelines:"
+            "\n- `article_markdown` must be well-structured Markdown with clear sections (## Heading),"
+            " short paragraphs, and bullet lists where helpful."
+            "\n- Provide 4-6 concise highlight bullet points."
+            "\n- Provide 3-5 reputable suggested sources (URLs or publication names)."
+            "\n- Keep every string under 400 characters; use empty arrays if you lack items but do not omit keys."
+            "\n\nTOPICS:\n"
+            f"{topics_text}"
+            "\n\nTAGS:\n"
+            f"{tags_text}\n"
+        )
 
     def _build_article_response_format(self) -> dict[str, Any]:
         return {
@@ -296,10 +346,81 @@ class LLMSummarizer:
             textracted = extract_json(response_text)
             if isinstance(textracted, dict):
                 candidate = textracted
+
+        if isinstance(candidate, dict):
+            article_payload = candidate.get("article")
+            if isinstance(article_payload, dict):
+                merged: dict[str, Any] = {**candidate, **article_payload}
+                candidate = merged
+
+            # Some providers return snake-case variations
+            if "articleBody" in candidate and "article_markdown" not in candidate:
+                candidate["article_markdown"] = candidate.get("articleBody")
+            if "body_markdown" in candidate and "article_markdown" not in candidate:
+                candidate["article_markdown"] = candidate.get("body_markdown")
+            if "markdown" in candidate and "article_markdown" not in candidate:
+                candidate["article_markdown"] = candidate.get("markdown")
+
+            # Join sections when available
+            if "article_sections" in candidate and not candidate.get("article_markdown"):
+                sections = candidate.get("article_sections")
+                if isinstance(sections, list):
+                    article_sections_builder: list[str] = []
+                    for section in sections:
+                        if not isinstance(section, dict):
+                            continue
+                        heading = str(section.get("heading") or section.get("title") or "").strip()
+                        body_text = str(
+                            section.get("markdown")
+                            or section.get("body")
+                            or section.get("content")
+                            or section.get("text")
+                            or ""
+                        ).strip()
+                        if heading:
+                            article_sections_builder.append(f"## {heading}")
+                        if body_text:
+                            article_sections_builder.append(body_text)
+                    if article_sections_builder:
+                        candidate["article_markdown"] = "\n\n".join(article_sections_builder)
+
+            if "sections" in candidate and not candidate.get("article_markdown"):
+                sections = candidate.get("sections")
+                if isinstance(sections, list):
+                    sections_builder: list[str] = []
+                    for section in sections:
+                        if not isinstance(section, dict):
+                            continue
+                        heading = str(section.get("heading") or section.get("title") or "").strip()
+                        body_text = str(
+                            section.get("markdown")
+                            or section.get("body")
+                            or section.get("content")
+                            or section.get("text")
+                            or ""
+                        ).strip()
+                        if heading:
+                            sections_builder.append(f"## {heading}")
+                        if body_text:
+                            sections_builder.append(body_text)
+                    if sections_builder:
+                        candidate["article_markdown"] = "\n\n".join(sections_builder)
+
         if not isinstance(candidate, dict):
             return None
-        title = str(candidate.get("title", "")).strip()
-        body = str(candidate.get("article_markdown", "")).strip()
+        title = str(
+            candidate.get("title")
+            or candidate.get("headline")
+            or candidate.get("article_title")
+            or ""
+        ).strip()
+        body = str(
+            candidate.get("article_markdown")
+            or candidate.get("body")
+            or candidate.get("body_markdown")
+            or candidate.get("markdown")
+            or ""
+        ).strip()
         if not title or not body:
             return None
         return candidate
@@ -1106,11 +1227,19 @@ class LLMSummarizer:
             " cut-off), market or technical implications, and unanswered questions."
             " Mark any uncertain statements as low confidence."
             f" Respond in {lang_label}."
-            "\n\nAdditionally, produce two extra sections:"
-            "\n- expansion_topics: 5-8 brief items that expand the topic beyond the article,"
-            " focusing on adjacent ideas, trends, or synthesis."
-            "\n- next_exploration: 5-8 concrete next steps (what to research/experiment),"
-            " each a short bullet (1 line)."
+            "\n\nReturn strictly valid JSON with the exact structure below (include every key even if empty):"
+            "\n{"
+            '\n  "topic_overview": string,'
+            '\n  "new_facts": ['
+            '\n    {\n      "fact": string,\n      "why_it_matters": string | null,\n      "source_hint": string | null,\n      "confidence": number | string | null\n    }'
+            "\n  ],"
+            '\n  "open_questions": [string],'
+            '\n  "suggested_sources": [string],'
+            '\n  "expansion_topics": [string],'
+            '\n  "next_exploration": [string],'
+            '\n  "caution": string | null'
+            "\n}"
+            "\nAim for 4-6 items per list when possible; use empty arrays when information is unavailable."
             "\n\nARTICLE CONTENT START\n"
             f"{content_text}\n"
             "ARTICLE CONTENT END"
@@ -1130,7 +1259,7 @@ class LLMSummarizer:
                         "topic_overview": {"type": "string"},
                         "new_facts": {
                             "type": "array",
-                            "minItems": 1,
+                            "minItems": 0,
                             "maxItems": 5,
                             "items": {
                                 "type": "object",

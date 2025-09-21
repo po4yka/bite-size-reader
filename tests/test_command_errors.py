@@ -1,6 +1,7 @@
 import os
 import tempfile
 import unittest
+from unittest.mock import AsyncMock, patch
 
 from app.adapters.telegram.telegram_bot import TelegramBot
 from app.config import AppConfig, FirecrawlConfig, OpenRouterConfig, RuntimeConfig, TelegramConfig
@@ -60,7 +61,11 @@ def make_bot(tmp_path: str) -> BoomBot:
 
     setattr(tbmod, "Client", object)
     setattr(tbmod, "filters", None)
-    return BoomBot(cfg=cfg, db=db)
+
+    # Mock the OpenRouter client to avoid API key validation
+    with patch("app.adapters.telegram.telegram_bot.OpenRouterClient") as mock_openrouter:
+        mock_openrouter.return_value = AsyncMock()
+        return BoomBot(cfg=cfg, db=db)
 
 
 class TestCommandErrors(unittest.IsolatedAsyncioTestCase):

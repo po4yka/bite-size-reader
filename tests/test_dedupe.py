@@ -3,6 +3,7 @@ import os
 import tempfile
 import unittest
 from typing import Any, cast
+from unittest.mock import AsyncMock, patch
 
 from app.adapters.openrouter.openrouter_client import LLMCallResult
 from app.adapters.telegram.telegram_bot import TelegramBot
@@ -149,7 +150,10 @@ class TestDedupeReuse(unittest.IsolatedAsyncioTestCase):
             setattr(tbmod, "Client", object)
             setattr(tbmod, "filters", None)
 
-            bot = TelegramBot(cfg=cfg, db=db)
+            # Mock the OpenRouter client to avoid API key validation
+            with patch("app.adapters.telegram.telegram_bot.OpenRouterClient") as mock_openrouter:
+                mock_openrouter.return_value = AsyncMock()
+                bot = TelegramBot(cfg=cfg, db=db)
             # Replace external clients with fakes
             bot_any = cast(Any, bot)
             bot_any._firecrawl = FakeFirecrawl()
@@ -173,7 +177,7 @@ class TestDedupeReuse(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(int(s2["version"]), 1)
             row2 = db.get_request_by_dedupe_hash(dedupe)
             self.assertEqual(row2["correlation_id"], "cid2")
-            self.assertEqual(fake_or.calls, 1)
+            self.assertEqual(fake_or.calls, 2)  # 1 for summary + 1 for insights
 
     async def test_forward_cached_summary_reuse(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -230,7 +234,10 @@ class TestDedupeReuse(unittest.IsolatedAsyncioTestCase):
             setattr(tbmod, "Client", object)
             setattr(tbmod, "filters", None)
 
-            bot = TelegramBot(cfg=cfg, db=db)
+            # Mock the OpenRouter client to avoid API key validation
+            with patch("app.adapters.telegram.telegram_bot.OpenRouterClient") as mock_openrouter:
+                mock_openrouter.return_value = AsyncMock()
+                bot = TelegramBot(cfg=cfg, db=db)
 
             class FailOpenRouter:
                 async def chat(self, *_, **__):  # noqa: ANN002

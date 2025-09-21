@@ -2,6 +2,7 @@ import json
 import os
 import tempfile
 import unittest
+from unittest.mock import AsyncMock, patch
 
 from app.adapters.telegram.telegram_bot import TelegramBot
 from app.config import AppConfig, FirecrawlConfig, OpenRouterConfig, RuntimeConfig, TelegramConfig
@@ -68,7 +69,11 @@ def _bot_with_tmpdb(tmp_path):
 
     tbmod.Client = object  # avoid real client
     tbmod.filters = None
-    bot = TelegramBot(cfg=cfg, db=db)
+
+    # Mock the OpenRouter client to avoid API key validation
+    with patch("app.adapters.telegram.telegram_bot.OpenRouterClient") as mock_openrouter:
+        mock_openrouter.return_value = AsyncMock()
+        bot = TelegramBot(cfg=cfg, db=db)
     return bot, db
 
 

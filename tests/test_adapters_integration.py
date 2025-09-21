@@ -14,6 +14,10 @@ class _FakeResponse:
     def json(self):
         return self._data
 
+    def raise_for_status(self):
+        if self.status_code >= 400:
+            raise Exception(f"HTTP {self.status_code}")
+
 
 class _FakeAsyncClient:
     def __init__(self, *, response_map):
@@ -30,6 +34,23 @@ class _FakeAsyncClient:
         for key, resp in self.response_map.items():
             if key in url:
                 return _FakeResponse(resp[0], resp[1])
+        raise AssertionError(f"Unexpected URL: {url}")
+
+    async def get(self, url, headers=None):  # noqa: A002
+        # Handle models endpoint
+        if "/models" in url:
+            return _FakeResponse(
+                200,
+                {
+                    "data": [
+                        {
+                            "id": "openai/gpt-5",
+                            "object": "model",
+                            "supported_parameters": {"structured_outputs": True},
+                        },
+                    ]
+                },
+            )
         raise AssertionError(f"Unexpected URL: {url}")
 
 
@@ -73,7 +94,7 @@ class TestAdaptersIntegration(unittest.IsolatedAsyncioTestCase):
                 "choices": [{"message": {"content": json.dumps({"summary_250": "ok"})}}],
                 "usage": {"prompt_tokens": 10, "completion_tokens": 20},
             }
-            fake = _FakeAsyncClient(response_map={"openrouter.ai": (200, payload)})
+            fake = _FakeAsyncClient(response_map={"/chat/completions": (200, payload)})
 
             def _make_or_client(*args, **kwargs):
                 return fake
@@ -81,7 +102,7 @@ class TestAdaptersIntegration(unittest.IsolatedAsyncioTestCase):
             or_httpx.AsyncClient = cast(Any, _make_or_client)
 
             client = OpenRouterClient(
-                api_key="y",
+                api_key="sk-test-key-123456789",
                 model="openai/gpt-5",
                 timeout_sec=5,
                 provider_order=None,

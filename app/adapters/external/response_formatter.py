@@ -322,121 +322,122 @@ class ResponseFormatter:
     ) -> None:
         """Send follow-up message summarizing additional research insights."""
         try:
-            lines: list[str] = ["🔍 Additional Research Highlights"]
-
+            header = "🔍 Additional Research Highlights"
             if correlation_id:
-                lines.append(f"🆔 Correlation ID: `{correlation_id}`")
-                lines.append("")
+                header += f"\n🆔 Correlation ID: `{correlation_id}`"
+            await self.safe_reply(message, header)
+
+            sections_sent = False
 
             overview = insights.get("topic_overview")
             if isinstance(overview, str) and overview.strip():
-                lines.append("🧭 Overview:")
-                lines.append(self._sanitize_summary_text(overview.strip()))
-                lines.append("")
+                sections_sent = True
+                await self._send_long_text(
+                    message,
+                    "🧭 Overview:\n" + self._sanitize_summary_text(overview.strip()),
+                )
 
+            facts_section: list[str] = []
             facts = insights.get("new_facts")
-            if isinstance(facts, list) and facts:
-                lines.append("📌 Fresh Facts:")
+            if isinstance(facts, list):
                 for idx, fact in enumerate(facts[:5], start=1):
                     if not isinstance(fact, dict):
                         continue
                     fact_text = str(fact.get("fact", "")).strip()
                     if not fact_text:
                         continue
-                    fact_line = f"{idx}. {self._sanitize_summary_text(fact_text)}"
+                    fact_lines = [f"{idx}. {self._sanitize_summary_text(fact_text)}"]
 
                     why_matters = str(fact.get("why_it_matters", "")).strip()
                     if why_matters:
-                        fact_line += (
-                            f"\n   • Why it matters: {self._sanitize_summary_text(why_matters)}"
+                        fact_lines.append(
+                            f"   • Why it matters: {self._sanitize_summary_text(why_matters)}"
                         )
 
                     source_hint = str(fact.get("source_hint", "")).strip()
                     if source_hint:
-                        fact_line += (
-                            f"\n   • Source hint: {self._sanitize_summary_text(source_hint)}"
+                        fact_lines.append(
+                            f"   • Source hint: {self._sanitize_summary_text(source_hint)}"
                         )
 
                     confidence = fact.get("confidence")
                     if confidence is not None:
                         try:
                             conf_val = float(confidence)
-                            fact_line += f"\n   • Confidence: {conf_val:.0%}"
+                            fact_lines.append(f"   • Confidence: {conf_val:.0%}")
                         except Exception:
-                            fact_line += (
-                                f"\n   • Confidence: {self._sanitize_summary_text(str(confidence))}"
+                            fact_lines.append(
+                                f"   • Confidence: {self._sanitize_summary_text(str(confidence))}"
                             )
 
-                    lines.append(fact_line)
-                lines.append("")
+                    facts_section.append("\n".join(fact_lines))
+            if facts_section:
+                sections_sent = True
+                await self._send_long_text(
+                    message, "📌 Fresh Facts:\n" + "\n\n".join(facts_section)
+                )
+
+            def _clean_list(items: list[Any]) -> list[str]:
+                cleaned: list[str] = []
+                for item in items:
+                    text = str(item).strip()
+                    if not text:
+                        continue
+                    cleaned.append(self._sanitize_summary_text(text))
+                return cleaned
 
             open_questions = insights.get("open_questions")
             if isinstance(open_questions, list):
-                cleaned_questions = [
-                    self._sanitize_summary_text(str(q).strip())
-                    for q in open_questions
-                    if str(q).strip()
-                ]
-                if cleaned_questions:
-                    lines.append("❓ Open Questions:")
-                    for question in cleaned_questions[:5]:
-                        lines.append(f"- {question}")
-                    lines.append("")
+                questions = _clean_list(open_questions)[:5]
+                if questions:
+                    sections_sent = True
+                    await self._send_long_text(
+                        message, "❓ Open Questions:\n" + "\n".join(f"- {q}" for q in questions)
+                    )
 
             suggested_sources = insights.get("suggested_sources")
             if isinstance(suggested_sources, list):
-                cleaned_sources = [
-                    self._sanitize_summary_text(str(src).strip())
-                    for src in suggested_sources
-                    if str(src).strip()
-                ]
-                if cleaned_sources:
-                    lines.append("🔗 Suggested Follow-up:")
-                    for src in cleaned_sources[:5]:
-                        lines.append(f"- {src}")
-                    lines.append("")
+                sources = _clean_list(suggested_sources)[:5]
+                if sources:
+                    sections_sent = True
+                    await self._send_long_text(
+                        message, "🔗 Suggested Follow-up:\n" + "\n".join(f"- {s}" for s in sources)
+                    )
 
-            # New: Expansion topics beyond the original text
             expansion = insights.get("expansion_topics")
             if isinstance(expansion, list):
-                exp_clean = [
-                    self._sanitize_summary_text(str(x).strip()) for x in expansion if str(x).strip()
-                ]
+                exp_clean = _clean_list(expansion)[:8]
                 if exp_clean:
-                    lines.append("🧠 Expansion Topics (beyond the article):")
-                    for item in exp_clean[:8]:
-                        lines.append(f"- {item}")
-                    lines.append("")
+                    sections_sent = True
+                    await self._send_long_text(
+                        message,
+                        "🧠 Expansion Topics (beyond the article):\n"
+                        + "\n".join(f"- {item}" for item in exp_clean),
+                    )
 
-            # New: What to explore next
             next_steps = insights.get("next_exploration")
             if isinstance(next_steps, list):
-                nxt_clean = [
-                    self._sanitize_summary_text(str(x).strip())
-                    for x in next_steps
-                    if str(x).strip()
-                ]
+                nxt_clean = _clean_list(next_steps)[:8]
                 if nxt_clean:
-                    lines.append("🚀 What to explore next:")
-                    for step in nxt_clean[:8]:
-                        lines.append(f"- {step}")
-                    lines.append("")
+                    sections_sent = True
+                    await self._send_long_text(
+                        message,
+                        "🚀 What to explore next:\n" + "\n".join(f"- {step}" for step in nxt_clean),
+                    )
 
             caution = insights.get("caution")
             if isinstance(caution, str) and caution.strip():
-                lines.append("⚠️ Caveats:")
-                lines.append(self._sanitize_summary_text(caution.strip()))
-                lines.append("")
+                sections_sent = True
+                await self._send_long_text(
+                    message,
+                    "⚠️ Caveats:\n" + self._sanitize_summary_text(caution.strip()),
+                )
 
-            while lines and not lines[-1].strip():
-                lines.pop()
+            if not sections_sent:
+                await self.safe_reply(message, "No additional research insights were available.")
 
-            if len(lines) == 1:
-                lines.append("No additional research insights were available.")
-
-            await self.safe_reply(message, "\n".join(lines))
-        except Exception:
-            pass
+        except Exception as exc:  # pragma: no cover - defensive
+            logger.error("insights_message_error", extra={"error": str(exc)})
 
     async def send_custom_article(self, message: Any, article: dict[str, Any]) -> None:
         """Send the custom generated article with a nice header and downloadable JSON."""

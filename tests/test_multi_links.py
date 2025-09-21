@@ -2,6 +2,7 @@ import os
 import tempfile
 import unittest
 from typing import Any
+from unittest.mock import AsyncMock, patch
 
 from app.adapters.telegram.telegram_bot import TelegramBot
 from app.config import AppConfig, FirecrawlConfig, OpenRouterConfig, RuntimeConfig, TelegramConfig
@@ -30,7 +31,10 @@ class FakeMessage:
 
 class SpyBot(TelegramBot):
     def __post_init__(self) -> None:
-        super().__post_init__()
+        # Mock the OpenRouter client to avoid API key validation
+        with patch("app.adapters.telegram.telegram_bot.OpenRouterClient") as mock_openrouter:
+            mock_openrouter.return_value = AsyncMock()
+            super().__post_init__()
         self.seen_urls: list[str] = []
 
     async def _handle_url_flow(self, message: Any, url_text: str, **_: object) -> None:
