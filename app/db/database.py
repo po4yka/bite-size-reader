@@ -40,6 +40,7 @@ CREATE TABLE IF NOT EXISTS requests (
   fwd_from_chat_id INTEGER,
   fwd_from_msg_id INTEGER,
   lang_detected TEXT,
+  content_text TEXT,
   route_version INTEGER DEFAULT 1
 );
 
@@ -379,12 +380,13 @@ class Database:
         fwd_from_chat_id: int | None = None,
         fwd_from_msg_id: int | None = None,
         lang_detected: str | None = None,
+        content_text: str | None = None,
         route_version: int = 1,
     ) -> int:
         sql = (
             "INSERT INTO requests (type, status, correlation_id, chat_id, user_id, input_url, normalized_url, dedupe_hash, "
-            "input_message_id, fwd_from_chat_id, fwd_from_msg_id, lang_detected, route_version) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+            "input_message_id, fwd_from_chat_id, fwd_from_msg_id, lang_detected, content_text, route_version) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
         )
         with self.connect() as conn:
             cur = conn.execute(
@@ -402,6 +404,7 @@ class Database:
                     fwd_from_chat_id,
                     fwd_from_msg_id,
                     lang_detected,
+                    content_text,
                     route_version,
                 ),
             )

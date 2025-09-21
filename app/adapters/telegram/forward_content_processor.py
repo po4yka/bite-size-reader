@@ -51,8 +51,8 @@ class ForwardContentProcessor:
         except Exception:
             pass
 
-        # Create request
-        req_id = self._create_forward_request(message, correlation_id)
+        # Create request with content text
+        req_id = self._create_forward_request(message, correlation_id, prompt)
 
         # Language detection and choice
         detected = detect_language(text)
@@ -75,7 +75,9 @@ class ForwardContentProcessor:
 
         return req_id, prompt, chosen_lang, system_prompt
 
-    def _create_forward_request(self, message: Any, correlation_id: str | None) -> int:
+    def _create_forward_request(
+        self, message: Any, correlation_id: str | None, content_text: str | None = None
+    ) -> int:
         """Create forward request in database."""
         chat_obj = getattr(message, "chat", None)
         chat_id_raw = getattr(chat_obj, "id", 0) if chat_obj is not None else None
@@ -130,6 +132,7 @@ class ForwardContentProcessor:
             input_message_id=input_message_id,
             fwd_from_chat_id=fwd_from_chat_id,
             fwd_from_msg_id=fwd_from_msg_id,
+            content_text=content_text,  # Store the full prompt as content text
             route_version=FORWARD_ROUTE_VERSION,
         )
 

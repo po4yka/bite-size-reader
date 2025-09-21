@@ -134,6 +134,7 @@ class ContentExtractor:
             normalized_url=norm,
             dedupe_hash=dedupe,
             input_message_id=input_message_id,
+            content_text=url_text,  # Store the URL as content text for consistency
             route_version=URL_ROUTE_VERSION,
         )
 
