@@ -134,6 +134,23 @@ class RequestBuilder:
         if request.stream:
             body["stream"] = request.stream
 
+        # GPT-5 specific optimizations for fewer restrictions
+        model_lower = model.lower()
+        if "gpt-5" in model_lower:
+            # Enable thinking time for GPT-5 - use extended reasoning
+            body["thinking"] = "extended"
+            # Allow GPT-5 to use its full reasoning capabilities
+            if "max_tokens" not in body or (
+                isinstance(body["max_tokens"], int) and body["max_tokens"] < 16384
+            ):
+                body["max_tokens"] = 16384  # Ensure minimum for reasoning
+            # Reduce temperature slightly for more focused reasoning
+            if request.temperature > 0.5:
+                body["temperature"] = 0.4
+            # Enable top_p for better diversity in reasoning
+            if request.top_p is None:
+                body["top_p"] = 0.9
+
         # Provider routing configuration
         provider_prefs: dict[str, Any] = {}
         if self._provider_order:

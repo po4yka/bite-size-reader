@@ -131,8 +131,25 @@ class LLMSummarizer:
         configured = self.cfg.openrouter.max_tokens
 
         approx_input_tokens = max(1, len(content_text) // 4)
-        # Significantly increased budget for comprehensive summaries and complex content
-        dynamic_budget = max(2048, min(8192, approx_input_tokens // 2 + 2048))
+
+        # GPT-5 specific optimizations: allow much larger token budgets
+        if "gpt-5" in self.cfg.openrouter.model.lower():
+            # GPT-5 can handle much larger responses - allow up to 32k tokens
+            dynamic_budget = max(4096, min(32768, approx_input_tokens // 2 + 4096))
+            # Override configured limit for GPT-5 if it's too restrictive
+            if configured is not None and configured < 16384:
+                logger.info(
+                    "gpt5_max_tokens_override",
+                    extra={
+                        "model": self.cfg.openrouter.model,
+                        "original_configured": configured,
+                        "new_budget": dynamic_budget,
+                    },
+                )
+                configured = None  # Use dynamic budget for GPT-5
+        else:
+            # Standard models: more conservative budget
+            dynamic_budget = max(2048, min(8192, approx_input_tokens // 2 + 2048))
 
         if configured is None:
             logger.debug(

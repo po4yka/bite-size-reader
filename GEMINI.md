@@ -112,3 +112,26 @@ Use these commands:
   3. `mypy .` - Run type checking with MyPy
 - Ensure all linting errors are resolved and code is properly formatted before marking tasks as complete.
 - If any linting errors cannot be automatically fixed, address them manually and re-run the linters.
+
+---
+
+## GPT-5 Optimization Status
+
+GPT-5 has been optimized to minimize restrictions and use truncation only as a last resort:
+
+### Optimizations Applied
+
+1. **Increased Token Budget**: GPT-5 now gets up to 32k tokens (vs 8k for other models)
+2. **Extended Thinking Time**: GPT-5 uses "thinking=extended" parameter for better reasoning
+3. **Optimized Parameters**: Temperature 0.4, top_p 0.9 for focused but diverse responses
+4. **Provider Preference**: OpenAI is prioritized for GPT-5 calls via `OPENROUTER_PROVIDER_ORDER=openai`
+5. **Permissive Truncation Logic**: GPT-5 gets multiple retry attempts before falling back to Gemini
+
+### Fallback Behavior
+
+- **First attempt**: GPT-5 with extended thinking
+- **Second attempt**: GPT-5 with adjusted parameters (if truncated)
+- **Third attempt**: GPT-5 with minimal restrictions (if still truncated)
+- **Final fallback**: Switch to Gemini 2.5 Pro (only as last resort)
+
+This ensures GPT-5 can provide comprehensive responses while maintaining reliability through intelligent fallback.

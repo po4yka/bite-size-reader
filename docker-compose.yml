@@ -14,6 +14,7 @@ services:
     environment:
       - TEXTACY_ENABLED=1
       - DB_PATH=/data/app.db
+      - OPENROUTER_PROVIDER_ORDER=openai
 
     restart: unless-stopped
 

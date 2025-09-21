@@ -736,13 +736,72 @@ class OpenRouterClient:
                     "backoff_needed": True,
                 }
 
-            # Final attempt with truncation
-            return {
-                "success": False,
-                "error_text": "completion_truncated",
-                "response_text": text if isinstance(text, str) else None,
-                "should_try_next_model": True,
-            }
+            # Handle truncation - be more permissive with GPT-5
+            model_lower = model.lower()
+
+            # GPT-5 specific handling: try multiple strategies before falling back
+            if "gpt-5" in model_lower:
+                # For GPT-5, first try with reduced temperature to see if it helps
+                if attempt == 0 and truncated:
+                    logger.info(
+                        "gpt5_truncation_attempt_1",
+                        extra={
+                            "model": model,
+                            "attempt": attempt,
+                            "finish_reason": truncated_finish,
+                        },
+                    )
+                    return {
+                        "success": False,
+                        "should_retry": True,
+                        "backoff_needed": True,
+                    }
+                # Second attempt: try with even lower temperature and higher max_tokens
+                elif attempt == 1 and truncated:
+                    logger.info(
+                        "gpt5_truncation_attempt_2",
+                        extra={
+                            "model": model,
+                            "attempt": attempt,
+                            "finish_reason": truncated_finish,
+                        },
+                    )
+                    return {
+                        "success": False,
+                        "should_retry": True,
+                        "backoff_needed": True,
+                    }
+                # Only fallback to next model as last resort
+                elif attempt >= 2 and truncated:
+                    logger.warning(
+                        "gpt5_fallback_to_next_model",
+                        extra={
+                            "model": model,
+                            "attempt": attempt,
+                            "finish_reason": truncated_finish,
+                        },
+                    )
+                    return {
+                        "success": False,
+                        "error_text": "completion_truncated_gpt5",
+                        "response_text": text if isinstance(text, str) else None,
+                        "should_try_next_model": True,
+                    }
+            elif attempt < self.error_handler._max_retries:
+                # For other models, try again with backoff
+                return {
+                    "success": False,
+                    "should_retry": True,
+                    "backoff_needed": True,
+                }
+            else:
+                # Final attempt with truncation
+                return {
+                    "success": False,
+                    "error_text": "completion_truncated",
+                    "response_text": text if isinstance(text, str) else None,
+                    "should_try_next_model": True,
+                }
 
         # Validate structured output if expected
         if rf_included and response_format_current:
