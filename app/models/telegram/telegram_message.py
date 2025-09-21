@@ -162,7 +162,18 @@ class TelegramMessage:
             show_caption_above_media = getattr(message, "show_caption_above_media", None)
 
             # Convert media objects to dictionaries for serialization
-            photo_list = [photo_size.__dict__ for photo_size in photo] if photo else None
+            photo_list = None
+            if photo:
+                try:
+                    # Handle both single Photo objects and lists of PhotoSize objects
+                    if isinstance(photo, list):
+                        photo_list = [photo_size.__dict__ for photo_size in photo]
+                    else:
+                        # Single Photo object - convert to list with single item
+                        photo_list = [photo.__dict__]
+                except (AttributeError, TypeError) as e:
+                    logger.warning(f"Failed to process photo object: {e}")
+                    photo_list = None
             video_dict = video.__dict__ if video else None
             audio_dict = audio.__dict__ if audio else None
             document_dict = document.__dict__ if document else None
@@ -310,13 +321,29 @@ class TelegramMessage:
                             language_code=getattr(from_user_data, "language_code"),
                             is_premium=getattr(from_user_data, "is_premium"),
                             added_to_attachment_menu=getattr(
-                                from_user_data, "added_to_attachment_menu"
+                                from_user_data, "added_to_attachment_menu", None
                             ),
                         )
                 except Exception as user_e:
                     logger.warning(
                         "Failed to extract user from failed message", extra={"error": str(user_e)}
                     )
+                    # Try to extract just the essential user information
+                    try:
+                        user_id = getattr(from_user_data, "id", 0)
+                        if user_id:
+                            from_user = TelegramUser(
+                                id=int(user_id),
+                                is_bot=False,  # Default fallback
+                                first_name="Unknown",  # Default fallback
+                                last_name=None,
+                                username=None,
+                                language_code=None,
+                                is_premium=None,
+                                added_to_attachment_menu=None,
+                            )
+                    except Exception:
+                        pass  # Give up on user extraction
 
             return cls(
                 message_id=getattr(message, "id", 0),

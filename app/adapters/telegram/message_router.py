@@ -75,8 +75,11 @@ class MessageRouter:
             try:
                 uid = int(uid)
             except (ValueError, TypeError):
-                uid = 0
-                logger.warning(f"Invalid user ID type: {type(uid)}, setting to 0")
+                logger.warning(f"Invalid user ID type: {type(uid)}, skipping message processing")
+                await self.response_formatter.safe_reply(
+                    message, "Unable to determine user identity. Message processing skipped."
+                )
+                return
 
             logger.info(f"Checking access for UID: {uid} (type: {type(uid)})")
             logger.info(
