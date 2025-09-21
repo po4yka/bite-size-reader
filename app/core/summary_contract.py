@@ -104,6 +104,107 @@ def _dedupe_case_insensitive(items: list[str]) -> list[str]:
     return out
 
 
+_ENTITY_KEY_ALIASES = {
+    "person": "people",
+    "persons": "people",
+    "individual": "people",
+    "individuals": "people",
+    "people": "people",
+    "organization": "organizations",
+    "organizations": "organizations",
+    "org": "organizations",
+    "orgs": "organizations",
+    "company": "organizations",
+    "companies": "organizations",
+    "institution": "organizations",
+    "institutions": "organizations",
+    "location": "locations",
+    "locations": "locations",
+    "place": "locations",
+    "places": "locations",
+    "country": "locations",
+    "countries": "locations",
+    "city": "locations",
+    "cities": "locations",
+}
+
+
+def _resolve_entity_bucket(name: Any) -> str | None:
+    if name is None:
+        return None
+    normalized = str(name).strip().lower()
+    if not normalized:
+        return None
+    bucket = _ENTITY_KEY_ALIASES.get(normalized, normalized)
+    return bucket if bucket in {"people", "organizations", "locations"} else None
+
+
+def _coerce_entity_values(value: Any) -> list[str]:
+    result: list[str] = []
+    if value is None:
+        return result
+    if isinstance(value, str):
+        candidate = value.strip()
+        if candidate:
+            result.append(candidate)
+        return result
+    if isinstance(value, int | float):
+        return [str(value)]
+    if isinstance(value, dict):
+        preferred_keys = ("entities", "items", "names", "values", "list", "members")
+        extracted = False
+        for key in preferred_keys:
+            if key in value:
+                result.extend(_coerce_entity_values(value[key]))
+                extracted = True
+        if not extracted:
+            fallback_keys = ("name", "label", "entity", "text", "value")
+            for key in fallback_keys:
+                if key in value:
+                    result.extend(_coerce_entity_values(value[key]))
+                    extracted = True
+            if not extracted:
+                for item in value.values():
+                    result.extend(_coerce_entity_values(item))
+        return result
+    if isinstance(value, list | tuple | set):
+        for item in value:
+            result.extend(_coerce_entity_values(item))
+        return result
+    return [str(value)]
+
+
+def _normalize_entities_field(raw: Any) -> dict[str, list[str]]:
+    buckets: dict[str, list[str]] = {"people": [], "organizations": [], "locations": []}
+
+    if isinstance(raw, dict):
+        for key, value in raw.items():
+            bucket = _resolve_entity_bucket(key)
+            if bucket:
+                buckets[bucket].extend(_coerce_entity_values(value))
+    elif isinstance(raw, list):
+        for item in raw:
+            if isinstance(item, dict):
+                bucket = (
+                    _resolve_entity_bucket(item.get("type"))
+                    or _resolve_entity_bucket(item.get("category"))
+                    or _resolve_entity_bucket(item.get("label"))
+                    or _resolve_entity_bucket(item.get("group"))
+                )
+                buckets[bucket or "people"].extend(_coerce_entity_values(item))
+            else:
+                buckets["people"].extend(_coerce_entity_values(item))
+    else:
+        buckets["people"].extend(_coerce_entity_values(raw))
+
+    return {
+        key: _dedupe_case_insensitive(
+            [val for val in buckets[key] if isinstance(val, str) and val.strip()]
+        )
+        for key in buckets
+    }
+
+
 def _normalize_field_names(payload: SummaryJSON) -> SummaryJSON:
     """Normalize field names from camelCase to snake_case.
 
@@ -200,15 +301,7 @@ def validate_and_shape_summary(payload: SummaryJSON) -> SummaryJSON:
     p["key_ideas"] = [str(x).strip() for x in p.get("key_ideas", []) if str(x).strip()]
     p["topic_tags"] = _hash_tagify([str(x) for x in p.get("topic_tags", [])])
 
-    entities = p.get("entities", {}) or {}
-    entities["people"] = _dedupe_case_insensitive([str(x) for x in entities.get("people", [])])
-    entities["organizations"] = _dedupe_case_insensitive(
-        [str(x) for x in entities.get("organizations", [])]
-    )
-    entities["locations"] = _dedupe_case_insensitive(
-        [str(x) for x in entities.get("locations", [])]
-    )
-    p["entities"] = entities
+    p["entities"] = _normalize_entities_field(p.get("entities"))
 
     # numeric & nested fields
     ert = p.get("estimated_reading_time_min")

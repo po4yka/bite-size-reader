@@ -655,6 +655,32 @@ class ResponseFormatter:
         except Exception as e:  # noqa: BLE001
             logger.error("reply_failed", extra={"error": str(e)})
 
+    async def safe_reply_with_id(
+        self, message: Any, text: str, *, parse_mode: str | None = None
+    ) -> int | None:
+        """Safely reply to a message and return the message ID for progress tracking."""
+        if self._safe_reply_func is not None:
+            kwargs = {"parse_mode": parse_mode} if parse_mode is not None else {}
+            await self._safe_reply_func(message, text, **kwargs)
+            return None  # Can't get message ID from custom function
+
+        try:
+            msg_any: Any = message
+            if parse_mode:
+                sent_message = await msg_any.reply_text(text, parse_mode=parse_mode)
+            else:
+                sent_message = await msg_any.reply_text(text)
+
+            try:
+                logger.debug("reply_text_sent", extra={"length": len(text)})
+            except Exception:
+                pass
+
+            return getattr(sent_message, "message_id", None) if sent_message else None
+        except Exception as e:  # noqa: BLE001
+            logger.error("reply_failed", extra={"error": str(e)})
+            return None
+
     async def edit_message(self, chat_id: int, message_id: int, text: str) -> None:
         """Edit an existing message in Telegram."""
         try:

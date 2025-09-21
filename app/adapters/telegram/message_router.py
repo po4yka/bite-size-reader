@@ -315,17 +315,16 @@ class MessageRouter:
                 )
                 return
 
-            # Send initial confirmation message
-            await self.response_formatter.safe_reply(
+            # Send initial confirmation message and get message ID for progress tracking
+            progress_msg_id = await self.response_formatter.safe_reply_with_id(
                 message, f"📄 File accepted. Processing {len(urls)} links."
             )
 
             # Process URLs sequentially with progress updates
-            # Note: We can't update progress bar without message_id, so we'll skip it
             await self._process_urls_sequentially(
                 message,
                 urls,
-                None,  # No progress bar updates for now
+                progress_msg_id,  # Enable progress bar updates
                 correlation_id,
                 interaction_id,
                 start_time,

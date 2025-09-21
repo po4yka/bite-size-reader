@@ -28,6 +28,33 @@ class TestSummaryContract(unittest.TestCase):
         self.assertIn("key_stats", out)
         self.assertIn("readability", out)
 
+    def test_entities_handles_list_payloads(self):
+        payload = {
+            "summary_250": "Short summary.",
+            "summary_1000": "Longer summary that provides more detail.",
+            "entities": [
+                {
+                    "type": "people",
+                    "entities": ["Alice", {"name": "Bob"}],
+                },
+                {
+                    "type": "organization",
+                    "names": ["OpenAI", "Anthropic"],
+                },
+                {
+                    "label": "locations",
+                    "values": ["San Francisco", "New York"],
+                },
+                "Charlie",
+            ],
+        }
+
+        out = validate_and_shape_summary(payload)
+
+        self.assertEqual(out["entities"]["people"], ["Alice", "Bob", "Charlie"])
+        self.assertEqual(out["entities"]["organizations"], ["OpenAI", "Anthropic"])
+        self.assertEqual(out["entities"]["locations"], ["San Francisco", "New York"])
+
 
 if __name__ == "__main__":
     unittest.main()

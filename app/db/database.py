@@ -340,6 +340,11 @@ class Database:
         row = self.fetchone("SELECT * FROM requests WHERE dedupe_hash = ?", (dedupe_hash,))
         return dict(row) if row else None
 
+    def get_request_by_id(self, request_id: int) -> dict | None:
+        """Return a request row by its primary key."""
+        row = self.fetchone("SELECT * FROM requests WHERE id = ?", (request_id,))
+        return dict(row) if row else None
+
     def get_crawl_result_by_request(self, request_id: int) -> dict | None:
         row = self.fetchone("SELECT * FROM crawl_results WHERE request_id = ?", (request_id,))
         return dict(row) if row else None

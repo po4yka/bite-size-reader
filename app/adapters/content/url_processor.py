@@ -483,7 +483,7 @@ class URLProcessor:
         # Skip Telegram responses if silent
         if not silent:
             await self.response_formatter.send_url_accepted_notification(
-                message, norm, correlation_id or ""
+                message, norm, correlation_id or "", silent=silent
             )
             await self.response_formatter.send_cached_summary_notification(message, silent=silent)
             await self.response_formatter.send_enhanced_summary_response(message, shaped, None)

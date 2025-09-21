@@ -81,6 +81,15 @@ tmp*.txt
 *.sublime-project
 *.sublime-workspace
 
+# --- Database files ---
+# SQLite database files
+*.db
+*.db-shm
+*.db-wal
+app.db
+app.db-shm
+app.db-wal
+
 # --- OS-specific files ---
 # macOS
 .DS_Store
