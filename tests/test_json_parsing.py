@@ -301,7 +301,7 @@ class TestJsonParsing(unittest.TestCase):
             mock_openrouter_instance.chat.assert_awaited_once()
             bot._reply_json.assert_called_once()
             summary_json = bot._reply_json.call_args[0][1]
-            self.assertEqual(summary_json["summary_250"], "Forward")
+            self.assertEqual(summary_json["summary_250"], "Forward.")
 
         asyncio.run(run_test())
 

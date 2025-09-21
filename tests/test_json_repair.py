@@ -59,9 +59,7 @@ class TestJsonRepair(unittest.TestCase):
             # Mock the initial failed response and the successful repair
             mock_llm_response_initial = MagicMock()
             mock_llm_response_initial.status = "ok"
-            mock_llm_response_initial.response_text = (
-                '{"summary_250": "This is a truncated summary..."'
-            )
+            mock_llm_response_initial.response_text = '{"summary_250": "This is a truncated summary...", "summary_1000": "This is completely broken JSON'
 
             mock_llm_response_repair = MagicMock()
             mock_llm_response_repair.status = "ok"
@@ -87,9 +85,15 @@ class TestJsonRepair(unittest.TestCase):
                 "content_markdown": "Some content"
             }
 
-            # Run the flow
-            message = MagicMock()
-            await self.bot._handle_url_flow(message, "http://example.com")
+            # Mock json_repair to prevent local repair from working
+            with patch.dict(
+                "sys.modules",
+                {"json_repair": None},
+                clear=False,
+            ):
+                # Run the flow
+                message = MagicMock()
+                await self.bot._handle_url_flow(message, "http://example.com")
 
             # Assert that the repair was successful and the final summary is correct
             self.bot._reply_json.assert_called_once()
@@ -112,9 +116,18 @@ class TestJsonRepair(unittest.TestCase):
             mock_llm_response_repair.status = "ok"
             mock_llm_response_repair.response_text = "Still not valid JSON"
 
+            # Add a third response for fallback model attempt
+            mock_llm_response_fallback = MagicMock()
+            mock_llm_response_fallback.status = "ok"
+            mock_llm_response_fallback.response_text = "Fallback also fails"
+
             mock_openrouter_instance = mock_openrouter_client.return_value
             mock_openrouter_instance.chat = AsyncMock(
-                side_effect=[mock_llm_response_initial, mock_llm_response_repair]
+                side_effect=[
+                    mock_llm_response_initial,
+                    mock_llm_response_repair,
+                    mock_llm_response_fallback,
+                ]
             )
             self.bot._openrouter = mock_openrouter_instance
             self.bot.url_processor.llm_summarizer.openrouter = mock_openrouter_instance
@@ -133,7 +146,8 @@ class TestJsonRepair(unittest.TestCase):
 
             # Assert that an error message was sent
             self.bot._safe_reply.assert_any_call(
-                message, "Invalid summary format. Error ID: unknown"
+                message,
+                "Invalid summary format. Error ID: unknown\n🔍 Reason: Unable to repair invalid JSON returned by the model",
             )
 
         asyncio.run(run_test())
@@ -165,7 +179,7 @@ class TestJsonRepair(unittest.TestCase):
 
             self.bot._reply_json.assert_called_once()
             summary_json = self.bot._reply_json.call_args[0][1]
-            self.assertEqual(summary_json["summary_250"], "Summary")
+            self.assertEqual(summary_json["summary_250"], "Summary.")
 
         asyncio.run(run_test())
 
@@ -175,7 +189,9 @@ class TestJsonRepair(unittest.TestCase):
             self.bot = TelegramBot(self.cfg, self.db)
             mock_llm_response_initial = MagicMock()
             mock_llm_response_initial.status = "ok"
-            mock_llm_response_initial.response_text = '{"summary_250": "Truncated..."'
+            mock_llm_response_initial.response_text = (
+                '{"summary_250": "Truncated...", "summary_1000": "This is completely broken JSON'
+            )
 
             mock_llm_response_repair = MagicMock()
             mock_llm_response_repair.status = "ok"
@@ -226,8 +242,15 @@ class TestJsonRepair(unittest.TestCase):
             mock_llm_response.response_text = '{"summary_250": "One" "summary_1000": "Two"}'
             mock_llm_response.response_json = None
 
+            # Add responses for insights generation
+            mock_llm_response_insights = MagicMock()
+            mock_llm_response_insights.status = "ok"
+            mock_llm_response_insights.response_text = '{"insights": []}'
+
             mock_openrouter_instance = mock_openrouter_client.return_value
-            mock_openrouter_instance.chat = AsyncMock(return_value=mock_llm_response)
+            mock_openrouter_instance.chat = AsyncMock(
+                side_effect=[mock_llm_response, mock_llm_response_insights]
+            )
             self.bot._openrouter = mock_openrouter_instance
             self.bot.url_processor.llm_summarizer.openrouter = mock_openrouter_instance
             self.bot.url_processor.content_chunker.openrouter = mock_openrouter_instance
@@ -251,7 +274,7 @@ class TestJsonRepair(unittest.TestCase):
                 await self.bot._handle_url_flow(message, "http://example.com")
 
             self.bot._reply_json.assert_called_once()
-            self.assertEqual(mock_openrouter_instance.chat.await_count, 1)
+            self.assertEqual(mock_openrouter_instance.chat.await_count, 2)
 
         asyncio.run(run_test())
 
