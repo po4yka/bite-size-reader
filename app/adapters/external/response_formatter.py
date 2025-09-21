@@ -667,6 +667,39 @@ class ResponseFormatter:
     ) -> int | None:
         """Safely reply to a message and return the message ID for progress tracking."""
         if self._safe_reply_func is not None:
+            # When a custom reply function is provided (e.g., compatibility layer),
+            # we still want to obtain a Telegram message_id for progress updates.
+            # If a Telegram client is available, prefer sending via the client so
+            # that we can return the created message_id and enable edits.
+            try:
+                client = getattr(getattr(self, "_telegram_client", None), "client", None)
+                chat = getattr(message, "chat", None)
+                chat_id = getattr(chat, "id", None) if chat is not None else None
+                if client is not None and chat_id is not None and hasattr(client, "send_message"):
+                    logger.debug(
+                        "reply_with_client_for_id",
+                        extra={
+                            "text_length": len(text),
+                            "has_parse_mode": parse_mode is not None,
+                            "chat_id": chat_id,
+                        },
+                    )
+                    if parse_mode is not None:
+                        sent = await client.send_message(
+                            chat_id=chat_id, text=text, parse_mode=parse_mode
+                        )
+                    else:
+                        sent = await client.send_message(chat_id=chat_id, text=text)
+                    message_id = getattr(sent, "message_id", None)
+                    logger.debug(
+                        "reply_with_id_result",
+                        extra={"message_id": message_id, "sent_message_type": type(sent).__name__},
+                    )
+                    return message_id
+            except Exception as e:  # noqa: BLE001
+                # Fall back to the custom function if direct client send failed
+                logger.warning("reply_with_client_failed_fallback_custom", extra={"error": str(e)})
+
             logger.debug(
                 "reply_with_custom_function",
                 extra={"text_length": len(text), "has_parse_mode": parse_mode is not None},
