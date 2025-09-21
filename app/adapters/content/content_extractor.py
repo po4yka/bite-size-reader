@@ -52,6 +52,7 @@ class ContentExtractor:
         url_text: str,
         correlation_id: str | None = None,
         interaction_id: int | None = None,
+        silent: bool = False,
     ) -> tuple[int, str, str, str]:
         """Extract content from URL and return (req_id, content_text, content_source, detected_lang)."""
         norm = normalize_url(url_text)
@@ -72,7 +73,7 @@ class ContentExtractor:
 
         # Extract content from Firecrawl or reuse existing
         content_text, content_source = await self._extract_or_reuse_content(
-            message, req_id, url_text, correlation_id, interaction_id
+            message, req_id, url_text, correlation_id, interaction_id, silent=silent
         )
 
         # Language detection
@@ -153,6 +154,7 @@ class ContentExtractor:
         url_text: str,
         correlation_id: str | None,
         interaction_id: int | None,
+        silent: bool = False,
     ) -> tuple[str, str]:
         """Extract content from Firecrawl or reuse existing crawl result."""
         existing_crawl = self.db.get_crawl_result_by_request(req_id)
@@ -160,14 +162,16 @@ class ContentExtractor:
         if existing_crawl and (
             existing_crawl.get("content_markdown") or existing_crawl.get("content_html")
         ):
-            return await self._process_existing_crawl(message, existing_crawl, correlation_id)
+            return await self._process_existing_crawl(
+                message, existing_crawl, correlation_id, silent
+            )
         else:
             return await self._perform_new_crawl(
-                message, req_id, url_text, correlation_id, interaction_id
+                message, req_id, url_text, correlation_id, interaction_id, silent
             )
 
     async def _process_existing_crawl(
-        self, message: Any, existing_crawl: dict, correlation_id: str | None
+        self, message: Any, existing_crawl: dict, correlation_id: str | None, silent: bool = False
     ) -> tuple[str, str]:
         """Process existing crawl result."""
         md = existing_crawl.get("content_markdown")
@@ -242,10 +246,11 @@ class ContentExtractor:
         url_text: str,
         correlation_id: str | None,
         interaction_id: int | None,
+        silent: bool = False,
     ) -> tuple[str, str]:
         """Perform new Firecrawl extraction."""
         # Notify: starting Firecrawl with progress indicator
-        await self.response_formatter.send_firecrawl_start_notification(message)
+        await self.response_formatter.send_firecrawl_start_notification(message, silent=silent)
 
         async with self._sem():
             crawl = await self.firecrawl.scrape_markdown(url_text, request_id=req_id)
@@ -294,12 +299,19 @@ class ContentExtractor:
 
         if crawl.status != "ok" or not (has_markdown or has_html):
             await self._handle_crawl_error(
-                message, req_id, crawl, correlation_id, interaction_id, has_markdown, has_html
+                message,
+                req_id,
+                crawl,
+                correlation_id,
+                interaction_id,
+                has_markdown,
+                has_html,
+                silent,
             )
             raise ValueError("Firecrawl extraction failed")
 
         # Process successful crawl
-        return await self._process_successful_crawl(message, crawl, correlation_id)
+        return await self._process_successful_crawl(message, crawl, correlation_id, silent)
 
     async def _handle_crawl_error(
         self,
@@ -310,6 +322,7 @@ class ContentExtractor:
         interaction_id: int | None,
         has_markdown: bool,
         has_html: bool,
+        silent: bool = False,
     ) -> None:
         """Handle Firecrawl extraction errors."""
         self.db.update_request_status(req_id, "error")
@@ -344,7 +357,11 @@ class ContentExtractor:
             pass
 
     async def _process_successful_crawl(
-        self, message: Any, crawl: FirecrawlResult, correlation_id: str | None
+        self,
+        message: Any,
+        crawl: FirecrawlResult,
+        correlation_id: str | None,
+        silent: bool = False,
     ) -> tuple[str, str]:
         """Process successful Firecrawl result."""
         # Notify: Firecrawl success
@@ -361,6 +378,7 @@ class ContentExtractor:
             correlation_id=crawl.correlation_id,
             endpoint=crawl.endpoint,
             options=crawl.options_json,
+            silent=silent,
         )
 
         # Process content with HTML fallback for empty markdown

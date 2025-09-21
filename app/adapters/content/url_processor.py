@@ -118,7 +118,7 @@ class URLProcessor:
                 content_source,
                 detected,
             ) = await self.content_extractor.extract_and_process_content(
-                message, url_text, correlation_id, interaction_id
+                message, url_text, correlation_id, interaction_id, silent
             )
 
             # Choose language and load system prompt
@@ -228,6 +228,7 @@ class URLProcessor:
                 max_chars,
                 correlation_id,
                 interaction_id,
+                silent=silent,
             )
 
             if shaped:

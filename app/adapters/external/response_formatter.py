@@ -671,9 +671,12 @@ class ResponseFormatter:
             )
 
     async def send_url_accepted_notification(
-        self, message: Any, norm: str, correlation_id: str
+        self, message: Any, norm: str, correlation_id: str, *, silent: bool = False
     ) -> None:
         """Send URL accepted notification."""
+        if silent:
+            return
+
         try:
             from urllib.parse import urlparse
 
@@ -920,8 +923,13 @@ class ResponseFormatter:
         except Exception:
             pass
 
-    async def send_firecrawl_start_notification(self, message: Any) -> None:
+    async def send_firecrawl_start_notification(
+        self, message: Any, *, silent: bool = False
+    ) -> None:
         """Send Firecrawl start notification."""
+        if silent:
+            return
+
         try:
             await self.safe_reply(
                 message,
@@ -944,8 +952,12 @@ class ResponseFormatter:
         correlation_id: str | None = None,
         endpoint: str | None = None,
         options: dict[str, Any] | None = None,
+        silent: bool = False,
     ) -> None:
         """Send Firecrawl success notification with crawl metadata."""
+        if silent:
+            return
+
         try:
             lines = [
                 "✅ **Content Extracted Successfully**",
@@ -1100,9 +1112,18 @@ class ResponseFormatter:
             pass
 
     async def send_llm_start_notification(
-        self, message: Any, model: str, content_len: int, structured_output_mode: str
+        self,
+        message: Any,
+        model: str,
+        content_len: int,
+        structured_output_mode: str,
+        *,
+        silent: bool = False,
     ) -> None:
         """Send LLM start notification."""
+        if silent:
+            return
+
         try:
             await self.safe_reply(
                 message,

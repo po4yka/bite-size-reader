@@ -58,6 +58,8 @@ class LLMSummarizer:
         max_chars: int,
         correlation_id: str | None = None,
         interaction_id: int | None = None,
+        *,
+        silent: bool = False,
     ) -> dict[str, Any] | None:
         """Summarize content using LLM and return shaped summary."""
         # Validate content before sending to LLM
@@ -84,6 +86,7 @@ class LLMSummarizer:
             self.cfg.openrouter.model,
             len(content_text),
             self.cfg.openrouter.structured_output_mode,
+            silent=silent,
         )
 
         # If we have a long-context model configured and content exceeds threshold,
