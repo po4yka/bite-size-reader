@@ -319,6 +319,22 @@ class MessageRouter:
             progress_msg_id = await self.response_formatter.safe_reply_with_id(
                 message, f"📄 File accepted. Processing {len(urls)} links."
             )
+            logger.debug(
+                "document_file_processing_started",
+                extra={
+                    "url_count": len(urls),
+                    "progress_msg_id": progress_msg_id,
+                },
+            )
+
+            # Check if we got a valid message ID for progress tracking
+            if progress_msg_id is None:
+                logger.warning(
+                    "no_progress_message_id",
+                    extra={"url_count": len(urls)},
+                )
+                # Continue processing without progress updates
+                progress_msg_id = None
 
             # Process URLs sequentially with progress updates
             await self._process_urls_sequentially(
@@ -417,10 +433,27 @@ class MessageRouter:
         )
 
     async def _update_progress_bar(
-        self, message: Any, progress_msg_id: int, current: int, total: int
+        self, message: Any, progress_msg_id: int | None, current: int, total: int
     ) -> None:
         """Update progress bar message in Telegram."""
         try:
+            # Check if we have a valid message ID to update
+            if progress_msg_id is None:
+                logger.debug(
+                    "progress_bar_update_skipped",
+                    extra={"reason": "no_progress_msg_id", "current": current, "total": total},
+                )
+                return
+
+            logger.debug(
+                "progress_bar_update_attempt",
+                extra={
+                    "progress_msg_id": progress_msg_id,
+                    "current": current,
+                    "total": total,
+                },
+            )
+
             # Create progress bar
             progress_bar = self._create_progress_bar(current, total)
             progress_text = f"🔄 Processing links: {current}/{total}\n{progress_bar}"
@@ -428,11 +461,28 @@ class MessageRouter:
             # Get chat ID from message
             chat_id = getattr(message, "chat", None)
             if chat_id and hasattr(chat_id, "id"):
+                logger.debug(
+                    "progress_bar_updating",
+                    extra={"chat_id": chat_id.id, "message_id": progress_msg_id},
+                )
                 await self.response_formatter.edit_message(
                     chat_id.id, progress_msg_id, progress_text
                 )
+            else:
+                logger.warning(
+                    "progress_update_no_chat_id",
+                    extra={"progress_msg_id": progress_msg_id, "current": current, "total": total},
+                )
         except Exception as e:
-            logger.warning("progress_update_failed", extra={"error": str(e)})
+            logger.warning(
+                "progress_update_failed",
+                extra={
+                    "error": str(e),
+                    "progress_msg_id": progress_msg_id,
+                    "current": current,
+                    "total": total,
+                },
+            )
 
     def _create_progress_bar(self, current: int, total: int, width: int = 20) -> str:
         """Create a simple text progress bar."""

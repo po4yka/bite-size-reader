@@ -662,8 +662,13 @@ class ResponseFormatter:
     ) -> int | None:
         """Safely reply to a message and return the message ID for progress tracking."""
         if self._safe_reply_func is not None:
+            logger.debug(
+                "reply_with_custom_function",
+                extra={"text_length": len(text), "has_parse_mode": parse_mode is not None},
+            )
             kwargs = {"parse_mode": parse_mode} if parse_mode is not None else {}
             await self._safe_reply_func(message, text, **kwargs)
+            logger.warning("reply_with_id_no_message_id", extra={"reason": "custom_reply_function"})
             return None  # Can't get message ID from custom function
 
         try:
@@ -678,21 +683,64 @@ class ResponseFormatter:
             except Exception:
                 pass
 
-            return getattr(sent_message, "message_id", None) if sent_message else None
+            message_id = getattr(sent_message, "message_id", None) if sent_message else None
+            logger.debug(
+                "reply_with_id_result",
+                extra={"message_id": message_id, "sent_message_type": type(sent_message).__name__},
+            )
+            return message_id
         except Exception as e:  # noqa: BLE001
-            logger.error("reply_failed", extra={"error": str(e)})
+            logger.error("reply_failed", extra={"error": str(e), "text_length": len(text)})
             return None
 
     async def edit_message(self, chat_id: int, message_id: int, text: str) -> None:
         """Edit an existing message in Telegram."""
         try:
+            logger.debug(
+                "edit_message_attempt",
+                extra={
+                    "chat_id": chat_id,
+                    "message_id": message_id,
+                    "has_telegram_client": self._telegram_client is not None,
+                    "telegram_client_has_client": hasattr(self._telegram_client, "client")
+                    if self._telegram_client
+                    else False,
+                    "client": self._telegram_client.client if self._telegram_client else None,
+                },
+            )
+
             if self._telegram_client and hasattr(self._telegram_client, "client"):
                 client = self._telegram_client.client
                 if client and hasattr(client, "edit_message_text"):
+                    # Validate inputs before making the API call
+                    if not isinstance(chat_id, int) or not isinstance(message_id, int):
+                        logger.warning(
+                            "edit_message_invalid_params",
+                            extra={
+                                "chat_id": chat_id,
+                                "message_id": message_id,
+                                "text_length": len(text),
+                            },
+                        )
+                        return
+
+                    logger.debug(
+                        "edit_message_success", extra={"chat_id": chat_id, "message_id": message_id}
+                    )
                     await client.edit_message_text(
                         chat_id=chat_id, message_id=message_id, text=text
                     )
                     return
+                else:
+                    logger.warning(
+                        "edit_message_no_client_method",
+                        extra={"chat_id": chat_id, "message_id": message_id},
+                    )
+            else:
+                logger.warning(
+                    "edit_message_no_telegram_client",
+                    extra={"chat_id": chat_id, "message_id": message_id},
+                )
         except Exception as e:
             logger.warning(
                 "edit_message_failed",
