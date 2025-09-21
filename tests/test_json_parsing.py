@@ -1,12 +1,14 @@
 import asyncio
 import json
 import unittest
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from app.adapters.telegram.telegram_bot import TelegramBot
 from app.config import AppConfig
 from app.core.json_utils import extract_json
 from app.db.database import Database
+from app.utils.json_validation import _extract_structured_dict
 
 
 class TestJsonParsing(unittest.TestCase):
@@ -317,6 +319,41 @@ class TestExtractJson(unittest.TestCase):
 
     def test_returns_none_for_non_objects(self) -> None:
         self.assertIsNone(extract_json("[1, 2, 3]"))
+
+    def test_extract_structured_dict_handles_list_response(self) -> None:
+        """Test that _extract_structured_dict can handle list responses from models."""
+        # Test with a list containing a valid summary dict
+        list_response = [
+            {
+                "summary_250": "This is a short summary",
+                "summary_1000": "This is a longer summary with more details",
+                "key_ideas": ["idea1", "idea2"],
+                "language": "en",
+                "title": "Test Article",
+            }
+        ]
+
+        result = _extract_structured_dict(list_response)
+        self.assertIsNotNone(result)
+        self.assertIsInstance(result, dict)
+        self.assertEqual(result["summary_250"], "This is a short summary")
+        self.assertEqual(result["summary_1000"], "This is a longer summary with more details")
+
+        # Test with a list containing invalid items
+        invalid_list_response = [{"invalid": "data"}, "string_item", 123]
+
+        result = _extract_structured_dict(invalid_list_response)
+        self.assertIsNone(result)
+
+        # Test with an empty list
+        empty_list: list[Any] = []
+        result = _extract_structured_dict(empty_list)
+        self.assertIsNone(result)
+
+        # Test with a list of non-dict items
+        non_dict_list = ["string", 123, True]
+        result = _extract_structured_dict(non_dict_list)
+        self.assertIsNone(result)
 
 
 if __name__ == "__main__":

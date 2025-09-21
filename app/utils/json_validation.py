@@ -107,6 +107,25 @@ def finalize_summary_texts(summary: dict[str, Any]) -> None:
 
 
 def _extract_structured_dict(response_json: Any) -> dict[str, Any] | None:
+    # Handle list responses (when model returns an array instead of object)
+    if isinstance(response_json, list):
+        if len(response_json) > 0:
+            # Try to use the first item if it's a dict
+            first_item = response_json[0]
+            if isinstance(first_item, dict):
+                if any(
+                    key in first_item
+                    for key in (
+                        "summary_250",
+                        "summary_1000",
+                        "summary250",
+                        "summary1000",
+                        "key_ideas",
+                    )
+                ):
+                    return first_item
+        return None
+
     if isinstance(response_json, dict):
         # Direct dict payload
         if any(
