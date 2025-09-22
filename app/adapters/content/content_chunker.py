@@ -90,7 +90,9 @@ class ContentChunker:
             if isinstance(_lc_model, str) and _lc_model
             else (_primary_model if isinstance(_primary_model, str) else "")
         )
-        max_chars = self.estimate_max_chars_for_model(threshold_model, configured_max)
+        # Nudge toward chunking earlier to reduce long latencies
+        tuned_base = int(configured_max * 0.8)
+        max_chars = self.estimate_max_chars_for_model(threshold_model, tuned_base)
         content_len = len(content_text)
         chunks: list[str] | None = None
 

@@ -160,7 +160,11 @@ class ResponseProcessor:
     def extract_response_data(
         self, data: dict, rf_included: bool
     ) -> tuple[str | None, dict, float | None]:
-        """Extract response text, usage data, and cost from API response."""
+        """Extract response text, usage data, and cost from API response.
+
+        If OPENROUTER usage.total_cost is present, use it. Otherwise, return None for cost
+        and let the caller optionally compute it using model-specific pricing.
+        """
         text = None
         usage = data.get("usage") or {}
         cost_usd = None
@@ -177,7 +181,11 @@ class ResponseProcessor:
         # Calculate cost if enabled
         if self._enable_stats:
             try:
-                cost_usd = float(data.get("usage", {}).get("total_cost", 0.0))
+                raw = data.get("usage", {})
+                if isinstance(raw, dict) and raw.get("total_cost") is not None:
+                    cost_usd = float(raw.get("total_cost", 0.0))
+                else:
+                    cost_usd = None
             except Exception:
                 cost_usd = None
 

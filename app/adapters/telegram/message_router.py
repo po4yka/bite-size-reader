@@ -375,12 +375,20 @@ class MessageRouter:
 
             # Ensure we do not hit rate limiter after the last progress edit
             try:
-                min_gap_sec = (self.response_formatter.MIN_MESSAGE_INTERVAL_MS + 10) / 1000.0
+                # Sleep a bit longer than the formatter's rate limit to ensure delivery
+                min_gap_sec = max(
+                    0.6,
+                    (self.response_formatter.MIN_MESSAGE_INTERVAL_MS + 50) / 1000.0,
+                )
                 await asyncio.sleep(min_gap_sec)
             except Exception:
                 pass
 
             # Send completion message
+            logger.debug(
+                "sending_completion_message",
+                extra={"url_count": len(urls), "sleep_sec": min_gap_sec},
+            )
             await self.response_formatter.safe_reply(
                 message, f"✅ All {len(urls)} links have been processed."
             )

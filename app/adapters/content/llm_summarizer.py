@@ -198,10 +198,10 @@ class LLMSummarizer:
 
         approx_input_tokens = max(1, len(content_text) // 4)
 
-        # GPT-5 specific optimizations: allow much larger token budgets
+        # GPT-5 specific tuning: still cap to mitigate latency
         if "gpt-5" in self.cfg.openrouter.model.lower():
-            # GPT-5 can handle much larger responses - allow up to 32k tokens
-            dynamic_budget = max(4096, min(32768, approx_input_tokens // 2 + 4096))
+            # Cap lower than before to reduce long completions
+            dynamic_budget = max(4096, min(16384, approx_input_tokens // 2 + 4096))
             # Override configured limit for GPT-5 if it's too restrictive
             if configured is not None and configured < 16384:
                 logger.info(
@@ -214,8 +214,8 @@ class LLMSummarizer:
                 )
                 configured = None  # Use dynamic budget for GPT-5
         else:
-            # Standard models: more conservative budget
-            dynamic_budget = max(2048, min(8192, approx_input_tokens // 2 + 2048))
+            # Standard models: conservative cap to mitigate latency
+            dynamic_budget = max(1536, min(6144, approx_input_tokens // 2 + 1536))
 
         if configured is None:
             logger.debug(
@@ -228,7 +228,7 @@ class LLMSummarizer:
             )
             return dynamic_budget
 
-        selected = max(2048, min(configured, dynamic_budget))
+        selected = max(1536, min(configured, dynamic_budget))
 
         logger.debug(
             "max_tokens_adjusted",
@@ -780,7 +780,7 @@ class LLMSummarizer:
                     missing_fields.discard(key)
 
         if missing_fields:
-            logger.warning(
+            logger.info(
                 "metadata_fields_still_missing",
                 extra={"cid": correlation_id, "fields": sorted(missing_fields)},
             )

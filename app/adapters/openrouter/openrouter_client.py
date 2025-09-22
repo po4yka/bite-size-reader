@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import time
 import weakref
 from collections.abc import AsyncGenerator, Callable
@@ -91,6 +92,16 @@ class OpenRouterClient:
         self._base_url = "https://openrouter.ai/api/v1"
         self._enable_structured_outputs = enable_structured_outputs
         self._closed = False
+
+        # Optional pricing overrides (USD per 1k tokens) for local cost estimation
+        try:
+            self._price_input_per_1k = float(os.getenv("OPENROUTER_PRICE_INPUT_PER_1K", ""))
+        except Exception:
+            self._price_input_per_1k = None
+        try:
+            self._price_output_per_1k = float(os.getenv("OPENROUTER_PRICE_OUTPUT_PER_1K", ""))
+        except Exception:
+            self._price_output_per_1k = None
 
         # Performance configuration
         self._limits = httpx.Limits(
@@ -1007,6 +1018,16 @@ class OpenRouterClient:
         tokens_prompt = usage.get("prompt_tokens") if isinstance(usage, dict) else None
         tokens_completion = usage.get("completion_tokens") if isinstance(usage, dict) else None
         tokens_total = usage.get("total_tokens") if isinstance(usage, dict) else None
+
+        # If API did not provide cost, optionally estimate using env-provided rates
+        if cost_usd is None and tokens_prompt is not None and tokens_completion is not None:
+            if self._price_input_per_1k is not None and self._price_output_per_1k is not None:
+                try:
+                    cost_usd = (float(tokens_prompt) / 1000.0) * self._price_input_per_1k + (
+                        float(tokens_completion) / 1000.0
+                    ) * self._price_output_per_1k
+                except Exception:
+                    cost_usd = None
 
         # Log successful response
         self.payload_logger.log_response(
