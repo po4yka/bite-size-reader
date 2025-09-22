@@ -104,6 +104,9 @@ class TestUserValidationFixes(unittest.IsolatedAsyncioTestCase):
         with tempfile.TemporaryDirectory() as tmp:
             bot = make_bot(os.path.join(tmp, "app.db"), allowed_ids=[94225168, 12345])
 
+            # Disable rate limiting for the test
+            bot.response_formatter.MIN_MESSAGE_INTERVAL_MS = 0
+
             # Test with integer
             msg1 = FakeMessage("/help", uid=94225168)
             await bot._on_message(msg1)

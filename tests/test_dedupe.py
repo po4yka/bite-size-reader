@@ -175,7 +175,9 @@ class TestDedupeReuse(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(int(s2["version"]), 1)
             row2 = db.get_request_by_dedupe_hash(dedupe)
             self.assertEqual(row2["correlation_id"], "cid2")
-            self.assertEqual(fake_or.calls, 2)  # 1 for summary + 1 for insights
+            self.assertEqual(
+                fake_or.calls, 3
+            )  # 1 for summary + 2 for insights (json_schema + json_object fallback)
 
     async def test_forward_cached_summary_reuse(self):
         with tempfile.TemporaryDirectory() as tmp:

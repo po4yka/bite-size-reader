@@ -38,25 +38,48 @@ class SpyBot(TelegramBot):
         self.seen_urls: list[str] = []
 
         # Mock Firecrawl to avoid API key issues
-        if hasattr(self, "_firecrawl"):
+        class MockCrawlResult:
+            def __init__(self):
+                self.status = "success"
+                self.markdown = "Mock content"
+                self.html = "Mock HTML"
+                self.source_url = "https://example.com"
+                self.language = "en"
+                self.http_status = 200
+                self.endpoint = "https://api.firecrawl.dev/v1/scrape"
+                self.error_text = None
+                self.options_json = '{"formats": ["markdown"]}'
+                self.correlation_id = None
+                self.content_markdown = "Mock content"
+                self.content_html = "Mock HTML"
+                self.structured_json = "{}"
+                self.metadata_json = "{}"
+                self.links_json = "{}"
+                self.screenshots_paths_json = None
+                self.raw_response_json = "{}"
+                self.latency_ms = 100
 
-            class MockCrawlResult:
-                def __init__(self):
-                    self.status = "success"
-                    self.markdown = "Mock content"
-                    self.html = "Mock HTML"
-                    self.source_url = "https://example.com"
-                    self.language = "en"
-                    self.http_status = 200
-                    self.endpoint = "https://api.firecrawl.dev/v1/scrape"
-                    self.error_text = None
-                    self.options_json = '{"formats": ["markdown"]}'
-                    self.correlation_id = None
-                    self.content_markdown = "Mock content"
-                    self.content_html = "Mock HTML"
-
-            # Use setattr to mock the method
+        # Mock the Firecrawl client method
+        if hasattr(self, "_firecrawl") and self._firecrawl is not None:
             setattr(self._firecrawl, "scrape_markdown", AsyncMock(return_value=MockCrawlResult()))
+
+        # Also mock the content extractor's firecrawl
+        if hasattr(self, "url_processor") and hasattr(self.url_processor, "content_extractor"):
+            if (
+                hasattr(self.url_processor.content_extractor, "firecrawl")
+                and self.url_processor.content_extractor.firecrawl is not None
+            ):
+                print(f"Mocking firecrawl: {self.url_processor.content_extractor.firecrawl}")
+                setattr(
+                    self.url_processor.content_extractor.firecrawl,
+                    "scrape_markdown",
+                    AsyncMock(return_value=MockCrawlResult()),
+                )
+                print(
+                    f"Mock applied: {hasattr(self.url_processor.content_extractor.firecrawl, 'scrape_markdown')}"
+                )
+            else:
+                print("Firecrawl not found or None")
 
     async def _handle_url_flow(self, message: Any, url_text: str, **_: object) -> None:
         self.seen_urls.append(url_text)
@@ -67,7 +90,9 @@ def make_bot(tmp_path: str) -> SpyBot:
     db = Database(tmp_path)
     db.migrate()
     cfg = AppConfig(
-        telegram=TelegramConfig(api_id=0, api_hash="", bot_token="", allowed_user_ids=(1,)),
+        telegram=TelegramConfig(
+            api_id=0, api_hash="", bot_token="", allowed_user_ids=(1, 55, 66, 77, 88)
+        ),
         firecrawl=FirecrawlConfig(api_key="fc-dummy-key"),
         openrouter=OpenRouterConfig(
             api_key="y",
@@ -120,10 +145,53 @@ class TestMultiLinks(unittest.IsolatedAsyncioTestCase):
             self.assertNotIn(uid, bot._pending_multi_links)
             self.assertEqual(bot.seen_urls, [])
 
-    async def test_document_file_processing(self):
+    @patch("app.adapters.content.content_extractor.FirecrawlClient")
+    async def test_document_file_processing(self, mock_firecrawl_class):
         """Test processing of .txt file containing URLs."""
+
+        # Set up the mock
+        class MockCrawlResult:
+            def __init__(self):
+                self.status = "success"
+                self.markdown = "Mock content"
+                self.html = "Mock HTML"
+                self.source_url = "https://example.com"
+                self.language = "en"
+                self.http_status = 200
+                self.endpoint = "https://api.firecrawl.dev/v1/scrape"
+                self.error_text = None
+                self.options_json = '{"formats": ["markdown"]}'
+                self.correlation_id = None
+                self.content_markdown = "Mock content"
+                self.content_html = "Mock HTML"
+                self.structured_json = "{}"
+                self.metadata_json = "{}"
+                self.links_json = "{}"
+                self.screenshots_paths_json = None
+                self.raw_response_json = "{}"
+                self.latency_ms = 100
+
+        mock_firecrawl_instance = AsyncMock()
+        mock_firecrawl_instance.scrape_markdown = AsyncMock(return_value=MockCrawlResult())
+        mock_firecrawl_class.return_value = mock_firecrawl_instance
+
         with tempfile.TemporaryDirectory() as tmp:
             bot = make_bot(os.path.join(tmp, "app.db"))
+
+            # Mock the Firecrawl client on the bot instance
+            if hasattr(bot, "url_processor") and hasattr(bot.url_processor, "content_extractor"):
+                if hasattr(bot.url_processor.content_extractor, "firecrawl"):
+                    original_method = bot.url_processor.content_extractor.firecrawl.scrape_markdown
+                    bot.url_processor.content_extractor.firecrawl.scrape_markdown = AsyncMock(
+                        return_value=MockCrawlResult()
+                    )
+                    print(
+                        f"Mocked firecrawl on bot instance: {bot.url_processor.content_extractor.firecrawl}"
+                    )
+                    print(f"Original method: {original_method}")
+                    print(
+                        f"New method: {bot.url_processor.content_extractor.firecrawl.scrape_markdown}"
+                    )
 
             # Create a test .txt file with URLs
             test_urls = [

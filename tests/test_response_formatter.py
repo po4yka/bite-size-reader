@@ -18,6 +18,9 @@ class TestResponseFormatter(unittest.IsolatedAsyncioTestCase):
         # Create a body longer than the formatter limit to force chunking.
         body = " ".join(["слово"] * 800)
 
+        # Disable rate limiting for the test
+        formatter.MIN_MESSAGE_INTERVAL_MS = 0
+
         await formatter._send_labelled_text(msg, "🧾 Summary 1000", body)
 
         self.assertGreater(len(msg.replies), 1)

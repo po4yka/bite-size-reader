@@ -199,7 +199,11 @@ class TestJsonRepair(unittest.TestCase):
 
             mock_openrouter_instance = mock_openrouter_client.return_value
             mock_openrouter_instance.chat = AsyncMock(
-                side_effect=[mock_llm_response_initial, mock_llm_response_repair]
+                side_effect=[
+                    mock_llm_response_initial,
+                    mock_llm_response_repair,
+                    mock_llm_response_repair,
+                ]
             )
             self.bot._openrouter = mock_openrouter_instance
             self.bot.url_processor.llm_summarizer.openrouter = mock_openrouter_instance
@@ -216,19 +220,18 @@ class TestJsonRepair(unittest.TestCase):
             message = MagicMock()
             await self.bot._handle_url_flow(message, "http://example.com")
 
-            # Check that the second call to the chat method includes the original content
-            repair_call_args = mock_openrouter_instance.chat.call_args_list[1]
-            repair_messages = repair_call_args[0][0]
+            # With local JSON repair, the broken JSON is fixed locally and no LLM repair call is made
+            # The test should verify that the summary was processed successfully despite broken JSON
+            self.assertEqual(
+                mock_openrouter_instance.chat.call_count, 3
+            )  # 1 for summary + 2 for insights
 
-            self.assertEqual(len(repair_messages), 4)
-            self.assertEqual(repair_messages[0]["role"], "system")
-            self.assertEqual(repair_messages[1]["role"], "user")
-            self.assertIn("This is the original content", repair_messages[1]["content"])
-            self.assertEqual(repair_messages[2]["role"], "assistant")
-            self.assertEqual(repair_messages[3]["role"], "user")
-            self.assertIn(
-                "Your previous message was not a valid JSON object", repair_messages[3]["content"]
-            )
+            # Verify that the summary was processed successfully with local JSON repair
+            self.bot._reply_json.assert_called_once()
+            summary_json = self.bot._reply_json.call_args[0][1]
+            self.assertEqual(
+                summary_json["summary_250"], "Truncated..."
+            )  # Local repair extracted this from broken JSON
 
         asyncio.run(run_test())
 
@@ -274,7 +277,9 @@ class TestJsonRepair(unittest.TestCase):
                 await self.bot._handle_url_flow(message, "http://example.com")
 
             self.bot._reply_json.assert_called_once()
-            self.assertEqual(mock_openrouter_instance.chat.await_count, 2)
+            self.assertEqual(
+                mock_openrouter_instance.chat.await_count, 3
+            )  # 1 for summary + 2 for insights (json_schema + json_object fallback)
 
         asyncio.run(run_test())
 

@@ -42,6 +42,7 @@ class TestModelValidation(unittest.TestCase):
             os.environ["BOT_TOKEN"] = "123456:abcdefghijklmnopqrstuvwxyz0123456789abcdefghij"
             os.environ["FIRECRAWL_API_KEY"] = "fc_" + "b" * 20
             os.environ["OPENROUTER_API_KEY"] = "or_" + "c" * 20
+            os.environ["ALLOWED_USER_IDS"] = "123456789"
             os.environ["OPENROUTER_MODEL"] = "openai/gpt-5"
             os.environ["OPENROUTER_FALLBACK_MODELS"] = (
                 "fallback/model,google/gemini-2.5-pro, invalid|name"

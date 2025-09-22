@@ -421,38 +421,42 @@ class TestOpenRouterCompliance(unittest.TestCase):
 
     def test_parameter_validation(self) -> None:
         """Test parameter validation."""
+        from app.adapters.openrouter.exceptions import ValidationError
+
         # Test invalid temperature
-        with self.assertRaises(ValueError):
+        with self.assertRaises(ValidationError):
             asyncio.run(self.client.chat([{"role": "user", "content": "Hello"}], temperature=3.0))
 
         # Test invalid max_tokens
-        with self.assertRaises(ValueError):
+        with self.assertRaises(ValidationError):
             asyncio.run(self.client.chat([{"role": "user", "content": "Hello"}], max_tokens=-1))
 
         # Test invalid top_p
-        with self.assertRaises(ValueError):
+        with self.assertRaises(ValidationError):
             asyncio.run(self.client.chat([{"role": "user", "content": "Hello"}], top_p=1.5))
 
         # Test invalid stream
-        with self.assertRaises(ValueError):
+        with self.assertRaises(ValidationError):
             asyncio.run(self.client.chat([{"role": "user", "content": "Hello"}], stream="true"))  # type: ignore[arg-type]
 
     def test_message_validation(self) -> None:
         """Test message structure validation."""
+        from app.adapters.openrouter.exceptions import ValidationError
+
         # Test empty messages
-        with self.assertRaises(ValueError):
+        with self.assertRaises(ValidationError):
             asyncio.run(self.client.chat([]))
 
         # Test invalid message structure
-        with self.assertRaises(ValueError):
+        with self.assertRaises(ValidationError):
             asyncio.run(self.client.chat([{"role": "user"}]))
 
         # Test invalid role
-        with self.assertRaises(ValueError):
+        with self.assertRaises(ValidationError):
             asyncio.run(self.client.chat([{"role": "invalid", "content": "Hello"}]))
 
         # Test too many messages
-        with self.assertRaises(ValueError):
+        with self.assertRaises(ValidationError):
             asyncio.run(self.client.chat([{"role": "user", "content": "Hello"}] * 51))
 
     def test_error_message_generation(self) -> None:
