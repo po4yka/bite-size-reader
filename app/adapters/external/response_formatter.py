@@ -61,47 +61,47 @@ class ResponseFormatter:
                 return False, f"Suspicious script content detected: {pattern}"
 
         # Check for dangerous control characters (non-printable ASCII except common ones)
-        # Allow: \n (10), \r (13), \t (9) - these are common in text
+        # Allow: \n (10), \r (13), \t (9) - these are common in text formatting
         dangerous_control_chars = [
-            0,
-            1,
-            2,
-            3,
-            4,
-            5,
-            6,
-            7,
-            8,
-            11,
-            12,
-            14,
-            15,
-            16,
-            17,
-            18,
-            19,
-            20,
-            21,
-            22,
-            23,
-            24,
-            25,
-            26,
-            27,
-            28,
-            29,
-            30,
-            31,
+            0,  # Null
+            1,  # Start of Heading
+            2,  # Start of Text
+            3,  # End of Text
+            4,  # End of Transmission
+            5,  # Enquiry
+            6,  # Acknowledge
+            7,  # Bell
+            8,  # Backspace
+            11,  # Vertical Tab
+            12,  # Form Feed
+            14,  # Shift Out
+            15,  # Shift In
+            16,  # Data Link Escape
+            17,  # Device Control 1
+            18,  # Device Control 2
+            19,  # Device Control 3
+            20,  # Device Control 4
+            21,  # Negative Acknowledge
+            22,  # Synchronous Idle
+            23,  # End of Transmission Block
+            24,  # Cancel
+            25,  # End of Medium
+            26,  # Substitute
+            27,  # Escape
+            28,  # File Separator
+            29,  # Group Separator
+            30,  # Record Separator
+            31,  # Unit Separator
         ]
         dangerous_chars = sum(1 for c in text if ord(c) in dangerous_control_chars)
         if dangerous_chars > 0:
             return False, f"Dangerous control characters detected: {dangerous_chars} found"
 
         # Check for extremely long lines (potential buffer overflow)
-        lines = text.split("\n")
-        for line in lines:
-            if len(line) > 10000:  # Very long lines are suspicious
-                return False, f"Line too long: {len(line)} characters"
+        # Replace newlines with spaces for length checking
+        text_for_length_check = text.replace("\n", " ").replace("\r", " ").replace("\t", " ")
+        if len(text_for_length_check) > 10000:  # Very long content is suspicious
+            return False, f"Content too long: {len(text_for_length_check)} characters"
 
         return True, ""
 

@@ -13,6 +13,12 @@ from typing import Any
 import httpx
 
 from app.adapters.openrouter.error_handler import ErrorHandler
+from app.adapters.openrouter.exceptions import (
+    ClientError,
+    ConfigurationError,
+    NetworkError,
+    ValidationError,
+)
 from app.adapters.openrouter.model_capabilities import ModelCapabilities
 from app.adapters.openrouter.payload_logger import PayloadLogger
 from app.adapters.openrouter.request_builder import RequestBuilder
@@ -93,7 +99,7 @@ class OpenRouterClient:
             keepalive_expiry=keepalive_expiry,
         )
 
-        # Initialize components with error handling
+        # Initialize components with specific error handling
         try:
             self.request_builder = RequestBuilder(
                 api_key=api_key,
@@ -104,11 +110,23 @@ class OpenRouterClient:
                 structured_output_mode=structured_output_mode,
                 require_parameters=require_parameters,
             )
+        except Exception as e:
+            raise ConfigurationError(
+                f"Failed to initialize request builder: {e}",
+                context={"component": "request_builder", "original_error": str(e)},
+            ) from e
 
+        try:
             self.response_processor = ResponseProcessor(
                 enable_stats=enable_stats,
             )
+        except Exception as e:
+            raise ConfigurationError(
+                f"Failed to initialize response processor: {e}",
+                context={"component": "response_processor", "original_error": str(e)},
+            ) from e
 
+        try:
             self.model_capabilities = ModelCapabilities(
                 api_key=api_key,
                 base_url=self._base_url,
@@ -116,20 +134,35 @@ class OpenRouterClient:
                 x_title=x_title,
                 timeout=int(timeout_sec),
             )
+        except Exception as e:
+            raise ConfigurationError(
+                f"Failed to initialize model capabilities: {e}",
+                context={"component": "model_capabilities", "original_error": str(e)},
+            ) from e
 
+        try:
             self.error_handler = ErrorHandler(
                 max_retries=max_retries,
                 backoff_base=backoff_base,
                 audit=audit,
                 auto_fallback_structured=auto_fallback_structured,
             )
+        except Exception as e:
+            raise ConfigurationError(
+                f"Failed to initialize error handler: {e}",
+                context={"component": "error_handler", "original_error": str(e)},
+            ) from e
 
+        try:
             self.payload_logger = PayloadLogger(
                 debug_payloads=debug_payloads,
                 log_truncate_length=log_truncate_length,
             )
         except Exception as e:
-            raise ValueError(f"Failed to initialize OpenRouter client components: {e}") from e
+            raise ConfigurationError(
+                f"Failed to initialize payload logger: {e}",
+                context={"component": "payload_logger", "original_error": str(e)},
+            ) from e
 
         # Client management
         self._client_key = f"{self._base_url}:{hash((api_key, timeout_sec, max_connections))}"
@@ -247,40 +280,88 @@ class OpenRouterClient:
         backoff_base: float,
         structured_output_mode: str,
     ) -> None:
-        """Validate initialization parameters."""
+        """Validate initialization parameters with specific error types."""
         # Security: Validate API key presence
         if not api_key or not isinstance(api_key, str):
-            raise ValueError("API key is required and must be a non-empty string")
+            raise ConfigurationError(
+                "API key is required and must be a non-empty string",
+                context={"parameter": "api_key", "type": type(api_key).__name__},
+            )
         if len(api_key.strip()) < 10:  # Basic sanity check
-            raise ValueError("API key appears to be invalid")
+            raise ConfigurationError(
+                "API key appears to be invalid (too short)",
+                context={"parameter": "api_key", "length": len(api_key.strip())},
+            )
 
         # Security: Validate model
         if not model or not isinstance(model, str):
-            raise ValueError("Model is required and must be a non-empty string")
+            raise ConfigurationError(
+                "Model is required and must be a non-empty string",
+                context={"parameter": "model", "type": type(model).__name__},
+            )
         if len(model) > 100:
-            raise ValueError("Model name too long (max 100 characters)")
+            raise ConfigurationError(
+                f"Model name too long (max 100 characters, got {len(model)})",
+                context={"parameter": "model", "length": len(model)},
+            )
 
         # Security: Validate headers
         if http_referer and (not isinstance(http_referer, str) or len(http_referer) > 500):
-            raise ValueError("HTTP referer must be a string with max 500 characters")
+            raise ConfigurationError(
+                f"HTTP referer must be a string with max 500 characters (got {len(http_referer)})",
+                context={
+                    "parameter": "http_referer",
+                    "length": len(http_referer) if http_referer else 0,
+                },
+            )
         if x_title and (not isinstance(x_title, str) or len(x_title) > 200):
-            raise ValueError("X-Title must be a string with max 200 characters")
+            raise ConfigurationError(
+                f"X-Title must be a string with max 200 characters (got {len(x_title)})",
+                context={"parameter": "x_title", "length": len(x_title) if x_title else 0},
+            )
 
         # Security: Validate timeout
         if not isinstance(timeout_sec, int | float) or timeout_sec <= 0:
-            raise ValueError("Timeout must be a positive number")
+            raise ConfigurationError(
+                f"Timeout must be a positive number (got {timeout_sec})",
+                context={
+                    "parameter": "timeout_sec",
+                    "value": timeout_sec,
+                    "type": type(timeout_sec).__name__,
+                },
+            )
         if timeout_sec > 300:  # 5 minutes max
-            raise ValueError("Timeout too large (max 300 seconds)")
+            raise ConfigurationError(
+                f"Timeout too large (max 300 seconds, got {timeout_sec})",
+                context={"parameter": "timeout_sec", "value": timeout_sec},
+            )
 
         # Security: Validate retry parameters
         if not isinstance(max_retries, int) or max_retries < 0 or max_retries > 10:
-            raise ValueError("Max retries must be an integer between 0 and 10")
+            raise ConfigurationError(
+                f"Max retries must be an integer between 0 and 10 (got {max_retries})",
+                context={
+                    "parameter": "max_retries",
+                    "value": max_retries,
+                    "type": type(max_retries).__name__,
+                },
+            )
         if not isinstance(backoff_base, int | float) or backoff_base < 0:
-            raise ValueError("Backoff base must be a non-negative number")
+            raise ConfigurationError(
+                f"Backoff base must be a non-negative number (got {backoff_base})",
+                context={
+                    "parameter": "backoff_base",
+                    "value": backoff_base,
+                    "type": type(backoff_base).__name__,
+                },
+            )
 
         # Validate structured output settings
         if structured_output_mode not in {"json_schema", "json_object"}:
-            raise ValueError("Structured output mode must be 'json_schema' or 'json_object'")
+            raise ConfigurationError(
+                f"Structured output mode must be 'json_schema' or 'json_object' (got '{structured_output_mode}')",
+                context={"parameter": "structured_output_mode", "value": structured_output_mode},
+            )
 
     def _validate_fallback_models(
         self, fallback_models: list[str] | tuple[str, ...] | None
@@ -295,13 +376,44 @@ class OpenRouterClient:
 
     @asynccontextmanager
     async def _request_context(self) -> AsyncGenerator[httpx.AsyncClient, None]:
-        """Context manager for request handling with proper cleanup."""
+        """Context manager for request handling with proper error handling."""
+        if self._closed:
+            raise ClientError("Cannot use client after it has been closed")
+
         client = self._ensure_client()
+
         try:
             yield client
-        except Exception:
-            # Log the exception but don't close the shared client
+        except httpx.TimeoutException as e:
+            raise NetworkError(
+                f"Request timeout: {e}",
+                context={
+                    "client": "shared" if client in self._client_pool.values() else "dedicated",
+                    "timeout_seconds": self._timeout.read_timeout
+                    if hasattr(self._timeout, "read_timeout")
+                    else "unknown",
+                },
+            ) from e
+        except httpx.ConnectError as e:
+            raise NetworkError(
+                f"Connection failed: {e}",
+                context={
+                    "client": "shared" if client in self._client_pool.values() else "dedicated",
+                    "base_url": self._base_url,
+                },
+            ) from e
+        except httpx.HTTPStatusError:
+            # Don't wrap HTTP errors here - let them be handled by the caller
+            # This preserves the original httpx.HTTPStatusError for proper handling
             raise
+        except Exception as e:
+            raise ClientError(
+                f"Unexpected client error: {e}",
+                context={
+                    "client": "shared" if client in self._client_pool.values() else "dedicated",
+                    "error_type": type(e).__name__,
+                },
+            ) from e
 
     async def chat(
         self,
@@ -321,12 +433,15 @@ class OpenRouterClient:
 
         # Early validation to fail fast
         if not messages:
-            raise ValueError("Messages cannot be empty")
+            raise ValidationError("Messages cannot be empty", context={"messages_count": 0})
 
         if not isinstance(messages, list):
-            raise ValueError("Messages must be a list")
+            raise ValidationError(
+                f"Messages must be a list, got {type(messages).__name__}",
+                context={"messages_type": type(messages).__name__},
+            )
 
-        # Create and validate request with better error handling
+        # Create and validate request with specific error handling
         try:
             request = ChatRequest(
                 messages=messages,
@@ -339,14 +454,20 @@ class OpenRouterClient:
                 model_override=model_override,
             )
         except Exception as e:
-            raise ValueError(f"Invalid chat request parameters: {e}") from e
+            raise ValidationError(
+                f"Invalid chat request parameters: {e}",
+                context={"original_error": str(e), "messages_count": len(messages)},
+            ) from e
 
-        # Pre-process and validate
+        # Pre-process and validate with specific error handling
         try:
             self.request_builder.validate_chat_request(request)
             sanitized_messages = self.request_builder.sanitize_messages(messages)
         except Exception as e:
-            raise ValueError(f"Request validation failed: {e}") from e
+            raise ValidationError(
+                f"Request validation failed: {e}",
+                context={"original_error": str(e), "messages_count": len(messages)},
+            ) from e
 
         # Calculate message metrics
         message_lengths = [len(str(msg.get("content", ""))) for msg in sanitized_messages]
@@ -466,15 +587,57 @@ class OpenRouterClient:
                                 )
                                 return result["error_result"]
 
+                        except httpx.TimeoutException as e:
+                            # Handle timeout specifically
+                            last_error_text = f"Request timeout: {str(e)}"
+                            last_error_context = {
+                                "status_code": None,
+                                "message": "Request timeout",
+                                "api_error": str(e),
+                            }
+                            # Timeout should be retried if within retry limits
+                            if attempt < self.error_handler._max_retries:
+                                await self.error_handler.sleep_backoff(attempt)
+                                continue
+                            else:
+                                break  # Try next model
+                        except httpx.ConnectError as e:
+                            # Handle connection errors specifically
+                            last_error_text = f"Connection error: {str(e)}"
+                            last_error_context = {
+                                "status_code": None,
+                                "message": "Connection failed",
+                                "api_error": str(e),
+                            }
+                            # Connection errors should be retried if within retry limits
+                            if attempt < self.error_handler._max_retries:
+                                await self.error_handler.sleep_backoff(attempt)
+                                continue
+                            else:
+                                break  # Try next model
+                        except httpx.HTTPStatusError as e:
+                            # Handle HTTP status errors specifically
+                            last_error_text = f"HTTP {e.response.status_code} error: {str(e)}"
+                            last_error_context = {
+                                "status_code": e.response.status_code,
+                                "message": "HTTP status error",
+                                "api_error": str(e),
+                            }
+                            # HTTP errors should be retried if within retry limits
+                            if attempt < self.error_handler._max_retries:
+                                await self.error_handler.sleep_backoff(attempt)
+                                continue
+                            else:
+                                break  # Try next model
                         except Exception as e:
-                            # Handle unexpected exceptions
+                            # Handle other unexpected exceptions
                             last_error_text = f"Unexpected error: {str(e)}"
                             last_error_context = {
                                 "status_code": None,
                                 "message": "Client exception",
                                 "api_error": str(e),
                             }
-
+                            # Generic exceptions should be retried if within retry limits
                             if attempt < self.error_handler._max_retries:
                                 await self.error_handler.sleep_backoff(attempt)
                                 continue
@@ -497,6 +660,7 @@ class OpenRouterClient:
                 "status_code": None,
                 "message": "Critical client error",
                 "api_error": str(e),
+                "error_type": "critical",
             }
 
         finally:

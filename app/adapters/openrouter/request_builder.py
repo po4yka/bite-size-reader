@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from app.adapters.openrouter.exceptions import ValidationError
 from app.models.llm.llm_models import ChatRequest
 
 
@@ -33,49 +34,118 @@ class RequestBuilder:
         """Validate chat request parameters."""
         # Security: Validate messages
         if not request.messages or not isinstance(request.messages, list):
-            raise ValueError("Messages list is required")
+            raise ValidationError(
+                "Messages list is required",
+                context={"messages_count": len(request.messages) if request.messages else 0},
+            )
         if len(request.messages) > 50:  # Prevent extremely long conversations
-            raise ValueError("Too many messages")
+            raise ValidationError(
+                f"Too many messages (max 50, got {len(request.messages)})",
+                context={"messages_count": len(request.messages)},
+            )
 
         for i, msg in enumerate(request.messages):
             if not isinstance(msg, dict):
-                raise ValueError(f"Message {i} must be a dictionary")
+                raise ValidationError(
+                    f"Message {i} must be a dictionary, got {type(msg).__name__}",
+                    context={"message_index": i, "message_type": type(msg).__name__},
+                )
             if "role" not in msg or "content" not in msg:
-                raise ValueError(f"Message {i} missing required fields")
+                raise ValidationError(
+                    f"Message {i} missing required fields 'role' or 'content'",
+                    context={
+                        "message_index": i,
+                        "missing_fields": [k for k in ["role", "content"] if k not in msg],
+                    },
+                )
             if not isinstance(msg["role"], str) or msg["role"] not in {
                 "system",
                 "user",
                 "assistant",
             }:
-                raise ValueError(f"Message {i} has invalid role")
+                raise ValidationError(
+                    f"Message {i} has invalid role '{msg.get('role', 'missing')}', must be one of: system, user, assistant",
+                    context={
+                        "message_index": i,
+                        "invalid_role": msg.get("role"),
+                        "valid_roles": ["system", "user", "assistant"],
+                    },
+                )
             if not isinstance(msg["content"], str):
-                raise ValueError(f"Message {i} content must be string")
+                raise ValidationError(
+                    f"Message {i} content must be string, got {type(msg['content']).__name__}",
+                    context={"message_index": i, "content_type": type(msg["content"]).__name__},
+                )
 
         # Validate other parameters
         if not isinstance(request.temperature, int | float):
-            raise ValueError("Temperature must be numeric")
+            raise ValidationError(
+                f"Temperature must be numeric, got {type(request.temperature).__name__}",
+                context={
+                    "parameter": "temperature",
+                    "value": request.temperature,
+                    "type": type(request.temperature).__name__,
+                },
+            )
         if request.temperature < 0 or request.temperature > 2:
-            raise ValueError("Temperature must be between 0 and 2")
+            raise ValidationError(
+                f"Temperature must be between 0 and 2, got {request.temperature}",
+                context={"parameter": "temperature", "value": request.temperature},
+            )
 
         if request.max_tokens is not None:
             if not isinstance(request.max_tokens, int) or request.max_tokens <= 0:
-                raise ValueError("Max tokens must be a positive integer")
+                raise ValidationError(
+                    f"Max tokens must be a positive integer, got {request.max_tokens}",
+                    context={
+                        "parameter": "max_tokens",
+                        "value": request.max_tokens,
+                        "type": type(request.max_tokens).__name__,
+                    },
+                )
             if request.max_tokens > 100000:
-                raise ValueError("Max tokens too large")
+                raise ValidationError(
+                    f"Max tokens too large (max 100000, got {request.max_tokens})",
+                    context={"parameter": "max_tokens", "value": request.max_tokens},
+                )
 
         if request.top_p is not None:
             if not isinstance(request.top_p, int | float):
-                raise ValueError("Top_p must be numeric")
+                raise ValidationError(
+                    f"Top_p must be numeric, got {type(request.top_p).__name__}",
+                    context={
+                        "parameter": "top_p",
+                        "value": request.top_p,
+                        "type": type(request.top_p).__name__,
+                    },
+                )
             if request.top_p < 0 or request.top_p > 1:
-                raise ValueError("Top_p must be between 0 and 1")
+                raise ValidationError(
+                    f"Top_p must be between 0 and 1, got {request.top_p}",
+                    context={"parameter": "top_p", "value": request.top_p},
+                )
 
         if not isinstance(request.stream, bool):
-            raise ValueError("Stream must be boolean")
+            raise ValidationError(
+                f"Stream must be boolean, got {type(request.stream).__name__}",
+                context={
+                    "parameter": "stream",
+                    "value": request.stream,
+                    "type": type(request.stream).__name__,
+                },
+            )
 
         if request.request_id is not None and (
             not isinstance(request.request_id, int) or request.request_id <= 0
         ):
-            raise ValueError("Invalid request_id")
+            raise ValidationError(
+                f"Invalid request_id (must be positive integer, got {request.request_id})",
+                context={
+                    "parameter": "request_id",
+                    "value": request.request_id,
+                    "type": type(request.request_id).__name__,
+                },
+            )
 
     def sanitize_messages(self, messages: list[dict[str, str]]) -> list[dict[str, str]]:
         """Sanitize user content to prevent prompt injection."""
