@@ -139,7 +139,7 @@ class ResponseFormatter:
         suspicious_domains = [
             "localhost",
             "127.0.0.1",
-            "0.0.0.0",
+            "0.0.0.0",  # nosec B104 - This is a security check, not network binding
             "file://",
             "ftp://",
             "javascript:",
