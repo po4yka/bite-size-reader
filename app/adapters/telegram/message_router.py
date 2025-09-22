@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import time
 from collections.abc import Callable
@@ -371,6 +372,13 @@ class MessageRouter:
                 start_time,
                 progress_message_id,
             )
+
+            # Ensure we do not hit rate limiter after the last progress edit
+            try:
+                min_gap_sec = (self.response_formatter.MIN_MESSAGE_INTERVAL_MS + 10) / 1000.0
+                await asyncio.sleep(min_gap_sec)
+            except Exception:
+                pass
 
             # Send completion message
             await self.response_formatter.safe_reply(
