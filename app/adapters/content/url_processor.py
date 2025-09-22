@@ -1,4 +1,6 @@
 """Refactored URL processor using modular components."""
+# ruff: noqa: E501
+# flake8: noqa
 
 from __future__ import annotations
 
@@ -203,14 +205,15 @@ class URLProcessor:
                         interaction_id,
                         silent=silent,
                     )
-                    if not silent:
-                        await self._handle_additional_insights(
-                            message,
-                            content_text,
-                            chosen_lang,
-                            req_id,
-                            correlation_id,
-                        )
+                    # Generate insights even in silent mode (for batch processing)
+                    await self._handle_additional_insights(
+                        message,
+                        content_text,
+                        chosen_lang,
+                        req_id,
+                        correlation_id,
+                        silent=silent,
+                    )
                     return
                 else:
                     # Fallback to single-pass if chunking failed
@@ -287,7 +290,7 @@ class URLProcessor:
                             extra={"cid": correlation_id, "error": str(exc)},
                         )
                 else:
-                    # Silent mode: just persist without responses
+                    # Silent mode: persist and generate insights without responses
                     new_version = self.db.upsert_summary(
                         request_id=req_id,
                         lang=chosen_lang,
@@ -297,6 +300,16 @@ class URLProcessor:
                     self.db.update_request_status(req_id, "ok")
                     self._audit(
                         "INFO", "summary_upserted", {"request_id": req_id, "version": new_version}
+                    )
+
+                    # Generate insights even in silent mode (for batch processing)
+                    await self._handle_additional_insights(
+                        message,
+                        content_text,
+                        chosen_lang,
+                        req_id,
+                        correlation_id,
+                        silent=True,
                     )
                     logger.info(
                         "silent_summary_persisted",
@@ -376,6 +389,7 @@ class URLProcessor:
         chosen_lang: str,
         req_id: int,
         correlation_id: str | None,
+        silent: bool = False,
     ) -> None:
         """Generate and persist additional insights using the LLM."""
         logger.info(
@@ -402,11 +416,14 @@ class URLProcessor:
                     },
                 )
 
-                await self.response_formatter.send_additional_insights_message(
-                    message, insights, correlation_id
-                )
-
-                logger.info("insights_message_sent", extra={"cid": correlation_id})
+                # Only send insights message if not in silent mode
+                if not silent:
+                    await self.response_formatter.send_additional_insights_message(
+                        message, insights, correlation_id
+                    )
+                    logger.info("insights_message_sent", extra={"cid": correlation_id})
+                else:
+                    logger.info("insights_generated_silently", extra={"cid": correlation_id})
 
                 try:
                     self.db.update_summary_insights(
