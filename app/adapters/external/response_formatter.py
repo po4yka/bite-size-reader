@@ -60,10 +60,42 @@ class ResponseFormatter:
             if re.search(pattern, text, re.IGNORECASE):
                 return False, f"Suspicious script content detected: {pattern}"
 
-        # Check for control characters (non-printable ASCII)
-        control_chars = sum(1 for c in text if ord(c) < 32)
-        if control_chars > 0:
-            return False, f"Control characters detected: {control_chars} found"
+        # Check for dangerous control characters (non-printable ASCII except common ones)
+        # Allow: \n (10), \r (13), \t (9) - these are common in text
+        dangerous_control_chars = [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            11,
+            12,
+            14,
+            15,
+            16,
+            17,
+            18,
+            19,
+            20,
+            21,
+            22,
+            23,
+            24,
+            25,
+            26,
+            27,
+            28,
+            29,
+            30,
+            31,
+        ]
+        dangerous_chars = sum(1 for c in text if ord(c) in dangerous_control_chars)
+        if dangerous_chars > 0:
+            return False, f"Dangerous control characters detected: {dangerous_chars} found"
 
         # Check for extremely long lines (potential buffer overflow)
         lines = text.split("\n")
@@ -750,7 +782,7 @@ class ResponseFormatter:
         if not is_safe:
             logger.warning(
                 "safe_reply_unsafe_content_blocked",
-                extra={"error": error_msg, "text_length": len(text)},
+                extra={"error": error_msg, "text_length": len(text), "text_preview": text[:100]},
             )
             # Send safe error message instead
             safe_text = "❌ Message blocked for security reasons."
@@ -804,7 +836,7 @@ class ResponseFormatter:
         if not is_safe:
             logger.warning(
                 "safe_reply_with_id_unsafe_content_blocked",
-                extra={"error": error_msg, "text_length": len(text)},
+                extra={"error": error_msg, "text_length": len(text), "text_preview": text[:100]},
             )
             # Send safe error message instead
             safe_text = "❌ Message blocked for security reasons."
@@ -906,7 +938,12 @@ class ResponseFormatter:
             if not is_safe:
                 logger.warning(
                     "edit_message_unsafe_content_blocked",
-                    extra={"error": error_msg, "chat_id": chat_id, "message_id": message_id},
+                    extra={
+                        "error": error_msg,
+                        "chat_id": chat_id,
+                        "message_id": message_id,
+                        "text_preview": text[:100],
+                    },
                 )
                 return
 
