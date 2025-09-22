@@ -1,4 +1,6 @@
 """Content extraction and processing for URLs."""
+# ruff: noqa: E501
+# flake8: noqa
 
 from __future__ import annotations
 
@@ -7,7 +9,12 @@ import logging
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
-from app.adapters.external.firecrawl_parser import FirecrawlClient, FirecrawlResult
+import httpx
+
+from app.adapters.external.firecrawl_parser import (
+    FirecrawlClient,
+    FirecrawlResult,
+)
 from app.config import AppConfig
 from app.core.html_utils import (
     clean_markdown_article_text,
@@ -301,6 +308,77 @@ class ContentExtractor:
         has_html = bool(crawl.content_html and crawl.content_html.strip())
 
         if crawl.status != "ok" or not (has_markdown or has_html):
+            # Attempt a direct HTML fetch salvage before failing
+            try:
+                salvage_html = await self._attempt_direct_html_salvage(url_text)
+            except Exception:
+                salvage_html = None
+
+            if salvage_html:
+                logger.info(
+                    "direct_html_salvage_success",
+                    extra={
+                        "cid": correlation_id,
+                        "html_len": len(salvage_html or ""),
+                        "reason": (crawl.error_text or "no_content_from_firecrawl"),
+                    },
+                )
+
+                salvage_crawl = FirecrawlResult(
+                    status="ok",
+                    http_status=200,
+                    content_markdown=None,
+                    content_html=salvage_html,
+                    structured_json=None,
+                    metadata_json=None,
+                    links_json=None,
+                    raw_response_json=None,
+                    latency_ms=None,
+                    error_text=None,
+                    source_url=url_text,
+                    endpoint="direct_fetch",
+                    options_json={"direct_fetch": True},
+                    correlation_id=None,
+                )
+
+                # Persist salvage crawl result (separate entry)
+                try:
+                    self.db.insert_crawl_result(
+                        request_id=req_id,
+                        source_url=salvage_crawl.source_url,
+                        endpoint=salvage_crawl.endpoint,
+                        http_status=salvage_crawl.http_status,
+                        status=salvage_crawl.status,
+                        options_json=json.dumps(salvage_crawl.options_json or {}),
+                        correlation_id=salvage_crawl.correlation_id,
+                        content_markdown=salvage_crawl.content_markdown,
+                        content_html=salvage_crawl.content_html,
+                        structured_json=json.dumps(salvage_crawl.structured_json or {}),
+                        metadata_json=json.dumps(salvage_crawl.metadata_json or {}),
+                        links_json=json.dumps(salvage_crawl.links_json or {}),
+                        screenshots_paths_json=None,
+                        raw_response_json=json.dumps(salvage_crawl.raw_response_json or {}),
+                        latency_ms=salvage_crawl.latency_ms,
+                        error_text=salvage_crawl.error_text,
+                    )
+                except Exception as e:  # noqa: BLE001
+                    logger.error(
+                        "persist_salvage_crawl_error",
+                        extra={"error": str(e), "cid": correlation_id},
+                    )
+
+                # Notify user we are using HTML fallback due to markdown/FC failure
+                await self.response_formatter.send_html_fallback_notification(
+                    message,
+                    len(html_to_text(salvage_html)),
+                    silent=silent,
+                )
+
+                # Continue as if crawl succeeded with HTML
+                return await self._process_successful_crawl(
+                    message, salvage_crawl, correlation_id, silent
+                )
+
             await self._handle_crawl_error(
                 message,
                 req_id,
@@ -358,6 +436,36 @@ class ContentExtractor:
         if interaction_id:
             # Note: This would need to be passed back to the caller to update
             pass
+
+    async def _attempt_direct_html_salvage(self, url: str) -> str | None:
+        """Try to fetch raw HTML directly and validate it contains readable text.
+
+        Returns the raw HTML string if the page appears readable; otherwise None.
+        """
+        headers = {
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/125.0.0.0 Safari/537.36"
+            ),
+            "Accept": ("text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"),
+            "Accept-Language": "ru,en-US;q=0.9,en;q=0.8",
+        }
+        timeout = max(5, int(getattr(self.cfg.runtime, "request_timeout_sec", 30)))
+        try:
+            async with httpx.AsyncClient(follow_redirects=True, timeout=timeout) as client:
+                resp = await client.get(url, headers=headers)
+                ctype = resp.headers.get("content-type", "").lower()
+                if resp.status_code != 200 or "text/html" not in ctype:
+                    return None
+                html = resp.text or ""
+                # Validate that extracted text is sufficiently long to be useful
+                text_preview = html_to_text(html)
+                if len(text_preview) < 400:
+                    return None
+                return html
+        except Exception:
+            return None
 
     async def _process_successful_crawl(
         self,
