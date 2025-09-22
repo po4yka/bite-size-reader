@@ -16,6 +16,8 @@ logger = logging.getLogger(__name__)
 class ResponseFormatter:
     """Handles message formatting and replies to Telegram users."""
 
+    # flake8: noqa
+
     def __init__(
         self,
         safe_reply_func: Callable[[Any, str], Awaitable[None]] | None = None,
@@ -1648,20 +1650,28 @@ class ResponseFormatter:
             pass
 
     async def send_error_notification(
-        self, message: Any, error_type: str, correlation_id: str, details: str | None = None
+        self,
+        message: Any,
+        error_type: str,
+        correlation_id: str,
+        details: str | None = None,
     ) -> None:
         """Send error notification with enhanced formatting."""
         try:
             if error_type == "firecrawl_error":
+                details_block = f"\n\n{details}" if details else ""
                 await self.safe_reply(
                     message,
-                    f"❌ **Content Extraction Failed**\n"
-                    f"🚨 Unable to extract readable content\n"
-                    f"🆔 Error ID: `{correlation_id}`\n\n"
-                    f"💡 **Possible Solutions:**\n"
-                    f"• Try a different URL\n"
-                    f"• Check if content is publicly accessible\n"
-                    f"• Ensure URL points to text-based content",
+                    (
+                        "❌ **Content Extraction Failed**\n"
+                        "🚨 Unable to extract readable content\n"
+                        f"🆔 Error ID: `{correlation_id}`"
+                        f"{details_block}\n\n"
+                        "💡 **Possible Solutions:**\n"
+                        "• Try a different URL\n"
+                        "• Check if content is publicly accessible\n"
+                        "• Ensure URL points to text-based content"
+                    ),
                 )
             elif error_type == "empty_content":
                 await self.safe_reply(

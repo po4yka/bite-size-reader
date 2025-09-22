@@ -407,8 +407,21 @@ class ContentExtractor:
     ) -> None:
         """Handle Firecrawl extraction errors."""
         self.db.update_request_status(req_id, "error")
+        # Provide a precise, user-visible stage and context
+        detail_lines = []
+        url_line = crawl.source_url or "unknown"
+        endpoint_line = crawl.endpoint or "/v1/scrape"
+        http_line = str(crawl.http_status) if crawl.http_status is not None else "n/a"
+        err_line = crawl.error_text or "unknown"
+        content_hint = f"md:{int(has_markdown)} html:{int(has_html)}"
+        detail_lines.append(f"🔗 URL: {url_line}")
+        detail_lines.append(f"🧭 Stage: Firecrawl scrape ({endpoint_line})")
+        detail_lines.append(f"📶 HTTP: {http_line}")
+        detail_lines.append(f"⚠️ Error: {err_line}")
+        detail_lines.append(f"🧩 Content received: {content_hint}")
+
         await self.response_formatter.send_error_notification(
-            message, "firecrawl_error", correlation_id
+            message, "firecrawl_error", correlation_id, details="\n".join(detail_lines)
         )
 
         logger.error(
