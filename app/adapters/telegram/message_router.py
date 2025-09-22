@@ -348,8 +348,8 @@ class MessageRouter:
             # Use only valid URLs
             urls = valid_urls
 
-            # Send initial confirmation message
-            await self.response_formatter.safe_reply(
+            # Send initial confirmation message and get message ID for progress updates
+            progress_message_id = await self.response_formatter.safe_reply_with_id(
                 message, f"📄 File accepted. Processing {len(urls)} links."
             )
             logger.debug(
@@ -357,13 +357,14 @@ class MessageRouter:
                 extra={"url_count": len(urls)},
             )
 
-            # Process URLs sequentially with progress updates (sent as new messages)
+            # Process URLs sequentially with progress updates (updating the same message)
             await self._process_urls_sequentially(
                 message,
                 urls,
                 correlation_id,
                 interaction_id,
                 start_time,
+                progress_message_id,
             )
 
             # Send completion message
@@ -413,8 +414,9 @@ class MessageRouter:
         correlation_id: str,
         interaction_id: int,
         start_time: float,
+        progress_message_id: int | None = None,
     ) -> None:
-        """Process URLs sequentially with progress updates sent as new messages."""
+        """Process URLs sequentially with progress updates editing the same message."""
         total = len(urls)
 
         for i, url in enumerate(urls, 1):
@@ -423,8 +425,8 @@ class MessageRouter:
                 extra={"url": url, "progress": f"{i}/{total}", "cid": correlation_id},
             )
 
-            # Send progress update as new message
-            await self._send_progress_update(message, i, total)
+            # Send progress update editing the same message
+            await self._send_progress_update(message, i, total, progress_message_id)
 
             # Process URL without sending Telegram responses
             await self._process_url_silently(message, url, correlation_id, interaction_id)
@@ -450,24 +452,49 @@ class MessageRouter:
             message, url, correlation_id=correlation_id, interaction_id=interaction_id, silent=True
         )
 
-    async def _send_progress_update(self, message: Any, current: int, total: int) -> None:
-        """Send progress update as a new message in Telegram."""
+    async def _send_progress_update(
+        self, message: Any, current: int, total: int, message_id: int | None = None
+    ) -> None:
+        """Send progress update, editing existing message if message_id provided, otherwise send as new message."""
         try:
             # Create progress bar
             progress_bar = self._create_progress_bar(current, total)
             progress_text = f"🔄 Processing links: {current}/{total}\n{progress_bar}"
 
-            # Send as new message
-            await self.response_formatter.safe_reply(message, progress_text)
-
-            logger.debug(
-                "progress_update_sent",
-                extra={"current": current, "total": total, "text_length": len(progress_text)},
-            )
+            if message_id is not None:
+                # Edit existing message
+                chat_id = getattr(message.chat, "id", None)
+                if chat_id is not None:
+                    await self.response_formatter.edit_message(chat_id, message_id, progress_text)
+                    logger.debug(
+                        "progress_update_edited",
+                        extra={
+                            "current": current,
+                            "total": total,
+                            "message_id": message_id,
+                            "text_length": len(progress_text),
+                        },
+                    )
+                else:
+                    logger.warning("progress_update_no_chat_id", extra={"message_id": message_id})
+                    # Fallback to new message
+                    await self.response_formatter.safe_reply(message, progress_text)
+            else:
+                # Send as new message (fallback)
+                await self.response_formatter.safe_reply(message, progress_text)
+                logger.debug(
+                    "progress_update_sent",
+                    extra={"current": current, "total": total, "text_length": len(progress_text)},
+                )
         except Exception as e:
             logger.warning(
                 "progress_update_failed",
-                extra={"error": str(e), "current": current, "total": total},
+                extra={
+                    "error": str(e),
+                    "current": current,
+                    "total": total,
+                    "message_id": message_id,
+                },
             )
 
     def _create_progress_bar(self, current: int, total: int, width: int = 20) -> str:
