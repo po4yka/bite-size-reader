@@ -691,6 +691,8 @@ class ResponseFormatter:
                     else:
                         sent = await client.send_message(chat_id=chat_id, text=text)
                     message_id = getattr(sent, "message_id", None)
+                    if message_id is None:
+                        message_id = getattr(sent, "id", None)
                     logger.debug(
                         "reply_with_id_result",
                         extra={"message_id": message_id, "sent_message_type": type(sent).__name__},
