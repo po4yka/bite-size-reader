@@ -5,14 +5,16 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import time
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
 from app.config import AppConfig
+from app.core.html_utils import clean_markdown_article_text, html_to_text
 from app.core.logging_utils import generate_correlation_id
-from app.core.url_utils import extract_all_urls, looks_like_url
+from app.core.url_utils import extract_all_urls, looks_like_url, normalize_url, url_hash_sha256
 from app.db.database import Database
 from app.models.telegram.telegram_models import TelegramMessage
 
@@ -443,6 +445,7 @@ class MessageRouter:
     ) -> None:
         """Process URLs sequentially with progress updates editing the same message."""
         total = len(urls)
+        successful_urls = []
 
         for i, url in enumerate(urls, 1):
             # Use a unique correlation ID per URL so errors are traceable
@@ -460,7 +463,13 @@ class MessageRouter:
             await self._send_progress_update(message, i, total, progress_message_id)
 
             # Process URL without sending Telegram responses
-            await self._process_url_silently(message, url, per_link_cid, interaction_id)
+            success = await self._process_url_silently(message, url, per_link_cid, interaction_id)
+            if success:
+                successful_urls.append((url, per_link_cid))
+
+        # Generate additional insights for all successful URLs
+        if successful_urls:
+            await self._generate_batch_insights(message, successful_urls)
 
         if interaction_id:
             self._update_user_interaction(
@@ -476,12 +485,24 @@ class MessageRouter:
         url: str,
         correlation_id: str,
         interaction_id: int,
-    ) -> None:
+    ) -> bool:
         """Process a single URL without sending Telegram responses."""
-        # Call the URL processor's handle_url_flow method with silent=True
-        await self._url_processor.handle_url_flow(
-            message, url, correlation_id=correlation_id, interaction_id=interaction_id, silent=True
-        )
+        try:
+            # Call the URL processor's handle_url_flow method with silent=True
+            await self._url_processor.handle_url_flow(
+                message,
+                url,
+                correlation_id=correlation_id,
+                interaction_id=interaction_id,
+                silent=True,
+            )
+            return True
+        except Exception as e:
+            logger.error(
+                "url_processing_failed",
+                extra={"url": url, "cid": correlation_id, "error": str(e)},
+            )
+            return False
 
     async def _send_progress_update(
         self, message: Any, current: int, total: int, message_id: int | None = None
@@ -583,3 +604,71 @@ class MessageRouter:
             "user_interaction_update_placeholder",
             extra={"interaction_id": interaction_id, "response_type": response_type},
         )
+
+    async def _generate_batch_insights(
+        self, message: Any, successful_urls: list[tuple[str, str]]
+    ) -> None:
+        """Generate additional insights for all successfully processed URLs."""
+        if not successful_urls:
+            return
+
+        try:
+            await self.response_formatter.safe_reply(
+                message,
+                f"🧠 Generating additional research insights for {len(successful_urls)} articles…",
+            )
+        except Exception:
+            pass
+
+        for url, correlation_id in successful_urls:
+            try:
+                # Get the request ID for this URL to fetch content
+                norm = normalize_url(url)
+                dedupe = url_hash_sha256(norm)
+                existing_req = self.db.get_request_by_dedupe_hash(dedupe)
+                if not existing_req:
+                    continue
+
+                req_id = int(existing_req["id"])
+
+                # Get the summary to extract language and content
+                summary_row = self.db.get_summary_by_request(req_id)
+                if not summary_row:
+                    continue
+
+                try:
+                    summary_data = json.loads(summary_row.get("json_payload", "{}"))
+                except json.JSONDecodeError:
+                    continue
+
+                # Extract language and content for insights
+                chosen_lang = summary_data.get("language", "en")
+
+                # Get content from the most recent crawl result
+                crawl_result = self.db.get_crawl_result_by_request(req_id)
+                if not crawl_result:
+                    continue
+
+                content_text = ""
+                if crawl_result.get("content_markdown"):
+                    content_text = clean_markdown_article_text(crawl_result["content_markdown"])
+                elif crawl_result.get("content_html"):
+                    content_text = html_to_text(crawl_result["content_html"])
+
+                if not content_text.strip():
+                    continue
+
+                # Generate insights using the URL processor's LLM summarizer
+                await self._url_processor._handle_additional_insights(
+                    message,
+                    content_text,
+                    chosen_lang,
+                    req_id,
+                    correlation_id,
+                )
+
+            except Exception as e:
+                logger.error(
+                    "batch_insights_error",
+                    extra={"url": url, "cid": correlation_id, "error": str(e)},
+                )

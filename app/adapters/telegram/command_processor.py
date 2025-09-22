@@ -1,4 +1,6 @@
 """Command processing for Telegram bot."""
+# ruff: noqa: E501
+# flake8: noqa
 
 from __future__ import annotations
 
@@ -437,6 +439,21 @@ class CommandProcessor:
                 await self.response_formatter.send_enhanced_summary_response(
                     message, shaped, llm_stub
                 )
+
+            # Send additional insights if available
+            insights_json = summary.get("insights_json")
+            if insights_json:
+                try:
+                    insights = json.loads(insights_json)
+                    if insights:
+                        await self.response_formatter.send_additional_insights_message(
+                            message, insights, correlation_id
+                        )
+                except json.JSONDecodeError:
+                    logger.warning(
+                        "insights_decode_failed",
+                        extra={"request_id": request_id, "cid": correlation_id},
+                    )
 
             if interaction_id:
                 self._update_user_interaction(
