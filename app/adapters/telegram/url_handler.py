@@ -77,8 +77,43 @@ class URLHandler:
         interaction_id: int,
         start_time: float,
     ) -> None:
-        """Handle direct URL message."""
+        """Handle direct URL message with security validation."""
         urls = extract_all_urls(text)
+
+        # Security check: limit batch size
+        if len(urls) > self.response_formatter.MAX_BATCH_URLS:
+            await self.response_formatter.safe_reply(
+                message,
+                f"❌ Too many URLs ({len(urls)}). Maximum allowed: {self.response_formatter.MAX_BATCH_URLS}.",
+            )
+            logger.warning(
+                "direct_url_batch_limit_exceeded",
+                extra={
+                    "url_count": len(urls),
+                    "max_allowed": self.response_formatter.MAX_BATCH_URLS,
+                    "uid": uid,
+                },
+            )
+            return
+
+        # Validate each URL for security
+        valid_urls = []
+        for url in urls:
+            is_valid, error_msg = self.response_formatter._validate_url(url)
+            if is_valid:
+                valid_urls.append(url)
+            else:
+                logger.warning(
+                    "invalid_direct_url", extra={"url": url, "error": error_msg, "uid": uid}
+                )
+
+        if not valid_urls:
+            await self.response_formatter.safe_reply(
+                message, "❌ No valid URLs found after security checks."
+            )
+            return
+
+        urls = valid_urls
 
         if len(urls) > 1:
             await self._request_multi_link_confirmation(

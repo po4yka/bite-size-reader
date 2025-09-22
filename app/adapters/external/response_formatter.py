@@ -34,6 +34,97 @@ class ResponseFormatter:
         # Keep a safety margin to avoid hitting the hard limit.
         self.MAX_MESSAGE_CHARS = 3500
 
+        # Security limits
+        self.MAX_URL_LENGTH = 2048
+        self.MAX_FILE_SIZE_MB = 10
+        self.MAX_BATCH_URLS = 50
+        self.MIN_MESSAGE_INTERVAL_MS = 100  # Rate limiting
+        self._last_message_time: float = 0.0
+
+    def _is_safe_content(self, text: str) -> tuple[bool, str]:
+        """Validate content for security issues."""
+        import re
+
+        # Check for suspicious patterns
+        suspicious_patterns = [
+            r"<script[^>]*>.*?</script>",
+            r"javascript:",
+            r"vbscript:",
+            r"on\w+\s*=",
+            r"alert\(",
+            r"confirm\(",
+            r"prompt\(",
+        ]
+
+        for pattern in suspicious_patterns:
+            if re.search(pattern, text, re.IGNORECASE):
+                return False, f"Suspicious script content detected: {pattern}"
+
+        # Check for excessive special characters
+        special_chars = sum(1 for c in text if ord(c) < 32 or ord(c) > 126)
+        if special_chars / len(text) > 0.3:
+            return False, "Excessive special characters detected"
+
+        return True, ""
+
+    def _sanitize_filename(self, filename: str) -> str:
+        """Sanitize filename to prevent path traversal and other issues."""
+        import re
+
+        # Remove or replace dangerous characters
+        filename = re.sub(r'[<>:"/\\|?*]', "_", filename)
+        filename = re.sub(r"_+", "_", filename)  # Replace multiple underscores with single
+        filename = filename.strip("_")  # Remove leading/trailing underscores
+
+        # Ensure reasonable length
+        if len(filename) > 100:
+            filename = filename[:97] + "..."
+
+        return filename or "summary.json"
+
+    def _validate_url(self, url: str) -> tuple[bool, str]:
+        """Validate URL for security."""
+        if not url or len(url) > self.MAX_URL_LENGTH:
+            return False, f"URL too long (max {self.MAX_URL_LENGTH} chars)"
+
+        # Basic URL validation
+        import re
+
+        url_pattern = (
+            r"^https?://(?:[-\w.])+(?:[:\d]+)?(?:/(?:[\w/_.])*(?:\?(?:[\w&=%.])*)?(?:#(?:\w*))*)?$"
+        )
+        if not re.match(url_pattern, url):
+            return False, "Invalid URL format"
+
+        # Block suspicious URLs
+        suspicious_domains = [
+            "localhost",
+            "127.0.0.1",
+            "0.0.0.0",
+            "file://",
+            "ftp://",
+            "javascript:",
+            "data:",
+        ]
+
+        for domain in suspicious_domains:
+            if domain in url.lower():
+                return False, f"Suspicious domain: {domain}"
+
+        return True, ""
+
+    def _check_rate_limit(self) -> bool:
+        """Check if we're within rate limits."""
+        import time
+
+        current_time = time.time() * 1000  # Convert to milliseconds
+
+        if current_time - self._last_message_time < self.MIN_MESSAGE_INTERVAL_MS:
+            return False
+
+        self._last_message_time = current_time
+        return True
+
     async def send_help(self, message: Any) -> None:
         """Send help message to user."""
         help_text = (
@@ -643,7 +734,37 @@ class ResponseFormatter:
         await self.safe_reply(message, f"```json\n{pretty}\n```")
 
     async def safe_reply(self, message: Any, text: str, *, parse_mode: str | None = None) -> None:
-        """Safely reply to a message with error handling."""
+        """Safely reply to a message with comprehensive security checks."""
+        # Input validation
+        if not text or not text.strip():
+            logger.warning("safe_reply_empty_text", extra={"parse_mode": parse_mode is not None})
+            return
+
+        # Security content check
+        is_safe, error_msg = self._is_safe_content(text)
+        if not is_safe:
+            logger.warning(
+                "safe_reply_unsafe_content_blocked",
+                extra={"error": error_msg, "text_length": len(text)},
+            )
+            # Send safe error message instead
+            safe_text = "❌ Message blocked for security reasons."
+            text = safe_text
+
+        # Length check
+        if len(text) > self.MAX_MESSAGE_CHARS:
+            logger.warning(
+                "safe_reply_message_too_long",
+                extra={"length": len(text), "max": self.MAX_MESSAGE_CHARS},
+            )
+            # Truncate if too long
+            text = text[: self.MAX_MESSAGE_CHARS - 10] + "..."
+
+        # Rate limiting check
+        if not self._check_rate_limit():
+            logger.warning("safe_reply_rate_limited", extra={"text_length": len(text)})
+            return
+
         if self._safe_reply_func is not None:
             kwargs = {"parse_mode": parse_mode} if parse_mode is not None else {}
             await self._safe_reply_func(message, text, **kwargs)
@@ -660,12 +781,44 @@ class ResponseFormatter:
             except Exception:
                 pass
         except Exception as e:  # noqa: BLE001
-            logger.error("reply_failed", extra={"error": str(e)})
+            logger.error("reply_failed", extra={"error": str(e), "text_length": len(text)})
 
     async def safe_reply_with_id(
         self, message: Any, text: str, *, parse_mode: str | None = None
     ) -> int | None:
-        """Safely reply to a message and return the message ID for progress tracking."""
+        """Safely reply to a message and return the message ID for progress tracking with security checks."""
+        # Input validation
+        if not text or not text.strip():
+            logger.warning(
+                "safe_reply_with_id_empty_text", extra={"parse_mode": parse_mode is not None}
+            )
+            return None
+
+        # Security content check
+        is_safe, error_msg = self._is_safe_content(text)
+        if not is_safe:
+            logger.warning(
+                "safe_reply_with_id_unsafe_content_blocked",
+                extra={"error": error_msg, "text_length": len(text)},
+            )
+            # Send safe error message instead
+            safe_text = "❌ Message blocked for security reasons."
+            text = safe_text
+
+        # Length check
+        if len(text) > self.MAX_MESSAGE_CHARS:
+            logger.warning(
+                "safe_reply_with_id_message_too_long",
+                extra={"length": len(text), "max": self.MAX_MESSAGE_CHARS},
+            )
+            # Truncate if too long
+            text = text[: self.MAX_MESSAGE_CHARS - 10] + "..."
+
+        # Rate limiting check
+        if not self._check_rate_limit():
+            logger.warning("safe_reply_with_id_rate_limited", extra={"text_length": len(text)})
+            return None
+
         if self._safe_reply_func is not None:
             # When a custom reply function is provided (e.g., compatibility layer),
             # we still want to obtain a Telegram message_id for progress updates.
@@ -734,8 +887,45 @@ class ResponseFormatter:
             return None
 
     async def edit_message(self, chat_id: int, message_id: int, text: str) -> None:
-        """Edit an existing message in Telegram."""
+        """Edit an existing message in Telegram with security checks."""
         try:
+            # Input validation
+            if not text or not text.strip():
+                logger.warning(
+                    "edit_message_empty_text", extra={"chat_id": chat_id, "message_id": message_id}
+                )
+                return
+
+            # Security content check
+            is_safe, error_msg = self._is_safe_content(text)
+            if not is_safe:
+                logger.warning(
+                    "edit_message_unsafe_content_blocked",
+                    extra={"error": error_msg, "chat_id": chat_id, "message_id": message_id},
+                )
+                return
+
+            # Length check
+            if len(text) > self.MAX_MESSAGE_CHARS:
+                logger.warning(
+                    "edit_message_too_long",
+                    extra={
+                        "length": len(text),
+                        "max": self.MAX_MESSAGE_CHARS,
+                        "chat_id": chat_id,
+                        "message_id": message_id,
+                    },
+                )
+                return
+
+            # Rate limiting check
+            if not self._check_rate_limit():
+                logger.warning(
+                    "edit_message_rate_limited",
+                    extra={"chat_id": chat_id, "message_id": message_id},
+                )
+                return
+
             logger.debug(
                 "edit_message_attempt",
                 extra={
