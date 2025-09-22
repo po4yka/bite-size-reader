@@ -60,10 +60,16 @@ class ResponseFormatter:
             if re.search(pattern, text, re.IGNORECASE):
                 return False, f"Suspicious script content detected: {pattern}"
 
-        # Check for excessive special characters
-        special_chars = sum(1 for c in text if ord(c) < 32 or ord(c) > 126)
-        if special_chars / len(text) > 0.3:
-            return False, "Excessive special characters detected"
+        # Check for control characters (non-printable ASCII)
+        control_chars = sum(1 for c in text if ord(c) < 32)
+        if control_chars > 0:
+            return False, f"Control characters detected: {control_chars} found"
+
+        # Check for extremely long lines (potential buffer overflow)
+        lines = text.split("\n")
+        for line in lines:
+            if len(line) > 10000:  # Very long lines are suspicious
+                return False, f"Line too long: {len(line)} characters"
 
         return True, ""
 
@@ -90,9 +96,8 @@ class ResponseFormatter:
         # Basic URL validation
         import re
 
-        url_pattern = (
-            r"^https?://(?:[-\w.])+(?:[:\d]+)?(?:/(?:[\w/_.])*(?:\?(?:[\w&=%.])*)?(?:#(?:\w*))*)?$"
-        )
+        # More permissive URL pattern that allows common URL characters
+        url_pattern = r"^https?://[^\s<>\"{}|\\^`]*$"
         if not re.match(url_pattern, url):
             return False, "Invalid URL format"
 
