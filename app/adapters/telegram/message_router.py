@@ -348,9 +348,14 @@ class MessageRouter:
             # Use only valid URLs
             urls = valid_urls
 
-            # Send initial confirmation message and get message ID for progress updates
-            progress_message_id = await self.response_formatter.safe_reply_with_id(
+            # Send initial confirmation message (kept as a standalone message)
+            await self.response_formatter.safe_reply(
                 message, f"📄 File accepted. Processing {len(urls)} links."
+            )
+            # Create a dedicated progress message that we will edit in-place
+            progress_message_id = await self.response_formatter.safe_reply_with_id(
+                message,
+                f"🔄 Processing links: 0/{len(urls)}\n{self._create_progress_bar(0, len(urls))}",
             )
             logger.debug(
                 "document_file_processing_started",
