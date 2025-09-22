@@ -428,7 +428,15 @@ class CommandProcessor:
 
             # Send the summary
             if shaped:
-                await self.response_formatter.send_enhanced_summary_response(message, shaped, None)
+                # Try to resolve model used for this request to avoid 'unknown' in header
+                try:
+                    model_name = self.db.get_latest_llm_model_by_request_id(request_id)
+                except Exception:
+                    model_name = None
+                llm_stub = type("LLMStub", (), {"model": model_name})()
+                await self.response_formatter.send_enhanced_summary_response(
+                    message, shaped, llm_stub
+                )
 
             if interaction_id:
                 self._update_user_interaction(

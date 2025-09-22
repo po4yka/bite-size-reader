@@ -603,6 +603,36 @@ class Database:
             )
             return lid
 
+    def get_latest_llm_model_by_request_id(self, request_id: int) -> str | None:
+        """Return the most recent non-null model used for a given request, if any.
+
+        Looks up the latest row in ``llm_calls`` for the ``request_id`` and returns the
+        ``model`` column. Returns ``None`` if no row is found or the model is empty.
+        """
+        with self.connect() as conn:
+            try:
+                row = conn.execute(
+                    "SELECT model FROM llm_calls WHERE request_id = ? AND model IS NOT NULL ORDER BY id DESC LIMIT 1",
+                    (request_id,),
+                ).fetchone()
+            except sqlite3.Error as exc:  # pragma: no cover - defensive
+                self._logger.error(
+                    "db_query_error",
+                    extra={"sql": "SELECT model FROM llm_calls ...", "error": str(exc)},
+                )
+                return None
+
+            if not row:
+                return None
+            # row may be sqlite3.Row or tuple
+            model_value = row[0]
+            if not model_value:
+                return None
+            try:
+                return str(model_value)
+            except Exception:
+                return None
+
     def insert_summary(
         self,
         *,

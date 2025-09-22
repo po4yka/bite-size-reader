@@ -486,7 +486,13 @@ class URLProcessor:
                 message, norm, correlation_id or "", silent=silent
             )
             await self.response_formatter.send_cached_summary_notification(message, silent=silent)
-            await self.response_formatter.send_enhanced_summary_response(message, shaped, None)
+            # Resolve model used previously for this request and pass a stub to avoid 'unknown'
+            try:
+                model_name = self.db.get_latest_llm_model_by_request_id(req_id)
+            except Exception:
+                model_name = None
+            llm_stub = type("LLMStub", (), {"model": model_name})()
+            await self.response_formatter.send_enhanced_summary_response(message, shaped, llm_stub)
 
             insights_raw = summary_row.get("insights_json")
             if isinstance(insights_raw, str) and insights_raw.strip():
