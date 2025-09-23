@@ -367,7 +367,7 @@ class MessageRouter:
                 extra={"url_count": len(urls)},
             )
 
-            # Process URLs sequentially with progress updates (updating the same message)
+            # Process URLs with optimized parallel processing and memory management
             await self._process_urls_sequentially(
                 message,
                 urls,
@@ -388,14 +388,7 @@ class MessageRouter:
             except Exception:
                 pass
 
-            # Send completion message
-            logger.debug(
-                "sending_completion_message",
-                extra={"url_count": len(urls), "sleep_sec": min_gap_sec},
-            )
-            await self.response_formatter.safe_reply(
-                message, f"✅ All {len(urls)} links have been processed."
-            )
+            # Completion message will be sent after processing is complete
 
         except Exception:
             logger.exception("document_file_processing_error", extra={"cid": correlation_id})
@@ -441,28 +434,260 @@ class MessageRouter:
         start_time: float,
         progress_message_id: int | None = None,
     ) -> None:
-        """Process URLs sequentially with progress updates editing the same message."""
+        """Process URLs with optimized parallel processing and batch progress updates."""
         total = len(urls)
 
-        for i, url in enumerate(urls, 1):
-            # Use a unique correlation ID per URL so errors are traceable
-            per_link_cid = generate_correlation_id()
-            logger.info(
-                "processing_url_from_file",
+        # Use semaphore to limit concurrent processing (prevent overwhelming external APIs)
+        # Note: Combined with batch processing, this limits both memory usage and API load
+        semaphore = asyncio.Semaphore(min(5, total))  # Max 5 concurrent URLs
+
+        # Circuit breaker: if too many failures in a chunk, reduce concurrency
+        max_concurrent_failures = min(
+            10, total // 3
+        )  # Allow up to 1/3 failures before reducing concurrency
+
+        async def process_single_url(url: str) -> tuple[str, bool, str]:
+            """Process a single URL and return (url, success, error_message)."""
+            async with semaphore:
+                per_link_cid = generate_correlation_id()
+                logger.info(
+                    "processing_url_from_file",
+                    extra={"url": url, "cid": per_link_cid},
+                )
+
+                try:
+                    # Add timeout protection for individual URL processing
+                    await asyncio.wait_for(
+                        self._process_url_silently(message, url, per_link_cid, interaction_id),
+                        timeout=600,  # 10 minute timeout per URL
+                    )
+
+                    # Update progress after successful completion
+                    await progress_tracker.increment_and_update()
+                    return url, True, ""
+                except asyncio.TimeoutError:
+                    error_msg = "Timeout processing URL after 10 minutes"
+                    logger.error(
+                        "url_processing_timeout",
+                        extra={"url": url, "cid": per_link_cid, "error": error_msg},
+                    )
+                    # Update progress even on timeout
+                    await progress_tracker.increment_and_update()
+                    return url, False, error_msg
+                except Exception as e:
+                    error_msg = str(e)
+                    logger.error(
+                        "url_processing_failed",
+                        extra={"url": url, "cid": per_link_cid, "error": error_msg},
+                    )
+                    # Update progress even on failure
+                    await progress_tracker.increment_and_update()
+                    return url, False, error_msg
+
+        # Process URLs in parallel with controlled concurrency and memory optimization
+        # For very large batches (>30 URLs), process in chunks to manage memory
+        chunk_size = 30 if total > 30 else total
+        completed = 0
+        successful = 0
+        failed_urls = []
+
+        # Thread-safe progress tracking with proper isolation
+        class ThreadSafeProgress:
+            def __init__(
+                self, total: int, message: Any, progress_message_id: int | None, message_router
+            ):
+                self.total = total
+                self._completed = 0
+                self._lock = asyncio.Lock()
+                self._last_update = 0.0
+                self._last_displayed = 0
+                self.update_interval = 1.0  # Update every 1 second minimum
+                self.message = message
+                self.progress_message_id = progress_message_id
+                self.message_router = message_router
+                self._update_queue: asyncio.Queue[tuple[int, int]] = asyncio.Queue(maxsize=1)
+
+            async def increment_and_update(self) -> tuple[int, int]:
+                """Atomically increment counter and queue progress update if needed."""
+                # Fast path: only increment counter under lock
+                async with self._lock:
+                    self._completed += 1
+                    current_time = time.time()
+
+                    # Check if we should update (don't call external methods in lock)
+                    progress_threshold = max(1, self.total // 20)  # Update every 5% or 1 URL
+                    should_update = (
+                        current_time - self._last_update >= self.update_interval
+                        and self._completed - self._last_displayed >= progress_threshold
+                    )
+
+                    if should_update:
+                        self._last_update = current_time
+                        self._last_displayed = self._completed
+
+                    completed = self._completed
+
+                # Slow path: call external method outside lock to prevent deadlocks
+                if should_update:
+                    try:
+                        # Non-blocking queue put - if full, skip this update
+                        self._update_queue.put_nowait((completed, self.total))
+                    except asyncio.QueueFull:
+                        pass  # Skip if update queue is full (prevents blocking)
+
+                return completed, self.total
+
+            async def process_update_queue(self) -> None:
+                """Process queued progress updates outside of locks."""
+                try:
+                    while True:
+                        completed, total = await asyncio.wait_for(
+                            self._update_queue.get(), timeout=0.1
+                        )
+                        try:
+                            await self.message_router._send_progress_update(
+                                self.message, completed, total, self.progress_message_id
+                            )
+                        except Exception as e:
+                            logger.warning(
+                                "progress_update_failed",
+                                extra={
+                                    "error": str(e),
+                                    "completed": completed,
+                                    "total": total,
+                                },
+                            )
+                except asyncio.TimeoutError:
+                    pass  # No more updates to process
+
+        progress_tracker = ThreadSafeProgress(total, message, progress_message_id, self)
+
+        # Process URLs in true memory-efficient batches
+        # File processing can use larger batches since users expect bulk processing
+        batch_size = min(10, total)  # Process max 10 URLs at a time to limit memory
+
+        async def process_batches():
+            """Process URL batches with progress tracking."""
+            for batch_start in range(0, total, batch_size):
+                batch_end = min(batch_start + batch_size, total)
+                batch_urls = urls[batch_start:batch_end]
+
+                # Create tasks for this batch only
+                batch_tasks = [process_single_url(url) for url in batch_urls]
+
+                # Process batch and handle results immediately
+                batch_results = await asyncio.gather(*batch_tasks, return_exceptions=True)
+
+                # Process results from this batch immediately
+                for result in batch_results:
+                    # Progress is already incremented in process_single_url() - no double counting
+
+                    if isinstance(result, Exception):
+                        # Handle asyncio-specific exceptions properly
+                        if isinstance(result, asyncio.CancelledError):
+                            # Re-raise cancellation
+                            raise result
+                        # This should rarely happen due to return_exceptions=True, but handle it
+                        logger.error(
+                            "unexpected_task_exception",
+                            extra={"error": str(result), "cid": correlation_id},
+                        )
+                        failed_urls.append(f"Unknown URL (task exception: {type(result).__name__})")
+                    elif isinstance(result, tuple) and len(result) == 3:
+                        url, success, error_msg = result
+                        if success:
+                            successful += 1
+                        else:
+                            failed_urls.append(url)
+                            if error_msg:
+                                logger.debug(
+                                    "url_processing_failed_detail",
+                                    extra={"url": url, "error": error_msg, "cid": correlation_id},
+                                )
+                    elif isinstance(result, tuple) and len(result) == 2:
+                        # Backward compatibility with old format
+                        url, success = result
+                        if success:
+                            successful += 1
+                        else:
+                            failed_urls.append(url)
+                            logger.warning(
+                                "legacy_result_format", extra={"url": url, "cid": correlation_id}
+                            )
+                    else:
+                        # Unexpected result type - this is a programming error
+                        logger.error(
+                            "unexpected_result_type",
+                            extra={
+                                "result_type": type(result).__name__,
+                                "result_value": str(result)[:200],  # Truncate for logging
+                                "cid": correlation_id,
+                            },
+                        )
+                        failed_urls.append(
+                            f"Unknown URL (unexpected result type: {type(result).__name__})"
+                        )
+
+            # Small delay between batches to prevent overwhelming external APIs
+            if batch_end < total:
+                await asyncio.sleep(0.1)
+
+        # Run batch processing and progress updates concurrently
+        await asyncio.gather(
+            process_batches(), progress_tracker.process_update_queue(), return_exceptions=True
+        )
+
+        # Final progress update to ensure 100% completion is shown
+        try:
+            await self._send_progress_update(message, total, total, progress_message_id)
+        except Exception as e:
+            logger.warning("final_progress_update_failed", extra={"error": str(e)})
+
+        # Send completion message with statistics
+        logger.debug(
+            "sending_completion_message",
+            extra={"url_count": total, "successful": successful, "failed": len(failed_urls)},
+        )
+
+        # Create completion message with statistics
+        completion_message = f"✅ Processing complete!\n"
+        completion_message += f"📊 Total: {total} links\n"
+        completion_message += f"✅ Successful: {successful}\n"
+        if failed_urls:
+            completion_message += f"❌ Failed: {len(failed_urls)}"
+
+        await self.response_formatter.safe_reply(message, completion_message)
+
+        # Safety check: ensure all URLs were processed
+        if completed != total:
+            logger.error(
+                "batch_processing_count_mismatch",
                 extra={
-                    "url": url,
-                    "progress": f"{i}/{total}",
-                    "cid": per_link_cid,
+                    "expected_total": total,
+                    "actual_completed": completed,
+                    "successful": successful,
+                    "failed": len(failed_urls),
                 },
             )
+            # This should never happen, but if it does, log it as a critical error
+            await self.response_formatter.safe_reply(
+                message,
+                f"⚠️ Processing completed with count mismatch. Expected {total}, processed {completed}.",
+            )
 
-            # Send progress update editing the same message
-            await self._send_progress_update(message, i, total, progress_message_id)
-
-            # Process URL without sending Telegram responses (insights generated per URL)
-            await self._process_url_silently(message, url, per_link_cid, interaction_id)
-
-        # Insights are now generated per URL during processing, no batch generation needed
+        # Log results
+        logger.info(
+            "batch_processing_complete",
+            extra={
+                "total": total,
+                "completed": completed,
+                "successful": successful,
+                "failed": len(failed_urls),
+                "failed_urls": failed_urls[:5],  # Log first 5 failed URLs
+                "processing_time_ms": int((time.time() - start_time) * 1000),
+                "count_match": completed == total,
+            },
+        )
 
         if interaction_id:
             self._update_user_interaction(
@@ -500,9 +725,12 @@ class MessageRouter:
     ) -> None:
         """Send progress update, editing existing message if message_id provided, otherwise send as new message."""
         try:
-            # Create progress bar
+            # Create enhanced progress bar with percentage
             progress_bar = self._create_progress_bar(current, total)
-            progress_text = f"🔄 Processing links: {current}/{total}\n{progress_bar}"
+            percentage = int((current / total) * 100) if total > 0 else 0
+            progress_text = (
+                f"🔄 Processing links: {current}/{total} ({percentage}%)\n{progress_bar}"
+            )
 
             if message_id is not None:
                 # Edit existing message

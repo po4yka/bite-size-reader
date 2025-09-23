@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import time
 from typing import TYPE_CHECKING, Any
@@ -138,12 +139,14 @@ class URLHandler:
         interaction_id: int,
         start_time: float,
     ) -> None:
-        """Handle yes/no confirmation for multiple links."""
+        """Handle yes/no confirmation for multiple links with optimized parallel processing."""
         normalized = self._normalize_response(text)
 
         if self._is_affirmative(normalized):
             urls = self._pending_multi_links.pop(uid)
-            await self.response_formatter.safe_reply(message, f"Processing {len(urls)} links...")
+            await self.response_formatter.safe_reply(
+                message, f"🚀 Processing {len(urls)} links in parallel..."
+            )
             if interaction_id:
                 self._update_user_interaction(
                     interaction_id=interaction_id,
@@ -151,13 +154,9 @@ class URLHandler:
                     response_type="processing",
                     processing_time_ms=int((time.time() - start_time) * 1000),
                 )
-            for u in urls:
-                per_link_cid = generate_correlation_id()
-                logger.debug(
-                    "processing_link",
-                    extra={"uid": uid, "url": u, "cid": per_link_cid},
-                )
-                await self.url_processor.handle_url_flow(message, u, correlation_id=per_link_cid)
+
+            # Process URLs in parallel with controlled concurrency
+            await self._process_multiple_urls_parallel(message, urls, uid, correlation_id)
             return
 
         if self._is_negative(normalized):
@@ -208,6 +207,303 @@ class URLHandler:
                 response_type="confirmation",
                 processing_time_ms=int((time.time() - start_time) * 1000),
             )
+
+    async def _process_multiple_urls_parallel(
+        self,
+        message: Any,
+        urls: list[str],
+        uid: int,
+        correlation_id: str,
+    ) -> None:
+        """Process multiple URLs in parallel with controlled concurrency."""
+        if not urls:
+            return
+
+        # Use semaphore to limit concurrent processing (prevent overwhelming external APIs)
+        semaphore = asyncio.Semaphore(
+            min(3, len(urls))
+        )  # Max 3 concurrent URLs for user-initiated batches
+
+        # Thread-safe progress tracking with proper isolation
+        class ThreadSafeProgress:
+            def __init__(
+                self, total: int, message: Any, progress_msg_id: int | None, response_formatter
+            ):
+                self.total = total
+                self._completed = 0
+                self._lock = asyncio.Lock()
+                self._last_update = 0.0
+                self._last_displayed = 0
+                self.update_interval = 1.0  # Update every 1 second minimum
+                self.message = message
+                self.progress_msg_id = progress_msg_id
+                self.response_formatter = response_formatter
+                self._update_queue: asyncio.Queue[tuple[int, int]] = asyncio.Queue(maxsize=1)
+
+            async def increment_and_update(self) -> tuple[int, int]:
+                """Atomically increment counter and queue progress update if needed."""
+                # Fast path: only increment counter under lock
+                async with self._lock:
+                    self._completed += 1
+                    current_time = time.time()
+
+                    # Check if we should update (don't call external methods in lock)
+                    progress_threshold = max(1, self.total // 20)  # Update every 5% or 1 URL
+                    should_update = (
+                        current_time - self._last_update >= self.update_interval
+                        and self._completed - self._last_displayed >= progress_threshold
+                    )
+
+                    if should_update:
+                        self._last_update = current_time
+                        self._last_displayed = self._completed
+
+                    completed = self._completed
+
+                # Slow path: call external method outside lock to prevent deadlocks
+                if should_update:
+                    try:
+                        # Non-blocking queue put - if full, skip this update
+                        self._update_queue.put_nowait((completed, self.total))
+                    except asyncio.QueueFull:
+                        pass  # Skip if update queue is full (prevents blocking)
+
+                return completed, self.total
+
+            async def process_update_queue(self) -> None:
+                """Process queued progress updates outside of locks."""
+                try:
+                    while True:
+                        completed, total = await asyncio.wait_for(
+                            self._update_queue.get(), timeout=0.1
+                        )
+                        try:
+                            percentage = int((completed / total) * 100)
+                            progress_text = f"🔄 Processing {total} links in parallel: {completed}/{total} ({percentage}%)"
+
+                            chat_id = getattr(self.message.chat, "id", None)
+                            if chat_id and self.progress_msg_id:
+                                await self.response_formatter.edit_message(
+                                    chat_id, self.progress_msg_id, progress_text
+                                )
+                        except Exception as e:
+                            logger.warning(
+                                "progress_update_failed",
+                                extra={
+                                    "error": str(e),
+                                    "completed": completed,
+                                    "total": total,
+                                    "progress_msg_id": self.progress_msg_id,
+                                },
+                            )
+                except TimeoutError:
+                    pass  # No more updates to process
+
+        async def process_single_url(
+            url: str, progress_tracker: ThreadSafeProgress
+        ) -> tuple[str, bool, str]:
+            """Process a single URL and return (url, success, error_message)."""
+            async with semaphore:
+                per_link_cid = generate_correlation_id()
+                logger.debug(
+                    "processing_link_parallel",
+                    extra={"uid": uid, "url": url, "cid": per_link_cid},
+                )
+
+                try:
+                    # Add timeout protection for individual URL processing
+                    await asyncio.wait_for(
+                        self.url_processor.handle_url_flow(
+                            message, url, correlation_id=per_link_cid
+                        ),
+                        timeout=600,  # 10 minute timeout per URL
+                    )
+
+                    # Update progress after successful completion
+                    await progress_tracker.increment_and_update()
+
+                    return url, True, ""
+                except TimeoutError:
+                    error_msg = "Timeout processing URL after 10 minutes"
+                    logger.error(
+                        "parallel_url_processing_timeout",
+                        extra={"url": url, "cid": per_link_cid, "error": error_msg, "uid": uid},
+                    )
+                    # Update progress even on timeout
+                    await progress_tracker.increment_and_update()
+
+                    return url, False, error_msg
+                except Exception as e:
+                    # Enhanced error handling with transient failure detection
+                    error_msg = str(e)
+                    transient_keywords = ["timeout", "connection", "network", "rate limit"]
+                    if any(keyword in error_msg.lower() for keyword in transient_keywords):
+                        logger.warning(
+                            "transient_error_detected",
+                            extra={"url": url, "cid": per_link_cid, "error": error_msg, "uid": uid},
+                        )
+                        # Could implement retry logic here in the future
+
+                    logger.error(
+                        "parallel_url_processing_failed",
+                        extra={"url": url, "cid": per_link_cid, "error": error_msg, "uid": uid},
+                    )
+
+                    # Update progress even on failure
+                    await progress_tracker.increment_and_update()
+
+                    return url, False, error_msg
+
+        # Send initial progress message with error handling
+        try:
+            progress_msg_id = await self.response_formatter.safe_reply_with_id(
+                message, f"🔄 Processing {len(urls)} links in parallel: 0/{len(urls)} (0%)"
+            )
+        except Exception as e:
+            logger.warning(
+                "failed_to_create_progress_message",
+                extra={"error": str(e), "uid": uid, "url_count": len(urls)},
+            )
+            progress_msg_id = None
+
+        # Create progress tracker
+        progress_tracker = ThreadSafeProgress(
+            len(urls), message, progress_msg_id, self.response_formatter
+        )
+
+        # Initialize counters for result tracking
+        successful = 0
+        failed = 0
+        failed_urls = []
+
+        # Process URLs in memory-efficient batches to prevent resource exhaustion
+        # User-initiated batches use smaller batches for better responsiveness and user control
+        batch_size = min(5, len(urls))  # Process max 5 URLs at a time for user-initiated batches
+
+        async def process_batches():
+            """Process URL batches with progress tracking."""
+            for batch_start in range(0, len(urls), batch_size):
+                batch_end = min(batch_start + batch_size, len(urls))
+                batch_urls = urls[batch_start:batch_end]
+
+                # Create tasks for this batch only
+                batch_tasks = [process_single_url(url, progress_tracker) for url in batch_urls]
+
+                # Process batch and handle results immediately
+                batch_results = await asyncio.gather(*batch_tasks, return_exceptions=True)
+
+                # Process results from this batch immediately
+                for result in batch_results:
+                    # Progress is already incremented in process_single_url() - no double counting
+                    if isinstance(result, Exception):
+                        # Handle asyncio-specific exceptions properly
+                        if isinstance(result, asyncio.CancelledError):
+                            # Re-raise cancellation
+                            raise result
+                        # This should rarely happen due to return_exceptions=True, but handle it
+                        failed += 1
+                        logger.error(
+                            "unexpected_task_exception", extra={"error": str(result), "uid": uid}
+                        )
+                        failed_urls.append(f"Unknown URL (task exception: {type(result).__name__})")
+                    elif isinstance(result, tuple) and len(result) == 3:
+                        url, success, error_msg = result
+                        if success:
+                            successful += 1
+                        else:
+                            failed += 1
+                            failed_urls.append(url)
+                            if error_msg:
+                                logger.debug(
+                                    "url_processing_failed_detail",
+                                    extra={"url": url, "error": error_msg, "uid": uid},
+                                )
+                    elif isinstance(result, tuple) and len(result) == 2:
+                        # Backward compatibility with old format
+                        url, success = result
+                        if success:
+                            successful += 1
+                        else:
+                            failed += 1
+                            failed_urls.append(url)
+                            logger.warning("legacy_result_format", extra={"url": url, "uid": uid})
+                    else:
+                        # Unexpected result type - this is a programming error
+                        failed += 1
+                        logger.error(
+                            "unexpected_result_type",
+                            extra={
+                                "result_type": type(result).__name__,
+                                "result_value": str(result)[:200],  # Truncate for logging
+                                "uid": uid,
+                            },
+                        )
+                        failed_urls.append(
+                            f"Unknown URL (unexpected result type: {type(result).__name__})"
+                        )
+
+                # Small delay between batches to prevent overwhelming external APIs
+                if batch_end < len(urls):
+                    await asyncio.sleep(0.1)
+
+        # Run batch processing and progress updates concurrently
+        await asyncio.gather(
+            process_batches(), progress_tracker.process_update_queue(), return_exceptions=True
+        )
+
+        # Send completion summary with detailed feedback
+        if failed == 0:
+            await self.response_formatter.safe_reply(
+                message, f"✅ Successfully processed all {successful} links!"
+            )
+        elif successful > 0:
+            # Partial success - provide helpful feedback
+            failure_rate = (failed / len(urls)) * 100
+            if failure_rate <= 20:  # Less than 20% failed
+                message_text = (
+                    f"✅ Processed {successful}/{len(urls)} links successfully! "
+                    f"({failed} failed - likely temporary issues)"
+                )
+            else:
+                message_text = (
+                    f"⚠️ Processed {successful}/{len(urls)} links successfully. "
+                    f"{failed} failed. Some URLs may be inaccessible or invalid."
+                )
+            await self.response_formatter.safe_reply(message, message_text)
+        else:
+            # Complete failure
+            await self.response_formatter.safe_reply(
+                message,
+                "❌ Failed to process any links. Please check if URLs are valid and accessible.",
+            )
+
+        # Safety check: ensure all URLs were processed
+        expected_total = len(urls)
+        actual_total = successful + failed
+
+        if actual_total != expected_total:
+            logger.error(
+                "parallel_processing_count_mismatch",
+                extra={
+                    "uid": uid,
+                    "expected_total": expected_total,
+                    "actual_total": actual_total,
+                    "successful": successful,
+                    "failed": failed,
+                },
+            )
+
+        logger.info(
+            "parallel_processing_complete",
+            extra={
+                "uid": uid,
+                "total": expected_total,
+                "successful": successful,
+                "failed": failed,
+                "failed_urls": failed_urls[:3],  # Log first 3 failed URLs
+                "count_match": actual_total == expected_total,
+            },
+        )
 
     def _update_user_interaction(
         self,

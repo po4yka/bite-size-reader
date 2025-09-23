@@ -138,36 +138,39 @@ def extract_first_url(text: str) -> str | None:
 
 
 def extract_all_urls(text: str) -> list[str]:
-    """Extract all URLs from text."""
+    """Extract all URLs from text with optimized performance."""
     if not text or not isinstance(text, str):
         return []
     if len(text) > 10000:  # Prevent processing of extremely long text
         return []
 
     try:
-        pattern = re.compile(r"https?://[\w\.-]+[\w\./\-?=&%#]*", re.IGNORECASE)
+        # Optimized regex pattern for better performance
+        pattern = re.compile(r"https?://[^\s<>\"']+", re.IGNORECASE)
         urls = pattern.findall(text) if text else []
 
-        # Validate and filter URLs
+        if not urls:
+            return []
+
+        # Validate and filter URLs with early exit optimization
         valid_urls = []
+        seen = set()  # Combine deduplication with validation
+
         for url in urls:
+            # Skip if already seen (deduplication)
+            if url in seen:
+                continue
+
             try:
                 _validate_url_input(url)
                 valid_urls.append(url)
+                seen.add(url)
             except ValueError:
-                # Skip invalid URLs
+                # Skip invalid URLs silently for performance
                 continue
 
-        # Preserve order, dedupe
-        seen = set()
-        out: list[str] = []
-        for u in valid_urls:
-            if u not in seen:
-                seen.add(u)
-                out.append(u)
-
-        logger.debug("extract_all_urls", extra={"count": len(out), "input_len": len(text)})
-        return out
+        logger.debug("extract_all_urls", extra={"count": len(valid_urls), "input_len": len(text)})
+        return valid_urls
     except Exception as e:
         logger.error("extract_all_urls_failed", extra={"error": str(e)})
         return []
