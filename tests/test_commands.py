@@ -1,3 +1,4 @@
+import json
 import os
 import tempfile
 import unittest
@@ -170,6 +171,158 @@ class TestCommands(unittest.IsolatedAsyncioTestCase):
             self.assertTrue(any("Requests by status" in reply for reply in msg._replies))
             self.assertTrue(any("Totals" in reply for reply in msg._replies))
             self.assertFalse(any(db_path in reply for reply in msg._replies))
+
+    async def test_dbverify_command(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            bot = make_bot(os.path.join(tmp, "app.db"))
+            bot.response_formatter.MIN_MESSAGE_INTERVAL_MS = 0
+
+            base_summary = {
+                "summary_250": "Short summary.",
+                "summary_1000": "Long summary.",
+                "key_ideas": ["Idea"],
+                "topic_tags": ["#tag"],
+                "entities": {"people": [], "organizations": [], "locations": []},
+                "estimated_reading_time_min": 5,
+                "key_stats": [],
+                "answered_questions": [],
+                "readability": {"method": "FK", "score": 50.0, "level": "Standard"},
+                "seo_keywords": [],
+                "metadata": {
+                    "title": "Title",
+                    "canonical_url": "https://example.com/article",
+                    "domain": "example.com",
+                    "author": "Author",
+                    "published_at": "2024-01-01",
+                    "last_updated": "2024-01-01",
+                },
+                "extractive_quotes": [],
+                "highlights": [],
+                "questions_answered": [],
+                "categories": [],
+                "topic_taxonomy": [],
+                "hallucination_risk": "low",
+                "confidence": 1.0,
+                "forwarded_post_extras": None,
+                "key_points_to_remember": [],
+            }
+
+            rid_good = bot.db.create_request(
+                type_="url",
+                status="ok",
+                correlation_id="good",
+                chat_id=1,
+                user_id=1,
+                input_url="https://example.com/good",
+                normalized_url="https://example.com/good",
+                route_version=1,
+            )
+            bot.db.insert_summary(
+                request_id=rid_good,
+                lang="en",
+                json_payload=json.dumps(base_summary),
+            )
+            bot.db.insert_crawl_result(
+                request_id=rid_good,
+                source_url="https://example.com/good",
+                endpoint="/v1/scrape",
+                http_status=200,
+                status="ok",
+                options_json=json.dumps({}),
+                correlation_id="fc-good",
+                content_markdown="# md",
+                content_html=None,
+                structured_json=json.dumps({}),
+                metadata_json=json.dumps({}),
+                links_json=json.dumps(["https://example.com/other"]),
+                screenshots_paths_json=None,
+                raw_response_json=json.dumps({}),
+                latency_ms=100,
+                error_text=None,
+            )
+
+            bad_summary = dict(base_summary)
+            bad_summary.pop("summary_1000", None)
+
+            rid_bad = bot.db.create_request(
+                type_="url",
+                status="ok",
+                correlation_id="bad",
+                chat_id=1,
+                user_id=1,
+                input_url="https://example.com/bad",
+                normalized_url="https://example.com/bad",
+                route_version=1,
+            )
+            bot.db.insert_summary(
+                request_id=rid_bad,
+                lang="en",
+                json_payload=json.dumps(bad_summary),
+            )
+
+            rid_empty = bot.db.create_request(
+                type_="url",
+                status="ok",
+                correlation_id="empty",
+                chat_id=1,
+                user_id=1,
+                input_url="https://example.com/empty",
+                normalized_url="https://example.com/empty",
+                route_version=1,
+            )
+            bot.db.insert_summary(
+                request_id=rid_empty,
+                lang="en",
+                json_payload=json.dumps(base_summary),
+            )
+            bot.db.insert_crawl_result(
+                request_id=rid_empty,
+                source_url="https://example.com/empty",
+                endpoint="/v1/scrape",
+                http_status=200,
+                status="ok",
+                options_json=json.dumps({}),
+                correlation_id="fc-empty",
+                content_markdown="# md",
+                content_html=None,
+                structured_json=json.dumps({}),
+                metadata_json=json.dumps({}),
+                links_json=json.dumps([]),
+                screenshots_paths_json=None,
+                raw_response_json=json.dumps({}),
+                latency_ms=100,
+                error_text=None,
+            )
+
+            bot.db.create_request(
+                type_="url",
+                status="pending",
+                correlation_id="missing",
+                chat_id=1,
+                user_id=1,
+                input_url="https://example.com/missing",
+                normalized_url="https://example.com/missing",
+                route_version=1,
+            )
+
+            msg = FakeMessage("/dbverify")
+            await bot._on_message(msg)
+
+            self.assertTrue(any("Database Verification" in reply for reply in msg._replies))
+            self.assertTrue(any("Missing summaries" in reply for reply in msg._replies))
+            self.assertTrue(any("Link coverage" in reply for reply in msg._replies))
+            self.assertTrue(any("summary_1000" in reply for reply in msg._replies))
+            self.assertTrue(
+                any("Starting automated reprocessing" in reply for reply in msg._replies)
+            )
+            self.assertTrue(any("Reprocessing complete" in reply for reply in msg._replies))
+
+            expected_urls = {
+                "https://example.com/bad",
+                "https://example.com/empty",
+                "https://example.com/missing",
+            }
+            self.assertTrue(expected_urls.issubset(set(bot.seen_urls)))
 
 
 if __name__ == "__main__":

@@ -177,6 +177,7 @@ class ResponseFormatter:
             "• `/unread` — Show list of unread articles\n"
             "• `/read <ID>` — Mark article as read and view it\n"
             "• `/dbinfo` — Show database overview\n\n"
+            "• `/dbverify` — Verify stored posts and required fields\n\n"
             "💡 **Usage Tips:**\n"
             "• Send URLs directly (commands are optional)\n"
             "• Forward channel posts to summarize them\n"
@@ -276,6 +277,207 @@ class ResponseFormatter:
             lines.append("Warnings:")
             for err in errors[:5]:
                 lines.append(f"- {err}")
+
+        await self.safe_reply(message, "\n".join(lines))
+
+    async def send_db_verification(self, message: Any, verification: dict[str, Any]) -> None:
+        """Send database verification summary highlighting missing fields."""
+
+        lines = ["🧪 Database Verification"]
+        overview = verification.get("overview") if isinstance(verification, dict) else {}
+        if isinstance(overview, dict):
+            path_display = overview.get("path_display") or overview.get("path")
+            if isinstance(path_display, str) and path_display:
+                lines.append(f"Path: `{path_display}`")
+
+            size_bytes = overview.get("db_size_bytes")
+            if isinstance(size_bytes, int) and size_bytes >= 0:
+                lines.append(f"Size: {self._format_bytes(size_bytes)} ({size_bytes:,} bytes)")
+
+            table_counts = overview.get("tables")
+            if isinstance(table_counts, dict) and table_counts:
+                lines.append("")
+                lines.append("Tables:")
+                for name in sorted(table_counts):
+                    lines.append(f"- {name}: {table_counts[name]}")
+
+            statuses = overview.get("requests_by_status")
+            if isinstance(statuses, dict) and statuses:
+                lines.append("")
+                lines.append("Request statuses:")
+                for status in sorted(statuses):
+                    lines.append(f"- {status or 'unknown'}: {statuses[status]}")
+
+        posts = verification.get("posts") if isinstance(verification, dict) else {}
+        if isinstance(posts, dict):
+            required_fields = posts.get("required_fields")
+            if isinstance(required_fields, list) and required_fields:
+                preview = ", ".join(str(f) for f in required_fields[:8])
+                if len(required_fields) > 8:
+                    preview += ", …"
+                lines.append("")
+                lines.append(f"Fields checked: {preview}")
+
+            checked = posts.get("checked")
+            with_summary = posts.get("with_summary")
+            if isinstance(checked, int) and checked > 0:
+                lines.append("")
+                summary_line = f"Posts checked: {checked}"
+                if isinstance(with_summary, int):
+                    summary_line += f" · With summary: {with_summary}"
+                lines.append(summary_line)
+
+            missing_summary = posts.get("missing_summary") or []
+            if missing_summary:
+                lines.append("⚠️ Missing summaries: {0}".format(len(missing_summary)))
+                for entry in missing_summary[:5]:
+                    rid = entry.get("request_id")
+                    rtype = entry.get("type")
+                    status = entry.get("status")
+                    source = entry.get("source")
+                    lines.append(f"  • #{rid} ({rtype} – {status}) {source}")
+                remaining = len(missing_summary) - min(len(missing_summary), 5)
+                if remaining > 0:
+                    lines.append(f"  • … {remaining} more")
+
+            missing_fields = posts.get("missing_fields") or []
+            if missing_fields:
+                lines.append("")
+                lines.append("⚠️ Missing fields detected: {0}".format(len(missing_fields)))
+                for entry in missing_fields[:5]:
+                    rid = entry.get("request_id")
+                    rtype = entry.get("type")
+                    status = entry.get("status")
+                    source = entry.get("source")
+                    missing = entry.get("missing") or []
+                    missing_preview = ", ".join(str(f) for f in missing[:6])
+                    if len(missing) > 6:
+                        missing_preview += ", …"
+                    lines.append(f"  • #{rid} ({rtype} – {status}) {source} → {missing_preview}")
+                remaining = len(missing_fields) - min(len(missing_fields), 5)
+                if remaining > 0:
+                    lines.append(f"  • … {remaining} more")
+
+            links_info = posts.get("links") or {}
+            if isinstance(links_info, dict):
+                total_links = links_info.get("total_links")
+                posts_with_links = links_info.get("posts_with_links")
+                missing_links = links_info.get("missing_data") or []
+                lines.append("")
+                lines.append("Link coverage:")
+                if isinstance(total_links, int):
+                    lines.append(f"- Total captured links: {total_links}")
+                if isinstance(posts_with_links, int):
+                    lines.append(f"- Posts with link data: {posts_with_links}")
+                if missing_links:
+                    lines.append(f"- Missing link data: {len(missing_links)}")
+                    for entry in missing_links[:5]:
+                        rid = entry.get("request_id")
+                        reason = entry.get("reason")
+                        source = entry.get("source")
+                        lines.append(f"  • #{rid} ({reason}) {source}")
+                    remaining = len(missing_links) - min(len(missing_links), 5)
+                    if remaining > 0:
+                        lines.append(f"  • … {remaining} more")
+
+            errors = posts.get("errors") or []
+            if errors:
+                lines.append("")
+                lines.append("Warnings:")
+                for err in errors[:5]:
+                    lines.append(f"- {err}")
+                if len(errors) > 5:
+                    lines.append(f"- … {len(errors) - 5} more")
+
+            reprocess_entries = posts.get("reprocess") or []
+            if reprocess_entries:
+                lines.append("")
+                lines.append(f"🔄 Reprocess queue: {len(reprocess_entries)} posts")
+                for entry in reprocess_entries[:5]:
+                    rid = entry.get("request_id")
+                    reason_list = entry.get("reasons") or []
+                    reasons = ", ".join(reason_list[:4]) if reason_list else "unknown"
+                    if reason_list and len(reason_list) > 4:
+                        reasons += ", …"
+                    source = (
+                        entry.get("normalized_url") or entry.get("input_url") or entry.get("source")
+                    )
+                    lines.append(f"  • #{rid} → {source} ({reasons})")
+                remaining = len(reprocess_entries) - min(len(reprocess_entries), 5)
+                if remaining > 0:
+                    lines.append(f"  • … {remaining} more")
+
+            if missing_summary or missing_fields or errors:
+                lines.append("")
+                lines.append("Please reprocess the affected posts to regenerate missing data.")
+
+        await self.safe_reply(message, "\n".join(lines))
+
+    async def send_db_reprocess_start(
+        self,
+        message: Any,
+        *,
+        url_targets: list[dict[str, Any]],
+        skipped: list[dict[str, Any]],
+    ) -> None:
+        """Notify the user that reprocessing of missing posts has started."""
+
+        lines = ["🚀 Starting automated reprocessing"]
+
+        if url_targets:
+            lines.append(f"Processing {len(url_targets)} URL posts...")
+            for entry in url_targets[:5]:
+                rid = entry.get("request_id")
+                url = entry.get("url")
+                reasons = entry.get("reasons") or []
+                reasons_text = ", ".join(reasons[:4]) if reasons else "missing data"
+                if len(reasons) > 4:
+                    reasons_text += ", …"
+                lines.append(f"  • #{rid} {url} ({reasons_text})")
+            if len(url_targets) > 5:
+                lines.append(f"  • … {len(url_targets) - 5} more URLs")
+        else:
+            lines.append("No URL posts available for automatic reprocessing.")
+
+        if skipped:
+            lines.append("")
+            lines.append(
+                f"Skipped {len(skipped)} posts that require manual attention (e.g., forwards)."
+            )
+
+        await self.safe_reply(message, "\n".join(lines))
+
+    async def send_db_reprocess_complete(
+        self,
+        message: Any,
+        *,
+        url_targets: list[dict[str, Any]],
+        failures: list[dict[str, Any]],
+        skipped: list[dict[str, Any]],
+    ) -> None:
+        """Summarize the outcome of the automated reprocessing."""
+
+        total = len(url_targets)
+        failed = len(failures)
+        successful = total - failed
+
+        status_icon = "✅" if failed == 0 else "⚠️"
+        lines = [f"{status_icon} Reprocessing complete"]
+        lines.append(f"Processed {successful}/{total} URL posts.")
+
+        if failures:
+            lines.append("Failures:")
+            for entry in failures[:5]:
+                rid = entry.get("request_id")
+                url = entry.get("url")
+                error = entry.get("error") or "unknown error"
+                lines.append(f"  • #{rid} {url}: {error}")
+            if failed > 5:
+                lines.append(f"  • … {failed - 5} more failures")
+
+        if skipped:
+            lines.append("")
+            lines.append(f"Skipped {len(skipped)} posts that could not be retried automatically.")
 
         await self.safe_reply(message, "\n".join(lines))
 

@@ -136,6 +136,124 @@ class CommandProcessor:
                 processing_time_ms=int((time.time() - start_time) * 1000),
             )
 
+    async def handle_dbverify_command(
+        self, message: Any, uid: int, correlation_id: str, interaction_id: int, start_time: float
+    ) -> None:
+        """Handle /dbverify command."""
+        chat_id = getattr(getattr(message, "chat", None), "id", None)
+        logger.info(
+            "command_dbverify",
+            extra={"uid": uid, "chat_id": chat_id, "cid": correlation_id},
+        )
+        try:
+            self._audit(
+                "INFO", "command_dbverify", {"uid": uid, "chat_id": chat_id, "cid": correlation_id}
+            )
+        except Exception:
+            pass
+
+        try:
+            verification = self.db.verify_processing_integrity()
+        except Exception as exc:  # noqa: BLE001 - defensive catch
+            logger.exception("command_dbverify_failed", extra={"cid": correlation_id})
+            await self.response_formatter.safe_reply(
+                message,
+                "⚠️ Unable to verify database records right now. Check bot logs for details.",
+            )
+            if interaction_id:
+                self._update_user_interaction(
+                    interaction_id=interaction_id,
+                    response_sent=True,
+                    response_type="dbverify_error",
+                    error_occurred=True,
+                    error_message=str(exc)[:500],
+                    processing_time_ms=int((time.time() - start_time) * 1000),
+                )
+            return
+
+        await self.response_formatter.send_db_verification(message, verification)
+
+        posts_info = verification.get("posts") if isinstance(verification, dict) else None
+        reprocess_entries = posts_info.get("reprocess") if isinstance(posts_info, dict) else []
+
+        if reprocess_entries:
+            urls_to_process: list[dict[str, Any]] = []
+            skipped: list[dict[str, Any]] = []
+
+            for entry in reprocess_entries:
+                if not isinstance(entry, dict):
+                    continue
+                req_type = str(entry.get("type") or "").lower()
+                if req_type == "url":
+                    url = entry.get("normalized_url") or entry.get("input_url")
+                    if not url:
+                        skipped.append(entry)
+                        continue
+                    urls_to_process.append(
+                        {
+                            "request_id": entry.get("request_id"),
+                            "url": url,
+                            "reasons": entry.get("reasons") or [],
+                        }
+                    )
+                else:
+                    skipped.append(entry)
+
+            if urls_to_process or skipped:
+                await self.response_formatter.send_db_reprocess_start(
+                    message, url_targets=urls_to_process, skipped=skipped
+                )
+
+            failures: list[dict[str, Any]] = []
+            for target in urls_to_process:
+                url = target["url"]
+                req_id = target.get("request_id")
+                per_link_cid = generate_correlation_id()
+                logger.info(
+                    "dbverify_reprocess_start",
+                    extra={
+                        "request_id": req_id,
+                        "url": url,
+                        "cid": per_link_cid,
+                        "cid_parent": correlation_id,
+                    },
+                )
+                try:
+                    await self.url_processor.handle_url_flow(
+                        message,
+                        url,
+                        correlation_id=per_link_cid,
+                    )
+                except Exception as exc:  # noqa: BLE001
+                    logger.exception(
+                        "dbverify_reprocess_failed",
+                        extra={
+                            "request_id": req_id,
+                            "url": url,
+                            "cid": per_link_cid,
+                            "cid_parent": correlation_id,
+                        },
+                    )
+                    failure_entry = dict(target)
+                    failure_entry["error"] = str(exc)
+                    failures.append(failure_entry)
+
+            if urls_to_process or skipped:
+                await self.response_formatter.send_db_reprocess_complete(
+                    message,
+                    url_targets=urls_to_process,
+                    failures=failures,
+                    skipped=skipped,
+                )
+
+        if interaction_id:
+            self._update_user_interaction(
+                interaction_id=interaction_id,
+                response_sent=True,
+                response_type="dbverify",
+                processing_time_ms=int((time.time() - start_time) * 1000),
+            )
+
     async def handle_summarize_all_command(
         self,
         message: Any,

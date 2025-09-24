@@ -1,3 +1,4 @@
+import copy
 import json
 import os
 import tempfile
@@ -211,6 +212,186 @@ class TestDatabaseHelpers(unittest.TestCase):
         arow = self.db.fetchone("SELECT * FROM audit_logs WHERE id = ?", (aid,))
         self.assertIsNotNone(arow)
         self.assertEqual(arow["level"], "INFO")
+
+    def test_verify_processing_integrity(self):
+        base_summary = {
+            "summary_250": "Short summary.",
+            "summary_1000": "Longer summary text.",
+            "key_ideas": ["Idea"],
+            "topic_tags": ["#tag"],
+            "entities": {
+                "people": [],
+                "organizations": [],
+                "locations": [],
+            },
+            "estimated_reading_time_min": 5,
+            "key_stats": [],
+            "answered_questions": [],
+            "readability": {"method": "FK", "score": 50.0, "level": "Standard"},
+            "seo_keywords": [],
+            "metadata": {
+                "title": "Title",
+                "canonical_url": "https://example.com/article",
+                "domain": "example.com",
+                "author": "Author",
+                "published_at": "2024-01-01",
+                "last_updated": "2024-01-01",
+            },
+            "extractive_quotes": [],
+            "highlights": [],
+            "questions_answered": [],
+            "categories": [],
+            "topic_taxonomy": [],
+            "hallucination_risk": "low",
+            "confidence": 1.0,
+            "forwarded_post_extras": None,
+            "key_points_to_remember": [],
+        }
+
+        rid_good = self.db.create_request(
+            type_="url",
+            status="ok",
+            correlation_id="good",
+            chat_id=1,
+            user_id=1,
+            input_url="https://example.com/good",
+            normalized_url="https://example.com/good",
+            route_version=1,
+        )
+        self.db.insert_summary(
+            request_id=rid_good,
+            lang="en",
+            json_payload=json.dumps(base_summary),
+        )
+        self.db.insert_crawl_result(
+            request_id=rid_good,
+            source_url="https://example.com/good",
+            endpoint="/v1/scrape",
+            http_status=200,
+            status="ok",
+            options_json=json.dumps({}),
+            correlation_id="fc-good",
+            content_markdown="# md",
+            content_html=None,
+            structured_json=json.dumps({}),
+            metadata_json=json.dumps({}),
+            links_json=json.dumps(["https://example.com/other"]),
+            screenshots_paths_json=None,
+            raw_response_json=json.dumps({}),
+            latency_ms=100,
+            error_text=None,
+        )
+
+        bad_summary = copy.deepcopy(base_summary)
+        bad_summary.pop("summary_1000", None)
+        bad_summary["summary_250"] = ""
+        bad_summary.pop("metadata", None)
+
+        rid_bad = self.db.create_request(
+            type_="url",
+            status="ok",
+            correlation_id="bad",
+            chat_id=1,
+            user_id=1,
+            input_url="https://example.com/bad",
+            normalized_url="https://example.com/bad",
+            route_version=1,
+        )
+        self.db.insert_summary(
+            request_id=rid_bad,
+            lang="en",
+            json_payload=json.dumps(bad_summary),
+        )
+
+        rid_empty_links = self.db.create_request(
+            type_="url",
+            status="ok",
+            correlation_id="empty",
+            chat_id=1,
+            user_id=1,
+            input_url="https://example.com/empty",
+            normalized_url="https://example.com/empty",
+            route_version=1,
+        )
+        self.db.insert_summary(
+            request_id=rid_empty_links,
+            lang="en",
+            json_payload=json.dumps(base_summary),
+        )
+        self.db.insert_crawl_result(
+            request_id=rid_empty_links,
+            source_url="https://example.com/empty",
+            endpoint="/v1/scrape",
+            http_status=200,
+            status="ok",
+            options_json=json.dumps({}),
+            correlation_id="fc-empty",
+            content_markdown="# md",
+            content_html=None,
+            structured_json=json.dumps({}),
+            metadata_json=json.dumps({}),
+            links_json=json.dumps([]),
+            screenshots_paths_json=None,
+            raw_response_json=json.dumps({}),
+            latency_ms=100,
+            error_text=None,
+        )
+
+        rid_missing = self.db.create_request(
+            type_="url",
+            status="pending",
+            correlation_id="missing",
+            chat_id=1,
+            user_id=1,
+            input_url="https://example.com/missing",
+            normalized_url="https://example.com/missing",
+            route_version=1,
+        )
+
+        verification = self.db.verify_processing_integrity()
+
+        self.assertIn("overview", verification)
+        posts = verification.get("posts")
+        self.assertIsInstance(posts, dict)
+        self.assertEqual(posts.get("checked"), 4)
+        self.assertEqual(posts.get("with_summary"), 3)
+
+        missing_summary = posts.get("missing_summary") or []
+        self.assertEqual(len(missing_summary), 1)
+        self.assertEqual(missing_summary[0]["request_id"], rid_missing)
+
+        missing_fields = posts.get("missing_fields") or []
+        bad_entries = [entry for entry in missing_fields if entry.get("request_id") == rid_bad]
+        self.assertTrue(bad_entries)
+        bad_missing = bad_entries[0].get("missing") or []
+        self.assertIn("summary_250", bad_missing)
+        self.assertIn("summary_1000", bad_missing)
+        self.assertIn("metadata", bad_missing)
+
+        links_info = posts.get("links") or {}
+        self.assertEqual(links_info.get("total_links"), 1)
+        self.assertEqual(links_info.get("posts_with_links"), 1)
+        missing_links = links_info.get("missing_data") or []
+        self.assertTrue(any(entry.get("request_id") == rid_bad for entry in missing_links))
+        empty_entries = [
+            entry for entry in missing_links if entry.get("request_id") == rid_empty_links
+        ]
+        self.assertTrue(empty_entries)
+        self.assertEqual(empty_entries[0].get("reason"), "empty_links")
+
+        reprocess_entries = posts.get("reprocess") or []
+        self.assertEqual(len(reprocess_entries), 3)
+        reprocess_map = {
+            entry.get("request_id"): set(entry.get("reasons") or []) for entry in reprocess_entries
+        }
+        self.assertIn(rid_bad, reprocess_map)
+        self.assertIn("missing_fields", reprocess_map[rid_bad])
+        self.assertIn("missing_links", reprocess_map[rid_bad])
+        self.assertIn(rid_missing, reprocess_map)
+        self.assertIn("missing_summary", reprocess_map[rid_missing])
+        self.assertIn("missing_links", reprocess_map[rid_missing])
+        self.assertIn(rid_empty_links, reprocess_map)
+        self.assertEqual(reprocess_map[rid_empty_links], {"missing_links"})
 
     def test_insert_telegram_message_handles_duplicate_request(self):
         rid = self.db.create_request(
