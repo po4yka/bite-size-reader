@@ -504,9 +504,7 @@ class MessageRouter:
         # Process URLs in parallel with controlled concurrency and memory optimization
         # For very large batches (>30 URLs), process in chunks to manage memory
         chunk_size = 30 if total > 30 else total
-        completed = 0
-        successful = 0
-        failed_urls = []
+        # Variables will be set from batch processing results
 
         # Thread-safe progress tracking with proper isolation
         class ThreadSafeProgress:
@@ -595,6 +593,10 @@ class MessageRouter:
 
         async def process_batches():
             """Process URL batches with progress tracking."""
+            batch_successful = 0
+            batch_failed = 0
+            batch_failed_urls = []
+
             for batch_start in range(0, total, batch_size):
                 batch_end = min(batch_start + batch_size, total)
                 batch_urls = urls[batch_start:batch_end]
@@ -629,19 +631,21 @@ class MessageRouter:
                             # Re-raise cancellation
                             raise result
                         # This should rarely happen due to return_exceptions=True, but handle it
-                        failed += 1
+                        batch_failed += 1
                         logger.error(
                             "unexpected_task_exception",
                             extra={"error": str(result), "cid": correlation_id},
                         )
-                        failed_urls.append(f"Unknown URL (task exception: {type(result).__name__})")
+                        batch_failed_urls.append(
+                            f"Unknown URL (task exception: {type(result).__name__})"
+                        )
                     elif isinstance(result, tuple) and len(result) == 3:
                         url, success, error_msg = result
                         if success:
-                            successful += 1
+                            batch_successful += 1
                         else:
-                            failed += 1
-                            failed_urls.append(url)
+                            batch_failed += 1
+                            batch_failed_urls.append(url)
                             if error_msg:
                                 logger.debug(
                                     "url_processing_failed_detail",
@@ -651,16 +655,16 @@ class MessageRouter:
                         # Backward compatibility with old format
                         url, success = result
                         if success:
-                            successful += 1
+                            batch_successful += 1
                         else:
-                            failed += 1
-                            failed_urls.append(url)
+                            batch_failed += 1
+                            batch_failed_urls.append(url)
                             logger.warning(
                                 "legacy_result_format", extra={"url": url, "cid": correlation_id}
                             )
                     else:
                         # Unexpected result type - this is a programming error
-                        failed += 1
+                        batch_failed += 1
                         logger.error(
                             "unexpected_result_type",
                             extra={
@@ -669,7 +673,7 @@ class MessageRouter:
                                 "cid": correlation_id,
                             },
                         )
-                        failed_urls.append(
+                        batch_failed_urls.append(
                             f"Unknown URL (unexpected result type: {type(result).__name__})"
                         )
 
@@ -677,10 +681,39 @@ class MessageRouter:
             if batch_end < total:
                 await asyncio.sleep(0.1)
 
+            return batch_successful, batch_failed, batch_failed_urls
+
         # Run batch processing and progress updates concurrently
-        await asyncio.gather(
+        results = await asyncio.gather(
             process_batches(), progress_tracker.process_update_queue(), return_exceptions=True
         )
+
+        # Extract results from batch processing
+        batch_result = results[0]
+        if isinstance(batch_result, Exception):
+            logger.error(
+                "batch_processing_failed",
+                extra={"error": str(batch_result), "cid": correlation_id},
+            )
+            # Set default values if batch processing failed
+            successful = 0
+            failed = total
+            completed = total
+            failed_urls = [f"Batch processing failed: {str(batch_result)}"]
+        elif isinstance(batch_result, tuple) and len(batch_result) == 3:
+            # Unpack the results from process_batches()
+            successful, failed, failed_urls = batch_result
+            completed = successful + failed
+        else:
+            # Unexpected result type
+            logger.error(
+                "unexpected_batch_result_type",
+                extra={"result_type": type(batch_result).__name__, "cid": correlation_id},
+            )
+            successful = 0
+            failed = total
+            completed = total
+            failed_urls = [f"Unexpected batch result type: {type(batch_result).__name__}"]
 
         # Final progress update to ensure 100% completion is shown
         try:
