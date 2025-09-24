@@ -155,7 +155,57 @@ class URLHandler:
         normalized = self._normalize_response(text)
 
         if self._is_affirmative(normalized):
-            urls = self._pending_multi_links.pop(uid)
+            urls = self._pending_multi_links.get(uid)
+            if not urls:
+                logger.warning(
+                    "multi_confirm_missing_state", extra={"uid": uid, "cid": correlation_id}
+                )
+                await self.response_formatter.safe_reply(
+                    message,
+                    "ℹ️ No pending multi-link request to confirm. Please send the links again.",
+                )
+                if interaction_id:
+                    self._update_user_interaction(
+                        interaction_id=interaction_id,
+                        response_sent=True,
+                        response_type="confirmation_missing",
+                        error_occurred=True,
+                        error_message="no_pending_multi_links",
+                        processing_time_ms=int((time.time() - start_time) * 1000),
+                    )
+                return
+
+            if not isinstance(urls, list) or any(
+                not isinstance(url, str) or not url.strip() for url in urls
+            ):
+                logger.warning(
+                    "multi_confirm_invalid_state",
+                    extra={
+                        "uid": uid,
+                        "cid": correlation_id,
+                        "type": type(urls).__name__,
+                        "count": len(urls) if isinstance(urls, list) else None,
+                    },
+                )
+                # Drop the corrupted state to avoid repeated failures
+                self._pending_multi_links.pop(uid, None)
+                await self.response_formatter.safe_reply(
+                    message,
+                    "❌ Pending multi-link request is invalid. Please send the links again.",
+                )
+                if interaction_id:
+                    self._update_user_interaction(
+                        interaction_id=interaction_id,
+                        response_sent=True,
+                        response_type="confirmation_invalid",
+                        error_occurred=True,
+                        error_message="invalid_multi_link_cache",
+                        processing_time_ms=int((time.time() - start_time) * 1000),
+                    )
+                return
+
+            # State is valid; remove it before processing to prevent double handling
+            self._pending_multi_links.pop(uid, None)
             await self.response_formatter.safe_reply(
                 message, f"🚀 Processing {len(urls)} links in parallel..."
             )
