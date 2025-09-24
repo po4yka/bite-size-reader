@@ -63,6 +63,10 @@ class RuntimeConfig:
     enable_chunking: bool = False
     chunk_max_chars: int = 200000
     log_truncate_length: int = 1000
+    db_backup_enabled: bool = True
+    db_backup_interval_minutes: int = 360
+    db_backup_retention: int = 14
+    db_backup_dir: str | None = None
 
 
 @dataclass(frozen=True)
@@ -321,6 +325,43 @@ def _parse_provider_order(order_raw: str | None) -> tuple[str, ...]:
     return tuple(out)
 
 
+def _validate_backup_interval_minutes(value_str: str | None) -> int:
+    """Validate configured database backup interval in minutes."""
+
+    return _validate_connection_pool_param_int(
+        value_str,
+        "DB backup interval (minutes)",
+        5,
+        10080,
+        360,
+    )
+
+
+def _validate_backup_retention(value_str: str | None) -> int:
+    """Validate how many backup files to retain."""
+
+    return _validate_connection_pool_param_int(
+        value_str,
+        "DB backup retention",
+        0,
+        1000,
+        14,
+    )
+
+
+def _validate_backup_dir(path_str: str | None) -> str | None:
+    """Validate backup directory input, returning None for blank values."""
+
+    if path_str is None:
+        return None
+    trimmed = path_str.strip()
+    if not trimmed:
+        return None
+    if "\x00" in trimmed:
+        raise ValueError("DB backup directory contains invalid characters")
+    return trimmed
+
+
 logger = logging.getLogger(__name__)
 
 
@@ -456,6 +497,12 @@ def load_config(*, allow_stub_telegram: bool = False) -> AppConfig:
             enable_chunking=os.getenv("CHUNKING_ENABLED", "0").lower() in ("1", "true", "yes"),
             chunk_max_chars=int(os.getenv("CHUNK_MAX_CHARS", "200000")),
             log_truncate_length=int(os.getenv("LOG_TRUNCATE_LENGTH", "1000")),
+            db_backup_enabled=os.getenv("DB_BACKUP_ENABLED", "1").lower() in ("1", "true", "yes"),
+            db_backup_interval_minutes=_validate_backup_interval_minutes(
+                os.getenv("DB_BACKUP_INTERVAL_MINUTES")
+            ),
+            db_backup_retention=_validate_backup_retention(os.getenv("DB_BACKUP_RETENTION")),
+            db_backup_dir=_validate_backup_dir(os.getenv("DB_BACKUP_DIR")),
         )
 
         return AppConfig(

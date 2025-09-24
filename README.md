@@ -17,6 +17,7 @@ Environment
 - `FIRECRAWL_API_KEY`
 - `OPENROUTER_API_KEY`, `OPENROUTER_MODEL`, `OPENROUTER_HTTP_REFERER`, `OPENROUTER_X_TITLE`
 - `DB_PATH=/data/app.db`, `LOG_LEVEL=INFO`, `REQUEST_TIMEOUT_SEC=60`
+- `DB_BACKUP_ENABLED=1`, `DB_BACKUP_INTERVAL_MINUTES=360`, `DB_BACKUP_RETENTION=14`, `DB_BACKUP_DIR=/data/backups`
 - `PREFERRED_LANG=auto` (auto|en|ru)
 - `DEBUG_PAYLOADS=0` — when `1`, logs request/response payload previews for Firecrawl/OpenRouter (with Authorization redacted)
  - `MAX_CONCURRENT_CALLS=4` — caps simultaneous Firecrawl/OpenRouter calls

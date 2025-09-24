@@ -2,12 +2,14 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import io
 import json
 import logging
 import os
 from dataclasses import dataclass
 from datetime import datetime
+from pathlib import Path
 from typing import Any, cast
 
 from app.adapters.content.url_processor import URLProcessor
@@ -158,7 +160,26 @@ class TelegramBot:
 
     async def start(self) -> None:
         """Start the bot."""
-        await self.telegram_client.start(self.message_handler.handle_message)
+        backup_enabled, interval, retention, backup_dir = self._get_backup_settings()
+        backup_task: asyncio.Task[None] | None = None
+        if backup_enabled and interval > 0:
+            backup_task = asyncio.create_task(
+                self._run_backup_loop(interval, retention, backup_dir),
+                name="db_backup_loop",
+            )
+        elif backup_enabled:
+            logger.warning(
+                "db_backup_disabled_invalid_interval",
+                extra={"interval_minutes": interval},
+            )
+
+        try:
+            await self.telegram_client.start(self.message_handler.handle_message)
+        finally:
+            if backup_task is not None:
+                backup_task.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await backup_task
 
     def _audit(self, level: str, event: str, details: dict) -> None:
         """Audit log helper."""
@@ -191,6 +212,152 @@ class TelegramBot:
             forward_summarizer = getattr(self.forward_processor, "summarizer", None)
             if forward_summarizer is not None:
                 forward_summarizer.openrouter = openrouter
+
+    def _get_backup_settings(self) -> tuple[bool, int, int, str | None]:
+        """Return sanitized backup configuration values."""
+
+        runtime = getattr(self.cfg, "runtime", None)
+        if runtime is None:
+            return False, 0, 0, None
+
+        enabled_raw = getattr(runtime, "db_backup_enabled", False)
+        enabled = bool(enabled_raw) if isinstance(enabled_raw, (bool, int)) else False
+
+        interval_raw = getattr(runtime, "db_backup_interval_minutes", 0)
+        interval = interval_raw if isinstance(interval_raw, int) else 0
+        if interval <= 0:
+            interval = 0
+
+        retention_raw = getattr(runtime, "db_backup_retention", 0)
+        retention = retention_raw if isinstance(retention_raw, int) else 0
+        if retention < 0:
+            retention = 0
+
+        backup_dir_raw = getattr(runtime, "db_backup_dir", None)
+        backup_dir = (
+            backup_dir_raw.strip()
+            if isinstance(backup_dir_raw, str) and backup_dir_raw.strip()
+            else None
+        )
+
+        return enabled, interval, retention, backup_dir
+
+    async def _run_backup_loop(
+        self, interval_minutes: int, retention: int, backup_dir: str | None
+    ) -> None:
+        """Periodically create database backups until cancelled."""
+
+        if interval_minutes <= 0:
+            return
+
+        backup_directory = self._resolve_backup_dir(backup_dir)
+        logger.info(
+            "db_backup_loop_started",
+            extra={
+                "interval_minutes": interval_minutes,
+                "retention": retention,
+                "backup_dir": self.db._mask_path(str(backup_directory)),
+            },
+        )
+
+        try:
+            while True:
+                try:
+                    await self._create_database_backup(backup_directory, retention)
+                except asyncio.CancelledError:
+                    raise
+                except Exception as exc:  # noqa: BLE001
+                    logger.error("db_backup_iteration_failed", extra={"error": str(exc)})
+
+                await asyncio.sleep(interval_minutes * 60)
+        except asyncio.CancelledError:
+            logger.info("db_backup_loop_cancelled")
+            raise
+
+    async def _create_database_backup(self, backup_directory: Path, retention: int) -> None:
+        """Create a single backup and prune according to retention settings."""
+
+        db_path = getattr(self.db, "path", "")
+        if db_path == ":memory:":
+            logger.debug("db_backup_skipped_in_memory")
+            return
+
+        base_path = Path(db_path)
+        suffix = base_path.suffix or ".db"
+        timestamp = datetime.utcnow().strftime("%Y%m%d-%H%M%S")
+        backup_file = backup_directory / f"{base_path.stem}-{timestamp}{suffix}"
+
+        try:
+            created_path = await asyncio.to_thread(self.db.create_backup_copy, str(backup_file))
+        except FileNotFoundError as exc:
+            logger.warning("db_backup_source_missing", extra={"error": str(exc)})
+            return
+        except ValueError as exc:
+            logger.debug("db_backup_not_applicable", extra={"reason": str(exc)})
+            return
+        except Exception as exc:  # noqa: BLE001
+            logger.error("db_backup_failed", extra={"error": str(exc)})
+            return
+
+        try:
+            self._cleanup_old_backups(backup_directory, base_path.stem, suffix, retention)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("db_backup_cleanup_failed", extra={"error": str(exc)})
+
+        logger.info(
+            "db_backup_created",
+            extra={"backup_path": self.db._mask_path(str(created_path))},
+        )
+
+    def _resolve_backup_dir(self, override: str | None) -> Path:
+        """Determine the directory to store backups in."""
+
+        if override:
+            path = Path(override).expanduser()
+        else:
+            base = Path(self.db.path)
+            parent = base.parent if base.parent != Path("") else Path(".")
+            path = parent / "backups"
+        path.mkdir(parents=True, exist_ok=True)
+        return path
+
+    def _cleanup_old_backups(
+        self, backup_directory: Path, base_name: str, suffix: str, retention: int
+    ) -> None:
+        """Remove older backup files beyond the retention limit."""
+
+        if retention <= 0:
+            return
+
+        try:
+            candidates = sorted(
+                (
+                    file
+                    for file in backup_directory.iterdir()
+                    if file.is_file()
+                    and file.name.startswith(f"{base_name}-")
+                    and file.suffix == suffix
+                ),
+                key=lambda path: path.stat().st_mtime,
+                reverse=True,
+            )
+        except FileNotFoundError:
+            return
+        except OSError as exc:
+            logger.warning(
+                "db_backup_list_failed",
+                extra={"backup_dir": self.db._mask_path(str(backup_directory)), "error": str(exc)},
+            )
+            return
+
+        for obsolete in candidates[retention:]:
+            try:
+                obsolete.unlink()
+            except OSError as exc:
+                logger.warning(
+                    "db_backup_remove_failed",
+                    extra={"backup_path": self.db._mask_path(str(obsolete)), "error": str(exc)},
+                )
 
     # ---- Compatibility helpers expected by tests (typed stubs) ----
     async def _safe_reply(self, message: Any, text: str, *, parse_mode: str | None = None) -> None:

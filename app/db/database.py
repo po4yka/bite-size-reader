@@ -153,6 +153,44 @@ class Database:
             conn.commit()
         self._logger.info("db_migrated", extra={"path": self.path})
 
+    def create_backup_copy(self, dest_path: str) -> Path:
+        """Create a consistent on-disk copy of the SQLite database."""
+
+        if self.path == ":memory:":
+            raise ValueError("Cannot create a backup for an in-memory database")
+
+        source = Path(self.path)
+        if not source.exists():
+            raise FileNotFoundError(f"Database file not found at {self.path}")
+
+        destination = Path(dest_path)
+        destination.parent.mkdir(parents=True, exist_ok=True)
+
+        try:
+            with self.connect() as source_conn:
+                with sqlite3.connect(str(destination)) as dest_conn:
+                    source_conn.backup(dest_conn)
+                    dest_conn.commit()
+        except sqlite3.Error as exc:
+            self._logger.error(
+                "db_backup_copy_failed",
+                extra={
+                    "source": self._mask_path(str(source)),
+                    "dest": self._mask_path(str(destination)),
+                    "error": str(exc),
+                },
+            )
+            raise
+
+        self._logger.info(
+            "db_backup_copy_created",
+            extra={
+                "source": self._mask_path(str(source)),
+                "dest": self._mask_path(str(destination)),
+            },
+        )
+        return destination
+
     def _ensure_column(
         self, conn: sqlite3.Connection, table: str, column: str, coltype: str
     ) -> None:

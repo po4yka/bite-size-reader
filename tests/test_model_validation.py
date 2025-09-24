@@ -60,6 +60,32 @@ class TestModelValidation(unittest.TestCase):
             os.environ.clear()
             os.environ.update(old_env)
 
+    def test_load_config_backup_settings(self):
+        from app.config import load_config
+
+        old_env = os.environ.copy()
+        try:
+            os.environ["API_ID"] = "123456"
+            os.environ["API_HASH"] = "a" * 32
+            os.environ["BOT_TOKEN"] = "123456:abcdefghijklmnopqrstuvwxyz0123456789abcdefghij"
+            os.environ["FIRECRAWL_API_KEY"] = "fc_" + "d" * 20
+            os.environ["OPENROUTER_API_KEY"] = "or_" + "e" * 20
+            os.environ["ALLOWED_USER_IDS"] = "42"
+            os.environ["DB_BACKUP_ENABLED"] = "0"
+            os.environ["DB_BACKUP_INTERVAL_MINUTES"] = "45"
+            os.environ["DB_BACKUP_RETENTION"] = "5"
+            os.environ["DB_BACKUP_DIR"] = "/tmp/backups"
+
+            cfg = load_config()
+
+            self.assertFalse(cfg.runtime.db_backup_enabled)
+            self.assertEqual(cfg.runtime.db_backup_interval_minutes, 45)
+            self.assertEqual(cfg.runtime.db_backup_retention, 5)
+            self.assertEqual(cfg.runtime.db_backup_dir, "/tmp/backups")
+        finally:
+            os.environ.clear()
+            os.environ.update(old_env)
+
 
 if __name__ == "__main__":
     unittest.main()
