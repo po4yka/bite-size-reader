@@ -536,7 +536,8 @@ class MessageRouter:
                 self.message = message
                 self.progress_message_id = progress_message_id
                 self.message_router = message_router
-                self._update_queue: asyncio.Queue[tuple[int, int]] = asyncio.Queue()
+                self._update_queue: asyncio.Queue[tuple[int, int]] = asyncio.Queue(maxsize=1)
+                self._queue_overflow_logged = False
                 self._shutdown_event = asyncio.Event()
 
             async def increment_and_update(self) -> tuple[int, int]:
@@ -580,14 +581,26 @@ class MessageRouter:
                 if should_update:
                     try:
                         self._update_queue.put_nowait((completed, self.total))
+                        self._queue_overflow_logged = False
                     except asyncio.QueueFull:
-                        # Queue is unbounded but guard just in case it becomes bounded elsewhere
                         try:
-                            self._update_queue.get_nowait()
+                            dropped_update = self._update_queue.get_nowait()
                         except asyncio.QueueEmpty:
-                            pass
+                            dropped_update = None
                         else:
                             self._update_queue.task_done()
+
+                        if not self._queue_overflow_logged:
+                            logger.debug(
+                                "progress_update_queue_full",
+                                extra={
+                                    "last_displayed": self._last_displayed,
+                                    "completed": completed,
+                                    "dropped": dropped_update,
+                                },
+                            )
+                            self._queue_overflow_logged = True
+
                         self._update_queue.put_nowait((completed, self.total))
 
                 if completed >= self.total:
