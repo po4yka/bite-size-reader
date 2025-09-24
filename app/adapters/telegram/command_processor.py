@@ -136,6 +136,50 @@ class CommandProcessor:
                 processing_time_ms=int((time.time() - start_time) * 1000),
             )
 
+    async def handle_dbverify_command(
+        self, message: Any, uid: int, correlation_id: str, interaction_id: int, start_time: float
+    ) -> None:
+        """Handle /dbverify command."""
+        chat_id = getattr(getattr(message, "chat", None), "id", None)
+        logger.info(
+            "command_dbverify",
+            extra={"uid": uid, "chat_id": chat_id, "cid": correlation_id},
+        )
+        try:
+            self._audit(
+                "INFO", "command_dbverify", {"uid": uid, "chat_id": chat_id, "cid": correlation_id}
+            )
+        except Exception:
+            pass
+
+        try:
+            verification = self.db.verify_processing_integrity()
+        except Exception as exc:  # noqa: BLE001 - defensive catch
+            logger.exception("command_dbverify_failed", extra={"cid": correlation_id})
+            await self.response_formatter.safe_reply(
+                message,
+                "⚠️ Unable to verify database records right now. Check bot logs for details.",
+            )
+            if interaction_id:
+                self._update_user_interaction(
+                    interaction_id=interaction_id,
+                    response_sent=True,
+                    response_type="dbverify_error",
+                    error_occurred=True,
+                    error_message=str(exc)[:500],
+                    processing_time_ms=int((time.time() - start_time) * 1000),
+                )
+            return
+
+        await self.response_formatter.send_db_verification(message, verification)
+        if interaction_id:
+            self._update_user_interaction(
+                interaction_id=interaction_id,
+                response_sent=True,
+                response_type="dbverify",
+                processing_time_ms=int((time.time() - start_time) * 1000),
+            )
+
     async def handle_summarize_all_command(
         self,
         message: Any,
