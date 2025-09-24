@@ -468,8 +468,16 @@ class MessageRouter:
                     await progress_tracker.increment_and_update()
 
                     if success:
+                        logger.debug(
+                            "process_single_url_success",
+                            extra={"url": url, "cid": per_link_cid, "result": "success"},
+                        )
                         return url, True, ""
                     else:
+                        logger.debug(
+                            "process_single_url_failure",
+                            extra={"url": url, "cid": per_link_cid, "result": "failed"},
+                        )
                         return url, False, "URL processing failed"
                 except asyncio.TimeoutError:
                     error_msg = "Timeout processing URL after 10 minutes"
@@ -600,6 +608,20 @@ class MessageRouter:
                 # Process results from this batch immediately
                 for result in batch_results:
                     # Progress is already incremented in process_single_url() - no double counting
+
+                    # Debug logging to understand what results we're getting
+                    logger.debug(
+                        "batch_result_debug",
+                        extra={
+                            "result_type": type(result).__name__,
+                            "result_value": str(result)[:200]
+                            if not isinstance(result, Exception)
+                            else str(result),
+                            "is_tuple": isinstance(result, tuple),
+                            "tuple_len": len(result) if isinstance(result, tuple) else 0,
+                            "cid": correlation_id,
+                        },
+                    )
 
                     if isinstance(result, Exception):
                         # Handle asyncio-specific exceptions properly

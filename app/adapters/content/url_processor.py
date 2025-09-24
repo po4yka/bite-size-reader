@@ -453,6 +453,64 @@ class URLProcessor:
         """Load system prompt file based on language."""
         return _get_system_prompt(lang)
 
+    def _is_summary_complete(self, summary: dict[str, Any]) -> bool:
+        """Check if a summary has the essential fields populated."""
+        if not isinstance(summary, dict):
+            return False
+
+        # Essential fields that must be present and non-empty
+        essential_fields = [
+            "summary_250",
+            "summary_1000",
+        ]
+
+        # Check essential fields
+        for field in essential_fields:
+            value = summary.get(field)
+            if not value or not str(value).strip():
+                return False
+
+        # At least one of these should have content
+        content_fields = [
+            "key_ideas",
+            "topic_tags",
+            "entities",
+        ]
+
+        has_content = False
+        for field in content_fields:
+            value = summary.get(field)
+            if field == "entities":
+                # Entities should be a dict with lists
+                if isinstance(value, dict) and any(
+                    isinstance(v, list) and len(v) > 0 for v in value.values()
+                ):
+                    has_content = True
+                    break
+            elif isinstance(value, list) and len(value) > 0:
+                has_content = True
+                break
+
+        return has_content
+
+    def _get_missing_summary_fields(self, summary: dict[str, Any]) -> list[str]:
+        """Get list of missing or empty essential fields."""
+        if not isinstance(summary, dict):
+            return ["invalid_summary_format"]
+
+        missing = []
+        essential_fields = [
+            "summary_250",
+            "summary_1000",
+        ]
+
+        for field in essential_fields:
+            value = summary.get(field)
+            if not value or not str(value).strip():
+                missing.append(field)
+
+        return missing
+
     async def _maybe_reply_with_cached_summary(
         self,
         message: Any,
@@ -480,6 +538,10 @@ class URLProcessor:
 
         payload = summary_row.get("json_payload")
         if not payload:
+            logger.debug(
+                "cached_summary_empty_payload",
+                extra={"request_id": req_id, "cid": correlation_id},
+            )
             return False
 
         try:
@@ -488,6 +550,18 @@ class URLProcessor:
             logger.warning(
                 "cached_summary_decode_failed",
                 extra={"request_id": req_id, "cid": correlation_id},
+            )
+            return False
+
+        # Validate that the summary is complete and has essential fields
+        if not self._is_summary_complete(shaped):
+            logger.debug(
+                "cached_summary_incomplete",
+                extra={
+                    "request_id": req_id,
+                    "cid": correlation_id,
+                    "missing_fields": self._get_missing_summary_fields(shaped),
+                },
             )
             return False
 
