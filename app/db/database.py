@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import logging
 import sqlite3
 from collections.abc import Iterable
@@ -335,6 +336,296 @@ class Database:
             return name
         except Exception:  # pragma: no cover - defensive
             return "..."
+
+    def verify_processing_integrity(
+        self,
+        *,
+        required_fields: Iterable[str] | None = None,
+        limit: int | None = None,
+    ) -> dict[str, Any]:
+        """Verify that stored posts contain required processing artifacts."""
+
+        overview = self.get_database_overview()
+        required_default = [
+            "summary_250",
+            "summary_1000",
+            "key_ideas",
+            "topic_tags",
+            "entities",
+            "estimated_reading_time_min",
+            "key_stats",
+            "answered_questions",
+            "readability",
+            "seo_keywords",
+            "metadata",
+            "extractive_quotes",
+            "highlights",
+            "questions_answered",
+            "categories",
+            "topic_taxonomy",
+            "hallucination_risk",
+            "confidence",
+            "forwarded_post_extras",
+            "key_points_to_remember",
+        ]
+        required = list(dict.fromkeys(required_fields or required_default))
+
+        post_checks: dict[str, Any] = {
+            "required_fields": required,
+            "checked": 0,
+            "with_summary": 0,
+            "missing_summary": [],
+            "missing_fields": [],
+            "errors": [],
+            "links": {
+                "total_links": 0,
+                "posts_with_links": 0,
+                "missing_data": [],
+            },
+        }
+
+        query = (
+            "SELECT "
+            "r.id AS request_id, "
+            "r.type AS request_type, "
+            "r.status AS request_status, "
+            "r.input_url AS input_url, "
+            "r.normalized_url AS normalized_url, "
+            "r.fwd_from_chat_id AS fwd_from_chat_id, "
+            "r.fwd_from_msg_id AS fwd_from_msg_id, "
+            "s.json_payload AS summary_json, "
+            "cr.links_json AS links_json, "
+            "cr.status AS crawl_status "
+            "FROM requests r "
+            "LEFT JOIN summaries s ON s.request_id = r.id "
+            "LEFT JOIN crawl_results cr ON cr.request_id = r.id "
+            "ORDER BY r.id DESC"
+        )
+        params: tuple[Any, ...] = ()
+        if isinstance(limit, int) and limit > 0:
+            query += " LIMIT ?"
+            params = (limit,)
+
+        with self.connect() as conn:
+            rows = conn.execute(query, params).fetchall()
+
+        post_checks["checked"] = len(rows)
+        links_info = post_checks["links"]
+
+        for row in rows:
+            request_id = int(row["request_id"])
+            request_type = str(row["request_type"] or "unknown")
+            request_status = str(row["request_status"] or "unknown")
+            summary_json = row["summary_json"]
+            links_json = row["links_json"]
+
+            # Links coverage
+            link_count, link_valid, link_error = self._count_links_entries(links_json)
+            if link_valid:
+                links_info["total_links"] += link_count
+                links_info["posts_with_links"] += 1
+            elif request_type != "forward":
+                links_info["missing_data"].append(
+                    {
+                        "request_id": request_id,
+                        "type": request_type,
+                        "status": request_status,
+                        "source": self._describe_request_source(row),
+                        "reason": "invalid_links_json" if link_error else "absent_links_json",
+                    }
+                )
+                if link_error:
+                    post_checks["errors"].append(
+                        f"request {request_id}: links_json error ({link_error})"
+                    )
+
+            if summary_json is None or not str(summary_json).strip():
+                post_checks["missing_summary"].append(
+                    {
+                        "request_id": request_id,
+                        "type": request_type,
+                        "status": request_status,
+                        "source": self._describe_request_source(row),
+                    }
+                )
+                continue
+
+            post_checks["with_summary"] += 1
+            try:
+                payload = json.loads(summary_json)
+            except (TypeError, json.JSONDecodeError) as exc:
+                post_checks["errors"].append(f"request {request_id}: invalid summary_json ({exc})")
+                post_checks["missing_fields"].append(
+                    {
+                        "request_id": request_id,
+                        "type": request_type,
+                        "status": request_status,
+                        "source": self._describe_request_source(row),
+                        "missing": ["summary_json"],
+                    }
+                )
+                continue
+
+            if not isinstance(payload, dict):
+                post_checks["errors"].append(f"request {request_id}: summary_json not an object")
+                post_checks["missing_fields"].append(
+                    {
+                        "request_id": request_id,
+                        "type": request_type,
+                        "status": request_status,
+                        "source": self._describe_request_source(row),
+                        "missing": ["summary_object"],
+                    }
+                )
+                continue
+
+            missing: list[str] = []
+
+            def flag(field: str) -> None:
+                if field not in missing:
+                    missing.append(field)
+
+            # String fields should be non-empty strings
+            for field in ("summary_250", "summary_1000"):
+                value = payload.get(field)
+                if not isinstance(value, str) or not value.strip():
+                    flag(field)
+
+            # List-based fields (may be empty lists but must exist)
+            list_fields = [
+                "key_ideas",
+                "topic_tags",
+                "key_stats",
+                "answered_questions",
+                "seo_keywords",
+                "extractive_quotes",
+                "highlights",
+                "questions_answered",
+                "categories",
+                "topic_taxonomy",
+                "key_points_to_remember",
+            ]
+            for field in list_fields:
+                if not isinstance(payload.get(field), list):
+                    flag(field)
+
+            reading_time = payload.get("estimated_reading_time_min")
+            if not isinstance(reading_time, int) or reading_time < 0:
+                flag("estimated_reading_time_min")
+
+            entities = payload.get("entities")
+            if not isinstance(entities, dict):
+                flag("entities")
+            else:
+                for subfield in ("people", "organizations", "locations"):
+                    if not isinstance(entities.get(subfield), list):
+                        flag(f"entities.{subfield}")
+
+            readability = payload.get("readability")
+            if not isinstance(readability, dict):
+                flag("readability")
+            else:
+                if (
+                    not isinstance(readability.get("method"), str)
+                    or not readability["method"].strip()
+                ):
+                    flag("readability.method")
+                score = readability.get("score")
+                if not isinstance(score, (int, float)):
+                    flag("readability.score")
+                if (
+                    not isinstance(readability.get("level"), str)
+                    or not readability["level"].strip()
+                ):
+                    flag("readability.level")
+
+            metadata = payload.get("metadata")
+            if not isinstance(metadata, dict):
+                flag("metadata")
+            else:
+                for subfield in (
+                    "title",
+                    "canonical_url",
+                    "domain",
+                    "author",
+                    "published_at",
+                    "last_updated",
+                ):
+                    if subfield not in metadata:
+                        flag(f"metadata.{subfield}")
+
+            hallu_risk = payload.get("hallucination_risk")
+            if not isinstance(hallu_risk, str) or not hallu_risk.strip():
+                flag("hallucination_risk")
+
+            confidence = payload.get("confidence")
+            if not isinstance(confidence, (int, float)):
+                flag("confidence")
+
+            if "forwarded_post_extras" not in payload:
+                flag("forwarded_post_extras")
+            else:
+                forwarded_extras = payload.get("forwarded_post_extras")
+                if request_type == "forward":
+                    if not isinstance(forwarded_extras, dict):
+                        flag("forwarded_post_extras")
+                    else:
+                        for subfield in (
+                            "channel_id",
+                            "channel_title",
+                            "channel_username",
+                            "message_id",
+                            "post_datetime",
+                            "hashtags",
+                            "mentions",
+                        ):
+                            if subfield not in forwarded_extras:
+                                flag(f"forwarded_post_extras.{subfield}")
+
+            if missing:
+                post_checks["missing_fields"].append(
+                    {
+                        "request_id": request_id,
+                        "type": request_type,
+                        "status": request_status,
+                        "source": self._describe_request_source(row),
+                        "missing": missing,
+                    }
+                )
+
+        return {"overview": overview, "posts": post_checks}
+
+    def _describe_request_source(self, row: sqlite3.Row) -> str:
+        """Return a concise description of where the request came from."""
+        url = row["normalized_url"] or row["input_url"]
+        if isinstance(url, str) and url:
+            return url
+        chat_id = row["fwd_from_chat_id"]
+        msg_id = row["fwd_from_msg_id"]
+        if chat_id is not None and msg_id is not None:
+            return f"forward:{chat_id}/{msg_id}"
+        return f"request:{row['request_id']}"
+
+    def _count_links_entries(self, links_json: str | None) -> tuple[int, bool, str | None]:
+        """Return link count, validity flag, and optional error message."""
+        if links_json is None or str(links_json).strip() == "":
+            return 0, False, None
+        try:
+            parsed = json.loads(links_json)
+        except (TypeError, json.JSONDecodeError) as exc:
+            return 0, False, str(exc)
+
+        if isinstance(parsed, list):
+            return len(parsed), True, None
+        if isinstance(parsed, dict):
+            if "links" in parsed and isinstance(parsed["links"], list):
+                return len(parsed["links"]), True, None
+            total = 0
+            for value in parsed.values():
+                if isinstance(value, list):
+                    total += len(value)
+            return total, True, None
+        return 0, False, "links_json_not_iterable"
 
     def get_request_by_dedupe_hash(self, dedupe_hash: str) -> dict | None:
         row = self.fetchone("SELECT * FROM requests WHERE dedupe_hash = ?", (dedupe_hash,))
