@@ -260,6 +260,40 @@ class TestCommands(unittest.IsolatedAsyncioTestCase):
                 json_payload=json.dumps(bad_summary),
             )
 
+            rid_empty = bot.db.create_request(
+                type_="url",
+                status="ok",
+                correlation_id="empty",
+                chat_id=1,
+                user_id=1,
+                input_url="https://example.com/empty",
+                normalized_url="https://example.com/empty",
+                route_version=1,
+            )
+            bot.db.insert_summary(
+                request_id=rid_empty,
+                lang="en",
+                json_payload=json.dumps(base_summary),
+            )
+            bot.db.insert_crawl_result(
+                request_id=rid_empty,
+                source_url="https://example.com/empty",
+                endpoint="/v1/scrape",
+                http_status=200,
+                status="ok",
+                options_json=json.dumps({}),
+                correlation_id="fc-empty",
+                content_markdown="# md",
+                content_html=None,
+                structured_json=json.dumps({}),
+                metadata_json=json.dumps({}),
+                links_json=json.dumps([]),
+                screenshots_paths_json=None,
+                raw_response_json=json.dumps({}),
+                latency_ms=100,
+                error_text=None,
+            )
+
             bot.db.create_request(
                 type_="url",
                 status="pending",
@@ -278,6 +312,17 @@ class TestCommands(unittest.IsolatedAsyncioTestCase):
             self.assertTrue(any("Missing summaries" in reply for reply in msg._replies))
             self.assertTrue(any("Link coverage" in reply for reply in msg._replies))
             self.assertTrue(any("summary_1000" in reply for reply in msg._replies))
+            self.assertTrue(
+                any("Starting automated reprocessing" in reply for reply in msg._replies)
+            )
+            self.assertTrue(any("Reprocessing complete" in reply for reply in msg._replies))
+
+            expected_urls = {
+                "https://example.com/bad",
+                "https://example.com/empty",
+                "https://example.com/missing",
+            }
+            self.assertTrue(expected_urls.issubset(set(bot.seen_urls)))
 
 
 if __name__ == "__main__":

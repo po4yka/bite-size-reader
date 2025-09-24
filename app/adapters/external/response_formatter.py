@@ -389,9 +389,95 @@ class ResponseFormatter:
                 if len(errors) > 5:
                     lines.append(f"- … {len(errors) - 5} more")
 
+            reprocess_entries = posts.get("reprocess") or []
+            if reprocess_entries:
+                lines.append("")
+                lines.append(f"🔄 Reprocess queue: {len(reprocess_entries)} posts")
+                for entry in reprocess_entries[:5]:
+                    rid = entry.get("request_id")
+                    reason_list = entry.get("reasons") or []
+                    reasons = ", ".join(reason_list[:4]) if reason_list else "unknown"
+                    if reason_list and len(reason_list) > 4:
+                        reasons += ", …"
+                    source = (
+                        entry.get("normalized_url") or entry.get("input_url") or entry.get("source")
+                    )
+                    lines.append(f"  • #{rid} → {source} ({reasons})")
+                remaining = len(reprocess_entries) - min(len(reprocess_entries), 5)
+                if remaining > 0:
+                    lines.append(f"  • … {remaining} more")
+
             if missing_summary or missing_fields or errors:
                 lines.append("")
                 lines.append("Please reprocess the affected posts to regenerate missing data.")
+
+        await self.safe_reply(message, "\n".join(lines))
+
+    async def send_db_reprocess_start(
+        self,
+        message: Any,
+        *,
+        url_targets: list[dict[str, Any]],
+        skipped: list[dict[str, Any]],
+    ) -> None:
+        """Notify the user that reprocessing of missing posts has started."""
+
+        lines = ["🚀 Starting automated reprocessing"]
+
+        if url_targets:
+            lines.append(f"Processing {len(url_targets)} URL posts...")
+            for entry in url_targets[:5]:
+                rid = entry.get("request_id")
+                url = entry.get("url")
+                reasons = entry.get("reasons") or []
+                reasons_text = ", ".join(reasons[:4]) if reasons else "missing data"
+                if len(reasons) > 4:
+                    reasons_text += ", …"
+                lines.append(f"  • #{rid} {url} ({reasons_text})")
+            if len(url_targets) > 5:
+                lines.append(f"  • … {len(url_targets) - 5} more URLs")
+        else:
+            lines.append("No URL posts available for automatic reprocessing.")
+
+        if skipped:
+            lines.append("")
+            lines.append(
+                f"Skipped {len(skipped)} posts that require manual attention (e.g., forwards)."
+            )
+
+        await self.safe_reply(message, "\n".join(lines))
+
+    async def send_db_reprocess_complete(
+        self,
+        message: Any,
+        *,
+        url_targets: list[dict[str, Any]],
+        failures: list[dict[str, Any]],
+        skipped: list[dict[str, Any]],
+    ) -> None:
+        """Summarize the outcome of the automated reprocessing."""
+
+        total = len(url_targets)
+        failed = len(failures)
+        successful = total - failed
+
+        status_icon = "✅" if failed == 0 else "⚠️"
+        lines = [f"{status_icon} Reprocessing complete"]
+        lines.append(f"Processed {successful}/{total} URL posts.")
+
+        if failures:
+            lines.append("Failures:")
+            for entry in failures[:5]:
+                rid = entry.get("request_id")
+                url = entry.get("url")
+                error = entry.get("error") or "unknown error"
+                lines.append(f"  • #{rid} {url}: {error}")
+            if failed > 5:
+                lines.append(f"  • … {failed - 5} more failures")
+
+        if skipped:
+            lines.append("")
+            lines.append(f"Skipped {len(skipped)} posts that could not be retried automatically.")
 
         await self.safe_reply(message, "\n".join(lines))
 

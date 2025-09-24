@@ -330,6 +330,40 @@ class TestDatabaseHelpers(unittest.TestCase):
             json_payload=json.dumps(bad_summary),
         )
 
+        rid_empty_links = self.db.create_request(
+            type_="url",
+            status="ok",
+            correlation_id="empty",
+            chat_id=1,
+            user_id=1,
+            input_url="https://example.com/empty",
+            normalized_url="https://example.com/empty",
+            route_version=1,
+        )
+        self.db.insert_summary(
+            request_id=rid_empty_links,
+            lang="en",
+            json_payload=json.dumps(base_summary),
+        )
+        self.db.insert_crawl_result(
+            request_id=rid_empty_links,
+            source_url="https://example.com/empty",
+            endpoint="/v1/scrape",
+            http_status=200,
+            status="ok",
+            options_json=json.dumps({}),
+            correlation_id="fc-empty",
+            content_markdown="# md",
+            content_html=None,
+            structured_json=json.dumps({}),
+            metadata_json=json.dumps({}),
+            links_json=json.dumps([]),
+            screenshots_paths_json=None,
+            raw_response_json=json.dumps({}),
+            latency_ms=100,
+            error_text=None,
+        )
+
         rid_missing = self.db.create_request(
             type_="url",
             status="pending",
@@ -348,6 +382,8 @@ class TestDatabaseHelpers(unittest.TestCase):
         self.assertIsInstance(posts, dict)
         self.assertEqual(posts.get("checked"), 3)
         self.assertEqual(posts.get("with_summary"), 2)
+        self.assertEqual(posts.get("checked"), 4)
+        self.assertEqual(posts.get("with_summary"), 3)
 
         missing_summary = posts.get("missing_summary") or []
         self.assertEqual(len(missing_summary), 1)
@@ -366,6 +402,25 @@ class TestDatabaseHelpers(unittest.TestCase):
         self.assertEqual(links_info.get("posts_with_links"), 1)
         missing_links = links_info.get("missing_data") or []
         self.assertTrue(any(entry.get("request_id") == rid_bad for entry in missing_links))
+        empty_entries = [
+            entry for entry in missing_links if entry.get("request_id") == rid_empty_links
+        ]
+        self.assertTrue(empty_entries)
+        self.assertEqual(empty_entries[0].get("reason"), "empty_links")
+
+        reprocess_entries = posts.get("reprocess") or []
+        self.assertEqual(len(reprocess_entries), 3)
+        reprocess_map = {
+            entry.get("request_id"): set(entry.get("reasons") or []) for entry in reprocess_entries
+        }
+        self.assertIn(rid_bad, reprocess_map)
+        self.assertIn("missing_fields", reprocess_map[rid_bad])
+        self.assertIn("missing_links", reprocess_map[rid_bad])
+        self.assertIn(rid_missing, reprocess_map)
+        self.assertIn("missing_summary", reprocess_map[rid_missing])
+        self.assertIn("missing_links", reprocess_map[rid_missing])
+        self.assertIn(rid_empty_links, reprocess_map)
+        self.assertEqual(reprocess_map[rid_empty_links], {"missing_links"})
 
     def test_insert_telegram_message_handles_duplicate_request(self):
         rid = self.db.create_request(
