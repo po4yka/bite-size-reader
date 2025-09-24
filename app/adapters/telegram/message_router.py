@@ -528,6 +528,7 @@ class MessageRouter:
                 self.progress_message_id = progress_message_id
                 self.message_router = message_router
                 self._update_queue: asyncio.Queue[tuple[int, int]] = asyncio.Queue(maxsize=1)
+                self._shutdown_event = asyncio.Event()
 
             async def increment_and_update(self) -> tuple[int, int]:
                 """Atomically increment counter and queue progress update if needed."""
@@ -567,30 +568,43 @@ class MessageRouter:
                     except asyncio.QueueFull:
                         pass  # Skip if update queue is full (prevents blocking)
 
+                if completed >= self.total:
+                    self._shutdown_event.set()
+
                 return completed, self.total
 
             async def process_update_queue(self) -> None:
                 """Process queued progress updates outside of locks."""
-                try:
-                    while True:
+                while True:
+                    if self._shutdown_event.is_set() and self._update_queue.empty():
+                        break
+
+                    try:
                         completed, total = await asyncio.wait_for(
-                            self._update_queue.get(), timeout=0.1
+                            self._update_queue.get(), timeout=0.5
                         )
-                        try:
-                            await self.message_router._send_progress_update(
-                                self.message, completed, total, self.progress_message_id
-                            )
-                        except Exception as e:
-                            logger.warning(
-                                "progress_update_failed",
-                                extra={
-                                    "error": str(e),
-                                    "completed": completed,
-                                    "total": total,
-                                },
-                            )
-                except asyncio.TimeoutError:
-                    pass  # No more updates to process
+                    except asyncio.TimeoutError:
+                        continue
+
+                    try:
+                        await self.message_router._send_progress_update(
+                            self.message, completed, total, self.progress_message_id
+                        )
+                    except Exception as e:
+                        logger.warning(
+                            "progress_update_failed",
+                            extra={
+                                "error": str(e),
+                                "completed": completed,
+                                "total": total,
+                            },
+                        )
+                    finally:
+                        self._update_queue.task_done()
+
+            def mark_complete(self) -> None:
+                """Signal that no further updates will be enqueued."""
+                self._shutdown_event.set()
 
         progress_tracker = ThreadSafeProgress(total, message, progress_message_id, self)
 
@@ -691,12 +705,26 @@ class MessageRouter:
             return batch_successful, batch_failed, batch_failed_urls
 
         # Run batch processing and progress updates concurrently
-        results = await asyncio.gather(
-            process_batches(), progress_tracker.process_update_queue(), return_exceptions=True
-        )
+        progress_task = asyncio.create_task(progress_tracker.process_update_queue())
+        batch_result: tuple[int, int, list[str]] | Exception
+        try:
+            batch_result = await process_batches()
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:  # noqa: BLE001
+            batch_result = exc
+        finally:
+            progress_tracker.mark_complete()
+            try:
+                await progress_task
+            except asyncio.CancelledError:
+                raise
+            except Exception as progress_exc:  # noqa: BLE001
+                logger.warning(
+                    "progress_update_worker_failed",
+                    extra={"error": str(progress_exc)},
+                )
 
-        # Extract results from batch processing
-        batch_result = results[0]
         if isinstance(batch_result, Exception):
             logger.error(
                 "batch_processing_failed",
