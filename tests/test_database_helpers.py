@@ -44,6 +44,44 @@ class TestDatabaseHelpers(unittest.TestCase):
         self.assertEqual(row2["lang_detected"], "en")
         self.assertEqual(row2["correlation_id"], "zzz999")
 
+    def test_create_request_handles_duplicate_hash_race(self):
+        first_id = self.db.create_request(
+            type_="url",
+            status="pending",
+            correlation_id="cid-1",
+            chat_id=1,
+            user_id=1,
+            input_url="https://example.com/path",
+            normalized_url="https://example.com/path",
+            dedupe_hash="shared-hash",
+            route_version=1,
+        )
+
+        second_id = self.db.create_request(
+            type_="url",
+            status="pending",
+            correlation_id="cid-2",
+            chat_id=1,
+            user_id=1,
+            input_url="https://example.com/path",
+            normalized_url="https://example.com/path",
+            dedupe_hash="shared-hash",
+            route_version=1,
+        )
+
+        self.assertEqual(first_id, second_id)
+
+        row = self.db.get_request_by_dedupe_hash("shared-hash")
+        self.assertEqual(row["id"], first_id)
+        # Latest correlation id should be persisted
+        self.assertEqual(row["correlation_id"], "cid-2")
+
+        # Only one record should exist
+        count = self.db.fetchone(
+            "SELECT COUNT(*) AS c FROM requests WHERE dedupe_hash = ?", ("shared-hash",)
+        )
+        self.assertEqual(count["c"], 1)
+
     def test_crawl_result_helpers(self):
         rid = self.db.create_request(
             type_="url",
@@ -173,6 +211,61 @@ class TestDatabaseHelpers(unittest.TestCase):
         arow = self.db.fetchone("SELECT * FROM audit_logs WHERE id = ?", (aid,))
         self.assertIsNotNone(arow)
         self.assertEqual(arow["level"], "INFO")
+
+    def test_insert_telegram_message_handles_duplicate_request(self):
+        rid = self.db.create_request(
+            type_="url",
+            status="pending",
+            correlation_id="cid-telegram",
+            chat_id=1,
+            user_id=2,
+            input_url="https://example.org",
+            normalized_url="https://example.org",
+            dedupe_hash="telegram-dup",
+            route_version=1,
+        )
+
+        mid1 = self.db.insert_telegram_message(
+            request_id=rid,
+            message_id=10,
+            chat_id=1,
+            date_ts=1700000000,
+            text_full="hello",
+            entities_json=json.dumps([{"type": "bold"}]),
+            media_type="photo",
+            media_file_ids_json=json.dumps(["file_a"]),
+            forward_from_chat_id=None,
+            forward_from_chat_type=None,
+            forward_from_chat_title=None,
+            forward_from_message_id=None,
+            forward_date_ts=None,
+            telegram_raw_json=json.dumps({"k": "v"}),
+        )
+
+        mid2 = self.db.insert_telegram_message(
+            request_id=rid,
+            message_id=10,
+            chat_id=1,
+            date_ts=1700000000,
+            text_full="hello",
+            entities_json=json.dumps([{"type": "bold"}]),
+            media_type="video",
+            media_file_ids_json=json.dumps(["file_b"]),
+            forward_from_chat_id=None,
+            forward_from_chat_type=None,
+            forward_from_chat_title=None,
+            forward_from_message_id=None,
+            forward_date_ts=None,
+            telegram_raw_json=json.dumps({"k": "v"}),
+        )
+
+        self.assertEqual(mid1, mid2)
+
+        row = self.db.fetchone("SELECT * FROM telegram_messages WHERE request_id = ?", (rid,))
+        self.assertIsNotNone(row)
+        # The original payload should remain intact
+        self.assertEqual(row["media_type"], "photo")
+        self.assertEqual(json.loads(row["media_file_ids_json"]), ["file_a"])
 
 
 if __name__ == "__main__":

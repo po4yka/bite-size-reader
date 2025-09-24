@@ -481,7 +481,6 @@ class URLProcessor:
         for field in content_fields:
             value = summary.get(field)
             if field == "entities":
-                # Entities should be a dict with lists
                 if isinstance(value, dict) and any(
                     isinstance(v, list) and len(v) > 0 for v in value.values()
                 ):
@@ -491,7 +490,13 @@ class URLProcessor:
                 has_content = True
                 break
 
-        return has_content
+        if not has_content:
+            logger.debug(
+                "cached_summary_missing_optional_content",
+                extra={"missing_fields": content_fields},
+            )
+
+        return True
 
     def _get_missing_summary_fields(self, summary: dict[str, Any]) -> list[str]:
         """Get list of missing or empty essential fields."""

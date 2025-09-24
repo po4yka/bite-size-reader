@@ -396,32 +396,61 @@ class Database:
             "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
         )
         with self.connect() as conn:
-            cur = conn.execute(
-                sql,
-                (
-                    type_,
-                    status,
-                    correlation_id,
-                    chat_id,
-                    user_id,
-                    input_url,
-                    normalized_url,
-                    dedupe_hash,
-                    input_message_id,
-                    fwd_from_chat_id,
-                    fwd_from_msg_id,
-                    lang_detected,
-                    content_text,
-                    route_version,
-                ),
-            )
-            conn.commit()
-            rid = cur.lastrowid
-            self._logger.info(
-                "request_created",
-                extra={"id": rid, "type": type_, "status": status, "cid": correlation_id},
-            )
-            return rid
+            try:
+                cur = conn.execute(
+                    sql,
+                    (
+                        type_,
+                        status,
+                        correlation_id,
+                        chat_id,
+                        user_id,
+                        input_url,
+                        normalized_url,
+                        dedupe_hash,
+                        input_message_id,
+                        fwd_from_chat_id,
+                        fwd_from_msg_id,
+                        lang_detected,
+                        content_text,
+                        route_version,
+                    ),
+                )
+                conn.commit()
+                rid = cur.lastrowid
+                self._logger.info(
+                    "request_created",
+                    extra={"id": rid, "type": type_, "status": status, "cid": correlation_id},
+                )
+                return rid
+            except sqlite3.IntegrityError as exc:
+                conn.rollback()
+                if dedupe_hash:
+                    row = conn.execute(
+                        "SELECT id FROM requests WHERE dedupe_hash = ?", (dedupe_hash,)
+                    ).fetchone()
+                    if row:
+                        rid = int(row["id"])
+                        if correlation_id:
+                            try:
+                                conn.execute(
+                                    "UPDATE requests SET correlation_id = ? WHERE id = ?",
+                                    (correlation_id, rid),
+                                )
+                                conn.commit()
+                            except sqlite3.Error:
+                                conn.rollback()
+                        self._logger.info(
+                            "request_dedupe_race_resolved",
+                            extra={
+                                "id": rid,
+                                "hash": dedupe_hash,
+                                "type": type_,
+                                "cid": correlation_id,
+                            },
+                        )
+                        return rid
+                raise exc
 
     def update_request_status(self, request_id: int, status: str) -> None:
         self.execute("UPDATE requests SET status = ? WHERE id = ?", (status, request_id))
@@ -461,31 +490,45 @@ class Database:
             "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
         )
         with self.connect() as conn:
-            cur = conn.execute(
-                sql,
-                (
-                    request_id,
-                    message_id,
-                    chat_id,
-                    date_ts,
-                    text_full,
-                    entities_json,
-                    media_type,
-                    media_file_ids_json,
-                    forward_from_chat_id,
-                    forward_from_chat_type,
-                    forward_from_chat_title,
-                    forward_from_message_id,
-                    forward_date_ts,
-                    telegram_raw_json,
-                ),
-            )
-            conn.commit()
-            mid = cur.lastrowid
-            self._logger.debug(
-                "telegram_snapshot_inserted", extra={"request_id": request_id, "row_id": mid}
-            )
-            return mid
+            try:
+                cur = conn.execute(
+                    sql,
+                    (
+                        request_id,
+                        message_id,
+                        chat_id,
+                        date_ts,
+                        text_full,
+                        entities_json,
+                        media_type,
+                        media_file_ids_json,
+                        forward_from_chat_id,
+                        forward_from_chat_type,
+                        forward_from_chat_title,
+                        forward_from_message_id,
+                        forward_date_ts,
+                        telegram_raw_json,
+                    ),
+                )
+                conn.commit()
+                mid = cur.lastrowid
+                self._logger.debug(
+                    "telegram_snapshot_inserted", extra={"request_id": request_id, "row_id": mid}
+                )
+                return mid
+            except sqlite3.IntegrityError as exc:
+                conn.rollback()
+                row = conn.execute(
+                    "SELECT id FROM telegram_messages WHERE request_id = ?", (request_id,)
+                ).fetchone()
+                if row:
+                    mid = int(row["id"])
+                    self._logger.info(
+                        "telegram_snapshot_dedupe",
+                        extra={"request_id": request_id, "row_id": mid},
+                    )
+                    return mid
+                raise exc
 
     def insert_crawl_result(
         self,
