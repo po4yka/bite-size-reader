@@ -101,6 +101,54 @@ class TestCommands(unittest.IsolatedAsyncioTestCase):
             self.assertIn(url, bot.seen_urls)
             self.assertNotIn(uid, bot._awaiting_url_users)
 
+    async def test_cancel_awaiting_request(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            bot = make_bot(os.path.join(tmp, "app.db"))
+            bot.response_formatter.MIN_MESSAGE_INTERVAL_MS = 0
+            uid = 42
+
+            await bot._on_message(FakeMessage("/summarize", uid=uid))
+            self.assertIn(uid, bot._awaiting_url_users)
+
+            cancel_msg = FakeMessage("/cancel", uid=uid)
+            await bot._on_message(cancel_msg)
+
+            self.assertNotIn(uid, bot._awaiting_url_users)
+            self.assertTrue(
+                any("Cancelled your pending URL request" in reply for reply in cancel_msg._replies)
+            )
+
+    async def test_cancel_pending_multi_links_command(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            bot = make_bot(os.path.join(tmp, "app.db"))
+            bot.response_formatter.MIN_MESSAGE_INTERVAL_MS = 0
+            uid = 42
+            multi_text = "https://example.com/a\nhttps://example.com/b"
+
+            await bot._on_message(FakeMessage(multi_text, uid=uid))
+            self.assertIn(uid, bot._pending_multi_links)
+
+            cancel_msg = FakeMessage("/cancel", uid=uid)
+            await bot._on_message(cancel_msg)
+
+            self.assertNotIn(uid, bot._pending_multi_links)
+            self.assertTrue(
+                any("pending multi-link confirmation" in reply for reply in cancel_msg._replies)
+            )
+
+    async def test_cancel_without_pending_requests(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            bot = make_bot(os.path.join(tmp, "app.db"))
+            bot.response_formatter.MIN_MESSAGE_INTERVAL_MS = 0
+            uid = 42
+
+            cancel_msg = FakeMessage("/cancel", uid=uid)
+            await bot._on_message(cancel_msg)
+
+            self.assertTrue(
+                any("No pending link requests" in reply for reply in cancel_msg._replies)
+            )
+
     async def test_dbinfo_command(self):
         with tempfile.TemporaryDirectory() as tmp:
             db_path = os.path.join(tmp, "app.db")

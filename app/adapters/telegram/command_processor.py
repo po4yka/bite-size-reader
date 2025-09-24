@@ -17,6 +17,7 @@ from app.core.url_utils import extract_all_urls
 if TYPE_CHECKING:
     from app.adapters.content.url_processor import URLProcessor
     from app.adapters.external.response_formatter import ResponseFormatter
+    from app.adapters.telegram.url_handler import URLHandler
     from app.db.database import Database
 
 logger = logging.getLogger(__name__)
@@ -32,11 +33,13 @@ class CommandProcessor:
         db: Database,
         url_processor: URLProcessor,
         audit_func: Callable[[str, str, dict], None],
+        url_handler: URLHandler | None = None,
     ) -> None:
         self.cfg = cfg
         self.response_formatter = response_formatter
         self.db = db
         self.url_processor = url_processor
+        self.url_handler: URLHandler | None = url_handler
         self._audit = audit_func
 
     async def handle_start_command(
@@ -262,6 +265,60 @@ class CommandProcessor:
                     processing_time_ms=int((time.time() - start_time) * 1000),
                 )
             return "awaiting_url", False
+
+    async def handle_cancel_command(
+        self,
+        message: Any,
+        uid: int,
+        correlation_id: str,
+        interaction_id: int,
+        start_time: float,
+    ) -> None:
+        """Handle /cancel command to clear pending URL flows."""
+        chat_id = getattr(getattr(message, "chat", None), "id", None)
+        logger.info(
+            "command_cancel",
+            extra={
+                "uid": uid,
+                "chat_id": chat_id,
+                "cid": correlation_id,
+            },
+        )
+        try:
+            self._audit(
+                "INFO",
+                "command_cancel",
+                {"uid": uid, "chat_id": chat_id, "cid": correlation_id},
+            )
+        except Exception:
+            pass
+
+        awaiting_cancelled = False
+        multi_cancelled = False
+        if self.url_handler is not None:
+            awaiting_cancelled, multi_cancelled = self.url_handler.cancel_pending_requests(uid)
+
+        if awaiting_cancelled and multi_cancelled:
+            reply_text = "🛑 Cancelled your pending URL request and multi-link confirmation."
+        elif awaiting_cancelled:
+            reply_text = "🛑 Cancelled your pending URL request."
+        elif multi_cancelled:
+            reply_text = "🛑 Cancelled your pending multi-link confirmation."
+        else:
+            reply_text = "ℹ️ No pending link requests to cancel."
+
+        await self.response_formatter.safe_reply(message, reply_text)
+
+        if interaction_id:
+            response_type = (
+                "cancelled" if (awaiting_cancelled or multi_cancelled) else "cancel_none"
+            )
+            self._update_user_interaction(
+                interaction_id=interaction_id,
+                response_sent=True,
+                response_type=response_type,
+                processing_time_ms=int((time.time() - start_time) * 1000),
+            )
 
     def _update_user_interaction(
         self,

@@ -41,6 +41,18 @@ class URLHandler:
         """Add user to pending multi-links confirmation."""
         self._pending_multi_links[uid] = urls
 
+    def cancel_pending_requests(self, uid: int) -> tuple[bool, bool]:
+        """Cancel any pending URL or multi-link confirmation requests for a user."""
+        awaiting_cancelled = uid in self._awaiting_url_users
+        if awaiting_cancelled:
+            self._awaiting_url_users.discard(uid)
+
+        multi_cancelled = uid in self._pending_multi_links
+        if multi_cancelled:
+            self._pending_multi_links.pop(uid, None)
+
+        return awaiting_cancelled, multi_cancelled
+
     async def handle_awaited_url(
         self,
         message: Any,

@@ -42,17 +42,18 @@ class MessageHandler:
             audit_func=self._audit,
         )
 
+        self.url_handler = URLHandler(
+            response_formatter=response_formatter,
+            url_processor=url_processor,
+        )
+
         self.command_processor = CommandProcessor(
             cfg=cfg,
             response_formatter=response_formatter,
             db=db,
             url_processor=url_processor,
             audit_func=self._audit,
-        )
-
-        self.url_handler = URLHandler(
-            response_formatter=response_formatter,
-            url_processor=url_processor,
+            url_handler=self.url_handler,
         )
 
         self.message_router = MessageRouter(

@@ -220,6 +220,12 @@ class MessageRouter:
                 self.url_handler.add_awaiting_user(uid)
             return
 
+        if text.startswith("/cancel"):
+            await self.command_processor.handle_cancel_command(
+                message, uid, correlation_id, interaction_id, start_time
+            )
+            return
+
         if text.startswith("/unread"):
             await self.command_processor.handle_unread_command(
                 message, uid, correlation_id, interaction_id, start_time
