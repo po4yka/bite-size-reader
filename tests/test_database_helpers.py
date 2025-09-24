@@ -1,6 +1,7 @@
 import copy
 import json
 import os
+import sqlite3
 import tempfile
 import unittest
 
@@ -16,6 +17,32 @@ class TestDatabaseHelpers(unittest.TestCase):
 
     def tearDown(self):
         self.tmp.cleanup()
+
+    def test_create_backup_copy_writes_snapshot(self):
+        backup_dir = os.path.join(self.tmp.name, "backups")
+        backup_path = os.path.join(backup_dir, "snapshot.db")
+
+        created = self.db.create_backup_copy(backup_path)
+
+        self.assertTrue(os.path.exists(created))
+        with sqlite3.connect(created) as conn:
+            row = conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name='requests'"
+            ).fetchone()
+            self.assertIsNotNone(row)
+
+    def test_create_backup_copy_rejects_memory_db(self):
+        mem_db = Database(":memory:")
+        mem_db.migrate()
+
+        with self.assertRaises(ValueError):
+            mem_db.create_backup_copy(os.path.join(self.tmp.name, "memory.db"))
+
+    def test_create_backup_copy_requires_source_file(self):
+        db = Database(os.path.join(self.tmp.name, "missing.db"))
+
+        with self.assertRaises(FileNotFoundError):
+            db.create_backup_copy(os.path.join(self.tmp.name, "missing-backup.db"))
 
     def test_create_request_and_fetch_by_hash(self):
         rid = self.db.create_request(

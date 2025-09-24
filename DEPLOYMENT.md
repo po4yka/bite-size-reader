@@ -79,7 +79,7 @@ How to use (no commands needed)
    - `docker run --env-file .env -v $(pwd)/data:/data --name bsr --restart unless-stopped bite-size-reader`
 
 Notes
-- The SQLite DB lives at `/data/app.db` inside the container. Mount a host directory for persistence and backups.
+- The SQLite DB lives at `/data/app.db` inside the container. Mount a host directory for persistence and backups. The bot also writes timestamped snapshots under `/data/backups` (configurable via `DB_BACKUP_*` settings).
 - Ensure `ALLOWED_USER_IDS` is set to prevent unauthorized use.
 - Keep `DEBUG_PAYLOADS=0` in production.
 
@@ -109,7 +109,7 @@ Run: `docker compose up -d --build`
 ## Operations
 - Health: ensure the bot account stays unbanned and tokens valid.
 - Monitoring: watch logs for latency spikes and error rates; consider dashboarding via structured logs.
-- Backups: back up `data/app.db` periodically.
+- Backups: automatic snapshots land in `/data/backups`. Copy them off-host or adjust `DB_BACKUP_*` if you need a different cadence.
 
 ## Troubleshooting
 - “Access denied”: verify `ALLOWED_USER_IDS` contains your Telegram numeric ID.
