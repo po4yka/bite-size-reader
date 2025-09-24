@@ -439,7 +439,8 @@ class MessageRouter:
 
         # Use semaphore to limit concurrent processing (prevent overwhelming external APIs)
         # Note: Combined with batch processing, this limits both memory usage and API load
-        semaphore = asyncio.Semaphore(min(5, total))  # Max 5 concurrent URLs
+        # Semaphore should allow at least as many concurrent URLs as batch size
+        semaphore = asyncio.Semaphore(min(20, total))  # Max 20 concurrent URLs
 
         # Circuit breaker: if too many failures in a chunk, reduce concurrency
         max_concurrent_failures = min(
@@ -589,7 +590,7 @@ class MessageRouter:
 
         # Process URLs in true memory-efficient batches
         # File processing can use larger batches since users expect bulk processing
-        batch_size = min(10, total)  # Process max 10 URLs at a time to limit memory
+        batch_size = min(5, total)  # Process max 5 URLs at a time to limit memory and API load
 
         async def process_batches():
             """Process URL batches with progress tracking."""
