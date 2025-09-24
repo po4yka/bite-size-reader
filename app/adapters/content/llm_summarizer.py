@@ -959,15 +959,22 @@ class LLMSummarizer:
             {"role": "user", "content": user_prompt},
         ]
 
-        async with self._sem():
-            llm = await self.openrouter.chat(
-                messages,
-                temperature=0.2,
-                max_tokens=512,
-                top_p=0.9,
-                request_id=req_id,
-                response_format=response_format,
+        try:
+            async with self._sem():
+                llm = await self.openrouter.chat(
+                    messages,
+                    temperature=0.2,
+                    max_tokens=512,
+                    top_p=0.9,
+                    request_id=req_id,
+                    response_format=response_format,
+                )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(
+                "metadata_completion_call_failed",
+                extra={"cid": correlation_id, "error": str(exc)},
             )
+            return {}
 
         asyncio.create_task(self._persist_llm_call(llm, req_id, correlation_id))
 
