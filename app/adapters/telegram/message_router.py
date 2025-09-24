@@ -446,7 +446,9 @@ class MessageRouter:
             10, total // 3
         )  # Allow up to 1/3 failures before reducing concurrency
 
-        async def process_single_url(url: str) -> tuple[str, bool, str]:
+        async def process_single_url(
+            url: str, progress_tracker: ThreadSafeProgress
+        ) -> tuple[str, bool, str]:
             """Process a single URL and return (url, success, error_message)."""
             async with semaphore:
                 per_link_cid = generate_correlation_id()
@@ -457,14 +459,18 @@ class MessageRouter:
 
                 try:
                     # Add timeout protection for individual URL processing
-                    await asyncio.wait_for(
+                    success = await asyncio.wait_for(
                         self._process_url_silently(message, url, per_link_cid, interaction_id),
                         timeout=600,  # 10 minute timeout per URL
                     )
 
-                    # Update progress after successful completion
+                    # Update progress after completion (success or failure)
                     await progress_tracker.increment_and_update()
-                    return url, True, ""
+
+                    if success:
+                        return url, True, ""
+                    else:
+                        return url, False, "URL processing failed"
                 except asyncio.TimeoutError:
                     error_msg = "Timeout processing URL after 10 minutes"
                     logger.error(
@@ -474,6 +480,9 @@ class MessageRouter:
                     # Update progress even on timeout
                     await progress_tracker.increment_and_update()
                     return url, False, error_msg
+                except asyncio.CancelledError:
+                    # Re-raise cancellation to stop all processing
+                    raise
                 except Exception as e:
                     error_msg = str(e)
                     logger.error(
@@ -583,7 +592,7 @@ class MessageRouter:
                 batch_urls = urls[batch_start:batch_end]
 
                 # Create tasks for this batch only
-                batch_tasks = [process_single_url(url) for url in batch_urls]
+                batch_tasks = [process_single_url(url, progress_tracker) for url in batch_urls]
 
                 # Process batch and handle results immediately
                 batch_results = await asyncio.gather(*batch_tasks, return_exceptions=True)
@@ -598,6 +607,7 @@ class MessageRouter:
                             # Re-raise cancellation
                             raise result
                         # This should rarely happen due to return_exceptions=True, but handle it
+                        failed += 1
                         logger.error(
                             "unexpected_task_exception",
                             extra={"error": str(result), "cid": correlation_id},
@@ -608,6 +618,7 @@ class MessageRouter:
                         if success:
                             successful += 1
                         else:
+                            failed += 1
                             failed_urls.append(url)
                             if error_msg:
                                 logger.debug(
@@ -620,12 +631,14 @@ class MessageRouter:
                         if success:
                             successful += 1
                         else:
+                            failed += 1
                             failed_urls.append(url)
                             logger.warning(
                                 "legacy_result_format", extra={"url": url, "cid": correlation_id}
                             )
                     else:
                         # Unexpected result type - this is a programming error
+                        failed += 1
                         logger.error(
                             "unexpected_result_type",
                             extra={
@@ -713,8 +726,12 @@ class MessageRouter:
         url: str,
         correlation_id: str,
         interaction_id: int,
-    ) -> None:
-        """Process a single URL without sending Telegram responses."""
+    ) -> bool:
+        """Process a single URL without sending Telegram responses.
+
+        Returns:
+            bool: True if processing succeeded, False if it failed
+        """
         try:
             # Call the URL processor's handle_url_flow method with silent=True
             await self._url_processor.handle_url_flow(
@@ -724,11 +741,13 @@ class MessageRouter:
                 interaction_id=interaction_id,
                 silent=True,
             )
+            return True
         except Exception as e:
             logger.error(
                 "url_processing_failed",
                 extra={"url": url, "cid": correlation_id, "error": str(e)},
             )
+            return False
 
     async def _send_progress_update(
         self, message: Any, current: int, total: int, message_id: int | None = None
