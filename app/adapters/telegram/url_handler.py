@@ -249,9 +249,35 @@ class URLHandler:
 
                     # Check if we should update (don't call external methods in lock)
                     progress_threshold = max(1, self.total // 20)  # Update every 5% or 1 URL
-                    should_update = (
-                        current_time - self._last_update >= self.update_interval
-                        and self._completed - self._last_displayed >= progress_threshold
+                    # For small batches, be more responsive - update every URL
+                    if self.total <= 5:
+                        progress_threshold = 1
+
+                    # Check both time and progress thresholds
+                    time_threshold_met = current_time - self._last_update >= self.update_interval
+                    progress_threshold_met = (
+                        self._completed - self._last_displayed >= progress_threshold
+                    )
+
+                    # For small batches, prioritize progress threshold over time threshold
+                    should_update = (time_threshold_met and progress_threshold_met) or (
+                        self.total <= 5 and progress_threshold_met
+                    )
+
+                    # Debug logging to understand progress tracking
+                    logger.debug(
+                        "progress_tracking_debug",
+                        extra={
+                            "completed": self._completed,
+                            "total": self.total,
+                            "threshold": progress_threshold,
+                            "should_update": should_update,
+                            "time_diff": current_time - self._last_update,
+                            "update_interval": self.update_interval,
+                            "last_displayed": self._last_displayed,
+                            "time_threshold_met": time_threshold_met,
+                            "progress_threshold_met": progress_threshold_met,
+                        },
                     )
 
                     if should_update:
@@ -265,7 +291,12 @@ class URLHandler:
                     try:
                         # Non-blocking queue put - if full, skip this update
                         self._update_queue.put_nowait((completed, self.total))
+                        logger.debug(
+                            "progress_update_queued",
+                            extra={"completed": completed, "total": self.total},
+                        )
                     except asyncio.QueueFull:
+                        logger.debug("progress_update_queue_full", extra={"completed": completed})
                         pass  # Skip if update queue is full (prevents blocking)
 
                 return completed, self.total
@@ -281,10 +312,38 @@ class URLHandler:
                             percentage = int((completed / total) * 100)
                             progress_text = f"🔄 Processing {total} links in parallel: {completed}/{total} ({percentage}%)"
 
+                            logger.debug(
+                                "attempting_progress_update",
+                                extra={
+                                    "completed": completed,
+                                    "total": total,
+                                    "progress_text": progress_text,
+                                    "progress_msg_id": self.progress_msg_id,
+                                },
+                            )
+
                             chat_id = getattr(self.message.chat, "id", None)
                             if chat_id and self.progress_msg_id:
                                 await self.response_formatter.edit_message(
                                     chat_id, self.progress_msg_id, progress_text
+                                )
+                                logger.debug(
+                                    "progress_update_sent_successfully",
+                                    extra={
+                                        "completed": completed,
+                                        "total": total,
+                                        "chat_id": chat_id,
+                                        "message_id": self.progress_msg_id,
+                                    },
+                                )
+                            else:
+                                logger.warning(
+                                    "progress_update_skipped",
+                                    extra={
+                                        "chat_id": chat_id,
+                                        "progress_msg_id": self.progress_msg_id,
+                                        "reason": "missing_chat_id_or_msg_id",
+                                    },
                                 )
                         except Exception as e:
                             logger.warning(
@@ -356,8 +415,20 @@ class URLHandler:
 
         # Send initial progress message with error handling
         try:
+            initial_progress_text = (
+                f"🔄 Processing {len(urls)} links in parallel: 0/{len(urls)} (0%)"
+            )
             progress_msg_id = await self.response_formatter.safe_reply_with_id(
-                message, f"🔄 Processing {len(urls)} links in parallel: 0/{len(urls)} (0%)"
+                message, initial_progress_text
+            )
+            logger.debug(
+                "initial_progress_message_created",
+                extra={
+                    "progress_msg_id": progress_msg_id,
+                    "url_count": len(urls),
+                    "progress_text": initial_progress_text,
+                    "uid": uid,
+                },
             )
         except Exception as e:
             logger.warning(
@@ -382,6 +453,7 @@ class URLHandler:
 
         async def process_batches():
             """Process URL batches with progress tracking."""
+            nonlocal successful, failed, failed_urls
             for batch_start in range(0, len(urls), batch_size):
                 batch_end = min(batch_start + batch_size, len(urls))
                 batch_urls = urls[batch_start:batch_end]

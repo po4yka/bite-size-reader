@@ -516,9 +516,19 @@ class MessageRouter:
 
                     # Check if we should update (don't call external methods in lock)
                     progress_threshold = max(1, self.total // 20)  # Update every 5% or 1 URL
-                    should_update = (
-                        current_time - self._last_update >= self.update_interval
-                        and self._completed - self._last_displayed >= progress_threshold
+                    # For small batches, be more responsive - update every URL
+                    if self.total <= 10:  # File processing uses larger batches
+                        progress_threshold = 1
+
+                    # Check both time and progress thresholds
+                    time_threshold_met = current_time - self._last_update >= self.update_interval
+                    progress_threshold_met = (
+                        self._completed - self._last_displayed >= progress_threshold
+                    )
+
+                    # For small batches, prioritize progress threshold over time threshold
+                    should_update = (time_threshold_met and progress_threshold_met) or (
+                        self.total <= 10 and progress_threshold_met
                     )
 
                     if should_update:
