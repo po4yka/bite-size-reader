@@ -363,6 +363,15 @@ class MessageRouter:
             await self.response_formatter.safe_reply(
                 message, f"📄 File accepted. Processing {len(urls)} links."
             )
+            # Respect formatter rate limits before sending the progress message we'll edit later
+            try:
+                initial_gap = max(
+                    0.12,
+                    (self.response_formatter.MIN_MESSAGE_INTERVAL_MS + 10) / 1000.0,
+                )
+                await asyncio.sleep(initial_gap)
+            except Exception:
+                pass
             # Create a dedicated progress message that we will edit in-place
             progress_message_id = await self.response_formatter.safe_reply_with_id(
                 message,
@@ -528,6 +537,7 @@ class MessageRouter:
                 self.progress_message_id = progress_message_id
                 self.message_router = message_router
                 self._update_queue: asyncio.Queue[tuple[int, int]] = asyncio.Queue(maxsize=1)
+                self._queue_overflow_logged = False
                 self._shutdown_event = asyncio.Event()
 
             async def increment_and_update(self) -> tuple[int, int]:
@@ -549,10 +559,17 @@ class MessageRouter:
                         self._completed - self._last_displayed >= progress_threshold
                     )
 
-                    # For small batches, prioritize progress threshold over time threshold
-                    should_update = (time_threshold_met and progress_threshold_met) or (
-                        self.total <= 10 and progress_threshold_met
-                    )
+                    # Only enqueue updates if we actually made forward progress
+                    made_progress = self._completed > self._last_displayed
+                    should_update = False
+                    if made_progress:
+                        # Always surface meaningful progress jumps immediately
+                        if progress_threshold_met:
+                            should_update = True
+                        # Otherwise, send periodic heartbeats while work is ongoing
+                        elif time_threshold_met:
+                            should_update = True
+                        # For very small batches we already handle every increment above
 
                     if should_update:
                         self._last_update = current_time
@@ -563,10 +580,28 @@ class MessageRouter:
                 # Slow path: call external method outside lock to prevent deadlocks
                 if should_update:
                     try:
-                        # Non-blocking queue put - if full, skip this update
                         self._update_queue.put_nowait((completed, self.total))
+                        self._queue_overflow_logged = False
                     except asyncio.QueueFull:
-                        pass  # Skip if update queue is full (prevents blocking)
+                        try:
+                            dropped_update = self._update_queue.get_nowait()
+                        except asyncio.QueueEmpty:
+                            dropped_update = None
+                        else:
+                            self._update_queue.task_done()
+
+                        if not self._queue_overflow_logged:
+                            logger.debug(
+                                "progress_update_queue_full",
+                                extra={
+                                    "last_displayed": self._last_displayed,
+                                    "completed": completed,
+                                    "dropped": dropped_update,
+                                },
+                            )
+                            self._queue_overflow_logged = True
+
+                        self._update_queue.put_nowait((completed, self.total))
 
                 if completed >= self.total:
                     self._shutdown_event.set()
@@ -587,9 +622,11 @@ class MessageRouter:
                         continue
 
                     try:
-                        await self.message_router._send_progress_update(
+                        new_message_id = await self.message_router._send_progress_update(
                             self.message, completed, total, self.progress_message_id
                         )
+                        if new_message_id is not None:
+                            self.progress_message_id = new_message_id
                     except Exception as e:
                         logger.warning(
                             "progress_update_failed",
@@ -752,7 +789,11 @@ class MessageRouter:
 
         # Final progress update to ensure 100% completion is shown
         try:
-            await self._send_progress_update(message, total, total, progress_message_id)
+            final_message_id = await self._send_progress_update(
+                message, total, total, progress_tracker.progress_message_id
+            )
+            if final_message_id is not None:
+                progress_tracker.progress_message_id = final_message_id
         except Exception as e:
             logger.warning("final_progress_update_failed", extra={"error": str(e)})
 
@@ -841,51 +882,97 @@ class MessageRouter:
 
     async def _send_progress_update(
         self, message: Any, current: int, total: int, message_id: int | None = None
-    ) -> None:
-        """Send progress update, editing existing message if message_id provided, otherwise send as new message."""
-        try:
-            # Create enhanced progress bar with percentage
-            progress_bar = self._create_progress_bar(current, total)
-            percentage = int((current / total) * 100) if total > 0 else 0
-            progress_text = (
-                f"🔄 Processing links: {current}/{total} ({percentage}%)\n{progress_bar}"
-            )
+    ) -> int | None:
+        """Send or edit the Telegram progress message.
 
-            if message_id is not None:
-                # Edit existing message
-                chat_id = getattr(message.chat, "id", None)
-                if chat_id is not None:
-                    await self.response_formatter.edit_message(chat_id, message_id, progress_text)
+        Returns the message ID that should be used for subsequent edits when available.
+        """
+
+        progress_bar = self._create_progress_bar(current, total)
+        percentage = int((current / total) * 100) if total > 0 else 0
+        progress_text = f"🔄 Processing links: {current}/{total} ({percentage}%)\n{progress_bar}"
+
+        chat_id = getattr(message.chat, "id", None)
+
+        if message_id is not None and chat_id is not None:
+            try:
+                await self.response_formatter.edit_message(chat_id, message_id, progress_text)
+                logger.debug(
+                    "progress_update_edited",
+                    extra={
+                        "current": current,
+                        "total": total,
+                        "message_id": message_id,
+                        "text_length": len(progress_text),
+                    },
+                )
+                return message_id
+            except Exception as edit_error:  # noqa: BLE001
+                error_text = str(edit_error)
+                if "message is not modified" in error_text.lower():
                     logger.debug(
-                        "progress_update_edited",
+                        "progress_update_unchanged",
                         extra={
                             "current": current,
                             "total": total,
                             "message_id": message_id,
-                            "text_length": len(progress_text),
                         },
                     )
-                else:
-                    logger.warning("progress_update_no_chat_id", extra={"message_id": message_id})
-                    # Fallback to new message
-                    await self.response_formatter.safe_reply(message, progress_text)
-            else:
-                # Send as new message (fallback)
-                await self.response_formatter.safe_reply(message, progress_text)
-                logger.debug(
-                    "progress_update_sent",
-                    extra={"current": current, "total": total, "text_length": len(progress_text)},
+                    return message_id
+
+                logger.warning(
+                    "progress_update_edit_failed",
+                    extra={
+                        "error": error_text,
+                        "current": current,
+                        "total": total,
+                        "message_id": message_id,
+                    },
                 )
-        except Exception as e:
+        elif message_id is not None:
             logger.warning(
-                "progress_update_failed",
+                "progress_update_no_chat_id",
+                extra={"message_id": message_id, "current": current, "total": total},
+            )
+
+        try:
+            new_message_id = await self.response_formatter.safe_reply_with_id(
+                message, progress_text
+            )
+        except Exception as send_error:  # noqa: BLE001
+            logger.warning(
+                "progress_update_send_failed",
                 extra={
-                    "error": str(e),
+                    "error": str(send_error),
                     "current": current,
                     "total": total,
                     "message_id": message_id,
                 },
             )
+            return message_id
+
+        if new_message_id is None:
+            logger.debug(
+                "progress_update_sent_without_id",
+                extra={
+                    "current": current,
+                    "total": total,
+                    "text_length": len(progress_text),
+                    "previous_message_id": message_id,
+                },
+            )
+        else:
+            logger.debug(
+                "progress_update_sent",
+                extra={
+                    "current": current,
+                    "total": total,
+                    "message_id": new_message_id,
+                    "text_length": len(progress_text),
+                },
+            )
+
+        return new_message_id
 
     def _create_progress_bar(self, current: int, total: int, width: int = 20) -> str:
         """Create a simple text progress bar."""
