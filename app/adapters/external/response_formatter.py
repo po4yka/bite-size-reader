@@ -173,6 +173,7 @@ class ResponseFormatter:
             "• `/help` — Show this help message\n"
             "• `/summarize <URL>` — Summarize a URL\n"
             "• `/summarize_all <URLs>` — Summarize multiple URLs from one message\n"
+            "• `/cancel` — Cancel any pending URL or multi-link requests\n"
             "• `/unread` — Show list of unread articles\n"
             "• `/read <ID>` — Mark article as read and view it\n"
             "• `/dbinfo` — Show database overview\n\n"
