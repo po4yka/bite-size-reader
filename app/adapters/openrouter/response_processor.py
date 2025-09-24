@@ -256,6 +256,7 @@ class ResponseProcessor:
             400: "Invalid or missing request parameters",
             401: "Authentication failed (invalid or expired API key)",
             402: "Insufficient account balance",
+            403: "Access forbidden (API key limit exceeded or invalid permissions)",
             404: "Requested resource not found",
             429: "Rate limit exceeded",
             500: "Internal server error",
@@ -269,6 +270,17 @@ class ResponseProcessor:
                 api_error = raw_error.get("message") or raw_error.get("code")
             elif isinstance(raw_error, str):
                 api_error = raw_error
+
+        # Enhance error message for specific OpenRouter API errors
+        if status_code == 403 and api_error:
+            api_error_lower = str(api_error).lower()
+            if "key limit exceeded" in api_error_lower:
+                base_message = "API key usage limit exceeded. Please check your OpenRouter account limits or upgrade your plan."
+            elif (
+                "manage it using" in api_error_lower
+                and "openrouter.ai/settings/keys" in api_error_lower
+            ):
+                base_message = "API key limit exceeded. Please manage your key limits at https://openrouter.ai/settings/keys"
 
         provider = None
         if isinstance(data, dict):

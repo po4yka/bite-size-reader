@@ -44,7 +44,7 @@ class ErrorHandler:
 
     def is_non_retryable_error(self, status_code: int) -> bool:
         """Check if error is non-retryable."""
-        return status_code in (400, 401, 402)
+        return status_code in (400, 401, 402, 403)
 
     def should_try_next_model(self, status_code: int) -> bool:
         """Determine if we should try the next model in fallback list."""
