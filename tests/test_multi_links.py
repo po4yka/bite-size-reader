@@ -1,5 +1,6 @@
 import os
 import tempfile
+import time
 import unittest
 from typing import Any
 from unittest.mock import AsyncMock, patch
@@ -174,6 +175,28 @@ class TestMultiLinks(unittest.IsolatedAsyncioTestCase):
 
             # Should not process URLs (bot.seen_urls should be empty)
             self.assertEqual(len(bot.seen_urls), 0)
+
+    async def test_confirm_without_pending_links(self):
+        """Confirm responses should be safe when no pending state exists."""
+        with tempfile.TemporaryDirectory() as tmp:
+            bot = make_bot(os.path.join(tmp, "app.db"))
+            message = FakeMessage("yes", uid=55)
+
+            await bot.message_handler.url_handler.handle_multi_link_confirmation(
+                message,
+                "yes",
+                55,
+                correlation_id="test-cid",
+                interaction_id=0,
+                start_time=time.time(),
+            )
+
+            self.assertTrue(message._replies, "Expected a notification reply to be sent")
+            self.assertEqual(
+                message._replies[-1],
+                "ℹ️ No pending multi-link request to confirm. Please send the links again.",
+            )
+            self.assertEqual(bot.seen_urls, [])
 
 
 if __name__ == "__main__":
