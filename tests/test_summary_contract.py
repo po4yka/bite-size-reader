@@ -7,7 +7,7 @@ class TestSummaryContract(unittest.TestCase):
     def test_caps_and_tags_and_entities(self):
         payload = {
             "summary_250": "A" * 400 + " end.",
-            "summary_1000": "B" * 1200 + " end.",
+            "tldr": "B" * 1200 + " end.",
             "key_ideas": [" idea1 ", "", "idea2"],
             "topic_tags": ["tag1", "#Tag1", "tag2"],
             "entities": {
@@ -21,7 +21,7 @@ class TestSummaryContract(unittest.TestCase):
         out = validate_and_shape_summary(payload)
 
         self.assertLessEqual(len(out["summary_250"]), 250)
-        self.assertLessEqual(len(out["summary_1000"]), 1000)
+        self.assertEqual(out["tldr"], ("B" * 1200 + " end.").strip())
         self.assertEqual(out["topic_tags"], ["#tag1", "#tag2"])  # dedup + hash prefix
         self.assertEqual(out["entities"]["people"], ["Alice", "Bob"])  # dedup case-insensitive
         self.assertEqual(out["estimated_reading_time_min"], 7)
@@ -51,6 +51,7 @@ class TestSummaryContract(unittest.TestCase):
 
         out = validate_and_shape_summary(payload)
 
+        self.assertEqual(out["tldr"], "Longer summary that provides more detail.")
         self.assertEqual(out["entities"]["people"], ["Alice", "Bob", "Charlie"])
         self.assertEqual(out["entities"]["organizations"], ["OpenAI", "Anthropic"])
         self.assertEqual(out["entities"]["locations"], ["San Francisco", "New York"])

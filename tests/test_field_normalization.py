@@ -42,7 +42,7 @@ class TestFieldNormalization(unittest.TestCase):
 
         # Check that the normalized fields exist
         self.assertIn("summary_250", result)
-        self.assertIn("summary_1000", result)
+        self.assertIn("tldr", result)
         self.assertIn("key_ideas", result)
         self.assertIn("topic_tags", result)
         self.assertIn("estimated_reading_time_min", result)
@@ -109,7 +109,7 @@ class TestFieldNormalization(unittest.TestCase):
 
         # Check that all fields are preserved
         self.assertIn("summary_250", result)
-        self.assertIn("summary_1000", result)
+        self.assertIn("tldr", result)
         self.assertIn("key_ideas", result)
         self.assertIn("topic_tags", result)
         self.assertIn("estimated_reading_time_min", result)
@@ -119,7 +119,7 @@ class TestFieldNormalization(unittest.TestCase):
 
         # Check content preservation
         self.assertEqual(result["summary_250"], "Test summary 250")
-        self.assertEqual(result["summary_1000"], "Test summary 1000")
+        self.assertEqual(result["tldr"], "Test summary 1000")
         self.assertEqual(result["key_ideas"], ["idea1", "idea2"])
 
 

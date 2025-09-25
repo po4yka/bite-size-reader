@@ -212,7 +212,7 @@ class TestJsonParsing(unittest.TestCase):
             mock_llm_response.status = "error"
             mock_llm_response.error_text = "structured_output_parse_error"
             mock_llm_response.response_text = (
-                '```json\n{"summary_250": "Fixed", "summary_1000": "Complete"}\n```'
+                '```json\n{"summary_250": "Fixed", "tldr": "Complete"}\n```'
             )
             mock_llm_response.model = "primary/model"
             mock_llm_response.tokens_prompt = 10
@@ -265,7 +265,7 @@ class TestJsonParsing(unittest.TestCase):
             mock_llm_response.status = "error"
             mock_llm_response.error_text = "structured_output_parse_error"
             mock_llm_response.response_text = (
-                '```json\n{"summary_250": "Forward", "summary_1000": "Full"}\n```'
+                '```json\n{"summary_250": "Forward", "tldr": "Full"}\n```'
             )
             mock_llm_response.model = "primary/model"
             mock_llm_response.tokens_prompt = 12
@@ -332,7 +332,7 @@ class TestExtractJson(unittest.TestCase):
         list_response = [
             {
                 "summary_250": "This is a short summary",
-                "summary_1000": "This is a longer summary with more details",
+                "tldr": "This is a longer summary with more details",
                 "key_ideas": ["idea1", "idea2"],
                 "language": "en",
                 "title": "Test Article",
@@ -343,7 +343,7 @@ class TestExtractJson(unittest.TestCase):
         self.assertIsNotNone(result)
         self.assertIsInstance(result, dict)
         self.assertEqual(result["summary_250"], "This is a short summary")
-        self.assertEqual(result["summary_1000"], "This is a longer summary with more details")
+        self.assertEqual(result["tldr"], "This is a longer summary with more details")
 
         # Test with a list containing invalid items
         invalid_list_response = [{"invalid": "data"}, "string_item", 123]

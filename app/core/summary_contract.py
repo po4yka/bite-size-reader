@@ -212,11 +212,11 @@ def _normalize_field_names(payload: SummaryJSON) -> SummaryJSON:
     """
     field_mapping = {
         # Summary fields
-        "summary": "summary_1000",  # Map generic "summary" to summary_1000
+        "summary": "tldr",  # Map generic "summary" to TL;DR
         "summary250": "summary_250",
-        "summary1000": "summary_1000",
+        "summary1000": "tldr",
         "summary_250": "summary_250",  # Already correct
-        "summary_1000": "summary_1000",  # Already correct
+        "summary_1000": "tldr",  # Backwards compatibility
         # Key ideas and tags
         "keyideas": "key_ideas",
         "keyIdeas": "key_ideas",
@@ -284,19 +284,19 @@ def validate_and_shape_summary(payload: SummaryJSON) -> SummaryJSON:
     p: SummaryJSON = dict(normalized_payload)
 
     # Handle summary fields with fallback logic
-    summary_1000 = str(p.get("summary_1000", "")).strip()
+    tldr = str(p.get("tldr", "")).strip()
     summary_250 = str(p.get("summary_250", "")).strip()
 
-    # If summary_1000 is empty but we have a generic summary, use it
-    if not summary_1000 and "summary" in normalized_payload:
-        summary_1000 = str(normalized_payload.get("summary", "")).strip()
+    # If TL;DR is empty but we have a generic summary, use it
+    if not tldr and "summary" in normalized_payload:
+        tldr = str(normalized_payload.get("summary", "")).strip()
 
-    # If summary_250 is empty, derive it from summary_1000
-    if not summary_250 and summary_1000:
-        summary_250 = _cap_text(summary_1000, 250)
+    # If summary_250 is empty, derive it from TL;DR
+    if not summary_250 and tldr:
+        summary_250 = _cap_text(tldr, 250)
 
     p["summary_250"] = _cap_text(summary_250, 250)
-    p["summary_1000"] = _cap_text(summary_1000, 1000)
+    p["tldr"] = tldr
 
     p["key_ideas"] = [str(x).strip() for x in p.get("key_ideas", []) if str(x).strip()]
     p["topic_tags"] = _hash_tagify([str(x) for x in p.get("topic_tags", [])])
@@ -339,8 +339,8 @@ def validate_and_shape_summary(payload: SummaryJSON) -> SummaryJSON:
     method = str(rb.get("method") or "Flesch-Kincaid")
     score_val = rb.get("score")
     level = rb.get("level")
-    # Choose source: prefer summary_1000, fallback to summary_250
-    read_src = p.get("summary_1000") or p.get("summary_250") or ""
+    # Choose source: prefer TL;DR, fallback to summary_250
+    read_src = p.get("tldr") or p.get("summary_250") or ""
     if score_val is None or not _is_numeric(score_val) or float(score_val or 0.0) == 0.0:
         score = 0.0
         try:
@@ -598,7 +598,7 @@ def get_summary_json_schema() -> dict[str, Any]:
         "additionalProperties": False,
         "properties": {
             "summary_250": {"type": "string", "maxLength": 250},
-            "summary_1000": {"type": "string", "maxLength": 1000},
+            "tldr": {"type": "string"},
             "key_ideas": {"type": "array", "items": {"type": "string"}},
             "topic_tags": {"type": "array", "items": {"type": "string"}},
             "entities": {
@@ -725,7 +725,7 @@ def get_summary_json_schema() -> dict[str, Any]:
         },
         "required": [
             "summary_250",
-            "summary_1000",
+            "tldr",
             "key_ideas",
             "topic_tags",
             "entities",

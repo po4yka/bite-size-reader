@@ -460,13 +460,15 @@ class URLProcessor:
 
         # Essential fields that must be present and non-empty
         essential_fields = [
-            "summary_250",
-            "summary_1000",
+            ("summary_250", "summary_250"),
+            ("tldr", "tldr"),
         ]
 
         # Check essential fields
-        for field in essential_fields:
-            value = summary.get(field)
+        for field, lookup in essential_fields:
+            value = summary.get(lookup)
+            if lookup == "tldr" and not value:
+                value = summary.get("summary_1000")
             if not value or not str(value).strip():
                 return False
 
@@ -505,12 +507,14 @@ class URLProcessor:
 
         missing = []
         essential_fields = [
-            "summary_250",
-            "summary_1000",
+            ("summary_250", "summary_250"),
+            ("tldr", "tldr"),
         ]
 
-        for field in essential_fields:
-            value = summary.get(field)
+        for field, lookup in essential_fields:
+            value = summary.get(lookup)
+            if lookup == "tldr" and not value:
+                value = summary.get("summary_1000")
             if not value or not str(value).strip():
                 missing.append(field)
 

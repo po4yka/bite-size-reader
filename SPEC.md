@@ -84,7 +84,7 @@ flowchart LR
 ```json
 {
   "summary_250": "string, <= 250 chars",
-  "summary_1000": "string, <= 1000 chars",
+  "tldr": "string, multi-sentence (no hard cap)",
   "key_ideas": ["idea 1", "idea 2", "idea 3", "idea 4", "idea 5"],
   "topic_tags": ["#tag1", "#tag2", "#tag3"],
   "entities": {
@@ -107,7 +107,7 @@ flowchart LR
 ```
 
 **Validation rules**
-- `summary_250`/`summary_1000`: hard caps; end on sentence/phrase boundary.
+- `summary_250`: hard cap; end on sentence/phrase boundary. `tldr`: no hard cap but should remain purposeful.
 - `topic_tags`: enforce leading `#`; dedupe; max 10.
 - `entities`: lists deduped case‑insensitively.
 - `estimated_reading_time_min`: integer; compute from words/WPM or accept LLM value (choose one method and record it).
