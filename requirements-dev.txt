@@ -48,18 +48,22 @@ distlib==0.4.0
     # via virtualenv
 en-core-web-sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.7.1/en_core_web_sm-3.7.1-py3-none-any.whl
     # via bite-size-reader (pyproject.toml)
-exceptiongroup==1.3.0
-    # via anyio
 filelock==3.19.1
     # via virtualenv
 floret==0.10.5
     # via textacy
 h11==0.16.0
     # via httpcore
+h2==4.3.0
+    # via httpx
+hpack==4.1.0
+    # via h2
 httpcore==1.0.9
     # via httpx
 httpx==0.28.1
     # via bite-size-reader (pyproject.toml)
+hyperframe==6.1.0
+    # via h2
 identify==2.6.14
     # via pre-commit
 idna==3.10
@@ -67,6 +71,8 @@ idna==3.10
     #   anyio
     #   httpx
     #   requests
+iniconfig==2.1.0
+    # via pytest
 isort==6.0.1
     # via bite-size-reader (pyproject.toml)
 jellyfish==1.2.0
@@ -77,6 +83,8 @@ joblib==1.5.2
     # via
     #   scikit-learn
     #   textacy
+json-repair==0.51.0
+    # via bite-size-reader (pyproject.toml)
 langcodes==3.5.0
     # via spacy
 language-data==1.3.0
@@ -86,9 +94,7 @@ lxml==6.0.1
     #   lxml-html-clean
     #   readability-lxml
 lxml-html-clean==0.4.2
-    # via
-    #   lxml
-    #   readability-lxml
+    # via lxml
 marisa-trie==1.3.1
     # via language-data
 markdown-it-py==4.0.0
@@ -121,6 +127,7 @@ numpy==2.2.6
     #   thinc
 packaging==25.0
     # via
+    #   pytest
     #   spacy
     #   thinc
     #   weasel
@@ -128,6 +135,8 @@ pathspec==0.12.1
     # via mypy
 platformdirs==4.4.0
     # via virtualenv
+pluggy==1.6.0
+    # via pytest
 pre-commit==4.3.0
     # via bite-size-reader (pyproject.toml)
 preshed==3.0.10
@@ -146,7 +155,9 @@ pydantic==2.11.9
 pydantic-core==2.33.2
     # via pydantic
 pygments==2.19.2
-    # via rich
+    # via
+    #   pytest
+    #   rich
 pymorphy3==2.0.4
     # via ru-core-news-sm
 pymorphy3-dicts-ru==2.4.417150.4580142
@@ -157,6 +168,12 @@ pyrogram==2.0.106
     # via bite-size-reader (pyproject.toml)
 pysocks==1.7.1
     # via pyrogram
+pytest==8.4.2
+    # via
+    #   bite-size-reader (pyproject.toml)
+    #   pytest-asyncio
+pytest-asyncio==1.2.0
+    # via bite-size-reader (pyproject.toml)
 pyyaml==6.0.2
     # via pre-commit
 readability-lxml==0.8.4.1
@@ -180,6 +197,7 @@ scipy==1.15.3
     #   textacy
 setuptools==80.9.0
     # via
+    #   pymorphy3
     #   spacy
     #   thinc
 shellingham==1.5.4
@@ -212,8 +230,6 @@ thinc==8.2.4
     # via spacy
 threadpoolctl==3.6.0
     # via scikit-learn
-tomli==2.2.1
-    # via mypy
 toolz==1.0.0
     # via cytoolz
 tqdm==4.67.1
@@ -227,15 +243,12 @@ typer==0.17.4
 typing-extensions==4.15.0
     # via
     #   anyio
-    #   cloudpathlib
-    #   dawg2-python
-    #   exceptiongroup
     #   mypy
     #   pydantic
     #   pydantic-core
+    #   pytest-asyncio
     #   typer
     #   typing-inspection
-    #   virtualenv
 typing-inspection==0.4.1
     # via pydantic
 urllib3==2.5.0

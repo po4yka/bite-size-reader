@@ -221,7 +221,7 @@ class TelegramBot:
             return False, 0, 0, None
 
         enabled_raw = getattr(runtime, "db_backup_enabled", False)
-        enabled = bool(enabled_raw) if isinstance(enabled_raw, (bool, int)) else False
+        enabled = bool(enabled_raw) if isinstance(enabled_raw, bool | int) else False
 
         interval_raw = getattr(runtime, "db_backup_interval_minutes", 0)
         interval = interval_raw if isinstance(interval_raw, int) else 0
