@@ -466,38 +466,35 @@ class Database:
             summary_json = row["summary_json"]
             links_json = row["links_json"]
 
-            # Links coverage
-            link_count, link_valid, link_error = self._count_links_entries(links_json)
-            if link_valid:
-                links_info["total_links"] += link_count
-                links_info["posts_with_links"] += 1
-            elif request_type != "forward":
+            def queue_reprocess(reason: str) -> None:
+                """Record a request that needs reprocessing for follow-up flows."""
 
-                def queue_reprocess(reason: str) -> None:
-                    entry = reprocess_map.get(request_id)
-                    if entry is None:
-                        normalized_url = row["normalized_url"]
-                        input_url = row["input_url"]
-                        source = self._describe_request_source(row)
-                        entry = {
-                            "request_id": request_id,
-                            "type": request_type,
-                            "status": request_status,
-                            "source": source,
-                            "normalized_url": (
-                                str(normalized_url)
-                                if isinstance(normalized_url, str) and normalized_url
-                                else None
-                            ),
-                            "input_url": (
-                                str(input_url) if isinstance(input_url, str) and input_url else None
-                            ),
-                            "fwd_from_chat_id": _coerce_int(row["fwd_from_chat_id"]),
-                            "fwd_from_msg_id": _coerce_int(row["fwd_from_msg_id"]),
-                            "reasons": set(),
-                        }
-                        reprocess_map[request_id] = entry
-                    entry["reasons"].add(reason)
+                if request_type == "forward":
+                    return
+                entry = reprocess_map.get(request_id)
+                if entry is None:
+                    normalized_url = row["normalized_url"]
+                    input_url = row["input_url"]
+                    source = self._describe_request_source(row)
+                    entry = {
+                        "request_id": request_id,
+                        "type": request_type,
+                        "status": request_status,
+                        "source": source,
+                        "normalized_url": (
+                            str(normalized_url)
+                            if isinstance(normalized_url, str) and normalized_url
+                            else None
+                        ),
+                        "input_url": (
+                            str(input_url) if isinstance(input_url, str) and input_url else None
+                        ),
+                        "fwd_from_chat_id": _coerce_int(row["fwd_from_chat_id"]),
+                        "fwd_from_msg_id": _coerce_int(row["fwd_from_msg_id"]),
+                        "reasons": set(),
+                    }
+                    reprocess_map[request_id] = entry
+                entry["reasons"].add(reason)
 
             # Links coverage
             link_count, link_has_entries, link_error = self._count_links_entries(links_json)
@@ -707,32 +704,36 @@ class Database:
         return f"request:{row['request_id']}"
 
     def _count_links_entries(self, links_json: str | None) -> tuple[int, bool, str | None]:
-        """Return link count, validity flag, and optional error message."""
         """Return link count, presence flag, and optional error message."""
+
         if links_json is None or str(links_json).strip() == "":
             return 0, False, None
+
         try:
             parsed = json.loads(links_json)
         except (TypeError, json.JSONDecodeError) as exc:
             return 0, False, str(exc)
 
         if isinstance(parsed, list):
-            return len(parsed), True, None
-        if isinstance(parsed, dict):
-            if "links" in parsed and isinstance(parsed["links"], list):
-                return len(parsed["links"]), True, None
             count = len(parsed)
             return count, count > 0, None
+
         if isinstance(parsed, dict):
             if "links" in parsed and isinstance(parsed["links"], list):
                 count = len(parsed["links"])
                 return count, count > 0, None
+
             total = 0
             for value in parsed.values():
                 if isinstance(value, list):
                     total += len(value)
-            return total, True, None
-            return total, total > 0, None
+
+            if total > 0:
+                return total, True, None
+
+            count = len(parsed)
+            return count, count > 0, None
+
         return 0, False, "links_json_not_iterable"
 
     def get_request_by_dedupe_hash(self, dedupe_hash: str) -> dict | None:

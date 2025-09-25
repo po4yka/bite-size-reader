@@ -382,8 +382,12 @@ class TestDatabaseHelpers(unittest.TestCase):
         self.assertIn("overview", verification)
         posts = verification.get("posts")
         self.assertIsInstance(posts, dict)
+        overview = verification.get("overview")
+        self.assertIsInstance(overview, dict)
         self.assertEqual(posts.get("checked"), 4)
         self.assertEqual(posts.get("with_summary"), 3)
+        self.assertEqual(overview.get("total_requests"), 4)
+        self.assertEqual(overview.get("total_summaries"), 3)
 
         missing_summary = posts.get("missing_summary") or []
         self.assertEqual(len(missing_summary), 1)
