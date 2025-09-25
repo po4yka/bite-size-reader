@@ -2,9 +2,9 @@
 #    uv pip compile pyproject.toml -o requirements.txt
 annotated-types==0.7.0
     # via pydantic
-anyio==4.10.0
+anyio==4.11.0
     # via httpx
-blis==0.7.11
+blis==1.3.0
     # via thinc
 cachetools==6.2.0
     # via textacy
@@ -23,7 +23,7 @@ chardet==5.2.0
     # via readability-lxml
 charset-normalizer==3.4.3
     # via requests
-click==8.2.1
+click==8.3.0
     # via typer
 cloudpathlib==0.22.0
     # via weasel
@@ -42,10 +42,8 @@ cytoolz==1.0.1
     # via textacy
 dawg2-python==0.9.0
     # via pymorphy3
-en-core-web-sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.7.1/en_core_web_sm-3.7.1-py3-none-any.whl
+en-core-web-sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl
     # via bite-size-reader (pyproject.toml)
-exceptiongroup==1.3.0
-    # via anyio
 floret==0.10.5
     # via textacy
 h11==0.16.0
@@ -79,14 +77,12 @@ langcodes==3.5.0
     # via spacy
 language-data==1.3.0
     # via langcodes
-lxml==6.0.1
+lxml==6.0.2
     # via
     #   lxml-html-clean
     #   readability-lxml
 lxml-html-clean==0.4.2
-    # via
-    #   lxml
-    #   readability-lxml
+    # via lxml
 marisa-trie==1.3.1
     # via language-data
 markdown-it-py==4.0.0
@@ -100,9 +96,9 @@ murmurhash==1.0.13
     #   preshed
     #   spacy
     #   thinc
-networkx==3.4.2
+networkx==3.5
     # via textacy
-numpy==2.2.6
+numpy==2.3.3
     # via
     #   blis
     #   floret
@@ -152,16 +148,17 @@ requests==2.32.5
     #   weasel
 rich==14.1.0
     # via typer
-ru-core-news-sm @ https://github.com/explosion/spacy-models/releases/download/ru_core_news_sm-3.7.0/ru_core_news_sm-3.7.0-py3-none-any.whl
+ru-core-news-sm @ https://github.com/explosion/spacy-models/releases/download/ru_core_news_sm-3.8.0/ru_core_news_sm-3.8.0-py3-none-any.whl
     # via bite-size-reader (pyproject.toml)
 scikit-learn==1.7.2
     # via textacy
-scipy==1.15.3
+scipy==1.16.2
     # via
     #   scikit-learn
     #   textacy
 setuptools==80.9.0
     # via
+    #   pymorphy3
     #   spacy
     #   thinc
 shellingham==1.5.4
@@ -170,11 +167,9 @@ smart-open==7.3.1
     # via weasel
 sniffio==1.3.1
     # via anyio
-spacy==3.7.5
+spacy==3.8.7
     # via
     #   bite-size-reader (pyproject.toml)
-    #   en-core-web-sm
-    #   ru-core-news-sm
     #   textacy
 spacy-legacy==3.0.12
     # via spacy
@@ -190,7 +185,7 @@ textacy==0.13.0
     # via bite-size-reader (pyproject.toml)
 tgcrypto==1.2.5
     # via bite-size-reader (pyproject.toml)
-thinc==8.2.4
+thinc==8.3.6
     # via spacy
 threadpoolctl==3.6.0
     # via scikit-learn
@@ -200,16 +195,13 @@ tqdm==4.67.1
     # via
     #   spacy
     #   textacy
-typer==0.17.4
+typer==0.19.2
     # via
     #   spacy
     #   weasel
 typing-extensions==4.15.0
     # via
     #   anyio
-    #   cloudpathlib
-    #   dawg2-python
-    #   exceptiongroup
     #   pydantic
     #   pydantic-core
     #   typer

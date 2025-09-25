@@ -62,37 +62,37 @@ version = "0.1.0"
 description = "Telegram bot that summarizes URLs and forwarded posts via Firecrawl + OpenRouter"
 requires-python = ">=3.11"
 dependencies = [
-  "httpx[http2]>=0.27",
-  "pyrogram>=2.0",
-  "tgcrypto>=1.2",
-  "pydantic>=2.6",
+  "httpx[http2]>=0.28.1",
+  "pyrogram>=2.0.106",
+  "tgcrypto>=1.2.5",
+  "pydantic>=2.11.9",
   "readability-lxml==0.8.4.1",
-  "textacy>=0.13,<0.14",
-  "spacy>=3.7,<4",
-  "json_repair>=0.30.0",
+  "textacy>=0.13.0,<0.14",
+  "spacy>=3.8.7,<4",
+  "json_repair>=0.51.0",
   # spaCy language models
-  "en-core-web-sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.7.1/en_core_web_sm-3.7.1-py3-none-any.whl",
-  "ru-core-news-sm @ https://github.com/explosion/spacy-models/releases/download/ru_core_news_sm-3.7.0/ru_core_news_sm-3.7.0-py3-none-any.whl",
+  "en-core-web-sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl",
+  "ru-core-news-sm @ https://github.com/explosion/spacy-models/releases/download/ru_core_news_sm-3.8.0/ru_core_news_sm-3.8.0-py3-none-any.whl",
 ]
 
 [project.optional-dependencies]
 dev = [
   "isort>=6.0.1",
   "pytest>=8.4.2",
-  "pytest-asyncio>=0.24.0",
-  "ruff>=0.13.0",
-  "mypy>=1.18.1",
+  "pytest-asyncio>=1.2.0",
+  "ruff>=0.13.1",
+  "mypy>=1.18.2",
   "pre-commit>=4.3.0",
 ]
 
 [dependency-groups]
 dev = [
     "isort>=6.0.1",
-    "mypy>=1.18.1",
+    "mypy>=1.18.2",
     "pre-commit>=4.3.0",
     "pytest>=8.4.2",
-    "pytest-asyncio>=0.24.0",
-    "ruff>=0.13.0",
+    "pytest-asyncio>=1.2.0",
+    "ruff>=0.13.1",
 ]
 
 [tool.pytest.ini_options]
