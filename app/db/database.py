@@ -387,6 +387,7 @@ class Database:
         required_default = [
             "summary_250",
             "summary_1000",
+            "tldr",
             "key_ideas",
             "topic_tags",
             "entities",
@@ -572,7 +573,7 @@ class Database:
                     missing.append(field)
 
             # String fields should be non-empty strings
-            for field in ("summary_250", "summary_1000"):
+            for field in ("summary_250", "summary_1000", "tldr"):
                 value = payload.get(field)
                 if not isinstance(value, str) or not value.strip():
                     flag(field)

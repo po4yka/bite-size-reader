@@ -59,12 +59,12 @@ class TestJsonRepair(unittest.TestCase):
             # Mock the initial failed response and the successful repair
             mock_llm_response_initial = MagicMock()
             mock_llm_response_initial.status = "ok"
-            mock_llm_response_initial.response_text = '{"summary_250": "This is a truncated summary...", "summary_1000": "This is completely broken JSON'
+            mock_llm_response_initial.response_text = '{"summary_250": "This is a truncated summary...", "tldr": "This is completely broken JSON'
 
             mock_llm_response_repair = MagicMock()
             mock_llm_response_repair.status = "ok"
             mock_llm_response_repair.response_text = (
-                '{"summary_250": "This is a truncated summary...", "summary_1000": "Full summary."}'
+                '{"summary_250": "This is a truncated summary...", "tldr": "Full summary."}'
             )
 
             # Configure the mock OpenRouterClient
@@ -99,7 +99,8 @@ class TestJsonRepair(unittest.TestCase):
             self.bot._reply_json.assert_called_once()
             call_args = self.bot._reply_json.call_args[0]
             summary_json = call_args[1]
-            self.assertEqual(summary_json["summary_1000"], "Full summary.")
+            self.assertIn("summary_1000", summary_json)
+            self.assertEqual(summary_json["tldr"], "Full summary.")
 
         asyncio.run(run_test())
 
@@ -190,7 +191,7 @@ class TestJsonRepair(unittest.TestCase):
             mock_llm_response_initial = MagicMock()
             mock_llm_response_initial.status = "ok"
             mock_llm_response_initial.response_text = (
-                '{"summary_250": "Truncated...", "summary_1000": "This is completely broken JSON'
+                '{"summary_250": "Truncated...", "tldr": "This is completely broken JSON'
             )
 
             mock_llm_response_repair = MagicMock()
@@ -242,7 +243,7 @@ class TestJsonRepair(unittest.TestCase):
 
             mock_llm_response = MagicMock()
             mock_llm_response.status = "ok"
-            mock_llm_response.response_text = '{"summary_250": "One" "summary_1000": "Two"}'
+            mock_llm_response.response_text = '{"summary_250": "One" "tldr": "Two"}'
             mock_llm_response.response_json = None
 
             # Add responses for insights generation
@@ -266,7 +267,7 @@ class TestJsonRepair(unittest.TestCase):
                 "content_markdown": "Some content"
             }
 
-            fixed_payload = '{"summary_250": "One", "summary_1000": "Two"}'
+            fixed_payload = '{"summary_250": "One", "tldr": "Two"}'
 
             with patch.dict(
                 "sys.modules",

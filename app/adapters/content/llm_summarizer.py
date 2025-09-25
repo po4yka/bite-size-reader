@@ -647,7 +647,8 @@ class LLMSummarizer:
             )
 
         if summary_shaped is None or not any(
-            str(summary_shaped.get(key, "")).strip() for key in ("summary_1000", "summary_250")
+            str(summary_shaped.get(key, "")).strip()
+            for key in ("tldr", "summary_250", "summary_1000")
         ):
             logger.error(
                 "summary_fields_empty_final",
@@ -664,7 +665,8 @@ class LLMSummarizer:
             )
 
             if summary_shaped is None or not any(
-                str(summary_shaped.get(key, "")).strip() for key in ("summary_1000", "summary_250")
+                str(summary_shaped.get(key, "")).strip()
+                for key in ("tldr", "summary_250", "summary_1000")
             ):
                 await self._handle_parsing_failure(message, req_id, correlation_id, interaction_id)
                 return None
@@ -1182,9 +1184,9 @@ class LLMSummarizer:
         used_local_fix = parse_result.used_local_fix if parse_result else False
 
         if shaped is not None:
-            summary_1000 = shaped.get("summary_1000")
+            tldr = shaped.get("tldr") or shaped.get("summary_1000")
             summary_250 = shaped.get("summary_250")
-            if any(str(x).strip() for x in (summary_1000, summary_250)):
+            if any(str(x).strip() for x in (tldr, summary_250)):
                 if used_local_fix:
                     logger.info(
                         "json_local_fix_applied",
@@ -1195,7 +1197,7 @@ class LLMSummarizer:
             if used_local_fix:
                 logger.info(
                     "json_local_fix_insufficient",
-                    extra={"cid": correlation_id, "reason": "missing_summary_1000"},
+                    extra={"cid": correlation_id, "reason": "missing_tldr"},
                 )
 
             logger.warning(
@@ -1231,7 +1233,7 @@ class LLMSummarizer:
             model_override=llm.model,
         )
         if repaired is not None and not any(
-            str(repaired.get(key, "")).strip() for key in ("summary_1000", "summary_250")
+            str(repaired.get(key, "")).strip() for key in ("tldr", "summary_250", "summary_1000")
         ):
             logger.warning(
                 "summary_fields_empty",
@@ -1326,7 +1328,10 @@ class LLMSummarizer:
                 )
 
             if shaped is not None:
-                if any(str(shaped.get(key, "")).strip() for key in ("summary_1000", "summary_250")):
+                if any(
+                    str(shaped.get(key, "")).strip()
+                    for key in ("tldr", "summary_250", "summary_1000")
+                ):
                     self._log_llm_finished(llm, shaped, correlation_id)
                     return shaped
 
@@ -1373,7 +1378,7 @@ class LLMSummarizer:
                     "content": (
                         "Your previous message was not a valid JSON object."
                         " Respond with ONLY a corrected JSON that matches the schema exactly."
-                        " Ensure `summary_250` and `summary_1000` contain non-empty informative text."
+                        " Ensure `summary_250` and `tldr` contain non-empty informative text."
                         if parse_result and "missing_summary_fields" in (parse_result.errors or [])
                         else (
                             "Your previous message was not a valid JSON object. "
@@ -1479,7 +1484,9 @@ class LLMSummarizer:
                 "model": llm.model,
                 "cid": correlation_id,
                 "summary_250_len": len(summary_shaped.get("summary_250", "")),
-                "summary_1000_len": len(summary_shaped.get("summary_1000", "")),
+                "tldr_len": len(
+                    summary_shaped.get("tldr", "") or summary_shaped.get("summary_1000", "")
+                ),
                 "key_ideas_count": len(summary_shaped.get("key_ideas", [])),
                 "topic_tags_count": len(summary_shaped.get("topic_tags", [])),
                 "entities_count": len(summary_shaped.get("entities", [])),

@@ -85,7 +85,7 @@ def _shape_candidate(candidate: dict[str, Any]) -> tuple[dict[str, Any] | None, 
 
 
 def finalize_summary_texts(summary: dict[str, Any]) -> None:
-    for key in ("summary_250", "summary_1000"):
+    for key in ("summary_250", "summary_1000", "tldr"):
         raw = summary.get(key)
         if not isinstance(raw, str):
             continue
@@ -117,6 +117,7 @@ def _extract_structured_dict(response_json: Any) -> dict[str, Any] | None:
                     key in first_item
                     for key in (
                         "summary_250",
+                        "tldr",
                         "summary_1000",
                         "summary250",
                         "summary1000",
@@ -130,7 +131,14 @@ def _extract_structured_dict(response_json: Any) -> dict[str, Any] | None:
         # Direct dict payload
         if any(
             key in response_json
-            for key in ("summary_250", "summary_1000", "summary250", "summary1000", "key_ideas")
+            for key in (
+                "summary_250",
+                "tldr",
+                "summary_1000",
+                "summary250",
+                "summary1000",
+                "key_ideas",
+            )
         ):
             return response_json
         choices = (

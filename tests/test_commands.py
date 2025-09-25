@@ -179,7 +179,8 @@ class TestCommands(unittest.IsolatedAsyncioTestCase):
 
             base_summary = {
                 "summary_250": "Short summary.",
-                "summary_1000": "Long summary.",
+                "summary_1000": "Medium summary.",
+                "tldr": "Long summary.",
                 "key_ideas": ["Idea"],
                 "topic_tags": ["#tag"],
                 "entities": {"people": [], "organizations": [], "locations": []},
@@ -243,6 +244,7 @@ class TestCommands(unittest.IsolatedAsyncioTestCase):
 
             bad_summary = dict(base_summary)
             bad_summary.pop("summary_1000", None)
+            bad_summary.pop("tldr", None)
 
             rid_bad = bot.db.create_request(
                 type_="url",
@@ -311,7 +313,7 @@ class TestCommands(unittest.IsolatedAsyncioTestCase):
             self.assertTrue(any("Database Verification" in reply for reply in msg._replies))
             self.assertTrue(any("Missing summaries" in reply for reply in msg._replies))
             self.assertTrue(any("Link coverage" in reply for reply in msg._replies))
-            self.assertTrue(any("summary_1000" in reply for reply in msg._replies))
+            self.assertTrue(any("tldr" in reply for reply in msg._replies))
             self.assertTrue(
                 any("Starting automated reprocessing" in reply for reply in msg._replies)
             )
@@ -319,7 +321,6 @@ class TestCommands(unittest.IsolatedAsyncioTestCase):
 
             expected_urls = {
                 "https://example.com/bad",
-                "https://example.com/empty",
                 "https://example.com/missing",
             }
             self.assertTrue(expected_urls.issubset(set(bot.seen_urls)))

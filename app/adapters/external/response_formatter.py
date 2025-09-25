@@ -606,14 +606,16 @@ class ResponseFormatter:
                     combined_lines.pop()
                 await self._send_long_text(message, "\n".join(combined_lines))
 
-            # Send separated summary fields (summary_250, summary_500, summary_1000, ...)
+            # Send separated summary fields (summary_250, summary_500, tldr, ...)
             summary_fields = [
                 k
                 for k in summary_shaped.keys()
-                if k.startswith("summary_") and k.split("_", 1)[1].isdigit()
+                if (k.startswith("summary_") and k.split("_", 1)[1].isdigit() or k == "tldr")
             ]
 
             def _key_num(k: str) -> int:
+                if k == "tldr":
+                    return 10_000
                 try:
                     return int(k.split("_", 1)[1])
                 except Exception:
@@ -623,9 +625,13 @@ class ResponseFormatter:
                 content = str(summary_shaped.get(key, "")).strip()
                 if content:
                     content = self._sanitize_summary_text(content)
+                    if key == "tldr":
+                        label = "🧾 TL;DR"
+                    else:
+                        label = f"🧾 Summary {key.split('_', 1)[1]}"
                     await self._send_labelled_text(
                         message,
-                        f"🧾 Summary {key.split('_', 1)[1]}",
+                        label,
                         content,
                     )
 

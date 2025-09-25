@@ -71,6 +71,7 @@ def aggregate_chunk_summaries(summaries: list[dict[str, Any]]) -> dict[str, Any]
         return {
             "summary_250": "",
             "summary_1000": "",
+            "tldr": "",
             "key_ideas": [],
             "topic_tags": [],
             "entities": {"people": [], "organizations": [], "locations": []},
@@ -83,7 +84,8 @@ def aggregate_chunk_summaries(summaries: list[dict[str, Any]]) -> dict[str, Any]
 
     # Collect
     s250_parts: list[str] = []
-    s1k_parts: list[str] = []
+    s1000_parts: list[str] = []
+    tldr_parts: list[str] = []
     key_ideas: list[str] = []
     topic_tags: list[str] = []
     entities: dict[str, list[str]] = {"people": [], "organizations": [], "locations": []}
@@ -97,9 +99,12 @@ def aggregate_chunk_summaries(summaries: list[dict[str, Any]]) -> dict[str, Any]
             s250 = str(s.get("summary_250", "")).strip()
             if s250:
                 s250_parts.append(s250)
-            s1k = str(s.get("summary_1000", "")).strip()
-            if s1k:
-                s1k_parts.append(s1k)
+            s1000_value = str(s.get("summary_1000", "") or s.get("tldr", "")).strip()
+            if s1000_value:
+                s1000_parts.append(s1000_value)
+            tldr_value = str(s.get("tldr", "") or s1000_value).strip()
+            if tldr_value:
+                tldr_parts.append(tldr_value)
             key_ideas.extend([str(x) for x in (s.get("key_ideas") or [])])
             topic_tags.extend([str(x) for x in (s.get("topic_tags") or [])])
             entities = _merge_entities(entities, s.get("entities") or {})
@@ -115,10 +120,12 @@ def aggregate_chunk_summaries(summaries: list[dict[str, Any]]) -> dict[str, Any]
 
     # Build final
     s250_joined = "; ".join(_dedupe_list(s250_parts))
-    s1k_joined = "\n".join(_dedupe_list(s1k_parts))
+    s1000_joined = "\n".join(_dedupe_list(s1000_parts))
+    tldr_joined = "\n".join(_dedupe_list(tldr_parts))
     return {
         "summary_250": s250_joined,
-        "summary_1000": s1k_joined or s250_joined,
+        "summary_1000": s1000_joined or tldr_joined or s250_joined,
+        "tldr": tldr_joined or s1000_joined or s250_joined,
         "key_ideas": _dedupe_list(key_ideas, limit=10),
         "topic_tags": _dedupe_list(topic_tags, limit=8),
         "entities": entities,

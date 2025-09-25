@@ -312,7 +312,8 @@ class TestOpenRouterCompliance(unittest.TestCase):
                                         "type": "output_json",
                                         "json": {
                                             "summary_250": "Short summary",
-                                            "summary_1000": "Longer summary",
+                                            "summary_1000": "Medium summary",
+                                            "tldr": "Longer summary",
                                         },
                                     },
                                 ],
@@ -340,8 +341,9 @@ class TestOpenRouterCompliance(unittest.TestCase):
                             "properties": {
                                 "summary_250": {"type": "string"},
                                 "summary_1000": {"type": "string"},
+                                "tldr": {"type": "string"},
                             },
-                            "required": ["summary_250", "summary_1000"],
+                            "required": ["summary_250", "summary_1000", "tldr"],
                         },
                     },
                 }
@@ -355,7 +357,8 @@ class TestOpenRouterCompliance(unittest.TestCase):
                 self.assertIsNotNone(result.response_text)
                 parsed = json.loads(result.response_text or "{}")
                 self.assertEqual(parsed["summary_250"], "Short summary")
-                self.assertEqual(parsed["summary_1000"], "Longer summary")
+                self.assertEqual(parsed["summary_1000"], "Medium summary")
+                self.assertEqual(parsed["tldr"], "Longer summary")
 
         asyncio.run(_test())
 

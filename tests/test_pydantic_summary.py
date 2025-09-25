@@ -14,6 +14,7 @@ class TestPydanticSummary(unittest.TestCase):
         payload = {
             "summary_250": "x" * 300,
             "summary_1000": "y" * 1200,
+            "tldr": "y" * 1200,
             "key_ideas": [],
             "topic_tags": [],
             "entities": {"people": [], "organizations": [], "locations": []},
@@ -33,6 +34,7 @@ class TestPydanticSummary(unittest.TestCase):
         payload = {
             "summary_250": "x" * 300,
             "summary_1000": "ok",
+            "tldr": "ok",
             "key_ideas": ["a", "b"],
             "topic_tags": ["tag", "#tag"],
             "entities": {"people": ["A", "a"], "organizations": [], "locations": []},
@@ -49,6 +51,7 @@ class TestPydanticSummary(unittest.TestCase):
         shaped = validate_and_shape_summary(payload)
         # Should respect caps and dedupe
         self.assertLessEqual(len(shaped["summary_250"]), 250)
+        self.assertLessEqual(len(shaped["summary_1000"]), 1000)
         self.assertEqual(shaped["topic_tags"], ["#tag"])  # dedup
         self.assertEqual(shaped["entities"]["people"], ["A"])  # dedup case-insensitive
         # Should be valid per pydantic model
@@ -56,6 +59,8 @@ class TestPydanticSummary(unittest.TestCase):
         dumped = model.model_dump()
         # spot check a few fields
         self.assertIn("summary_250", dumped)
+        self.assertIn("summary_1000", dumped)
+        self.assertIn("tldr", dumped)
         self.assertIn("entities", dumped)
         self.assertIsInstance(dumped["estimated_reading_time_min"], int)
 

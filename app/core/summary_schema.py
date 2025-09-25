@@ -59,6 +59,7 @@ if PydanticAvailable:
     class SummaryModel(BaseModel):
         summary_250: str = Field(max_length=250)
         summary_1000: str = Field(max_length=1000)
+        tldr: str = Field(default="")
         key_ideas: list[str] = Field(default_factory=list)
         topic_tags: list[str] = Field(default_factory=list)
         entities: Entities = Field(default_factory=Entities)

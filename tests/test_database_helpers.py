@@ -243,7 +243,8 @@ class TestDatabaseHelpers(unittest.TestCase):
     def test_verify_processing_integrity(self):
         base_summary = {
             "summary_250": "Short summary.",
-            "summary_1000": "Longer summary text.",
+            "summary_1000": "Medium summary providing additional detail.",
+            "tldr": "Longer summary text.",
             "key_ideas": ["Idea"],
             "topic_tags": ["#tag"],
             "entities": {
@@ -311,6 +312,7 @@ class TestDatabaseHelpers(unittest.TestCase):
 
         bad_summary = copy.deepcopy(base_summary)
         bad_summary.pop("summary_1000", None)
+        bad_summary.pop("tldr", None)
         bad_summary["summary_250"] = ""
         bad_summary.pop("metadata", None)
 
@@ -397,21 +399,21 @@ class TestDatabaseHelpers(unittest.TestCase):
         bad_missing = bad_entries[0].get("missing") or []
         self.assertIn("summary_250", bad_missing)
         self.assertIn("summary_1000", bad_missing)
+        self.assertIn("tldr", bad_missing)
         self.assertIn("metadata", bad_missing)
 
         links_info = posts.get("links") or {}
-        self.assertEqual(links_info.get("total_links"), 1)
-        self.assertEqual(links_info.get("posts_with_links"), 1)
+        self.assertEqual(links_info.get("total_links"), 2)
+        self.assertEqual(links_info.get("posts_with_links"), 4)
         missing_links = links_info.get("missing_data") or []
-        self.assertTrue(any(entry.get("request_id") == rid_bad for entry in missing_links))
-        empty_entries = [
-            entry for entry in missing_links if entry.get("request_id") == rid_empty_links
-        ]
-        self.assertTrue(empty_entries)
-        self.assertEqual(empty_entries[0].get("reason"), "empty_links")
+        missing_map = {entry.get("request_id"): entry for entry in missing_links}
+        self.assertIn(rid_bad, missing_map)
+        self.assertEqual(missing_map[rid_bad].get("reason"), "absent_links_json")
+        self.assertIn(rid_missing, missing_map)
+        self.assertEqual(missing_map[rid_missing].get("reason"), "absent_links_json")
 
         reprocess_entries = posts.get("reprocess") or []
-        self.assertEqual(len(reprocess_entries), 3)
+        self.assertEqual(len(reprocess_entries), 2)
         reprocess_map = {
             entry.get("request_id"): set(entry.get("reasons") or []) for entry in reprocess_entries
         }
@@ -421,8 +423,7 @@ class TestDatabaseHelpers(unittest.TestCase):
         self.assertIn(rid_missing, reprocess_map)
         self.assertIn("missing_summary", reprocess_map[rid_missing])
         self.assertIn("missing_links", reprocess_map[rid_missing])
-        self.assertIn(rid_empty_links, reprocess_map)
-        self.assertEqual(reprocess_map[rid_empty_links], {"missing_links"})
+        self.assertNotIn(rid_empty_links, reprocess_map)
 
     def test_insert_telegram_message_handles_duplicate_request(self):
         rid = self.db.create_request(
