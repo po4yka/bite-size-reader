@@ -621,7 +621,7 @@ class Database:
                 ):
                     flag("readability.method")
                 score = readability.get("score")
-                if not isinstance(score, (int, float)):
+                if not isinstance(score, int | float):
                     flag("readability.score")
                 if (
                     not isinstance(readability.get("level"), str)
@@ -654,7 +654,7 @@ class Database:
                 flag("hallucination_risk")
 
             confidence = payload.get("confidence")
-            if not isinstance(confidence, (int, float)):
+            if not isinstance(confidence, int | float):
                 flag("confidence")
 
             if "forwarded_post_extras" not in payload:
