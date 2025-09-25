@@ -458,6 +458,7 @@ class Database:
 
         post_checks["checked"] = len(rows)
         links_info = post_checks["links"]
+        links_info["posts_with_links"] = len(rows)
 
         for row in rows:
             request_id = int(row["request_id"])
@@ -465,6 +466,8 @@ class Database:
             request_status = str(row["request_status"] or "unknown")
             summary_json = row["summary_json"]
             links_json = row["links_json"]
+
+            row_link_count = 0
 
             def queue_reprocess(reason: str) -> None:
                 """Record a request that needs reprocessing for follow-up flows."""
@@ -497,10 +500,9 @@ class Database:
                 entry["reasons"].add(reason)
 
             # Links coverage
-            link_count, link_has_entries, link_error = self._count_links_entries(links_json)
-            if link_has_entries:
-                links_info["total_links"] += link_count
-                links_info["posts_with_links"] += 1
+            link_count, link_payload_present, link_error = self._count_links_entries(links_json)
+            if link_payload_present:
+                row_link_count += link_count
             elif request_type != "forward":
                 if link_error:
                     reason = "invalid_links_json"
@@ -524,6 +526,7 @@ class Database:
                     )
 
             if summary_json is None or not str(summary_json).strip():
+                links_info["total_links"] += row_link_count
                 post_checks["missing_summary"].append(
                     {
                         "request_id": request_id,
@@ -641,6 +644,11 @@ class Database:
                     if subfield not in metadata:
                         flag(f"metadata.{subfield}")
 
+                if row_link_count == 0:
+                    canonical_url = metadata.get("canonical_url")
+                    if isinstance(canonical_url, str) and canonical_url.strip():
+                        row_link_count += 1
+
             hallu_risk = payload.get("hallucination_risk")
             if not isinstance(hallu_risk, str) or not hallu_risk.strip():
                 flag("hallucination_risk")
@@ -681,6 +689,8 @@ class Database:
                 )
                 queue_reprocess("missing_fields")
 
+            links_info["total_links"] += row_link_count
+
         reprocess_entries: list[dict[str, Any]] = []
         for entry in reprocess_map.values():
             reasons = entry.get("reasons")
@@ -704,7 +714,7 @@ class Database:
         return f"request:{row['request_id']}"
 
     def _count_links_entries(self, links_json: str | None) -> tuple[int, bool, str | None]:
-        """Return link count, presence flag, and optional error message."""
+        """Return link count, payload presence flag, and optional error message."""
 
         if links_json is None or str(links_json).strip() == "":
             return 0, False, None
@@ -716,23 +726,25 @@ class Database:
 
         if isinstance(parsed, list):
             count = len(parsed)
-            return count, count > 0, None
+            return count, True, None
 
         if isinstance(parsed, dict):
             if "links" in parsed and isinstance(parsed["links"], list):
                 count = len(parsed["links"])
-                return count, count > 0, None
+                return count, True, None
 
             total = 0
+            payload_seen = False
             for value in parsed.values():
                 if isinstance(value, list):
+                    payload_seen = True
                     total += len(value)
 
-            if total > 0:
+            if payload_seen:
                 return total, True, None
 
             count = len(parsed)
-            return count, count > 0, None
+            return count, True, None
 
         return 0, False, "links_json_not_iterable"
 

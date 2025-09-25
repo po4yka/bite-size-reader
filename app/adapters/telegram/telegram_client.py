@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from typing import TYPE_CHECKING, Any
 
 from app.config import AppConfig
@@ -36,7 +36,7 @@ class TelegramClient:
 
     def __init__(self, cfg: AppConfig) -> None:
         self.cfg = cfg
-        self.client = None
+        self.client: Client | None = None
 
         # Initialize Telegram client (PyroTGFork/Pyrogram)
         if not PYROGRAM_AVAILABLE or Client is object:
@@ -50,17 +50,17 @@ class TelegramClient:
                 in_memory=True,
             )
 
-    async def start(self, message_handler: Callable[[Any], Any]) -> None:
+    async def start(self, message_handler: Callable[[Any], Awaitable[None]]) -> None:
         """Start the Telegram client with message handler."""
         if not self.client:
             logger.warning("telegram_client_not_available")
             return
 
+        client_any: Any = self.client
+
         # Register handlers only if filters are available
         if filters:
             # Register a simple on_message handler in private chats
-            client_any: Any = self.client
-
             @client_any.on_message(filters.private)
             async def _handler(client: Any, message: Any) -> None:  # noqa: ANN401
                 await message_handler(message)
