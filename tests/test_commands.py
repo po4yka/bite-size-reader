@@ -179,6 +179,7 @@ class TestCommands(unittest.IsolatedAsyncioTestCase):
 
             base_summary = {
                 "summary_250": "Short summary.",
+                "summary_1000": "Medium summary.",
                 "tldr": "Long summary.",
                 "key_ideas": ["Idea"],
                 "topic_tags": ["#tag"],
@@ -242,6 +243,7 @@ class TestCommands(unittest.IsolatedAsyncioTestCase):
             )
 
             bad_summary = dict(base_summary)
+            bad_summary.pop("summary_1000", None)
             bad_summary.pop("tldr", None)
 
             rid_bad = bot.db.create_request(

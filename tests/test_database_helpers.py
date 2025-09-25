@@ -243,6 +243,7 @@ class TestDatabaseHelpers(unittest.TestCase):
     def test_verify_processing_integrity(self):
         base_summary = {
             "summary_250": "Short summary.",
+            "summary_1000": "Medium summary providing additional detail.",
             "tldr": "Longer summary text.",
             "key_ideas": ["Idea"],
             "topic_tags": ["#tag"],
@@ -310,6 +311,7 @@ class TestDatabaseHelpers(unittest.TestCase):
         )
 
         bad_summary = copy.deepcopy(base_summary)
+        bad_summary.pop("summary_1000", None)
         bad_summary.pop("tldr", None)
         bad_summary["summary_250"] = ""
         bad_summary.pop("metadata", None)
@@ -392,6 +394,7 @@ class TestDatabaseHelpers(unittest.TestCase):
         self.assertTrue(bad_entries)
         bad_missing = bad_entries[0].get("missing") or []
         self.assertIn("summary_250", bad_missing)
+        self.assertIn("summary_1000", bad_missing)
         self.assertIn("tldr", bad_missing)
         self.assertIn("metadata", bad_missing)
 

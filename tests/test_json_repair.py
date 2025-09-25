@@ -99,6 +99,7 @@ class TestJsonRepair(unittest.TestCase):
             self.bot._reply_json.assert_called_once()
             call_args = self.bot._reply_json.call_args[0]
             summary_json = call_args[1]
+            self.assertIn("summary_1000", summary_json)
             self.assertEqual(summary_json["tldr"], "Full summary.")
 
         asyncio.run(run_test())

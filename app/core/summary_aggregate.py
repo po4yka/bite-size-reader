@@ -70,6 +70,7 @@ def aggregate_chunk_summaries(summaries: list[dict[str, Any]]) -> dict[str, Any]
     if not summaries:
         return {
             "summary_250": "",
+            "summary_1000": "",
             "tldr": "",
             "key_ideas": [],
             "topic_tags": [],
@@ -83,6 +84,7 @@ def aggregate_chunk_summaries(summaries: list[dict[str, Any]]) -> dict[str, Any]
 
     # Collect
     s250_parts: list[str] = []
+    s1000_parts: list[str] = []
     tldr_parts: list[str] = []
     key_ideas: list[str] = []
     topic_tags: list[str] = []
@@ -97,7 +99,10 @@ def aggregate_chunk_summaries(summaries: list[dict[str, Any]]) -> dict[str, Any]
             s250 = str(s.get("summary_250", "")).strip()
             if s250:
                 s250_parts.append(s250)
-            tldr_value = str(s.get("tldr", "") or s.get("summary_1000", "")).strip()
+            s1000_value = str(s.get("summary_1000", "") or s.get("tldr", "")).strip()
+            if s1000_value:
+                s1000_parts.append(s1000_value)
+            tldr_value = str(s.get("tldr", "") or s1000_value).strip()
             if tldr_value:
                 tldr_parts.append(tldr_value)
             key_ideas.extend([str(x) for x in (s.get("key_ideas") or [])])
@@ -115,10 +120,12 @@ def aggregate_chunk_summaries(summaries: list[dict[str, Any]]) -> dict[str, Any]
 
     # Build final
     s250_joined = "; ".join(_dedupe_list(s250_parts))
+    s1000_joined = "\n".join(_dedupe_list(s1000_parts))
     tldr_joined = "\n".join(_dedupe_list(tldr_parts))
     return {
         "summary_250": s250_joined,
-        "tldr": tldr_joined or s250_joined,
+        "summary_1000": s1000_joined or tldr_joined or s250_joined,
+        "tldr": tldr_joined or s1000_joined or s250_joined,
         "key_ideas": _dedupe_list(key_ideas, limit=10),
         "topic_tags": _dedupe_list(topic_tags, limit=8),
         "entities": entities,

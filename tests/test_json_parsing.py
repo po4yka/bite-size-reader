@@ -201,6 +201,7 @@ class TestJsonParsing(unittest.TestCase):
             bot._reply_json.assert_called_once()
             summary_json = bot._reply_json.call_args[0][1]
             self.assertEqual(summary_json["summary_250"], "Summary.")
+            self.assertIn("summary_1000", summary_json)
 
         asyncio.run(run_test())
 
@@ -250,6 +251,7 @@ class TestJsonParsing(unittest.TestCase):
             bot._reply_json.assert_called_once()
             summary_json = bot._reply_json.call_args[0][1]
             self.assertEqual(summary_json["summary_250"], "Fixed.")
+            self.assertIn("summary_1000", summary_json)
             # Ensure we did not send the invalid summary format error
             for call_args in bot._safe_reply.await_args_list:
                 if len(call_args.args) >= 2 and isinstance(call_args.args[1], str):

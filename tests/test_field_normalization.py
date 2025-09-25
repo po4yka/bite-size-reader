@@ -42,6 +42,7 @@ class TestFieldNormalization(unittest.TestCase):
 
         # Check that the normalized fields exist
         self.assertIn("summary_250", result)
+        self.assertIn("summary_1000", result)
         self.assertIn("tldr", result)
         self.assertIn("key_ideas", result)
         self.assertIn("topic_tags", result)
@@ -55,6 +56,7 @@ class TestFieldNormalization(unittest.TestCase):
             result["summary_250"],
             "No source content provided; unable to generate a factual summary.",
         )
+        self.assertEqual(result["summary_1000"], payload["summary1000"])
         self.assertEqual(len(result["key_ideas"]), 5)
         self.assertEqual(len(result["topic_tags"]), 6)
         self.assertEqual(result["estimated_reading_time_min"], 0)
@@ -86,6 +88,7 @@ class TestFieldNormalization(unittest.TestCase):
 
         # Check content preservation
         self.assertEqual(result["summary_250"], "Test summary 250")
+        self.assertEqual(result["summary_1000"], "Test summary 250")
         self.assertEqual(result["key_ideas"], ["idea1", "idea2"])
         self.assertEqual(result["topic_tags"], ["#tag1", "#tag2"])  # Should be hash-tagged
         self.assertEqual(result["estimated_reading_time_min"], 5)
@@ -109,6 +112,7 @@ class TestFieldNormalization(unittest.TestCase):
 
         # Check that all fields are preserved
         self.assertIn("summary_250", result)
+        self.assertIn("summary_1000", result)
         self.assertIn("tldr", result)
         self.assertIn("key_ideas", result)
         self.assertIn("topic_tags", result)
@@ -119,6 +123,7 @@ class TestFieldNormalization(unittest.TestCase):
 
         # Check content preservation
         self.assertEqual(result["summary_250"], "Test summary 250")
+        self.assertEqual(result["summary_1000"], "Test summary 1000")
         self.assertEqual(result["tldr"], "Test summary 1000")
         self.assertEqual(result["key_ideas"], ["idea1", "idea2"])
 

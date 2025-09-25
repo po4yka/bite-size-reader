@@ -61,7 +61,7 @@ class FakeOpenRouter:
     async def chat(self, messages, request_id=None, **kwargs):  # noqa: ARG002
         # return minimal valid JSON content
         self.calls += 1
-        content = json.dumps({"summary_250": "ok", "tldr": "ok"})
+        content = json.dumps({"summary_250": "ok", "summary_1000": "ok", "tldr": "ok"})
         return LLMCallResult(
             status="ok",
             model="m",

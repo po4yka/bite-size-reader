@@ -85,7 +85,7 @@ def _shape_candidate(candidate: dict[str, Any]) -> tuple[dict[str, Any] | None, 
 
 
 def finalize_summary_texts(summary: dict[str, Any]) -> None:
-    for key in ("summary_250", "tldr"):
+    for key in ("summary_250", "summary_1000", "tldr"):
         raw = summary.get(key)
         if not isinstance(raw, str):
             continue

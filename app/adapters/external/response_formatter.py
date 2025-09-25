@@ -625,9 +625,13 @@ class ResponseFormatter:
                 content = str(summary_shaped.get(key, "")).strip()
                 if content:
                     content = self._sanitize_summary_text(content)
+                    if key == "tldr":
+                        label = "🧾 TL;DR"
+                    else:
+                        label = f"🧾 Summary {key.split('_', 1)[1]}"
                     await self._send_labelled_text(
                         message,
-                        f"🧾 Summary {key.split('_', 1)[1]}",
+                        label,
                         content,
                     )
 
