@@ -139,7 +139,7 @@ class LLMSummarizer:
             {"role": "user", "content": user_content},
         ]
 
-        # Notify: Starting enhanced LLM call
+        # Notify: Starting LLM call
         await self.response_formatter.send_llm_start_notification(
             message,
             self.cfg.openrouter.model,
@@ -155,7 +155,7 @@ class LLMSummarizer:
             model_override = self.cfg.openrouter.long_context_model
 
         async with self._sem():
-            # Use enhanced structured output configuration
+            # Use structured output configuration
             response_format = self._build_structured_response_format()
             max_tokens = self._select_max_tokens(content_text)
             self._last_llm_result = None
@@ -173,7 +173,7 @@ class LLMSummarizer:
 
             self._last_llm_result = llm
 
-        # Enhanced LLM completion notification
+        # LLM completion notification
         await self.response_formatter.send_llm_completion_notification(
             message, llm, correlation_id, silent=silent
         )
@@ -694,7 +694,7 @@ class LLMSummarizer:
         silent: bool = False,
     ) -> dict[str, Any] | None:
         """Process LLM response and handle errors/repairs."""
-        # Enhanced error handling and salvage logic
+        # Robust error handling and salvage logic
         salvage_shaped: dict[str, Any] | None = None
         if llm.status != "ok" and (llm.error_text or "") == "structured_output_parse_error":
             salvage_shaped = await self._attempt_salvage_parsing(llm, correlation_id)
@@ -708,7 +708,7 @@ class LLMSummarizer:
                 await self._handle_llm_error(message, llm, req_id, correlation_id, interaction_id)
                 return None
 
-        # Enhanced parsing with better error handling
+        # Parsing with better error handling
         summary_shaped: dict[str, Any] | None = salvage_shaped
 
         if summary_shaped is None:
@@ -1303,7 +1303,7 @@ class LLMSummarizer:
         if not should_attempt_repair:
             return shaped
 
-        # Enhanced repair logic with structured outputs
+        # Repair logic with structured outputs
         repaired = await self._attempt_json_repair(
             message,
             llm,

@@ -1,4 +1,5 @@
 """Command processing for Telegram bot."""
+
 # ruff: noqa: E501
 # flake8: noqa
 
@@ -610,7 +611,7 @@ class CommandProcessor:
                 except Exception:
                     model_name = None
                 llm_stub = type("LLMStub", (), {"model": model_name})()
-                await self.response_formatter.send_enhanced_summary_response(
+                await self.response_formatter.send_structured_summary_response(
                     message, shaped, llm_stub
                 )
 

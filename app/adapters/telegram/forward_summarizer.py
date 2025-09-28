@@ -76,7 +76,7 @@ class ForwardSummarizer:
         ]
 
         async with self._sem():
-            # Use enhanced structured output configuration for forwarded messages
+            # Use structured output configuration for forwarded messages
             fwd_response_format = self._build_structured_response_format()
 
             # Use dynamic token budget based on content length
@@ -90,7 +90,7 @@ class ForwardSummarizer:
                 response_format=fwd_response_format,
             )
 
-        # Enhanced notification for forward completion
+        # Notification for forward completion
         await self.response_formatter.send_forward_completion_notification(message, llm)
 
         # Process response
@@ -109,7 +109,7 @@ class ForwardSummarizer:
         interaction_id: int | None,
     ) -> dict[str, Any] | None:
         """Process forward LLM response."""
-        # Enhanced salvage logic for forward flow
+        # Salvage logic for forward flow
         forward_salvage_shaped: dict[str, Any] | None = None
         if llm.status != "ok" and (llm.error_text or "") == "structured_output_parse_error":
             forward_salvage_shaped = await self._attempt_salvage_parsing(llm, correlation_id)
@@ -118,7 +118,7 @@ class ForwardSummarizer:
             await self._handle_llm_error(message, llm, req_id, correlation_id, interaction_id)
             return None
 
-        # Enhanced parsing for forward flow
+        # Parsing for forward flow
         forward_shaped: dict[str, Any] | None = forward_salvage_shaped
 
         if forward_shaped is None:
@@ -191,9 +191,11 @@ class ForwardSummarizer:
                 error_text=llm.error_text,
                 structured_output_used=getattr(llm, "structured_output_used", None),
                 structured_output_mode=getattr(llm, "structured_output_mode", None),
-                error_context_json=json.dumps(getattr(llm, "error_context", {}) or {}, default=str)
-                if getattr(llm, "error_context", None) is not None
-                else None,
+                error_context_json=(
+                    json.dumps(getattr(llm, "error_context", {}) or {}, default=str)
+                    if getattr(llm, "error_context", None) is not None
+                    else None
+                ),
             )
         except Exception as e:  # noqa: BLE001
             logger.error("persist_llm_error", extra={"error": str(e), "cid": correlation_id})
@@ -248,7 +250,7 @@ class ForwardSummarizer:
                 )
             return parse_result.shaped
         else:
-            # Enhanced repair for forward flow
+            # Repair for forward flow
             return await self._attempt_json_repair(
                 message, llm, messages, req_id, correlation_id, interaction_id
             )
@@ -391,9 +393,11 @@ class ForwardSummarizer:
                 error_text=llm.error_text,
                 structured_output_used=getattr(llm, "structured_output_used", None),
                 structured_output_mode=getattr(llm, "structured_output_mode", None),
-                error_context_json=json.dumps(getattr(llm, "error_context", {}) or {}, default=str)
-                if getattr(llm, "error_context", None) is not None
-                else None,
+                error_context_json=(
+                    json.dumps(getattr(llm, "error_context", {}) or {}, default=str)
+                    if getattr(llm, "error_context", None) is not None
+                    else None
+                ),
             )
         except Exception as e:  # noqa: BLE001
             logger.error("persist_llm_error", extra={"error": str(e), "cid": correlation_id})

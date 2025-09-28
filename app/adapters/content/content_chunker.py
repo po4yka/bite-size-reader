@@ -137,7 +137,7 @@ class ContentChunker:
                 },
             ]
             async with self._sem():
-                # Use enhanced structured output format
+                # Use structured output format
                 response_format_cf = self._build_structured_response_format()
                 # Use dynamic token budget based on chunk size
                 chunk_tokens = max(1024, min(4096, len(chunk) // 4 + 1024))

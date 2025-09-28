@@ -1,4 +1,5 @@
 """Refactored URL processor using modular components."""
+
 # ruff: noqa: E501
 # flake8: noqa
 
@@ -239,7 +240,7 @@ class URLProcessor:
 
                 # Skip Telegram responses if silent
                 if not silent:
-                    await self.response_formatter.send_enhanced_summary_response(
+                    await self.response_formatter.send_structured_summary_response(
                         message,
                         shaped,
                         llm_result,
@@ -375,9 +376,9 @@ class URLProcessor:
                 request_id=req_id,
             )
 
-        # Send enhanced results (skip if silent)
+        # Send structured results (skip if silent)
         if not silent:
-            await self.response_formatter.send_enhanced_summary_response(
+            await self.response_formatter.send_structured_summary_response(
                 message, shaped, llm, chunks=chunk_count
             )
             logger.info("reply_json_sent", extra={"cid": correlation_id, "request_id": req_id})
@@ -598,7 +599,9 @@ class URLProcessor:
             except Exception:
                 model_name = None
             llm_stub = type("LLMStub", (), {"model": model_name})()
-            await self.response_formatter.send_enhanced_summary_response(message, shaped, llm_stub)
+            await self.response_formatter.send_structured_summary_response(
+                message, shaped, llm_stub
+            )
 
             insights_raw = summary_row.get("insights_json")
             if isinstance(insights_raw, str) and insights_raw.strip():

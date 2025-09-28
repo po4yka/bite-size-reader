@@ -114,11 +114,11 @@ class TelegramClient:
                 # Optional descriptions (if supported)
                 try:
                     await client_any.set_bot_description(
-                        "Summarize URLs and forwarded posts into structured JSON with enhanced reliability.",
+                        "Summarize URLs and forwarded posts into structured JSON with reliable results.",
                         language_code="en",
                     )
                     await client_any.set_bot_short_description(
-                        "Enhanced JSON summaries with smart fallbacks", language_code="en"
+                        "Structured JSON summaries with smart fallbacks", language_code="en"
                     )
                     await client_any.set_bot_description(
                         "Улучшенные резюме ссылок и пересланных постов в формате JSON с повышенной надёжностью.",
