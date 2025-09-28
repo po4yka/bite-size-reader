@@ -6,13 +6,70 @@ on:
   pull_request:
     branches: [ main, master ]
 
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
 permissions:
   contents: read
   packages: write
   pull-requests: read
 
 jobs:
+  prepare-environment:
+    name: Prepare dependencies
+    runs-on: ubuntu-latest
+    outputs:
+      lock_drift: ${{ steps.lockcheck.outputs.drift }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      - name: Install uv (fast Python package manager)
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: "0.8.17"
+          enable-cache: true
+          cache-dependency-glob: |
+            pyproject.toml
+            uv.lock
+
+      - name: Compile locked requirements (runtime)
+        run: uv pip compile pyproject.toml -o requirements.txt
+
+      - name: Compile locked requirements (dev)
+        run: uv pip compile --extra dev pyproject.toml -o requirements-dev.txt
+
+      - name: Check lockfile drift
+        id: lockcheck
+        run: |
+          if git diff --quiet requirements.txt requirements-dev.txt; then
+            echo "drift=false" >> "$GITHUB_OUTPUT"
+            echo "No lockfile drift detected."
+          else
+            echo "drift=true" >> "$GITHUB_OUTPUT"
+            echo "::warning::Lockfiles are out of date. Run 'make lock-uv' locally or trigger 'Update Lockfiles' workflow."
+          fi
+
+      - name: Upload compiled requirements
+        uses: actions/upload-artifact@v4
+        with:
+          name: compiled-requirements
+          path: |
+            requirements.txt
+            requirements-dev.txt
+
   build-and-check:
+    needs: prepare-environment
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -21,6 +78,12 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v5
+
+      - name: Download compiled requirements
+        uses: actions/download-artifact@v4
+        with:
+          name: compiled-requirements
+          path: .
 
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -32,18 +95,12 @@ jobs:
         with:
           version: "0.8.17"
           enable-cache: true
-          cache-dependency-glob: "pyproject.toml"
-
-      # Prepare up-to-date lockfiles for reproducible installs, but do not fail the build on drift.
-      - name: Compile locked requirements (runtime)
-        run: uv pip compile pyproject.toml -o requirements.txt
-
-      - name: Compile locked requirements (dev)
-        run: uv pip compile --extra dev pyproject.toml -o requirements-dev.txt
+          cache-dependency-glob: |
+            pyproject.toml
+            uv.lock
 
       - name: Install dependencies
-        run: |
-          uv pip install --system -r requirements.txt -r requirements-dev.txt
+        run: uv pip sync --system requirements.txt requirements-dev.txt
 
       - name: Remove Pydantic for no-pydantic matrix case
         if: ${{ matrix.pydantic == false }}
@@ -75,17 +132,9 @@ jobs:
       - name: Run tests
         run: python -m unittest discover -s tests -p "test_*.py" -v
 
-      - name: Check lockfile drift (non-blocking)
-        id: lockcheck
-        continue-on-error: true
-        run: |
-          if git diff --exit-code requirements.txt requirements-dev.txt; then
-            echo "drift=false" >> "$GITHUB_OUTPUT"
-            echo "No lockfile drift detected."
-          else
-            echo "drift=true" >> "$GITHUB_OUTPUT"
-            echo "::warning::Lockfiles are out of date. Run 'make lock-uv' locally or trigger 'Update Lockfiles' workflow."
-          fi
+      - name: Surface lockfile drift status
+        if: ${{ needs.prepare-environment.outputs.lock_drift == 'true' && matrix.pydantic }}
+        run: echo "::warning::Lockfiles are out of date. Run 'make lock-uv' locally or trigger 'Update Lockfiles' workflow."
 
   docker-image:
     needs: build-and-check
@@ -130,10 +179,17 @@ jobs:
           cache-to: type=gha,mode=max
 
   security:
+    needs: prepare-environment
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v5
+
+      - name: Download compiled requirements
+        uses: actions/download-artifact@v4
+        with:
+          name: compiled-requirements
+          path: .
 
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -145,16 +201,13 @@ jobs:
         with:
           version: "0.8.17"
           enable-cache: true
-          cache-dependency-glob: "pyproject.toml"
-
-      - name: Compile locked requirements
-        run: |
-          uv pip compile pyproject.toml -o requirements.txt
-          uv pip compile --extra dev pyproject.toml -o requirements-dev.txt
+          cache-dependency-glob: |
+            pyproject.toml
+            uv.lock
 
       - name: Install project and security tools
         run: |
-          uv pip install --system -r requirements.txt -r requirements-dev.txt
+          uv pip sync --system requirements.txt requirements-dev.txt
           uv pip install --system bandit pip-audit safety
 
       - name: Bandit (SAST)

@@ -3,6 +3,14 @@ name: Regenerate Lockfiles
 on:
   workflow_dispatch:
 
+concurrency:
+  group: regen-lockfiles
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
 permissions:
   contents: write
   pull-requests: write
@@ -23,6 +31,12 @@ jobs:
 
       - name: Set up UV
         uses: astral-sh/setup-uv@v4
+        with:
+          version: "0.8.17"
+          enable-cache: true
+          cache-dependency-glob: |
+            pyproject.toml
+            uv.lock
 
       - name: Install Python 3.11
         run: uv python install 3.11
