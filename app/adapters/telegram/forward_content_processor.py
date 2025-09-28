@@ -6,6 +6,7 @@ import logging
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
+from app.adapters.telegram.message_persistence import MessagePersistence
 from app.config import AppConfig
 from app.core.html_utils import normalize_with_textacy
 from app.core.lang import choose_language, detect_language
@@ -34,6 +35,7 @@ class ForwardContentProcessor:
         self.db = db
         self.response_formatter = response_formatter
         self._audit = audit_func
+        self.message_persistence = MessagePersistence(db)
 
     async def process_forward_content(
         self, message: Any, correlation_id: str | None = None
@@ -206,7 +208,4 @@ class ForwardContentProcessor:
 
     def _persist_message_snapshot(self, request_id: int, message: Any) -> None:
         """Persist message snapshot to database."""
-        # This is a duplicate of the method in message_persistence.py
-        # In a real refactor, we'd use the MessagePersistence class
-        # For now, keeping it here to maintain functionality
-        pass
+        self.message_persistence.persist_message_snapshot(request_id, message)
