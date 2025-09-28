@@ -80,7 +80,7 @@ class ForwardProcessor:
             )
 
             if forward_shaped:
-                # Send enhanced preview for forward flow
+                # Send formatted preview for forward flow
                 await self.response_formatter.send_forward_summary_response(message, forward_shaped)
 
                 # Generate and send additional research insights (same as URL processing)

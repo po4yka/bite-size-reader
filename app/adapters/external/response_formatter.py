@@ -186,7 +186,7 @@ class ResponseFormatter:
             "• Multiple links in one message are supported\n"
             "• Use `/unread` to see your saved articles\n\n"
             "⚡ **Features:**\n"
-            "• Enhanced structured JSON output with schema validation\n"
+            "• Structured JSON output with schema validation\n"
             "• Intelligent model fallbacks for better reliability\n"
             "• Automatic content optimization based on model capabilities\n"
             "• Silent batch processing for uploaded files\n"
@@ -201,7 +201,7 @@ class ResponseFormatter:
             "What I do:\n"
             "- Summarize articles from URLs using Firecrawl + OpenRouter.\n"
             "- Summarize forwarded channel posts.\n"
-            "- Generate structured JSON summaries with enhanced reliability.\n\n"
+            "- Generate structured JSON summaries with reliable results.\n\n"
             "How to use:\n"
             "- Send a URL directly, or use /summarize <URL>.\n"
             "- You can also send /summarize and then the URL in the next message.\n"
@@ -481,10 +481,10 @@ class ResponseFormatter:
 
         await self.safe_reply(message, "\n".join(lines))
 
-    async def send_enhanced_summary_response(
+    async def send_structured_summary_response(
         self, message: Any, summary_shaped: dict[str, Any], llm: Any, chunks: int | None = None
     ) -> None:
-        """Send enhanced summary where each top-level JSON field is a separate message,
+        """Send summary where each top-level JSON field is a separate message,
         then attach the full JSON as a .json document with a descriptive filename."""
         try:
             # Optional short header
@@ -1185,9 +1185,9 @@ class ResponseFormatter:
                     "chat_id": chat_id,
                     "message_id": message_id,
                     "has_telegram_client": self._telegram_client is not None,
-                    "telegram_client_has_client": hasattr(self._telegram_client, "client")
-                    if self._telegram_client
-                    else False,
+                    "telegram_client_has_client": (
+                        hasattr(self._telegram_client, "client") if self._telegram_client else False
+                    ),
                     "client": self._telegram_client.client if self._telegram_client else None,
                 },
             )
@@ -1247,7 +1247,7 @@ class ResponseFormatter:
                 f"🌐 Domain: `{url_domain}`\n"
                 f"🔗 URL: `{norm[:60]}{'...' if len(norm) > 60 else ''}`\n"
                 f"📋 Status: Fetching content...\n"
-                f"🤖 Enhanced: Structured output with smart fallbacks",
+                f"🤖 Structured output with smart fallbacks",
             )
         except Exception:
             pass
@@ -1496,7 +1496,7 @@ class ResponseFormatter:
                 "🕷️ **Firecrawl Extraction**\n"
                 "📡 Connecting to Firecrawl API...\n"
                 "⏱️ This may take 10-30 seconds\n"
-                "🔄 Enhanced processing pipeline active",
+                "🔄 Processing pipeline active",
             )
         except Exception:
             pass
@@ -1543,7 +1543,7 @@ class ResponseFormatter:
             if correlation_id:
                 lines.append(f"🆔 Firecrawl CID: `{correlation_id}`")
 
-            lines.append("🔄 Status: Preparing for enhanced AI analysis...")
+            lines.append("🔄 Status: Preparing for AI analysis...")
 
             await self.safe_reply(message, "\n".join(lines))
         except Exception:
@@ -1587,7 +1587,7 @@ class ResponseFormatter:
             if correlation_id:
                 lines.append(f"🆔 Firecrawl CID: `{correlation_id}`")
 
-            lines.append("⚡ Proceeding to enhanced AI analysis...")
+            lines.append("⚡ Proceeding to AI analysis...")
 
             await self.safe_reply(message, "\n".join(lines))
         except Exception:
@@ -1618,7 +1618,7 @@ class ResponseFormatter:
                 f"📄 Markdown extraction was empty\n"
                 f"🛠️ Using HTML content extraction\n"
                 f"📊 Processing {content_len:,} characters...\n"
-                f"🤖 Enhanced pipeline will optimize for best results",
+                f"🤖 Pipeline will optimize for best results",
             )
         except Exception:
             pass
@@ -1636,7 +1636,7 @@ class ResponseFormatter:
                 f"📝 Detected: `{detected or 'unknown'}`\n"
                 f"📄 Content preview:\n"
                 f"```\n{content_preview}\n```\n"
-                f"🤖 Status: Preparing enhanced AI analysis with structured outputs...",
+                f"🤖 Status: Preparing AI analysis with structured outputs...",
             )
         except Exception:
             pass
@@ -1659,7 +1659,7 @@ class ResponseFormatter:
             if enable_chunking and content_len > max_chars and (chunks or []):
                 await self.safe_reply(
                     message,
-                    f"📚 **Enhanced Content Analysis**\n"
+                    f"📚 **Content Analysis**\n"
                     f"📊 Length: {content_len:,} characters\n"
                     f"🔀 Processing: Chunked analysis ({len(chunks or [])} chunks)\n"
                     f"🤖 Method: Advanced structured output with schema validation\n"
@@ -1668,16 +1668,16 @@ class ResponseFormatter:
             elif not enable_chunking and content_len > max_chars:
                 await self.safe_reply(
                     message,
-                    f"📚 **Enhanced Content Analysis**\n"
+                    f"📚 **Content Analysis**\n"
                     f"📊 Length: {content_len:,} characters (exceeds {max_chars:,} adaptive threshold)\n"
                     f"🔀 Processing: Single-pass (chunking disabled)\n"
-                    f"🤖 Method: Enhanced structured output with intelligent fallbacks\n"
+                    f"🤖 Method: Structured output with intelligent fallbacks\n"
                     f"⚡ Status: Sending to AI model...",
                 )
             else:
                 await self.safe_reply(
                     message,
-                    f"📚 **Enhanced Content Analysis**\n"
+                    f"📚 **Content Analysis**\n"
                     f"📊 Length: {content_len:,} characters\n"
                     f"🔀 Processing: Single-pass summary\n"
                     f"🤖 Method: Structured output with schema validation\n"
@@ -1702,7 +1702,7 @@ class ResponseFormatter:
         try:
             await self.safe_reply(
                 message,
-                f"🤖 **Enhanced AI Analysis Starting**\n"
+                f"🤖 **AI Analysis Starting**\n"
                 f"🧠 Model: `{model}`\n"
                 f"📊 Content: {content_len:,} characters\n"
                 f"🔧 Mode: {structured_output_mode.upper()} with smart fallbacks\n"
@@ -1727,7 +1727,7 @@ class ResponseFormatter:
                 tokens_used = prompt_tokens + completion_tokens
 
                 lines = [
-                    "🤖 **Enhanced AI Analysis Complete**",
+                    "🤖 **AI Analysis Complete**",
                     "✅ Status: Success",
                     f"🧠 Model: `{model_name}`",
                     f"⏱️ Processing time: {latency_sec:.1f}s",
@@ -1751,14 +1751,14 @@ class ResponseFormatter:
                 if correlation_id:
                     lines.append(f"🆔 Request ID: `{correlation_id}`")
 
-                lines.append("📋 Status: Generating enhanced summary...")
+                lines.append("📋 Status: Generating summary...")
 
                 await self.safe_reply(message, "\n".join(lines))
             else:
-                # Enhanced error message
+                # Error message for failure scenarios
                 await self.safe_reply(
                     message,
-                    f"🤖 **Enhanced AI Analysis Failed**\n"
+                    f"🤖 **AI Analysis Failed**\n"
                     f"❌ Status: Error\n"
                     f"🧠 Model: `{model_name}`\n"
                     f"⏱️ Processing time: {latency_sec:.1f}s\n"
@@ -1819,7 +1819,7 @@ class ResponseFormatter:
                 message,
                 "✅ **Forward Request Accepted**\n"
                 f"📺 Channel: {title}\n"
-                "🤖 Enhanced processing with structured outputs...\n"
+                "🤖 Processing with structured outputs...\n"
                 "📋 Status: Generating summary...",
             )
         except Exception:
@@ -1832,7 +1832,7 @@ class ResponseFormatter:
                 message,
                 f"🌍 **Language Detection**\n"
                 f"📝 Detected: `{detected or 'unknown'}`\n"
-                f"🤖 Processing with enhanced structured outputs...\n"
+                f"🤖 Processing with structured outputs...\n"
                 f"⚡ Status: Sending to AI model...",
             )
         except Exception:
@@ -1850,7 +1850,7 @@ class ResponseFormatter:
 
             await self.safe_reply(
                 message,
-                f"🤖 **Enhanced AI Analysis Complete**\n"
+                f"🤖 **AI Analysis Complete**\n"
                 f"{status_emoji} Status: {'Success' if llm.status == 'ok' else 'Error'}\n"
                 f"⏱️ Time: {latency_sec:.1f}s{structured_info}\n"
                 f"📋 Status: {'Generating summary...' if llm.status == 'ok' else 'Processing error...'}",
@@ -1865,7 +1865,7 @@ class ResponseFormatter:
         correlation_id: str,
         details: str | None = None,
     ) -> None:
-        """Send error notification with enhanced formatting."""
+        """Send error notification with rich formatting."""
         try:
             if error_type == "firecrawl_error":
                 details_block = f"\n\n{details}" if details else ""
@@ -1908,7 +1908,7 @@ class ResponseFormatter:
                 else:
                     await self.safe_reply(
                         message,
-                        f"❌ **Enhanced Processing Failed**\n"
+                        f"❌ **Processing Failed**\n"
                         f"🚨 Invalid summary format despite smart fallbacks{detail_block}\n"
                         f"🆔 Error ID: `{correlation_id}`",
                     )
@@ -1916,7 +1916,7 @@ class ResponseFormatter:
                 detail_block = f"\n🔍 Provider response: {details}" if details else ""
                 await self.safe_reply(
                     message,
-                    f"❌ **Enhanced Processing Failed**\n"
+                    f"❌ **Processing Failed**\n"
                     f"🚨 LLM error despite smart fallbacks{detail_block}\n"
                     f"🆔 Error ID: `{correlation_id}`",
                 )
