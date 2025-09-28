@@ -373,58 +373,6 @@ class Database:
         )
         return interaction_id
 
-    def update_user_interaction(
-        self,
-        *,
-        interaction_id: int,
-        response_sent: bool | None = None,
-        response_type: str | None = None,
-        error_occurred: bool | None = None,
-        error_message: str | None = None,
-        processing_time_ms: int | None = None,
-        request_id: int | None = None,
-    ) -> None:
-        """Update an existing user interaction record with optional fields."""
-
-        updates: list[str] = []
-        params: list[Any] = []
-
-        if response_sent is not None:
-            updates.append("response_sent = ?")
-            params.append(self._bool_to_int(response_sent))
-        if response_type is not None:
-            updates.append("response_type = ?")
-            params.append(response_type)
-        if error_occurred is not None:
-            updates.append("error_occurred = ?")
-            params.append(self._bool_to_int(error_occurred))
-        if error_message is not None:
-            updates.append("error_message = ?")
-            params.append(error_message)
-        if processing_time_ms is not None:
-            updates.append("processing_time_ms = ?")
-            params.append(processing_time_ms)
-        if request_id is not None:
-            updates.append("request_id = ?")
-            params.append(request_id)
-
-        if not updates:
-            return
-
-        set_clause = ", ".join(updates + ["updated_at = CURRENT_TIMESTAMP"])
-
-        with self.connect() as conn:
-            conn.execute(
-                f"UPDATE user_interactions SET {set_clause} WHERE id = ?",
-                (*params, interaction_id),
-            )
-            conn.commit()
-
-        self._logger.debug(
-            "db_user_interaction_updated",
-            extra={"interaction_id": interaction_id, "updated_fields": len(updates)},
-        )
-
     def _apply_pragma_settings(self, conn: sqlite3.Connection) -> None:
         try:
             conn.execute("PRAGMA journal_mode=WAL;")
