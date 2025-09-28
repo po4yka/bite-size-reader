@@ -757,22 +757,8 @@ class LLMSummarizer:
 
         self._last_summary_shaped = summary_shaped
         insights_payload = summary_shaped.get("insights")
-        if isinstance(insights_payload, dict):
-            has_content = any(
-                bool(str(insights_payload.get(field, "")).strip())
-                for field in ("topic_overview", "caution")
-            ) or any(
-                isinstance(insights_payload.get(field), list)
-                and len(insights_payload.get(field) or []) > 0
-                for field in (
-                    "new_facts",
-                    "open_questions",
-                    "suggested_sources",
-                    "expansion_topics",
-                    "next_exploration",
-                )
-            )
-            self._last_insights = insights_payload if has_content else None
+        if isinstance(insights_payload, dict) and self._insights_has_content(insights_payload):
+            self._last_insights = insights_payload
         else:
             self._last_insights = None
 
@@ -1675,33 +1661,18 @@ class LLMSummarizer:
 
         if summary_candidate and isinstance(summary_candidate, dict):
             insights_payload = summary_candidate.get("insights")
-            if isinstance(insights_payload, dict):
-                has_content = any(
-                    bool(str(insights_payload.get(field, "")).strip())
-                    for field in ("topic_overview", "caution")
-                ) or any(
-                    isinstance(insights_payload.get(field), list)
-                    and len(insights_payload.get(field) or []) > 0
-                    for field in (
-                        "new_facts",
-                        "open_questions",
-                        "suggested_sources",
-                        "expansion_topics",
-                        "next_exploration",
-                    )
+            if isinstance(insights_payload, dict) and self._insights_has_content(insights_payload):
+                logger.info(
+                    "insights_reused_from_summary",
+                    extra={
+                        "cid": correlation_id,
+                        "request_id": req_id,
+                        "source": "summary_payload",
+                    },
                 )
-                if has_content:
-                    logger.info(
-                        "insights_reused_from_summary",
-                        extra={
-                            "cid": correlation_id,
-                            "request_id": req_id,
-                            "source": "summary_payload",
-                        },
-                    )
-                    self._last_summary_shaped = summary_candidate
-                    self._last_insights = insights_payload
-                    return insights_payload
+                self._last_summary_shaped = summary_candidate
+                self._last_insights = insights_payload
+                return insights_payload
 
         system_prompt = self._build_insights_system_prompt(chosen_lang)
         user_prompt = self._build_insights_user_prompt(content_text, chosen_lang)
@@ -1796,6 +1767,39 @@ class LLMSummarizer:
             )
             self._last_insights = None
             return None
+
+    def _insights_has_content(self, payload: dict[str, Any]) -> bool:
+        """Return True when the insights payload contains meaningful data."""
+
+        for field in ("topic_overview", "caution"):
+            value = payload.get(field)
+            if isinstance(value, str) and value.strip():
+                return True
+
+        list_fields = (
+            "new_facts",
+            "open_questions",
+            "suggested_sources",
+            "expansion_topics",
+            "next_exploration",
+        )
+        for field in list_fields:
+            items = payload.get(field)
+            if not isinstance(items, list):
+                continue
+            for item in items:
+                if isinstance(item, str) and item.strip():
+                    return True
+                if isinstance(item, dict):
+                    for value in item.values():
+                        if isinstance(value, str) and value.strip():
+                            return True
+                        if value not in (None, "", [], {}):
+                            return True
+                elif item not in (None, "", [], {}):
+                    return True
+
+        return False
 
     def _build_insights_system_prompt(self, lang: str) -> str:
         """Return system prompt instructing additional insight behaviour."""

@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import importlib
 import json
+import re
+import sys
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -71,6 +73,15 @@ def parse_summary_response(
         errors.append(f"local_repair_validation_failed: {val_err}")
     elif repair_err:
         errors.append(f"local_repair_failed: {repair_err}")
+
+    minimal_candidate = None
+    if not any("json_repair_disabled" in err for err in errors):
+        minimal_candidate = _extract_minimal_summary(response_text)
+    if minimal_candidate is not None:
+        shaped, val_err = _shape_candidate(minimal_candidate)
+        if shaped is not None:
+            return SummaryJsonParseResult(minimal_candidate, shaped, True, errors)
+        errors.append(f"minimal_summary_validation_failed: {val_err}")
 
     return SummaryJsonParseResult(None, None, False, errors)
 
@@ -160,6 +171,27 @@ def _extract_structured_dict(response_json: Any) -> dict[str, Any] | None:
     return None
 
 
+_SUMMARY_250_RE = re.compile(r'"summary_250"\s*:\s*"([^"\\]*(?:\\.[^"\\]*)*)"')
+
+
+def _extract_minimal_summary(response_text: str | None) -> dict[str, Any] | None:
+    """Extract a minimal summary payload from unstructured text."""
+
+    if not response_text:
+        return None
+
+    match = _SUMMARY_250_RE.search(response_text)
+    if not match:
+        return None
+
+    summary_raw = match.group(1)
+    summary_clean = bytes(summary_raw, "utf-8").decode("unicode_escape").strip()
+    if not summary_clean:
+        return None
+
+    return {"summary_250": summary_clean}
+
+
 def _iter_text_candidates(response_text: str | None) -> list[tuple[str, str, bool]]:
     if not response_text:
         return []
@@ -235,6 +267,8 @@ def _attempt_local_repair(
     try:
         module = importlib.import_module("json_repair")
     except ModuleNotFoundError:
+        if "json_repair" in sys.modules:
+            return None, "json_repair_disabled", False
         return None, "json_repair_not_available", False
     except Exception as exc:  # noqa: BLE001
         return None, f"json_repair_import_error: {exc}", False
