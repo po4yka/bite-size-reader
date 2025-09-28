@@ -9,8 +9,6 @@ from pathlib import Path
 from typing import Any
 
 SCHEMA_SQL = r"""
-PRAGMA journal_mode=WAL;
-
 CREATE TABLE IF NOT EXISTS users (
   telegram_user_id INTEGER PRIMARY KEY,
   username TEXT,
@@ -141,6 +139,7 @@ class Database:
 
     def migrate(self) -> None:
         with self.connect() as conn:
+            self._apply_pragma_settings(conn)
             conn.executescript(SCHEMA_SQL)
             # Ensure backward-compatible schema updates
             self._ensure_column(conn, "requests", "correlation_id", "TEXT")
@@ -151,6 +150,7 @@ class Database:
             self._ensure_column(conn, "llm_calls", "structured_output_mode", "TEXT")
             self._ensure_column(conn, "llm_calls", "error_context_json", "TEXT")
             conn.commit()
+        self._run_database_maintenance()
         self._logger.info("db_migrated", extra={"path": self.path})
 
     def create_backup_copy(self, dest_path: str) -> Path:
@@ -240,6 +240,43 @@ class Database:
             conn.execute(sql, tuple(params or ()))
             conn.commit()
         self._logger.debug("db_execute", extra={"sql": sql, "params": list(params or [])[:10]})
+
+    def _apply_pragma_settings(self, conn: sqlite3.Connection) -> None:
+        try:
+            conn.execute("PRAGMA journal_mode=WAL;")
+            conn.execute("PRAGMA synchronous=NORMAL;")
+        except sqlite3.Error as exc:
+            self._logger.warning(
+                "db_pragma_apply_failed",
+                extra={"path": self._mask_path(self.path), "error": str(exc)},
+            )
+
+    def _run_database_maintenance(self) -> None:
+        if self.path == ":memory:":
+            self._logger.debug("db_maintenance_skipped_in_memory")
+            return
+        self._run_analyze()
+        self._run_vacuum()
+
+    def _run_analyze(self) -> None:
+        try:
+            with self.connect() as conn:
+                conn.execute("ANALYZE;")
+        except sqlite3.Error as exc:
+            self._logger.warning(
+                "db_analyze_failed",
+                extra={"path": self._mask_path(self.path), "error": str(exc)},
+            )
+
+    def _run_vacuum(self) -> None:
+        try:
+            with sqlite3.connect(self.path, isolation_level=None) as conn:
+                conn.execute("VACUUM;")
+        except sqlite3.Error as exc:
+            self._logger.warning(
+                "db_vacuum_failed",
+                extra={"path": self._mask_path(self.path), "error": str(exc)},
+            )
 
     # Fetch helpers
     def fetchone(self, sql: str, params: Iterable | None = None) -> sqlite3.Row | None:
