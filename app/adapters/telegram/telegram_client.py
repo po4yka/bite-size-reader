@@ -82,8 +82,10 @@ class TelegramClient:
                 BotCommand("help", "Show help and usage"),
                 BotCommand("summarize", "Summarize a URL"),
                 BotCommand("summarize_all", "Summarize multiple URLs from one message"),
+                BotCommand("cancel", "Cancel pending URL or multi-link prompts"),
                 BotCommand("unread", "Show list of unread articles"),
                 BotCommand("read", "Mark article as read and view it"),
+                BotCommand("dbverify", "Verify database integrity and reprocess"),
                 BotCommand("dbinfo", "Show database overview"),
             ]
             commands_ru = [
@@ -91,9 +93,17 @@ class TelegramClient:
                 BotCommand("help", "Показать помощь и инструкцию"),
                 BotCommand("summarize", "Суммировать ссылку (или пришлите позже)"),
                 BotCommand("summarize_all", "Суммировать несколько ссылок из сообщения"),
+                BotCommand(
+                    "cancel",
+                    "Отменить ожидание ссылки или подтверждения нескольких ссылок",
+                ),
                 BotCommand("unread", "Показать список непрочитанных статей"),
                 BotCommand(
                     "read", "Отметить статью как прочитанную и просмотреть (используйте /read <ID>)"
+                ),
+                BotCommand(
+                    "dbverify",
+                    "Проверить целостность базы данных и перезапустить обработку",
                 ),
                 BotCommand("dbinfo", "Показать состояние базы данных"),
             ]
