@@ -343,16 +343,20 @@ class LLMSummarizer:
     def _build_article_system_prompt(self, lang: str) -> str:
         if lang == LANG_RU:
             return (
-                "Ты опытный редактор и аналитик. На основе тем и тэгов сформируй"
-                " самостоятельную статью с самыми важными и интересными фактами."
-                " Пиши связно и структурировано, с коротким подзаголовком и маркированными"
-                " списками там, где это уместно. Верни строго JSON по схеме."
+                "Ты ведущий редактор-аналитик. На основе тем и тэгов подготовь"
+                " обстоятельную самостоятельную статью, объясняя контекст,"
+                " ключевые события, последствия и перспективы. Поддерживай"
+                " связное повествование, используй подзаголовок, H2/H3-разделы,"
+                " фактические детали и списки, когда уместно. Верни строго JSON"
+                " по заданной схеме."
             )
         return (
-            "You are an expert editor and analyst. Using the provided topics and tags,"
-            " craft a standalone article that highlights the most important and"
-            " interesting facts. Keep it structured with a short subtitle and use"
-            " bullet points when helpful. Return strictly as JSON per the schema."
+            "You are a senior long-form editor and analyst. Using the provided topics"
+            " and tags, craft a comprehensive standalone article that explains"
+            " context, key developments, implications, and outlook. Maintain a clear"
+            " narrative, include a short subtitle, structured H2/H3 sections,"
+            " concrete details, and bullet lists when helpful. Return strictly as"
+            " JSON per the schema."
         )
 
     def _build_article_user_prompt(self, topics: list[str], tags: list[str], lang: str) -> str:
@@ -362,13 +366,25 @@ class LLMSummarizer:
         return (
             f"Respond in {lang_label}."
             "\nReturn JSON only with exactly these keys (no extras):"
-            '\n{\n  "title": string,\n  "subtitle": string | null,\n  "article_markdown": string,\n  "highlights": [string],\n  "suggested_sources": [string]\n}'
+            '\n{\n  "title": string,\n  "subtitle": string | null,\n  "article_markdown": string,\n  "highlights": [string],\n'
+            '"suggested_sources": [string]\n}'
             "\nGuidelines:"
-            "\n- `article_markdown` must be well-structured Markdown with clear sections (## Heading),"
-            " short paragraphs, and bullet lists where helpful."
-            "\n- Provide 4-6 concise highlight bullet points."
-            "\n- Provide 3-5 reputable suggested sources (URLs or publication names)."
-            "\n- Keep every string under 400 characters; use empty arrays if you lack items but do not omit keys."
+            "\n- `article_markdown` must be a detailed 600-900 word Markdown article with"
+            " an engaging introduction, at least four `##` sections, optional `###`"
+            " subsections, and short paragraphs (2-3 sentences)."
+            "\n- Cover background/context, the current landscape, key drivers or"
+            " challenges, stakeholder perspectives, quantitative examples or"
+            " milestones, and forward-looking implications or recommendations."
+            "\n- Weave provided topics and tags naturally as keywords and explain the"
+            " relationships between them."
+            "\n- Close with a concise conclusion summarizing takeaways."
+            "\n- Provide 5-7 highlight bullet points, each under 160 characters and"
+            " capturing distinct insights."
+            "\n- Provide 4-6 reputable suggested sources (URLs or publication names);"
+            " avoid duplicates and low-quality outlets."
+            "\n- Strings may exceed 400 characters when necessary, but keep highlight"
+            " and source entries succinct. Use empty arrays when you truly lack"
+            " items, but never omit required keys."
             "\n\nTOPICS:\n"
             f"{topics_text}"
             "\n\nTAGS:\n"
