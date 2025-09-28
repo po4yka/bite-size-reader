@@ -2,6 +2,42 @@
 
 Async Telegram bot that summarizes URLs via Firecrawl + OpenRouter or summarizes forwarded channel posts. Returns a strict JSON summary and stores artifacts in SQLite. See SPEC.md for full details.
 
+## Architecture overview
+
+```mermaid
+flowchart LR
+  subgraph TelegramBot
+    TGClient[TelegramClient] --> MsgHandler[MessageHandler]
+    MsgHandler --> AccessController
+    AccessController --> MessageRouter
+    MessageRouter --> CommandProcessor
+    MessageRouter --> URLHandler
+    MessageRouter --> ForwardProcessor
+    MessageRouter --> MessagePersistence
+  end
+
+  subgraph URLPipeline[URL processing pipeline]
+    URLHandler --> URLProcessor
+    URLProcessor --> ContentExtractor
+    ContentExtractor --> Firecrawl[(Firecrawl /scrape)]
+    URLProcessor --> ContentChunker
+    URLProcessor --> LLMSummarizer
+    LLMSummarizer --> OpenRouter[(OpenRouter Chat Completions)]
+  end
+
+  ForwardProcessor --> LLMSummarizer
+  ContentExtractor --> SQLite[(SQLite)]
+  MessagePersistence --> SQLite
+  LLMSummarizer --> SQLite
+  MessageRouter --> ResponseFormatter
+  ResponseFormatter --> TGClient
+  TGClient -->|Replies| Telegram
+  Telegram -->|Updates| TGClient
+  ResponseFormatter --> Logs[(Structured + audit logs)]
+```
+
+The bot ingests updates via a lightweight `TelegramClient`, normalizes them through `MessageHandler`, and hands them to `MessageRouter`. The router enforces access control, persists interaction metadata, and dispatches requests either to the command processor, the URL handler (which orchestrates Firecrawl + OpenRouter summarization through `URLProcessor`), or the forward processor for channel reposts. `ResponseFormatter` centralizes Telegram replies and audit logging while all artifacts land in SQLite.
+
 Quick start
 - Copy `.env.example` to `.env` and fill required secrets.
 - Build and run with Docker.
@@ -23,11 +59,17 @@ Environment
  - `MAX_CONCURRENT_CALLS=4` — caps simultaneous Firecrawl/OpenRouter calls
 
 Repository layout
-- `app/core` — URL normalization, summary contract, logging utils
-- `app/adapters` — Firecrawl/OpenRouter clients, Telegram bot
-- `app/db` — SQLite schema and helpers
+- `app/core` — URL normalization, JSON contract, logging, language helpers
+- `app/adapters/content` — Firecrawl integration, content chunking, LLM summarization
+- `app/adapters/external` — response formatting helpers shared by adapters
+- `app/adapters/openrouter` — OpenRouter client, payload shaping, error handling
+- `app/adapters/telegram` — Telegram client, message routing, access control, persistence
+- `app/db` — SQLite schema, migrations, audit logging helpers
+- `app/models` — Pydantic-style models for Telegram entities and LLM configuration
+- `app/utils` — shared validation utilities
+- `app/cli` — local CLI runner for summaries
 - `app/prompts` — LLM prompt templates
-- `bot.py` — entrypoint
+- `bot.py` — entrypoint wiring config, DB, and Telegram bot
 - `SPEC.md` — full technical specification
 
 Notes

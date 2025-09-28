@@ -56,14 +56,72 @@ Everything runs in one Docker container; code lives on GitHub. Access is restric
 ## High‑level architecture
 
 ```mermaid
-flowchart LR
-  U[User] -->|URL or Forwarded Post| TG[Telegram]
-  TG -->|updates| BOT[PyroTGFork / Pyrogram Client]
-  BOT -->|HTTP| FC[(Firecrawl /scrape)]
-  BOT -->|HTTP| OR[(OpenRouter /api/v1/chat/completions)]
-  BOT -->|SQL| DB[(SQLite)]
-  BOT -->|stdout| LOGS[(JSON Logs)]
-  BOT -->|reply| TG
+flowchart TD
+  U[User] -->|URL / forwarded post| TG[Telegram]
+  TG -->|updates| TGClient[TelegramClient]
+  TGClient --> MsgHandler[MessageHandler]
+  MsgHandler --> AccessController
+  AccessController --> MessageRouter
+  MessageRouter --> CommandProcessor
+  MessageRouter --> URLHandler
+  MessageRouter --> ForwardProcessor
+  MessageRouter --> MessagePersistence
+  MessagePersistence --> DB[(SQLite)]
+
+  subgraph URL_Pipeline [URL processing pipeline]
+    URLHandler --> URLProcessor
+    URLProcessor --> ContentExtractor
+    ContentExtractor --> Firecrawl[(Firecrawl /scrape)]
+    URLProcessor --> ContentChunker
+    URLProcessor --> LLMSummarizer
+    LLMSummarizer --> OpenRouter[(OpenRouter Chat Completions)]
+  end
+
+  ForwardProcessor --> LLMSummarizer
+  ContentExtractor --> DB
+  LLMSummarizer --> DB
+  MessageRouter --> ResponseFormatter
+  ResponseFormatter --> TGClient
+  ResponseFormatter --> Logs[(Structured + audit logs)]
+  TGClient -->|replies| TG
+```
+
+Incoming updates are normalized via `MessageHandler`, which delegates access checks to `AccessController` and durable logging to `MessagePersistence`. Authorized interactions are routed to either command handling, URL processing (Firecrawl → OpenRouter), or forwarded message summarization. `ResponseFormatter` provides a single path for replies, edits, and error handling while emitting structured logs and audit events.
+
+### Telegram message routing
+
+```mermaid
+sequenceDiagram
+  participant User
+  participant Telegram
+  participant Bot as TelegramBot
+  participant Router as MessageRouter
+  participant URLProc as URLProcessor
+  participant Firecrawl
+  participant OpenRouter
+  participant DB as SQLite
+  participant Formatter as ResponseFormatter
+
+  User->>Telegram: Send URL / forward post / command
+  Telegram->>Bot: update
+  Bot->>Router: TelegramMessage model
+  Router->>DB: persist interaction + audit
+  alt URL message
+    Router->>URLProc: handle_url_flow
+    URLProc->>Firecrawl: /scrape
+    URLProc->>OpenRouter: chat completion
+    URLProc->>DB: store crawl + LLM artifacts
+    OpenRouter-->>URLProc: summary JSON
+  else Forwarded message
+    Router->>OpenRouter: summarize forward
+    Router->>DB: store message snapshot + LLM payload
+  else Commands / prompts
+    Router->>Formatter: help/start responses
+  end
+  URLProc-->>Formatter: shaped summary payload
+  Router-->>Formatter: correlation + status metadata
+  Formatter->>Telegram: reply with JSON summary
+  Formatter->>DB: audit log entry
 ```
 
 ## Inputs & Outputs
@@ -342,27 +400,25 @@ classDiagram
 ## Processing pipelines
 
 ### URL flow
-1) Detect URL; create `requests` row (`type='url'`), normalize URL, compute `dedupe_hash`.
-2) **Firecrawl `/scrape`**
-   - **Formats**: request at least `markdown`; optionally `html`, `structured`, `screenshot`.
-   - **Options**: `mobile` emulation (responsive), `parsers: ["pdf"]` for PDFs, “actions” for dynamic pages.
-   - Persist **full raw** response plus extracted content fields.
-3) Build LLM prompt from Firecrawl **markdown** (+ metadata).
-4) **OpenRouter /api/v1/chat/completions**
+1) `MessageRouter` classifies the interaction, persists a `requests` row (`type='url'`), normalizes the URL, and records the `dedupe_hash` via `MessagePersistence`.
+2) `URLProcessor.content_extractor` invokes **Firecrawl `/scrape`**:
+   - **Formats**: always request `markdown`; optionally add `html`, `structured`, `screenshot` based on config.
+   - **Options**: `mobile` emulation, `parsers: ["pdf"]`, scripted “actions” for dynamic pages.
+   - Persist the full raw response, extracted content, metadata, and latency telemetry in SQLite.
+3) `URLProcessor` determines language, loads the matching system prompt, and reports detection back to the user through `ResponseFormatter`.
+4) `ContentChunker` decides whether to chunk. When chunking is enabled it fans out concurrent OpenRouter calls and aggregates responses; otherwise it hands the full article to `LLMSummarizer`.
+5) `LLMSummarizer` calls **OpenRouter /api/v1/chat/completions** with structured output hints, automatic provider/model fallbacks, and optional long-context support:
    - Headers: `Authorization: Bearer <KEY>`, optional `HTTP-Referer`, `X-Title`.
-   - Body: `model`, `messages` (system+user), sensible `temperature`.
-   - Persist **full** response (including `usage`).
-5) Validate/shape **Summary JSON**, store in `summaries`, reply to user.
-6) Optional **additional insights** call:
-   - Reuse article content to request contextual insights (recent facts, open questions).
-   - Attempt structured `json_schema` response first; if `structured_output_parse_error` occurs, retry with JSON-object mode and configured fallback models before abandoning.
-   - Persist successful insights payload alongside the summary version.
-7) Log audit events with correlation IDs; record latencies.
+   - Body: base model plus fallback cascade, `messages` (system + user), tuned `temperature`.
+   - Persist every request/response pair (including usage) and derived token/cost metrics.
+6) Shape and validate the Summary JSON contract; store in `summaries` and send through `ResponseFormatter` (code block or file depending on size).
+7) Optional **insights** stage reuses the same pipeline: attempt `json_schema` outputs first, downgrade to JSON-object mode, and iterate through configured fallback models until successful or exhausted.
+8) Emit audit logs (start/end, retries, errors) with the correlation ID for full traceability.
 
 ### Forwarded message flow
-1) Detect forwarded message via `forward_from_chat`, `forward_from_message_id`, `forward_date`; snapshot **entire `Message`** object (text, entities, media ids, raw JSON).
-2) Build LLM prompt directly from message text/caption; include channel name/title if present.
-3) Call OpenRouter; validate **Summary JSON**; store and reply.
+1) `MessageRouter` detects forwarded metadata, snapshots the full Telegram message via `MessagePersistence`, and writes a `requests` row (`type='forward'`).
+2) `ForwardProcessor` builds an LLM prompt from the snapshot (channel name/title + text/caption) and calls **OpenRouter** with the same structured output pipeline used for URLs.
+3) Persist the LLM payload, validated Summary JSON, and audit events; reply via `ResponseFormatter`.
 
 ---
 
@@ -456,8 +512,17 @@ REQUEST_TIMEOUT_SEC=60
 /app
   /core
   /adapters
+    /content
+    /external
+    /openrouter
+    /telegram
+  /cli
   /db
+  /handlers
+  /models
   /prompts
+  /services
+  /utils
 /docker
 .env.example
 README.md
