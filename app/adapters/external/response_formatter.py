@@ -794,9 +794,20 @@ class ResponseFormatter:
             title = str(article.get("title", "")).strip() or "Custom Article"
             subtitle = str(article.get("subtitle", "") or "").strip()
             body = str(article.get("article_markdown", "")).strip()
-            highlights = [
-                str(x).strip() for x in (article.get("highlights") or []) if str(x).strip()
-            ]
+
+            raw_highlights = article.get("highlights")
+            if isinstance(raw_highlights, list):
+                highlights = [str(x).strip() for x in raw_highlights if str(x).strip()]
+            elif isinstance(raw_highlights, str):
+                highlights = [
+                    part.strip(" -•\t")
+                    for part in re.split(r"[\n\r•;]+", raw_highlights)
+                    if part.strip()
+                ]
+            elif raw_highlights is None:
+                highlights = []
+            else:
+                highlights = [str(raw_highlights).strip()] if str(raw_highlights).strip() else []
 
             header = f"📝 {title}"
             if subtitle:
@@ -1185,9 +1196,9 @@ class ResponseFormatter:
                     "chat_id": chat_id,
                     "message_id": message_id,
                     "has_telegram_client": self._telegram_client is not None,
-                    "telegram_client_has_client": hasattr(self._telegram_client, "client")
-                    if self._telegram_client
-                    else False,
+                    "telegram_client_has_client": (
+                        hasattr(self._telegram_client, "client") if self._telegram_client else False
+                    ),
                     "client": self._telegram_client.client if self._telegram_client else None,
                 },
             )
