@@ -19,6 +19,19 @@ TRACKING_PARAMS = {
 }
 
 
+_URL_SEARCH_PATTERN = re.compile(r"https?://[\w\.-]+[\w\./\-?=&%#]*", re.IGNORECASE)
+_URL_FINDALL_PATTERN = re.compile(r"https?://[^\s<>\"']+", re.IGNORECASE)
+_DANGEROUS_URL_SUBSTRINGS: tuple[str, ...] = (
+    "<",
+    ">",
+    '"',
+    "'",
+    "script",
+    "javascript:",
+    "data:",
+)
+
+
 def _validate_url_input(url: str) -> None:
     """Validate URL input for security."""
     if not url:
@@ -28,9 +41,8 @@ def _validate_url_input(url: str) -> None:
     if len(url) > 2048:  # RFC 2616 limit
         raise ValueError("URL too long")
     # Basic security: no obvious injection attempts
-    dangerous_chars = ["<", ">", '"', "'", "script", "javascript:", "data:"]
     url_lower = url.lower()
-    if any(char in url_lower for char in dangerous_chars):
+    if any(needle in url_lower for needle in _DANGEROUS_URL_SUBSTRINGS):
         raise ValueError("URL contains potentially dangerous content")
 
 
@@ -108,8 +120,7 @@ def looks_like_url(text: str) -> bool:
         return False
 
     try:
-        pattern = re.compile(r"https?://[\w\.-]+[\w\./\-?=&%#]*", re.IGNORECASE)
-        ok = bool(pattern.search(text))
+        ok = bool(_URL_SEARCH_PATTERN.search(text))
         logger.debug("looks_like_url", extra={"text_sample": text[:80], "match": ok})
         return ok
     except Exception as e:
@@ -125,8 +136,7 @@ def extract_first_url(text: str) -> str | None:
         return None
 
     try:
-        pattern = re.compile(r"https?://[\w\.-]+[\w\./\-?=&%#]*", re.IGNORECASE)
-        m = pattern.search(text)
+        m = _URL_SEARCH_PATTERN.search(text)
         val = m.group(0) if m else None
         logger.debug(
             "extract_first_url", extra={"text_sample": text[:80], "url": val[:100] if val else None}
@@ -146,8 +156,7 @@ def extract_all_urls(text: str) -> list[str]:
 
     try:
         # Optimized regex pattern for better performance
-        pattern = re.compile(r"https?://[^\s<>\"']+", re.IGNORECASE)
-        urls = pattern.findall(text) if text else []
+        urls = _URL_FINDALL_PATTERN.findall(text)
 
         if not urls:
             return []
