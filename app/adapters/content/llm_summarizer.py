@@ -436,58 +436,45 @@ class LLMSummarizer:
                 merged: dict[str, Any] = {**candidate, **article_payload}
                 candidate = merged
 
-            # Some providers return snake-case variations
-            if "articleBody" in candidate and "article_markdown" not in candidate:
-                candidate["article_markdown"] = candidate.get("articleBody")
-            if "body_markdown" in candidate and "article_markdown" not in candidate:
-                candidate["article_markdown"] = candidate.get("body_markdown")
-            if "markdown" in candidate and "article_markdown" not in candidate:
-                candidate["article_markdown"] = candidate.get("markdown")
+            # Normalise common body field variants before attempting to coerce sections
+            body_keys_precedence: tuple[str, ...] = (
+                "article_markdown",
+                "articleBody",
+                "articleBodyMarkdown",
+                "articleMarkdown",
+                "body_markdown",
+                "bodyMarkdown",
+                "body",
+                "markdown",
+                "content_markdown",
+            )
+            if "article_markdown" not in candidate:
+                for key in body_keys_precedence:
+                    if key in candidate and candidate.get(key):
+                        candidate["article_markdown"] = candidate.get(key)
+                        break
 
-            # Join sections when available
-            if "article_sections" in candidate and not candidate.get("article_markdown"):
-                sections = candidate.get("article_sections")
-                if isinstance(sections, list):
-                    article_sections_builder: list[str] = []
-                    for section in sections:
-                        if not isinstance(section, dict):
-                            continue
-                        heading = str(section.get("heading") or section.get("title") or "").strip()
-                        body_text = str(
-                            section.get("markdown")
-                            or section.get("body")
-                            or section.get("content")
-                            or section.get("text")
-                            or ""
-                        ).strip()
-                        if heading:
-                            article_sections_builder.append(f"## {heading}")
-                        if body_text:
-                            article_sections_builder.append(body_text)
-                    if article_sections_builder:
-                        candidate["article_markdown"] = "\n\n".join(article_sections_builder)
+            # Join sections when available, accounting for both explicit section
+            # containers and when the body itself is a list/dict structure.
+            if not candidate.get("article_markdown"):
+                for section_key in ("article_sections", "sections"):
+                    sections = candidate.get(section_key)
+                    if not isinstance(sections, list):
+                        continue
+                    section_text = self._coerce_section_list(sections)
+                    if section_text:
+                        candidate["article_markdown"] = section_text
+                        break
 
-            if "sections" in candidate and not candidate.get("article_markdown"):
-                sections = candidate.get("sections")
-                if isinstance(sections, list):
-                    sections_builder: list[str] = []
-                    for section in sections:
-                        if not isinstance(section, dict):
-                            continue
-                        heading = str(section.get("heading") or section.get("title") or "").strip()
-                        body_text = str(
-                            section.get("markdown")
-                            or section.get("body")
-                            or section.get("content")
-                            or section.get("text")
-                            or ""
-                        ).strip()
-                        if heading:
-                            sections_builder.append(f"## {heading}")
-                        if body_text:
-                            sections_builder.append(body_text)
-                    if sections_builder:
-                        candidate["article_markdown"] = "\n\n".join(sections_builder)
+            article_markdown_value = candidate.get("article_markdown")
+            if isinstance(article_markdown_value, list):
+                coerced = self._coerce_section_list(article_markdown_value)
+                if coerced:
+                    candidate["article_markdown"] = coerced
+            elif isinstance(article_markdown_value, dict):
+                coerced = self._coerce_section_dict(article_markdown_value)
+                if coerced:
+                    candidate["article_markdown"] = coerced
 
         if not isinstance(candidate, dict):
             return None
@@ -506,7 +493,101 @@ class LLMSummarizer:
         ).strip()
         if not title or not body:
             return None
+
+        for list_key in ("highlights", "suggested_sources"):
+            coerced_list = self._coerce_string_list(candidate.get(list_key))
+            candidate[list_key] = coerced_list
+
         return candidate
+
+    def _coerce_section_list(self, sections: list[Any]) -> str | None:
+        """Convert a list of section payloads into Markdown text."""
+        section_builder: list[str] = []
+        for section in sections:
+            if isinstance(section, str):
+                text = section.strip()
+                if text:
+                    section_builder.append(text)
+                continue
+
+            if isinstance(section, dict):
+                coerced = self._coerce_section_dict(section)
+                if coerced:
+                    section_builder.append(coerced)
+                continue
+
+            if isinstance(section, list):
+                nested = self._coerce_section_list(section)
+                if nested:
+                    section_builder.append(nested)
+
+        if not section_builder:
+            return None
+        return "\n\n".join(section_builder)
+
+    def _coerce_section_dict(self, section: dict[str, Any]) -> str | None:
+        """Coerce a dict-style section into Markdown."""
+        if "sections" in section and isinstance(section["sections"], list):
+            return self._coerce_section_list(section["sections"])
+
+        heading = str(
+            section.get("heading") or section.get("title") or section.get("section_title") or ""
+        ).strip()
+        body_text = section.get("markdown")
+        if not body_text:
+            body_text = (
+                section.get("body")
+                or section.get("content")
+                or section.get("text")
+                or section.get("paragraph")
+            )
+        if isinstance(body_text, list):
+            body_text = self._coerce_section_list(body_text)
+        else:
+            body_text = str(body_text or "").strip()
+
+        parts: list[str] = []
+        if heading:
+            parts.append(f"## {heading}")
+        if body_text:
+            parts.append(str(body_text))
+
+        if not parts:
+            return None
+        return "\n\n".join(parts)
+
+    def _coerce_string_list(self, value: Any) -> list[str]:
+        """Coerce arbitrary list-like structures into a list of clean strings."""
+        if isinstance(value, list):
+            result: list[str] = []
+            for item in value:
+                if isinstance(item, list | tuple):
+                    nested = self._coerce_string_list(list(item))
+                    result.extend(nested)
+                    continue
+                if isinstance(item, dict):
+                    parts = [str(v).strip() for v in item.values() if str(v).strip()]
+                    if parts:
+                        result.append(" ".join(parts))
+                    continue
+                text = str(item).strip()
+                if text:
+                    result.append(text)
+            return result
+
+        if isinstance(value, str):
+            cleaned = value.strip()
+            if not cleaned:
+                return []
+            splitter = re.compile(r"[\n\r•;]+")
+            parts = [part.strip(" -•\t") for part in splitter.split(cleaned)]
+            return [part for part in parts if part]
+
+        if value is None:
+            return []
+
+        text = str(value).strip()
+        return [text] if text else []
 
     def _select_insights_max_tokens(self, content_text: str) -> int | None:
         """Choose an appropriate max_tokens budget for insights generation."""
@@ -1097,9 +1178,11 @@ class LLMSummarizer:
                 error_text=llm.error_text,
                 structured_output_used=getattr(llm, "structured_output_used", None),
                 structured_output_mode=getattr(llm, "structured_output_mode", None),
-                error_context_json=json.dumps(getattr(llm, "error_context", {}) or {}, default=str)
-                if getattr(llm, "error_context", None) is not None
-                else None,
+                error_context_json=(
+                    json.dumps(getattr(llm, "error_context", {}) or {}, default=str)
+                    if getattr(llm, "error_context", None) is not None
+                    else None
+                ),
             )
         except Exception as e:  # noqa: BLE001
             logger.error("persist_llm_error", extra={"error": str(e), "cid": correlation_id})
@@ -1361,9 +1444,9 @@ class LLMSummarizer:
                 "json_repair_attempt_enhanced",
                 extra={
                     "cid": correlation_id,
-                    "reason": parse_result.errors[-3:]
-                    if parse_result and parse_result.errors
-                    else None,
+                    "reason": (
+                        parse_result.errors[-3:] if parse_result and parse_result.errors else None
+                    ),
                     "structured_mode": self.cfg.openrouter.structured_output_mode,
                 },
             )
