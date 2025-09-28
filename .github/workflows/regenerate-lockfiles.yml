@@ -10,6 +10,8 @@ permissions:
 jobs:
   regen-lockfiles:
     runs-on: ubuntu-latest
+    env:
+      ACTIONS_PR_TOKEN: ${{ secrets.ACTIONS_PR_TOKEN }}
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -31,10 +33,10 @@ jobs:
           uv pip compile --extra dev pyproject.toml -o requirements-dev.txt
 
       - name: Create Pull Request (using PAT if provided)
-        if: ${{ secrets.ACTIONS_PR_TOKEN != '' }}
+        if: ${{ env.ACTIONS_PR_TOKEN != '' }}
         uses: peter-evans/create-pull-request@v7
         with:
-          token: ${{ secrets.ACTIONS_PR_TOKEN }}
+          token: ${{ env.ACTIONS_PR_TOKEN }}
           commit-message: "chore(ci): regenerate lockfiles via uv"
           title: "chore(ci): regenerate lockfiles via uv"
           body: "Automated lockfile regeneration triggered by CI failure."
@@ -42,7 +44,7 @@ jobs:
           labels: dependencies
 
       - name: Create Pull Request (best-effort with GITHUB_TOKEN)
-        if: ${{ secrets.ACTIONS_PR_TOKEN == '' }}
+        if: ${{ env.ACTIONS_PR_TOKEN == '' }}
         continue-on-error: true
         uses: peter-evans/create-pull-request@v7
         with:
@@ -53,7 +55,7 @@ jobs:
           labels: dependencies
 
       - name: Note PR permission restriction
-        if: ${{ secrets.ACTIONS_PR_TOKEN == '' }}
+        if: ${{ env.ACTIONS_PR_TOKEN == '' }}
         run: |
           echo "::warning::Repository blocks GitHub Actions from creating PRs."
           echo "Set a repo/org secret 'ACTIONS_PR_TOKEN' with 'contents' and 'pull_requests' write permissions (fine-grained PAT), or enable the setting to allow Actions to create PRs."
