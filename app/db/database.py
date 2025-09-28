@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import sqlite3
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -153,6 +153,18 @@ CREATE TABLE IF NOT EXISTS audit_logs (
   details_json TEXT
 );
 """
+
+USER_INTERACTION_UPDATE_SQL = (
+    "UPDATE user_interactions\n"
+    "SET\n"
+    "    response_sent = CASE WHEN :response_sent_set THEN :response_sent ELSE response_sent END,\n"
+    "    response_type = CASE WHEN :response_type_set THEN :response_type ELSE response_type END,\n"
+    "    error_occurred = CASE WHEN :error_occurred_set THEN :error_occurred ELSE error_occurred END,\n"
+    "    error_message = CASE WHEN :error_message_set THEN :error_message ELSE error_message END,\n"
+    "    processing_time_ms = CASE WHEN :processing_time_ms_set THEN :processing_time_ms ELSE processing_time_ms END,\n"
+    "    request_id = CASE WHEN :request_id_set THEN :request_id ELSE request_id END\n"
+    "WHERE id = :interaction_id\n"
+)
 
 
 @dataclass
@@ -992,6 +1004,193 @@ class Database:
         return dict(row) if row else None
 
     # Convenience insert/update helpers for core flows
+
+    def upsert_user(
+        self,
+        *,
+        telegram_user_id: int,
+        username: str | None = None,
+        is_owner: bool | None = None,
+    ) -> None:
+        """Insert or update a Telegram user row with the latest metadata."""
+
+        if not isinstance(telegram_user_id, int):
+            raise ValueError("telegram_user_id must be an integer")
+
+        with self.connect() as conn:
+            existing = conn.execute(
+                "SELECT username, is_owner FROM users WHERE telegram_user_id = ?",
+                (telegram_user_id,),
+            ).fetchone()
+
+            if existing:
+                new_username = username if username is not None else existing["username"]
+                new_is_owner = (
+                    int(bool(is_owner)) if is_owner is not None else int(existing["is_owner"])
+                )
+                conn.execute(
+                    "UPDATE users SET username = ?, is_owner = ? WHERE telegram_user_id = ?",
+                    (new_username, new_is_owner, telegram_user_id),
+                )
+            else:
+                conn.execute(
+                    "INSERT INTO users (telegram_user_id, username, is_owner) VALUES (?, ?, ?)",
+                    (
+                        telegram_user_id,
+                        username,
+                        int(bool(is_owner)) if is_owner is not None else 0,
+                    ),
+                )
+            conn.commit()
+        self._logger.debug(
+            "user_upserted",
+            extra={"telegram_user_id": telegram_user_id, "username": username},
+        )
+
+    def upsert_chat(
+        self,
+        *,
+        chat_id: int,
+        type_: str | None = None,
+        title: str | None = None,
+        username: str | None = None,
+    ) -> None:
+        """Insert or update a Telegram chat row with the latest metadata."""
+
+        if not isinstance(chat_id, int):
+            raise ValueError("chat_id must be an integer")
+
+        with self.connect() as conn:
+            existing = conn.execute(
+                "SELECT type, title, username FROM chats WHERE chat_id = ?",
+                (chat_id,),
+            ).fetchone()
+
+            if existing:
+                new_type = type_ if type_ is not None else existing["type"]
+                new_title = title if title is not None else existing["title"]
+                new_username = username if username is not None else existing["username"]
+                conn.execute(
+                    "UPDATE chats SET type = ?, title = ?, username = ? WHERE chat_id = ?",
+                    (new_type, new_title, new_username, chat_id),
+                )
+            else:
+                conn.execute(
+                    "INSERT INTO chats (chat_id, type, title, username) VALUES (?, ?, ?, ?)",
+                    (
+                        chat_id,
+                        type_ if type_ is not None else "unknown",
+                        title,
+                        username,
+                    ),
+                )
+            conn.commit()
+        self._logger.debug(
+            "chat_upserted",
+            extra={"chat_id": chat_id, "type": type_, "title": title},
+        )
+
+    def update_user_interaction(
+        self,
+        *,
+        interaction_id: int,
+        updates: Mapping[str, Any] | None = None,
+        response_sent: bool | None = None,
+        response_type: str | None = None,
+        error_occurred: bool | None = None,
+        error_message: str | None = None,
+        processing_time_ms: int | None = None,
+        request_id: int | None = None,
+    ) -> None:
+        """Update ``user_interactions`` columns using a static SQL statement.
+
+        Callers may provide an ``updates`` mapping that explicitly declares the
+        desired column changes (including ``None`` values), or they may use the
+        legacy keyword arguments that mirror the original method signature. The
+        two styles are mutually exclusive to avoid ambiguity.
+        """
+
+        if not isinstance(interaction_id, int) or interaction_id <= 0:
+            raise ValueError("interaction_id must be a positive integer")
+
+        legacy_fields = {
+            "response_sent": response_sent,
+            "response_type": response_type,
+            "error_occurred": error_occurred,
+            "error_message": error_message,
+            "processing_time_ms": processing_time_ms,
+            "request_id": request_id,
+        }
+
+        if updates is not None and any(value is not None for value in legacy_fields.values()):
+            raise ValueError(
+                "Provide either an 'updates' mapping or individual keyword arguments, not both"
+            )
+
+        if updates is not None:
+            items: Iterable[tuple[str, Any]] = updates.items()
+        else:
+            items = ((field, value) for field, value in legacy_fields.items() if value is not None)
+
+        any_updates = False
+
+        def _as_bool(value: Any) -> int | None:
+            if value is None:
+                return None
+            return int(bool(value))
+
+        def _as_int(value: Any, column: str) -> int | None:
+            if value is None:
+                return None
+            try:
+                return int(value)
+            except (TypeError, ValueError) as exc:  # pragma: no cover - defensive
+                raise ValueError(f"Invalid integer value for '{column}'") from exc
+
+        def _as_str(value: Any) -> str | None:
+            if value is None:
+                return None
+            return str(value)
+
+        converters: dict[str, Callable[[Any], Any]] = {
+            "response_sent": _as_bool,
+            "response_type": _as_str,
+            "error_occurred": _as_bool,
+            "error_message": _as_str,
+            "processing_time_ms": lambda value: _as_int(value, "processing_time_ms"),
+            "request_id": lambda value: _as_int(value, "request_id"),
+        }
+
+        converted_values: dict[str, Any] = {key: None for key in converters}
+        update_flags: dict[str, int] = {f"{key}_set": 0 for key in converters}
+        changed_fields: list[str] = []
+
+        for field, raw_value in items:
+            converter = converters.get(field)
+            if converter is None:
+                raise ValueError(f"Unsupported column '{field}' for user_interactions update")
+            converted_values[field] = converter(raw_value)
+            update_flags[f"{field}_set"] = 1
+            any_updates = True
+            changed_fields.append(field)
+
+        if not any_updates:
+            return
+
+        params: dict[str, Any] = {
+            **converted_values,
+            **update_flags,
+            "interaction_id": interaction_id,
+        }
+
+        with self.connect() as conn:
+            conn.execute(USER_INTERACTION_UPDATE_SQL, params)
+            conn.commit()
+
+        self._logger.debug(
+            "user_interaction_updated",
+            extra={"interaction_id": interaction_id, "fields": changed_fields},
+        )
 
     def create_request(
         self,

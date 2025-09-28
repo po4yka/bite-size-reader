@@ -130,6 +130,8 @@ class ContentExtractor:
         self, message: Any, url_text: str, norm: str, dedupe: str, correlation_id: str | None
     ) -> int:
         """Handle request deduplication or creation."""
+        self._upsert_sender_metadata(message)
+
         existing_req = self.db.get_request_by_dedupe_hash(dedupe)
 
         if existing_req:
@@ -187,6 +189,51 @@ class ContentExtractor:
             logger.error("snapshot_error", extra={"error": str(e), "cid": correlation_id})
 
         return req_id
+
+    def _upsert_sender_metadata(self, message: Any) -> None:
+        """Persist sender user/chat metadata for the interaction."""
+
+        def _coerce_int(value: Any) -> int | None:
+            try:
+                return int(value) if value is not None else None
+            except (TypeError, ValueError):
+                return None
+
+        chat_obj = getattr(message, "chat", None)
+        chat_id = _coerce_int(getattr(chat_obj, "id", None) if chat_obj is not None else None)
+        if chat_id is not None:
+            chat_type = getattr(chat_obj, "type", None)
+            chat_title = getattr(chat_obj, "title", None)
+            chat_username = getattr(chat_obj, "username", None)
+            try:
+                self.db.upsert_chat(
+                    chat_id=chat_id,
+                    type_=str(chat_type) if chat_type is not None else None,
+                    title=str(chat_title) if isinstance(chat_title, str) else None,
+                    username=str(chat_username) if isinstance(chat_username, str) else None,
+                )
+            except Exception as exc:  # noqa: BLE001
+                logger.warning(
+                    "chat_upsert_failed",
+                    extra={"chat_id": chat_id, "error": str(exc)},
+                )
+
+        from_user_obj = getattr(message, "from_user", None)
+        user_id = _coerce_int(
+            getattr(from_user_obj, "id", None) if from_user_obj is not None else None
+        )
+        if user_id is not None:
+            username = getattr(from_user_obj, "username", None)
+            try:
+                self.db.upsert_user(
+                    telegram_user_id=user_id,
+                    username=str(username) if isinstance(username, str) else None,
+                )
+            except Exception as exc:  # noqa: BLE001
+                logger.warning(
+                    "user_upsert_failed",
+                    extra={"user_id": user_id, "error": str(exc)},
+                )
 
     async def _extract_or_reuse_content(
         self,
