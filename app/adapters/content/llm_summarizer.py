@@ -29,6 +29,9 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+_STRING_LIST_SPLITTER_RE = re.compile(r"[\n\r•;]+")
+
+
 class LLMSummarizer:
     """Handles AI summarization calls and response processing."""
 
@@ -578,8 +581,7 @@ class LLMSummarizer:
             cleaned = value.strip()
             if not cleaned:
                 return []
-            splitter = re.compile(r"[\n\r•;]+")
-            parts = [part.strip(" -•\t") for part in splitter.split(cleaned)]
+            parts = [part.strip(" -•\t") for part in _STRING_LIST_SPLITTER_RE.split(cleaned)]
             return [part for part in parts if part]
 
         if value is None:
