@@ -152,13 +152,18 @@ class ResponseFormatter:
 
         return True, ""
 
-    def _check_rate_limit(self) -> bool:
-        """Check if we're within rate limits."""
+    async def _check_rate_limit(self) -> bool:
+        """Ensure replies respect the minimum delay between Telegram messages."""
+        import asyncio
         import time
 
         current_time = time.time() * 1000  # Convert to milliseconds
+        elapsed = current_time - self._last_message_time
 
-        if current_time - self._last_message_time < self.MIN_MESSAGE_INTERVAL_MS:
+        if elapsed < self.MIN_MESSAGE_INTERVAL_MS:
+            await asyncio.sleep((self.MIN_MESSAGE_INTERVAL_MS - elapsed) / 1000)
+            current_time = time.time() * 1000
+            self._last_message_time = current_time
             return False
 
         self._last_message_time = current_time
@@ -1020,9 +1025,8 @@ class ResponseFormatter:
             text = text[: self.MAX_MESSAGE_CHARS - 10] + "..."
 
         # Rate limiting check
-        if not self._check_rate_limit():
+        if not await self._check_rate_limit():
             logger.warning("safe_reply_rate_limited", extra={"text_length": len(text)})
-            return
 
         if self._safe_reply_func is not None:
             kwargs = {"parse_mode": parse_mode} if parse_mode is not None else {}
@@ -1074,9 +1078,8 @@ class ResponseFormatter:
             text = text[: self.MAX_MESSAGE_CHARS - 10] + "..."
 
         # Rate limiting check
-        if not self._check_rate_limit():
+        if not await self._check_rate_limit():
             logger.warning("safe_reply_with_id_rate_limited", extra={"text_length": len(text)})
-            return None
 
         if self._safe_reply_func is not None:
             # When a custom reply function is provided (e.g., compatibility layer),
@@ -1183,12 +1186,11 @@ class ResponseFormatter:
                 return
 
             # Rate limiting check
-            if not self._check_rate_limit():
+            if not await self._check_rate_limit():
                 logger.warning(
                     "edit_message_rate_limited",
                     extra={"chat_id": chat_id, "message_id": message_id},
                 )
-                return
 
             logger.debug(
                 "edit_message_attempt",
