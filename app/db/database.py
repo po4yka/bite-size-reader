@@ -922,21 +922,45 @@ class Database:
         self,
         *,
         interaction_id: int,
-        updates: Mapping[str, Any],
+        updates: Mapping[str, Any] | None = None,
+        response_sent: bool | None = None,
+        response_type: str | None = None,
+        error_occurred: bool | None = None,
+        error_message: str | None = None,
+        processing_time_ms: int | None = None,
+        request_id: int | None = None,
     ) -> None:
         """Update ``user_interactions`` columns using a static SQL statement.
 
-        The method validates requested fields against an allow-list and converts
-        incoming values before executing a single ``UPDATE`` statement. Each
-        column uses a ``CASE`` guard so omitted fields remain untouched while
-        still allowing explicit ``NULL`` assignments. This avoids dynamic SQL
-        string construction that Bandit previously flagged (B608).
+        Callers may provide an ``updates`` mapping that explicitly declares the
+        desired column changes (including ``None`` values), or they may use the
+        legacy keyword arguments that mirror the original method signature. The
+        two styles are mutually exclusive to avoid ambiguity.
         """
 
         if not isinstance(interaction_id, int) or interaction_id <= 0:
             raise ValueError("interaction_id must be a positive integer")
-        if not updates:
-            return
+
+        legacy_fields = {
+            "response_sent": response_sent,
+            "response_type": response_type,
+            "error_occurred": error_occurred,
+            "error_message": error_message,
+            "processing_time_ms": processing_time_ms,
+            "request_id": request_id,
+        }
+
+        if updates is not None and any(value is not None for value in legacy_fields.values()):
+            raise ValueError(
+                "Provide either an 'updates' mapping or individual keyword arguments, not both"
+            )
+
+        if updates is not None:
+            items: Iterable[tuple[str, Any]] = updates.items()
+        else:
+            items = ((field, value) for field, value in legacy_fields.items() if value is not None)
+
+        any_updates = False
 
         def _as_bool(value: Any) -> int | None:
             if value is None:
@@ -967,15 +991,16 @@ class Database:
 
         converted_values: dict[str, Any] = {key: None for key in converters}
         update_flags: dict[str, int] = {f"{key}_set": 0 for key in converters}
-        any_updates = False
+        changed_fields: list[str] = []
 
-        for field, raw_value in updates.items():
+        for field, raw_value in items:
             converter = converters.get(field)
             if converter is None:
                 raise ValueError(f"Unsupported column '{field}' for user_interactions update")
             converted_values[field] = converter(raw_value)
             update_flags[f"{field}_set"] = 1
             any_updates = True
+            changed_fields.append(field)
 
         if not any_updates:
             return
@@ -992,7 +1017,7 @@ class Database:
 
         self._logger.debug(
             "user_interaction_updated",
-            extra={"interaction_id": interaction_id, "fields": list(updates.keys())},
+            extra={"interaction_id": interaction_id, "fields": changed_fields},
         )
 
     def create_request(

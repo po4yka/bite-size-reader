@@ -90,3 +90,37 @@ def test_update_user_interaction_ignores_empty_updates(db: Database) -> None:
     after = db.fetchone("SELECT * FROM user_interactions WHERE id = ?", (interaction_id,))
     assert after is not None
     assert dict(after) == dict(before)
+
+
+def test_update_user_interaction_accepts_legacy_kwargs(db: Database) -> None:
+    interaction_id = _insert_interaction(db)
+
+    db.update_user_interaction(
+        interaction_id=interaction_id,
+        response_sent=True,
+        response_type="completed",
+        error_occurred=False,
+        error_message="done",
+        processing_time_ms=512,
+        request_id=99,
+    )
+
+    row = db.fetchone("SELECT * FROM user_interactions WHERE id = ?", (interaction_id,))
+    assert row is not None
+    assert row["response_sent"] == 1
+    assert row["response_type"] == "completed"
+    assert row["error_occurred"] == 0
+    assert row["error_message"] == "done"
+    assert row["processing_time_ms"] == 512
+    assert row["request_id"] == 99
+
+
+def test_update_user_interaction_rejects_mixed_inputs(db: Database) -> None:
+    interaction_id = _insert_interaction(db)
+
+    with pytest.raises(ValueError):
+        db.update_user_interaction(
+            interaction_id=interaction_id,
+            updates={"response_sent": True},
+            response_type="summary",
+        )
