@@ -125,6 +125,18 @@ CREATE TABLE IF NOT EXISTS audit_logs (
 );
 """
 
+USER_INTERACTION_UPDATE_SQL = (
+    "UPDATE user_interactions\n"
+    "SET\n"
+    "    response_sent = CASE WHEN :response_sent_set THEN :response_sent ELSE response_sent END,\n"
+    "    response_type = CASE WHEN :response_type_set THEN :response_type ELSE response_type END,\n"
+    "    error_occurred = CASE WHEN :error_occurred_set THEN :error_occurred ELSE error_occurred END,\n"
+    "    error_message = CASE WHEN :error_message_set THEN :error_message ELSE error_message END,\n"
+    "    processing_time_ms = CASE WHEN :processing_time_ms_set THEN :processing_time_ms ELSE processing_time_ms END,\n"
+    "    request_id = CASE WHEN :request_id_set THEN :request_id ELSE request_id END\n"
+    "WHERE id = :interaction_id\n"
+)
+
 
 @dataclass
 class Database:
@@ -968,18 +980,6 @@ class Database:
         if not any_updates:
             return
 
-        sql = """
-            UPDATE user_interactions
-            SET
-                response_sent = CASE WHEN :response_sent_set THEN :response_sent ELSE response_sent END,
-                response_type = CASE WHEN :response_type_set THEN :response_type ELSE response_type END,
-                error_occurred = CASE WHEN :error_occurred_set THEN :error_occurred ELSE error_occurred END,
-                error_message = CASE WHEN :error_message_set THEN :error_message ELSE error_message END,
-                processing_time_ms = CASE WHEN :processing_time_ms_set THEN :processing_time_ms ELSE processing_time_ms END,
-                request_id = CASE WHEN :request_id_set THEN :request_id ELSE request_id END
-            WHERE id = :interaction_id
-        """
-
         params: dict[str, Any] = {
             **converted_values,
             **update_flags,
@@ -987,7 +987,7 @@ class Database:
         }
 
         with self.connect() as conn:
-            conn.execute(sql, params)
+            conn.execute(USER_INTERACTION_UPDATE_SQL, params)
             conn.commit()
 
         self._logger.debug(
