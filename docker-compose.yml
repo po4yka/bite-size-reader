@@ -5,26 +5,62 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-
+    
+    container_name: bsr-bot
+    
     env_file:
       - .env
-
+    
     volumes:
       - ./data:/data
+      - /etc/localtime:/etc/localtime:ro
+    
     environment:
       - TEXTACY_ENABLED=1
       - DB_PATH=/data/app.db
       - OPENROUTER_PROVIDER_ORDER=openai
-
+      - PYTHONUNBUFFERED=1
+      - PYTHONDONTWRITEBYTECODE=1
+    
     restart: unless-stopped
-
-    # The bot does not expose any ports. It initiates outbound connections only.
-    ports: []
-
+    
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '1.0'
+        reservations:
+          memory: 512M
+          cpus: '0.25'
+    
     healthcheck:
-      # Lightweight DB open to confirm the container is healthy
-      test: ["CMD-SHELL", "uv run python -c 'import os,sqlite3; db=os.getenv(\"DB_PATH\",\"/data/app.db\"); sqlite3.connect(db).close(); print(\"ok\")' >/dev/null 2>&1"]
+      test: |
+        CMD-SHELL "
+        timeout 10s uv run python -c '
+        import os, sqlite3, sys
+        try:
+            db_path = os.getenv(\"DB_PATH\", \"/data/app.db\")
+            conn = sqlite3.connect(db_path, timeout=5)
+            conn.execute(\"SELECT 1\").fetchone()
+            conn.close()
+            print(\"Health check passed\")
+        except Exception as e:
+            print(f\"Health check failed: {e}\")
+            sys.exit(1)
+        ' 2>&1"
       interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    
+    security_opt:
+      - no-new-privileges:true
+    
+    stop_grace_period: 30s
+
