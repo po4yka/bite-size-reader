@@ -821,6 +821,91 @@ class Database:
 
     # Convenience insert/update helpers for core flows
 
+    def upsert_user(
+        self,
+        *,
+        telegram_user_id: int,
+        username: str | None = None,
+        is_owner: bool | None = None,
+    ) -> None:
+        """Insert or update a Telegram user row with the latest metadata."""
+
+        if not isinstance(telegram_user_id, int):
+            raise ValueError("telegram_user_id must be an integer")
+
+        with self.connect() as conn:
+            existing = conn.execute(
+                "SELECT username, is_owner FROM users WHERE telegram_user_id = ?",
+                (telegram_user_id,),
+            ).fetchone()
+
+            if existing:
+                new_username = username if username is not None else existing["username"]
+                new_is_owner = (
+                    int(bool(is_owner)) if is_owner is not None else int(existing["is_owner"])
+                )
+                conn.execute(
+                    "UPDATE users SET username = ?, is_owner = ? WHERE telegram_user_id = ?",
+                    (new_username, new_is_owner, telegram_user_id),
+                )
+            else:
+                conn.execute(
+                    "INSERT INTO users (telegram_user_id, username, is_owner) VALUES (?, ?, ?)",
+                    (
+                        telegram_user_id,
+                        username,
+                        int(bool(is_owner)) if is_owner is not None else 0,
+                    ),
+                )
+            conn.commit()
+        self._logger.debug(
+            "user_upserted",
+            extra={"telegram_user_id": telegram_user_id, "username": username},
+        )
+
+    def upsert_chat(
+        self,
+        *,
+        chat_id: int,
+        type_: str | None = None,
+        title: str | None = None,
+        username: str | None = None,
+    ) -> None:
+        """Insert or update a Telegram chat row with the latest metadata."""
+
+        if not isinstance(chat_id, int):
+            raise ValueError("chat_id must be an integer")
+
+        with self.connect() as conn:
+            existing = conn.execute(
+                "SELECT type, title, username FROM chats WHERE chat_id = ?",
+                (chat_id,),
+            ).fetchone()
+
+            if existing:
+                new_type = type_ if type_ is not None else existing["type"]
+                new_title = title if title is not None else existing["title"]
+                new_username = username if username is not None else existing["username"]
+                conn.execute(
+                    "UPDATE chats SET type = ?, title = ?, username = ? WHERE chat_id = ?",
+                    (new_type, new_title, new_username, chat_id),
+                )
+            else:
+                conn.execute(
+                    "INSERT INTO chats (chat_id, type, title, username) VALUES (?, ?, ?, ?)",
+                    (
+                        chat_id,
+                        type_ if type_ is not None else "unknown",
+                        title,
+                        username,
+                    ),
+                )
+            conn.commit()
+        self._logger.debug(
+            "chat_upserted",
+            extra={"chat_id": chat_id, "type": type_, "title": title},
+        )
+
     def create_request(
         self,
         *,
