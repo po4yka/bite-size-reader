@@ -194,6 +194,18 @@ class ForwardProcessor:
             from app.adapters.content.llm_summarizer import LLMSummarizer
 
             # Create LLMSummarizer instance with same dependencies as ForwardSummarizer
+            summary_payload: dict[str, Any] | None = None
+            try:
+                row = self.db.get_summary_by_request(req_id)
+                json_payload = row.get("json_payload") if row else None
+                if json_payload:
+                    summary_payload = json.loads(json_payload)
+            except Exception as exc:
+                logger.debug(
+                    "forward_insights_summary_load_failed",
+                    extra={"cid": correlation_id, "error": str(exc)},
+                )
+
             llm_summarizer = LLMSummarizer(
                 cfg=self.cfg,
                 db=self.db,
@@ -209,6 +221,7 @@ class ForwardProcessor:
                 chosen_lang=chosen_lang,
                 req_id=req_id,
                 correlation_id=correlation_id,
+                summary=summary_payload,
             )
 
             if insights:

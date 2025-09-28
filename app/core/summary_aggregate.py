@@ -80,6 +80,15 @@ def aggregate_chunk_summaries(summaries: list[dict[str, Any]]) -> dict[str, Any]
             "answered_questions": [],
             "readability": {"method": "Flesch-Kincaid", "score": 0.0, "level": "Unknown"},
             "seo_keywords": [],
+            "insights": {
+                "topic_overview": "",
+                "new_facts": [],
+                "open_questions": [],
+                "suggested_sources": [],
+                "expansion_topics": [],
+                "next_exploration": [],
+                "caution": None,
+            },
         }
 
     # Collect
@@ -93,6 +102,13 @@ def aggregate_chunk_summaries(summaries: list[dict[str, Any]]) -> dict[str, Any]
     key_stats: list[dict[str, Any]] = []
     answered: list[str] = []
     seo_keywords: list[str] = []
+    topic_overview_parts: list[str] = []
+    caution_parts: list[str] = []
+    fact_map: dict[str, dict[str, Any]] = {}
+    open_questions: list[str] = []
+    suggested_sources: list[str] = []
+    expansion_topics: list[str] = []
+    next_exploration: list[str] = []
 
     for s in summaries:
         try:
@@ -115,6 +131,41 @@ def aggregate_chunk_summaries(summaries: list[dict[str, Any]]) -> dict[str, Any]
             key_stats = _merge_key_stats(key_stats, s.get("key_stats") or [])
             answered.extend([str(x) for x in (s.get("answered_questions") or [])])
             seo_keywords.extend([str(x) for x in (s.get("seo_keywords") or [])])
+            insights_payload = s.get("insights") or {}
+            if isinstance(insights_payload, dict):
+                overview = str(insights_payload.get("topic_overview", "")).strip()
+                if overview:
+                    topic_overview_parts.append(overview)
+                caution = str(insights_payload.get("caution", "")).strip()
+                if caution:
+                    caution_parts.append(caution)
+                for fact in insights_payload.get("new_facts", []) or []:
+                    if not isinstance(fact, dict):
+                        continue
+                    fact_text = str(fact.get("fact", "")).strip()
+                    if not fact_text:
+                        continue
+                    key = fact_text.lower()
+                    if key in fact_map:
+                        continue
+                    fact_map[key] = {
+                        "fact": fact_text,
+                        "why_it_matters": str(fact.get("why_it_matters", "")).strip() or None,
+                        "source_hint": str(fact.get("source_hint", "")).strip() or None,
+                        "confidence": fact.get("confidence"),
+                    }
+                open_questions.extend(
+                    [str(x).strip() for x in (insights_payload.get("open_questions") or [])]
+                )
+                suggested_sources.extend(
+                    [str(x).strip() for x in (insights_payload.get("suggested_sources") or [])]
+                )
+                expansion_topics.extend(
+                    [str(x).strip() for x in (insights_payload.get("expansion_topics") or [])]
+                )
+                next_exploration.extend(
+                    [str(x).strip() for x in (insights_payload.get("next_exploration") or [])]
+                )
         except Exception:
             continue
 
@@ -122,6 +173,16 @@ def aggregate_chunk_summaries(summaries: list[dict[str, Any]]) -> dict[str, Any]
     s250_joined = "; ".join(_dedupe_list(s250_parts))
     s1000_joined = "\n".join(_dedupe_list(s1000_parts))
     tldr_joined = "\n".join(_dedupe_list(tldr_parts))
+    insights = {
+        "topic_overview": "\n\n".join(_dedupe_list(topic_overview_parts, limit=3)),
+        "new_facts": list(fact_map.values())[:8],
+        "open_questions": _dedupe_list(open_questions, limit=6),
+        "suggested_sources": _dedupe_list(suggested_sources, limit=6),
+        "expansion_topics": _dedupe_list(expansion_topics, limit=6),
+        "next_exploration": _dedupe_list(next_exploration, limit=6),
+        "caution": "\n\n".join(_dedupe_list(caution_parts, limit=2)) or None,
+    }
+
     return {
         "summary_250": s250_joined,
         "summary_1000": s1000_joined or tldr_joined or s250_joined,
@@ -134,4 +195,5 @@ def aggregate_chunk_summaries(summaries: list[dict[str, Any]]) -> dict[str, Any]
         "answered_questions": _dedupe_list(answered),
         "readability": {"method": "Flesch-Kincaid", "score": 0.0, "level": "Unknown"},
         "seo_keywords": _dedupe_list(seo_keywords, limit=15),
+        "insights": insights,
     }

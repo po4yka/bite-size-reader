@@ -213,6 +213,7 @@ class URLProcessor:
                         chosen_lang,
                         req_id,
                         correlation_id,
+                        summary=shaped,
                         silent=silent,
                     )
                     return
@@ -264,6 +265,7 @@ class URLProcessor:
                         chosen_lang,
                         req_id,
                         correlation_id,
+                        summary=shaped,
                     )
 
                     # Generate a standalone custom article based on extracted topics/tags
@@ -310,6 +312,7 @@ class URLProcessor:
                         chosen_lang,
                         req_id,
                         correlation_id,
+                        summary=shaped,
                         silent=True,
                     )
                     logger.info(
@@ -390,6 +393,8 @@ class URLProcessor:
         chosen_lang: str,
         req_id: int,
         correlation_id: str | None,
+        *,
+        summary: dict[str, Any] | None = None,
         silent: bool = False,
     ) -> None:
         """Generate and persist additional insights using the LLM."""
@@ -405,6 +410,7 @@ class URLProcessor:
                 chosen_lang=chosen_lang,
                 req_id=req_id,
                 correlation_id=correlation_id,
+                summary=summary,
             )
 
             if insights:
