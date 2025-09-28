@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import sqlite3
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -904,6 +904,69 @@ class Database:
         self._logger.debug(
             "chat_upserted",
             extra={"chat_id": chat_id, "type": type_, "title": title},
+        )
+
+    def update_user_interaction(
+        self,
+        *,
+        interaction_id: int,
+        updates: Mapping[str, Any],
+    ) -> None:
+        """Update columns on ``user_interactions`` without dynamic SQL construction.
+
+        ``updates`` must only contain keys from the allow-list below. Each key maps
+        to a static SQL fragment so that the generated statement remains free from
+        user-controlled SQL. This prevents SQL-injection vectors that Bandit flagged
+        for earlier string interpolation approaches.
+        """
+
+        if not isinstance(interaction_id, int) or interaction_id <= 0:
+            raise ValueError("interaction_id must be a positive integer")
+        if not updates:
+            return
+
+        statements: dict[str, str] = {
+            "response_sent": "UPDATE user_interactions SET response_sent = ? WHERE id = ?",
+            "response_type": "UPDATE user_interactions SET response_type = ? WHERE id = ?",
+            "error_occurred": "UPDATE user_interactions SET error_occurred = ? WHERE id = ?",
+            "error_message": "UPDATE user_interactions SET error_message = ? WHERE id = ?",
+            "processing_time_ms": "UPDATE user_interactions SET processing_time_ms = ? WHERE id = ?",
+            "request_id": "UPDATE user_interactions SET request_id = ? WHERE id = ?",
+        }
+        boolean_fields = {"response_sent", "error_occurred"}
+        integer_fields = {"processing_time_ms", "request_id"}
+
+        with self.connect() as conn:
+            any_updated = False
+            for column, value in updates.items():
+                sql = statements.get(column)
+                if sql is None:
+                    raise ValueError(f"Unsupported column '{column}' for user_interactions update")
+
+                converted: Any
+                if column in boolean_fields:
+                    converted = None if value is None else int(bool(value))
+                elif column in integer_fields:
+                    try:
+                        converted = None if value is None else int(value)
+                    except (TypeError, ValueError) as exc:
+                        raise ValueError(f"Invalid integer value for '{column}'") from exc
+                elif column in {"response_type", "error_message"} and value is not None:
+                    converted = str(value)
+                else:
+                    converted = value
+
+                conn.execute(sql, (converted, interaction_id))
+                any_updated = True
+
+            if any_updated:
+                conn.commit()
+            else:
+                conn.rollback()
+
+        self._logger.debug(
+            "user_interaction_updated",
+            extra={"interaction_id": interaction_id, "fields": list(updates.keys())},
         )
 
     def create_request(
