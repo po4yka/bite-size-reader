@@ -1,6 +1,7 @@
 # ruff: noqa: E501
 from __future__ import annotations
 
+import html
 import io
 import json
 import logging
@@ -814,10 +815,14 @@ class ResponseFormatter:
             else:
                 highlights = [str(raw_highlights).strip()] if str(raw_highlights).strip() else []
 
-            header = f"📝 {title}"
+            header_lines: list[str] = []
+            title_html = html.escape(title)
+            header_lines.append(f"<b>📝 {title_html}</b>")
             if subtitle:
-                header += f"\n_{subtitle}_"
-            await self.safe_reply(message, header, parse_mode="Markdown")
+                subtitle_html = html.escape(subtitle)
+                header_lines.append(f"<i>{subtitle_html}</i>")
+
+            await self.safe_reply(message, "\n".join(header_lines), parse_mode="HTML")
 
             if body:
                 await self._send_long_text(message, body)
