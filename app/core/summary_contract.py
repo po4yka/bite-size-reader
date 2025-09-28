@@ -205,6 +205,88 @@ def _normalize_entities_field(raw: Any) -> dict[str, list[str]]:
     }
 
 
+def _clean_string_list(values: Any, *, limit: int | None = None) -> list[str]:
+    if values is None:
+        return []
+    result: list[str] = []
+    seen: set[str] = set()
+    iterable: list[Any]
+    if isinstance(values, list | tuple | set):
+        iterable = list(values)
+    else:
+        iterable = [values]
+    for item in iterable:
+        text = str(item).strip()
+        if not text:
+            continue
+        key = text.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        result.append(text)
+        if limit is not None and len(result) >= limit:
+            break
+    return result
+
+
+def _shape_insights(raw: Any) -> dict[str, Any]:
+    shaped: dict[str, Any] = {
+        "topic_overview": "",
+        "new_facts": [],
+        "open_questions": [],
+        "suggested_sources": [],
+        "expansion_topics": [],
+        "next_exploration": [],
+        "caution": None,
+    }
+
+    if not isinstance(raw, dict):
+        return shaped
+
+    shaped["topic_overview"] = str(raw.get("topic_overview", "")).strip()
+
+    facts: list[dict[str, Any]] = []
+    seen_facts: set[str] = set()
+    for fact in raw.get("new_facts", []) or []:
+        if not isinstance(fact, dict):
+            continue
+        fact_text = str(fact.get("fact", "")).strip()
+        if not fact_text:
+            continue
+        fact_key = fact_text.lower()
+        if fact_key in seen_facts:
+            continue
+        seen_facts.add(fact_key)
+        why_value = str(fact.get("why_it_matters", "")).strip() or None
+        source_value = str(fact.get("source_hint", "")).strip() or None
+        confidence_raw = fact.get("confidence")
+        if isinstance(confidence_raw, int | float):
+            confidence_value: float | str | None = float(confidence_raw)
+        elif confidence_raw is None:
+            confidence_value = None
+        else:
+            confidence_value = str(confidence_raw).strip() or None
+        facts.append(
+            {
+                "fact": fact_text,
+                "why_it_matters": why_value,
+                "source_hint": source_value,
+                "confidence": confidence_value,
+            }
+        )
+    shaped["new_facts"] = facts
+
+    shaped["open_questions"] = _clean_string_list(raw.get("open_questions"))
+    shaped["suggested_sources"] = _clean_string_list(raw.get("suggested_sources"))
+    shaped["expansion_topics"] = _clean_string_list(raw.get("expansion_topics"))
+    shaped["next_exploration"] = _clean_string_list(raw.get("next_exploration"))
+
+    caution_value = str(raw.get("caution", "")).strip()
+    shaped["caution"] = caution_value or None
+
+    return shaped
+
+
 def _normalize_field_names(payload: SummaryJSON) -> SummaryJSON:
     """Normalize field names from camelCase to snake_case.
 
@@ -436,6 +518,7 @@ def validate_and_shape_summary(payload: SummaryJSON) -> SummaryJSON:
     p.setdefault("confidence", 1.0)
     p.setdefault("forwarded_post_extras", None)
     p.setdefault("key_points_to_remember", [])
+    p["insights"] = _shape_insights(p.get("insights"))
 
     # Validate and clean new fields
     if not isinstance(p["confidence"], int | float) or not (0.0 <= p["confidence"] <= 1.0):
@@ -741,6 +824,41 @@ def get_summary_json_schema() -> dict[str, Any]:
                 ],
             },
             "key_points_to_remember": {"type": "array", "items": {"type": "string"}},
+            "insights": {
+                "type": "object",
+                "additionalProperties": False,
+                "properties": {
+                    "topic_overview": {"type": "string"},
+                    "new_facts": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "additionalProperties": False,
+                            "properties": {
+                                "fact": {"type": "string"},
+                                "why_it_matters": {"type": ["string", "null"]},
+                                "source_hint": {"type": ["string", "null"]},
+                                "confidence": {"type": ["number", "string", "null"]},
+                            },
+                            "required": ["fact", "why_it_matters", "source_hint", "confidence"],
+                        },
+                    },
+                    "open_questions": {"type": "array", "items": {"type": "string"}},
+                    "suggested_sources": {"type": "array", "items": {"type": "string"}},
+                    "expansion_topics": {"type": "array", "items": {"type": "string"}},
+                    "next_exploration": {"type": "array", "items": {"type": "string"}},
+                    "caution": {"type": ["string", "null"]},
+                },
+                "required": [
+                    "topic_overview",
+                    "new_facts",
+                    "open_questions",
+                    "suggested_sources",
+                    "expansion_topics",
+                    "next_exploration",
+                    "caution",
+                ],
+            },
         },
         "required": [
             "summary_250",
@@ -764,5 +882,6 @@ def get_summary_json_schema() -> dict[str, Any]:
             "confidence",
             "forwarded_post_extras",
             "key_points_to_remember",
+            "insights",
         ],
     }

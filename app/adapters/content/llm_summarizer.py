@@ -105,6 +105,7 @@ class LLMSummarizer:
         self._audit = audit_func
         self._sem = sem
         self._last_llm_result: Any | None = None
+        self._last_summary_shaped: dict[str, Any] | None = None
         self._last_insights: dict[str, Any] | None = None
 
     async def summarize_content(
@@ -159,6 +160,7 @@ class LLMSummarizer:
             response_format = self._build_structured_response_format()
             max_tokens = self._select_max_tokens(content_text)
             self._last_llm_result = None
+            self._last_summary_shaped = None
             self._last_insights = None
 
             llm = await self.openrouter.chat(
@@ -196,14 +198,12 @@ class LLMSummarizer:
         """Choose an appropriate max_tokens budget based on content size."""
         configured = self.cfg.openrouter.max_tokens
 
-        approx_input_tokens = max(1, len(content_text) // 4)
+        approx_input_tokens = max(1, len(content_text) // 3)
 
-        # GPT-5 specific tuning: still cap to mitigate latency
-        if "gpt-5" in self.cfg.openrouter.model.lower():
-            # Cap lower than before to reduce long completions
-            dynamic_budget = max(4096, min(16384, approx_input_tokens // 2 + 4096))
-            # Override configured limit for GPT-5 if it's too restrictive
-            if configured is not None and configured < 16384:
+        model_name = self.cfg.openrouter.model.lower()
+        if "gpt-5" in model_name:
+            dynamic_budget = max(12288, min(32768, approx_input_tokens + 8192))
+            if configured is not None and configured < 20000:
                 logger.info(
                     "gpt5_max_tokens_override",
                     extra={
@@ -212,10 +212,9 @@ class LLMSummarizer:
                         "new_budget": dynamic_budget,
                     },
                 )
-                configured = None  # Use dynamic budget for GPT-5
+                configured = None
         else:
-            # Standard models: conservative cap to mitigate latency
-            dynamic_budget = max(1536, min(6144, approx_input_tokens // 2 + 1536))
+            dynamic_budget = max(8192, min(24576, approx_input_tokens + 4096))
 
         if configured is None:
             logger.debug(
@@ -228,7 +227,7 @@ class LLMSummarizer:
             )
             return dynamic_budget
 
-        selected = max(1536, min(configured, dynamic_budget))
+        selected = max(4096, min(configured, dynamic_budget))
 
         logger.debug(
             "max_tokens_adjusted",
@@ -755,6 +754,27 @@ class LLMSummarizer:
         summary_shaped = await self._ensure_summary_metadata(
             summary_shaped, req_id, content_text, correlation_id
         )
+
+        self._last_summary_shaped = summary_shaped
+        insights_payload = summary_shaped.get("insights")
+        if isinstance(insights_payload, dict):
+            has_content = any(
+                bool(str(insights_payload.get(field, "")).strip())
+                for field in ("topic_overview", "caution")
+            ) or any(
+                isinstance(insights_payload.get(field), list)
+                and len(insights_payload.get(field) or []) > 0
+                for field in (
+                    "new_facts",
+                    "open_questions",
+                    "suggested_sources",
+                    "expansion_topics",
+                    "next_exploration",
+                )
+            )
+            self._last_insights = insights_payload if has_content else None
+        else:
+            self._last_insights = None
 
         # Log enhanced results
         self._log_llm_finished(llm, summary_shaped, correlation_id)
@@ -1634,10 +1654,54 @@ class LLMSummarizer:
         chosen_lang: str,
         req_id: int,
         correlation_id: str | None,
+        summary: dict[str, Any] | None = None,
     ) -> dict[str, Any] | None:
         """Call OpenRouter to obtain additional researched insights for the article."""
         if not content_text.strip():
             return None
+
+        summary_candidate = summary or self._last_summary_shaped
+        if summary_candidate is None:
+            try:
+                row = self.db.get_summary_by_request(req_id)
+                json_payload = row.get("json_payload") if row else None
+                if json_payload:
+                    summary_candidate = json.loads(json_payload)
+            except Exception as exc:  # noqa: BLE001
+                logger.debug(
+                    "insights_summary_load_failed",
+                    extra={"cid": correlation_id, "error": str(exc)},
+                )
+
+        if summary_candidate and isinstance(summary_candidate, dict):
+            insights_payload = summary_candidate.get("insights")
+            if isinstance(insights_payload, dict):
+                has_content = any(
+                    bool(str(insights_payload.get(field, "")).strip())
+                    for field in ("topic_overview", "caution")
+                ) or any(
+                    isinstance(insights_payload.get(field), list)
+                    and len(insights_payload.get(field) or []) > 0
+                    for field in (
+                        "new_facts",
+                        "open_questions",
+                        "suggested_sources",
+                        "expansion_topics",
+                        "next_exploration",
+                    )
+                )
+                if has_content:
+                    logger.info(
+                        "insights_reused_from_summary",
+                        extra={
+                            "cid": correlation_id,
+                            "request_id": req_id,
+                            "source": "summary_payload",
+                        },
+                    )
+                    self._last_summary_shaped = summary_candidate
+                    self._last_insights = insights_payload
+                    return insights_payload
 
         system_prompt = self._build_insights_system_prompt(chosen_lang)
         user_prompt = self._build_insights_user_prompt(content_text, chosen_lang)
@@ -1717,7 +1781,10 @@ class LLMSummarizer:
                             "facts_count": len(insights.get("new_facts", []) or []),
                         },
                     )
+                    if not isinstance(self._last_summary_shaped, dict):
+                        self._last_summary_shaped = {}
                     self._last_insights = insights
+                    self._last_summary_shaped.setdefault("insights", insights)
                     return insights
 
             self._last_insights = None

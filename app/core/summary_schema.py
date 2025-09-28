@@ -42,6 +42,21 @@ if PydanticAvailable:
         question: str
         answer: str
 
+    class InsightFact(BaseModel):
+        fact: str
+        why_it_matters: str | None = None
+        source_hint: str | None = None
+        confidence: float | str | None = None
+
+    class Insights(BaseModel):
+        topic_overview: str = Field(default="")
+        new_facts: list[InsightFact] = Field(default_factory=list)
+        open_questions: list[str] = Field(default_factory=list)
+        suggested_sources: list[str] = Field(default_factory=list)
+        expansion_topics: list[str] = Field(default_factory=list)
+        next_exploration: list[str] = Field(default_factory=list)
+        caution: str | None = None
+
     class TopicTaxonomy(BaseModel):
         label: str
         score: float = 0.0
@@ -80,3 +95,4 @@ if PydanticAvailable:
         confidence: float = Field(default=1.0, ge=0.0, le=1.0)
         forwarded_post_extras: ForwardedPostExtras | None = None
         key_points_to_remember: list[str] = Field(default_factory=list)
+        insights: Insights = Field(default_factory=Insights)

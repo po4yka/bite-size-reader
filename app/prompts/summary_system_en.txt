@@ -12,6 +12,17 @@ Top-level keys (exactly these, no extras):
 - answered_questions
 - readability
 - seo_keywords
+- metadata
+- extractive_quotes
+- highlights
+- questions_answered
+- categories
+- topic_taxonomy
+- hallucination_risk
+- confidence
+- forwarded_post_extras
+- key_points_to_remember
+- insights
 
 Field requirements:
 - summary_250: string, max 250 characters. One-sentence, high-signal summary that ends cleanly.
@@ -25,6 +36,24 @@ Field requirements:
 - answered_questions: array of strings capturing questions the content answers. No duplicates.
 - readability: object { method: string (e.g., "Flesch-Kincaid"), score: number, level: string }.
 - seo_keywords: array of strings (5–15 items), lowercase, deduplicated.
+- metadata: object with keys { title, canonical_url, domain, author, published_at, last_updated } (strings or null). Fill from article when available.
+- extractive_quotes: array of objects { text: string, source_span: string|null } representing up to 5 verbatim pull quotes.
+- highlights: array of 5–10 short bullet strings.
+- questions_answered: array of objects { question: string, answer: string } describing Q&A pairs surfaced in the content.
+- categories: array of short classification strings.
+- topic_taxonomy: array of objects { label: string, score: number, path: string|null } for hierarchical categories.
+- hallucination_risk: string enum low|med|high summarizing factual confidence.
+- confidence: number between 0 and 1 expressing overall certainty.
+- forwarded_post_extras: object|null capturing Telegram metadata { channel_id, channel_title, channel_username, message_id, post_datetime, hashtags, mentions }.
+- key_points_to_remember: array of strings listing enduring takeaways.
+- insights: object with keys:
+  * topic_overview: string summarizing broader context.
+  * new_facts: array of objects { fact: string, why_it_matters: string|null, source_hint: string|null, confidence: number|string|null } containing 4–6 beyond-text insights.
+  * open_questions: array of strings (3–6 items).
+  * suggested_sources: array of strings referencing follow-up reading.
+  * expansion_topics: array of strings with adjacent themes to explore.
+  * next_exploration: array of strings outlining experiments, hypotheses, or next steps.
+  * caution: string|null flagging caveats or uncertainty.
 
 Rules:
 - Output all strings in the language requested in the user message.
