@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any
 
 from app.core.logging_utils import generate_correlation_id
 from app.core.url_utils import extract_all_urls
+from app.db.database import Database
 
 if TYPE_CHECKING:
     from app.adapters.content.url_processor import URLProcessor
@@ -22,9 +23,11 @@ class URLHandler:
 
     def __init__(
         self,
+        db: Database,
         response_formatter: ResponseFormatter,
         url_processor: URLProcessor,
     ) -> None:
+        self.db = db
         self.response_formatter = response_formatter
         self.url_processor = url_processor
 
@@ -651,9 +654,22 @@ class URLHandler:
         request_id: int | None = None,
     ) -> None:
         """Update an existing user interaction record."""
-        # Note: This method is a placeholder for future user interaction tracking
-        # The current database schema doesn't include user_interactions table
-        logger.debug(
-            "user_interaction_update_placeholder",
-            extra={"interaction_id": interaction_id, "response_type": response_type},
-        )
+
+        if interaction_id <= 0:
+            return
+
+        try:
+            self.db.update_user_interaction(
+                interaction_id=interaction_id,
+                response_sent=response_sent,
+                response_type=response_type,
+                error_occurred=error_occurred,
+                error_message=error_message,
+                processing_time_ms=processing_time_ms,
+                request_id=request_id,
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(
+                "user_interaction_update_failed",
+                extra={"interaction_id": interaction_id, "error": str(exc)},
+            )

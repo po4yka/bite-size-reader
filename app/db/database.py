@@ -116,6 +116,35 @@ CREATE TABLE IF NOT EXISTS summaries (
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS user_interactions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  chat_id INTEGER,
+  message_id INTEGER,
+  interaction_type TEXT NOT NULL,
+  command TEXT,
+  input_text TEXT,
+  input_url TEXT,
+  has_forward INTEGER NOT NULL DEFAULT 0,
+  forward_from_chat_id INTEGER,
+  forward_from_chat_title TEXT,
+  forward_from_message_id INTEGER,
+  media_type TEXT,
+  correlation_id TEXT,
+  structured_output_enabled INTEGER NOT NULL DEFAULT 0,
+  response_sent INTEGER NOT NULL DEFAULT 0,
+  response_type TEXT,
+  error_occurred INTEGER NOT NULL DEFAULT 0,
+  error_message TEXT,
+  processing_time_ms INTEGER,
+  request_id INTEGER,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_user_interactions_user ON user_interactions(user_id);
+CREATE INDEX IF NOT EXISTS idx_user_interactions_request ON user_interactions(request_id);
+
 CREATE TABLE IF NOT EXISTS audit_logs (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   ts DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -235,11 +264,154 @@ class Database:
         }
         return coltype.upper() in allowed_types
 
+    @staticmethod
+    def _bool_to_int(value: bool | None) -> int:
+        return 1 if value else 0
+
     def execute(self, sql: str, params: Iterable | None = None) -> None:
         with self.connect() as conn:
             conn.execute(sql, tuple(params or ()))
             conn.commit()
         self._logger.debug("db_execute", extra={"sql": sql, "params": list(params or [])[:10]})
+
+    def insert_user_interaction(
+        self,
+        *,
+        user_id: int,
+        interaction_type: str,
+        chat_id: int | None = None,
+        message_id: int | None = None,
+        command: str | None = None,
+        input_text: str | None = None,
+        input_url: str | None = None,
+        has_forward: bool = False,
+        forward_from_chat_id: int | None = None,
+        forward_from_chat_title: str | None = None,
+        forward_from_message_id: int | None = None,
+        media_type: str | None = None,
+        correlation_id: str | None = None,
+        structured_output_enabled: bool = False,
+    ) -> int:
+        """Persist a new user interaction record."""
+
+        record = {
+            "user_id": user_id,
+            "chat_id": chat_id,
+            "message_id": message_id,
+            "interaction_type": interaction_type,
+            "command": command,
+            "input_text": input_text,
+            "input_url": input_url,
+            "has_forward": self._bool_to_int(has_forward),
+            "forward_from_chat_id": forward_from_chat_id,
+            "forward_from_chat_title": forward_from_chat_title,
+            "forward_from_message_id": forward_from_message_id,
+            "media_type": media_type,
+            "correlation_id": correlation_id,
+            "structured_output_enabled": self._bool_to_int(structured_output_enabled),
+        }
+
+        with self.connect() as conn:
+            cursor = conn.execute(
+                """
+                INSERT INTO user_interactions (
+                    user_id,
+                    chat_id,
+                    message_id,
+                    interaction_type,
+                    command,
+                    input_text,
+                    input_url,
+                    has_forward,
+                    forward_from_chat_id,
+                    forward_from_chat_title,
+                    forward_from_message_id,
+                    media_type,
+                    correlation_id,
+                    structured_output_enabled
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    record["user_id"],
+                    record["chat_id"],
+                    record["message_id"],
+                    record["interaction_type"],
+                    record["command"],
+                    record["input_text"],
+                    record["input_url"],
+                    record["has_forward"],
+                    record["forward_from_chat_id"],
+                    record["forward_from_chat_title"],
+                    record["forward_from_message_id"],
+                    record["media_type"],
+                    record["correlation_id"],
+                    record["structured_output_enabled"],
+                ),
+            )
+            conn.commit()
+            interaction_id = int(cursor.lastrowid or 0)
+
+        self._logger.debug(
+            "db_user_interaction_inserted",
+            extra={
+                "interaction_id": interaction_id,
+                "user_id": user_id,
+                "interaction_type": interaction_type,
+            },
+        )
+        return interaction_id
+
+    def update_user_interaction(
+        self,
+        *,
+        interaction_id: int,
+        response_sent: bool | None = None,
+        response_type: str | None = None,
+        error_occurred: bool | None = None,
+        error_message: str | None = None,
+        processing_time_ms: int | None = None,
+        request_id: int | None = None,
+    ) -> None:
+        """Update an existing user interaction record with optional fields."""
+
+        updates: list[str] = []
+        params: list[Any] = []
+
+        if response_sent is not None:
+            updates.append("response_sent = ?")
+            params.append(self._bool_to_int(response_sent))
+        if response_type is not None:
+            updates.append("response_type = ?")
+            params.append(response_type)
+        if error_occurred is not None:
+            updates.append("error_occurred = ?")
+            params.append(self._bool_to_int(error_occurred))
+        if error_message is not None:
+            updates.append("error_message = ?")
+            params.append(error_message)
+        if processing_time_ms is not None:
+            updates.append("processing_time_ms = ?")
+            params.append(processing_time_ms)
+        if request_id is not None:
+            updates.append("request_id = ?")
+            params.append(request_id)
+
+        if not updates:
+            return
+
+        set_clause = ", ".join(updates + ["updated_at = CURRENT_TIMESTAMP"])
+
+        with self.connect() as conn:
+            conn.execute(
+                f"UPDATE user_interactions SET {set_clause} WHERE id = ?",
+                (*params, interaction_id),
+            )
+            conn.commit()
+
+        self._logger.debug(
+            "db_user_interaction_updated",
+            extra={"interaction_id": interaction_id, "updated_fields": len(updates)},
+        )
 
     def _apply_pragma_settings(self, conn: sqlite3.Connection) -> None:
         try:

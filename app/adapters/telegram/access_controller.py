@@ -8,6 +8,7 @@ from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
 from app.config import AppConfig
+from app.db.database import Database
 
 if TYPE_CHECKING:
     from app.adapters.external.response_formatter import ResponseFormatter
@@ -21,10 +22,12 @@ class AccessController:
     def __init__(
         self,
         cfg: AppConfig,
+        db: Database,
         response_formatter: ResponseFormatter,
         audit_func: Callable[[str, str, dict], None],
     ) -> None:
         self.cfg = cfg
+        self.db = db
         self.response_formatter = response_formatter
         self._audit = audit_func
 
@@ -143,9 +146,22 @@ class AccessController:
         request_id: int | None = None,
     ) -> None:
         """Update an existing user interaction record."""
-        # Note: This method is a placeholder for future user interaction tracking
-        # The current database schema doesn't include user_interactions table
-        logger.debug(
-            "user_interaction_update_placeholder",
-            extra={"interaction_id": interaction_id, "response_type": response_type},
-        )
+
+        if interaction_id <= 0:
+            return
+
+        try:
+            self.db.update_user_interaction(
+                interaction_id=interaction_id,
+                response_sent=response_sent,
+                response_type=response_type,
+                error_occurred=error_occurred,
+                error_message=error_message,
+                processing_time_ms=processing_time_ms,
+                request_id=request_id,
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(
+                "user_interaction_update_failed",
+                extra={"interaction_id": interaction_id, "error": str(exc)},
+            )

@@ -38,11 +38,13 @@ class MessageHandler:
         # Initialize components
         self.access_controller = AccessController(
             cfg=cfg,
+            db=db,
             response_formatter=response_formatter,
             audit_func=self._audit,
         )
 
         self.url_handler = URLHandler(
+            db=db,
             response_formatter=response_formatter,
             url_processor=url_processor,
         )

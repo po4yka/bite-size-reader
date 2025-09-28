@@ -1620,12 +1620,25 @@ class LLMSummarizer:
         request_id: int | None = None,
     ) -> None:
         """Update an existing user interaction record."""
-        # Note: This method is a placeholder for future user interaction tracking
-        # The current database schema doesn't include user_interactions table
-        logger.debug(
-            "user_interaction_update_placeholder",
-            extra={"interaction_id": interaction_id, "response_type": response_type},
-        )
+
+        if interaction_id is None or interaction_id <= 0:
+            return
+
+        try:
+            self.db.update_user_interaction(
+                interaction_id=interaction_id,
+                response_sent=response_sent,
+                response_type=response_type,
+                error_occurred=error_occurred,
+                error_message=error_message,
+                processing_time_ms=processing_time_ms,
+                request_id=request_id,
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(
+                "user_interaction_update_failed",
+                extra={"interaction_id": interaction_id, "error": str(exc)},
+            )
 
     @property
     def last_llm_result(self) -> Any | None:
