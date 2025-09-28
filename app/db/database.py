@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import sqlite3
-from collections.abc import Iterable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -912,12 +912,13 @@ class Database:
         interaction_id: int,
         updates: Mapping[str, Any],
     ) -> None:
-        """Update columns on ``user_interactions`` without dynamic SQL construction.
+        """Update ``user_interactions`` columns using a static SQL statement.
 
-        ``updates`` must only contain keys from the allow-list below. Each key maps
-        to a static SQL fragment so that the generated statement remains free from
-        user-controlled SQL. This prevents SQL-injection vectors that Bandit flagged
-        for earlier string interpolation approaches.
+        The method validates requested fields against an allow-list and converts
+        incoming values before executing a single ``UPDATE`` statement. Each
+        column uses a ``CASE`` guard so omitted fields remain untouched while
+        still allowing explicit ``NULL`` assignments. This avoids dynamic SQL
+        string construction that Bandit previously flagged (B608).
         """
 
         if not isinstance(interaction_id, int) or interaction_id <= 0:
@@ -925,44 +926,69 @@ class Database:
         if not updates:
             return
 
-        statements: dict[str, str] = {
-            "response_sent": "UPDATE user_interactions SET response_sent = ? WHERE id = ?",
-            "response_type": "UPDATE user_interactions SET response_type = ? WHERE id = ?",
-            "error_occurred": "UPDATE user_interactions SET error_occurred = ? WHERE id = ?",
-            "error_message": "UPDATE user_interactions SET error_message = ? WHERE id = ?",
-            "processing_time_ms": "UPDATE user_interactions SET processing_time_ms = ? WHERE id = ?",
-            "request_id": "UPDATE user_interactions SET request_id = ? WHERE id = ?",
+        def _as_bool(value: Any) -> int | None:
+            if value is None:
+                return None
+            return int(bool(value))
+
+        def _as_int(value: Any, column: str) -> int | None:
+            if value is None:
+                return None
+            try:
+                return int(value)
+            except (TypeError, ValueError) as exc:  # pragma: no cover - defensive
+                raise ValueError(f"Invalid integer value for '{column}'") from exc
+
+        def _as_str(value: Any) -> str | None:
+            if value is None:
+                return None
+            return str(value)
+
+        converters: dict[str, Callable[[Any], Any]] = {
+            "response_sent": _as_bool,
+            "response_type": _as_str,
+            "error_occurred": _as_bool,
+            "error_message": _as_str,
+            "processing_time_ms": lambda value: _as_int(value, "processing_time_ms"),
+            "request_id": lambda value: _as_int(value, "request_id"),
         }
-        boolean_fields = {"response_sent", "error_occurred"}
-        integer_fields = {"processing_time_ms", "request_id"}
+
+        converted_values: dict[str, Any] = {key: None for key in converters}
+        update_flags: dict[str, int] = {f"{key}_set": 0 for key in converters}
+        any_updates = False
+
+        for field, raw_value in updates.items():
+            converter = converters.get(field)
+            if converter is None:
+                raise ValueError(f"Unsupported column '{field}' for user_interactions update")
+            converted_values[field] = converter(raw_value)
+            update_flags[f"{field}_set"] = 1
+            any_updates = True
+
+        if not any_updates:
+            return
+
+        sql = """
+            UPDATE user_interactions
+            SET
+                response_sent = CASE WHEN :response_sent_set THEN :response_sent ELSE response_sent END,
+                response_type = CASE WHEN :response_type_set THEN :response_type ELSE response_type END,
+                error_occurred = CASE WHEN :error_occurred_set THEN :error_occurred ELSE error_occurred END,
+                error_message = CASE WHEN :error_message_set THEN :error_message ELSE error_message END,
+                processing_time_ms = CASE WHEN :processing_time_ms_set THEN :processing_time_ms ELSE processing_time_ms END,
+                request_id = CASE WHEN :request_id_set THEN :request_id ELSE request_id END
+            WHERE id = :interaction_id
+        """
+
+        params: dict[str, Any] = {
+            **converted_values,
+            **update_flags,
+            "interaction_id": interaction_id,
+        }
 
         with self.connect() as conn:
-            any_updated = False
-            for column, value in updates.items():
-                sql = statements.get(column)
-                if sql is None:
-                    raise ValueError(f"Unsupported column '{column}' for user_interactions update")
-
-                converted: Any
-                if column in boolean_fields:
-                    converted = None if value is None else int(bool(value))
-                elif column in integer_fields:
-                    try:
-                        converted = None if value is None else int(value)
-                    except (TypeError, ValueError) as exc:
-                        raise ValueError(f"Invalid integer value for '{column}'") from exc
-                elif column in {"response_type", "error_message"} and value is not None:
-                    converted = str(value)
-                else:
-                    converted = value
-
-                conn.execute(sql, (converted, interaction_id))
-                any_updated = True
-
-            if any_updated:
-                conn.commit()
-            else:
-                conn.rollback()
+            conn.execute(sql, params)
+            conn.commit()
 
         self._logger.debug(
             "user_interaction_updated",
