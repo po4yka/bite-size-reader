@@ -1,14 +1,25 @@
+import builtins
+
 import pytest
 
 from app.core import html_utils
 
 
 @pytest.fixture(autouse=True)
-def disable_readability(monkeypatch):
-    """Force html_to_text to use the lightweight HTML parser fallback."""
+def disable_optional_dependencies(monkeypatch):
+    """Force html_utils helpers to exercise their lightweight fallbacks."""
     monkeypatch.setattr(html_utils, "_HAS_READABILITY", False)
     monkeypatch.setattr(html_utils, "Document", None)
     monkeypatch.setattr(html_utils, "lxml_html", None)
+
+    original_import = builtins.__import__
+
+    def guarded_import(name, *args, **kwargs):
+        if name.startswith("textacy"):
+            raise ImportError("textacy intentionally disabled for fallback tests")
+        return original_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", guarded_import)
 
 
 def test_html_to_text_fallback_strips_scripts_and_formats_lists():
