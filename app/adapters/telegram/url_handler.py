@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Any
 from app.core.logging_utils import generate_correlation_id
 from app.core.url_utils import extract_all_urls
 from app.db.database import Database
-from app.db.user_interactions import safe_update_user_interaction
+from app.db.user_interactions import async_safe_update_user_interaction
 
 if TYPE_CHECKING:
     from app.adapters.content.url_processor import URLProcessor
@@ -169,7 +169,7 @@ class URLHandler:
                     "ℹ️ No pending multi-link request to confirm. Please send the links again.",
                 )
                 if interaction_id:
-                    safe_update_user_interaction(
+                    await async_safe_update_user_interaction(
                         self.db,
                         interaction_id=interaction_id,
                         response_sent=True,
@@ -200,7 +200,7 @@ class URLHandler:
                     "❌ Pending multi-link request is invalid. Please send the links again.",
                 )
                 if interaction_id:
-                    safe_update_user_interaction(
+                    await async_safe_update_user_interaction(
                         self.db,
                         interaction_id=interaction_id,
                         response_sent=True,
@@ -218,7 +218,7 @@ class URLHandler:
                 message, f"🚀 Processing {len(urls)} links in parallel..."
             )
             if interaction_id:
-                safe_update_user_interaction(
+                await async_safe_update_user_interaction(
                     self.db,
                     interaction_id=interaction_id,
                     response_sent=True,
@@ -235,7 +235,7 @@ class URLHandler:
             self._pending_multi_links.pop(uid, None)
             await self.response_formatter.safe_reply(message, "Cancelled.")
             if interaction_id:
-                safe_update_user_interaction(
+                await async_safe_update_user_interaction(
                     self.db,
                     interaction_id=interaction_id,
                     response_sent=True,
@@ -275,7 +275,7 @@ class URLHandler:
         await self.response_formatter.safe_reply(message, f"Process {len(urls)} links? (yes/no)")
         logger.debug("awaiting_multi_confirm", extra={"uid": uid, "count": len(urls)})
         if interaction_id:
-            safe_update_user_interaction(
+            await async_safe_update_user_interaction(
                 self.db,
                 interaction_id=interaction_id,
                 response_sent=True,

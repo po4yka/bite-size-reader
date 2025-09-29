@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import logging
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
@@ -11,7 +10,7 @@ from typing import Any
 from app.core.json_utils import extract_json
 from app.core.summary_contract import validate_and_shape_summary
 from app.db.database import Database
-from app.db.user_interactions import safe_update_user_interaction
+from app.db.user_interactions import async_safe_update_user_interaction
 from app.utils.json_validation import finalize_summary_texts, parse_summary_response
 
 logger = logging.getLogger(__name__)
@@ -118,7 +117,7 @@ class LLMResponseWorkflow:
             if on_attempt is not None:
                 await on_attempt(llm)
 
-            self.schedule_persist_llm_call(llm, req_id, correlation_id)
+            await self._persist_llm_call(llm, req_id, correlation_id)
 
             if notifications and notifications.completion:
                 await notifications.completion(llm, attempt)
@@ -170,12 +169,10 @@ class LLMResponseWorkflow:
         except Exception:
             return {"type": "json_object"}
 
-    def schedule_persist_llm_call(
-        self, llm: Any, req_id: int, correlation_id: str | None
-    ) -> asyncio.Task[Any]:
-        """Persist an LLM call asynchronously."""
+    async def persist_llm_call(self, llm: Any, req_id: int, correlation_id: str | None) -> None:
+        """Public helper to persist an LLM call."""
 
-        return asyncio.create_task(self._persist_llm_call(llm, req_id, correlation_id))
+        await self._persist_llm_call(llm, req_id, correlation_id)
 
     async def _invoke_llm(self, request: LLMRequestConfig, req_id: int) -> Any:
         async with self._sem():
@@ -300,14 +297,14 @@ class LLMResponseWorkflow:
                 )
 
         try:
-            new_version = self.db.upsert_summary(
+            new_version = await self.db.async_upsert_summary(
                 request_id=req_id,
                 lang=persistence.lang,
                 json_payload=summary,
                 insights_json=insights_json,
                 is_read=persistence.is_read,
             )
-            self.db.update_request_status(req_id, "ok")
+            await self.db.async_update_request_status(req_id, "ok")
             self._audit("INFO", "summary_upserted", {"request_id": req_id, "version": new_version})
         except Exception as exc:  # noqa: BLE001
             logger.error(
@@ -317,7 +314,7 @@ class LLMResponseWorkflow:
 
         if interaction_config.interaction_id and interaction_config.success_kwargs:
             try:
-                safe_update_user_interaction(
+                await async_safe_update_user_interaction(
                     self.db,
                     interaction_id=interaction_config.interaction_id,
                     logger_=logger,
@@ -464,7 +461,7 @@ class LLMResponseWorkflow:
         interaction_config: LLMInteractionConfig,
         notifications: LLMWorkflowNotifications | None,
     ) -> None:
-        self.db.update_request_status(req_id, "error")
+        await self.db.async_update_request_status(req_id, "error")
 
         error_parts: list[str] = []
         context = getattr(llm, "error_context", None) or {}
@@ -513,7 +510,7 @@ class LLMResponseWorkflow:
         if interaction_config.interaction_id and interaction_config.llm_error_builder:
             try:
                 kwargs = interaction_config.llm_error_builder(llm, error_details)
-                safe_update_user_interaction(
+                await async_safe_update_user_interaction(
                     self.db,
                     interaction_id=interaction_config.interaction_id,
                     logger_=logger,
@@ -533,7 +530,7 @@ class LLMResponseWorkflow:
         interaction_config: LLMInteractionConfig,
         notifications: LLMWorkflowNotifications | None,
     ) -> None:
-        self.db.update_request_status(req_id, "error")
+        await self.db.async_update_request_status(req_id, "error")
 
         if notifications and notifications.repair_failure:
             try:
@@ -543,7 +540,7 @@ class LLMResponseWorkflow:
 
         if interaction_config.interaction_id and interaction_config.repair_failure_kwargs:
             try:
-                safe_update_user_interaction(
+                await async_safe_update_user_interaction(
                     self.db,
                     interaction_id=interaction_config.interaction_id,
                     logger_=logger,
@@ -563,7 +560,7 @@ class LLMResponseWorkflow:
         interaction_config: LLMInteractionConfig,
         notifications: LLMWorkflowNotifications | None,
     ) -> None:
-        self.db.update_request_status(req_id, "error")
+        await self.db.async_update_request_status(req_id, "error")
 
         if notifications and notifications.parsing_failure:
             try:
@@ -573,7 +570,7 @@ class LLMResponseWorkflow:
 
         if interaction_config.interaction_id and interaction_config.parsing_failure_kwargs:
             try:
-                safe_update_user_interaction(
+                await async_safe_update_user_interaction(
                     self.db,
                     interaction_id=interaction_config.interaction_id,
                     logger_=logger,
@@ -594,7 +591,7 @@ class LLMResponseWorkflow:
 
     async def _persist_llm_call(self, llm: Any, req_id: int, correlation_id: str | None) -> None:
         try:
-            self.db.insert_llm_call(
+            await self.db.async_insert_llm_call(
                 request_id=req_id,
                 provider="openrouter",
                 model=llm.model or self.cfg.openrouter.model,

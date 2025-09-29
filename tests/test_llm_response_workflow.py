@@ -1,4 +1,3 @@
-import asyncio
 import sys
 import unittest
 from types import SimpleNamespace
@@ -39,9 +38,9 @@ class LLMResponseWorkflowTests(unittest.IsolatedAsyncioTestCase):
         self.cfg.openrouter.structured_output_mode = "json_object"
 
         self.db = MagicMock()
-        self.db.upsert_summary = MagicMock(return_value=1)
-        self.db.update_request_status = MagicMock()
-        self.db.insert_llm_call = MagicMock()
+        self.db.async_upsert_summary = AsyncMock(return_value=1)
+        self.db.async_update_request_status = AsyncMock()
+        self.db.async_insert_llm_call = AsyncMock()
 
         self.response_formatter = MagicMock()
         self.openrouter = MagicMock()
@@ -117,14 +116,13 @@ class LLMResponseWorkflowTests(unittest.IsolatedAsyncioTestCase):
                 notifications=self.notifications,
             )
 
-        await asyncio.sleep(0)
-
         self.assertIsNotNone(summary)
-        self.db.upsert_summary.assert_called_once()
-        _args, kwargs = self.db.upsert_summary.call_args
+        self.db.async_upsert_summary.assert_awaited_once()
+        _args, kwargs = self.db.async_upsert_summary.await_args
         self.assertEqual(kwargs["request_id"], 101)
         self.assertEqual(kwargs["lang"], "en")
-        self.db.update_request_status.assert_called_once_with(101, "ok")
+        self.db.async_update_request_status.assert_awaited_once_with(101, "ok")
+        self.db.async_insert_llm_call.assert_awaited_once()
         self.completion_mock.assert_awaited_once()
         self.llm_error_mock.assert_not_awaited()
 
@@ -155,12 +153,11 @@ class LLMResponseWorkflowTests(unittest.IsolatedAsyncioTestCase):
                 notifications=self.notifications,
             )
 
-        await asyncio.sleep(0)
-
         self.assertIsNotNone(summary)
         self.assertEqual(self.openrouter.chat.await_count, 2)
         self.repair_failure_mock.assert_not_awaited()
-        self.db.upsert_summary.assert_called_once()
+        self.db.async_upsert_summary.assert_awaited_once()
+        self.assertGreaterEqual(self.db.async_insert_llm_call.await_count, 1)
 
     async def test_execute_handles_llm_error(self) -> None:
         llm_error = self._llm_response({}, status="error", error_text="boom", text=None)
@@ -177,11 +174,10 @@ class LLMResponseWorkflowTests(unittest.IsolatedAsyncioTestCase):
             notifications=self.notifications,
         )
 
-        await asyncio.sleep(0)
-
         self.assertIsNone(summary)
-        self.db.upsert_summary.assert_not_called()
-        self.db.update_request_status.assert_called_with(303, "error")
+        self.db.async_upsert_summary.assert_not_awaited()
+        self.db.async_update_request_status.assert_awaited_with(303, "error")
+        self.db.async_insert_llm_call.assert_awaited_once()
         self.llm_error_mock.assert_awaited_once()
 
     def _llm_response(

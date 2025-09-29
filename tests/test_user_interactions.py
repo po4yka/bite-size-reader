@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from types import SimpleNamespace
 from typing import cast
 from unittest.mock import Mock
@@ -8,7 +9,10 @@ from app.adapters.telegram.message_router import MessageRouter
 from app.adapters.telegram.url_handler import URLHandler
 from app.config import AppConfig, FirecrawlConfig, OpenRouterConfig, RuntimeConfig, TelegramConfig
 from app.db.database import Database
-from app.db.user_interactions import safe_update_user_interaction
+from app.db.user_interactions import (
+    async_safe_update_user_interaction,
+    safe_update_user_interaction,
+)
 
 
 def _make_config() -> AppConfig:
@@ -123,3 +127,42 @@ def test_safe_update_user_interaction_updates_interaction(tmp_path) -> None:
     assert row["error_message"] == "boom"
     assert row["processing_time_ms"] == 1234
     assert row["request_id"] == 88
+
+
+def test_async_safe_update_user_interaction_updates_interaction(tmp_path) -> None:
+    db = _make_db(tmp_path)
+
+    interaction_id = db.insert_user_interaction(
+        user_id=13,
+        interaction_type="url",
+        chat_id=44,
+        message_id=55,
+        command="/summary",
+        input_text="go",
+        structured_output_enabled=False,
+    )
+
+    asyncio.run(
+        async_safe_update_user_interaction(
+            db,
+            interaction_id=interaction_id,
+            response_sent=True,
+            response_type="summary",
+            error_occurred=False,
+            error_message=None,
+            request_id=99,
+        )
+    )
+
+    row = db.fetchone(
+        "SELECT response_sent, response_type, error_occurred, error_message, request_id "
+        "FROM user_interactions WHERE id = ?",
+        (interaction_id,),
+    )
+
+    assert row is not None
+    assert row["response_sent"] == 1
+    assert row["response_type"] == "summary"
+    assert row["error_occurred"] == 0
+    assert row["error_message"] is None
+    assert row["request_id"] == 99

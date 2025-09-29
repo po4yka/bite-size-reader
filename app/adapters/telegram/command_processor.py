@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, Any
 from app.config import AppConfig
 from app.core.logging_utils import generate_correlation_id
 from app.core.url_utils import extract_all_urls
-from app.db.user_interactions import safe_update_user_interaction
+from app.db.user_interactions import async_safe_update_user_interaction
 
 if TYPE_CHECKING:
     from app.adapters.content.url_processor import URLProcessor
@@ -62,7 +62,7 @@ class CommandProcessor:
 
         await self.response_formatter.send_welcome(message)
         if interaction_id:
-            safe_update_user_interaction(
+            await async_safe_update_user_interaction(
                 self.db,
                 interaction_id=interaction_id,
                 response_sent=True,
@@ -89,7 +89,7 @@ class CommandProcessor:
 
         await self.response_formatter.send_help(message)
         if interaction_id:
-            safe_update_user_interaction(
+            await async_safe_update_user_interaction(
                 self.db,
                 interaction_id=interaction_id,
                 response_sent=True,
@@ -123,7 +123,7 @@ class CommandProcessor:
                 "⚠️ Unable to read database overview right now. Check bot logs for details.",
             )
             if interaction_id:
-                safe_update_user_interaction(
+                await async_safe_update_user_interaction(
                     self.db,
                     interaction_id=interaction_id,
                     response_sent=True,
@@ -137,7 +137,7 @@ class CommandProcessor:
 
         await self.response_formatter.send_db_overview(message, overview)
         if interaction_id:
-            safe_update_user_interaction(
+            await async_safe_update_user_interaction(
                 self.db,
                 interaction_id=interaction_id,
                 response_sent=True,
@@ -171,7 +171,7 @@ class CommandProcessor:
                 "⚠️ Unable to verify database records right now. Check bot logs for details.",
             )
             if interaction_id:
-                safe_update_user_interaction(
+                await async_safe_update_user_interaction(
                     self.db,
                     interaction_id=interaction_id,
                     response_sent=True,
@@ -258,7 +258,7 @@ class CommandProcessor:
                 )
 
         if interaction_id:
-            safe_update_user_interaction(
+            await async_safe_update_user_interaction(
                 self.db,
                 interaction_id=interaction_id,
                 response_sent=True,
@@ -284,7 +284,7 @@ class CommandProcessor:
                 "Send multiple URLs in one message after /summarize_all, separated by space or new line.",
             )
             if interaction_id:
-                safe_update_user_interaction(
+                await async_safe_update_user_interaction(
                     self.db,
                     interaction_id=interaction_id,
                     response_sent=True,
@@ -317,7 +317,7 @@ class CommandProcessor:
 
         await self.response_formatter.safe_reply(message, f"Processing {len(urls)} links...")
         if interaction_id:
-            safe_update_user_interaction(
+            await async_safe_update_user_interaction(
                 self.db,
                 interaction_id=interaction_id,
                 response_sent=True,
@@ -374,7 +374,7 @@ class CommandProcessor:
             )
             logger.debug("awaiting_multi_confirm", extra={"uid": uid, "count": len(urls)})
             if interaction_id:
-                safe_update_user_interaction(
+                await async_safe_update_user_interaction(
                     self.db,
                     interaction_id=interaction_id,
                     response_sent=True,
@@ -395,7 +395,7 @@ class CommandProcessor:
             await self.response_formatter.safe_reply(message, "Send a URL to summarize.")
             logger.debug("awaiting_url", extra={"uid": uid})
             if interaction_id:
-                safe_update_user_interaction(
+                await async_safe_update_user_interaction(
                     self.db,
                     interaction_id=interaction_id,
                     response_sent=True,
@@ -452,7 +452,7 @@ class CommandProcessor:
             response_type = (
                 "cancelled" if (awaiting_cancelled or multi_cancelled) else "cancel_none"
             )
-            safe_update_user_interaction(
+            await async_safe_update_user_interaction(
                 self.db,
                 interaction_id=interaction_id,
                 response_sent=True,
@@ -516,7 +516,7 @@ class CommandProcessor:
             await self.response_formatter.safe_reply(message, "\n".join(response_lines))
 
             if interaction_id:
-                safe_update_user_interaction(
+                await async_safe_update_user_interaction(
                     self.db,
                     interaction_id=interaction_id,
                     response_sent=True,
@@ -532,7 +532,7 @@ class CommandProcessor:
                 "⚠️ Unable to retrieve unread articles right now. Check bot logs for details.",
             )
             if interaction_id:
-                safe_update_user_interaction(
+                await async_safe_update_user_interaction(
                     self.db,
                     interaction_id=interaction_id,
                     response_sent=True,
@@ -639,7 +639,7 @@ class CommandProcessor:
                     )
 
             if interaction_id:
-                safe_update_user_interaction(
+                await async_safe_update_user_interaction(
                     self.db,
                     interaction_id=interaction_id,
                     response_sent=True,
@@ -656,7 +656,7 @@ class CommandProcessor:
                 "⚠️ Unable to read the article right now. Check bot logs for details.",
             )
             if interaction_id:
-                safe_update_user_interaction(
+                await async_safe_update_user_interaction(
                     self.db,
                     interaction_id=interaction_id,
                     response_sent=True,

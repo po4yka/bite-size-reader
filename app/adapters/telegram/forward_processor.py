@@ -11,7 +11,7 @@ from app.adapters.telegram.forward_content_processor import ForwardContentProces
 from app.adapters.telegram.forward_summarizer import ForwardSummarizer
 from app.config import AppConfig
 from app.db.database import Database
-from app.db.user_interactions import safe_update_user_interaction
+from app.db.user_interactions import async_safe_update_user_interaction
 
 if TYPE_CHECKING:
     from app.adapters.external.response_formatter import ResponseFormatter
@@ -115,7 +115,7 @@ class ForwardProcessor:
         interaction_id: int | None,
     ) -> bool:
         """Return True if a cached summary exists for the forward request."""
-        summary_row = self.db.get_summary_by_request(req_id)
+        summary_row = await self.db.async_get_summary_by_request(req_id)
         if not summary_row:
             return False
 
@@ -131,10 +131,10 @@ class ForwardProcessor:
         await self.response_formatter.send_cached_summary_notification(message)
         await self.response_formatter.send_forward_summary_response(message, shaped)
 
-        self.db.update_request_status(req_id, "ok")
+        await self.db.async_update_request_status(req_id, "ok")
 
         if interaction_id:
-            safe_update_user_interaction(
+            await async_safe_update_user_interaction(
                 self.db,
                 interaction_id=interaction_id,
                 response_sent=True,
@@ -154,7 +154,7 @@ class ForwardProcessor:
         """Extract the content text for a forward message."""
         try:
             # Get the request details to extract the content
-            request_row = self.db.get_summary_by_request(req_id)
+            request_row = await self.db.async_get_summary_by_request(req_id)
             if not request_row:
                 return None
 
@@ -199,7 +199,7 @@ class ForwardProcessor:
             # Create LLMSummarizer instance with same dependencies as ForwardSummarizer
             summary_payload: dict[str, Any] | None = None
             try:
-                row = self.db.get_summary_by_request(req_id)
+                row = await self.db.async_get_summary_by_request(req_id)
                 json_payload = row.get("json_payload") if row else None
                 if json_payload:
                     summary_payload = json.loads(json_payload)

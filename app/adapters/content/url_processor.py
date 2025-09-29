@@ -22,7 +22,7 @@ from app.config import AppConfig
 from app.core.lang import choose_language
 from app.core.url_utils import normalize_url, url_hash_sha256
 from app.db.database import Database
-from app.db.user_interactions import safe_update_user_interaction
+from app.db.user_interactions import async_safe_update_user_interaction
 
 if TYPE_CHECKING:
     from app.adapters.external.response_formatter import ResponseFormatter
@@ -295,13 +295,13 @@ class URLProcessor:
                         )
                 else:
                     # Silent mode: persist and generate insights without responses
-                    new_version = self.db.upsert_summary(
+                    new_version = await self.db.async_upsert_summary(
                         request_id=req_id,
                         lang=chosen_lang,
                         json_payload=shaped,
                         is_read=False,
                     )
-                    self.db.update_request_status(req_id, "ok")
+                    await self.db.async_update_request_status(req_id, "ok")
                     self._audit(
                         "INFO", "summary_upserted", {"request_id": req_id, "version": new_version}
                     )
@@ -361,19 +361,19 @@ class URLProcessor:
     ) -> None:
         """Persist chunked results and send response."""
         try:
-            new_version = self.db.upsert_summary(
+            new_version = await self.db.async_upsert_summary(
                 request_id=req_id,
                 lang=chosen_lang,
                 json_payload=shaped,
                 is_read=not silent,
             )
-            self.db.update_request_status(req_id, "ok")
+            await self.db.async_update_request_status(req_id, "ok")
             self._audit("INFO", "summary_upserted", {"request_id": req_id, "version": new_version})
         except Exception as e:  # noqa: BLE001
             logger.error("persist_summary_error", extra={"error": str(e), "cid": correlation_id})
 
         if interaction_id:
-            safe_update_user_interaction(
+            await async_safe_update_user_interaction(
                 self.db,
                 interaction_id=interaction_id,
                 response_sent=True,
@@ -550,12 +550,12 @@ class URLProcessor:
             return False
 
         dedupe = url_hash_sha256(norm)
-        existing_req = self.db.get_request_by_dedupe_hash(dedupe)
+        existing_req = await self.db.async_get_request_by_dedupe_hash(dedupe)
         if not existing_req:
             return False
 
         req_id = int(existing_req["id"])
-        summary_row = self.db.get_summary_by_request(req_id)
+        summary_row = await self.db.async_get_summary_by_request(req_id)
         if not summary_row:
             return False
 
@@ -643,7 +643,7 @@ class URLProcessor:
                     message, dict(insights_payload), correlation_id
                 )
 
-        self.db.update_request_status(req_id, "ok")
+        await self.db.async_update_request_status(req_id, "ok")
 
         self._audit(
             "INFO",
@@ -656,7 +656,7 @@ class URLProcessor:
         )
 
         if interaction_id:
-            safe_update_user_interaction(
+            await async_safe_update_user_interaction(
                 self.db,
                 interaction_id=interaction_id,
                 response_sent=True,
