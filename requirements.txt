@@ -112,6 +112,8 @@ packaging==25.0
     #   spacy
     #   thinc
     #   weasel
+peewee==3.18.2
+    # via bite-size-reader (pyproject.toml)
 preshed==3.0.10
     # via
     #   spacy
@@ -158,7 +160,6 @@ scipy==1.16.2
     #   textacy
 setuptools==80.9.0
     # via
-    #   pymorphy3
     #   spacy
     #   thinc
 shellingham==1.5.4

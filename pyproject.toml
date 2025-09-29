@@ -66,6 +66,7 @@ dependencies = [
   "pyrogram>=2.0.106",
   "tgcrypto>=1.2.5",
   "pydantic>=2.11.9",
+  "peewee>=3.17.6",
   "readability-lxml==0.8.4.1",
   "textacy>=0.13.0,<0.14",
   "spacy>=3.8.7,<4",
