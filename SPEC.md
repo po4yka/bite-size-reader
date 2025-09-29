@@ -238,7 +238,11 @@ sequenceDiagram
   metadata_json            -- meta, og, canonical, etc.
   links_json               -- outlinks
   screenshots_paths_json   -- saved local paths if any
-  raw_response_json
+  firecrawl_success        -- Firecrawl success boolean (0/1)
+  firecrawl_error_code     -- Firecrawl error code when present
+  firecrawl_error_message  -- Firecrawl-provided error message
+  firecrawl_details_json   -- Firecrawl error details array/object
+  raw_response_json        -- legacy payload (kept for backward compatibility)
   latency_ms
   error_text
   ```
@@ -346,7 +350,11 @@ classDiagram
     metadata_json: text
     links_json: text
     screenshots_paths_json: text?
-    raw_response_json: text
+    firecrawl_success: int?
+    firecrawl_error_code: text?
+    firecrawl_error_message: text?
+    firecrawl_details_json: text?
+    raw_response_json: text?
     latency_ms: int?
     error_text: text?
   }

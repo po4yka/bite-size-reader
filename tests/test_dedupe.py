@@ -114,7 +114,11 @@ class TestDedupeReuse(unittest.IsolatedAsyncioTestCase):
                 metadata_json=json.dumps({}),
                 links_json=json.dumps({}),
                 screenshots_paths_json=None,
-                raw_response_json=json.dumps({}),
+                firecrawl_success=True,
+                firecrawl_error_code=None,
+                firecrawl_error_message=None,
+                firecrawl_details_json=None,
+                raw_response_json=None,
                 latency_ms=1,
                 error_text=None,
             )

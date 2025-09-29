@@ -78,6 +78,10 @@ CREATE TABLE IF NOT EXISTS crawl_results (
   metadata_json TEXT,
   links_json TEXT,
   screenshots_paths_json TEXT,
+  firecrawl_success INTEGER,
+  firecrawl_error_code TEXT,
+  firecrawl_error_message TEXT,
+  firecrawl_details_json TEXT,
   raw_response_json TEXT,
   latency_ms INTEGER,
   error_text TEXT
@@ -187,9 +191,14 @@ class Database:
             self._ensure_column(conn, "summaries", "insights_json", "TEXT")
             self._ensure_column(conn, "summaries", "is_read", "INTEGER")
             self._ensure_column(conn, "crawl_results", "correlation_id", "TEXT")
+            self._ensure_column(conn, "crawl_results", "firecrawl_success", "INTEGER")
+            self._ensure_column(conn, "crawl_results", "firecrawl_error_code", "TEXT")
+            self._ensure_column(conn, "crawl_results", "firecrawl_error_message", "TEXT")
+            self._ensure_column(conn, "crawl_results", "firecrawl_details_json", "TEXT")
             self._ensure_column(conn, "llm_calls", "structured_output_used", "INTEGER")
             self._ensure_column(conn, "llm_calls", "structured_output_mode", "TEXT")
             self._ensure_column(conn, "llm_calls", "error_context_json", "TEXT")
+            self._migrate_firecrawl_raw_payload(conn)
             conn.commit()
         self._run_database_maintenance()
         self._logger.info("db_migrated", extra={"path": self.path})
@@ -252,6 +261,95 @@ class Database:
         cols = [row[1] for row in cur.fetchall()]
         if column not in cols:
             conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {coltype}")
+
+    def _migrate_firecrawl_raw_payload(self, conn: sqlite3.Connection) -> None:
+        """Split persisted Firecrawl payloads into dedicated columns."""
+
+        try:
+            cur = conn.execute(
+                """
+                SELECT id, raw_response_json
+                FROM crawl_results
+                WHERE raw_response_json IS NOT NULL
+                  AND TRIM(raw_response_json) != ''
+                """
+            )
+            rows = cur.fetchall()
+        except sqlite3.Error as exc:  # noqa: BLE001
+            self._logger.error("firecrawl_migration_select_failed", extra={"error": str(exc)})
+            return
+
+        if not rows:
+            return
+
+        updated = 0
+        for row in rows:
+            raw_text = row["raw_response_json"]
+            if not raw_text:
+                continue
+
+            try:
+                payload = json.loads(raw_text)
+            except Exception as exc:  # noqa: BLE001
+                self._logger.debug(
+                    "firecrawl_migration_json_error",
+                    extra={"error": str(exc), "row_id": row["id"]},
+                )
+                continue
+
+            if not isinstance(payload, dict):
+                continue
+
+            success_val = payload.get("success")
+            success_int: int | None
+            if isinstance(success_val, bool):
+                success_int = 1 if success_val else 0
+            elif isinstance(success_val, (int, float)):
+                success_int = 1 if bool(success_val) else 0
+            else:
+                success_int = None
+
+            error_code = payload.get("code")
+            if error_code is not None and not isinstance(error_code, str):
+                error_code = str(error_code)
+
+            error_message = payload.get("error")
+            if error_message is not None and not isinstance(error_message, str):
+                error_message = str(error_message)
+
+            details_json = None
+            details = payload.get("details")
+            if details is not None:
+                try:
+                    details_json = json.dumps(details)
+                except Exception:  # noqa: BLE001
+                    details_json = None
+
+            try:
+                conn.execute(
+                    """
+                    UPDATE crawl_results
+                    SET firecrawl_success = ?,
+                        firecrawl_error_code = ?,
+                        firecrawl_error_message = ?,
+                        firecrawl_details_json = ?,
+                        raw_response_json = NULL
+                    WHERE id = ?
+                    """,
+                    (success_int, error_code, error_message, details_json, row["id"]),
+                )
+                updated += 1
+            except sqlite3.Error as exc:  # noqa: BLE001
+                self._logger.error(
+                    "firecrawl_migration_update_failed",
+                    extra={"error": str(exc), "row_id": row["id"]},
+                )
+
+        if updated:
+            self._logger.info(
+                "firecrawl_payload_migrated",
+                extra={"rows": updated},
+            )
 
     def _is_valid_identifier(self, identifier: str) -> bool:
         """Validate that an identifier is safe for SQL operations."""
@@ -1314,6 +1412,10 @@ class Database:
         metadata_json: str | None,
         links_json: str | None,
         screenshots_paths_json: str | None,
+        firecrawl_success: bool | int | None,
+        firecrawl_error_code: str | None,
+        firecrawl_error_message: str | None,
+        firecrawl_details_json: str | None,
         raw_response_json: str | None,
         latency_ms: int | None,
         error_text: str | None,
@@ -1321,9 +1423,17 @@ class Database:
         sql = (
             "INSERT INTO crawl_results (request_id, source_url, endpoint, http_status, status, options_json, "
             "correlation_id, content_markdown, content_html, structured_json, metadata_json, links_json, "
-            "screenshots_paths_json, raw_response_json, latency_ms, error_text) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+            "screenshots_paths_json, firecrawl_success, firecrawl_error_code, firecrawl_error_message, "
+            "firecrawl_details_json, raw_response_json, latency_ms, error_text) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
         )
+        success_value: int | None
+        if isinstance(firecrawl_success, bool):
+            success_value = 1 if firecrawl_success else 0
+        elif isinstance(firecrawl_success, int):
+            success_value = 1 if firecrawl_success else 0
+        else:
+            success_value = None
         with self.connect() as conn:
             cur = conn.execute(
                 sql,
@@ -1341,6 +1451,10 @@ class Database:
                     metadata_json,
                     links_json,
                     screenshots_paths_json,
+                    success_value,
+                    firecrawl_error_code,
+                    firecrawl_error_message,
+                    firecrawl_details_json,
                     raw_response_json,
                     latency_ms,
                     error_text,

@@ -133,7 +133,11 @@ class TestDatabaseHelpers(unittest.TestCase):
             metadata_json=json.dumps({}),
             links_json=json.dumps({}),
             screenshots_paths_json=None,
-            raw_response_json=json.dumps({}),
+            firecrawl_success=True,
+            firecrawl_error_code=None,
+            firecrawl_error_message=None,
+            firecrawl_details_json=None,
+            raw_response_json=None,
             latency_ms=123,
             error_text=None,
         )
@@ -143,6 +147,8 @@ class TestDatabaseHelpers(unittest.TestCase):
         self.assertEqual(row["http_status"], 200)
         self.assertEqual(row["content_markdown"], "# md")
         self.assertEqual(row["correlation_id"], "fc-123")
+        self.assertEqual(row["firecrawl_success"], 1)
+        self.assertIsNone(row["raw_response_json"])
 
     def test_summary_upsert(self):
         rid = self.db.create_request(
@@ -305,7 +311,11 @@ class TestDatabaseHelpers(unittest.TestCase):
             metadata_json=json.dumps({}),
             links_json=json.dumps(["https://example.com/other"]),
             screenshots_paths_json=None,
-            raw_response_json=json.dumps({}),
+            firecrawl_success=True,
+            firecrawl_error_code=None,
+            firecrawl_error_message=None,
+            firecrawl_details_json=None,
+            raw_response_json=None,
             latency_ms=100,
             error_text=None,
         )
@@ -361,7 +371,11 @@ class TestDatabaseHelpers(unittest.TestCase):
             metadata_json=json.dumps({}),
             links_json=json.dumps([]),
             screenshots_paths_json=None,
-            raw_response_json=json.dumps({}),
+            firecrawl_success=True,
+            firecrawl_error_code=None,
+            firecrawl_error_message=None,
+            firecrawl_details_json=None,
+            raw_response_json=None,
             latency_ms=100,
             error_text=None,
         )

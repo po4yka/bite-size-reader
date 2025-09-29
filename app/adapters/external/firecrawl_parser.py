@@ -22,7 +22,10 @@ class FirecrawlResult:
     structured_json: dict | None
     metadata_json: dict | None
     links_json: dict | None
-    raw_response_json: dict | None
+    response_success: bool | None
+    response_error_code: str | None
+    response_error_message: str | None
+    response_details: dict | list | None
     latency_ms: int | None
     error_text: str | None
     source_url: str | None = None
@@ -201,7 +204,10 @@ class FirecrawlClient:
                         structured_json=None,
                         metadata_json=None,
                         links_json=None,
-                        raw_response_json=None,
+                        response_success=None,
+                        response_error_code=None,
+                        response_error_message=None,
+                        response_details=None,
                         latency_ms=latency,
                         error_text=last_error,
                         source_url=url,
@@ -234,6 +240,16 @@ class FirecrawlClient:
                 if resp.status_code < 400:
                     # Extract correlation ID if present
                     correlation_id = data.get("cid")
+
+                    raw_success_field = data.get("success")
+                    if isinstance(raw_success_field, bool):
+                        response_success = raw_success_field
+                    elif raw_success_field is None:
+                        response_success = None
+                    else:
+                        response_success = bool(raw_success_field)
+                    response_error_code = data.get("code")
+                    response_details = data.get("details")
 
                     # Check if the response body contains an error even with 200 status
                     response_error = data.get("error")
@@ -372,7 +388,10 @@ class FirecrawlClient:
                             structured_json=data.get("structured"),
                             metadata_json=error_metadata,
                             links_json=error_links,
-                            raw_response_json=data,
+                            response_success=response_success,
+                            response_error_code=response_error_code,
+                            response_error_message=error_message or response_error,
+                            response_details=response_details,
                             latency_ms=latency,
                             error_text=last_error,
                             source_url=url,
@@ -451,7 +470,10 @@ class FirecrawlClient:
                         structured_json=data.get("structured"),
                         metadata_json=metadata,
                         links_json=links,
-                        raw_response_json=data,
+                        response_success=response_success,
+                        response_error_code=response_error_code,
+                        response_error_message=None,
+                        response_details=response_details,
                         latency_ms=latency,
                         error_text=None,
                         source_url=url,
@@ -537,6 +559,16 @@ class FirecrawlClient:
                         "excerpt": truncate_log_content(summary_preview_source, 160),
                     },
                 )
+                raw_success_field = data.get("success")
+                if isinstance(raw_success_field, bool):
+                    response_success = raw_success_field
+                elif raw_success_field is None:
+                    response_success = None
+                else:
+                    response_success = bool(raw_success_field)
+                response_error_code = data.get("code")
+                response_details = data.get("details")
+                response_error_message = data.get("error") or error_message
                 return FirecrawlResult(
                     status="error",
                     http_status=resp.status_code,
@@ -545,7 +577,10 @@ class FirecrawlClient:
                     structured_json=data.get("structured"),
                     metadata_json=data.get("metadata"),
                     links_json=data.get("links"),
-                    raw_response_json=data,
+                    response_success=response_success,
+                    response_error_code=response_error_code,
+                    response_error_message=response_error_message,
+                    response_details=response_details,
                     latency_ms=latency,
                     error_text=error_message,
                     source_url=url,
@@ -581,10 +616,22 @@ class FirecrawlClient:
         last_markdown = None
         last_html = None
         last_correlation = None
+        response_success = None
+        response_error_code = None
+        response_error_message = None
+        response_details = None
         if isinstance(last_data, dict):
             last_markdown = last_data.get("markdown")
             last_html = last_data.get("html")
             last_correlation = last_data.get("cid")
+            raw_success_field = last_data.get("success")
+            if isinstance(raw_success_field, bool):
+                response_success = raw_success_field
+            elif raw_success_field is not None:
+                response_success = bool(raw_success_field)
+            response_error_code = last_data.get("code")
+            response_error_message = last_data.get("error")
+            response_details = last_data.get("details")
         self._logger.info(
             "firecrawl_result_summary",
             extra={
@@ -607,7 +654,10 @@ class FirecrawlClient:
             structured_json=None,
             metadata_json=None,
             links_json=None,
-            raw_response_json=last_data,
+            response_success=response_success,
+            response_error_code=response_error_code,
+            response_error_message=response_error_message,
+            response_details=response_details,
             latency_ms=last_latency,
             error_text=last_error,
             source_url=url,

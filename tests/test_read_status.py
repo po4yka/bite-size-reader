@@ -59,7 +59,10 @@ class ReadStatusBot(TelegramBot):
                     self.metadata_json = "{}"  # Add missing attribute
                     self.links_json = "[]"  # Add missing attribute
                     self.screenshots_paths_json = None  # Add missing attribute
-                    self.raw_response_json = "{}"  # Add missing attribute
+                    self.response_success = True
+                    self.response_error_code = None
+                    self.response_error_message = None
+                    self.response_details = None
                     self.latency_ms = 100  # Add missing attribute
 
             # Use setattr to mock the method

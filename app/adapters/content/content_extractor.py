@@ -393,6 +393,12 @@ class ContentExtractor:
 
         # Persist crawl result
         try:
+            details_json = None
+            if crawl.response_details is not None:
+                try:
+                    details_json = json.dumps(crawl.response_details)
+                except TypeError:
+                    details_json = None
             self.db.insert_crawl_result(
                 request_id=req_id,
                 source_url=crawl.source_url,
@@ -407,7 +413,11 @@ class ContentExtractor:
                 metadata_json=json.dumps(crawl.metadata_json or {}),
                 links_json=json.dumps(crawl.links_json or {}),
                 screenshots_paths_json=None,
-                raw_response_json=json.dumps(crawl.raw_response_json or {}),
+                firecrawl_success=crawl.response_success,
+                firecrawl_error_code=crawl.response_error_code,
+                firecrawl_error_message=crawl.response_error_message,
+                firecrawl_details_json=details_json,
+                raw_response_json=None,
                 latency_ms=crawl.latency_ms,
                 error_text=crawl.error_text,
             )
@@ -462,7 +472,10 @@ class ContentExtractor:
                     structured_json=None,
                     metadata_json=None,
                     links_json=None,
-                    raw_response_json=None,
+                    response_success=None,
+                    response_error_code=None,
+                    response_error_message=None,
+                    response_details=None,
                     latency_ms=None,
                     error_text=None,
                     source_url=url_text,
@@ -487,7 +500,11 @@ class ContentExtractor:
                         metadata_json=json.dumps(salvage_crawl.metadata_json or {}),
                         links_json=json.dumps(salvage_crawl.links_json or {}),
                         screenshots_paths_json=None,
-                        raw_response_json=json.dumps(salvage_crawl.raw_response_json or {}),
+                        firecrawl_success=salvage_crawl.response_success,
+                        firecrawl_error_code=salvage_crawl.response_error_code,
+                        firecrawl_error_message=salvage_crawl.response_error_message,
+                        firecrawl_details_json=None,
+                        raw_response_json=None,
                         latency_ms=salvage_crawl.latency_ms,
                         error_text=salvage_crawl.error_text,
                     )
@@ -912,7 +929,10 @@ class MockCrawl:
         self.structured_json = None
         self.metadata_json = None
         self.links_json = None
-        self.raw_response_json = None
+        self.response_success = None
+        self.response_error_code = None
+        self.response_error_message = None
+        self.response_details = None
         self.latency_ms = None
         self.error_text = None
         self.source_url = None
