@@ -236,6 +236,13 @@ class TestDatabaseHelpers(unittest.TestCase):
         self.assertEqual(lrow["structured_output_used"], 1)
         self.assertEqual(lrow["structured_output_mode"], "json_schema")
         self.assertEqual(json.loads(lrow["error_context_json"]), {"status_code": 200})
+        self.assertIsNone(lrow["response_text"])
+        self.assertIsNone(lrow["response_json"])
+        self.assertEqual(lrow["openrouter_response_text"], "{}")
+        self.assertEqual(
+            json.loads(lrow["openrouter_response_json"] or "{}"),
+            {"choices": []},
+        )
 
         # Audit
         aid = self.db.insert_audit_log(

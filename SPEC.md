@@ -258,6 +258,8 @@ sequenceDiagram
   request_messages_json    -- Chat 'messages' array
   response_text            -- assistant text if present
   response_json            -- full payload (choices, usage, id)
+  openrouter_response_text -- raw text from OpenRouter completion
+  openrouter_response_json -- raw JSON payload from OpenRouter
   tokens_prompt
   tokens_completion
   cost_usd
@@ -369,6 +371,8 @@ classDiagram
     request_messages_json: text
     response_text: text?
     response_json: text
+    openrouter_response_text: text?
+    openrouter_response_json: text?
     tokens_prompt: int?
     tokens_completion: int?
     cost_usd: real?

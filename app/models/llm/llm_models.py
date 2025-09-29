@@ -14,11 +14,13 @@ class LLMCallResult:
     model: str | None
     response_text: str | None
     response_json: dict | None
-    tokens_prompt: int | None
-    tokens_completion: int | None
-    cost_usd: float | None
-    latency_ms: int | None
-    error_text: str | None
+    openrouter_response_text: str | None = None
+    openrouter_response_json: dict | None = None
+    tokens_prompt: int | None = None
+    tokens_completion: int | None = None
+    cost_usd: float | None = None
+    latency_ms: int | None = None
+    error_text: str | None = None
     request_headers: dict | None = None
     request_messages: list[dict] | None = None
     endpoint: str | None = "/api/v1/chat/completions"

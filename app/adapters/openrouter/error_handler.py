@@ -121,6 +121,8 @@ class ErrorHandler:
             model=model,
             response_text=text,
             response_json=data,
+            openrouter_response_text=text,
+            openrouter_response_json=data,
             tokens_prompt=usage.get("prompt_tokens"),
             tokens_completion=usage.get("completion_tokens"),
             cost_usd=None,

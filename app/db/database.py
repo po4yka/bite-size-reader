@@ -97,6 +97,8 @@ CREATE TABLE IF NOT EXISTS llm_calls (
   request_messages_json TEXT,
   response_text TEXT,
   response_json TEXT,
+  openrouter_response_text TEXT,
+  openrouter_response_json TEXT,
   tokens_prompt INTEGER,
   tokens_completion INTEGER,
   cost_usd REAL,
@@ -198,6 +200,9 @@ class Database:
             self._ensure_column(conn, "llm_calls", "structured_output_used", "INTEGER")
             self._ensure_column(conn, "llm_calls", "structured_output_mode", "TEXT")
             self._ensure_column(conn, "llm_calls", "error_context_json", "TEXT")
+            self._ensure_column(conn, "llm_calls", "openrouter_response_text", "TEXT")
+            self._ensure_column(conn, "llm_calls", "openrouter_response_json", "TEXT")
+            self._migrate_openrouter_response_payloads(conn)
             self._migrate_firecrawl_raw_payload(conn)
             conn.commit()
         self._run_database_maintenance()
@@ -348,6 +353,59 @@ class Database:
         if updated:
             self._logger.info(
                 "firecrawl_payload_migrated",
+                extra={"rows": updated},
+            )
+
+    def _migrate_openrouter_response_payloads(self, conn: sqlite3.Connection) -> None:
+        """Move OpenRouter response payloads into provider-specific columns."""
+
+        try:
+            cur = conn.execute(
+                """
+                SELECT id, response_text, response_json
+                FROM llm_calls
+                WHERE provider = 'openrouter'
+                  AND (
+                      (response_text IS NOT NULL AND TRIM(response_text) != '')
+                      OR (response_json IS NOT NULL AND TRIM(response_json) != '')
+                  )
+                """
+            )
+            rows = cur.fetchall()
+        except sqlite3.Error as exc:  # noqa: BLE001
+            self._logger.error("openrouter_migration_select_failed", extra={"error": str(exc)})
+            return
+
+        if not rows:
+            return
+
+        updated = 0
+        for row in rows:
+            text_val = row["response_text"]
+            json_val = row["response_json"]
+
+            try:
+                conn.execute(
+                    """
+                    UPDATE llm_calls
+                    SET openrouter_response_text = COALESCE(openrouter_response_text, ?),
+                        openrouter_response_json = COALESCE(openrouter_response_json, ?),
+                        response_text = NULL,
+                        response_json = NULL
+                    WHERE id = ?
+                    """,
+                    (text_val, json_val, row["id"]),
+                )
+                updated += 1
+            except sqlite3.Error as exc:  # noqa: BLE001
+                self._logger.error(
+                    "openrouter_migration_update_failed",
+                    extra={"error": str(exc), "row_id": row["id"]},
+                )
+
+        if updated:
+            self._logger.info(
+                "openrouter_payload_migrated",
                 extra={"rows": updated},
             )
 
@@ -1479,6 +1537,8 @@ class Database:
         request_messages_json: str | None,
         response_text: str | None,
         response_json: str | None,
+        openrouter_response_text: str | None = None,
+        openrouter_response_json: str | None = None,
         tokens_prompt: int | None,
         tokens_completion: int | None,
         cost_usd: float | None,
@@ -1491,10 +1551,24 @@ class Database:
     ) -> int:
         sql = (
             "INSERT INTO llm_calls (request_id, provider, model, endpoint, request_headers_json, request_messages_json, "
-            "response_text, response_json, tokens_prompt, tokens_completion, cost_usd, latency_ms, status, error_text, "
+            "response_text, response_json, openrouter_response_text, openrouter_response_json, tokens_prompt, tokens_completion, cost_usd, latency_ms, status, error_text, "
             "structured_output_used, structured_output_mode, error_context_json) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
         )
+
+        response_text_value = response_text
+        response_json_value = response_json
+        openrouter_text_value = openrouter_response_text
+        openrouter_json_value = openrouter_response_json
+
+        if provider.lower() == "openrouter":
+            if openrouter_text_value is None:
+                openrouter_text_value = response_text_value
+            if openrouter_json_value is None:
+                openrouter_json_value = response_json_value
+            response_text_value = None
+            response_json_value = None
+
         with self.connect() as conn:
             cur = conn.execute(
                 sql,
@@ -1505,8 +1579,10 @@ class Database:
                     endpoint,
                     request_headers_json,
                     request_messages_json,
-                    response_text,
-                    response_json,
+                    response_text_value,
+                    response_json_value,
+                    openrouter_text_value,
+                    openrouter_json_value,
                     tokens_prompt,
                     tokens_completion,
                     cost_usd,
