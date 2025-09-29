@@ -23,7 +23,7 @@ known_first_party = ["app", "tests"]
 [tool.ruff]
 line-length = 100
 target-version = "py311"
-exclude = ["data", "build", "dist", "venv"]
+exclude = [".git", "data", "build", "dist", "venv"]
 
 [tool.ruff.lint]
 select = [
