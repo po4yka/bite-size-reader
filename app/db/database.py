@@ -309,7 +309,7 @@ class Database:
             success_int: int | None
             if isinstance(success_val, bool):
                 success_int = 1 if success_val else 0
-            elif isinstance(success_val, (int, float)):
+            elif isinstance(success_val, int | float):
                 success_int = 1 if bool(success_val) else 0
             else:
                 success_int = None
@@ -1483,7 +1483,7 @@ class Database:
             "correlation_id, content_markdown, content_html, structured_json, metadata_json, links_json, "
             "screenshots_paths_json, firecrawl_success, firecrawl_error_code, firecrawl_error_message, "
             "firecrawl_details_json, raw_response_json, latency_ms, error_text) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
         )
         success_value: int | None
         if isinstance(firecrawl_success, bool):
@@ -1713,7 +1713,7 @@ class Database:
             FROM summaries s
             JOIN requests r ON s.request_id = r.id
             WHERE s.is_read = 0
-            ORDER BY s.created_at DESC
+            ORDER BY s.created_at ASC, s.id ASC
             LIMIT ?
         """
         with self.connect() as conn:
