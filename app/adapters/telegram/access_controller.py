@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any
 
 from app.config import AppConfig
 from app.db.database import Database
-from app.db.user_interactions import safe_update_user_interaction
+from app.db.user_interactions import async_safe_update_user_interaction
 
 if TYPE_CHECKING:
     from app.adapters.external.response_formatter import ResponseFormatter
@@ -125,7 +125,7 @@ class AccessController:
         logger.info("access_denied", extra={"uid": uid, "cid": correlation_id})
 
         if interaction_id:
-            safe_update_user_interaction(
+            await async_safe_update_user_interaction(
                 self.db,
                 interaction_id=interaction_id,
                 response_sent=True,

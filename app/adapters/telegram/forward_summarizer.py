@@ -11,7 +11,7 @@ from app.core.json_utils import extract_json
 from app.core.lang import LANG_RU
 from app.core.summary_contract import validate_and_shape_summary
 from app.db.database import Database
-from app.db.user_interactions import safe_update_user_interaction
+from app.db.user_interactions import async_safe_update_user_interaction
 from app.utils.json_validation import finalize_summary_texts, parse_summary_response
 
 if TYPE_CHECKING:
@@ -173,7 +173,7 @@ class ForwardSummarizer:
         """Handle LLM errors."""
         # persist LLM call as error, then reply
         try:
-            self.db.insert_llm_call(
+            await self.db.async_insert_llm_call(
                 request_id=req_id,
                 provider="openrouter",
                 model=llm.model or self.cfg.openrouter.model,
@@ -199,7 +199,7 @@ class ForwardSummarizer:
         except Exception as e:  # noqa: BLE001
             logger.error("persist_llm_error", extra={"error": str(e), "cid": correlation_id})
 
-        self.db.update_request_status(req_id, "error")
+        await self.db.async_update_request_status(req_id, "error")
         await self.response_formatter.send_error_notification(message, "llm_error", correlation_id)
         logger.error("openrouter_error", extra={"error": llm.error_text, "cid": correlation_id})
 
@@ -214,7 +214,7 @@ class ForwardSummarizer:
 
         # Update interaction with error
         if interaction_id:
-            safe_update_user_interaction(
+            await async_safe_update_user_interaction(
                 self.db,
                 interaction_id=interaction_id,
                 response_sent=True,
@@ -326,14 +326,14 @@ class ForwardSummarizer:
         interaction_id: int | None,
     ) -> None:
         """Handle repair failure."""
-        self.db.update_request_status(req_id, "error")
+        await self.db.async_update_request_status(req_id, "error")
         await self.response_formatter.send_error_notification(
             message, "processing_failed", correlation_id
         )
 
         # Update interaction with error
         if interaction_id:
-            safe_update_user_interaction(
+            await async_safe_update_user_interaction(
                 self.db,
                 interaction_id=interaction_id,
                 response_sent=True,
@@ -352,13 +352,13 @@ class ForwardSummarizer:
         interaction_id: int | None,
     ) -> None:
         """Handle final parsing failure."""
-        self.db.update_request_status(req_id, "error")
+        await self.db.async_update_request_status(req_id, "error")
         await self.response_formatter.send_error_notification(
             message, "processing_failed", correlation_id
         )
 
         if interaction_id:
-            safe_update_user_interaction(
+            await async_safe_update_user_interaction(
                 self.db,
                 interaction_id=interaction_id,
                 response_sent=True,
@@ -381,7 +381,7 @@ class ForwardSummarizer:
     ) -> None:
         """Persist forward processing results."""
         try:
-            self.db.insert_llm_call(
+            await self.db.async_insert_llm_call(
                 request_id=req_id,
                 provider="openrouter",
                 model=llm.model or self.cfg.openrouter.model,
@@ -408,20 +408,20 @@ class ForwardSummarizer:
             logger.error("persist_llm_error", extra={"error": str(e), "cid": correlation_id})
 
         try:
-            new_version = self.db.upsert_summary(
+            new_version = await self.db.async_upsert_summary(
                 request_id=req_id,
                 lang=chosen_lang,
                 json_payload=forward_shaped,
                 is_read=True,
             )
-            self.db.update_request_status(req_id, "ok")
+            await self.db.async_update_request_status(req_id, "ok")
             self._audit("INFO", "summary_upserted", {"request_id": req_id, "version": new_version})
         except Exception as e:  # noqa: BLE001
             logger.error("persist_summary_error", extra={"error": str(e), "cid": correlation_id})
 
         # Update interaction with successful completion
         if interaction_id:
-            safe_update_user_interaction(
+            await async_safe_update_user_interaction(
                 self.db,
                 interaction_id=interaction_id,
                 response_sent=True,

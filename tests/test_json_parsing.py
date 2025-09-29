@@ -54,6 +54,12 @@ class TestJsonParsing(unittest.TestCase):
 
         self.cfg = AppConfig(telegram_cfg, firecrawl_cfg, openrouter_cfg, runtime_cfg)
         self.db = MagicMock(spec=Database)
+        self.db.async_get_request_by_dedupe_hash = AsyncMock(return_value=None)
+        self.db.async_get_crawl_result_by_request = AsyncMock(return_value=None)
+        self.db.async_get_summary_by_request = AsyncMock(return_value=None)
+        self.db.async_upsert_summary = AsyncMock(return_value=1)
+        self.db.async_update_request_status = AsyncMock()
+        self.db.async_insert_llm_call = AsyncMock()
 
     def _make_insights_response(self) -> MagicMock:
         payload = {
@@ -114,11 +120,13 @@ class TestJsonParsing(unittest.TestCase):
 
             bot._safe_reply = AsyncMock()  # type: ignore[method-assign]
             bot._reply_json = AsyncMock()  # type: ignore[method-assign]
-            self.db.get_request_by_dedupe_hash.return_value = None
+            self.db.async_get_request_by_dedupe_hash.return_value = None
             self.db.create_request.return_value = 1
-            self.db.get_crawl_result_by_request.return_value = {"content_markdown": "Some content"}
-            self.db.get_summary_by_request.return_value = None
-            self.db.upsert_summary.return_value = 1
+            self.db.async_get_crawl_result_by_request.return_value = {
+                "content_markdown": "Some content"
+            }
+            self.db.async_get_summary_by_request.return_value = None
+            self.db.async_upsert_summary.return_value = 1
 
             message = MagicMock()
             await bot._handle_url_flow(message, "http://example.com")
@@ -143,10 +151,12 @@ class TestJsonParsing(unittest.TestCase):
             bot._openrouter = mock_openrouter_instance
 
             bot._safe_reply = AsyncMock()  # type: ignore[method-assign]
-            self.db.get_request_by_dedupe_hash.return_value = None
+            self.db.async_get_request_by_dedupe_hash.return_value = None
             self.db.create_request.return_value = 1
-            self.db.get_crawl_result_by_request.return_value = {"content_markdown": "Some content"}
-            self.db.get_summary_by_request.return_value = None
+            self.db.async_get_crawl_result_by_request.return_value = {
+                "content_markdown": "Some content"
+            }
+            self.db.async_get_summary_by_request.return_value = None
 
             message = MagicMock()
             await bot._handle_url_flow(message, "http://example.com")
@@ -186,11 +196,13 @@ class TestJsonParsing(unittest.TestCase):
 
             bot._safe_reply = AsyncMock()  # type: ignore[method-assign]
             bot._reply_json = AsyncMock()  # type: ignore[method-assign]
-            self.db.get_request_by_dedupe_hash.return_value = None
+            self.db.async_get_request_by_dedupe_hash.return_value = None
             self.db.create_request.return_value = 1
-            self.db.get_crawl_result_by_request.return_value = {"content_markdown": "Some content"}
-            self.db.get_summary_by_request.return_value = None
-            self.db.upsert_summary.return_value = 1
+            self.db.async_get_crawl_result_by_request.return_value = {
+                "content_markdown": "Some content"
+            }
+            self.db.async_get_summary_by_request.return_value = None
+            self.db.async_upsert_summary.return_value = 1
 
             message = MagicMock()
             await bot._handle_url_flow(message, "http://example.com")
@@ -236,11 +248,13 @@ class TestJsonParsing(unittest.TestCase):
 
             bot._safe_reply = AsyncMock()  # type: ignore[method-assign]
             bot._reply_json = AsyncMock()  # type: ignore[method-assign]
-            self.db.get_request_by_dedupe_hash.return_value = None
+            self.db.async_get_request_by_dedupe_hash.return_value = None
             self.db.create_request.return_value = 1
-            self.db.get_crawl_result_by_request.return_value = {"content_markdown": "Some content"}
-            self.db.get_summary_by_request.return_value = None
-            self.db.upsert_summary.return_value = 1
+            self.db.async_get_crawl_result_by_request.return_value = {
+                "content_markdown": "Some content"
+            }
+            self.db.async_get_summary_by_request.return_value = None
+            self.db.async_upsert_summary.return_value = 1
 
             message = MagicMock()
             await bot._handle_url_flow(message, "http://example.com")
@@ -290,8 +304,8 @@ class TestJsonParsing(unittest.TestCase):
             bot._reply_json = AsyncMock()  # type: ignore[method-assign]
 
             self.db.create_request.return_value = 1
-            self.db.upsert_summary.return_value = 1
-            self.db.get_summary_by_request.return_value = None
+            self.db.async_upsert_summary.return_value = 1
+            self.db.async_get_summary_by_request.return_value = None
 
             message = MagicMock()
             message.text = "Some forwarded text"
