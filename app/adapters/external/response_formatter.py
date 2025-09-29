@@ -5,6 +5,7 @@ import html
 import io
 import json
 import logging
+import math
 import re
 import unicodedata
 from collections.abc import Awaitable, Callable
@@ -544,27 +545,17 @@ class ResponseFormatter:
 
             key_stats = summary_shaped.get("key_stats") or []
             if isinstance(key_stats, list) and key_stats:
-                ks_lines: list[str] = ["📈 Key Stats:"]
-                for ks in key_stats[:10]:
-                    if isinstance(ks, dict):
-                        label = str(ks.get("label", "")).strip()
-                        value = ks.get("value")
-                        unit = str(ks.get("unit", "")).strip()
-                        if label and value is not None:
-                            ks_lines.append(f"• {label}: {value} {unit}".rstrip())
-                if len(ks_lines) > 1:
+                ks_lines = self._format_key_stats(key_stats[:10])
+                if ks_lines:
+                    combined_lines.append("📈 Key Stats:")
                     combined_lines.extend(ks_lines)
                     combined_lines.append("")
 
             readability = summary_shaped.get("readability") or {}
-            if isinstance(readability, dict):
-                method = readability.get("method")
-                score = readability.get("score")
-                level = readability.get("level")
-                details = [str(x) for x in (method, score, level) if x is not None]
-                if details:
-                    combined_lines.append("🧮 Readability: " + ", ".join(map(str, details)))
-                    combined_lines.append("")
+            readability_line = self._format_readability(readability)
+            if readability_line:
+                combined_lines.append(f"🧮 Readability — {readability_line}")
+                combined_lines.append("")
 
             seo = [
                 str(x).strip() for x in (summary_shaped.get("seo_keywords") or []) if str(x).strip()
@@ -881,27 +872,17 @@ class ResponseFormatter:
 
             key_stats = forward_shaped.get("key_stats") or []
             if isinstance(key_stats, list) and key_stats:
-                ks_lines: list[str] = ["📈 Key Stats:"]
-                for ks in key_stats[:10]:
-                    if isinstance(ks, dict):
-                        label = str(ks.get("label", "")).strip()
-                        value = ks.get("value")
-                        unit = str(ks.get("unit", "")).strip()
-                        if label and value is not None:
-                            ks_lines.append(f"• {label}: {value} {unit}".rstrip())
-                if len(ks_lines) > 1:
+                ks_lines = self._format_key_stats(key_stats[:10])
+                if ks_lines:
+                    combined_lines.append("📈 Key Stats:")
                     combined_lines.extend(ks_lines)
                     combined_lines.append("")
 
             readability = forward_shaped.get("readability") or {}
-            if isinstance(readability, dict):
-                method = readability.get("method")
-                score = readability.get("score")
-                level = readability.get("level")
-                details = [str(x) for x in (method, score, level) if x is not None]
-                if details:
-                    combined_lines.append("🧮 Readability: " + ", ".join(map(str, details)))
-                    combined_lines.append("")
+            readability_line = self._format_readability(readability)
+            if readability_line:
+                combined_lines.append(f"🧮 Readability — {readability_line}")
+                combined_lines.append("")
 
             seo = [
                 str(x).strip() for x in (forward_shaped.get("seo_keywords") or []) if str(x).strip()
@@ -1333,6 +1314,84 @@ class ResponseFormatter:
                 return f"{value:.1f} {unit}"
             value /= 1024
         return f"{value:.1f} TB"
+
+    def _format_metric_value(self, value: Any) -> str | None:
+        """Format metric values, trimming insignificant decimals and booleans."""
+
+        if value is None:
+            return None
+        if isinstance(value, bool):
+            return "Yes" if value else "No"
+        if isinstance(value, int):
+            return str(value)
+        if isinstance(value, float):
+            if math.isnan(value) or math.isinf(value):
+                return str(value)
+            if value.is_integer():
+                return str(int(value))
+            return f"{value:.2f}".rstrip("0").rstrip(".")
+        return str(value).strip()
+
+    def _format_key_stats(self, key_stats: list[dict[str, Any]]) -> list[str]:
+        """Render key statistics into bullet-point lines."""
+
+        formatted: list[str] = []
+        for entry in key_stats:
+            if not isinstance(entry, dict):
+                continue
+
+            label = str(entry.get("label", "")).strip()
+            if not label:
+                continue
+
+            value_text = self._format_metric_value(entry.get("value"))
+            unit = str(entry.get("unit", "")).strip()
+            source_excerpt = str(entry.get("source_excerpt", "")).strip()
+
+            detail_parts: list[str] = []
+            if value_text is not None:
+                if unit:
+                    detail_parts.append(f"{value_text} {unit}".strip())
+                else:
+                    detail_parts.append(value_text)
+            elif unit:
+                detail_parts.append(unit)
+
+            if source_excerpt:
+                detail_parts.append(f"Source: {source_excerpt}")
+
+            if detail_parts:
+                formatted.append(f"• {label}: " + " — ".join(detail_parts))
+            else:
+                formatted.append(f"• {label}")
+
+        return formatted
+
+    def _format_readability(self, readability: Any) -> str | None:
+        """Create a reader-friendly readability summary line."""
+
+        if not isinstance(readability, dict):
+            return None
+
+        method_raw = str(readability.get("method", "")).strip()
+        method_display = method_raw[:1].upper() + method_raw[1:] if method_raw else ""
+
+        score = self._format_metric_value(readability.get("score"))
+        level_raw = str(readability.get("level", "")).strip()
+        level_display = level_raw[:1].upper() + level_raw[1:] if level_raw else ""
+
+        detail_parts: list[str] = []
+        if score is not None:
+            detail_parts.append(f"Score: {score}")
+        if level_display:
+            detail_parts.append(f"Level: {level_display}")
+
+        details = " • ".join(detail_parts)
+        if method_display and details:
+            return f"{method_display} • {details}"
+        if method_display:
+            return method_display
+        return details or None
 
     def _chunk_text(self, text: str, *, max_len: int) -> list[str]:
         """Split text into chunks respecting Telegram's message length limit."""
