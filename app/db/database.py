@@ -335,14 +335,43 @@ class Database:
 
         reprocess_map: dict[int, dict[str, Any]] = {}
 
+        def _coerce_int(value: Any) -> int | None:
+            try:
+                return int(value) if value is not None else None
+            except (TypeError, ValueError):
+                return None
+
         def queue_reprocess(request_id: int, reason: str) -> None:
-            entry = reprocess_map.setdefault(
-                request_id, {"request_id": request_id, "reasons": set()}
-            )
+            if row_type == "forward":
+                return
+            entry = reprocess_map.get(request_id)
+            if entry is None:
+                entry = {
+                    "request_id": request_id,
+                    "type": row_type,
+                    "status": row_status,
+                    "source": self._describe_request_source(row),
+                    "normalized_url": (
+                        str(row.get("normalized_url"))
+                        if isinstance(row.get("normalized_url"), str) and row.get("normalized_url")
+                        else None
+                    ),
+                    "input_url": (
+                        str(row.get("input_url"))
+                        if isinstance(row.get("input_url"), str) and row.get("input_url")
+                        else None
+                    ),
+                    "fwd_from_chat_id": _coerce_int(row.get("fwd_from_chat_id")),
+                    "fwd_from_msg_id": _coerce_int(row.get("fwd_from_msg_id")),
+                    "reasons": set(),
+                }
+                reprocess_map[request_id] = entry
             entry["reasons"].add(reason)
 
         for row in rows:
             request_id = int(row["request_id"])
+            row_type = str(row.get("request_type") or "unknown")
+            row_status = str(row.get("request_status") or "unknown")
             summary_json = row.get("summary_json")
             links_json = row.get("links_json")
 
@@ -413,10 +442,14 @@ class Database:
                 queue_reprocess(request_id, "missing_links")
 
         if reprocess_map:
-            posts["reprocess"] = [
-                {"request_id": rid, "reasons": sorted(data["reasons"])}
-                for rid, data in sorted(reprocess_map.items())
-            ]
+            reprocess_entries: list[dict[str, Any]] = []
+            for request_id, data in sorted(reprocess_map.items()):
+                reasons = data.get("reasons")
+                entry = dict(data)
+                entry["request_id"] = request_id
+                entry["reasons"] = sorted(reasons) if isinstance(reasons, set) else []
+                reprocess_entries.append(entry)
+            posts["reprocess"] = reprocess_entries
 
         return {"overview": overview, "posts": posts}
 
