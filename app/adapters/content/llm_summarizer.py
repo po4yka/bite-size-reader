@@ -20,6 +20,7 @@ from app.core.json_utils import extract_json
 from app.core.lang import LANG_RU
 from app.core.summary_contract import validate_and_shape_summary
 from app.db.database import Database
+from app.db.user_interactions import safe_update_user_interaction
 from app.utils.json_validation import finalize_summary_texts, parse_summary_response
 
 if TYPE_CHECKING:
@@ -663,13 +664,15 @@ class LLMSummarizer:
 
         # Update interaction with error
         if interaction_id:
-            self._update_user_interaction(
+            safe_update_user_interaction(
+                self.db,
                 interaction_id=interaction_id,
                 response_sent=True,
                 response_type="error",
                 error_occurred=True,
                 error_message="No meaningful content extracted from URL",
                 request_id=req_id,
+                logger_=logger,
             )
 
     def _log_llm_content_validation(
@@ -800,11 +803,13 @@ class LLMSummarizer:
 
         # Update interaction with successful completion
         if interaction_id:
-            self._update_user_interaction(
+            safe_update_user_interaction(
+                self.db,
                 interaction_id=interaction_id,
                 response_sent=True,
                 response_type="summary",
                 request_id=req_id,
+                logger_=logger,
             )
 
         return summary_shaped
@@ -1265,13 +1270,15 @@ class LLMSummarizer:
 
         # Update interaction with error
         if interaction_id:
-            self._update_user_interaction(
+            safe_update_user_interaction(
+                self.db,
                 interaction_id=interaction_id,
                 response_sent=True,
                 response_type="error",
                 error_occurred=True,
                 error_message=error_details or f"LLM error: {llm.error_text or 'Unknown error'}",
                 request_id=req_id,
+                logger_=logger,
             )
 
     async def _parse_and_repair_response(
@@ -1544,13 +1551,15 @@ class LLMSummarizer:
 
         # Update interaction with error
         if interaction_id:
-            self._update_user_interaction(
+            safe_update_user_interaction(
+                self.db,
                 interaction_id=interaction_id,
                 response_sent=True,
                 response_type="error",
                 error_occurred=True,
                 error_message="Invalid summary format",
                 request_id=req_id,
+                logger_=logger,
             )
 
     async def _handle_parsing_failure(
@@ -1570,13 +1579,15 @@ class LLMSummarizer:
         )
 
         if interaction_id:
-            self._update_user_interaction(
+            safe_update_user_interaction(
+                self.db,
                 interaction_id=interaction_id,
                 response_sent=True,
                 response_type="error",
                 error_occurred=True,
                 error_message="Invalid summary format",
                 request_id=req_id,
+                logger_=logger,
             )
 
     def _log_llm_finished(
@@ -1625,38 +1636,6 @@ class LLMSummarizer:
         except Exception:
             # Fallback to basic JSON object mode
             return {"type": "json_object"}
-
-    def _update_user_interaction(
-        self,
-        *,
-        interaction_id: int,
-        response_sent: bool | None = None,
-        response_type: str | None = None,
-        error_occurred: bool | None = None,
-        error_message: str | None = None,
-        processing_time_ms: int | None = None,
-        request_id: int | None = None,
-    ) -> None:
-        """Update an existing user interaction record."""
-
-        if interaction_id is None or interaction_id <= 0:
-            return
-
-        try:
-            self.db.update_user_interaction(
-                interaction_id=interaction_id,
-                response_sent=response_sent,
-                response_type=response_type,
-                error_occurred=error_occurred,
-                error_message=error_message,
-                processing_time_ms=processing_time_ms,
-                request_id=request_id,
-            )
-        except Exception as exc:  # noqa: BLE001
-            logger.warning(
-                "user_interaction_update_failed",
-                extra={"interaction_id": interaction_id, "error": str(exc)},
-            )
 
     @property
     def last_llm_result(self) -> Any | None:

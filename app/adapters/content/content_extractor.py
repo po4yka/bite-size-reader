@@ -1,4 +1,5 @@
 """Content extraction and processing for URLs."""
+
 # ruff: noqa: E501
 # flake8: noqa
 

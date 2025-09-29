@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING, Any
 from app.config import AppConfig
 from app.core.logging_utils import generate_correlation_id
 from app.core.url_utils import extract_all_urls
+from app.db.user_interactions import safe_update_user_interaction
 
 if TYPE_CHECKING:
     from app.adapters.content.url_processor import URLProcessor
@@ -61,11 +62,13 @@ class CommandProcessor:
 
         await self.response_formatter.send_welcome(message)
         if interaction_id:
-            self._update_user_interaction(
+            safe_update_user_interaction(
+                self.db,
                 interaction_id=interaction_id,
                 response_sent=True,
                 response_type="welcome",
-                processing_time_ms=int((time.time() - start_time) * 1000),
+                start_time=start_time,
+                logger_=logger,
             )
 
     async def handle_help_command(
@@ -86,11 +89,13 @@ class CommandProcessor:
 
         await self.response_formatter.send_help(message)
         if interaction_id:
-            self._update_user_interaction(
+            safe_update_user_interaction(
+                self.db,
                 interaction_id=interaction_id,
                 response_sent=True,
                 response_type="help",
-                processing_time_ms=int((time.time() - start_time) * 1000),
+                start_time=start_time,
+                logger_=logger,
             )
 
     async def handle_dbinfo_command(
@@ -118,23 +123,27 @@ class CommandProcessor:
                 "⚠️ Unable to read database overview right now. Check bot logs for details.",
             )
             if interaction_id:
-                self._update_user_interaction(
+                safe_update_user_interaction(
+                    self.db,
                     interaction_id=interaction_id,
                     response_sent=True,
                     response_type="dbinfo_error",
                     error_occurred=True,
                     error_message=str(exc)[:500],
-                    processing_time_ms=int((time.time() - start_time) * 1000),
+                    start_time=start_time,
+                    logger_=logger,
                 )
             return
 
         await self.response_formatter.send_db_overview(message, overview)
         if interaction_id:
-            self._update_user_interaction(
+            safe_update_user_interaction(
+                self.db,
                 interaction_id=interaction_id,
                 response_sent=True,
                 response_type="dbinfo",
-                processing_time_ms=int((time.time() - start_time) * 1000),
+                start_time=start_time,
+                logger_=logger,
             )
 
     async def handle_dbverify_command(
@@ -162,13 +171,15 @@ class CommandProcessor:
                 "⚠️ Unable to verify database records right now. Check bot logs for details.",
             )
             if interaction_id:
-                self._update_user_interaction(
+                safe_update_user_interaction(
+                    self.db,
                     interaction_id=interaction_id,
                     response_sent=True,
                     response_type="dbverify_error",
                     error_occurred=True,
                     error_message=str(exc)[:500],
-                    processing_time_ms=int((time.time() - start_time) * 1000),
+                    start_time=start_time,
+                    logger_=logger,
                 )
             return
 
@@ -247,11 +258,13 @@ class CommandProcessor:
                 )
 
         if interaction_id:
-            self._update_user_interaction(
+            safe_update_user_interaction(
+                self.db,
                 interaction_id=interaction_id,
                 response_sent=True,
                 response_type="dbverify",
-                processing_time_ms=int((time.time() - start_time) * 1000),
+                start_time=start_time,
+                logger_=logger,
             )
 
     async def handle_summarize_all_command(
@@ -271,13 +284,15 @@ class CommandProcessor:
                 "Send multiple URLs in one message after /summarize_all, separated by space or new line.",
             )
             if interaction_id:
-                self._update_user_interaction(
+                safe_update_user_interaction(
+                    self.db,
                     interaction_id=interaction_id,
                     response_sent=True,
                     response_type="error",
                     error_occurred=True,
                     error_message="No URLs found",
-                    processing_time_ms=int((time.time() - start_time) * 1000),
+                    start_time=start_time,
+                    logger_=logger,
                 )
             return
 
@@ -302,11 +317,13 @@ class CommandProcessor:
 
         await self.response_formatter.safe_reply(message, f"Processing {len(urls)} links...")
         if interaction_id:
-            self._update_user_interaction(
+            safe_update_user_interaction(
+                self.db,
                 interaction_id=interaction_id,
                 response_sent=True,
                 response_type="processing",
-                processing_time_ms=int((time.time() - start_time) * 1000),
+                start_time=start_time,
+                logger_=logger,
             )
 
         for u in urls:
@@ -357,11 +374,13 @@ class CommandProcessor:
             )
             logger.debug("awaiting_multi_confirm", extra={"uid": uid, "count": len(urls)})
             if interaction_id:
-                self._update_user_interaction(
+                safe_update_user_interaction(
+                    self.db,
                     interaction_id=interaction_id,
                     response_sent=True,
                     response_type="confirmation",
-                    processing_time_ms=int((time.time() - start_time) * 1000),
+                    start_time=start_time,
+                    logger_=logger,
                 )
             return "multi_confirm", False
         elif len(urls) == 1:
@@ -376,11 +395,13 @@ class CommandProcessor:
             await self.response_formatter.safe_reply(message, "Send a URL to summarize.")
             logger.debug("awaiting_url", extra={"uid": uid})
             if interaction_id:
-                self._update_user_interaction(
+                safe_update_user_interaction(
+                    self.db,
                     interaction_id=interaction_id,
                     response_sent=True,
                     response_type="awaiting_url",
-                    processing_time_ms=int((time.time() - start_time) * 1000),
+                    start_time=start_time,
+                    logger_=logger,
                 )
             return "awaiting_url", False
 
@@ -431,43 +452,13 @@ class CommandProcessor:
             response_type = (
                 "cancelled" if (awaiting_cancelled or multi_cancelled) else "cancel_none"
             )
-            self._update_user_interaction(
+            safe_update_user_interaction(
+                self.db,
                 interaction_id=interaction_id,
                 response_sent=True,
                 response_type=response_type,
-                processing_time_ms=int((time.time() - start_time) * 1000),
-            )
-
-    def _update_user_interaction(
-        self,
-        *,
-        interaction_id: int,
-        response_sent: bool | None = None,
-        response_type: str | None = None,
-        error_occurred: bool | None = None,
-        error_message: str | None = None,
-        processing_time_ms: int | None = None,
-        request_id: int | None = None,
-    ) -> None:
-        """Update an existing user interaction record."""
-
-        if interaction_id <= 0:
-            return
-
-        try:
-            self.db.update_user_interaction(
-                interaction_id=interaction_id,
-                response_sent=response_sent,
-                response_type=response_type,
-                error_occurred=error_occurred,
-                error_message=error_message,
-                processing_time_ms=processing_time_ms,
-                request_id=request_id,
-            )
-        except Exception as exc:  # noqa: BLE001
-            logger.warning(
-                "user_interaction_update_failed",
-                extra={"interaction_id": interaction_id, "error": str(exc)},
+                start_time=start_time,
+                logger_=logger,
             )
 
     async def handle_unread_command(
@@ -525,11 +516,13 @@ class CommandProcessor:
             await self.response_formatter.safe_reply(message, "\n".join(response_lines))
 
             if interaction_id:
-                self._update_user_interaction(
+                safe_update_user_interaction(
+                    self.db,
                     interaction_id=interaction_id,
                     response_sent=True,
                     response_type="unread_list",
-                    processing_time_ms=int((time.time() - start_time) * 1000),
+                    start_time=start_time,
+                    logger_=logger,
                 )
 
         except Exception as exc:  # noqa: BLE001 - defensive catch
@@ -539,13 +532,15 @@ class CommandProcessor:
                 "⚠️ Unable to retrieve unread articles right now. Check bot logs for details.",
             )
             if interaction_id:
-                self._update_user_interaction(
+                safe_update_user_interaction(
+                    self.db,
                     interaction_id=interaction_id,
                     response_sent=True,
                     response_type="error",
                     error_occurred=True,
                     error_message=str(exc)[:500],
-                    processing_time_ms=int((time.time() - start_time) * 1000),
+                    start_time=start_time,
+                    logger_=logger,
                 )
 
     async def handle_read_command(
@@ -644,12 +639,14 @@ class CommandProcessor:
                     )
 
             if interaction_id:
-                self._update_user_interaction(
+                safe_update_user_interaction(
+                    self.db,
                     interaction_id=interaction_id,
                     response_sent=True,
                     response_type="read_article",
                     request_id=request_id,
-                    processing_time_ms=int((time.time() - start_time) * 1000),
+                    start_time=start_time,
+                    logger_=logger,
                 )
 
         except Exception as exc:  # noqa: BLE001 - defensive catch
@@ -659,11 +656,13 @@ class CommandProcessor:
                 "⚠️ Unable to read the article right now. Check bot logs for details.",
             )
             if interaction_id:
-                self._update_user_interaction(
+                safe_update_user_interaction(
+                    self.db,
                     interaction_id=interaction_id,
                     response_sent=True,
                     response_type="error",
                     error_occurred=True,
                     error_message=str(exc)[:500],
-                    processing_time_ms=int((time.time() - start_time) * 1000),
+                    start_time=start_time,
+                    logger_=logger,
                 )
