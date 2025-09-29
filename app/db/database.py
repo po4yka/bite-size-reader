@@ -167,10 +167,7 @@ class Database:
                 tables = {}
                 for table in sorted(self._database.get_tables()):
                     try:
-                        count_row = self._database.execute_sql(
-                            f"SELECT COUNT(*) AS cnt FROM {table}"
-                        ).fetchone()
-                        tables[table] = int(count_row["cnt"]) if count_row else 0
+                        tables[table] = self._count_table_rows(table)
                     except peewee.DatabaseError as exc:
                         overview["errors"].append(f"Failed to count rows for table '{table}'")
                         self._logger.error(
@@ -227,6 +224,19 @@ class Database:
     def _fetch_single_value(self, sql: str) -> Any:
         row = self.fetchone(sql)
         return row[0] if row else None
+
+    def _count_table_rows(self, table_name: str) -> int:
+        """Return the number of rows in the given table using Peewee queries."""
+
+        model = next(
+            (model for model in ALL_MODELS if model._meta.table_name == table_name),
+            None,
+        )
+        if model is not None:
+            return model.select().count()
+
+        dynamic_table = peewee.Table(table_name)
+        return dynamic_table.select().count(self._database)
 
     def _mask_path(self, path: str) -> str:
         try:
