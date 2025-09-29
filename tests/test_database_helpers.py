@@ -207,6 +207,7 @@ class TestDatabaseHelpers(unittest.TestCase):
         row = self.db.fetchone("SELECT * FROM telegram_messages WHERE request_id = ?", (rid,))
         self.assertIsNotNone(row)
         self.assertEqual(row["media_type"], "photo")
+        self.assertEqual(row["chat_id"], 1)
 
         # LLM call
         lid = self.db.insert_llm_call(

@@ -133,6 +133,8 @@ packaging==25.0
     #   weasel
 pathspec==0.12.1
     # via mypy
+peewee==3.18.2
+    # via bite-size-reader (pyproject.toml)
 platformdirs==4.4.0
     # via virtualenv
 pluggy==1.6.0
@@ -197,7 +199,6 @@ scipy==1.16.2
     #   textacy
 setuptools==80.9.0
     # via
-    #   pymorphy3
     #   spacy
     #   thinc
 shellingham==1.5.4

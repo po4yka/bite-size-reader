@@ -1,1 +1,1 @@
-"""Database layer: schema and helpers for SQLite."""
+"""Database layer built on top of Peewee ORM."""
