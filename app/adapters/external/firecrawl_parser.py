@@ -5,33 +5,66 @@ import json
 import logging
 import time
 from collections.abc import Callable
-from dataclasses import dataclass
 from typing import Any
 
 import httpx
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.core.logging_utils import truncate_log_content
 
 
-@dataclass
-class FirecrawlResult:
-    status: str
-    http_status: int | None
-    content_markdown: str | None
-    content_html: str | None
-    structured_json: dict | None
-    metadata_json: dict | None
-    links_json: dict | None
-    response_success: bool | None
-    response_error_code: str | None
-    response_error_message: str | None
-    response_details: dict | list | None
-    latency_ms: int | None
-    error_text: str | None
-    source_url: str | None = None
-    endpoint: str | None = "/v1/scrape"
-    options_json: dict | None = None
-    correlation_id: str | None = None  # Firecrawl's cid field
+class FirecrawlResult(BaseModel):
+    """Normalized representation of a Firecrawl `/v1/scrape` response."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    status: str = Field(description="High-level status of the crawl attempt.")
+    http_status: int | None = Field(
+        default=None, description="HTTP status code returned by Firecrawl."
+    )
+    content_markdown: str | None = Field(
+        default=None, description="Markdown content returned by Firecrawl."
+    )
+    content_html: str | None = Field(
+        default=None, description="HTML content returned by Firecrawl."
+    )
+    structured_json: dict[str, Any] | None = Field(
+        default=None, description="Structured JSON payload from Firecrawl."
+    )
+    metadata_json: dict[str, Any] | None = Field(
+        default=None, description="Metadata block supplied by Firecrawl."
+    )
+    links_json: dict[str, Any] | list[Any] | None = Field(
+        default=None, description="Outbound links metadata from Firecrawl."
+    )
+    response_success: bool | None = Field(
+        default=None, description="Whether Firecrawl reported success."
+    )
+    response_error_code: str | None = Field(
+        default=None, description="Firecrawl-provided error code, if any."
+    )
+    response_error_message: str | None = Field(
+        default=None, description="Firecrawl-provided error message, if any."
+    )
+    response_details: dict[str, Any] | list[Any] | None = Field(
+        default=None, description="Additional detail array/object from Firecrawl."
+    )
+    latency_ms: int | None = Field(
+        default=None, description="Client-observed latency for the call."
+    )
+    error_text: str | None = Field(
+        default=None, description="Client-derived error message, if any."
+    )
+    source_url: str | None = Field(default=None, description="URL that was submitted to Firecrawl.")
+    endpoint: str | None = Field(
+        default="/v1/scrape", description="Firecrawl endpoint that was called."
+    )
+    options_json: dict[str, Any] | None = Field(
+        default=None, description="Options payload sent to Firecrawl."
+    )
+    correlation_id: str | None = Field(
+        default=None, description="Firecrawl correlation identifier (cid)."
+    )
 
 
 class FirecrawlClient:
