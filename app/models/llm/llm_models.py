@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, StrictBool
 
 
 class LLMCallResult(BaseModel):
@@ -73,7 +73,10 @@ class ChatRequest(BaseModel):
         default=None, description="Maximum tokens to generate in the completion."
     )
     top_p: float | None = Field(default=None, description="Nucleus sampling parameter.")
-    stream: bool = Field(default=False, description="Whether to request a streaming response.")
+    stream: StrictBool = Field(
+        default=False,
+        description="Whether to request a streaming response.",
+    )
     request_id: int | None = Field(
         default=None, description="Internal request identifier for tracing."
     )
