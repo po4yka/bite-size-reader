@@ -11,6 +11,7 @@ def db(tmp_path) -> Database:
     database = Database(str(path))
     database.migrate()
     with database.connect() as conn:
+        conn.execute("DROP TABLE IF EXISTS user_interactions")
         conn.execute(
             """
             CREATE TABLE user_interactions (
