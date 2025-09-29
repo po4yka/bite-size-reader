@@ -6,6 +6,7 @@ import datetime as _dt
 from typing import Any
 
 import peewee
+from playhouse.sqlite_ext import JSONField
 
 # A proxy that will be initialised with the concrete database instance at runtime.
 database_proxy: peewee.Database = peewee.DatabaseProxy()
@@ -69,15 +70,15 @@ class TelegramMessage(BaseModel):
     chat_id = peewee.BigIntegerField(null=True)
     date_ts = peewee.IntegerField(null=True)
     text_full = peewee.TextField(null=True)
-    entities_json = peewee.TextField(null=True)
+    entities_json = JSONField(null=True)
     media_type = peewee.TextField(null=True)
-    media_file_ids_json = peewee.TextField(null=True)
+    media_file_ids_json = JSONField(null=True)
     forward_from_chat_id = peewee.BigIntegerField(null=True)
     forward_from_chat_type = peewee.TextField(null=True)
     forward_from_chat_title = peewee.TextField(null=True)
     forward_from_message_id = peewee.IntegerField(null=True)
     forward_date_ts = peewee.IntegerField(null=True)
-    telegram_raw_json = peewee.TextField(null=True)
+    telegram_raw_json = JSONField(null=True)
 
     class Meta:
         table_name = "telegram_messages"
@@ -91,19 +92,19 @@ class CrawlResult(BaseModel):
     endpoint = peewee.TextField(null=True)
     http_status = peewee.IntegerField(null=True)
     status = peewee.TextField(null=True)
-    options_json = peewee.TextField(null=True)
+    options_json = JSONField(null=True)
     correlation_id = peewee.TextField(null=True)
     content_markdown = peewee.TextField(null=True)
     content_html = peewee.TextField(null=True)
-    structured_json = peewee.TextField(null=True)
-    metadata_json = peewee.TextField(null=True)
-    links_json = peewee.TextField(null=True)
-    screenshots_paths_json = peewee.TextField(null=True)
+    structured_json = JSONField(null=True)
+    metadata_json = JSONField(null=True)
+    links_json = JSONField(null=True)
+    screenshots_paths_json = JSONField(null=True)
     firecrawl_success = peewee.BooleanField(null=True)
     firecrawl_error_code = peewee.TextField(null=True)
     firecrawl_error_message = peewee.TextField(null=True)
-    firecrawl_details_json = peewee.TextField(null=True)
-    raw_response_json = peewee.TextField(null=True)
+    firecrawl_details_json = JSONField(null=True)
+    raw_response_json = JSONField(null=True)
     latency_ms = peewee.IntegerField(null=True)
     error_text = peewee.TextField(null=True)
 
@@ -116,12 +117,12 @@ class LLMCall(BaseModel):
     provider = peewee.TextField(null=True)
     model = peewee.TextField(null=True)
     endpoint = peewee.TextField(null=True)
-    request_headers_json = peewee.TextField(null=True)
-    request_messages_json = peewee.TextField(null=True)
+    request_headers_json = JSONField(null=True)
+    request_messages_json = JSONField(null=True)
     response_text = peewee.TextField(null=True)
-    response_json = peewee.TextField(null=True)
+    response_json = JSONField(null=True)
     openrouter_response_text = peewee.TextField(null=True)
-    openrouter_response_json = peewee.TextField(null=True)
+    openrouter_response_json = JSONField(null=True)
     tokens_prompt = peewee.IntegerField(null=True)
     tokens_completion = peewee.IntegerField(null=True)
     cost_usd = peewee.FloatField(null=True)
@@ -130,7 +131,7 @@ class LLMCall(BaseModel):
     error_text = peewee.TextField(null=True)
     structured_output_used = peewee.BooleanField(null=True)
     structured_output_mode = peewee.TextField(null=True)
-    error_context_json = peewee.TextField(null=True)
+    error_context_json = JSONField(null=True)
     created_at = peewee.DateTimeField(default=_dt.datetime.utcnow)
 
     class Meta:
@@ -140,8 +141,8 @@ class LLMCall(BaseModel):
 class Summary(BaseModel):
     request = peewee.ForeignKeyField(Request, backref="summary", unique=True, on_delete="CASCADE")
     lang = peewee.TextField(null=True)
-    json_payload = peewee.TextField(null=True)
-    insights_json = peewee.TextField(null=True)
+    json_payload = JSONField(null=True)
+    insights_json = JSONField(null=True)
     version = peewee.IntegerField(default=1)
     is_read = peewee.BooleanField(default=False)
     created_at = peewee.DateTimeField(default=_dt.datetime.utcnow)
@@ -185,7 +186,7 @@ class AuditLog(BaseModel):
     ts = peewee.DateTimeField(default=_dt.datetime.utcnow)
     level = peewee.TextField()
     event = peewee.TextField()
-    details_json = peewee.TextField(null=True)
+    details_json = JSONField(null=True)
 
     class Meta:
         table_name = "audit_logs"

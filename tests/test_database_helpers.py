@@ -125,13 +125,13 @@ class TestDatabaseHelpers(unittest.TestCase):
             endpoint="/v1/scrape",
             http_status=200,
             status="ok",
-            options_json=json.dumps({}),
+            options_json={},
             correlation_id="fc-123",
             content_markdown="# md",
             content_html=None,
-            structured_json=json.dumps({}),
-            metadata_json=json.dumps({}),
-            links_json=json.dumps({}),
+            structured_json={},
+            metadata_json={},
+            links_json={},
             screenshots_paths_json=None,
             firecrawl_success=True,
             firecrawl_error_code=None,
@@ -147,7 +147,7 @@ class TestDatabaseHelpers(unittest.TestCase):
         self.assertEqual(row["http_status"], 200)
         self.assertEqual(row["content_markdown"], "# md")
         self.assertEqual(row["correlation_id"], "fc-123")
-        self.assertEqual(row["firecrawl_success"], 1)
+        self.assertTrue(row["firecrawl_success"])
         self.assertIsNone(row["raw_response_json"])
 
     def test_summary_upsert(self):
@@ -159,7 +159,7 @@ class TestDatabaseHelpers(unittest.TestCase):
             user_id=None,
             route_version=1,
         )
-        v1 = self.db.upsert_summary(request_id=rid, lang="en", json_payload=json.dumps({"a": 1}))
+        v1 = self.db.upsert_summary(request_id=rid, lang="en", json_payload={"a": 1})
         self.assertEqual(v1, 1)
         row = self.db.get_summary_by_request(rid)
         self.assertIsNotNone(row)
@@ -167,12 +167,12 @@ class TestDatabaseHelpers(unittest.TestCase):
         self.assertEqual(row["lang"], "en")
         self.assertIsNone(row["insights_json"])
 
-        v2 = self.db.upsert_summary(request_id=rid, lang="en", json_payload=json.dumps({"a": 2}))
+        v2 = self.db.upsert_summary(request_id=rid, lang="en", json_payload={"a": 2})
         self.assertEqual(v2, 2)
         row2 = self.db.get_summary_by_request(rid)
         self.assertEqual(row2["version"], 2)
 
-        insights_payload = json.dumps({"topic_overview": "Context", "new_facts": []})
+        insights_payload = {"topic_overview": "Context", "new_facts": []}
         self.db.update_summary_insights(rid, insights_payload)
         row3 = self.db.get_summary_by_request(rid)
         self.assertEqual(row3["insights_json"], insights_payload)
@@ -193,15 +193,15 @@ class TestDatabaseHelpers(unittest.TestCase):
             chat_id=1,
             date_ts=1700000000,
             text_full="hello",
-            entities_json=json.dumps([{"type": "bold"}]),
+            entities_json=[{"type": "bold"}],
             media_type="photo",
-            media_file_ids_json=json.dumps(["file_1"]),
+            media_file_ids_json=["file_1"],
             forward_from_chat_id=7,
             forward_from_chat_type="channel",
             forward_from_chat_title="Title",
             forward_from_message_id=5,
             forward_date_ts=1700000001,
-            telegram_raw_json=json.dumps({"k": "v"}),
+            telegram_raw_json={"k": "v"},
         )
         self.assertIsInstance(mid, int)
         row = self.db.fetchone("SELECT * FROM telegram_messages WHERE request_id = ?", (rid,))
@@ -215,10 +215,10 @@ class TestDatabaseHelpers(unittest.TestCase):
             provider="openrouter",
             model="m",
             endpoint="/api/v1/chat/completions",
-            request_headers_json=json.dumps({"Authorization": "REDACTED"}),
-            request_messages_json=json.dumps([{"role": "user", "content": "hi"}]),
+            request_headers_json={"Authorization": "REDACTED"},
+            request_messages_json=[{"role": "user", "content": "hi"}],
             response_text="{}",
-            response_json=json.dumps({"choices": []}),
+            response_json={"choices": []},
             tokens_prompt=1,
             tokens_completion=2,
             cost_usd=0.001,
@@ -227,7 +227,7 @@ class TestDatabaseHelpers(unittest.TestCase):
             error_text=None,
             structured_output_used=True,
             structured_output_mode="json_schema",
-            error_context_json=json.dumps({"status_code": 200}),
+            error_context_json={"status_code": 200},
         )
         self.assertIsInstance(lid, int)
         lrow = self.db.fetchone("SELECT * FROM llm_calls WHERE id = ?", (lid,))
@@ -246,9 +246,7 @@ class TestDatabaseHelpers(unittest.TestCase):
         )
 
         # Audit
-        aid = self.db.insert_audit_log(
-            level="INFO", event="test", details_json=json.dumps({"x": 1})
-        )
+        aid = self.db.insert_audit_log(level="INFO", event="test", details_json={"x": 1})
         self.assertIsInstance(aid, int)
         arow = self.db.fetchone("SELECT * FROM audit_logs WHERE id = ?", (aid,))
         self.assertIsNotNone(arow)
@@ -303,7 +301,7 @@ class TestDatabaseHelpers(unittest.TestCase):
         self.db.insert_summary(
             request_id=rid_good,
             lang="en",
-            json_payload=json.dumps(base_summary),
+            json_payload=base_summary,
         )
         self.db.insert_crawl_result(
             request_id=rid_good,
@@ -311,13 +309,13 @@ class TestDatabaseHelpers(unittest.TestCase):
             endpoint="/v1/scrape",
             http_status=200,
             status="ok",
-            options_json=json.dumps({}),
+            options_json={},
             correlation_id="fc-good",
             content_markdown="# md",
             content_html=None,
-            structured_json=json.dumps({}),
-            metadata_json=json.dumps({}),
-            links_json=json.dumps(["https://example.com/other"]),
+            structured_json={},
+            metadata_json={},
+            links_json=["https://example.com/other"],
             screenshots_paths_json=None,
             firecrawl_success=True,
             firecrawl_error_code=None,
@@ -347,7 +345,7 @@ class TestDatabaseHelpers(unittest.TestCase):
         self.db.insert_summary(
             request_id=rid_bad,
             lang="en",
-            json_payload=json.dumps(bad_summary),
+            json_payload=bad_summary,
         )
 
         rid_empty_links = self.db.create_request(
@@ -363,7 +361,7 @@ class TestDatabaseHelpers(unittest.TestCase):
         self.db.insert_summary(
             request_id=rid_empty_links,
             lang="en",
-            json_payload=json.dumps(base_summary),
+            json_payload=base_summary,
         )
         self.db.insert_crawl_result(
             request_id=rid_empty_links,
@@ -371,13 +369,13 @@ class TestDatabaseHelpers(unittest.TestCase):
             endpoint="/v1/scrape",
             http_status=200,
             status="ok",
-            options_json=json.dumps({}),
+            options_json={},
             correlation_id="fc-empty",
             content_markdown="# md",
             content_html=None,
-            structured_json=json.dumps({}),
-            metadata_json=json.dumps({}),
-            links_json=json.dumps([]),
+            structured_json={},
+            metadata_json={},
+            links_json=[],
             screenshots_paths_json=None,
             firecrawl_success=True,
             firecrawl_error_code=None,
@@ -466,15 +464,15 @@ class TestDatabaseHelpers(unittest.TestCase):
             chat_id=1,
             date_ts=1700000000,
             text_full="hello",
-            entities_json=json.dumps([{"type": "bold"}]),
+            entities_json=[{"type": "bold"}],
             media_type="photo",
-            media_file_ids_json=json.dumps(["file_a"]),
+            media_file_ids_json=["file_a"],
             forward_from_chat_id=None,
             forward_from_chat_type=None,
             forward_from_chat_title=None,
             forward_from_message_id=None,
             forward_date_ts=None,
-            telegram_raw_json=json.dumps({"k": "v"}),
+            telegram_raw_json={"k": "v"},
         )
 
         mid2 = self.db.insert_telegram_message(
@@ -483,15 +481,15 @@ class TestDatabaseHelpers(unittest.TestCase):
             chat_id=1,
             date_ts=1700000000,
             text_full="hello",
-            entities_json=json.dumps([{"type": "bold"}]),
+            entities_json=[{"type": "bold"}],
             media_type="video",
-            media_file_ids_json=json.dumps(["file_b"]),
+            media_file_ids_json=["file_b"],
             forward_from_chat_id=None,
             forward_from_chat_type=None,
             forward_from_chat_title=None,
             forward_from_message_id=None,
             forward_date_ts=None,
-            telegram_raw_json=json.dumps({"k": "v"}),
+            telegram_raw_json={"k": "v"},
         )
 
         self.assertEqual(mid1, mid2)

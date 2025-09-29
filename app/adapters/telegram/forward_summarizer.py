@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import logging
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
@@ -174,16 +173,15 @@ class ForwardSummarizer:
         """Handle LLM errors."""
         # persist LLM call as error, then reply
         try:
-            # json.dumps with default=str to avoid MagicMock serialization errors in tests
             self.db.insert_llm_call(
                 request_id=req_id,
                 provider="openrouter",
                 model=llm.model or self.cfg.openrouter.model,
                 endpoint=llm.endpoint,
-                request_headers_json=json.dumps(llm.request_headers or {}, default=str),
-                request_messages_json=json.dumps(llm.request_messages or [], default=str),
+                request_headers_json=llm.request_headers or {},
+                request_messages_json=list(llm.request_messages or []),
                 response_text=llm.response_text,
-                response_json=json.dumps(llm.response_json or {}, default=str),
+                response_json=llm.response_json or {},
                 tokens_prompt=llm.tokens_prompt,
                 tokens_completion=llm.tokens_completion,
                 cost_usd=llm.cost_usd,
@@ -193,7 +191,7 @@ class ForwardSummarizer:
                 structured_output_used=getattr(llm, "structured_output_used", None),
                 structured_output_mode=getattr(llm, "structured_output_mode", None),
                 error_context_json=(
-                    json.dumps(getattr(llm, "error_context", {}) or {}, default=str)
+                    getattr(llm, "error_context", {})
                     if getattr(llm, "error_context", None) is not None
                     else None
                 ),
@@ -388,10 +386,10 @@ class ForwardSummarizer:
                 provider="openrouter",
                 model=llm.model or self.cfg.openrouter.model,
                 endpoint=llm.endpoint,
-                request_headers_json=json.dumps(llm.request_headers or {}, default=str),
-                request_messages_json=json.dumps([m for m in messages], default=str),
+                request_headers_json=llm.request_headers or {},
+                request_messages_json=list(messages),
                 response_text=llm.response_text,
-                response_json=json.dumps(llm.response_json or {}, default=str),
+                response_json=llm.response_json or {},
                 tokens_prompt=llm.tokens_prompt,
                 tokens_completion=llm.tokens_completion,
                 cost_usd=llm.cost_usd,
@@ -401,7 +399,7 @@ class ForwardSummarizer:
                 structured_output_used=getattr(llm, "structured_output_used", None),
                 structured_output_mode=getattr(llm, "structured_output_mode", None),
                 error_context_json=(
-                    json.dumps(getattr(llm, "error_context", {}) or {}, default=str)
+                    getattr(llm, "error_context", {})
                     if getattr(llm, "error_context", None) is not None
                     else None
                 ),
@@ -413,7 +411,7 @@ class ForwardSummarizer:
             new_version = self.db.upsert_summary(
                 request_id=req_id,
                 lang=chosen_lang,
-                json_payload=json.dumps(forward_shaped),
+                json_payload=forward_shaped,
                 is_read=True,
             )
             self.db.update_request_status(req_id, "ok")

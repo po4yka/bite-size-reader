@@ -244,9 +244,7 @@ class ForwardProcessor:
                 logger.info("insights_message_sent_for_forward", extra={"cid": correlation_id})
 
                 try:
-                    self.db.update_summary_insights(
-                        req_id, json.dumps(insights, ensure_ascii=False)
-                    )
+                    self.db.update_summary_insights(req_id, insights)
                     logger.debug(
                         "insights_persisted_for_forward",
                         extra={"cid": correlation_id, "request_id": req_id},

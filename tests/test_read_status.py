@@ -1,4 +1,3 @@
-import json
 import os
 import tempfile
 import unittest
@@ -51,13 +50,13 @@ class ReadStatusBot(TelegramBot):
                     self.http_status = 200
                     self.endpoint = "https://api.firecrawl.dev/v1/scrape"
                     self.error_text = None
-                    self.options_json = '{"formats": ["markdown"]}'
+                    self.options_json = {"formats": ["markdown"]}
                     self.correlation_id = None
                     self.content_markdown = "Mock content"
                     self.content_html = "Mock HTML"
-                    self.structured_json = "{}"
-                    self.metadata_json = "{}"  # Add missing attribute
-                    self.links_json = "[]"  # Add missing attribute
+                    self.structured_json = {}
+                    self.metadata_json = {}  # Add missing attribute
+                    self.links_json = []  # Add missing attribute
                     self.screenshots_paths_json = None  # Add missing attribute
                     self.response_success = True
                     self.response_error_code = None
@@ -126,7 +125,7 @@ class TestReadStatusDatabase(unittest.TestCase):
         self.db.insert_summary(
             request_id=rid,
             lang="en",
-            json_payload=json.dumps({"title": "Test Article"}),
+            json_payload={"title": "Test Article"},
         )
 
         row = self.db.get_summary_by_request(rid)
@@ -156,7 +155,7 @@ class TestReadStatusDatabase(unittest.TestCase):
         self.db.insert_summary(
             request_id=rid1,
             lang="en",
-            json_payload=json.dumps({"title": "Unread Article"}),
+            json_payload={"title": "Unread Article"},
             is_read=False,
         )
 
@@ -164,7 +163,7 @@ class TestReadStatusDatabase(unittest.TestCase):
         self.db.insert_summary(
             request_id=rid2,
             lang="en",
-            json_payload=json.dumps({"title": "Read Article"}),
+            json_payload={"title": "Read Article"},
             is_read=True,
         )
 
@@ -209,19 +208,19 @@ class TestReadStatusDatabase(unittest.TestCase):
         self.db.insert_summary(
             request_id=rid1,
             lang="en",
-            json_payload=json.dumps({"title": "Article 1"}),
+            json_payload={"title": "Article 1"},
             is_read=False,
         )
         self.db.insert_summary(
             request_id=rid2,
             lang="en",
-            json_payload=json.dumps({"title": "Article 2"}),
+            json_payload={"title": "Article 2"},
             is_read=True,
         )
         self.db.insert_summary(
             request_id=rid3,
             lang="en",
-            json_payload=json.dumps({"title": "Article 3"}),
+            json_payload={"title": "Article 3"},
             is_read=False,
         )
 
@@ -247,7 +246,7 @@ class TestReadStatusDatabase(unittest.TestCase):
             self.db.insert_summary(
                 request_id=rid,
                 lang="en",
-                json_payload=json.dumps({"title": f"Article {i}"}),
+                json_payload={"title": f"Article {i}"},
                 is_read=False,
             )
 
@@ -269,7 +268,7 @@ class TestReadStatusDatabase(unittest.TestCase):
         self.db.insert_summary(
             request_id=rid,
             lang="en",
-            json_payload=json.dumps({"title": "Test Article"}),
+            json_payload={"title": "Test Article"},
             is_read=False,
         )
 
@@ -306,13 +305,13 @@ class TestReadStatusDatabase(unittest.TestCase):
         self.db.insert_summary(
             request_id=rid1,
             lang="en",
-            json_payload=json.dumps({"title": "Unread Article"}),
+            json_payload={"title": "Unread Article"},
             is_read=False,
         )
         self.db.insert_summary(
             request_id=rid2,
             lang="en",
-            json_payload=json.dumps({"title": "Read Article"}),
+            json_payload={"title": "Read Article"},
             is_read=True,
         )
 
@@ -335,7 +334,7 @@ class TestReadStatusDatabase(unittest.TestCase):
         self.db.insert_summary(
             request_id=rid,
             lang="en",
-            json_payload=json.dumps({"title": "Test Article"}),
+            json_payload={"title": "Test Article"},
             is_read=False,
         )
 
@@ -384,9 +383,10 @@ class TestReadStatusCommands(unittest.IsolatedAsyncioTestCase):
                 bot.db.insert_summary(
                     request_id=rid,
                     lang="en",
-                    json_payload=json.dumps(
-                        {"title": f"Article {i + 1}", "metadata": {"title": f"Article {i + 1}"}}
-                    ),
+                    json_payload={
+                        "title": f"Article {i + 1}",
+                        "metadata": {"title": f"Article {i + 1}"},
+                    },
                     is_read=False,
                 )
 
@@ -443,13 +443,11 @@ class TestReadStatusCommands(unittest.IsolatedAsyncioTestCase):
             bot.db.insert_summary(
                 request_id=rid,
                 lang="en",
-                json_payload=json.dumps(
-                    {
-                        "title": "Test Article",
-                        "summary_250": "This is a test article.",
-                        "metadata": {"title": "Test Article"},
-                    }
-                ),
+                json_payload={
+                    "title": "Test Article",
+                    "summary_250": "This is a test article.",
+                    "metadata": {"title": "Test Article"},
+                },
                 is_read=False,
             )
 
@@ -483,9 +481,7 @@ class TestReadStatusCommands(unittest.IsolatedAsyncioTestCase):
             bot.db.insert_summary(
                 request_id=rid,
                 lang="en",
-                json_payload=json.dumps(
-                    {"title": "Test Article", "metadata": {"title": "Test Article"}}
-                ),
+                json_payload={"title": "Test Article", "metadata": {"title": "Test Article"}},
                 is_read=True,  # Already read
             )
 
@@ -537,7 +533,7 @@ class TestReadStatusIntegration(unittest.IsolatedAsyncioTestCase):
             bot.db.insert_summary(
                 request_id=rid,
                 lang="en",
-                json_payload=json.dumps({"title": "Test Article"}),
+                json_payload={"title": "Test Article"},
                 is_read=False,
             )
 

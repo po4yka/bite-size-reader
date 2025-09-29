@@ -7,10 +7,10 @@ from __future__ import annotations
 
 import json
 import logging
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from functools import lru_cache
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from app.adapters.content.content_chunker import ContentChunker
 from app.adapters.content.content_extractor import ContentExtractor
@@ -298,7 +298,7 @@ class URLProcessor:
                     new_version = self.db.upsert_summary(
                         request_id=req_id,
                         lang=chosen_lang,
-                        json_payload=json.dumps(shaped),
+                        json_payload=shaped,
                         is_read=False,
                     )
                     self.db.update_request_status(req_id, "ok")
@@ -364,7 +364,7 @@ class URLProcessor:
             new_version = self.db.upsert_summary(
                 request_id=req_id,
                 lang=chosen_lang,
-                json_payload=json.dumps(shaped),
+                json_payload=shaped,
                 is_read=not silent,
             )
             self.db.update_request_status(req_id, "ok")
@@ -436,9 +436,7 @@ class URLProcessor:
                     logger.info("insights_generated_silently", extra={"cid": correlation_id})
 
                 try:
-                    self.db.update_summary_insights(
-                        req_id, json.dumps(insights, ensure_ascii=False)
-                    )
+                    self.db.update_summary_insights(req_id, insights)
                     logger.debug(
                         "insights_persisted", extra={"cid": correlation_id, "request_id": req_id}
                     )
@@ -562,19 +560,28 @@ class URLProcessor:
             return False
 
         payload = summary_row.get("json_payload")
-        if not payload:
+        if payload is None:
             logger.debug(
                 "cached_summary_empty_payload",
                 extra={"request_id": req_id, "cid": correlation_id},
             )
             return False
 
-        try:
-            shaped = json.loads(payload)
-        except json.JSONDecodeError:
+        if isinstance(payload, Mapping):
+            shaped = dict(payload)
+        elif isinstance(payload, str):
+            try:
+                shaped = json.loads(payload)
+            except json.JSONDecodeError:
+                logger.warning(
+                    "cached_summary_decode_failed",
+                    extra={"request_id": req_id, "cid": correlation_id},
+                )
+                return False
+        else:
             logger.warning(
-                "cached_summary_decode_failed",
-                extra={"request_id": req_id, "cid": correlation_id},
+                "cached_summary_unsupported_payload",
+                extra={"request_id": req_id, "cid": correlation_id, "type": type(payload).__name__},
             )
             return False
 
@@ -613,18 +620,28 @@ class URLProcessor:
             )
 
             insights_raw = summary_row.get("insights_json")
-            if isinstance(insights_raw, str) and insights_raw.strip():
+            insights_payload: dict[str, Any] | None
+            if isinstance(insights_raw, Mapping):
+                insights_payload = dict(cast(Mapping[str, Any], insights_raw))
+            elif isinstance(insights_raw, str) and insights_raw.strip():
                 try:
-                    insights_payload = json.loads(insights_raw)
-                    if isinstance(insights_payload, dict):
-                        await self.response_formatter.send_additional_insights_message(
-                            message, insights_payload, correlation_id
-                        )
+                    decoded = json.loads(insights_raw)
                 except json.JSONDecodeError:
                     logger.warning(
                         "cached_insights_decode_failed",
                         extra={"request_id": req_id, "cid": correlation_id},
                     )
+                    decoded = None
+                if isinstance(decoded, Mapping):
+                    insights_payload = dict(cast(Mapping[str, Any], decoded))
+                else:
+                    insights_payload = None
+            else:
+                insights_payload = None
+            if insights_payload:
+                await self.response_formatter.send_additional_insights_message(
+                    message, dict(insights_payload), correlation_id
+                )
 
         self.db.update_request_status(req_id, "ok")
 
