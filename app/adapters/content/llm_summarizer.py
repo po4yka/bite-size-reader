@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import json
 import logging
 import re
@@ -20,7 +19,7 @@ from app.core.json_utils import extract_json
 from app.core.lang import LANG_RU
 from app.core.summary_contract import validate_and_shape_summary
 from app.db.database import Database
-from app.db.user_interactions import safe_update_user_interaction
+from app.db.user_interactions import async_safe_update_user_interaction
 from app.utils.json_validation import finalize_summary_texts, parse_summary_response
 
 if TYPE_CHECKING:
@@ -302,7 +301,7 @@ class LLMSummarizer:
                             model_override=model_name,
                         )
 
-                    asyncio.create_task(self._persist_llm_call(llm, req_id, correlation_id))
+                    await self._persist_llm_call(llm, req_id, correlation_id)
 
                     if llm.status != "ok":
                         structured_error = (llm.error_text or "") == "structured_output_parse_error"
@@ -657,14 +656,14 @@ class LLMSummarizer:
                 "content_source": "unknown",
             },
         )
-        self.db.update_request_status(req_id, "error")
+        await self.db.async_update_request_status(req_id, "error")
         await self.response_formatter.send_error_notification(
             message, "empty_content", correlation_id
         )
 
         # Update interaction with error
         if interaction_id:
-            safe_update_user_interaction(
+            await async_safe_update_user_interaction(
                 self.db,
                 interaction_id=interaction_id,
                 response_sent=True,
@@ -720,7 +719,7 @@ class LLMSummarizer:
             salvage_shaped = await self._attempt_salvage_parsing(llm, correlation_id)
 
         # Async optimization: Run database operations concurrently with response processing
-        asyncio.create_task(self._persist_llm_call(llm, req_id, correlation_id))
+        await self._persist_llm_call(llm, req_id, correlation_id)
 
         if llm.status != "ok" and salvage_shaped is None:
             # Allow JSON repair flow for structured_output_parse_error instead of returning early
@@ -789,21 +788,21 @@ class LLMSummarizer:
         # Persist summary
         try:
             insights_json = self._last_insights if self._last_insights else None
-            new_version = self.db.upsert_summary(
+            new_version = await self.db.async_upsert_summary(
                 request_id=req_id,
                 lang=chosen_lang,
                 json_payload=summary_shaped,
                 insights_json=insights_json,
                 is_read=True,  # LLM summarizer is for direct processing
             )
-            self.db.update_request_status(req_id, "ok")
+            await self.db.async_update_request_status(req_id, "ok")
             self._audit("INFO", "summary_upserted", {"request_id": req_id, "version": new_version})
         except Exception as e:  # noqa: BLE001
             logger.error("persist_summary_error", extra={"error": str(e), "cid": correlation_id})
 
         # Update interaction with successful completion
         if interaction_id:
-            safe_update_user_interaction(
+            await async_safe_update_user_interaction(
                 self.db,
                 interaction_id=interaction_id,
                 response_sent=True,
@@ -833,7 +832,7 @@ class LLMSummarizer:
         if not missing_fields:
             return summary
 
-        firecrawl_flat = self._load_firecrawl_metadata(req_id)
+        firecrawl_flat = await self._load_firecrawl_metadata(req_id)
         if firecrawl_flat:
             filled_from_crawl = self._apply_firecrawl_metadata(
                 metadata, missing_fields, firecrawl_flat, correlation_id
@@ -842,7 +841,7 @@ class LLMSummarizer:
 
         request_row: dict[str, Any] | None = None
         try:
-            request_row = self.db.get_request_by_id(req_id)
+            request_row = await self.db.async_get_request_by_id(req_id)
         except Exception as exc:  # noqa: BLE001
             logger.error("request_lookup_failed", extra={"error": str(exc), "cid": correlation_id})
 
@@ -922,10 +921,10 @@ class LLMSummarizer:
                 break
         return filled
 
-    def _load_firecrawl_metadata(self, req_id: int) -> dict[str, str]:
+    async def _load_firecrawl_metadata(self, req_id: int) -> dict[str, str]:
         """Load and flatten Firecrawl metadata for a request."""
         try:
-            crawl_row = self.db.get_crawl_result_by_request(req_id)
+            crawl_row = await self.db.async_get_crawl_result_by_request(req_id)
         except Exception as exc:  # noqa: BLE001
             logger.error("firecrawl_lookup_failed", extra={"error": str(exc)})
             return {}
@@ -1088,7 +1087,7 @@ class LLMSummarizer:
             )
             return {}
 
-        asyncio.create_task(self._persist_llm_call(llm, req_id, correlation_id))
+        await self._persist_llm_call(llm, req_id, correlation_id)
 
         if llm.status != "ok":
             logger.warning(
@@ -1189,7 +1188,7 @@ class LLMSummarizer:
     async def _persist_llm_call(self, llm: Any, req_id: int, correlation_id: str | None) -> None:
         """Persist LLM call to database."""
         try:
-            self.db.insert_llm_call(
+            await self.db.async_insert_llm_call(
                 request_id=req_id,
                 provider="openrouter",
                 model=llm.model or self.cfg.openrouter.model,
@@ -1224,7 +1223,7 @@ class LLMSummarizer:
         interaction_id: int | None,
     ) -> None:
         """Handle LLM errors."""
-        self.db.update_request_status(req_id, "error")
+        await self.db.async_update_request_status(req_id, "error")
         logger.error("openrouter_error", extra={"error": llm.error_text, "cid": correlation_id})
 
         error_details_parts: list[str] = []
@@ -1269,7 +1268,7 @@ class LLMSummarizer:
 
         # Update interaction with error
         if interaction_id:
-            safe_update_user_interaction(
+            await async_safe_update_user_interaction(
                 self.db,
                 interaction_id=interaction_id,
                 response_sent=True,
@@ -1398,7 +1397,7 @@ class LLMSummarizer:
                     model_override=model_name,
                 )
 
-            asyncio.create_task(self._persist_llm_call(llm, req_id, correlation_id))
+            await self._persist_llm_call(llm, req_id, correlation_id)
             await self.response_formatter.send_llm_completion_notification(
                 message, llm, correlation_id, silent=silent
             )
@@ -1540,7 +1539,7 @@ class LLMSummarizer:
         interaction_id: int | None,
     ) -> None:
         """Handle JSON repair failure."""
-        self.db.update_request_status(req_id, "error")
+        await self.db.async_update_request_status(req_id, "error")
         await self.response_formatter.send_error_notification(
             message,
             "processing_failed",
@@ -1550,7 +1549,7 @@ class LLMSummarizer:
 
         # Update interaction with error
         if interaction_id:
-            safe_update_user_interaction(
+            await async_safe_update_user_interaction(
                 self.db,
                 interaction_id=interaction_id,
                 response_sent=True,
@@ -1569,7 +1568,7 @@ class LLMSummarizer:
         interaction_id: int | None,
     ) -> None:
         """Handle final parsing failure."""
-        self.db.update_request_status(req_id, "error")
+        await self.db.async_update_request_status(req_id, "error")
         await self.response_formatter.send_error_notification(
             message,
             "processing_failed",
@@ -1578,7 +1577,7 @@ class LLMSummarizer:
         )
 
         if interaction_id:
-            safe_update_user_interaction(
+            await async_safe_update_user_interaction(
                 self.db,
                 interaction_id=interaction_id,
                 response_sent=True,
@@ -1658,7 +1657,7 @@ class LLMSummarizer:
         summary_candidate = summary or self._last_summary_shaped
         if summary_candidate is None:
             try:
-                row = self.db.get_summary_by_request(req_id)
+                row = await self.db.async_get_summary_by_request(req_id)
                 json_payload = row.get("json_payload") if row else None
                 if json_payload:
                     summary_candidate = json.loads(json_payload)
@@ -1720,7 +1719,7 @@ class LLMSummarizer:
                             model_override=model_name,
                         )
 
-                    asyncio.create_task(self._persist_llm_call(llm, req_id, correlation_id))
+                    await self._persist_llm_call(llm, req_id, correlation_id)
 
                     if llm.status != "ok":
                         structured_error = (llm.error_text or "") == "structured_output_parse_error"

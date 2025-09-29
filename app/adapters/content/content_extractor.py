@@ -133,7 +133,7 @@ class ContentExtractor:
         """Handle request deduplication or creation."""
         self._upsert_sender_metadata(message)
 
-        existing_req = self.db.get_request_by_dedupe_hash(dedupe)
+        existing_req = await self.db.async_get_request_by_dedupe_hash(dedupe)
 
         if existing_req:
             req_id = int(existing_req["id"])  # reuse existing request
@@ -246,7 +246,7 @@ class ContentExtractor:
         silent: bool = False,
     ) -> tuple[str, str]:
         """Extract content from Firecrawl or reuse existing crawl result."""
-        existing_crawl = self.db.get_crawl_result_by_request(req_id)
+        existing_crawl = await self.db.async_get_crawl_result_by_request(req_id)
 
         if existing_crawl and (
             existing_crawl.get("content_markdown") or existing_crawl.get("content_html")
@@ -618,7 +618,7 @@ class ContentExtractor:
         silent: bool = False,
     ) -> None:
         """Handle Firecrawl extraction errors."""
-        self.db.update_request_status(req_id, "error")
+        await self.db.async_update_request_status(req_id, "error")
         # Provide a precise, user-visible stage and context
         detail_lines = []
         url_line = crawl.source_url or "unknown"

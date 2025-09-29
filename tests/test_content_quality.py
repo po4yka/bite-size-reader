@@ -60,6 +60,7 @@ def _firecrawl_result(markdown: str | None, html: str | None) -> FirecrawlResult
 @pytest.mark.asyncio
 async def test_low_value_content_triggers_failure() -> None:
     db = MagicMock()
+    db.async_update_request_status = AsyncMock()
     response_formatter = MagicMock()
     response_formatter.send_firecrawl_start_notification = AsyncMock()
     response_formatter.send_error_notification = AsyncMock()
@@ -85,7 +86,7 @@ async def test_low_value_content_triggers_failure() -> None:
         )
 
     assert "insufficient_useful_content" in str(exc_info.value)
-    db.update_request_status.assert_called_with(42, "error")
+    db.async_update_request_status.assert_awaited_once_with(42, "error")
     response_formatter.send_error_notification.assert_awaited()
     response_formatter.send_firecrawl_success_notification.assert_not_awaited()
 

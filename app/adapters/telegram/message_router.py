@@ -15,7 +15,7 @@ from app.config import AppConfig
 from app.core.logging_utils import generate_correlation_id
 from app.core.url_utils import extract_all_urls, looks_like_url
 from app.db.database import Database
-from app.db.user_interactions import safe_update_user_interaction
+from app.db.user_interactions import async_safe_update_user_interaction
 from app.models.telegram.telegram_models import TelegramMessage
 
 if TYPE_CHECKING:
@@ -167,7 +167,7 @@ class MessageRouter:
                 f"An unexpected error occurred. Error ID: {correlation_id}. Please try again.",
             )
             if interaction_id:
-                safe_update_user_interaction(
+                await async_safe_update_user_interaction(
                     self.db,
                     interaction_id=interaction_id,
                     response_sent=True,
@@ -293,7 +293,7 @@ class MessageRouter:
             },
         )
         if interaction_id:
-            safe_update_user_interaction(
+            await async_safe_update_user_interaction(
                 self.db,
                 interaction_id=interaction_id,
                 response_sent=True,
@@ -858,7 +858,7 @@ class MessageRouter:
         )
 
         if interaction_id:
-            safe_update_user_interaction(
+            await async_safe_update_user_interaction(
                 self.db,
                 interaction_id=interaction_id,
                 response_sent=True,
