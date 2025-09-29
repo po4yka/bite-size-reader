@@ -16,7 +16,6 @@ from pydantic import (
     field_validator,
     model_validator,
 )
-from pydantic_settings import BaseSettings, PydanticBaseSettingsSource, SettingsConfigDict
 
 # ruff: noqa: E501
 
@@ -42,8 +41,9 @@ def validate_model_name(model: str) -> str:
 def _ensure_api_key(value: str, *, name: str) -> str:
     if not value:
         raise ValueError(f"{name} API key is required")
-    if len(value) < 10:
-        raise ValueError(f"{name} API key appears to be too short")
+    value = value.strip()
+    if not value:
+        raise ValueError(f"{name} API key is required")
     if len(value) > 500:
         raise ValueError(f"{name} API key appears to be too long")
     if any(char in value for char in [" ", "\n", "\t"]):
@@ -108,8 +108,8 @@ class TelegramConfig(BaseModel):
             except ValueError as exc:  # pragma: no cover - defensive
                 raise ValueError("API ID must be a valid integer") from exc
 
-        if api_id <= 0:
-            raise ValueError("API ID must be positive")
+        if api_id < 0:
+            raise ValueError("API ID must be non-negative")
         if api_id > 2**31 - 1:
             raise ValueError("API ID too large")
         return api_id
@@ -117,14 +117,17 @@ class TelegramConfig(BaseModel):
     @field_validator("api_hash", mode="before")
     @classmethod
     def _validate_api_hash(cls, value: Any) -> str:
-        return _ensure_api_key(str(value or ""), name="API Hash")
+        api_hash = str(value or "")
+        if not api_hash:
+            return ""
+        return _ensure_api_key(api_hash, name="API Hash")
 
     @field_validator("bot_token", mode="before")
     @classmethod
     def _validate_bot_token(cls, value: Any) -> str:
         token = str(value or "")
         if not token:
-            raise ValueError("Bot token is required")
+            return ""
         if ":" not in token:
             raise ValueError("Bot token format appears invalid")
         parts = token.split(":")
@@ -490,10 +493,8 @@ class AppConfig:
     runtime: RuntimeConfig
 
 
-class Settings(BaseSettings):
-    model_config = SettingsConfigDict(
-        env_nested_delimiter="__", extra="ignore", populate_by_name=True
-    )
+class Settings(BaseModel):
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
 
     allow_stub_telegram: bool = Field(default=False, exclude=True)
     telegram: TelegramConfig
@@ -502,39 +503,9 @@ class Settings(BaseSettings):
     runtime: RuntimeConfig = Field(default_factory=RuntimeConfig)
 
     @classmethod
-    def settings_customise_sources(
-        cls,
-        settings_cls: type[BaseSettings],
-        init_settings: PydanticBaseSettingsSource,
-        env_settings: PydanticBaseSettingsSource,
-        dotenv_settings: PydanticBaseSettingsSource,
-        file_secret_settings: PydanticBaseSettingsSource,
-    ) -> tuple[PydanticBaseSettingsSource, ...]:
-        class FlattenedEnvSource(PydanticBaseSettingsSource):
-            def __init__(self, settings_cls: type[BaseSettings], **kwargs: Any) -> None:
-                super().__init__(settings_cls=settings_cls, **kwargs)
-                self.env = os.environ
-
-            def __call__(self) -> dict[str, Any]:
-                return cls._load_flattened_environment(settings_cls, self.env)
-
-            def get_field_value(self, field: Any, field_name: str) -> tuple[Any | None, str, bool]:
-                return None, field_name, False
-
-        return (
-            init_settings,
-            FlattenedEnvSource(settings_cls),
-            env_settings,
-            dotenv_settings,
-            file_secret_settings,
-        )
-
-    @staticmethod
-    def _load_flattened_environment(
-        settings_cls: type[BaseSettings], env: Mapping[str, str]
-    ) -> dict[str, Any]:
+    def _load_flattened_environment(cls, env: Mapping[str, str]) -> dict[str, Any]:
         data: dict[str, Any] = {}
-        for field_name, field in settings_cls.model_fields.items():
+        for field_name, field in cls.model_fields.items():
             if field_name == "allow_stub_telegram":
                 continue
             annotation = field.annotation
@@ -544,7 +515,7 @@ class Settings(BaseSettings):
             nested_values: dict[str, Any] = {}
             nested_model: type[BaseModel] = annotation
             for nested_name, nested_field in nested_model.model_fields.items():
-                value = Settings._resolve_env_value(env, nested_field)
+                value = cls._resolve_env_value(env, nested_field)
                 if value is not None:
                     nested_values[nested_name] = value
             if nested_values:
@@ -609,7 +580,10 @@ def load_config(*, allow_stub_telegram: bool = False) -> AppConfig:
             overrides["telegram"] = telegram_overrides
 
     try:
-        settings = Settings(allow_stub_telegram=allow_stub_telegram, **overrides)
+        env_data = Settings._load_flattened_environment(os.environ)
+        merged: dict[str, Any] = _deep_merge(env_data, overrides)
+        merged["allow_stub_telegram"] = allow_stub_telegram
+        settings = Settings(**merged)
     except (ValidationError, RuntimeError) as exc:  # pragma: no cover - defensive
         raise RuntimeError(f"Configuration validation failed: {exc}") from exc
 
@@ -619,3 +593,16 @@ def load_config(*, allow_stub_telegram: bool = False) -> AppConfig:
         )
 
     return settings.as_app_config()
+
+
+def _deep_merge(base: Mapping[str, Any], updates: Mapping[str, Any]) -> dict[str, Any]:
+    if not updates:
+        return dict(base)
+
+    result: dict[str, Any] = {k: v for k, v in base.items()}
+    for key, value in updates.items():
+        if key in result and isinstance(result[key], Mapping) and isinstance(value, Mapping):
+            result[key] = _deep_merge(result[key], value)
+        else:
+            result[key] = value
+    return result

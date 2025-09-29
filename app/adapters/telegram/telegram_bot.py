@@ -205,6 +205,9 @@ class TelegramBot:
             summarizer = getattr(self.url_processor, "llm_summarizer", None)
             if summarizer is not None:
                 summarizer.openrouter = openrouter
+                workflow = getattr(summarizer, "_workflow", None)
+                if workflow is not None:
+                    workflow.openrouter = openrouter
 
         if hasattr(self, "forward_processor"):
             forward_summarizer = getattr(self.forward_processor, "summarizer", None)
