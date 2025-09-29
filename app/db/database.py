@@ -5,13 +5,14 @@ import datetime as dt
 import json
 import logging
 import sqlite3
-from collections.abc import Iterable, Iterator, Mapping
+from collections.abc import Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
 import peewee
 from peewee import JOIN, fn
+from playhouse.sqlite_ext import SqliteExtDatabase
 
 from app.db.models import (
     ALL_MODELS,
@@ -28,8 +29,10 @@ from app.db.models import (
     model_to_dict,
 )
 
+JSONValue = Mapping[str, Any] | Sequence[Any] | str | None
 
-class RowSqliteDatabase(peewee.SqliteDatabase):
+
+class RowSqliteDatabase(SqliteExtDatabase):
     """SQLite database subclass that configures the row factory for dict-like access."""
 
     def _connect(self) -> sqlite3.Connection:
@@ -65,6 +68,101 @@ class Database:
 
         with self._database.connection_context():
             yield self._database.connection()
+
+    @staticmethod
+    def _normalize_json_container(value: Any) -> Any:
+        if isinstance(value, Mapping):
+            return dict(value)
+        if isinstance(value, Sequence) and not isinstance(value, str | bytes | bytearray):
+            return list(value)
+        return value
+
+    @staticmethod
+    def _prepare_json_payload(value: Any, *, default: Any | None = None) -> Any | None:
+        if value is None:
+            value = default
+        if value is None:
+            return None
+        if isinstance(value, memoryview):
+            value = value.tobytes()
+        if isinstance(value, bytes | bytearray):
+            try:
+                value = value.decode("utf-8")
+            except Exception:
+                value = value.decode("utf-8", errors="replace")
+        if isinstance(value, str):
+            stripped = value.strip()
+            if not stripped:
+                return None
+            try:
+                return json.loads(stripped)
+            except json.JSONDecodeError:
+                return stripped
+        normalized = Database._normalize_json_container(value)
+        try:
+            json.dumps(normalized)
+            return normalized
+        except (TypeError, ValueError):
+            try:
+                coerced = json.loads(json.dumps(normalized, default=str))
+            except (TypeError, ValueError):
+                return None
+            return coerced
+
+    @staticmethod
+    def _decode_json_field(value: Any) -> tuple[Any | None, str | None]:
+        if value is None:
+            return None, None
+        if isinstance(value, memoryview):
+            value = value.tobytes()
+        if isinstance(value, bytes | bytearray):
+            try:
+                value = value.decode("utf-8")
+            except Exception:
+                return None, "decode_error"
+        if isinstance(value, dict | list):
+            return value, None
+        if isinstance(value, str):
+            stripped = value.strip()
+            if not stripped:
+                return None, None
+            try:
+                return json.loads(stripped), None
+            except json.JSONDecodeError as exc:
+                return None, f"invalid_json:{exc.msg}"
+        try:
+            json.dumps(value)
+        except (TypeError, ValueError):
+            return None, "unsupported_type"
+        return value, None
+
+    @staticmethod
+    def _normalize_legacy_json_value(value: Any) -> tuple[Any | None, bool, str | None]:
+        if value is None:
+            return None, False, None
+        if isinstance(value, memoryview):
+            value = value.tobytes()
+        if isinstance(value, bytes | bytearray):
+            try:
+                value = value.decode("utf-8")
+            except Exception:
+                value = value.decode("utf-8", errors="replace")
+        if isinstance(value, dict | list):
+            return value, False, None
+        if isinstance(value, str):
+            stripped = value.strip()
+            if not stripped:
+                return None, True, "blank"
+            try:
+                json.loads(stripped)
+            except json.JSONDecodeError:
+                return {"__legacy_text__": stripped}, True, "invalid_json"
+            return None, False, None
+        try:
+            json.dumps(value)
+        except (TypeError, ValueError):
+            return {"__legacy_text__": str(value)}, True, "invalid_json"
+        return value, False, None
 
     def migrate(self) -> None:
         with self._database.connection_context():
@@ -372,10 +470,11 @@ class Database:
             request_id = int(row["request_id"])
             row_type = str(row.get("request_type") or "unknown")
             row_status = str(row.get("request_status") or "unknown")
-            summary_json = row.get("summary_json")
-            links_json = row.get("links_json")
+            summary_raw = row.get("summary_json")
+            links_raw = row.get("links_json")
 
-            if summary_json:
+            summary_payload, summary_error = self._decode_json_field(summary_raw)
+            if summary_payload is not None:
                 posts["with_summary"] += 1
             else:
                 posts["missing_summary"].append(
@@ -389,21 +488,19 @@ class Database:
                 queue_reprocess(request_id, "missing_summary")
 
             missing_fields: list[str] = []
-            if summary_json:
-                try:
-                    payload = json.loads(summary_json)
-                except json.JSONDecodeError as exc:
-                    posts["errors"].append(
-                        {
-                            "request_id": request_id,
-                            "error": f"invalid_json:{exc}",
-                        }
-                    )
-                    queue_reprocess(request_id, "invalid_summary_json")
-                    payload = {}
-                if isinstance(payload, Mapping):
+            if summary_error:
+                posts["errors"].append(
+                    {
+                        "request_id": request_id,
+                        "error": summary_error,
+                    }
+                )
+                queue_reprocess(request_id, "invalid_summary_json")
+                missing_fields = required[:]
+            elif summary_payload is not None:
+                if isinstance(summary_payload, Mapping):
                     for field in required:
-                        value = payload.get(field)
+                        value = summary_payload.get(field)
                         if value is None:
                             missing_fields.append(field)
                             continue
@@ -427,7 +524,7 @@ class Database:
                     )
                     queue_reprocess(request_id, "missing_fields")
 
-            links_count, has_links, links_error = self._count_links_entries(links_json)
+            links_count, has_links, links_error = self._count_links_entries(links_raw)
             posts["links"]["total_links"] += links_count
             if not has_links:
                 reason = links_error or "absent_links_json"
@@ -466,22 +563,21 @@ class Database:
             return f"forward:{fwd_chat_id}:{fwd_msg_id}"
         return "unknown"
 
-    def _count_links_entries(self, links_json: str | None) -> tuple[int, bool, str | None]:
-        if not links_json:
+    def _count_links_entries(self, links_json: Any) -> tuple[int, bool, str | None]:
+        parsed, error = self._decode_json_field(links_json)
+        if error:
+            return 0, False, error
+        if parsed is None:
             return 0, False, None
-        try:
-            data = json.loads(links_json)
-        except json.JSONDecodeError as exc:
-            return 0, False, f"invalid_json:{exc.msg}"
-        if isinstance(data, list):
-            if not data:
+        if isinstance(parsed, list):
+            if not parsed:
                 return 1, True, None
-            return len(data), True, None
-        if isinstance(data, Mapping):
-            if not data:
+            return len(parsed), True, None
+        if isinstance(parsed, Mapping):
+            if not parsed:
                 return 1, True, None
             total = 0
-            for value in data.values():
+            for value in parsed.values():
                 if isinstance(value, list):
                     total += len(value)
                 elif value is not None:
@@ -671,15 +767,15 @@ class Database:
         chat_id: int | None,
         date_ts: int | None,
         text_full: str | None,
-        entities_json: str | None,
+        entities_json: JSONValue,
         media_type: str | None,
-        media_file_ids_json: str | None,
+        media_file_ids_json: JSONValue,
         forward_from_chat_id: int | None,
         forward_from_chat_type: str | None,
         forward_from_chat_title: str | None,
         forward_from_message_id: int | None,
         forward_date_ts: int | None,
-        telegram_raw_json: str | None,
+        telegram_raw_json: JSONValue,
     ) -> int:
         try:
             message = TelegramMessage.create(
@@ -688,15 +784,15 @@ class Database:
                 chat_id=chat_id,
                 date_ts=date_ts,
                 text_full=text_full,
-                entities_json=entities_json,
+                entities_json=self._prepare_json_payload(entities_json),
                 media_type=media_type,
-                media_file_ids_json=media_file_ids_json,
+                media_file_ids_json=self._prepare_json_payload(media_file_ids_json),
                 forward_from_chat_id=forward_from_chat_id,
                 forward_from_chat_type=forward_from_chat_type,
                 forward_from_chat_title=forward_from_chat_title,
                 forward_from_message_id=forward_from_message_id,
                 forward_date_ts=forward_date_ts,
-                telegram_raw_json=telegram_raw_json,
+                telegram_raw_json=self._prepare_json_payload(telegram_raw_json),
             )
             return message.id
         except peewee.IntegrityError:
@@ -713,19 +809,19 @@ class Database:
         endpoint: str | None,
         http_status: int | None,
         status: str | None,
-        options_json: str | None,
+        options_json: JSONValue,
         correlation_id: str | None,
         content_markdown: str | None,
         content_html: str | None,
-        structured_json: str | None,
-        metadata_json: str | None,
-        links_json: str | None,
-        screenshots_paths_json: str | None,
+        structured_json: JSONValue,
+        metadata_json: JSONValue,
+        links_json: JSONValue,
+        screenshots_paths_json: JSONValue,
         firecrawl_success: bool | None,
         firecrawl_error_code: str | None,
         firecrawl_error_message: str | None,
-        firecrawl_details_json: str | None,
-        raw_response_json: str | None,
+        firecrawl_details_json: JSONValue,
+        raw_response_json: JSONValue,
         latency_ms: int | None,
         error_text: str | None,
     ) -> int:
@@ -736,19 +832,19 @@ class Database:
                 endpoint=endpoint,
                 http_status=http_status,
                 status=status,
-                options_json=options_json,
+                options_json=self._prepare_json_payload(options_json, default={}),
                 correlation_id=correlation_id,
                 content_markdown=content_markdown,
                 content_html=content_html,
-                structured_json=structured_json,
-                metadata_json=metadata_json,
-                links_json=links_json,
-                screenshots_paths_json=screenshots_paths_json,
+                structured_json=self._prepare_json_payload(structured_json, default={}),
+                metadata_json=self._prepare_json_payload(metadata_json, default={}),
+                links_json=self._prepare_json_payload(links_json, default={}),
+                screenshots_paths_json=self._prepare_json_payload(screenshots_paths_json),
                 firecrawl_success=firecrawl_success,
                 firecrawl_error_code=firecrawl_error_code,
                 firecrawl_error_message=firecrawl_error_message,
-                firecrawl_details_json=firecrawl_details_json,
-                raw_response_json=raw_response_json,
+                firecrawl_details_json=self._prepare_json_payload(firecrawl_details_json),
+                raw_response_json=self._prepare_json_payload(raw_response_json),
                 latency_ms=latency_ms,
                 error_text=error_text,
             )
@@ -766,10 +862,10 @@ class Database:
         provider: str | None,
         model: str | None,
         endpoint: str | None,
-        request_headers_json: str | None,
-        request_messages_json: str | None,
+        request_headers_json: JSONValue,
+        request_messages_json: JSONValue,
         response_text: str | None,
-        response_json: str | None,
+        response_json: JSONValue,
         tokens_prompt: int | None,
         tokens_completion: int | None,
         cost_usd: float | None,
@@ -778,15 +874,19 @@ class Database:
         error_text: str | None,
         structured_output_used: bool | None,
         structured_output_mode: str | None,
-        error_context_json: str | None,
+        error_context_json: JSONValue,
     ) -> int:
+        headers_payload = self._prepare_json_payload(request_headers_json, default={})
+        messages_payload = self._prepare_json_payload(request_messages_json, default=[])
+        response_payload = self._prepare_json_payload(response_json, default={})
+        error_context_payload = self._prepare_json_payload(error_context_json)
         payload: dict[Any, Any] = {
             LLMCall.request: request_id,
             LLMCall.provider: provider,
             LLMCall.model: model,
             LLMCall.endpoint: endpoint,
-            LLMCall.request_headers_json: request_headers_json,
-            LLMCall.request_messages_json: request_messages_json,
+            LLMCall.request_headers_json: headers_payload,
+            LLMCall.request_messages_json: messages_payload,
             LLMCall.tokens_prompt: tokens_prompt,
             LLMCall.tokens_completion: tokens_completion,
             LLMCall.cost_usd: cost_usd,
@@ -795,16 +895,16 @@ class Database:
             LLMCall.error_text: error_text,
             LLMCall.structured_output_used: structured_output_used,
             LLMCall.structured_output_mode: structured_output_mode,
-            LLMCall.error_context_json: error_context_json,
+            LLMCall.error_context_json: error_context_payload,
         }
         if provider == "openrouter":
             payload[LLMCall.openrouter_response_text] = response_text
-            payload[LLMCall.openrouter_response_json] = response_json
+            payload[LLMCall.openrouter_response_json] = response_payload
             payload[LLMCall.response_text] = None
             payload[LLMCall.response_json] = None
         else:
             payload[LLMCall.response_text] = response_text
-            payload[LLMCall.response_json] = response_json
+            payload[LLMCall.response_json] = response_payload
 
         call = LLMCall.create(**{field.name: value for field, value in payload.items()})
         return call.id
@@ -823,16 +923,16 @@ class Database:
         *,
         request_id: int,
         lang: str | None,
-        json_payload: str | None,
-        insights_json: str | None = None,
+        json_payload: JSONValue,
+        insights_json: JSONValue = None,
         version: int = 1,
         is_read: bool = False,
     ) -> int:
         summary = Summary.create(
             request=request_id,
             lang=lang,
-            json_payload=json_payload,
-            insights_json=insights_json,
+            json_payload=self._prepare_json_payload(json_payload),
+            insights_json=self._prepare_json_payload(insights_json),
             version=version,
             is_read=is_read,
         )
@@ -843,16 +943,18 @@ class Database:
         *,
         request_id: int,
         lang: str | None,
-        json_payload: str | None,
-        insights_json: str | None = None,
+        json_payload: JSONValue,
+        insights_json: JSONValue = None,
         is_read: bool | None = None,
     ) -> int:
+        payload_value = self._prepare_json_payload(json_payload)
+        insights_value = self._prepare_json_payload(insights_json)
         try:
             summary = Summary.create(
                 request=request_id,
                 lang=lang,
-                json_payload=json_payload,
-                insights_json=insights_json,
+                json_payload=payload_value,
+                insights_json=insights_value,
                 version=1,
                 is_read=is_read if is_read is not None else False,
             )
@@ -860,12 +962,12 @@ class Database:
         except peewee.IntegrityError:
             update_map: dict[Any, Any] = {
                 Summary.lang: lang,
-                Summary.json_payload: json_payload,
+                Summary.json_payload: payload_value,
                 Summary.version: Summary.version + 1,
                 Summary.created_at: dt.datetime.utcnow(),
             }
-            if insights_json is not None:
-                update_map[Summary.insights_json] = insights_json
+            if insights_value is not None:
+                update_map[Summary.insights_json] = insights_value
             if is_read is not None:
                 update_map[Summary.is_read] = is_read
             query = Summary.update(update_map).where(Summary.request == request_id)
@@ -873,8 +975,8 @@ class Database:
             updated = Summary.get_or_none(Summary.request == request_id)
             return updated.version if updated else 0
 
-    def update_summary_insights(self, request_id: int, insights_json: str | None) -> None:
-        Summary.update({Summary.insights_json: insights_json}).where(
+    def update_summary_insights(self, request_id: int, insights_json: JSONValue) -> None:
+        Summary.update({Summary.insights_json: self._prepare_json_payload(insights_json)}).where(
             Summary.request == request_id
         ).execute()
 
@@ -928,9 +1030,13 @@ class Database:
         *,
         level: str,
         event: str,
-        details_json: str | None = None,
+        details_json: JSONValue = None,
     ) -> int:
-        entry = AuditLog.create(level=level, event=event, details_json=details_json)
+        entry = AuditLog.create(
+            level=level,
+            event=event,
+            details_json=self._prepare_json_payload(details_json),
+        )
         return entry.id
 
     # -- internal helpers -------------------------------------------------
@@ -955,6 +1061,7 @@ class Database:
             self._ensure_column(table, column, coltype)
         self._migrate_openrouter_response_payloads()
         self._migrate_firecrawl_raw_payload()
+        self._coerce_json_columns()
 
     def _ensure_column(self, table: str, column: str, coltype: str) -> None:
         if table not in self._database.get_tables():
@@ -963,6 +1070,68 @@ class Database:
         if column in existing:
             return
         self._database.execute_sql(f"ALTER TABLE {table} ADD COLUMN {column} {coltype}")
+
+    def _coerce_json_columns(self) -> None:
+        columns_map: dict[str, tuple[str, ...]] = {
+            "telegram_messages": (
+                "entities_json",
+                "media_file_ids_json",
+                "telegram_raw_json",
+            ),
+            "crawl_results": (
+                "options_json",
+                "structured_json",
+                "metadata_json",
+                "links_json",
+                "screenshots_paths_json",
+                "firecrawl_details_json",
+                "raw_response_json",
+            ),
+            "llm_calls": (
+                "request_headers_json",
+                "request_messages_json",
+                "response_json",
+                "openrouter_response_json",
+                "error_context_json",
+            ),
+            "summaries": ("json_payload", "insights_json"),
+            "audit_logs": ("details_json",),
+        }
+        tables = set(self._database.get_tables())
+        for table, columns in columns_map.items():
+            if table not in tables:
+                continue
+            for column in columns:
+                self._coerce_json_column(table, column)
+
+    def _coerce_json_column(self, table: str, column: str) -> None:
+        model = next((m for m in ALL_MODELS if m._meta.table_name == table), None)
+        if model is None:
+            return
+        field = getattr(model, column)
+        cursor = self._database.execute_sql(
+            f"SELECT id, {column} FROM {table} WHERE {column} IS NOT NULL"
+        )
+        updates = 0
+        wrapped = 0
+        blanks = 0
+        for row_id, raw_value in cursor.fetchall():
+            normalized, should_update, reason = self._normalize_legacy_json_value(raw_value)
+            if not should_update:
+                continue
+            if reason == "invalid_json" and isinstance(raw_value, str):
+                wrapped += 1
+            if reason == "blank":
+                blanks += 1
+            model.update({field: normalized}).where(model.id == row_id).execute()
+            updates += 1
+        if updates:
+            extra: dict[str, Any] = {"table": table, "column": column, "rows": updates}
+            if wrapped:
+                extra["wrapped"] = wrapped
+            if blanks:
+                extra["blanks"] = blanks
+            self._logger.info("json_column_coerced", extra=extra)
 
     def _migrate_firecrawl_raw_payload(self) -> None:
         rows = (
@@ -975,17 +1144,20 @@ class Database:
         )
         updated = 0
         for row in rows:
-            raw_text = row.raw_response_json
-            if not raw_text:
+            raw_value = row.raw_response_json
+            if not raw_value:
                 continue
-            try:
-                payload = json.loads(raw_text)
-            except Exception as exc:
-                self._logger.debug(
-                    "firecrawl_migration_json_error",
-                    extra={"error": str(exc), "row_id": row.id},
-                )
-                continue
+            if isinstance(raw_value, dict | list):
+                payload = raw_value
+            else:
+                try:
+                    payload = json.loads(raw_value)
+                except Exception as exc:
+                    self._logger.debug(
+                        "firecrawl_migration_json_error",
+                        extra={"error": str(exc), "row_id": row.id},
+                    )
+                    continue
             if not isinstance(payload, Mapping):
                 continue
 
@@ -1006,13 +1178,8 @@ class Database:
             if error_message is not None and not isinstance(error_message, str):
                 error_message = str(error_message)
 
-            details_json = None
             details = payload.get("details")
-            if details is not None:
-                try:
-                    details_json = json.dumps(details)
-                except Exception:
-                    details_json = None
+            details_json = self._prepare_json_payload(details)
 
             CrawlResult.update(
                 {

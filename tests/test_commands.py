@@ -1,4 +1,3 @@
-import json
 import os
 import tempfile
 import unittest
@@ -221,7 +220,7 @@ class TestCommands(unittest.IsolatedAsyncioTestCase):
             bot.db.insert_summary(
                 request_id=rid_good,
                 lang="en",
-                json_payload=json.dumps(base_summary),
+                json_payload=base_summary,
             )
             bot.db.insert_crawl_result(
                 request_id=rid_good,
@@ -229,13 +228,13 @@ class TestCommands(unittest.IsolatedAsyncioTestCase):
                 endpoint="/v1/scrape",
                 http_status=200,
                 status="ok",
-                options_json=json.dumps({}),
+                options_json={},
                 correlation_id="fc-good",
                 content_markdown="# md",
                 content_html=None,
-                structured_json=json.dumps({}),
-                metadata_json=json.dumps({}),
-                links_json=json.dumps(["https://example.com/other"]),
+                structured_json={},
+                metadata_json={},
+                links_json=["https://example.com/other"],
                 screenshots_paths_json=None,
                 firecrawl_success=True,
                 firecrawl_error_code=None,
@@ -263,7 +262,7 @@ class TestCommands(unittest.IsolatedAsyncioTestCase):
             bot.db.insert_summary(
                 request_id=rid_bad,
                 lang="en",
-                json_payload=json.dumps(bad_summary),
+                json_payload=bad_summary,
             )
 
             rid_empty = bot.db.create_request(
@@ -279,7 +278,7 @@ class TestCommands(unittest.IsolatedAsyncioTestCase):
             bot.db.insert_summary(
                 request_id=rid_empty,
                 lang="en",
-                json_payload=json.dumps(base_summary),
+                json_payload=base_summary,
             )
             bot.db.insert_crawl_result(
                 request_id=rid_empty,
@@ -287,13 +286,13 @@ class TestCommands(unittest.IsolatedAsyncioTestCase):
                 endpoint="/v1/scrape",
                 http_status=200,
                 status="ok",
-                options_json=json.dumps({}),
+                options_json={},
                 correlation_id="fc-empty",
                 content_markdown="# md",
                 content_html=None,
-                structured_json=json.dumps({}),
-                metadata_json=json.dumps({}),
-                links_json=json.dumps([]),
+                structured_json={},
+                metadata_json={},
+                links_json=[],
                 screenshots_paths_json=None,
                 firecrawl_success=True,
                 firecrawl_error_code=None,

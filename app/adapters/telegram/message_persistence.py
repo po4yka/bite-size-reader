@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import logging
 from typing import Any
 
@@ -123,8 +122,8 @@ class MessagePersistence:
         except Exception:
             return None
 
-    def _extract_entities_json(self, message: Any) -> str | None:
-        """Extract entities from message as JSON."""
+    def _extract_entities_json(self, message: Any) -> list[dict[str, Any]] | None:
+        """Extract entities from message as native structures."""
         entities_obj = list(getattr(message, "entities", []) or [])
         entities_obj.extend(list(getattr(message, "caption_entities", []) or []))
 
@@ -141,11 +140,11 @@ class MessagePersistence:
                         pass
                 return getattr(e, "__dict__", {})
 
-            return json.dumps([_ent_to_dict(e) for e in entities_obj], ensure_ascii=False)
+            return [_ent_to_dict(e) for e in entities_obj]
         except Exception:
             return None
 
-    def _extract_media_info(self, message: Any) -> tuple[str | None, str | None]:
+    def _extract_media_info(self, message: Any) -> tuple[str | None, list[str] | None]:
         """Extract media type and file IDs from message."""
         media_type = None
         media_file_ids: list[str] = []
@@ -193,9 +192,7 @@ class MessagePersistence:
 
         # Filter out non-string values (like MagicMock objects) from media_file_ids
         valid_media_file_ids = [fid for fid in media_file_ids if isinstance(fid, str)]
-        media_file_ids_json = (
-            json.dumps(valid_media_file_ids, ensure_ascii=False) if valid_media_file_ids else None
-        )
+        media_file_ids_json = valid_media_file_ids or None
 
         return media_type, media_file_ids_json
 
@@ -219,17 +216,15 @@ class MessagePersistence:
             "date_ts": forward_date_ts,
         }
 
-    def _extract_raw_json(self, message: Any) -> str | None:
+    def _extract_raw_json(self, message: Any) -> dict[str, Any] | None:
         """Extract raw JSON from message if possible."""
         try:
             if hasattr(message, "to_dict"):
                 message_dict = message.to_dict()
                 # Check if the result is actually serializable (not a MagicMock)
                 if isinstance(message_dict, dict):
-                    return json.dumps(message_dict, ensure_ascii=False)
-                else:
-                    return None
-            else:
+                    return message_dict
                 return None
+            return None
         except Exception:
             return None

@@ -1,4 +1,5 @@
 """Content extraction and processing for URLs."""
+
 # ruff: noqa: E501
 # flake8: noqa
 
@@ -294,24 +295,25 @@ class ContentExtractor:
 
         self._audit("INFO", "reuse_crawl_result", {"request_id": None, "cid": correlation_id})
 
-        options_obj = None
-        correlation_from_raw = existing_crawl.get("correlation_id")
-        try:
-            options_raw = existing_crawl.get("options_json")
-            if options_raw:
-                options_obj = json.loads(options_raw)
-        except Exception:
-            options_obj = None
-
-        if not correlation_from_raw:
+        options_obj = existing_crawl.get("options_json")
+        if isinstance(options_obj, str):
             try:
-                raw_payload = existing_crawl.get("raw_response_json")
-                if raw_payload:
-                    parsed_raw = json.loads(raw_payload)
-                    if isinstance(parsed_raw, dict):
-                        correlation_from_raw = parsed_raw.get("cid")
+                options_obj = json.loads(options_obj)
             except Exception:
-                correlation_from_raw = None
+                options_obj = None
+
+        correlation_from_raw = existing_crawl.get("correlation_id")
+        if not correlation_from_raw:
+            raw_payload = existing_crawl.get("raw_response_json")
+            if isinstance(raw_payload, dict):
+                correlation_from_raw = raw_payload.get("cid")
+            elif isinstance(raw_payload, str):
+                try:
+                    parsed_raw = json.loads(raw_payload)
+                except Exception:
+                    parsed_raw = None
+                if isinstance(parsed_raw, dict):
+                    correlation_from_raw = parsed_raw.get("cid")
 
         latency_val = existing_crawl.get("latency_ms")
         latency_sec = (latency_val / 1000.0) if isinstance(latency_val, int | float) else None
@@ -393,30 +395,25 @@ class ContentExtractor:
 
         # Persist crawl result
         try:
-            details_json = None
-            if crawl.response_details is not None:
-                try:
-                    details_json = json.dumps(crawl.response_details)
-                except TypeError:
-                    details_json = None
+            details_payload = Database._prepare_json_payload(crawl.response_details)
             self.db.insert_crawl_result(
                 request_id=req_id,
                 source_url=crawl.source_url,
                 endpoint=crawl.endpoint,
                 http_status=crawl.http_status,
                 status=crawl.status,
-                options_json=json.dumps(crawl.options_json or {}),
+                options_json=crawl.options_json,
                 correlation_id=crawl.correlation_id,
                 content_markdown=crawl.content_markdown,
                 content_html=crawl.content_html,
-                structured_json=json.dumps(crawl.structured_json or {}),
-                metadata_json=json.dumps(crawl.metadata_json or {}),
-                links_json=json.dumps(crawl.links_json or {}),
+                structured_json=crawl.structured_json,
+                metadata_json=crawl.metadata_json,
+                links_json=crawl.links_json,
                 screenshots_paths_json=None,
                 firecrawl_success=crawl.response_success,
                 firecrawl_error_code=crawl.response_error_code,
                 firecrawl_error_message=crawl.response_error_message,
-                firecrawl_details_json=details_json,
+                firecrawl_details_json=details_payload,
                 raw_response_json=None,
                 latency_ms=crawl.latency_ms,
                 error_text=crawl.error_text,
@@ -492,13 +489,13 @@ class ContentExtractor:
                         endpoint=salvage_crawl.endpoint,
                         http_status=salvage_crawl.http_status,
                         status=salvage_crawl.status,
-                        options_json=json.dumps(salvage_crawl.options_json or {}),
+                        options_json=salvage_crawl.options_json,
                         correlation_id=salvage_crawl.correlation_id,
                         content_markdown=salvage_crawl.content_markdown,
                         content_html=salvage_crawl.content_html,
-                        structured_json=json.dumps(salvage_crawl.structured_json or {}),
-                        metadata_json=json.dumps(salvage_crawl.metadata_json or {}),
-                        links_json=json.dumps(salvage_crawl.links_json or {}),
+                        structured_json=salvage_crawl.structured_json,
+                        metadata_json=salvage_crawl.metadata_json,
+                        links_json=salvage_crawl.links_json,
                         screenshots_paths_json=None,
                         firecrawl_success=salvage_crawl.response_success,
                         firecrawl_error_code=salvage_crawl.response_error_code,
@@ -821,7 +818,7 @@ class ContentExtractor:
                         pass
                 return getattr(e, "__dict__", {})
 
-            entities_json = json.dumps([_ent_to_dict(e) for e in entities_obj], ensure_ascii=False)
+            entities_json = [_ent_to_dict(e) for e in entities_obj]
         except Exception:
             entities_json = None
 
@@ -870,9 +867,7 @@ class ContentExtractor:
 
         # Filter out non-string values (like MagicMock objects) from media_file_ids
         valid_media_file_ids = [fid for fid in media_file_ids if isinstance(fid, str)]
-        media_file_ids_json = (
-            json.dumps(valid_media_file_ids, ensure_ascii=False) if valid_media_file_ids else None
-        )
+        media_file_ids_json = valid_media_file_ids or None
 
         # Forward info
         fwd_chat = getattr(message, "forward_from_chat", None)
@@ -892,7 +887,7 @@ class ContentExtractor:
                 message_dict = message.to_dict()
                 # Check if the result is actually serializable (not a MagicMock)
                 if isinstance(message_dict, dict):
-                    raw_json = json.dumps(message_dict, ensure_ascii=False)
+                    raw_json = message_dict
                 else:
                     raw_json = None
             else:

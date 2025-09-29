@@ -106,13 +106,13 @@ class TestDedupeReuse(unittest.IsolatedAsyncioTestCase):
                 endpoint="/v1/scrape",
                 http_status=200,
                 status="ok",
-                options_json=json.dumps({"formats": ["markdown"], "mobile": True}),
+                options_json={"formats": ["markdown"], "mobile": True},
                 correlation_id="firecrawl-cid",
                 content_markdown="# cached",
                 content_html=None,
-                structured_json=json.dumps({}),
-                metadata_json=json.dumps({}),
-                links_json=json.dumps({}),
+                structured_json={},
+                metadata_json={},
+                links_json={},
                 screenshots_paths_json=None,
                 firecrawl_success=True,
                 firecrawl_error_code=None,
@@ -206,7 +206,7 @@ class TestDedupeReuse(unittest.IsolatedAsyncioTestCase):
             db.insert_summary(
                 request_id=req_id,
                 lang="en",
-                json_payload=json.dumps({"summary_250": "cached", "tldr": "cached"}),
+                json_payload={"summary_250": "cached", "tldr": "cached"},
             )
 
             cfg = AppConfig(

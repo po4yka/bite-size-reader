@@ -400,9 +400,11 @@ class OpenRouterClient:
                 f"Request timeout: {e}",
                 context={
                     "client": "shared" if client in self._client_pool.values() else "dedicated",
-                    "timeout_seconds": self._timeout.read_timeout
-                    if hasattr(self._timeout, "read_timeout")
-                    else "unknown",
+                    "timeout_seconds": (
+                        self._timeout.read_timeout
+                        if hasattr(self._timeout, "read_timeout")
+                        else "unknown"
+                    ),
                 },
             ) from e
         except httpx.ConnectError as e:
@@ -1120,9 +1122,9 @@ class OpenRouterClient:
                         "success": False,
                         "should_retry": True,
                         "new_rf_mode": new_mode,
-                        "new_response_format": {"type": "json_object"}
-                        if new_mode == "json_object"
-                        else None,
+                        "new_response_format": (
+                            {"type": "json_object"} if new_mode == "json_object" else None
+                        ),
                         "backoff_needed": True,
                     }
                 else:

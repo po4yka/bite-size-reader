@@ -184,9 +184,7 @@ class TelegramBot:
     def _audit(self, level: str, event: str, details: dict) -> None:
         """Audit log helper."""
         try:
-            self.db.insert_audit_log(
-                level=level, event=event, details_json=json.dumps(details, ensure_ascii=False)
-            )
+            self.db.insert_audit_log(level=level, event=event, details_json=details)
         except Exception as e:  # noqa: BLE001
             logger.error("audit_persist_failed", extra={"error": str(e), "event": event})
 

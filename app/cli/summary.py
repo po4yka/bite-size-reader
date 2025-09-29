@@ -264,11 +264,11 @@ def _build_audit(db: Database) -> Callable[[str, str, dict[str, Any]], None]:
 
     def audit(level: str, event: str, details: dict[str, Any]) -> None:
         try:
-            payload = json.dumps(details, ensure_ascii=False)
-        except TypeError:
-            payload = json.dumps({"details": str(details)}, ensure_ascii=False)
-
-        try:
+            payload: dict[str, Any]
+            if isinstance(details, dict):
+                payload = details
+            else:
+                payload = {"details": str(details)}
             db.insert_audit_log(level=level, event=event, details_json=payload)
         except Exception:  # noqa: BLE001 - audit failures should not crash CLI
             logger.exception("audit_log_failed", extra={"event": event})

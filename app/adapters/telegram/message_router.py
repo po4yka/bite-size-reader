@@ -1,4 +1,5 @@
 """Message routing and coordination for Telegram bot."""
+
 # ruff: noqa: E501
 # flake8: noqa
 
@@ -680,9 +681,11 @@ class MessageRouter:
                         "batch_result_debug",
                         extra={
                             "result_type": type(result).__name__,
-                            "result_value": str(result)[:200]
-                            if not isinstance(result, Exception)
-                            else str(result),
+                            "result_value": (
+                                str(result)[:200]
+                                if not isinstance(result, Exception)
+                                else str(result)
+                            ),
                             "is_tuple": isinstance(result, tuple),
                             "tuple_len": len(result) if isinstance(result, tuple) else 0,
                             "cid": correlation_id,
