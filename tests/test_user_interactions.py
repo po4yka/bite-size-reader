@@ -4,11 +4,11 @@ from types import SimpleNamespace
 from typing import cast
 from unittest.mock import Mock
 
-from app.adapters.telegram.command_processor import CommandProcessor
 from app.adapters.telegram.message_router import MessageRouter
 from app.adapters.telegram.url_handler import URLHandler
 from app.config import AppConfig, FirecrawlConfig, OpenRouterConfig, RuntimeConfig, TelegramConfig
 from app.db.database import Database
+from app.db.user_interactions import safe_update_user_interaction
 
 
 def _make_config() -> AppConfig:
@@ -86,8 +86,7 @@ def test_message_router_logs_interaction(tmp_path) -> None:
     assert row["correlation_id"] == "cid-123"
 
 
-def test_command_processor_updates_interaction(tmp_path) -> None:
-    cfg = _make_config()
+def test_safe_update_user_interaction_updates_interaction(tmp_path) -> None:
     db = _make_db(tmp_path)
 
     interaction_id = db.insert_user_interaction(
@@ -100,15 +99,8 @@ def test_command_processor_updates_interaction(tmp_path) -> None:
         structured_output_enabled=True,
     )
 
-    processor = CommandProcessor(
-        cfg=cfg,
-        response_formatter=Mock(),
-        db=db,
-        url_processor=Mock(),
-        audit_func=lambda *args, **kwargs: None,
-    )
-
-    processor._update_user_interaction(  # noqa: SLF001
+    safe_update_user_interaction(
+        db,
         interaction_id=interaction_id,
         response_sent=True,
         response_type="help",

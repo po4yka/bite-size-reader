@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Any
 from app.core.logging_utils import generate_correlation_id
 from app.core.url_utils import extract_all_urls
 from app.db.database import Database
+from app.db.user_interactions import safe_update_user_interaction
 
 if TYPE_CHECKING:
     from app.adapters.content.url_processor import URLProcessor
@@ -168,13 +169,15 @@ class URLHandler:
                     "ℹ️ No pending multi-link request to confirm. Please send the links again.",
                 )
                 if interaction_id:
-                    self._update_user_interaction(
+                    safe_update_user_interaction(
+                        self.db,
                         interaction_id=interaction_id,
                         response_sent=True,
                         response_type="confirmation_missing",
                         error_occurred=True,
                         error_message="no_pending_multi_links",
-                        processing_time_ms=int((time.time() - start_time) * 1000),
+                        start_time=start_time,
+                        logger_=logger,
                     )
                 return
 
@@ -197,13 +200,15 @@ class URLHandler:
                     "❌ Pending multi-link request is invalid. Please send the links again.",
                 )
                 if interaction_id:
-                    self._update_user_interaction(
+                    safe_update_user_interaction(
+                        self.db,
                         interaction_id=interaction_id,
                         response_sent=True,
                         response_type="confirmation_invalid",
                         error_occurred=True,
                         error_message="invalid_multi_link_cache",
-                        processing_time_ms=int((time.time() - start_time) * 1000),
+                        start_time=start_time,
+                        logger_=logger,
                     )
                 return
 
@@ -213,11 +218,13 @@ class URLHandler:
                 message, f"🚀 Processing {len(urls)} links in parallel..."
             )
             if interaction_id:
-                self._update_user_interaction(
+                safe_update_user_interaction(
+                    self.db,
                     interaction_id=interaction_id,
                     response_sent=True,
                     response_type="processing",
-                    processing_time_ms=int((time.time() - start_time) * 1000),
+                    start_time=start_time,
+                    logger_=logger,
                 )
 
             # Process URLs in parallel with controlled concurrency
@@ -228,11 +235,13 @@ class URLHandler:
             self._pending_multi_links.pop(uid, None)
             await self.response_formatter.safe_reply(message, "Cancelled.")
             if interaction_id:
-                self._update_user_interaction(
+                safe_update_user_interaction(
+                    self.db,
                     interaction_id=interaction_id,
                     response_sent=True,
                     response_type="cancelled",
-                    processing_time_ms=int((time.time() - start_time) * 1000),
+                    start_time=start_time,
+                    logger_=logger,
                 )
 
     def is_awaiting_url(self, uid: int) -> bool:
@@ -266,11 +275,13 @@ class URLHandler:
         await self.response_formatter.safe_reply(message, f"Process {len(urls)} links? (yes/no)")
         logger.debug("awaiting_multi_confirm", extra={"uid": uid, "count": len(urls)})
         if interaction_id:
-            self._update_user_interaction(
+            safe_update_user_interaction(
+                self.db,
                 interaction_id=interaction_id,
                 response_sent=True,
                 response_type="confirmation",
-                processing_time_ms=int((time.time() - start_time) * 1000),
+                start_time=start_time,
+                logger_=logger,
             )
 
     async def _process_multiple_urls_parallel(
@@ -641,35 +652,3 @@ class URLHandler:
                 "count_match": actual_total == expected_total,
             },
         )
-
-    def _update_user_interaction(
-        self,
-        *,
-        interaction_id: int,
-        response_sent: bool | None = None,
-        response_type: str | None = None,
-        error_occurred: bool | None = None,
-        error_message: str | None = None,
-        processing_time_ms: int | None = None,
-        request_id: int | None = None,
-    ) -> None:
-        """Update an existing user interaction record."""
-
-        if interaction_id <= 0:
-            return
-
-        try:
-            self.db.update_user_interaction(
-                interaction_id=interaction_id,
-                response_sent=response_sent,
-                response_type=response_type,
-                error_occurred=error_occurred,
-                error_message=error_message,
-                processing_time_ms=processing_time_ms,
-                request_id=request_id,
-            )
-        except Exception as exc:  # noqa: BLE001
-            logger.warning(
-                "user_interaction_update_failed",
-                extra={"interaction_id": interaction_id, "error": str(exc)},
-            )

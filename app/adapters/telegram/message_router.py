@@ -1,4 +1,5 @@
 """Message routing and coordination for Telegram bot."""
+
 # ruff: noqa: E501
 # flake8: noqa
 
@@ -14,6 +15,7 @@ from app.config import AppConfig
 from app.core.logging_utils import generate_correlation_id
 from app.core.url_utils import extract_all_urls, looks_like_url
 from app.db.database import Database
+from app.db.user_interactions import safe_update_user_interaction
 from app.models.telegram.telegram_models import TelegramMessage
 
 if TYPE_CHECKING:
@@ -165,13 +167,15 @@ class MessageRouter:
                 f"An unexpected error occurred. Error ID: {correlation_id}. Please try again.",
             )
             if interaction_id:
-                self._update_user_interaction(
+                safe_update_user_interaction(
+                    self.db,
                     interaction_id=interaction_id,
                     response_sent=True,
                     response_type="error",
                     error_occurred=True,
                     error_message=str(e)[:500],  # Limit error message length
-                    processing_time_ms=int((time.time() - start_time) * 1000),
+                    start_time=start_time,
+                    logger_=logger,
                 )
 
     async def _route_message_content(
@@ -289,11 +293,13 @@ class MessageRouter:
             },
         )
         if interaction_id:
-            self._update_user_interaction(
+            safe_update_user_interaction(
+                self.db,
                 interaction_id=interaction_id,
                 response_sent=True,
                 response_type="unknown_input",
-                processing_time_ms=int((time.time() - start_time) * 1000),
+                start_time=start_time,
+                logger_=logger,
             )
 
     def _is_txt_file_with_urls(self, message: Any) -> bool:
@@ -680,9 +686,11 @@ class MessageRouter:
                         "batch_result_debug",
                         extra={
                             "result_type": type(result).__name__,
-                            "result_value": str(result)[:200]
-                            if not isinstance(result, Exception)
-                            else str(result),
+                            "result_value": (
+                                str(result)[:200]
+                                if not isinstance(result, Exception)
+                                else str(result)
+                            ),
                             "is_tuple": isinstance(result, tuple),
                             "tuple_len": len(result) if isinstance(result, tuple) else 0,
                             "cid": correlation_id,
@@ -850,11 +858,13 @@ class MessageRouter:
         )
 
         if interaction_id:
-            self._update_user_interaction(
+            safe_update_user_interaction(
+                self.db,
                 interaction_id=interaction_id,
                 response_sent=True,
                 response_type="batch_processing_complete",
-                processing_time_ms=int((time.time() - start_time) * 1000),
+                start_time=start_time,
+                logger_=logger,
             )
 
     async def _process_url_silently(
@@ -1034,35 +1044,3 @@ class MessageRouter:
                 },
             )
             return 0
-
-    def _update_user_interaction(
-        self,
-        *,
-        interaction_id: int,
-        response_sent: bool | None = None,
-        response_type: str | None = None,
-        error_occurred: bool | None = None,
-        error_message: str | None = None,
-        processing_time_ms: int | None = None,
-        request_id: int | None = None,
-    ) -> None:
-        """Update an existing user interaction record."""
-
-        if interaction_id <= 0:
-            return
-
-        try:
-            self.db.update_user_interaction(
-                interaction_id=interaction_id,
-                response_sent=response_sent,
-                response_type=response_type,
-                error_occurred=error_occurred,
-                error_message=error_message,
-                processing_time_ms=processing_time_ms,
-                request_id=request_id,
-            )
-        except Exception as exc:  # noqa: BLE001
-            logger.warning(
-                "user_interaction_update_failed",
-                extra={"interaction_id": interaction_id, "error": str(exc)},
-            )

@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any
 
 from app.config import AppConfig
 from app.db.database import Database
+from app.db.user_interactions import safe_update_user_interaction
 
 if TYPE_CHECKING:
     from app.adapters.external.response_formatter import ResponseFormatter
@@ -124,44 +125,14 @@ class AccessController:
         logger.info("access_denied", extra={"uid": uid, "cid": correlation_id})
 
         if interaction_id:
-            self._update_user_interaction(
+            safe_update_user_interaction(
+                self.db,
                 interaction_id=interaction_id,
                 response_sent=True,
                 response_type="error",
                 error_occurred=True,
                 error_message="Access denied",
-                processing_time_ms=int((time.time() - start_time) * 1000),
+                start_time=start_time,
+                logger_=logger,
             )
         return False
-
-    def _update_user_interaction(
-        self,
-        *,
-        interaction_id: int,
-        response_sent: bool | None = None,
-        response_type: str | None = None,
-        error_occurred: bool | None = None,
-        error_message: str | None = None,
-        processing_time_ms: int | None = None,
-        request_id: int | None = None,
-    ) -> None:
-        """Update an existing user interaction record."""
-
-        if interaction_id <= 0:
-            return
-
-        try:
-            self.db.update_user_interaction(
-                interaction_id=interaction_id,
-                response_sent=response_sent,
-                response_type=response_type,
-                error_occurred=error_occurred,
-                error_message=error_message,
-                processing_time_ms=processing_time_ms,
-                request_id=request_id,
-            )
-        except Exception as exc:  # noqa: BLE001
-            logger.warning(
-                "user_interaction_update_failed",
-                extra={"interaction_id": interaction_id, "error": str(exc)},
-            )

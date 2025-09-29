@@ -22,6 +22,7 @@ from app.config import AppConfig
 from app.core.lang import choose_language
 from app.core.url_utils import normalize_url, url_hash_sha256
 from app.db.database import Database
+from app.db.user_interactions import safe_update_user_interaction
 
 if TYPE_CHECKING:
     from app.adapters.external.response_formatter import ResponseFormatter
@@ -372,11 +373,13 @@ class URLProcessor:
             logger.error("persist_summary_error", extra={"error": str(e), "cid": correlation_id})
 
         if interaction_id:
-            self._update_user_interaction(
+            safe_update_user_interaction(
+                self.db,
                 interaction_id=interaction_id,
                 response_sent=True,
                 response_type="summary",
                 request_id=req_id,
+                logger_=logger,
             )
 
         # Send structured results (skip if silent)
@@ -636,11 +639,13 @@ class URLProcessor:
         )
 
         if interaction_id:
-            self._update_user_interaction(
+            safe_update_user_interaction(
+                self.db,
                 interaction_id=interaction_id,
                 response_sent=True,
                 response_type="summary",
                 request_id=req_id,
+                logger_=logger,
             )
 
         logger.info(
@@ -648,35 +653,3 @@ class URLProcessor:
             extra={"request_id": req_id, "cid": correlation_id, "normalized_url": norm},
         )
         return True
-
-    def _update_user_interaction(
-        self,
-        *,
-        interaction_id: int,
-        response_sent: bool | None = None,
-        response_type: str | None = None,
-        error_occurred: bool | None = None,
-        error_message: str | None = None,
-        processing_time_ms: int | None = None,
-        request_id: int | None = None,
-    ) -> None:
-        """Update an existing user interaction record."""
-
-        if interaction_id <= 0:
-            return
-
-        try:
-            self.db.update_user_interaction(
-                interaction_id=interaction_id,
-                response_sent=response_sent,
-                response_type=response_type,
-                error_occurred=error_occurred,
-                error_message=error_message,
-                processing_time_ms=processing_time_ms,
-                request_id=request_id,
-            )
-        except Exception as exc:  # noqa: BLE001
-            logger.warning(
-                "user_interaction_update_failed",
-                extra={"interaction_id": interaction_id, "error": str(exc)},
-            )

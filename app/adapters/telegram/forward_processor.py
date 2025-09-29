@@ -11,6 +11,7 @@ from app.adapters.telegram.forward_content_processor import ForwardContentProces
 from app.adapters.telegram.forward_summarizer import ForwardSummarizer
 from app.config import AppConfig
 from app.db.database import Database
+from app.db.user_interactions import safe_update_user_interaction
 
 if TYPE_CHECKING:
     from app.adapters.external.response_formatter import ResponseFormatter
@@ -133,11 +134,13 @@ class ForwardProcessor:
         self.db.update_request_status(req_id, "ok")
 
         if interaction_id:
-            self.summarizer._update_user_interaction(  # noqa: SLF001
+            safe_update_user_interaction(
+                self.db,
                 interaction_id=interaction_id,
                 response_sent=True,
                 response_type="summary",
                 request_id=req_id,
+                logger_=logger,
             )
 
         self._audit(
