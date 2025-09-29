@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import json
 import logging
 import re
@@ -15,13 +14,19 @@ try:
 except ImportError:  # pragma: no cover - AsyncMock introduced in stdlib py3.8+
     AsyncMock = None  # type: ignore[misc]
 
+from app.adapters.content.llm_response_workflow import (
+    LLMInteractionConfig,
+    LLMRepairContext,
+    LLMRequestConfig,
+    LLMResponseWorkflow,
+    LLMSummaryPersistenceSettings,
+    LLMWorkflowNotifications,
+)
 from app.config import AppConfig
 from app.core.json_utils import extract_json
 from app.core.lang import LANG_RU
-from app.core.summary_contract import validate_and_shape_summary
 from app.db.database import Database
 from app.db.user_interactions import safe_update_user_interaction
-from app.utils.json_validation import finalize_summary_texts, parse_summary_response
 
 if TYPE_CHECKING:
     from app.adapters.external.response_formatter import ResponseFormatter
@@ -108,6 +113,14 @@ class LLMSummarizer:
         self.response_formatter = response_formatter
         self._audit = audit_func
         self._sem = sem
+        self._workflow = LLMResponseWorkflow(
+            cfg=cfg,
+            db=db,
+            openrouter=openrouter,
+            response_formatter=response_formatter,
+            audit_func=audit_func,
+            sem=sem,
+        )
         self._last_llm_result: Any | None = None
         self._last_summary_shaped: dict[str, Any] | None = None
         self._last_insights: dict[str, Any] | None = None
@@ -159,43 +172,167 @@ class LLMSummarizer:
         if len(content_text) > max_chars and (self.cfg.openrouter.long_context_model or ""):
             model_override = self.cfg.openrouter.long_context_model
 
-        async with self._sem():
-            # Use structured output configuration
-            response_format = self._build_structured_response_format()
-            max_tokens = self._select_max_tokens(content_text)
-            self._last_llm_result = None
-            self._last_summary_shaped = None
-            self._last_insights = None
+        response_format = self._workflow.build_structured_response_format()
+        max_tokens = self._select_max_tokens(content_text)
 
-            llm = await self.openrouter.chat(
-                messages,
-                temperature=self.cfg.openrouter.temperature,
-                max_tokens=max_tokens,
-                top_p=self.cfg.openrouter.top_p,
-                request_id=req_id,
+        self._last_llm_result = None
+        self._last_summary_shaped = None
+        self._last_insights = None
+
+        requests: list[LLMRequestConfig] = [
+            LLMRequestConfig(
+                messages=messages,
                 response_format=response_format,
+                max_tokens=max_tokens,
+                temperature=self.cfg.openrouter.temperature,
+                top_p=self.cfg.openrouter.top_p,
                 model_override=model_override,
+                silent=silent,
             )
+        ]
 
-            self._last_llm_result = llm
+        fallback_models = [
+            model
+            for model in self.cfg.openrouter.fallback_models
+            if model and model != (model_override or self.cfg.openrouter.model)
+        ]
+        if fallback_models:
+            fallback_format = self._workflow.build_structured_response_format(mode="json_object")
+            fallback_tokens = self._select_max_tokens(user_content)
+            for model_name in fallback_models:
+                requests.append(
+                    LLMRequestConfig(
+                        messages=messages,
+                        response_format=fallback_format,
+                        max_tokens=fallback_tokens,
+                        temperature=self.cfg.openrouter.temperature,
+                        top_p=self.cfg.openrouter.top_p,
+                        model_override=model_name,
+                        silent=silent,
+                    )
+                )
 
-        # LLM completion notification
-        await self.response_formatter.send_llm_completion_notification(
-            message, llm, correlation_id, silent=silent
+        repair_context = LLMRepairContext(
+            base_messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_content},
+            ],
+            repair_response_format=self._workflow.build_structured_response_format(
+                mode="json_object"
+            ),
+            repair_max_tokens=self._select_max_tokens(user_content),
+            default_prompt=(
+                "Your previous message was not a valid JSON object. Respond with ONLY a corrected JSON "
+                "that matches the schema exactly."
+            ),
+            missing_fields_prompt=(
+                "Your previous message was not a valid JSON object. Respond with ONLY a corrected JSON that "
+                "matches the schema exactly. Ensure `summary_250` and `tldr` contain non-empty informative text."
+            ),
         )
 
-        # Process LLM response
-        return await self._process_llm_response(
-            message,
-            llm,
-            system_prompt,
-            user_content,
-            req_id,
-            content_text,
-            chosen_lang,
-            correlation_id,
-            interaction_id,
-            silent=silent,
+        async def _on_completion(llm_result: Any, attempt: LLMRequestConfig) -> None:
+            await self.response_formatter.send_llm_completion_notification(
+                message, llm_result, correlation_id, silent=attempt.silent
+            )
+
+        async def _on_llm_error(llm_result: Any, details: str | None) -> None:
+            await self.response_formatter.send_error_notification(
+                message,
+                "llm_error",
+                correlation_id or "unknown",
+                details=details,
+            )
+
+        async def _on_repair_failure() -> None:
+            await self.response_formatter.send_error_notification(
+                message,
+                "processing_failed",
+                correlation_id or "unknown",
+                details="Unable to repair invalid JSON returned by the model",
+            )
+
+        async def _on_parsing_failure() -> None:
+            await self.response_formatter.send_error_notification(
+                message,
+                "processing_failed",
+                correlation_id or "unknown",
+                details="Model did not produce valid summary output after retries",
+            )
+
+        notifications = LLMWorkflowNotifications(
+            completion=_on_completion,
+            llm_error=_on_llm_error,
+            repair_failure=_on_repair_failure,
+            parsing_failure=_on_parsing_failure,
+        )
+
+        def _insights_from_summary(summary: dict[str, Any]) -> dict[str, Any] | None:
+            insights_payload = summary.get("insights")
+            if isinstance(insights_payload, dict) and self._insights_has_content(insights_payload):
+                return insights_payload
+            return None
+
+        interaction_config = LLMInteractionConfig(
+            interaction_id=interaction_id,
+            success_kwargs={
+                "response_sent": True,
+                "response_type": "summary",
+                "request_id": req_id,
+            },
+            llm_error_builder=lambda llm_result, details: {
+                "response_sent": True,
+                "response_type": "error",
+                "error_occurred": True,
+                "error_message": details
+                or f"LLM error: {llm_result.error_text or 'Unknown error'}",
+                "request_id": req_id,
+            },
+            repair_failure_kwargs={
+                "response_sent": True,
+                "response_type": "error",
+                "error_occurred": True,
+                "error_message": "Invalid summary format",
+                "request_id": req_id,
+            },
+            parsing_failure_kwargs={
+                "response_sent": True,
+                "response_type": "error",
+                "error_occurred": True,
+                "error_message": "Invalid summary format",
+                "request_id": req_id,
+            },
+        )
+
+        persistence = LLMSummaryPersistenceSettings(
+            lang=chosen_lang,
+            is_read=True,
+            insights_getter=_insights_from_summary,
+        )
+
+        async def _on_attempt(llm_result: Any) -> None:
+            self._last_llm_result = llm_result
+
+        async def _on_success(summary: dict[str, Any], llm_result: Any) -> None:
+            self._last_summary_shaped = summary
+            self._last_insights = _insights_from_summary(summary)
+
+        ensure_summary = lambda summary: self._ensure_summary_metadata(  # noqa: E731
+            summary, req_id, content_text, correlation_id
+        )
+
+        return await self._workflow.execute_summary_workflow(
+            message=message,
+            req_id=req_id,
+            correlation_id=correlation_id,
+            interaction_config=interaction_config,
+            persistence=persistence,
+            repair_context=repair_context,
+            requests=requests,
+            notifications=notifications,
+            ensure_summary=ensure_summary,
+            on_attempt=_on_attempt,
+            on_success=_on_success,
         )
 
     def _select_max_tokens(self, content_text: str) -> int | None:
@@ -302,7 +439,7 @@ class LLMSummarizer:
                             model_override=model_name,
                         )
 
-                    asyncio.create_task(self._persist_llm_call(llm, req_id, correlation_id))
+                    self._workflow.schedule_persist_llm_call(llm, req_id, correlation_id)
 
                     if llm.status != "ok":
                         structured_error = (llm.error_text or "") == "structured_output_parse_error"
@@ -699,121 +836,6 @@ class LLMSummarizer:
             },
         )
 
-    async def _process_llm_response(
-        self,
-        message: Any,
-        llm: Any,
-        system_prompt: str,
-        user_content: str,
-        req_id: int,
-        content_text: str,
-        chosen_lang: str,
-        correlation_id: str | None,
-        interaction_id: int | None,
-        *,
-        silent: bool = False,
-    ) -> dict[str, Any] | None:
-        """Process LLM response and handle errors/repairs."""
-        # Robust error handling and salvage logic
-        salvage_shaped: dict[str, Any] | None = None
-        if llm.status != "ok" and (llm.error_text or "") == "structured_output_parse_error":
-            salvage_shaped = await self._attempt_salvage_parsing(llm, correlation_id)
-
-        # Async optimization: Run database operations concurrently with response processing
-        asyncio.create_task(self._persist_llm_call(llm, req_id, correlation_id))
-
-        if llm.status != "ok" and salvage_shaped is None:
-            # Allow JSON repair flow for structured_output_parse_error instead of returning early
-            if (llm.error_text or "") != "structured_output_parse_error":
-                await self._handle_llm_error(message, llm, req_id, correlation_id, interaction_id)
-                return None
-
-        # Parsing with better error handling
-        summary_shaped: dict[str, Any] | None = salvage_shaped
-
-        if summary_shaped is None:
-            summary_shaped = await self._parse_and_repair_response(
-                message, llm, system_prompt, user_content, req_id, correlation_id, interaction_id
-            )
-
-        if summary_shaped is None:
-            summary_shaped = await self._try_fallback_models(
-                message,
-                system_prompt,
-                user_content,
-                req_id,
-                correlation_id,
-                interaction_id,
-                silent=silent,
-            )
-
-        if summary_shaped is None or not any(
-            str(summary_shaped.get(key, "")).strip()
-            for key in ("tldr", "summary_250", "summary_1000")
-        ):
-            logger.error(
-                "summary_fields_empty_final",
-                extra={"cid": correlation_id, "model": getattr(llm, "model", None)},
-            )
-            summary_shaped = await self._try_fallback_models(
-                message,
-                system_prompt,
-                user_content,
-                req_id,
-                correlation_id,
-                interaction_id,
-                silent=silent,
-            )
-
-            if summary_shaped is None or not any(
-                str(summary_shaped.get(key, "")).strip()
-                for key in ("tldr", "summary_250", "summary_1000")
-            ):
-                await self._handle_parsing_failure(message, req_id, correlation_id, interaction_id)
-                return None
-
-        summary_shaped = await self._ensure_summary_metadata(
-            summary_shaped, req_id, content_text, correlation_id
-        )
-
-        self._last_summary_shaped = summary_shaped
-        insights_payload = summary_shaped.get("insights")
-        if isinstance(insights_payload, dict) and self._insights_has_content(insights_payload):
-            self._last_insights = insights_payload
-        else:
-            self._last_insights = None
-
-        # Log enhanced results
-        self._log_llm_finished(llm, summary_shaped, correlation_id)
-
-        # Persist summary
-        try:
-            insights_json = self._last_insights if self._last_insights else None
-            new_version = self.db.upsert_summary(
-                request_id=req_id,
-                lang=chosen_lang,
-                json_payload=summary_shaped,
-                insights_json=insights_json,
-                is_read=True,  # LLM summarizer is for direct processing
-            )
-            self.db.update_request_status(req_id, "ok")
-            self._audit("INFO", "summary_upserted", {"request_id": req_id, "version": new_version})
-        except Exception as e:  # noqa: BLE001
-            logger.error("persist_summary_error", extra={"error": str(e), "cid": correlation_id})
-
-        # Update interaction with successful completion
-        if interaction_id:
-            safe_update_user_interaction(
-                self.db,
-                interaction_id=interaction_id,
-                response_sent=True,
-                response_type="summary",
-                request_id=req_id,
-                logger_=logger,
-            )
-
-        return summary_shaped
-
     async def _ensure_summary_metadata(
         self,
         summary: dict[str, Any],
@@ -1088,7 +1110,7 @@ class LLMSummarizer:
             )
             return {}
 
-        asyncio.create_task(self._persist_llm_call(llm, req_id, correlation_id))
+        self._workflow.schedule_persist_llm_call(llm, req_id, correlation_id)
 
         if llm.status != "ok":
             logger.warning(
@@ -1160,481 +1182,6 @@ class LLMSummarizer:
             return netloc or None
         except Exception:  # noqa: BLE001
             return None
-
-    async def _attempt_salvage_parsing(
-        self, llm: Any, correlation_id: str | None
-    ) -> dict[str, Any] | None:
-        """Attempt to salvage parsing from structured output parse error."""
-        try:
-            # Try robust local parsing first
-            parsed = extract_json(llm.response_text or "")
-            if isinstance(parsed, dict):
-                salvage_shaped = validate_and_shape_summary(parsed)
-                finalize_summary_texts(salvage_shaped)
-                if salvage_shaped:
-                    return salvage_shaped
-
-            pr = parse_summary_response(llm.response_json, llm.response_text)
-            salvage_shaped = pr.shaped
-
-            if salvage_shaped:
-                finalize_summary_texts(salvage_shaped)
-                logger.info("structured_output_salvage_success", extra={"cid": correlation_id})
-                return salvage_shaped
-        except Exception as e:
-            logger.error("salvage_error", extra={"error": str(e), "cid": correlation_id})
-
-        return None
-
-    async def _persist_llm_call(self, llm: Any, req_id: int, correlation_id: str | None) -> None:
-        """Persist LLM call to database."""
-        try:
-            self.db.insert_llm_call(
-                request_id=req_id,
-                provider="openrouter",
-                model=llm.model or self.cfg.openrouter.model,
-                endpoint=llm.endpoint,
-                request_headers_json=llm.request_headers or {},
-                request_messages_json=list(llm.request_messages or []),
-                response_text=llm.response_text,
-                response_json=llm.response_json or {},
-                tokens_prompt=llm.tokens_prompt,
-                tokens_completion=llm.tokens_completion,
-                cost_usd=llm.cost_usd,
-                latency_ms=llm.latency_ms,
-                status=llm.status,
-                error_text=llm.error_text,
-                structured_output_used=getattr(llm, "structured_output_used", None),
-                structured_output_mode=getattr(llm, "structured_output_mode", None),
-                error_context_json=(
-                    getattr(llm, "error_context", {})
-                    if getattr(llm, "error_context", None) is not None
-                    else None
-                ),
-            )
-        except Exception as e:  # noqa: BLE001
-            logger.error("persist_llm_error", extra={"error": str(e), "cid": correlation_id})
-
-    async def _handle_llm_error(
-        self,
-        message: Any,
-        llm: Any,
-        req_id: int,
-        correlation_id: str | None,
-        interaction_id: int | None,
-    ) -> None:
-        """Handle LLM errors."""
-        self.db.update_request_status(req_id, "error")
-        logger.error("openrouter_error", extra={"error": llm.error_text, "cid": correlation_id})
-
-        error_details_parts: list[str] = []
-        if getattr(llm, "error_context", None):
-            ctx = llm.error_context or {}
-            status_code = ctx.get("status_code")
-            if status_code is not None:
-                error_details_parts.append(f"HTTP {status_code}")
-            base = ctx.get("message")
-            if base:
-                error_details_parts.append(str(base))
-            api_error = ctx.get("api_error")
-            if api_error and api_error not in error_details_parts:
-                error_details_parts.append(str(api_error))
-            provider = ctx.get("provider")
-            if provider:
-                error_details_parts.append(f"Provider: {provider}")
-
-        if llm.error_text and llm.error_text not in error_details_parts:
-            error_details_parts.append(str(llm.error_text))
-
-        error_details = " | ".join(error_details_parts) if error_details_parts else None
-
-        try:
-            self._audit(
-                "ERROR",
-                "openrouter_error",
-                {"request_id": req_id, "cid": correlation_id, "error": llm.error_text},
-            )
-        except Exception:
-            pass
-
-        try:
-            await self.response_formatter.send_error_notification(
-                message,
-                "llm_error",
-                correlation_id or "unknown",
-                details=error_details,
-            )
-        except Exception:
-            pass
-
-        # Update interaction with error
-        if interaction_id:
-            safe_update_user_interaction(
-                self.db,
-                interaction_id=interaction_id,
-                response_sent=True,
-                response_type="error",
-                error_occurred=True,
-                error_message=error_details or f"LLM error: {llm.error_text or 'Unknown error'}",
-                request_id=req_id,
-                logger_=logger,
-            )
-
-    async def _parse_and_repair_response(
-        self,
-        message: Any,
-        llm: Any,
-        system_prompt: str,
-        user_content: str,
-        req_id: int,
-        correlation_id: str | None,
-        interaction_id: int | None,
-    ) -> dict[str, Any] | None:
-        """Parse LLM response and attempt repair if needed."""
-        parse_result = parse_summary_response(llm.response_json, llm.response_text)
-
-        shaped = parse_result.shaped if parse_result and parse_result.shaped is not None else None
-        used_local_fix = parse_result.used_local_fix if parse_result else False
-
-        if shaped is not None:
-            tldr = shaped.get("tldr") or shaped.get("summary_1000")
-            summary_250 = shaped.get("summary_250")
-            if any(str(x).strip() for x in (tldr, summary_250)):
-                if used_local_fix:
-                    logger.info(
-                        "json_local_fix_applied",
-                        extra={"cid": correlation_id, "stage": "initial"},
-                    )
-                return shaped
-
-            if used_local_fix:
-                logger.info(
-                    "json_local_fix_insufficient",
-                    extra={"cid": correlation_id, "reason": "missing_tldr"},
-                )
-
-            logger.warning(
-                "summary_fields_empty",
-                extra={"cid": correlation_id, "stage": "initial"},
-            )
-            if parse_result and parse_result.errors is not None:
-                parse_result.errors.append("missing_summary_fields")
-            shaped = None
-
-        should_attempt_repair = True
-        chat_callable = getattr(self.openrouter, "chat", None)
-        if AsyncMock is not None and isinstance(chat_callable, AsyncMock):
-            side_effect = getattr(chat_callable, "side_effect", None)
-            if side_effect is None:
-                should_attempt_repair = False
-            elif isinstance(side_effect, list):
-                should_attempt_repair = len(side_effect) > 1
-
-        if not should_attempt_repair:
-            return shaped
-
-        # Repair logic with structured outputs
-        repaired = await self._attempt_json_repair(
-            message,
-            llm,
-            system_prompt,
-            user_content,
-            req_id,
-            parse_result,
-            correlation_id,
-            interaction_id,
-            model_override=llm.model,
-        )
-        if repaired is not None and not any(
-            str(repaired.get(key, "")).strip() for key in ("tldr", "summary_250", "summary_1000")
-        ):
-            logger.warning(
-                "summary_fields_empty",
-                extra={"cid": correlation_id, "stage": "repair"},
-            )
-            return None
-        return repaired
-
-    async def _try_fallback_models(
-        self,
-        message: Any,
-        system_prompt: str,
-        user_content: str,
-        req_id: int,
-        correlation_id: str | None,
-        interaction_id: int | None,
-        *,
-        silent: bool = False,
-    ) -> dict[str, Any] | None:
-        """Attempt summarization with configured fallback models."""
-        fallback_models = [
-            model
-            for model in self.cfg.openrouter.fallback_models
-            if model and model != self.cfg.openrouter.model
-        ]
-        if not fallback_models:
-            return None
-
-        messages = [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_content},
-        ]
-        response_format = self._build_structured_response_format(mode="json_object")
-
-        for model_name in fallback_models:
-            logger.info(
-                "llm_fallback_attempt",
-                extra={"cid": correlation_id, "model": model_name, "request_id": req_id},
-            )
-
-            async with self._sem():
-                llm = await self.openrouter.chat(
-                    messages,
-                    temperature=self.cfg.openrouter.temperature,
-                    max_tokens=self._select_max_tokens(user_content),
-                    top_p=self.cfg.openrouter.top_p,
-                    request_id=req_id,
-                    response_format=response_format,
-                    model_override=model_name,
-                )
-
-            asyncio.create_task(self._persist_llm_call(llm, req_id, correlation_id))
-            await self.response_formatter.send_llm_completion_notification(
-                message, llm, correlation_id, silent=silent
-            )
-
-            self._last_llm_result = llm
-
-            if llm.status != "ok":
-                salvage = None
-                if (llm.error_text or "") == "structured_output_parse_error":
-                    salvage = await self._attempt_salvage_parsing(llm, correlation_id)
-                if salvage:
-                    self._log_llm_finished(llm, salvage, correlation_id)
-                    return salvage
-
-                logger.warning(
-                    "llm_fallback_failed",
-                    extra={
-                        "cid": correlation_id,
-                        "model": model_name,
-                        "status": llm.status,
-                        "error": llm.error_text,
-                    },
-                )
-                continue
-
-            parse_result = parse_summary_response(llm.response_json, llm.response_text)
-            shaped = parse_result.shaped if parse_result else None
-
-            if shaped is None:
-                shaped = await self._attempt_json_repair(
-                    message,
-                    llm,
-                    system_prompt,
-                    user_content,
-                    req_id,
-                    parse_result,
-                    correlation_id,
-                    interaction_id,
-                    model_override=model_name,
-                )
-
-            if shaped is not None:
-                if any(
-                    str(shaped.get(key, "")).strip()
-                    for key in ("tldr", "summary_250", "summary_1000")
-                ):
-                    self._log_llm_finished(llm, shaped, correlation_id)
-                    return shaped
-
-                logger.warning(
-                    "summary_fields_empty",
-                    extra={"cid": correlation_id, "stage": "fallback", "model": model_name},
-                )
-
-        return None
-
-    async def _attempt_json_repair(
-        self,
-        message: Any,
-        llm: Any,
-        system_prompt: str,
-        user_content: str,
-        req_id: int,
-        parse_result: Any,
-        correlation_id: str | None,
-        interaction_id: int | None,
-        *,
-        model_override: str | None = None,
-    ) -> dict[str, Any] | None:
-        """Attempt to repair invalid JSON response."""
-        try:
-            logger.info(
-                "json_repair_attempt_enhanced",
-                extra={
-                    "cid": correlation_id,
-                    "reason": (
-                        parse_result.errors[-3:] if parse_result and parse_result.errors else None
-                    ),
-                    "structured_mode": self.cfg.openrouter.structured_output_mode,
-                },
-            )
-
-            llm_text = llm.response_text or ""
-            repair_messages = [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_content},
-                {"role": "assistant", "content": llm_text},
-                {
-                    "role": "user",
-                    "content": (
-                        "Your previous message was not a valid JSON object."
-                        " Respond with ONLY a corrected JSON that matches the schema exactly."
-                        " Ensure `summary_250` and `tldr` contain non-empty informative text."
-                        if parse_result and "missing_summary_fields" in (parse_result.errors or [])
-                        else (
-                            "Your previous message was not a valid JSON object. "
-                            "Respond with ONLY a corrected JSON that matches the schema exactly."
-                        )
-                    ),
-                },
-            ]
-
-            async with self._sem():
-                repair_response_format = self._build_structured_response_format(mode="json_object")
-                repair = await self.openrouter.chat(
-                    repair_messages,
-                    temperature=self.cfg.openrouter.temperature,
-                    max_tokens=self._select_max_tokens(user_content),
-                    top_p=self.cfg.openrouter.top_p,
-                    request_id=req_id,
-                    response_format=repair_response_format,
-                    model_override=model_override,
-                )
-
-            if repair.status == "ok":
-                repair_result = parse_summary_response(repair.response_json, repair.response_text)
-                if repair_result.shaped is not None:
-                    logger.info(
-                        "json_repair_success_enhanced",
-                        extra={
-                            "cid": correlation_id,
-                            "used_local_fix": repair_result.used_local_fix,
-                        },
-                    )
-                    return repair_result.shaped
-                else:
-                    raise ValueError("repair_failed")
-            else:
-                raise ValueError("repair_call_error")
-        except Exception:
-            await self._handle_repair_failure(message, req_id, correlation_id, interaction_id)
-            return None
-
-    async def _handle_repair_failure(
-        self,
-        message: Any,
-        req_id: int,
-        correlation_id: str | None,
-        interaction_id: int | None,
-    ) -> None:
-        """Handle JSON repair failure."""
-        self.db.update_request_status(req_id, "error")
-        await self.response_formatter.send_error_notification(
-            message,
-            "processing_failed",
-            correlation_id or "unknown",
-            details="Unable to repair invalid JSON returned by the model",
-        )
-
-        # Update interaction with error
-        if interaction_id:
-            safe_update_user_interaction(
-                self.db,
-                interaction_id=interaction_id,
-                response_sent=True,
-                response_type="error",
-                error_occurred=True,
-                error_message="Invalid summary format",
-                request_id=req_id,
-                logger_=logger,
-            )
-
-    async def _handle_parsing_failure(
-        self,
-        message: Any,
-        req_id: int,
-        correlation_id: str | None,
-        interaction_id: int | None,
-    ) -> None:
-        """Handle final parsing failure."""
-        self.db.update_request_status(req_id, "error")
-        await self.response_formatter.send_error_notification(
-            message,
-            "processing_failed",
-            correlation_id or "unknown",
-            details="Model did not produce valid summary output after retries",
-        )
-
-        if interaction_id:
-            safe_update_user_interaction(
-                self.db,
-                interaction_id=interaction_id,
-                response_sent=True,
-                response_type="error",
-                error_occurred=True,
-                error_message="Invalid summary format",
-                request_id=req_id,
-                logger_=logger,
-            )
-
-    def _log_llm_finished(
-        self, llm: Any, summary_shaped: dict[str, Any], correlation_id: str | None
-    ) -> None:
-        """Log enhanced LLM completion details."""
-        logger.info(
-            "llm_finished_enhanced",
-            extra={
-                "status": llm.status,
-                "latency_ms": llm.latency_ms,
-                "model": llm.model,
-                "cid": correlation_id,
-                "summary_250_len": len(summary_shaped.get("summary_250", "")),
-                "tldr_len": len(
-                    summary_shaped.get("tldr", "") or summary_shaped.get("summary_1000", "")
-                ),
-                "key_ideas_count": len(summary_shaped.get("key_ideas", [])),
-                "topic_tags_count": len(summary_shaped.get("topic_tags", [])),
-                "entities_count": len(summary_shaped.get("entities", [])),
-                "reading_time_min": summary_shaped.get("estimated_reading_time_min"),
-                "seo_keywords_count": len(summary_shaped.get("seo_keywords", [])),
-                "structured_output_used": getattr(llm, "structured_output_used", False),
-                "structured_output_mode": getattr(llm, "structured_output_mode", None),
-            },
-        )
-
-    def _build_structured_response_format(self, mode: str | None = None) -> dict[str, Any]:
-        """Build response format configuration for structured outputs."""
-        try:
-            from app.core.summary_contract import get_summary_json_schema
-
-            current_mode = mode or self.cfg.openrouter.structured_output_mode
-
-            if current_mode == "json_schema":
-                return {
-                    "type": "json_schema",
-                    "json_schema": {
-                        "name": "summary_schema",
-                        "schema": get_summary_json_schema(),
-                        "strict": True,
-                    },
-                }
-            else:
-                return {"type": "json_object"}
-        except Exception:
-            # Fallback to basic JSON object mode
-            return {"type": "json_object"}
 
     @property
     def last_llm_result(self) -> Any | None:
@@ -1720,7 +1267,7 @@ class LLMSummarizer:
                             model_override=model_name,
                         )
 
-                    asyncio.create_task(self._persist_llm_call(llm, req_id, correlation_id))
+                    self._workflow.schedule_persist_llm_call(llm, req_id, correlation_id)
 
                     if llm.status != "ok":
                         structured_error = (llm.error_text or "") == "structured_output_parse_error"
