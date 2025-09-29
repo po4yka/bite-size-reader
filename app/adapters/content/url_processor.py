@@ -551,11 +551,25 @@ class URLProcessor:
 
         dedupe = url_hash_sha256(norm)
         existing_req = await self.db.async_get_request_by_dedupe_hash(dedupe)
+        if not isinstance(existing_req, Mapping):
+            getter = getattr(self.db, "get_request_by_dedupe_hash", None)
+            existing_req = getter(dedupe) if callable(getter) else None
+
+        if isinstance(existing_req, Mapping):
+            existing_req = dict(existing_req)
+
         if not existing_req:
             return False
 
         req_id = int(existing_req["id"])
         summary_row = await self.db.async_get_summary_by_request(req_id)
+        if not isinstance(summary_row, Mapping):
+            getter = getattr(self.db, "get_summary_by_request", None)
+            summary_row = getter(req_id) if callable(getter) else None
+
+        if isinstance(summary_row, Mapping):
+            summary_row = dict(summary_row)
+
         if not summary_row:
             return False
 

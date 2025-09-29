@@ -1161,13 +1161,11 @@ class Database:
         if model is None:
             return
         field = getattr(model, column)
-        cursor = self._database.execute_sql(
-            f"SELECT id, {column} FROM {table} WHERE {column} IS NOT NULL"
-        )
+        query = model.select(model.id, field).where(field.is_null(False)).tuples()
         updates = 0
         wrapped = 0
         blanks = 0
-        for row_id, raw_value in cursor.fetchall():
+        for row_id, raw_value in query:
             normalized, should_update, reason = self._normalize_legacy_json_value(raw_value)
             if not should_update:
                 continue

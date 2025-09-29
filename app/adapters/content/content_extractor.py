@@ -9,7 +9,7 @@ import json
 import logging
 import re
 from collections import Counter
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import asdict, dataclass
 from typing import TYPE_CHECKING, Any, Literal
 
@@ -134,6 +134,12 @@ class ContentExtractor:
         self._upsert_sender_metadata(message)
 
         existing_req = await self.db.async_get_request_by_dedupe_hash(dedupe)
+        if not isinstance(existing_req, Mapping):
+            getter = getattr(self.db, "get_request_by_dedupe_hash", None)
+            existing_req = getter(dedupe) if callable(getter) else None
+
+        if isinstance(existing_req, Mapping):
+            existing_req = dict(existing_req)
 
         if existing_req:
             req_id = int(existing_req["id"])  # reuse existing request
@@ -247,6 +253,12 @@ class ContentExtractor:
     ) -> tuple[str, str]:
         """Extract content from Firecrawl or reuse existing crawl result."""
         existing_crawl = await self.db.async_get_crawl_result_by_request(req_id)
+        if not isinstance(existing_crawl, Mapping):
+            getter = getattr(self.db, "get_crawl_result_by_request", None)
+            existing_crawl = getter(req_id) if callable(getter) else None
+
+        if isinstance(existing_crawl, Mapping):
+            existing_crawl = dict(existing_crawl)
 
         if existing_crawl and (
             existing_crawl.get("content_markdown") or existing_crawl.get("content_html")

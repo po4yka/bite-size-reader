@@ -8,7 +8,7 @@ from __future__ import annotations
 import json
 import logging
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from typing import TYPE_CHECKING, Any
 
 from app.config import AppConfig
@@ -43,6 +43,27 @@ class CommandProcessor:
         self.url_processor = url_processor
         self.url_handler: URLHandler | None = url_handler
         self._audit = audit_func
+
+    @staticmethod
+    def _maybe_load_json(payload: Any) -> Any:
+        if payload is None:
+            return None
+        if isinstance(payload, Mapping):
+            return dict(payload)
+        if isinstance(payload, bytes | bytearray):
+            try:
+                payload = payload.decode("utf-8")
+            except Exception:
+                payload = payload.decode("utf-8", errors="replace")
+        if isinstance(payload, str):
+            stripped = payload.strip()
+            if not stripped:
+                return None
+            try:
+                return json.loads(stripped)
+            except json.JSONDecodeError:
+                return None
+        return payload
 
     async def handle_start_command(
         self, message: Any, uid: int, correlation_id: str, interaction_id: int, start_time: float
@@ -495,11 +516,14 @@ class CommandProcessor:
                 created_at = summary.get("created_at", "Unknown date")
 
                 # Extract title from metadata if available
-                json_payload = summary.get("json_payload", "{}")
-                try:
-                    payload = json.loads(json_payload) if json_payload else {}
-                    title = payload.get("metadata", {}).get("title", input_url)
-                except (json.JSONDecodeError, TypeError):
+                payload = self._maybe_load_json(summary.get("json_payload"))
+                if isinstance(payload, Mapping):
+                    title = (
+                        payload.get("metadata", {}).get("title")
+                        or payload.get("title")
+                        or input_url
+                    )
+                else:
                     title = input_url
 
                 response_lines.append(
@@ -593,14 +617,17 @@ class CommandProcessor:
                 return
 
             # Parse the summary payload
-            json_payload = summary.get("json_payload", "{}")
-            try:
-                shaped = json.loads(json_payload) if json_payload else {}
-            except json.JSONDecodeError:
-                await self.response_formatter.safe_reply(
-                    message, f"❌ Error reading article data for ID `{request_id}`."
-                )
-                return
+            payload = self._maybe_load_json(summary.get("json_payload"))
+            if isinstance(payload, Mapping):
+                shaped = dict(payload)
+            else:
+                shaped = {}
+                if payload is not None:
+                    await self.response_formatter.safe_reply(
+                        message,
+                        f"❌ Error reading article data for ID `{request_id}`.",
+                    )
+                    return
 
             # Mark as read
             self.db.mark_summary_as_read(request_id)
@@ -624,19 +651,12 @@ class CommandProcessor:
                 )
 
             # Send additional insights if available
-            insights_json = summary.get("insights_json")
-            if insights_json:
-                try:
-                    insights = json.loads(insights_json)
-                    if insights:
-                        await self.response_formatter.send_additional_insights_message(
-                            message, insights, correlation_id
-                        )
-                except json.JSONDecodeError:
-                    logger.warning(
-                        "insights_decode_failed",
-                        extra={"request_id": request_id, "cid": correlation_id},
-                    )
+            insights_raw = summary.get("insights_json")
+            insights = self._maybe_load_json(insights_raw)
+            if isinstance(insights, Mapping) and insights:
+                await self.response_formatter.send_additional_insights_message(
+                    message, dict(insights), correlation_id
+                )
 
             if interaction_id:
                 await async_safe_update_user_interaction(
