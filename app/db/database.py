@@ -39,6 +39,10 @@ from app.services.topic_search_utils import (
 JSONValue = Mapping[str, Any] | Sequence[Any] | str | None
 
 
+class TopicSearchIndexRebuiltError(RuntimeError):
+    """Raised to signal that the topic search index was rebuilt mid-operation."""
+
+
 class RowSqliteDatabase(SqliteExtDatabase):
     """SQLite database subclass that configures the row factory for dict-like access."""
 
@@ -1215,8 +1219,11 @@ class Database:
                 self._logger.warning("topic_search_index_count_failed", extra={"error": str(exc)})
                 summary_count = -1
                 index_count = -2
-            if summary_count < 0 or index_count != summary_count:
-                self._rebuild_topic_search_index()
+            try:
+                if summary_count < 0 or index_count != summary_count:
+                    self._rebuild_topic_search_index()
+            except TopicSearchIndexRebuiltError:
+                return
 
     def _refresh_topic_search_index(self, request_id: int) -> None:
         try:
@@ -1250,7 +1257,10 @@ class Database:
                     self._remove_topic_search_index_entry(request_id)
                     return
 
-                self._write_topic_search_index(document)
+                try:
+                    self._write_topic_search_index(document)
+                except TopicSearchIndexRebuiltError:
+                    return
         except Exception as exc:  # noqa: BLE001 - logging and continue
             self._logger.warning(
                 "topic_search_index_refresh_failed",
@@ -1258,7 +1268,10 @@ class Database:
             )
 
     def _write_topic_search_index(self, document: TopicSearchDocument) -> None:
-        self._delete_topic_search_index_row(document.request_id)
+        try:
+            self._delete_topic_search_index_row(document.request_id)
+        except TopicSearchIndexRebuiltError:
+            return
         self._database.execute_sql(
             """
             INSERT INTO topic_search_index(
@@ -1279,7 +1292,10 @@ class Database:
         )
 
     def _remove_topic_search_index_entry(self, request_id: int) -> None:
-        self._delete_topic_search_index_row(request_id)
+        try:
+            self._delete_topic_search_index_row(request_id)
+        except TopicSearchIndexRebuiltError:
+            return
 
     def _rebuild_topic_search_index(self) -> None:
         with self._database.connection_context():
@@ -1306,7 +1322,10 @@ class Database:
                 )
                 if not document:
                     continue
-                self._write_topic_search_index(document)
+                try:
+                    self._write_topic_search_index(document)
+                except TopicSearchIndexRebuiltError:
+                    return
                 rebuilt += 1
         if rebuilt:
             self._logger.info("topic_search_index_rebuilt", extra={"rows": rebuilt})
@@ -1363,6 +1382,7 @@ class Database:
             raise exc
 
         self._reset_topic_search_index()
+        raise TopicSearchIndexRebuiltError from exc
 
     def _reset_topic_search_index(self) -> None:
         """Drop and rebuild the topic search index to recover from corruption."""
@@ -1379,7 +1399,10 @@ class Database:
                 except peewee.DatabaseError:
                     pass
                 TopicSearchIndex.create_table()
-            self._rebuild_topic_search_index()
+            try:
+                self._rebuild_topic_search_index()
+            except TopicSearchIndexRebuiltError:
+                return
         except peewee.DatabaseError as reset_exc:  # pragma: no cover - defensive
             self._logger.exception(
                 "topic_search_index_reset_failed",
