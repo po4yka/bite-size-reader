@@ -16,6 +16,7 @@ from app.config import AppConfig
 from app.core.logging_utils import generate_correlation_id
 from app.core.url_utils import extract_all_urls
 from app.db.user_interactions import async_safe_update_user_interaction
+from app.services.topic_search import LocalTopicSearchService, TopicSearchService
 
 if TYPE_CHECKING:
     from app.adapters.content.url_processor import URLProcessor
@@ -37,6 +38,8 @@ class CommandProcessor:
         url_processor: URLProcessor,
         audit_func: Callable[[str, str, dict], None],
         url_handler: URLHandler | None = None,
+        topic_searcher: TopicSearchService | None = None,
+        local_searcher: LocalTopicSearchService | None = None,
         task_manager: UserTaskManager | None = None,
     ) -> None:
         self.cfg = cfg
@@ -45,6 +48,8 @@ class CommandProcessor:
         self.url_processor = url_processor
         self.url_handler: URLHandler | None = url_handler
         self._audit = audit_func
+        self.topic_searcher = topic_searcher
+        self.local_searcher = local_searcher
         self._task_manager = task_manager
 
     @staticmethod
@@ -287,6 +292,195 @@ class CommandProcessor:
                 interaction_id=interaction_id,
                 response_sent=True,
                 response_type="dbverify",
+                start_time=start_time,
+                logger_=logger,
+            )
+
+    async def handle_find_online_command(
+        self,
+        message: Any,
+        text: str,
+        uid: int,
+        correlation_id: str,
+        interaction_id: int,
+        start_time: float,
+        *,
+        command: str,
+    ) -> None:
+        """Handle Firecrawl-backed search commands."""
+
+        await self._handle_topic_search(
+            message,
+            text,
+            uid,
+            correlation_id,
+            interaction_id,
+            start_time,
+            command=command,
+            searcher=self.topic_searcher,
+            unavailable_message="⚠️ Online article search is currently unavailable.",
+            usage_example="❌ Usage: `{cmd} <topic>`\n\nExample: `{cmd} Android System Design`",
+            invalid_message="❌ Topic must contain visible characters. Try `{cmd} space exploration`.",
+            error_message="⚠️ Unable to search online articles right now. Please try again later.",
+            empty_message="No recent online articles found for **{topic}**.",
+            response_prefix="topic_search_online",
+            log_event="command_find_online",
+            formatter_source="online",
+        )
+
+    async def handle_find_local_command(
+        self,
+        message: Any,
+        text: str,
+        uid: int,
+        correlation_id: str,
+        interaction_id: int,
+        start_time: float,
+        *,
+        command: str,
+    ) -> None:
+        """Handle database-only topic search commands."""
+
+        await self._handle_topic_search(
+            message,
+            text,
+            uid,
+            correlation_id,
+            interaction_id,
+            start_time,
+            command=command,
+            searcher=self.local_searcher,
+            unavailable_message="⚠️ Library search is currently unavailable.",
+            usage_example="❌ Usage: `{cmd} <topic>`\n\nExample: `{cmd} Android System Design`",
+            invalid_message="❌ Topic must contain visible characters. Try `{cmd} space exploration`.",
+            error_message="⚠️ Unable to search saved articles right now. Please try again later.",
+            empty_message="No saved summaries matched **{topic}**.",
+            response_prefix="topic_search_local",
+            log_event="command_find_local",
+            formatter_source="library",
+        )
+
+    async def _handle_topic_search(
+        self,
+        message: Any,
+        text: str,
+        uid: int,
+        correlation_id: str,
+        interaction_id: int,
+        start_time: float,
+        *,
+        command: str,
+        searcher: TopicSearchService | LocalTopicSearchService | None,
+        unavailable_message: str,
+        usage_example: str,
+        invalid_message: str,
+        error_message: str,
+        empty_message: str,
+        response_prefix: str,
+        log_event: str,
+        formatter_source: str,
+    ) -> None:
+        chat_id = getattr(getattr(message, "chat", None), "id", None)
+        logger.info(
+            log_event,
+            extra={
+                "uid": uid,
+                "chat_id": chat_id,
+                "cid": correlation_id,
+                "text": text[:100],
+            },
+        )
+        try:
+            self._audit(
+                "INFO",
+                log_event,
+                {"uid": uid, "chat_id": chat_id, "cid": correlation_id, "text": text[:100]},
+            )
+        except Exception:
+            pass
+
+        if not searcher:
+            await self.response_formatter.safe_reply(message, unavailable_message)
+            if interaction_id:
+                await async_safe_update_user_interaction(
+                    self.db,
+                    interaction_id=interaction_id,
+                    response_sent=True,
+                    response_type=f"{response_prefix}_disabled",
+                    start_time=start_time,
+                    logger_=logger,
+                )
+            return
+
+        parts = text.split(maxsplit=1)
+        topic = parts[1].strip() if len(parts) > 1 else ""
+        if not topic:
+            usage = usage_example.format(cmd=command)
+            await self.response_formatter.safe_reply(message, usage)
+            if interaction_id:
+                await async_safe_update_user_interaction(
+                    self.db,
+                    interaction_id=interaction_id,
+                    response_sent=True,
+                    response_type=f"{response_prefix}_usage",
+                    start_time=start_time,
+                    logger_=logger,
+                )
+            return
+
+        try:
+            results = await searcher.find_articles(topic, correlation_id=correlation_id)
+        except ValueError:
+            invalid = invalid_message.format(cmd=command)
+            await self.response_formatter.safe_reply(message, invalid)
+            if interaction_id:
+                await async_safe_update_user_interaction(
+                    self.db,
+                    interaction_id=interaction_id,
+                    response_sent=True,
+                    response_type=f"{response_prefix}_invalid",
+                    start_time=start_time,
+                    logger_=logger,
+                )
+            return
+        except Exception as exc:  # noqa: BLE001 - defensive catch
+            logger.exception(f"{log_event}_failed", extra={"cid": correlation_id})
+            await self.response_formatter.safe_reply(message, error_message)
+            if interaction_id:
+                await async_safe_update_user_interaction(
+                    self.db,
+                    interaction_id=interaction_id,
+                    response_sent=True,
+                    response_type=f"{response_prefix}_error",
+                    error_occurred=True,
+                    error_message=str(exc)[:500],
+                    start_time=start_time,
+                    logger_=logger,
+                )
+            return
+
+        if not results:
+            await self.response_formatter.safe_reply(message, empty_message.format(topic=topic))
+            if interaction_id:
+                await async_safe_update_user_interaction(
+                    self.db,
+                    interaction_id=interaction_id,
+                    response_sent=True,
+                    response_type=f"{response_prefix}_empty",
+                    start_time=start_time,
+                    logger_=logger,
+                )
+            return
+
+        await self.response_formatter.send_topic_search_results(
+            message, topic=topic, articles=results, source=formatter_source
+        )
+        if interaction_id:
+            await async_safe_update_user_interaction(
+                self.db,
+                interaction_id=interaction_id,
+                response_sent=True,
+                response_type=f"{response_prefix}_results",
                 start_time=start_time,
                 logger_=logger,
             )

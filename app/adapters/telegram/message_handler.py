@@ -17,6 +17,7 @@ if TYPE_CHECKING:
     from app.adapters.content.url_processor import URLProcessor
     from app.adapters.external.response_formatter import ResponseFormatter
     from app.adapters.telegram.forward_processor import ForwardProcessor
+    from app.services.topic_search import LocalTopicSearchService, TopicSearchService
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +32,8 @@ class MessageHandler:
         response_formatter: ResponseFormatter,
         url_processor: URLProcessor,
         forward_processor: ForwardProcessor,
+        topic_searcher: TopicSearchService | None = None,
+        local_searcher: LocalTopicSearchService | None = None,
     ) -> None:
         self.cfg = cfg
         self.db = db
@@ -57,6 +60,8 @@ class MessageHandler:
             url_processor=url_processor,
             audit_func=self._audit,
             url_handler=self.url_handler,
+            topic_searcher=topic_searcher,
+            local_searcher=local_searcher,
             task_manager=self.task_manager,
         )
 

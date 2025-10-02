@@ -5,6 +5,7 @@ import json
 import logging
 import time
 from collections.abc import Callable
+from dataclasses import dataclass, field
 from typing import Any
 
 import httpx
@@ -66,6 +67,30 @@ class FirecrawlResult(BaseModel):
     correlation_id: str | None = Field(
         default=None, description="Firecrawl correlation identifier (cid)."
     )
+
+
+@dataclass(slots=True)
+class FirecrawlSearchItem:
+    """Normalized representation of a Firecrawl `/v1/search` result item."""
+
+    title: str
+    url: str
+    snippet: str | None = None
+    source: str | None = None
+    published_at: str | None = None
+
+
+@dataclass(slots=True)
+class FirecrawlSearchResult:
+    """Result container for Firecrawl search queries."""
+
+    status: str
+    http_status: int | None = None
+    results: list[FirecrawlSearchItem] = field(default_factory=list)
+    total_results: int | None = None
+    latency_ms: int | None = None
+    error_text: str | None = None
+    correlation_id: str | None = None
 
 
 class FirecrawlClient:
@@ -163,6 +188,299 @@ class FirecrawlClient:
 
     async def aclose(self) -> None:
         await self._client.aclose()
+
+    async def search(
+        self,
+        query: str,
+        *,
+        limit: int = 5,
+        request_id: int | None = None,
+    ) -> FirecrawlSearchResult:
+        """Call Firecrawl's search endpoint and normalize the response."""
+
+        trimmed_query = str(query or "").strip()
+        if not trimmed_query:
+            raise ValueError("Search query is required")
+        if len(trimmed_query) > 500:
+            raise ValueError("Search query too long")
+
+        if not isinstance(limit, int):
+            raise ValueError("Search limit must be an integer")
+        if limit <= 0 or limit > 10:
+            raise ValueError("Search limit must be between 1 and 10")
+
+        if request_id is not None and (not isinstance(request_id, int) or request_id <= 0):
+            raise ValueError("Invalid request_id")
+
+        headers = {"Authorization": f"Bearer {self._api_key}"}
+        body = {"query": trimmed_query, "numResults": limit, "page": 1}
+
+        if self._audit:
+            try:
+                self._audit(
+                    "INFO",
+                    "firecrawl_search_request",
+                    {"query": trimmed_query, "limit": limit, "request_id": request_id},
+                )
+            except Exception:
+                pass
+
+        self._logger.debug(
+            "firecrawl_search_request",
+            extra={"query": trimmed_query, "limit": limit, "request_id": request_id},
+        )
+
+        started = time.perf_counter()
+        try:
+            resp = await self._client.post(
+                "https://api.firecrawl.dev/v1/search", headers=headers, json=body
+            )
+        except httpx.HTTPError as exc:
+            latency = int((time.perf_counter() - started) * 1000)
+            error_text = str(exc)
+            self._logger.error(
+                "firecrawl_search_http_error",
+                extra={"error": error_text, "query": trimmed_query},
+            )
+            if self._audit:
+                try:
+                    self._audit(
+                        "ERROR",
+                        "firecrawl_search_http_error",
+                        {"error": error_text, "query": trimmed_query},
+                    )
+                except Exception:
+                    pass
+            return FirecrawlSearchResult(
+                status="error",
+                results=[],
+                latency_ms=latency,
+                error_text=error_text,
+                http_status=None,
+            )
+
+        latency = int((time.perf_counter() - started) * 1000)
+        try:
+            data = resp.json()
+        except json.JSONDecodeError as exc:
+            error_text = f"invalid_json: {exc}"
+            self._logger.error(
+                "firecrawl_search_invalid_json",
+                extra={"error": error_text, "status": resp.status_code},
+            )
+            if self._audit:
+                try:
+                    self._audit(
+                        "ERROR",
+                        "firecrawl_search_invalid_json",
+                        {"status": resp.status_code, "error": error_text},
+                    )
+                except Exception:
+                    pass
+            return FirecrawlSearchResult(
+                status="error",
+                results=[],
+                latency_ms=latency,
+                error_text=error_text,
+                http_status=resp.status_code,
+            )
+
+        correlation_id = None
+        if isinstance(data, dict):
+            correlation_id = data.get("cid") or data.get("correlation_id")
+
+        total_results = self._extract_total_results(data)
+        raw_error = self._extract_error_message(data)
+        raw_items = self._extract_result_items(data)
+
+        items: list[FirecrawlSearchItem] = []
+        seen_urls: set[str] = set()
+        for raw in raw_items:
+            normalized = self._normalize_search_item(raw)
+            if normalized is None:
+                continue
+            if normalized.url in seen_urls:
+                continue
+            seen_urls.add(normalized.url)
+            items.append(normalized)
+            if len(items) >= limit:
+                break
+
+        status = "success"
+        final_error: str | None = None
+
+        if resp.status_code >= 400 or raw_error:
+            status = "error"
+            final_error = raw_error or f"HTTP {resp.status_code}"
+
+        if self._audit:
+            try:
+                self._audit(
+                    "INFO" if status == "success" else "ERROR",
+                    "firecrawl_search_response",
+                    {
+                        "status": status,
+                        "http_status": resp.status_code,
+                        "result_count": len(items),
+                        "query": trimmed_query,
+                    },
+                )
+            except Exception:
+                pass
+
+        self._logger.debug(
+            "firecrawl_search_response",
+            extra={
+                "status": status,
+                "http_status": resp.status_code,
+                "results": len(items),
+                "latency_ms": latency,
+            },
+        )
+
+        return FirecrawlSearchResult(
+            status=status,
+            http_status=resp.status_code,
+            results=items,
+            total_results=total_results,
+            latency_ms=latency,
+            error_text=final_error,
+            correlation_id=correlation_id,
+        )
+
+    @classmethod
+    def _extract_total_results(cls, payload: Any) -> int | None:
+        """Attempt to extract a total results count from the payload."""
+
+        queue: list[Any] = [payload]
+        seen: set[int] = set()
+        while queue:
+            current = queue.pop(0)
+            if id(current) in seen:
+                continue
+            seen.add(id(current))
+
+            if isinstance(current, dict):
+                for key in ("totalResults", "total_results", "numResults", "total"):
+                    value = current.get(key)
+                    if isinstance(value, int) and value >= 0:
+                        return value
+                nested = current.get("data")
+                if nested is not None:
+                    queue.append(nested)
+            elif isinstance(current, list):
+                queue.extend(current)
+        return None
+
+    @classmethod
+    def _extract_error_message(cls, payload: Any) -> str | None:
+        """Extract an error message from Firecrawl payloads if present."""
+
+        if isinstance(payload, dict):
+            for key in ("error", "message"):
+                value = payload.get(key)
+                if isinstance(value, str) and value.strip():
+                    return value.strip()
+            nested = payload.get("data")
+            if nested is not None:
+                nested_error = cls._extract_error_message(nested)
+                if nested_error:
+                    return nested_error
+        elif isinstance(payload, list):
+            for item in payload:
+                nested_error = cls._extract_error_message(item)
+                if nested_error:
+                    return nested_error
+        return None
+
+    @classmethod
+    def _extract_result_items(cls, payload: Any) -> list[dict[str, Any]]:
+        """Locate the list of search result dictionaries within the payload."""
+
+        queue: list[Any] = [payload]
+        seen: set[int] = set()
+        while queue:
+            current = queue.pop(0)
+            if id(current) in seen:
+                continue
+            seen.add(id(current))
+
+            if isinstance(current, list):
+                dict_items = [item for item in current if isinstance(item, dict)]
+                url_items = [item for item in dict_items if cls._has_url_field(item)]
+                if url_items:
+                    return url_items
+                queue.extend(current)
+            elif isinstance(current, dict):
+                if cls._has_url_field(current):
+                    return [current]
+                for key in ("results", "items", "data", "matches"):
+                    if key in current:
+                        queue.append(current[key])
+        return []
+
+    @staticmethod
+    def _has_url_field(item: dict[str, Any]) -> bool:
+        url_value = item.get("url") or item.get("link") or item.get("sourceUrl")
+        if isinstance(url_value, str) and url_value.strip():
+            return True
+        return False
+
+    @classmethod
+    def _normalize_search_item(cls, raw: dict[str, Any]) -> FirecrawlSearchItem | None:
+        """Normalize a raw search item dictionary into ``FirecrawlSearchItem``."""
+
+        url = cls._normalize_text(
+            raw.get("url") or raw.get("link") or raw.get("sourceUrl") or raw.get("permalink")
+        )
+        if not url:
+            return None
+
+        title = (
+            cls._normalize_text(raw.get("title") or raw.get("name") or raw.get("headline")) or url
+        )
+
+        snippet_source = (
+            raw.get("snippet") or raw.get("description") or raw.get("summary") or raw.get("content")
+        )
+        snippet = cls._normalize_text(snippet_source)
+        if snippet:
+            snippet = " ".join(snippet.split())
+
+        source_value: Any = raw.get("source") or raw.get("site") or raw.get("publisher")
+        if isinstance(source_value, dict):
+            source_value = source_value.get("name") or source_value.get("title")
+        elif isinstance(source_value, list):
+            parts = [cls._normalize_text(part) for part in source_value]
+            source_value = ", ".join(part for part in parts if part)
+        source = cls._normalize_text(source_value)
+
+        published_raw = (
+            raw.get("published_at")
+            or raw.get("publishedAt")
+            or raw.get("published")
+            or raw.get("date")
+        )
+        if isinstance(published_raw, dict):
+            published_raw = published_raw.get("iso") or published_raw.get("value")
+        published = cls._normalize_text(published_raw)
+
+        return FirecrawlSearchItem(
+            title=title,
+            url=url,
+            snippet=snippet,
+            source=source,
+            published_at=published,
+        )
+
+    @staticmethod
+    def _normalize_text(value: Any) -> str | None:
+        if value is None:
+            return None
+        if isinstance(value, int | float):
+            value = str(value)
+        text = str(value).strip()
+        return text or None
 
     async def scrape_markdown(
         self, url: str, *, mobile: bool = True, request_id: int | None = None

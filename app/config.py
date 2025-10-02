@@ -399,6 +399,7 @@ class RuntimeConfig(BaseModel):
     enable_chunking: bool = Field(default=False, validation_alias="CHUNKING_ENABLED")
     chunk_max_chars: int = Field(default=200000, validation_alias="CHUNK_MAX_CHARS")
     log_truncate_length: int = Field(default=1000, validation_alias="LOG_TRUNCATE_LENGTH")
+    topic_search_max_results: int = Field(default=5, validation_alias="TOPIC_SEARCH_MAX_RESULTS")
     db_backup_enabled: bool = Field(default=True, validation_alias="DB_BACKUP_ENABLED")
     db_backup_interval_minutes: int = Field(
         default=360, validation_alias="DB_BACKUP_INTERVAL_MINUTES"
@@ -448,6 +449,20 @@ class RuntimeConfig(BaseModel):
             ) from exc
         if parsed <= 0:
             raise ValueError(f"{info.field_name.replace('_', ' ').capitalize()} must be positive")
+        return parsed
+
+    @field_validator("topic_search_max_results", mode="before")
+    @classmethod
+    def _validate_topic_search_limit(cls, value: Any) -> int:
+        default = cls.model_fields["topic_search_max_results"].default
+        try:
+            parsed = int(str(value if value not in (None, "") else default))
+        except ValueError as exc:  # pragma: no cover - defensive
+            raise ValueError("Topic search max results must be a valid integer") from exc
+        if parsed <= 0:
+            raise ValueError("Topic search max results must be positive")
+        if parsed > 10:
+            raise ValueError("Topic search max results must be 10 or fewer")
         return parsed
 
     @field_validator("db_backup_interval_minutes", mode="before")

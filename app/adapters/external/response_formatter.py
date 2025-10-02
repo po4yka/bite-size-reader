@@ -8,7 +8,7 @@ import logging
 import math
 import re
 import unicodedata
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Sequence
 from datetime import datetime
 from typing import Any
 
@@ -180,6 +180,9 @@ class ResponseFormatter:
             "• `/help` — Show this help message\n"
             "• `/summarize <URL>` — Summarize a URL\n"
             "• `/summarize_all <URLs>` — Summarize multiple URLs from one message\n"
+            "• `/findweb <topic>` — Search the web (Firecrawl) for recent articles\n"
+            "• `/finddb <topic>` — Search your saved Bite-Size Reader library\n"
+            "• `/find <topic>` — Alias for `/findweb`\n"
             "• `/cancel` — Cancel any pending URL or multi-link requests\n"
             "• `/unread` — Show list of unread articles\n"
             "• `/read <ID>` — Mark article as read and view it\n"
@@ -284,6 +287,71 @@ class ResponseFormatter:
             lines.append("Warnings:")
             for err in errors[:5]:
                 lines.append(f"- {err}")
+
+        await self.safe_reply(message, "\n".join(lines))
+
+    async def send_topic_search_results(
+        self,
+        message: Any,
+        *,
+        topic: str,
+        articles: Sequence[TopicArticle],
+        source: str = "online",
+    ) -> None:
+        """Send a formatted list of topic search results to the user."""
+
+        topic_display = " ".join((topic or "").split())
+        if not topic_display:
+            topic_display = "your topic"
+        if len(topic_display) > 120:
+            topic_display = topic_display[:117].rstrip() + "..."
+
+        source_key = (source or "").lower()
+        if source_key == "library":
+            header_icon = "🗄️"
+            header_label = "Saved library results"
+        elif source_key == "online":
+            header_icon = "🌐"
+            header_label = "Online search results"
+        else:
+            header_icon = "🔎"
+            header_label = "Search results"
+
+        lines: list[str] = [f"{header_icon} {header_label} for: {topic_display}"]
+
+        for idx, article in enumerate(articles, start=1):
+            title = article.title.strip() if article.title else article.url
+            if len(title) > 180:
+                title = title[:177].rstrip() + "..."
+
+            lines.append(f"{idx}. {title}")
+            lines.append(f"   🔗 {article.url}")
+
+            details: list[str] = []
+            if article.source:
+                details.append(article.source)
+            if article.published_at:
+                details.append(article.published_at)
+            if details:
+                lines.append(f"   🗞️ {' · '.join(details)}")
+
+            if article.snippet:
+                lines.append(f"   📝 {article.snippet}")
+
+            lines.append("")
+
+        if lines and not lines[-1]:
+            lines.pop()
+
+        lines.append("")
+        if source_key == "library":
+            lines.append(
+                "Tip: Send `/summarize <URL>` to refresh an article or `/read <request_id>` for saved summaries."
+            )
+        else:
+            lines.append(
+                "Tip: Send `/summarize <URL>` for a detailed summary of any article above."
+            )
 
         await self.safe_reply(message, "\n".join(lines))
 
@@ -2007,3 +2075,6 @@ class ResponseFormatter:
                 )
         except Exception:
             pass
+
+
+from app.services.topic_search import TopicArticle
