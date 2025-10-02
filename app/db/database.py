@@ -1256,10 +1256,7 @@ class Database:
             )
 
     def _write_topic_search_index(self, document: TopicSearchDocument) -> None:
-        self._database.execute_sql(
-            "DELETE FROM topic_search_index WHERE rowid = ?",
-            (document.request_id,),
-        )
+        self._delete_topic_search_index_row(document.request_id)
         self._database.execute_sql(
             """
             INSERT INTO topic_search_index(
@@ -1280,14 +1277,11 @@ class Database:
         )
 
     def _remove_topic_search_index_entry(self, request_id: int) -> None:
-        self._database.execute_sql(
-            "DELETE FROM topic_search_index WHERE rowid = ?",
-            (request_id,),
-        )
+        self._delete_topic_search_index_row(request_id)
 
     def _rebuild_topic_search_index(self) -> None:
         with self._database.connection_context():
-            self._database.execute_sql("DELETE FROM topic_search_index")
+            self._clear_topic_search_index()
             rows = (
                 Summary.select(Summary, Request)
                 .join(Request)
@@ -1314,6 +1308,21 @@ class Database:
                 rebuilt += 1
         if rebuilt:
             self._logger.info("topic_search_index_rebuilt", extra={"rows": rebuilt})
+
+    def _clear_topic_search_index(self) -> None:
+        """Remove all rows from the topic search FTS index."""
+
+        self._database.execute_sql(
+            "INSERT INTO topic_search_index(topic_search_index) VALUES ('delete-all')"
+        )
+
+    def _delete_topic_search_index_row(self, rowid: int) -> None:
+        """Remove a single row from the topic search FTS index."""
+
+        self._database.execute_sql(
+            "INSERT INTO topic_search_index(topic_search_index, rowid) VALUES ('delete', ?)",
+            (rowid,),
+        )
 
     def _coerce_json_column(self, table: str, column: str) -> None:
         model = next((m for m in ALL_MODELS if m._meta.table_name == table), None)
