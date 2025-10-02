@@ -1208,9 +1208,7 @@ class Database:
                 return
             try:
                 summary_count = Summary.select().where(Summary.json_payload.is_null(False)).count()
-                cursor = self._database.execute_sql(f"SELECT COUNT(*) FROM {table_name}")
-                row = cursor.fetchone()
-                index_count = int(row[0]) if row else 0
+                index_count = TopicSearchIndex.select().count()
             except peewee.DatabaseError as exc:  # pragma: no cover - defensive path
                 self._logger.warning("topic_search_index_count_failed", extra={"error": str(exc)})
                 summary_count = -1
