@@ -55,6 +55,7 @@ class Database:
     path: str
     _logger: logging.Logger = logging.getLogger(__name__)
     _database: peewee.SqliteDatabase = field(init=False)
+    _topic_search_index_reset_in_progress: bool = field(default=False, init=False)
 
     def __post_init__(self) -> None:
         if self.path != ":memory":
@@ -1319,10 +1320,60 @@ class Database:
     def _delete_topic_search_index_row(self, rowid: int) -> None:
         """Remove a single row from the topic search FTS index."""
 
-        self._database.execute_sql(
-            "INSERT INTO topic_search_index(topic_search_index, rowid) VALUES ('delete', ?)",
-            (rowid,),
+        try:
+            self._database.execute_sql(
+                "INSERT INTO topic_search_index(topic_search_index, rowid) VALUES ('delete', ?)",
+                (rowid,),
+            )
+        except peewee.DatabaseError as exc:
+            self._logger.warning(
+                "topic_search_index_delete_failed_primary",
+                extra={"rowid": rowid, "error": str(exc)},
+            )
+            try:
+                self._database.execute_sql(
+                    "DELETE FROM topic_search_index WHERE rowid = ?",
+                    (rowid,),
+                )
+            except peewee.DatabaseError as fallback_exc:  # pragma: no cover - defensive
+                self._handle_topic_search_index_error(fallback_exc, rowid)
+
+    def _handle_topic_search_index_error(self, exc: peewee.DatabaseError, rowid: int) -> None:
+        """Handle unrecoverable FTS errors by rebuilding the index."""
+
+        message = str(exc)
+        self._logger.error(
+            "topic_search_index_delete_failed",
+            extra={"rowid": rowid, "error": message},
         )
+        if "malformed" not in message.lower():
+            raise exc
+
+        self._reset_topic_search_index()
+
+    def _reset_topic_search_index(self) -> None:
+        """Drop and rebuild the topic search index to recover from corruption."""
+
+        if self._topic_search_index_reset_in_progress:
+            return
+
+        self._topic_search_index_reset_in_progress = True
+        try:
+            self._logger.warning("topic_search_index_resetting_due_to_error")
+            with self._database.connection_context():
+                try:
+                    TopicSearchIndex.drop_table(safe=True)
+                except peewee.DatabaseError:
+                    pass
+                TopicSearchIndex.create_table()
+            self._rebuild_topic_search_index()
+        except peewee.DatabaseError as reset_exc:  # pragma: no cover - defensive
+            self._logger.exception(
+                "topic_search_index_reset_failed",
+                extra={"error": str(reset_exc)},
+            )
+        finally:
+            self._topic_search_index_reset_in_progress = False
 
     def _coerce_json_column(self, table: str, column: str) -> None:
         model = next((m for m in ALL_MODELS if m._meta.table_name == table), None)
