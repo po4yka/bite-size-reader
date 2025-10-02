@@ -1219,11 +1219,12 @@ class Database:
                 self._logger.warning("topic_search_index_count_failed", extra={"error": str(exc)})
                 summary_count = -1
                 index_count = -2
-            try:
-                if summary_count < 0 or index_count != summary_count:
+
+            if summary_count < 0 or index_count != summary_count:
+                try:
                     self._rebuild_topic_search_index()
-            except TopicSearchIndexRebuiltError:
-                return
+                except TopicSearchIndexRebuiltError:
+                    return
 
     def _refresh_topic_search_index(self, request_id: int) -> None:
         try:
@@ -1268,10 +1269,7 @@ class Database:
             )
 
     def _write_topic_search_index(self, document: TopicSearchDocument) -> None:
-        try:
-            self._delete_topic_search_index_row(document.request_id)
-        except TopicSearchIndexRebuiltError:
-            return
+        self._delete_topic_search_index_row(document.request_id)
         self._database.execute_sql(
             """
             INSERT INTO topic_search_index(
@@ -1292,10 +1290,7 @@ class Database:
         )
 
     def _remove_topic_search_index_entry(self, request_id: int) -> None:
-        try:
-            self._delete_topic_search_index_row(request_id)
-        except TopicSearchIndexRebuiltError:
-            return
+        self._delete_topic_search_index_row(request_id)
 
     def _rebuild_topic_search_index(self) -> None:
         with self._database.connection_context():
@@ -1306,27 +1301,27 @@ class Database:
                 .where(Summary.json_payload.is_null(False))
             )
             rebuilt = 0
-            for row in rows.iterator():
-                payload = ensure_mapping(row.json_payload)
-                if not payload:
-                    continue
-                request_data = {
-                    "normalized_url": getattr(row.request, "normalized_url", None),
-                    "input_url": getattr(row.request, "input_url", None),
-                    "content_text": getattr(row.request, "content_text", None),
-                }
-                document = build_topic_search_document(
-                    request_id=row.request.id,
-                    payload=payload,
-                    request_data=request_data,
-                )
-                if not document:
-                    continue
-                try:
+            try:
+                for row in rows.iterator():
+                    payload = ensure_mapping(row.json_payload)
+                    if not payload:
+                        continue
+                    request_data = {
+                        "normalized_url": getattr(row.request, "normalized_url", None),
+                        "input_url": getattr(row.request, "input_url", None),
+                        "content_text": getattr(row.request, "content_text", None),
+                    }
+                    document = build_topic_search_document(
+                        request_id=row.request.id,
+                        payload=payload,
+                        request_data=request_data,
+                    )
+                    if not document:
+                        continue
                     self._write_topic_search_index(document)
-                except TopicSearchIndexRebuiltError:
-                    return
-                rebuilt += 1
+                    rebuilt += 1
+            except TopicSearchIndexRebuiltError:
+                return
         if rebuilt:
             self._logger.info("topic_search_index_rebuilt", extra={"rows": rebuilt})
 
