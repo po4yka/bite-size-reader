@@ -8,6 +8,7 @@ from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
 from app.config import AppConfig
+from app.core.async_utils import raise_if_cancelled
 from app.core.html_utils import chunk_sentences, split_sentences
 from app.core.lang import LANG_RU
 from app.core.summary_aggregate import aggregate_chunk_summaries
@@ -69,7 +70,8 @@ class ContentChunker:
 
             # fallback
             return int(base_default)
-        except Exception:
+        except Exception as exc:
+            raise_if_cancelled(exc)
             return int(base_default)
 
     def should_chunk_content(
@@ -108,7 +110,8 @@ class ContentChunker:
             try:
                 sentences = split_sentences(content_text, "ru" if chosen_lang == LANG_RU else "en")
                 chunks = chunk_sentences(sentences, max_chars=2000)
-            except Exception:
+            except Exception as exc:
+                raise_if_cancelled(exc)
                 chunks = None
 
         return enable_chunking and content_len > max_chars and chunks is not None, max_chars, chunks
@@ -160,18 +163,21 @@ class ContentChunker:
                             p = msg0.get("parsed")
                             if p is not None:
                                 parsed = p if isinstance(p, dict) else None
-                except Exception:
+                except Exception as exc:
+                    raise_if_cancelled(exc)
                     parsed = None
                 try:
                     if parsed is None and (resp.response_text or "").strip():
                         parsed = json.loads((resp.response_text or "").strip().strip("` "))
-                except Exception:
+                except Exception as exc:
+                    raise_if_cancelled(exc)
                     parsed = None
                 if parsed is not None:
                     try:
                         shaped_chunk = validate_and_shape_summary(parsed)
                         chunk_summaries.append(shaped_chunk)
-                    except Exception:
+                    except Exception as exc:
+                        raise_if_cancelled(exc)
                         pass
 
         # Aggregate chunk summaries into final
@@ -196,6 +202,7 @@ class ContentChunker:
                 }
             else:
                 return {"type": "json_object"}
-        except Exception:
+        except Exception as exc:
+            raise_if_cancelled(exc)
             # Fallback to basic JSON object mode
             return {"type": "json_object"}
