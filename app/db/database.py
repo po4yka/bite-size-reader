@@ -686,12 +686,30 @@ class Database:
         processing_time_ms: int | None = None,
         request_id: int | None = None,
     ) -> None:
-        update_values: dict[Any, Any] = {UserInteraction.updated_at: dt.datetime.utcnow()}
+        legacy_fields = (
+            response_sent,
+            response_type,
+            error_occurred,
+            error_message,
+            processing_time_ms,
+            request_id,
+        )
+        if updates and any(field is not None for field in legacy_fields):
+            raise ValueError("Cannot mix explicit field arguments with the updates mapping")
+
+        update_values: dict[Any, Any] = {}
         if updates:
+            invalid_fields = [
+                key
+                for key in updates
+                if not isinstance(getattr(UserInteraction, key, None), peewee.Field)
+            ]
+            if invalid_fields:
+                raise ValueError(f"Unknown user interaction fields: {', '.join(invalid_fields)}")
             for key, value in updates.items():
-                field_obj = getattr(UserInteraction, key, None)
-                if isinstance(field_obj, peewee.Field):
-                    update_values[field_obj] = value
+                field_obj = getattr(UserInteraction, key)
+                update_values[field_obj] = value
+
         if response_sent is not None:
             update_values[UserInteraction.response_sent] = response_sent
         if response_type is not None:
@@ -705,8 +723,20 @@ class Database:
         if request_id is not None:
             update_values[UserInteraction.request] = request_id
 
-        if len(update_values) == 1:
+        if not update_values:
             return
+
+        updated_at_field = getattr(UserInteraction, "updated_at", None)
+        if isinstance(updated_at_field, peewee.Field):
+            try:
+                columns = {
+                    column.name
+                    for column in self._database.get_columns(UserInteraction._meta.table_name)
+                }
+            except Exception:
+                columns = set()
+            if updated_at_field.column_name in columns:
+                update_values[updated_at_field] = dt.datetime.utcnow()
 
         UserInteraction.update(update_values).where(UserInteraction.id == interaction_id).execute()
 
@@ -1108,6 +1138,7 @@ class Database:
             ("llm_calls", "error_context_json", "TEXT"),
             ("llm_calls", "openrouter_response_text", "TEXT"),
             ("llm_calls", "openrouter_response_json", "TEXT"),
+            ("user_interactions", "updated_at", "DATETIME"),
         ]
         for table, column, coltype in checks:
             self._ensure_column(table, column, coltype)

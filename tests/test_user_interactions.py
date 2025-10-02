@@ -20,7 +20,7 @@ def _make_config() -> AppConfig:
         telegram=TelegramConfig(
             api_id=1,
             api_hash="hash",
-            bot_token="token",
+            bot_token="123456789:ABCDEFGHIJKLMNOPQRSTUVWXYZ1234",
             allowed_user_ids=(1,),
         ),
         firecrawl=FirecrawlConfig(api_key="firecrawl-key"),

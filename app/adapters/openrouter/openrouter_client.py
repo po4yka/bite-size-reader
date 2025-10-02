@@ -24,6 +24,7 @@ from app.adapters.openrouter.model_capabilities import ModelCapabilities
 from app.adapters.openrouter.payload_logger import PayloadLogger
 from app.adapters.openrouter.request_builder import RequestBuilder
 from app.adapters.openrouter.response_processor import ResponseProcessor
+from app.core.async_utils import raise_if_cancelled
 from app.models.llm.llm_models import ChatRequest, LLMCallResult
 
 logger = logging.getLogger(__name__)
@@ -122,6 +123,7 @@ class OpenRouterClient:
                 require_parameters=require_parameters,
             )
         except Exception as e:
+            raise_if_cancelled(e)
             raise ConfigurationError(
                 f"Failed to initialize request builder: {e}",
                 context={"component": "request_builder", "original_error": str(e)},
@@ -132,6 +134,7 @@ class OpenRouterClient:
                 enable_stats=enable_stats,
             )
         except Exception as e:
+            raise_if_cancelled(e)
             raise ConfigurationError(
                 f"Failed to initialize response processor: {e}",
                 context={"component": "response_processor", "original_error": str(e)},
@@ -146,6 +149,7 @@ class OpenRouterClient:
                 timeout=int(timeout_sec),
             )
         except Exception as e:
+            raise_if_cancelled(e)
             raise ConfigurationError(
                 f"Failed to initialize model capabilities: {e}",
                 context={"component": "model_capabilities", "original_error": str(e)},
@@ -159,6 +163,7 @@ class OpenRouterClient:
                 auto_fallback_structured=auto_fallback_structured,
             )
         except Exception as e:
+            raise_if_cancelled(e)
             raise ConfigurationError(
                 f"Failed to initialize error handler: {e}",
                 context={"component": "error_handler", "original_error": str(e)},
@@ -170,6 +175,7 @@ class OpenRouterClient:
                 log_truncate_length=log_truncate_length,
             )
         except Exception as e:
+            raise_if_cancelled(e)
             raise ConfigurationError(
                 f"Failed to initialize payload logger: {e}",
                 context={"component": "payload_logger", "original_error": str(e)},
@@ -420,6 +426,7 @@ class OpenRouterClient:
             # This preserves the original httpx.HTTPStatusError for proper handling
             raise
         except Exception as e:
+            raise_if_cancelled(e)
             raise ClientError(
                 f"Unexpected client error: {e}",
                 context={
@@ -467,6 +474,7 @@ class OpenRouterClient:
                 model_override=model_override,
             )
         except Exception as e:
+            raise_if_cancelled(e)
             raise ValidationError(
                 f"Invalid chat request parameters: {e}",
                 context={"original_error": str(e), "messages_count": len(messages)},
@@ -477,6 +485,7 @@ class OpenRouterClient:
             self.request_builder.validate_chat_request(request)
             sanitized_messages = self.request_builder.sanitize_messages(messages)
         except Exception as e:
+            raise_if_cancelled(e)
             raise ValidationError(
                 f"Request validation failed: {e}",
                 context={"original_error": str(e), "messages_count": len(messages)},
@@ -532,6 +541,7 @@ class OpenRouterClient:
                                     )
                                     continue
                         except Exception as e:
+                            raise_if_cancelled(e)
                             # Log but continue with assumption that model supports it
                             logger.warning("Failed to check model capabilities: %s", e)
 
@@ -643,6 +653,7 @@ class OpenRouterClient:
                             else:
                                 break  # Try next model
                         except Exception as e:
+                            raise_if_cancelled(e)
                             # Handle other unexpected exceptions
                             last_error_text = f"Unexpected error: {str(e)}"
                             last_error_context = {
@@ -667,6 +678,7 @@ class OpenRouterClient:
                         self.error_handler.log_fallback(model, next_model, request_id)
 
         except Exception as e:
+            raise_if_cancelled(e)
             # Handle context manager or other critical errors
             last_error_text = f"Critical error: {str(e)}"
             last_error_context = {
@@ -787,6 +799,7 @@ class OpenRouterClient:
             try:
                 data = resp.json()
             except Exception as e:
+                raise_if_cancelled(e)
                 return {
                     "success": False,
                     "error_text": f"Failed to parse JSON response: {e}",
@@ -845,6 +858,7 @@ class OpenRouterClient:
                 "backoff_needed": True,
             }
         except Exception as e:
+            raise_if_cancelled(e)
             latency = int((time.perf_counter() - started) * 1000)
             return {
                 "success": False,

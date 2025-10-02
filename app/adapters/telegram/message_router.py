@@ -11,6 +11,7 @@ import time
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
+from app.adapters.telegram.task_manager import UserTaskManager
 from app.config import AppConfig
 from app.core.logging_utils import generate_correlation_id
 from app.core.url_utils import extract_all_urls, looks_like_url
@@ -43,6 +44,7 @@ class MessageRouter:
         forward_processor: ForwardProcessor,
         response_formatter: ResponseFormatter,
         audit_func: Callable[[str, str, dict], None],
+        task_manager: UserTaskManager | None = None,
     ) -> None:
         self.cfg = cfg
         self.db = db
@@ -52,6 +54,7 @@ class MessageRouter:
         self.forward_processor = forward_processor
         self.response_formatter = response_formatter
         self._audit = audit_func
+        self._task_manager = task_manager
 
         # Store reference to URL processor for silent processing
         self._url_processor = url_handler.url_processor
@@ -60,6 +63,7 @@ class MessageRouter:
         """Main message routing entry point."""
         start_time = time.time()
         interaction_id = 0
+        uid = 0
 
         try:
             correlation_id = generate_correlation_id()
@@ -151,11 +155,43 @@ class MessageRouter:
             ):
                 return
 
-            # Route message based on content
-            await self._route_message_content(
-                message, text, uid, has_forward, correlation_id, interaction_id, start_time
-            )
+            if self._task_manager is not None:
+                async with self._task_manager.track(uid, enabled=not text.startswith("/cancel")):
+                    await self._route_message_content(
+                        message,
+                        text,
+                        uid,
+                        has_forward,
+                        correlation_id,
+                        interaction_id,
+                        start_time,
+                    )
+            else:
+                await self._route_message_content(
+                    message,
+                    text,
+                    uid,
+                    has_forward,
+                    correlation_id,
+                    interaction_id,
+                    start_time,
+                )
 
+        except asyncio.CancelledError:
+            logger.info(
+                "message_processing_cancelled",
+                extra={"cid": correlation_id, "uid": uid},
+            )
+            if interaction_id:
+                await async_safe_update_user_interaction(
+                    self.db,
+                    interaction_id=interaction_id,
+                    response_sent=False,
+                    response_type="cancelled",
+                    start_time=start_time,
+                    logger_=logger,
+                )
+            return
         except Exception as e:  # noqa: BLE001
             logger.exception("handler_error", extra={"cid": correlation_id})
             try:

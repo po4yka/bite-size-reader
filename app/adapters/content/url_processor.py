@@ -19,6 +19,7 @@ from app.adapters.external.firecrawl_parser import FirecrawlClient
 from app.adapters.openrouter.openrouter_client import OpenRouterClient
 from app.adapters.telegram.message_persistence import MessagePersistence
 from app.config import AppConfig
+from app.core.async_utils import raise_if_cancelled
 from app.core.lang import choose_language
 from app.core.url_utils import normalize_url, url_hash_sha256
 from app.db.database import Database
@@ -257,7 +258,8 @@ class URLProcessor:
                             message,
                             "🧠 Generating additional research insights…",
                         )
-                    except Exception:
+                    except Exception as exc:
+                        raise_if_cancelled(exc)
                         pass
 
                     await self._handle_additional_insights(
@@ -289,6 +291,7 @@ class URLProcessor:
                             if article:
                                 await self.response_formatter.send_custom_article(message, article)
                     except Exception as exc:  # noqa: BLE001
+                        raise_if_cancelled(exc)
                         logger.error(
                             "custom_article_flow_error",
                             extra={"cid": correlation_id, "error": str(exc)},
@@ -325,6 +328,7 @@ class URLProcessor:
             # Handle known errors (like Firecrawl failures)
             logger.error("url_flow_error", extra={"error": str(e), "cid": correlation_id})
         except Exception as e:
+            raise_if_cancelled(e)
             # Handle unexpected errors
             logger.exception(
                 "url_flow_unexpected_error", extra={"error": str(e), "cid": correlation_id}
@@ -370,6 +374,7 @@ class URLProcessor:
             await self.db.async_update_request_status(req_id, "ok")
             self._audit("INFO", "summary_upserted", {"request_id": req_id, "version": new_version})
         except Exception as e:  # noqa: BLE001
+            raise_if_cancelled(e)
             logger.error("persist_summary_error", extra={"error": str(e), "cid": correlation_id})
 
         if interaction_id:
@@ -441,6 +446,7 @@ class URLProcessor:
                         "insights_persisted", extra={"cid": correlation_id, "request_id": req_id}
                     )
                 except Exception as exc:  # noqa: BLE001
+                    raise_if_cancelled(exc)
                     logger.error(
                         "persist_insights_error",
                         extra={"cid": correlation_id, "error": str(exc)},
@@ -452,6 +458,7 @@ class URLProcessor:
                 )
 
         except Exception as exc:  # noqa: BLE001
+            raise_if_cancelled(exc)
             logger.exception(
                 "insights_flow_error",
                 extra={"cid": correlation_id, "error": str(exc)},
@@ -615,6 +622,7 @@ class URLProcessor:
             try:
                 self.db.update_request_correlation_id(req_id, correlation_id)
             except Exception as exc:  # noqa: BLE001
+                raise_if_cancelled(exc)
                 logger.error("persist_cid_error", extra={"error": str(exc), "cid": correlation_id})
 
         # Skip Telegram responses if silent

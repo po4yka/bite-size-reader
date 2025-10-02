@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any
 from app.adapters.telegram.access_controller import AccessController
 from app.adapters.telegram.command_processor import CommandProcessor
 from app.adapters.telegram.message_router import MessageRouter
+from app.adapters.telegram.task_manager import UserTaskManager
 from app.adapters.telegram.url_handler import URLHandler
 from app.config import AppConfig
 from app.db.database import Database
@@ -35,6 +36,7 @@ class MessageHandler:
         self.db = db
 
         # Initialize components
+        self.task_manager = UserTaskManager()
         self.access_controller = AccessController(
             cfg=cfg,
             db=db,
@@ -55,6 +57,7 @@ class MessageHandler:
             url_processor=url_processor,
             audit_func=self._audit,
             url_handler=self.url_handler,
+            task_manager=self.task_manager,
         )
 
         self.message_router = MessageRouter(
@@ -66,6 +69,7 @@ class MessageHandler:
             forward_processor=forward_processor,
             response_formatter=response_formatter,
             audit_func=self._audit,
+            task_manager=self.task_manager,
         )
 
     async def handle_message(self, message: Any) -> None:

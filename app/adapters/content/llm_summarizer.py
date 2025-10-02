@@ -23,6 +23,7 @@ from app.adapters.content.llm_response_workflow import (
     LLMWorkflowNotifications,
 )
 from app.config import AppConfig
+from app.core.async_utils import raise_if_cancelled
 from app.core.json_utils import extract_json
 from app.core.lang import LANG_RU
 from app.db.database import Database
@@ -472,6 +473,7 @@ class LLMSummarizer:
             logger.warning("custom_article_generation_exhausted", extra={"cid": correlation_id})
             return None
         except Exception as exc:  # noqa: BLE001
+            raise_if_cancelled(exc)
             logger.exception(
                 "custom_article_generation_failed",
                 extra={"cid": correlation_id, "error": str(exc)},
@@ -866,6 +868,7 @@ class LLMSummarizer:
         try:
             request_row = self.db.get_request_by_id(req_id)
         except Exception as exc:  # noqa: BLE001
+            raise_if_cancelled(exc)
             logger.error("request_lookup_failed", extra={"error": str(exc), "cid": correlation_id})
 
         request_url: str | None = None
@@ -949,6 +952,7 @@ class LLMSummarizer:
         try:
             crawl_row = self.db.get_crawl_result_by_request(req_id)
         except Exception as exc:  # noqa: BLE001
+            raise_if_cancelled(exc)
             logger.error("firecrawl_lookup_failed", extra={"error": str(exc)})
             return {}
 
@@ -961,6 +965,7 @@ class LLMSummarizer:
             try:
                 parsed = json.loads(metadata_raw)
             except Exception as exc:  # noqa: BLE001
+                raise_if_cancelled(exc)
                 logger.debug("firecrawl_metadata_parse_error", extra={"error": str(exc)})
 
         if parsed is None:
@@ -973,6 +978,7 @@ class LLMSummarizer:
                         if isinstance(data_block, dict):
                             parsed = data_block.get("metadata") or data_block.get("meta")
                 except Exception as exc:  # noqa: BLE001
+                    raise_if_cancelled(exc)
                     logger.debug("firecrawl_raw_metadata_parse_error", extra={"error": str(exc)})
 
         if parsed is None:
@@ -1104,6 +1110,7 @@ class LLMSummarizer:
                     response_format=response_format,
                 )
         except Exception as exc:  # noqa: BLE001
+            raise_if_cancelled(exc)
             logger.warning(
                 "metadata_completion_call_failed",
                 extra={"cid": correlation_id, "error": str(exc)},
@@ -1210,6 +1217,7 @@ class LLMSummarizer:
                 if json_payload:
                     summary_candidate = json.loads(json_payload)
             except Exception as exc:  # noqa: BLE001
+                raise_if_cancelled(exc)
                 logger.debug(
                     "insights_summary_load_failed",
                     extra={"cid": correlation_id, "error": str(exc)},
@@ -1318,6 +1326,7 @@ class LLMSummarizer:
             return None
 
         except Exception as exc:  # noqa: BLE001
+            raise_if_cancelled(exc)
             logger.exception(
                 "insights_generation_failed", extra={"cid": correlation_id, "error": str(exc)}
             )
