@@ -310,6 +310,17 @@ class MessageRouter:
             )
             return
 
+        # Handle forwarded messages before URL routing so forwards containing links aren't misclassified
+        if (
+            has_forward
+            and getattr(message, "forward_from_chat", None)
+            and getattr(message, "forward_from_message_id", None)
+        ):
+            await self.forward_processor.handle_forward_flow(
+                message, correlation_id=correlation_id, interaction_id=interaction_id
+            )
+            return
+
         # If awaiting a URL due to prior /summarize
         if self.url_handler.is_awaiting_url(uid) and looks_like_url(text):
             await self.url_handler.handle_awaited_url(
@@ -328,15 +339,6 @@ class MessageRouter:
         if self.url_handler.has_pending_multi_links(uid):
             await self.url_handler.handle_multi_link_confirmation(
                 message, text, uid, correlation_id, interaction_id, start_time
-            )
-            return
-
-        # Handle forwarded messages
-        if getattr(message, "forward_from_chat", None) and getattr(
-            message, "forward_from_message_id", None
-        ):
-            await self.forward_processor.handle_forward_flow(
-                message, correlation_id=correlation_id, interaction_id=interaction_id
             )
             return
 
