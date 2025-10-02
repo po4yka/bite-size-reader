@@ -25,6 +25,8 @@ from app.core.logging_utils import generate_correlation_id, setup_json_logging
 from app.db.database import Database
 from app.services.topic_search import LocalTopicSearchService, TopicSearchService
 
+DEFAULT_TOPIC_SEARCH_MAX_RESULTS = 5
+
 logger = logging.getLogger(__name__)
 
 # Expose pyrogram compatibility shims for test monkeypatching. Tests set
@@ -126,14 +128,16 @@ class TelegramBot:
             sem=self._sem,
         )
 
+        topic_search_max_results = self._get_topic_search_limit()
+
         self.topic_searcher = TopicSearchService(
             firecrawl=self._firecrawl,
-            max_results=self.cfg.runtime.topic_search_max_results,
+            max_results=topic_search_max_results,
             audit_func=self._audit,
         )
         self.local_searcher = LocalTopicSearchService(
             db=self.db,
-            max_results=self.cfg.runtime.topic_search_max_results,
+            max_results=topic_search_max_results,
             audit_func=self._audit,
         )
 
@@ -227,6 +231,37 @@ class TelegramBot:
             forward_summarizer = getattr(self.forward_processor, "summarizer", None)
             if forward_summarizer is not None:
                 forward_summarizer.openrouter = openrouter
+
+    def _get_topic_search_limit(self) -> int:
+        """Return a sanitized topic search limit from runtime config."""
+
+        runtime = getattr(self.cfg, "runtime", None)
+        raw_value = getattr(runtime, "topic_search_max_results", DEFAULT_TOPIC_SEARCH_MAX_RESULTS)
+
+        try:
+            limit = int(raw_value)
+        except (TypeError, ValueError):
+            logger.warning(
+                "topic_search_limit_invalid",
+                extra={"value": raw_value},
+            )
+            return DEFAULT_TOPIC_SEARCH_MAX_RESULTS
+
+        if limit <= 0:
+            logger.warning(
+                "topic_search_limit_non_positive",
+                extra={"value": limit},
+            )
+            return DEFAULT_TOPIC_SEARCH_MAX_RESULTS
+
+        if limit > 10:
+            logger.warning(
+                "topic_search_limit_too_large",
+                extra={"value": limit},
+            )
+            return 10
+
+        return limit
 
     def _get_backup_settings(self) -> tuple[bool, int, int, str | None]:
         """Return sanitized backup configuration values."""
