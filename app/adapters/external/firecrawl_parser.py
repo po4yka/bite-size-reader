@@ -11,6 +11,7 @@ from typing import Any
 import httpx
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.core.async_utils import raise_if_cancelled
 from app.core.logging_utils import truncate_log_content
 
 
@@ -944,6 +945,7 @@ class FirecrawlClient:
                     correlation_id=data.get("cid"),
                 )
             except Exception as e:  # noqa: BLE001
+                raise_if_cancelled(e)
                 latency = int((time.perf_counter() - started) * 1000)
                 last_latency = latency
                 last_error = str(e)

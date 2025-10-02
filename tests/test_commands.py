@@ -151,6 +151,22 @@ class TestCommands(unittest.IsolatedAsyncioTestCase):
                 any("No pending link requests" in reply for reply in cancel_msg._replies)
             )
 
+    async def test_cancel_includes_active_requests(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            bot = make_bot(os.path.join(tmp, "app.db"))
+            bot.response_formatter.MIN_MESSAGE_INTERVAL_MS = 0
+            uid = 42
+
+            bot.message_handler.task_manager.cancel = AsyncMock(return_value=2)
+
+            cancel_msg = FakeMessage("/cancel", uid=uid)
+            await bot._on_message(cancel_msg)
+
+            bot.message_handler.task_manager.cancel.assert_awaited_once_with(
+                uid, exclude_current=True
+            )
+            self.assertTrue(any("ongoing requests" in reply for reply in cancel_msg._replies))
+
     async def test_dbinfo_command(self):
         with tempfile.TemporaryDirectory() as tmp:
             db_path = os.path.join(tmp, "app.db")

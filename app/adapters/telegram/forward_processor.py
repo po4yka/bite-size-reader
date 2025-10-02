@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from typing import TYPE_CHECKING, Any
 
 from app.adapters.telegram.forward_content_processor import ForwardContentProcessor
@@ -84,6 +84,25 @@ class ForwardProcessor:
                 # Send formatted preview for forward flow
                 await self.response_formatter.send_forward_summary_response(message, forward_shaped)
 
+                summary_payload: dict[str, Any] | None = (
+                    dict(forward_shaped) if isinstance(forward_shaped, dict) else None
+                )
+
+                # Generate a standalone article similar to the URL flow
+                try:
+                    await self._maybe_generate_custom_article(
+                        message,
+                        summary_payload,
+                        chosen_lang,
+                        req_id,
+                        correlation_id,
+                    )
+                except Exception as exc:
+                    logger.warning(
+                        "custom_article_generation_failed_for_forward",
+                        extra={"error": str(exc), "cid": correlation_id, "req_id": req_id},
+                    )
+
                 # Generate and send additional research insights (same as URL processing)
                 try:
                     # Get the content text from the content processor
@@ -95,6 +114,7 @@ class ForwardProcessor:
                             chosen_lang,
                             req_id,
                             correlation_id,
+                            summary=summary_payload,
                         )
                 except Exception as exc:
                     logger.warning(
@@ -179,6 +199,82 @@ class ForwardProcessor:
             )
             return None
 
+    async def _maybe_generate_custom_article(
+        self,
+        message: Any,
+        summary: dict[str, Any] | None,
+        chosen_lang: str,
+        req_id: int,
+        correlation_id: str | None,
+    ) -> None:
+        """Generate a standalone article for forwarded content when topics are present."""
+
+        if not summary:
+            return
+
+        topics_raw = summary.get("key_ideas") if isinstance(summary, Mapping) else None
+        tags_raw = summary.get("topic_tags") if isinstance(summary, Mapping) else None
+
+        topics = [str(item).strip() for item in (topics_raw or []) if str(item).strip()]
+        tags = [str(item).strip() for item in (tags_raw or []) if str(item).strip()]
+
+        if not topics and not tags:
+            return
+
+        logger.info(
+            "custom_article_flow_started_for_forward",
+            extra={
+                "cid": correlation_id,
+                "topics_count": len(topics),
+                "tags_count": len(tags),
+            },
+        )
+
+        from app.adapters.content.llm_summarizer import LLMSummarizer
+        from app.core.async_utils import raise_if_cancelled
+
+        llm_summarizer = LLMSummarizer(
+            cfg=self.cfg,
+            db=self.db,
+            openrouter=self.summarizer.openrouter,
+            response_formatter=self.response_formatter,
+            audit_func=self._audit,
+            sem=self.summarizer._sem,
+        )
+
+        try:
+            await self.response_formatter.safe_reply(
+                message,
+                "📝 Crafting a standalone article from topics & tags…",
+            )
+        except Exception as exc:  # noqa: BLE001
+            raise_if_cancelled(exc)
+            logger.debug(
+                "forward_custom_article_notice_failed",
+                extra={"cid": correlation_id, "error": str(exc)},
+            )
+
+        article = await llm_summarizer.generate_custom_article(
+            message,
+            chosen_lang=chosen_lang,
+            req_id=req_id,
+            topics=topics,
+            tags=tags,
+            correlation_id=correlation_id,
+        )
+
+        if article:
+            await self.response_formatter.send_custom_article(message, article)
+            logger.info(
+                "custom_article_sent_for_forward",
+                extra={"cid": correlation_id, "has_article": True},
+            )
+        else:
+            logger.debug(
+                "custom_article_not_generated_for_forward",
+                extra={"cid": correlation_id},
+            )
+
     async def _handle_additional_insights(
         self,
         message: Any,
@@ -186,6 +282,7 @@ class ForwardProcessor:
         chosen_lang: str,
         req_id: int,
         correlation_id: str | None,
+        summary: dict[str, Any] | None = None,
     ) -> None:
         """Generate and persist additional insights using the LLM."""
         logger.info(
@@ -196,18 +293,20 @@ class ForwardProcessor:
         try:
             from app.adapters.content.llm_summarizer import LLMSummarizer
 
-            # Create LLMSummarizer instance with same dependencies as ForwardSummarizer
             summary_payload: dict[str, Any] | None = None
-            try:
-                row = await self.db.async_get_summary_by_request(req_id)
-                json_payload = row.get("json_payload") if row else None
-                if json_payload:
-                    summary_payload = json.loads(json_payload)
-            except Exception as exc:
-                logger.debug(
-                    "forward_insights_summary_load_failed",
-                    extra={"cid": correlation_id, "error": str(exc)},
-                )
+            if isinstance(summary, Mapping):
+                summary_payload = dict(summary)
+            if summary_payload is None:
+                try:
+                    row = await self.db.async_get_summary_by_request(req_id)
+                    json_payload = row.get("json_payload") if row else None
+                    if json_payload:
+                        summary_payload = json.loads(json_payload)
+                except Exception as exc:
+                    logger.debug(
+                        "forward_insights_summary_load_failed",
+                        extra={"cid": correlation_id, "error": str(exc)},
+                    )
 
             llm_summarizer = LLMSummarizer(
                 cfg=self.cfg,

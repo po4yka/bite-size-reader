@@ -11,6 +11,7 @@ import time
 from collections.abc import Callable, Mapping
 from typing import TYPE_CHECKING, Any
 
+from app.adapters.telegram.task_manager import UserTaskManager
 from app.config import AppConfig
 from app.core.logging_utils import generate_correlation_id
 from app.core.url_utils import extract_all_urls
@@ -39,6 +40,7 @@ class CommandProcessor:
         url_handler: URLHandler | None = None,
         topic_searcher: TopicSearchService | None = None,
         local_searcher: LocalTopicSearchService | None = None,
+        task_manager: UserTaskManager | None = None,
     ) -> None:
         self.cfg = cfg
         self.response_formatter = response_formatter
@@ -48,6 +50,7 @@ class CommandProcessor:
         self._audit = audit_func
         self.topic_searcher = topic_searcher
         self.local_searcher = local_searcher
+        self._task_manager = task_manager
 
     @staticmethod
     def _maybe_load_json(payload: Any) -> Any:
@@ -649,15 +652,30 @@ class CommandProcessor:
 
         awaiting_cancelled = False
         multi_cancelled = False
+        active_cancelled = 0
         if self.url_handler is not None:
             awaiting_cancelled, multi_cancelled = self.url_handler.cancel_pending_requests(uid)
 
-        if awaiting_cancelled and multi_cancelled:
-            reply_text = "🛑 Cancelled your pending URL request and multi-link confirmation."
-        elif awaiting_cancelled:
-            reply_text = "🛑 Cancelled your pending URL request."
-        elif multi_cancelled:
-            reply_text = "🛑 Cancelled your pending multi-link confirmation."
+        if self._task_manager is not None:
+            active_cancelled = await self._task_manager.cancel(uid, exclude_current=True)
+
+        cancelled_parts: list[str] = []
+        if awaiting_cancelled:
+            cancelled_parts.append("pending URL request")
+        if multi_cancelled:
+            cancelled_parts.append("pending multi-link confirmation")
+        if active_cancelled:
+            if active_cancelled == 1:
+                cancelled_parts.append("ongoing request")
+            else:
+                cancelled_parts.append(f"{active_cancelled} ongoing requests")
+
+        if cancelled_parts:
+            if len(cancelled_parts) == 1:
+                detail = cancelled_parts[0]
+            else:
+                detail = ", ".join(cancelled_parts[:-1]) + f", and {cancelled_parts[-1]}"
+            reply_text = f"🛑 Cancelled your {detail}."
         else:
             reply_text = "ℹ️ No pending link requests to cancel."
 
@@ -665,7 +683,9 @@ class CommandProcessor:
 
         if interaction_id:
             response_type = (
-                "cancelled" if (awaiting_cancelled or multi_cancelled) else "cancel_none"
+                "cancelled"
+                if (awaiting_cancelled or multi_cancelled or active_cancelled)
+                else "cancel_none"
             )
             await async_safe_update_user_interaction(
                 self.db,

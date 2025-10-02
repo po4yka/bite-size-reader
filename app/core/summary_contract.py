@@ -104,6 +104,94 @@ def _dedupe_case_insensitive(items: list[str]) -> list[str]:
     return out
 
 
+def _summary_fallback_from_supporting_fields(payload: SummaryJSON) -> str | None:
+    """Compose a fallback summary using secondary textual fields."""
+
+    def _add_snippet(snippet: Any) -> None:
+        if len(snippets) >= 8:
+            return
+        text = str(snippet).strip() if snippet is not None else ""
+        if not text:
+            return
+        key = text.lower()
+        if key in seen:
+            return
+        seen.add(key)
+        snippets.append(text)
+
+    snippets: list[str] = []
+    seen: set[str] = set()
+
+    scalar_candidates = (
+        payload.get("topic_overview"),
+        payload.get("overview"),
+    )
+    for candidate in scalar_candidates:
+        _add_snippet(candidate)
+
+    list_fields = (
+        "summary_paragraphs",
+        "summary_bullets",
+        "highlights",
+        "key_points_to_remember",
+        "key_ideas",
+        "answered_questions",
+    )
+    for field in list_fields:
+        value = payload.get(field)
+        if isinstance(value, list | tuple | set):
+            for item in value:
+                _add_snippet(item)
+        elif value is not None:
+            _add_snippet(value)
+
+    questions_answered = payload.get("questions_answered")
+    if isinstance(questions_answered, list):
+        for entry in questions_answered:
+            if isinstance(entry, dict):
+                question = str(entry.get("question", "")).strip()
+                answer = str(entry.get("answer", "")).strip()
+                if question and answer:
+                    _add_snippet(f"{question}: {answer}")
+                elif question:
+                    _add_snippet(question)
+                elif answer:
+                    _add_snippet(answer)
+            else:
+                _add_snippet(entry)
+
+    extractive_quotes = payload.get("extractive_quotes")
+    if isinstance(extractive_quotes, list):
+        for quote in extractive_quotes:
+            if isinstance(quote, dict):
+                _add_snippet(quote.get("text"))
+            else:
+                _add_snippet(quote)
+
+    insights = payload.get("insights")
+    if isinstance(insights, dict):
+        _add_snippet(insights.get("topic_overview"))
+        _add_snippet(insights.get("caution"))
+        new_facts = insights.get("new_facts")
+        if isinstance(new_facts, list):
+            for fact in new_facts:
+                if isinstance(fact, dict):
+                    fact_text = str(fact.get("fact", "")).strip()
+                    why = str(fact.get("why_it_matters", "")).strip()
+                    if fact_text and why:
+                        _add_snippet(f"{fact_text} — {why}")
+                    else:
+                        _add_snippet(fact_text or why)
+                else:
+                    _add_snippet(fact)
+
+    if not snippets:
+        return None
+
+    combined = " ".join(snippets[:6]).strip()
+    return combined or None
+
+
 _ENTITY_KEY_ALIASES = {
     "person": "people",
     "persons": "people",
@@ -383,6 +471,15 @@ def validate_and_shape_summary(payload: SummaryJSON) -> SummaryJSON:
         summary_250 = _cap_text(summary_1000, 250)
     if not summary_250 and tldr:
         summary_250 = _cap_text(tldr, 250)
+
+    if not any((summary_250, summary_1000, tldr)):
+        fallback_text = _summary_fallback_from_supporting_fields(normalized_payload)
+        if not fallback_text:
+            fallback_text = _summary_fallback_from_supporting_fields(p)
+        if fallback_text:
+            summary_1000 = _cap_text(fallback_text, 1000)
+            summary_250 = _cap_text(summary_1000, 250)
+            tldr = summary_1000
 
     # Enforce caps where appropriate
     summary_250 = _cap_text(summary_250, 250)
