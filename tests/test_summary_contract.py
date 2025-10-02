@@ -59,6 +59,23 @@ class TestSummaryContract(unittest.TestCase):
         self.assertEqual(out["entities"]["organizations"], ["OpenAI", "Anthropic"])
         self.assertEqual(out["entities"]["locations"], ["San Francisco", "New York"])
 
+    def test_fallback_summary_from_supporting_fields(self):
+        payload = {
+            "key_ideas": [
+                "Key idea one highlights the main vulnerability.",
+                "Key idea two explains the mitigation steps.",
+            ],
+            "highlights": ["Highlight content adds additional context."],
+            "insights": {"topic_overview": "Overall, the article explores safety bypasses."},
+        }
+
+        out = validate_and_shape_summary(payload)
+
+        self.assertTrue(out["summary_250"].strip())
+        self.assertTrue(out["summary_1000"].strip())
+        self.assertTrue(out["tldr"].strip())
+        self.assertIn("Key idea one", out["summary_1000"])
+
 
 if __name__ == "__main__":
     unittest.main()
