@@ -1464,10 +1464,6 @@ class LLMSummarizer:
             },
         }
 
-    @property
-    def last_insights(self) -> dict[str, Any] | None:
-        return self._last_insights
-
     def _parse_insights_response(
         self, response_json: Any, response_text: str | None
     ) -> dict[str, Any] | None:

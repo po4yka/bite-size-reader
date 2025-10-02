@@ -40,7 +40,6 @@ class ResponseFormatter:
 
         # Security limits
         self.MAX_URL_LENGTH = 2048
-        self.MAX_FILE_SIZE_MB = 10
         self.MAX_BATCH_URLS = 200
         self.MIN_MESSAGE_INTERVAL_MS = 100  # Rate limiting
         self._last_message_time: float = 0.0
@@ -108,21 +107,6 @@ class ResponseFormatter:
             return False, f"Content too long: {len(text_for_length_check)} characters"
 
         return True, ""
-
-    def _sanitize_filename(self, filename: str) -> str:
-        """Sanitize filename to prevent path traversal and other issues."""
-        import re
-
-        # Remove or replace dangerous characters
-        filename = re.sub(r'[<>:"/\\|?*]', "_", filename)
-        filename = re.sub(r"_+", "_", filename)  # Replace multiple underscores with single
-        filename = filename.strip("_")  # Remove leading/trailing underscores
-
-        # Ensure reasonable length
-        if len(filename) > 100:
-            filename = filename[:97] + "..."
-
-        return filename or "summary.json"
 
     def _validate_url(self, url: str) -> tuple[bool, str]:
         """Validate URL for security."""

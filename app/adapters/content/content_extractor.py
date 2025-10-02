@@ -923,26 +923,3 @@ class ContentExtractor:
             forward_date_ts=forward_date_ts,
             telegram_raw_json=raw_json,
         )
-
-
-class MockCrawl:
-    """Mock crawl object for reused content."""
-
-    def __init__(self, markdown: str | None, html: str | None):
-        self.status = "ok"
-        self.http_status = 200
-        self.content_markdown = markdown
-        self.content_html = html
-        self.structured_json = None
-        self.metadata_json = None
-        self.links_json = None
-        self.response_success = None
-        self.response_error_code = None
-        self.response_error_message = None
-        self.response_details = None
-        self.latency_ms = None
-        self.error_text = None
-        self.source_url = None
-        self.endpoint = "/v1/scrape"
-        self.options_json = None
-        self.correlation_id = None
