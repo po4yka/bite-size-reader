@@ -6,7 +6,7 @@ import datetime as _dt
 from typing import Any
 
 import peewee
-from playhouse.sqlite_ext import JSONField
+from playhouse.sqlite_ext import FTS5Model, JSONField, SearchField
 
 # A proxy that will be initialised with the concrete database instance at runtime.
 database_proxy: peewee.Database = peewee.DatabaseProxy()
@@ -151,6 +151,24 @@ class Summary(BaseModel):
         table_name = "summaries"
 
 
+class TopicSearchIndex(FTS5Model):
+    """FTS-backed search index for locally stored summaries."""
+
+    request_id = SearchField()
+    url = SearchField()
+    title = SearchField()
+    snippet = SearchField()
+    source = SearchField()
+    published_at = SearchField()
+    body = SearchField()
+    tags = SearchField()
+
+    class Meta:
+        table_name = "topic_search_index"
+        database = database_proxy
+        options = {"content": "", "tokenize": "unicode61 remove_diacritics 2"}
+
+
 class UserInteraction(BaseModel):
     user_id = peewee.BigIntegerField()
     chat_id = peewee.BigIntegerField(null=True)
@@ -200,6 +218,7 @@ ALL_MODELS: tuple[type[BaseModel], ...] = (
     CrawlResult,
     LLMCall,
     Summary,
+    TopicSearchIndex,
     UserInteraction,
     AuditLog,
 )

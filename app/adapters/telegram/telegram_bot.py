@@ -23,6 +23,7 @@ from app.adapters.telegram.telegram_client import TelegramClient
 from app.config import AppConfig
 from app.core.logging_utils import generate_correlation_id, setup_json_logging
 from app.db.database import Database
+from app.services.topic_search import LocalTopicSearchService, TopicSearchService
 
 logger = logging.getLogger(__name__)
 
@@ -125,12 +126,25 @@ class TelegramBot:
             sem=self._sem,
         )
 
+        self.topic_searcher = TopicSearchService(
+            firecrawl=self._firecrawl,
+            max_results=self.cfg.runtime.topic_search_max_results,
+            audit_func=self._audit,
+        )
+        self.local_searcher = LocalTopicSearchService(
+            db=self.db,
+            max_results=self.cfg.runtime.topic_search_max_results,
+            audit_func=self._audit,
+        )
+
         self.message_handler = MessageHandler(
             cfg=self.cfg,
             db=self.db,
             response_formatter=self.response_formatter,
             url_processor=self.url_processor,
             forward_processor=self.forward_processor,
+            topic_searcher=self.topic_searcher,
+            local_searcher=self.local_searcher,
         )
 
         # Route URL handling via the bot instance so legacy tests overriding

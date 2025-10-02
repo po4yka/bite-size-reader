@@ -214,6 +214,32 @@ class MessageRouter:
             )
             return
 
+        for local_command in ("/finddb", "/findlocal"):
+            if text.startswith(local_command):
+                await self.command_processor.handle_find_local_command(
+                    message,
+                    text,
+                    uid,
+                    correlation_id,
+                    interaction_id,
+                    start_time,
+                    command=local_command,
+                )
+                return
+
+        for online_command in ("/findweb", "/findonline", "/find"):
+            if text.startswith(online_command):
+                await self.command_processor.handle_find_online_command(
+                    message,
+                    text,
+                    uid,
+                    correlation_id,
+                    interaction_id,
+                    start_time,
+                    command=online_command,
+                )
+                return
+
         if text.startswith("/summarize_all"):
             await self.command_processor.handle_summarize_all_command(
                 message, text, uid, correlation_id, interaction_id, start_time

@@ -24,10 +24,16 @@ from app.db.models import (
     Request,
     Summary,
     TelegramMessage,
+    TopicSearchIndex,
     User,
     UserInteraction,
     database_proxy,
     model_to_dict,
+)
+from app.services.topic_search_utils import (
+    TopicSearchDocument,
+    build_topic_search_document,
+    ensure_mapping,
 )
 
 JSONValue = Mapping[str, Any] | Sequence[Any] | str | None
@@ -983,6 +989,7 @@ class Database:
             version=version,
             is_read=is_read,
         )
+        self._refresh_topic_search_index(request_id)
         return summary.id
 
     def upsert_summary(
@@ -1005,6 +1012,7 @@ class Database:
                 version=1,
                 is_read=is_read if is_read is not None else False,
             )
+            self._refresh_topic_search_index(request_id)
             return summary.version
         except peewee.IntegrityError:
             update_map: dict[Any, Any] = {
@@ -1020,7 +1028,9 @@ class Database:
             query = Summary.update(update_map).where(Summary.request == request_id)
             query.execute()
             updated = Summary.get_or_none(Summary.request == request_id)
-            return updated.version if updated else 0
+            version_val = updated.version if updated else 0
+            self._refresh_topic_search_index(request_id)
+            return version_val
 
     async def async_upsert_summary(self, **kwargs: Any) -> int:
         """Asynchronously upsert a summary entry."""
@@ -1114,6 +1124,7 @@ class Database:
         self._migrate_openrouter_response_payloads()
         self._migrate_firecrawl_raw_payload()
         self._coerce_json_columns()
+        self._ensure_topic_search_index()
 
     def _ensure_column(self, table: str, column: str, coltype: str) -> None:
         if table not in self._database.get_tables():
@@ -1155,6 +1166,125 @@ class Database:
                 continue
             for column in columns:
                 self._coerce_json_column(table, column)
+
+    def _ensure_topic_search_index(self) -> None:
+        table_name = TopicSearchIndex._meta.table_name
+        with self._database.connection_context():
+            tables = set(self._database.get_tables())
+            if table_name not in tables:
+                TopicSearchIndex.create_table()
+                self._rebuild_topic_search_index()
+                return
+            try:
+                summary_count = Summary.select().where(Summary.json_payload.is_null(False)).count()
+                cursor = self._database.execute_sql(f"SELECT COUNT(*) FROM {table_name}")
+                row = cursor.fetchone()
+                index_count = int(row[0]) if row else 0
+            except peewee.DatabaseError as exc:  # pragma: no cover - defensive path
+                self._logger.warning("topic_search_index_count_failed", extra={"error": str(exc)})
+                summary_count = -1
+                index_count = -2
+            if summary_count < 0 or index_count != summary_count:
+                self._rebuild_topic_search_index()
+
+    def _refresh_topic_search_index(self, request_id: int) -> None:
+        try:
+            with self._database.connection_context():
+                summary = (
+                    Summary.select(Summary, Request)
+                    .join(Request)
+                    .where((Summary.request == request_id) & (Summary.json_payload.is_null(False)))
+                    .first()
+                )
+                if not summary:
+                    self._remove_topic_search_index_entry(request_id)
+                    return
+
+                payload = ensure_mapping(summary.json_payload)
+                if not payload:
+                    self._remove_topic_search_index_entry(request_id)
+                    return
+
+                request_data = {
+                    "normalized_url": getattr(summary.request, "normalized_url", None),
+                    "input_url": getattr(summary.request, "input_url", None),
+                    "content_text": getattr(summary.request, "content_text", None),
+                }
+                document = build_topic_search_document(
+                    request_id=request_id,
+                    payload=payload,
+                    request_data=request_data,
+                )
+                if not document:
+                    self._remove_topic_search_index_entry(request_id)
+                    return
+
+                self._write_topic_search_index(document)
+        except Exception as exc:  # noqa: BLE001 - logging and continue
+            self._logger.warning(
+                "topic_search_index_refresh_failed",
+                extra={"request_id": request_id, "error": str(exc)},
+            )
+
+    def _write_topic_search_index(self, document: TopicSearchDocument) -> None:
+        self._database.execute_sql(
+            "DELETE FROM topic_search_index WHERE rowid = ?",
+            (document.request_id,),
+        )
+        self._database.execute_sql(
+            """
+            INSERT INTO topic_search_index(
+                rowid, request_id, url, title, snippet, source, published_at, body, tags
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                document.request_id,
+                str(document.request_id),
+                document.url or "",
+                document.title or "",
+                document.snippet or "",
+                document.source or "",
+                document.published_at or "",
+                document.body,
+                document.tags_text or "",
+            ),
+        )
+
+    def _remove_topic_search_index_entry(self, request_id: int) -> None:
+        self._database.execute_sql(
+            "DELETE FROM topic_search_index WHERE rowid = ?",
+            (request_id,),
+        )
+
+    def _rebuild_topic_search_index(self) -> None:
+        with self._database.connection_context():
+            self._database.execute_sql("DELETE FROM topic_search_index")
+            rows = (
+                Summary.select(Summary, Request)
+                .join(Request)
+                .where(Summary.json_payload.is_null(False))
+            )
+            rebuilt = 0
+            for row in rows.iterator():
+                payload = ensure_mapping(row.json_payload)
+                if not payload:
+                    continue
+                request_data = {
+                    "normalized_url": getattr(row.request, "normalized_url", None),
+                    "input_url": getattr(row.request, "input_url", None),
+                    "content_text": getattr(row.request, "content_text", None),
+                }
+                document = build_topic_search_document(
+                    request_id=row.request.id,
+                    payload=payload,
+                    request_data=request_data,
+                )
+                if not document:
+                    continue
+                self._write_topic_search_index(document)
+                rebuilt += 1
+        if rebuilt:
+            self._logger.info("topic_search_index_rebuilt", extra={"rows": rebuilt})
 
     def _coerce_json_column(self, table: str, column: str) -> None:
         model = next((m for m in ALL_MODELS if m._meta.table_name == table), None)

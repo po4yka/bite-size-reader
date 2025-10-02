@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock, patch
 from app.adapters.telegram.telegram_bot import TelegramBot
 from app.config import AppConfig, FirecrawlConfig, OpenRouterConfig, RuntimeConfig, TelegramConfig
 from app.db.database import Database
+from app.services.topic_search import TopicArticle
 
 
 class FakeMessage:
@@ -25,7 +26,8 @@ class FakeMessage:
         self.id = 123
         self.message_id = 123
 
-    async def reply_text(self, text: str) -> None:
+    async def reply_text(self, text: str, parse_mode: str | None = None) -> None:
+        _ = parse_mode
         self._replies.append(text)
 
 
@@ -331,6 +333,125 @@ class TestCommands(unittest.IsolatedAsyncioTestCase):
                 "https://example.com/missing",
             }
             self.assertTrue(expected_urls.issubset(set(bot.seen_urls)))
+
+    async def test_findweb_command_success(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            bot = make_bot(os.path.join(tmp, "app.db"))
+            bot.response_formatter.MIN_MESSAGE_INTERVAL_MS = 0
+
+            class FakeSearch:
+                def __init__(self) -> None:
+                    self.queries: list[tuple[str, str | None]] = []
+
+                async def find_articles(
+                    self, topic: str, *, correlation_id: str | None = None
+                ) -> list[TopicArticle]:
+                    self.queries.append((topic, correlation_id))
+                    return [
+                        TopicArticle(
+                            title="Android System Design Overview",
+                            url="https://example.com/android-design",
+                            snippet="Key considerations for the Android system architecture.",
+                            source="Example Weekly",
+                            published_at="2024-04-01",
+                        ),
+                        TopicArticle(
+                            title="Scaling Android Services",
+                            url="https://example.com/android-services",
+                            snippet="How large teams approach Android service scalability.",
+                            source=None,
+                            published_at=None,
+                        ),
+                    ]
+
+            fake_search = FakeSearch()
+            bot.topic_searcher = fake_search
+            bot.message_handler.command_processor.topic_searcher = fake_search
+
+            msg = FakeMessage("/findweb Android System Design")
+            await bot._on_message(msg)
+
+            self.assertTrue(fake_search.queries)
+            self.assertEqual(fake_search.queries[0][0], "Android System Design")
+            self.assertTrue(any("Online search results" in reply for reply in msg._replies))
+            self.assertTrue(any("summarize" in reply.lower() for reply in msg._replies))
+
+    async def test_find_alias_uses_online_search(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            bot = make_bot(os.path.join(tmp, "app.db"))
+            bot.response_formatter.MIN_MESSAGE_INTERVAL_MS = 0
+
+            class FakeSearch:
+                def __init__(self) -> None:
+                    self.queries: list[str] = []
+
+                async def find_articles(self, topic: str, *, correlation_id: str | None = None):
+                    self.queries.append(topic)
+                    return []
+
+            fake_search = FakeSearch()
+            bot.topic_searcher = fake_search
+            bot.message_handler.command_processor.topic_searcher = fake_search
+
+            msg = FakeMessage("/find Android")
+            await bot._on_message(msg)
+
+            self.assertEqual(fake_search.queries, ["Android"])
+            self.assertTrue(any("No recent online articles" in reply for reply in msg._replies))
+
+    async def test_finddb_command_success(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            bot = make_bot(os.path.join(tmp, "app.db"))
+            bot.response_formatter.MIN_MESSAGE_INTERVAL_MS = 0
+
+            class FakeLocalSearch:
+                def __init__(self) -> None:
+                    self.queries: list[str] = []
+
+                async def find_articles(self, topic: str, *, correlation_id: str | None = None):
+                    self.queries.append(topic)
+                    return [
+                        TopicArticle(
+                            title="Saved Android System Design",
+                            url="https://example.com/android-design",
+                            snippet="Local summary about Android system design.",
+                            source="example.com",
+                            published_at="2024-04-01",
+                        )
+                    ]
+
+            fake_local = FakeLocalSearch()
+            bot.local_searcher = fake_local
+            bot.message_handler.command_processor.local_searcher = fake_local
+
+            msg = FakeMessage("/finddb Android System Design")
+            await bot._on_message(msg)
+
+            self.assertEqual(fake_local.queries, ["Android System Design"])
+            self.assertTrue(any("Saved library results" in reply for reply in msg._replies))
+            self.assertTrue(any("summarize" in reply.lower() for reply in msg._replies))
+
+    async def test_find_commands_require_topic(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            bot = make_bot(os.path.join(tmp, "app.db"))
+            bot.response_formatter.MIN_MESSAGE_INTERVAL_MS = 0
+
+            msg_web = FakeMessage("/findweb")
+            await bot._on_message(msg_web)
+
+            class StubLocalSearch:
+                async def find_articles(self, topic: str, *, correlation_id: str | None = None):
+                    raise AssertionError("Should not be called when topic missing")
+
+            stub = StubLocalSearch()
+            bot.local_searcher = stub
+            bot.message_handler.command_processor.local_searcher = stub
+
+            msg_db = FakeMessage("/finddb")
+            await bot._on_message(msg_db)
+
+            self.assertTrue(any("Usage" in reply for reply in msg_web._replies))
+            self.assertTrue(any("Usage" in reply for reply in msg_db._replies))
 
 
 if __name__ == "__main__":
