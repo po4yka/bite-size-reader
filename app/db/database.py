@@ -56,6 +56,7 @@ class Database:
     _logger: logging.Logger = logging.getLogger(__name__)
     _database: peewee.SqliteDatabase = field(init=False)
     _topic_search_index_reset_in_progress: bool = field(default=False, init=False)
+    _topic_search_index_delete_warned: bool = field(default=False, init=False)
 
     def __post_init__(self) -> None:
         if self.path != ":memory":
@@ -1326,10 +1327,12 @@ class Database:
                 (rowid,),
             )
         except peewee.DatabaseError as exc:
-            self._logger.warning(
-                "topic_search_index_delete_failed_primary",
-                extra={"rowid": rowid, "error": str(exc)},
-            )
+            message = str(exc)
+            if "malformed" in message.lower():
+                self._handle_topic_search_index_error(exc, rowid)
+                return
+
+            self._log_topic_search_delete_fallback(rowid, message)
             try:
                 self._database.execute_sql(
                     "DELETE FROM topic_search_index WHERE rowid = ?",
@@ -1337,6 +1340,16 @@ class Database:
                 )
             except peewee.DatabaseError as fallback_exc:  # pragma: no cover - defensive
                 self._handle_topic_search_index_error(fallback_exc, rowid)
+
+    def _log_topic_search_delete_fallback(self, rowid: int, message: str) -> None:
+        """Log degraded delete path, but only warn once to avoid noise."""
+
+        log_extra = {"rowid": rowid, "error": message}
+        if not self._topic_search_index_delete_warned:
+            self._topic_search_index_delete_warned = True
+            self._logger.warning("topic_search_index_delete_failed_primary", extra=log_extra)
+        else:  # pragma: no cover - logging noise suppression
+            self._logger.debug("topic_search_index_delete_failed_primary", extra=log_extra)
 
     def _handle_topic_search_index_error(self, exc: peewee.DatabaseError, rowid: int) -> None:
         """Handle unrecoverable FTS errors by rebuilding the index."""
