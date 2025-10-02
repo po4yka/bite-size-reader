@@ -128,25 +128,6 @@ def looks_like_url(text: str) -> bool:
         return False
 
 
-def extract_first_url(text: str) -> str | None:
-    """Extract the first URL from text."""
-    if not text or not isinstance(text, str):
-        return None
-    if len(text) > 10000:  # Prevent processing of extremely long text
-        return None
-
-    try:
-        m = _URL_SEARCH_PATTERN.search(text)
-        val = m.group(0) if m else None
-        logger.debug(
-            "extract_first_url", extra={"text_sample": text[:80], "url": val[:100] if val else None}
-        )
-        return val
-    except Exception as e:
-        logger.error("extract_first_url_failed", extra={"error": str(e)})
-        return None
-
-
 def extract_all_urls(text: str) -> list[str]:
     """Extract all URLs from text with optimized performance."""
     if not text or not isinstance(text, str):

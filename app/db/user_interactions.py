@@ -4,8 +4,6 @@ from __future__ import annotations
 
 import logging
 import time
-from collections.abc import Callable, Generator
-from contextlib import contextmanager
 from typing import Any
 
 from .database import Database
@@ -80,36 +78,6 @@ def safe_update_user_interaction(
             "user_interaction_update_failed",
             extra={"interaction_id": interaction_id, "error": str(exc)},
         )
-
-
-@contextmanager
-def user_interaction_timer(
-    db: Database,
-    *,
-    interaction_id: int | None,
-    logger_: logging.Logger | None = None,
-) -> Generator[Callable[..., None], None, None]:
-    """Yield a callable that records updates with automatic timing.
-
-    The context manager captures the start time when entered and provides a
-    callable that proxies to :func:`safe_update_user_interaction`.  Any update
-    invoked through the callable will automatically include a computed
-    ``processing_time_ms`` value unless one is provided explicitly.
-    """
-
-    start = time.time()
-
-    def _updater(*, end_time: float | None = None, **kwargs: Any) -> None:
-        safe_update_user_interaction(
-            db,
-            interaction_id=interaction_id,
-            logger_=logger_,
-            start_time=start,
-            end_time=end_time,
-            **kwargs,
-        )
-
-    yield _updater
 
 
 async def async_safe_update_user_interaction(

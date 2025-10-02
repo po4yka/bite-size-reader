@@ -84,24 +84,6 @@ class ErrorHandler:
                 return True, None
         return False, None
 
-    def should_disable_structured_outputs(
-        self,
-        status_code: int,
-        data: dict,
-        rf_mode_current: str,
-        rf_included: bool,
-    ) -> bool:
-        """Check if structured outputs should be disabled."""
-        if not self._auto_fallback_structured:
-            return False
-
-        if status_code == 400 and rf_included and rf_mode_current == "json_object":
-            import json
-
-            err_dump = json.dumps(data).lower()
-            return "response_format" in err_dump
-        return False
-
     def build_error_result(
         self,
         model: str | None,
