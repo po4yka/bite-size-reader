@@ -1320,7 +1320,7 @@ class Database:
         """Remove a single row from the topic search FTS index."""
 
         self._database.execute_sql(
-            "DELETE FROM topic_search_index WHERE rowid = ?",
+            "INSERT INTO topic_search_index(topic_search_index, rowid) VALUES ('delete', ?)",
             (rowid,),
         )
 
