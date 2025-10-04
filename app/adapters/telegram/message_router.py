@@ -300,7 +300,7 @@ class MessageRouter:
 
         if text.startswith("/unread"):
             await self.command_processor.handle_unread_command(
-                message, uid, correlation_id, interaction_id, start_time
+                message, text, uid, correlation_id, interaction_id, start_time
             )
             return
 

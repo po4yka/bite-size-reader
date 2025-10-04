@@ -253,6 +253,85 @@ class TestReadStatusDatabase(unittest.TestCase):
         # Get limited unread summaries
         unread = self.db.get_unread_summaries(limit=3)
         self.assertEqual(len(unread), 3)
+        self.assertEqual(unread[0]["input_url"], "https://example0.com")
+        self.assertEqual(unread[2]["input_url"], "https://example4.com")
+
+    def test_get_unread_summaries_topic_filter(self):
+        """Unread summaries can be filtered by a topic query."""
+
+        payloads = (
+            {
+                "title": "AI breakthroughs",
+                "topic_tags": ["Artificial Intelligence", "Research"],
+                "metadata": {"description": "Advances in AI"},
+            },
+            {
+                "title": "Gardening tips",
+                "topic_tags": ["Outdoors"],
+                "metadata": {"description": "Plants"},
+            },
+            {
+                "title": "AI safety",
+                "topic_tags": ["Machine Learning"],
+                "metadata": {"keywords": ["AI", "Safety"]},
+            },
+        )
+
+        for index, payload in enumerate(payloads):
+            rid = self.db.create_request(
+                type_="url",
+                status="pending",
+                input_url=f"https://example{index}.com",
+                correlation_id=None,
+                chat_id=None,
+                user_id=None,
+                route_version=1,
+            )
+            self.db.insert_summary(
+                request_id=rid,
+                lang="en",
+                json_payload=payload,
+                is_read=False,
+            )
+
+        unread_ai = self.db.get_unread_summaries(limit=5, topic="AI")
+        self.assertEqual(len(unread_ai), 2)
+        self.assertTrue(
+            all(
+                "example0" in row["input_url"] or "example2" in row["input_url"]
+                for row in unread_ai
+            )
+        )
+
+        unread_garden = self.db.get_unread_summaries(limit=5, topic="garden")
+        self.assertEqual(len(unread_garden), 1)
+        self.assertIn("example1", unread_garden[0]["input_url"])
+
+    def test_get_unread_summaries_topic_filter_no_matches(self):
+        """Topic filter returns empty when nothing matches."""
+
+        rid = self.db.create_request(
+            type_="url",
+            status="pending",
+            input_url="https://example.com",
+            correlation_id=None,
+            chat_id=None,
+            user_id=None,
+            route_version=1,
+        )
+        self.db.insert_summary(
+            request_id=rid,
+            lang="en",
+            json_payload={
+                "title": "Quantum breakthrough",
+                "topic_tags": ["Physics"],
+                "metadata": {"title": "Quantum breakthrough"},
+            },
+            is_read=False,
+        )
+
+        unread_none = self.db.get_unread_summaries(limit=5, topic="space")
+        self.assertEqual(unread_none, [])
 
     def test_mark_summary_as_read(self):
         """Test marking summary as read."""
@@ -400,6 +479,81 @@ class TestReadStatusCommands(unittest.IsolatedAsyncioTestCase):
             self.assertIn("Article 1", reply)
             self.assertIn("Article 2", reply)
             self.assertIn("Request ID", reply)
+
+    async def test_unread_command_with_topic_and_limit(self):
+        """/unread accepts topic filters and limits results."""
+
+        with tempfile.TemporaryDirectory() as tmp:
+            bot = make_bot(os.path.join(tmp, "app.db"))
+
+            details = [
+                ("https://example-ai.com", "AI Revolution", ["Artificial Intelligence"]),
+                ("https://example-web.com", "Web Dev", ["Web"]),
+                ("https://example-ml.com", "ML Overview", ["Machine Learning"]),
+            ]
+
+            for url, title, tags in details:
+                rid = bot.db.create_request(
+                    type_="url",
+                    status="ok",
+                    input_url=url,
+                    correlation_id="test",
+                    chat_id=None,
+                    user_id=None,
+                    route_version=1,
+                )
+                bot.db.insert_summary(
+                    request_id=rid,
+                    lang="en",
+                    json_payload={
+                        "title": title,
+                        "topic_tags": tags,
+                        "metadata": {"title": title},
+                    },
+                    is_read=False,
+                )
+
+            msg = FakeMessage("/unread ai 1", uid=1)
+            await bot._on_message(msg)
+
+            self.assertEqual(len(msg._replies), 1)
+            reply = msg._replies[0]
+            self.assertIn("Topic filter: ai", reply.casefold())
+            self.assertIn("Showing up to 1 article", reply)
+            self.assertIn("AI Revolution", reply)
+            self.assertNotIn("Web Dev", reply)
+
+    async def test_unread_command_topic_no_results(self):
+        """/unread reports when a topic has no unread articles."""
+
+        with tempfile.TemporaryDirectory() as tmp:
+            bot = make_bot(os.path.join(tmp, "app.db"))
+
+            rid = bot.db.create_request(
+                type_="url",
+                status="ok",
+                input_url="https://example.com",
+                correlation_id="test",
+                chat_id=None,
+                user_id=None,
+                route_version=1,
+            )
+            bot.db.insert_summary(
+                request_id=rid,
+                lang="en",
+                json_payload={
+                    "title": "Space Exploration",
+                    "topic_tags": ["Space"],
+                    "metadata": {"title": "Space Exploration"},
+                },
+                is_read=False,
+            )
+
+            msg = FakeMessage("/unread gardening", uid=1)
+            await bot._on_message(msg)
+
+            self.assertEqual(len(msg._replies), 1)
+            self.assertIn('No unread articles found for topic "gardening"', msg._replies[0])
 
     async def test_read_command_invalid_id(self):
         """Test /read command with invalid request ID."""

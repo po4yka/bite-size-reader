@@ -34,6 +34,7 @@ from app.services.topic_search_utils import (
     TopicSearchDocument,
     build_topic_search_document,
     ensure_mapping,
+    tokenize,
 )
 
 JSONValue = Mapping[str, Any] | Sequence[Any] | str | None
@@ -1078,24 +1079,107 @@ class Database:
             Summary.request == request_id
         ).execute()
 
-    def get_unread_summaries(self, limit: int = 10) -> list[dict[str, Any]]:
-        rows = (
+    @staticmethod
+    def _yield_topic_fragments(value: Any) -> Iterator[str]:
+        """Yield normalized text fragments from arbitrary payload values."""
+
+        if value is None:
+            return
+        if isinstance(value, str):
+            text = value.strip()
+            if text:
+                yield text
+            return
+        if isinstance(value, Sequence) and not isinstance(value, str | bytes | bytearray):
+            for item in value:
+                yield from Database._yield_topic_fragments(item)
+            return
+        yield str(value)
+
+    @staticmethod
+    def _summary_matches_topic(
+        payload: Mapping[str, Any], request_data: Mapping[str, Any], topic: str
+    ) -> bool:
+        """Return True when a stored summary appears to match the requested topic."""
+
+        terms = [term for term in tokenize(topic) if term]
+        if not terms:
+            normalized = topic.casefold().strip()
+            if not normalized:
+                return True
+            terms = [normalized]
+
+        metadata = ensure_mapping(payload.get("metadata"))
+        candidate_values: list[Any] = [
+            payload.get("title"),
+            payload.get("summary_250"),
+            payload.get("summary_1000"),
+            payload.get("tldr"),
+            payload.get("topic_tags"),
+            payload.get("topic_taxonomy"),
+            metadata.get("title"),
+            metadata.get("description"),
+            metadata.get("keywords"),
+            metadata.get("section"),
+            metadata.get("topics"),
+            metadata.get("category"),
+            request_data.get("input_url"),
+            request_data.get("normalized_url"),
+            request_data.get("content_text"),
+        ]
+
+        fragments: list[str] = []
+        for value in candidate_values:
+            for fragment in Database._yield_topic_fragments(value):
+                fragments.append(fragment.casefold())
+
+        if not fragments:
+            return False
+
+        combined = " ".join(fragments)
+        return all(term in combined for term in terms)
+
+    def get_unread_summaries(
+        self, *, limit: int = 10, topic: str | None = None
+    ) -> list[dict[str, Any]]:
+        """Return unread summary rows optionally filtered by topic text."""
+
+        if limit <= 0:
+            return []
+
+        topic_query = topic.strip() if topic else None
+        base_query = (
             Summary.select(Summary, Request)
             .join(Request)
             .where(~Summary.is_read)
             .order_by(Summary.created_at.asc())
-            .limit(limit)
         )
+
+        fetch_limit = limit
+        if topic_query:
+            fetch_limit = max(limit * 5, 25)
+            fetch_limit = min(fetch_limit, 100)
+
+        rows = base_query.limit(fetch_limit)
+
         results: list[dict[str, Any]] = []
         for row in rows:
+            payload = ensure_mapping(row.json_payload)
+            request_data = model_to_dict(row.request) or {}
+
+            if topic_query and not self._summary_matches_topic(payload, request_data, topic_query):
+                continue
+
             data = model_to_dict(row) or {}
-            req_data = model_to_dict(row.request) or {}
+            req_data = request_data
             req_data.pop("id", None)
             data.update(req_data)
             if "request" in data and "request_id" not in data:
                 data["request_id"] = data["request"]
             self._convert_bool_fields(data, ["is_read"])
             results.append(data)
+            if len(results) >= limit:
+                break
         return results
 
     def get_unread_summary_by_request_id(self, request_id: int) -> dict[str, Any] | None:
