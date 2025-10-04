@@ -117,6 +117,16 @@ class TestParseUnreadArguments(unittest.TestCase):
         self.assertEqual(limit, 5)
         self.assertEqual(topic, "gardening")
 
+    def test_parse_unread_with_numeric_topic_only(self) -> None:
+        limit, topic = CommandProcessor._parse_unread_arguments("/unread 2024")
+        self.assertEqual(limit, 5)
+        self.assertEqual(topic, "2024")
+
+    def test_parse_unread_with_numeric_topic_and_limit(self) -> None:
+        limit, topic = CommandProcessor._parse_unread_arguments("/unread 2024 limit=3")
+        self.assertEqual(limit, 3)
+        self.assertEqual(topic, "2024")
+
 
 class TestReadStatusDatabase(unittest.TestCase):
     def setUp(self):
