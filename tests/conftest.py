@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import importlib.util
+import inspect
 import json
 import sys
 from types import ModuleType, TracebackType
@@ -162,9 +163,19 @@ def pytest_pyfunc_call(pyfuncitem: pytest.Function) -> bool | None:
 
     test_func = pyfuncitem.obj
     if asyncio.iscoroutinefunction(test_func):
+        signature = inspect.signature(test_func)
+        has_var_kwargs = any(
+            param.kind == inspect.Parameter.VAR_KEYWORD for param in signature.parameters.values()
+        )
+        if has_var_kwargs:
+            call_args = pyfuncitem.funcargs
+        else:
+            allowed = set(signature.parameters)
+            call_args = {k: v for k, v in pyfuncitem.funcargs.items() if k in allowed}
+
         loop = asyncio.new_event_loop()
         try:
-            loop.run_until_complete(test_func(**pyfuncitem.funcargs))
+            loop.run_until_complete(test_func(**call_args))
         finally:
             loop.run_until_complete(loop.shutdown_asyncgens())
             loop.close()

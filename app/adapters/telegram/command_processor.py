@@ -709,6 +709,7 @@ class CommandProcessor:
             return 5, None
 
         tokens = remainder.split()
+        had_mention = bool(tokens and tokens[0].startswith("@"))
         if tokens and tokens[0].startswith("@"):
             tokens = tokens[1:]
 
@@ -717,14 +718,8 @@ class CommandProcessor:
 
         max_limit = 20
         limit = 5
-        limit_inferred = False
-        topic_parts: list[str] = []
-        topic_seen = False
-
-        has_explicit_limit = any(
-            token.casefold().startswith("limit=") or token.casefold().startswith("limit:")
-            for token in tokens
-        )
+        topic_tokens: list[tuple[str, bool]] = []
+        explicit_limit_set = False
 
         for raw_token in tokens:
             token = raw_token.strip()
@@ -734,44 +729,35 @@ class CommandProcessor:
             lowered = token.casefold()
             if lowered.startswith("limit=") or lowered.startswith("limit:"):
                 candidate = token.split("=", 1)[-1] if "=" in token else token.split(":", 1)[-1]
-            elif token.isdigit():
-                if has_explicit_limit or topic_seen or limit_inferred:
-                    topic_parts.append(token)
-                    topic_seen = True
-                    continue
-
-                try:
-                    parsed_candidate = int(token)
-                except ValueError:
-                    topic_parts.append(token)
-                    topic_seen = True
-                    continue
-
-                if parsed_candidate > max_limit:
-                    topic_parts.append(token)
-                    topic_seen = True
-                    continue
-
-                candidate = token
-            else:
-                candidate = None
-
-            if candidate is not None:
                 try:
                     parsed = int(candidate)
                 except ValueError:
-                    topic_parts.append(token)
-                    topic_seen = True
+                    topic_tokens.append((token, False))
                     continue
-
                 limit = max(1, min(parsed, max_limit))
-                limit_inferred = True
+                explicit_limit_set = True
                 continue
 
-            topic_parts.append(token)
-            topic_seen = True
+            topic_tokens.append((token, token.isdigit()))
 
-        topic = " ".join(topic_parts).strip() or None
+        if not explicit_limit_set and topic_tokens:
+            candidate_index = len(topic_tokens) - 1
+            if candidate_index >= 0 and topic_tokens[candidate_index][1]:
+                candidate_token = topic_tokens[candidate_index][0]
+                try:
+                    parsed_limit = int(candidate_token)
+                except ValueError:
+                    pass
+                else:
+                    if parsed_limit <= max_limit:
+                        has_non_digit_before = any(
+                            not is_digit for _, is_digit in topic_tokens[:candidate_index]
+                        )
+                        if had_mention or has_non_digit_before:
+                            limit = max(1, min(parsed_limit, max_limit))
+                            del topic_tokens[candidate_index]
+
+        topic = " ".join(token for token, _ in topic_tokens).strip() or None
         return limit, topic
 
     async def handle_unread_command(

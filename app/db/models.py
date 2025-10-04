@@ -166,7 +166,7 @@ class TopicSearchIndex(FTS5Model):
     class Meta:
         table_name = "topic_search_index"
         database = database_proxy
-        options = {"content": "", "tokenize": "unicode61 remove_diacritics 2"}
+        options = {"tokenize": "unicode61 remove_diacritics 2"}
 
 
 class UserInteraction(BaseModel):
