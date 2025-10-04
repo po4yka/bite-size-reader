@@ -707,10 +707,17 @@ class CommandProcessor:
         if not remainder:
             return 5, None
 
+        tokens = remainder.split()
+        if tokens and tokens[0].startswith("@"):
+            tokens = tokens[1:]
+
+        if not tokens:
+            return 5, None
+
         max_limit = 20
         limit = 5
         topic_parts: list[str] = []
-        for raw_token in remainder.split():
+        for raw_token in tokens:
             token = raw_token.strip()
             if not token:
                 continue

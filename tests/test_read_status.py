@@ -4,6 +4,7 @@ import unittest
 from typing import Any
 from unittest.mock import AsyncMock, patch
 
+from app.adapters.telegram.command_processor import CommandProcessor
 from app.adapters.telegram.telegram_bot import TelegramBot
 from app.config import AppConfig, FirecrawlConfig, OpenRouterConfig, RuntimeConfig, TelegramConfig
 from app.db.database import Database
@@ -98,6 +99,23 @@ def make_bot(tmp_path: str) -> ReadStatusBot:
     setattr(tbmod, "Client", object)
     setattr(tbmod, "filters", None)
     return ReadStatusBot(cfg=cfg, db=Database(tmp_path))
+
+
+class TestParseUnreadArguments(unittest.TestCase):
+    def test_parse_unread_with_mention_only(self) -> None:
+        limit, topic = CommandProcessor._parse_unread_arguments("/unread@bot")
+        self.assertEqual(limit, 5)
+        self.assertIsNone(topic)
+
+    def test_parse_unread_with_mention_and_limit(self) -> None:
+        limit, topic = CommandProcessor._parse_unread_arguments("/unread@bot 3")
+        self.assertEqual(limit, 3)
+        self.assertIsNone(topic)
+
+    def test_parse_unread_with_mention_and_topic(self) -> None:
+        limit, topic = CommandProcessor._parse_unread_arguments("/unread@bot gardening")
+        self.assertEqual(limit, 5)
+        self.assertEqual(topic, "gardening")
 
 
 class TestReadStatusDatabase(unittest.TestCase):
