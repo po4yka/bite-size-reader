@@ -696,8 +696,54 @@ class CommandProcessor:
                 logger_=logger,
             )
 
+    @staticmethod
+    def _parse_unread_arguments(text: str | None) -> tuple[int, str | None]:
+        """Parse optional limit and topic arguments from an /unread command string."""
+
+        if not text:
+            return 5, None
+
+        remainder = text[len("/unread") :].strip() if text.startswith("/unread") else text
+        if not remainder:
+            return 5, None
+
+        max_limit = 20
+        limit = 5
+        topic_parts: list[str] = []
+        for raw_token in remainder.split():
+            token = raw_token.strip()
+            if not token:
+                continue
+            lowered = token.casefold()
+            if lowered.startswith("limit=") or lowered.startswith("limit:"):
+                candidate = token.split("=", 1)[-1] if "=" in token else token.split(":", 1)[-1]
+            elif token.isdigit():
+                candidate = token
+            else:
+                candidate = None
+
+            if candidate is not None:
+                try:
+                    parsed = int(candidate)
+                except ValueError:
+                    topic_parts.append(token)
+                    continue
+                limit = max(1, min(parsed, max_limit))
+                continue
+
+            topic_parts.append(token)
+
+        topic = " ".join(topic_parts).strip() or None
+        return limit, topic
+
     async def handle_unread_command(
-        self, message: Any, uid: int, correlation_id: str, interaction_id: int, start_time: float
+        self,
+        message: Any,
+        text: str,
+        uid: int,
+        correlation_id: str,
+        interaction_id: int,
+        start_time: float,
     ) -> None:
         """Handle /unread command - retrieve unread articles."""
         chat_id = getattr(getattr(message, "chat", None), "id", None)
@@ -712,11 +758,18 @@ class CommandProcessor:
         except Exception:
             pass
 
+        limit, topic = self._parse_unread_arguments(text)
+
         try:
-            # Get unread summaries
-            unread_summaries = self.db.get_unread_summaries(limit=5)
+            unread_summaries = self.db.get_unread_summaries(limit=limit, topic=topic)
 
             if not unread_summaries:
+                if topic:
+                    await self.response_formatter.safe_reply(
+                        message,
+                        f'📖 No unread articles found for topic "{topic}".',
+                    )
+                    return
                 await self.response_formatter.safe_reply(
                     message, "📖 No unread articles found. All caught up!"
                 )
@@ -724,6 +777,10 @@ class CommandProcessor:
 
             # Send a message with the list of unread articles
             response_lines = ["📚 **Unread Articles:**"]
+            if topic:
+                response_lines.append(f"🔍 Topic filter: {topic}")
+            if limit:
+                response_lines.append(f"📦 Showing up to {limit} article(s)")
             for i, summary in enumerate(unread_summaries, 1):
                 request_id = summary.get("request_id")
                 input_url = summary.get("input_url", "Unknown URL")
