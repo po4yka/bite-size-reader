@@ -1512,7 +1512,7 @@ class Database:
 
         try:
             self._database.execute_sql(
-                "INSERT INTO topic_search_index(topic_search_index, rowid) VALUES ('delete', ?)",
+                "DELETE FROM topic_search_index WHERE rowid = ?",
                 (rowid,),
             )
         except peewee.DatabaseError as exc:
@@ -1522,13 +1522,6 @@ class Database:
                 return
 
             self._log_topic_search_delete_fallback(rowid, message)
-            try:
-                self._database.execute_sql(
-                    "DELETE FROM topic_search_index WHERE rowid = ?",
-                    (rowid,),
-                )
-            except peewee.DatabaseError as fallback_exc:  # pragma: no cover - defensive
-                self._handle_topic_search_index_error(fallback_exc, rowid)
 
     def _log_topic_search_delete_fallback(self, rowid: int, message: str) -> None:
         """Log degraded delete path, but only warn once to avoid noise."""

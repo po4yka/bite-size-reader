@@ -127,6 +127,26 @@ class TestParseUnreadArguments(unittest.TestCase):
         self.assertEqual(limit, 3)
         self.assertEqual(topic, "2024")
 
+    def test_parse_unread_with_topic_and_trailing_limit(self) -> None:
+        limit, topic = CommandProcessor._parse_unread_arguments("/unread ai 2")
+        self.assertEqual(limit, 2)
+        self.assertEqual(topic, "ai")
+
+    def test_parse_unread_trailing_limit_above_max_is_topic(self) -> None:
+        limit, topic = CommandProcessor._parse_unread_arguments("/unread ai 99")
+        self.assertEqual(limit, 5)
+        self.assertEqual(topic, "ai 99")
+
+    def test_parse_unread_numeric_only_without_mention_is_topic(self) -> None:
+        limit, topic = CommandProcessor._parse_unread_arguments("/unread 3")
+        self.assertEqual(limit, 5)
+        self.assertEqual(topic, "3")
+
+    def test_parse_unread_numeric_only_with_mention_is_limit(self) -> None:
+        limit, topic = CommandProcessor._parse_unread_arguments("/unread@bot 4")
+        self.assertEqual(limit, 4)
+        self.assertIsNone(topic)
+
 
 class TestReadStatusDatabase(unittest.TestCase):
     def setUp(self):
