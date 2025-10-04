@@ -252,9 +252,14 @@ class TestReadStatusDatabase(unittest.TestCase):
 
         # Get limited unread summaries
         unread = self.db.get_unread_summaries(limit=3)
-        self.assertEqual(len(unread), 3)
-        self.assertEqual(unread[0]["input_url"], "https://example0.com")
-        self.assertEqual(unread[2]["input_url"], "https://example4.com")
+        self.assertEqual(
+            [row["input_url"] for row in unread],
+            [
+                "https://example0.com",
+                "https://example1.com",
+                "https://example2.com",
+            ],
+        )
 
     def test_get_unread_summaries_topic_filter(self):
         """Unread summaries can be filtered by a topic query."""
@@ -332,6 +337,47 @@ class TestReadStatusDatabase(unittest.TestCase):
 
         unread_none = self.db.get_unread_summaries(limit=5, topic="space")
         self.assertEqual(unread_none, [])
+
+    def test_get_unread_summaries_topic_filter_large_backlog(self):
+        """Topic filtering consults the search index beyond the initial window."""
+
+        matching_ids: list[int] = []
+        for i in range(130):
+            rid = self.db.create_request(
+                type_="url",
+                status="pending",
+                input_url=f"https://example{i}.com",
+                correlation_id=None,
+                chat_id=None,
+                user_id=None,
+                route_version=1,
+            )
+            payload: dict[str, Any] = {
+                "title": f"Article {i}",
+                "topic_tags": ["general"],
+                "metadata": {"title": f"Article {i}", "description": "General news"},
+            }
+            if i >= 120:
+                payload = {
+                    "title": f"Gardening insights {i}",
+                    "topic_tags": ["gardening"],
+                    "metadata": {
+                        "title": f"Gardening insights {i}",
+                        "description": "Gardening tips",
+                    },
+                }
+                matching_ids.append(rid)
+
+            self.db.insert_summary(
+                request_id=rid,
+                lang="en",
+                json_payload=payload,
+                is_read=False,
+            )
+
+        unread = self.db.get_unread_summaries(limit=3, topic="gardening")
+        self.assertEqual(len(unread), 3)
+        self.assertEqual([row["request_id"] for row in unread], matching_ids[:3])
 
     def test_mark_summary_as_read(self):
         """Test marking summary as read."""
@@ -518,7 +564,7 @@ class TestReadStatusCommands(unittest.IsolatedAsyncioTestCase):
 
             self.assertEqual(len(msg._replies), 1)
             reply = msg._replies[0]
-            self.assertIn("Topic filter: ai", reply.casefold())
+            self.assertIn("topic filter: ai", reply.casefold())
             self.assertIn("Showing up to 1 article", reply)
             self.assertIn("AI Revolution", reply)
             self.assertNotIn("Web Dev", reply)
@@ -554,6 +600,57 @@ class TestReadStatusCommands(unittest.IsolatedAsyncioTestCase):
 
             self.assertEqual(len(msg._replies), 1)
             self.assertIn('No unread articles found for topic "gardening"', msg._replies[0])
+
+    async def test_unread_command_topic_large_backlog(self):
+        """/unread topic queries surface matches beyond the default scan window."""
+
+        with tempfile.TemporaryDirectory() as tmp:
+            bot = make_bot(os.path.join(tmp, "app.db"))
+
+            gardening_titles: list[str] = []
+            for i in range(130):
+                rid = bot.db.create_request(
+                    type_="url",
+                    status="ok",
+                    input_url=f"https://example{i}.com",
+                    correlation_id=f"cid-{i}",
+                    chat_id=None,
+                    user_id=None,
+                    route_version=1,
+                )
+                payload: dict[str, Any] = {
+                    "title": f"General article {i}",
+                    "topic_tags": ["general"],
+                    "metadata": {
+                        "title": f"General article {i}",
+                        "description": "General news",
+                    },
+                }
+                if i >= 120:
+                    payload = {
+                        "title": f"Gardening roundup {i}",
+                        "topic_tags": ["gardening"],
+                        "metadata": {
+                            "title": f"Gardening roundup {i}",
+                            "description": "Gardening tips",
+                        },
+                    }
+                    gardening_titles.append(payload["title"])
+                bot.db.insert_summary(
+                    request_id=rid,
+                    lang="en",
+                    json_payload=payload,
+                    is_read=False,
+                )
+
+            msg = FakeMessage("/unread gardening", uid=1)
+            await bot._on_message(msg)
+
+            self.assertEqual(len(msg._replies), 1)
+            reply = msg._replies[0]
+            for title in gardening_titles[:5]:
+                self.assertIn(title, reply)
+            self.assertIn("Topic filter: gardening", reply)
 
     async def test_read_command_invalid_id(self):
         """Test /read command with invalid request ID."""
