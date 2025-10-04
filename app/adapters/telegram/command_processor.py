@@ -17,6 +17,7 @@ from app.core.logging_utils import generate_correlation_id
 from app.core.url_utils import extract_all_urls
 from app.db.user_interactions import async_safe_update_user_interaction
 from app.services.topic_search import LocalTopicSearchService, TopicSearchService
+from app.services.topic_search_utils import ensure_mapping
 
 if TYPE_CHECKING:
     from app.adapters.content.url_processor import URLProcessor
@@ -796,11 +797,8 @@ class CommandProcessor:
                 # Extract title from metadata if available
                 payload = self._maybe_load_json(summary.get("json_payload"))
                 if isinstance(payload, Mapping):
-                    title = (
-                        payload.get("metadata", {}).get("title")
-                        or payload.get("title")
-                        or input_url
-                    )
+                    metadata = ensure_mapping(payload.get("metadata"))
+                    title = metadata.get("title") or payload.get("title") or input_url
                 else:
                     title = input_url
 

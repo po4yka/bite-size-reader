@@ -513,7 +513,29 @@ class TestReadStatusCommands(unittest.IsolatedAsyncioTestCase):
             bot = make_bot(os.path.join(tmp, "app.db"))
 
             # Create some unread articles
-            for i, url in enumerate(["https://example1.com", "https://example2.com"]):
+            details = [
+                (
+                    "https://example1.com",
+                    {"title": "Article 1", "metadata": {"title": "Article 1"}},
+                ),
+                (
+                    "https://example2.com",
+                    {"title": "Article 2", "metadata": {"title": "Article 2"}},
+                ),
+                (
+                    "https://example3.com",
+                    {"title": "Article 3", "metadata": None},
+                ),
+                (
+                    "https://example4.com",
+                    {
+                        "title": "Article 4",
+                        "metadata": '{"title": "Article 4"}',
+                    },
+                ),
+            ]
+
+            for i, (url, payload) in enumerate(details, start=1):
                 rid = bot.db.create_request(
                     type_="url",
                     status="ok",
@@ -526,10 +548,7 @@ class TestReadStatusCommands(unittest.IsolatedAsyncioTestCase):
                 bot.db.insert_summary(
                     request_id=rid,
                     lang="en",
-                    json_payload={
-                        "title": f"Article {i + 1}",
-                        "metadata": {"title": f"Article {i + 1}"},
-                    },
+                    json_payload=payload,
                     is_read=False,
                 )
 
@@ -543,6 +562,8 @@ class TestReadStatusCommands(unittest.IsolatedAsyncioTestCase):
             self.assertIn("Article 1", reply)
             self.assertIn("Article 2", reply)
             self.assertIn("Request ID", reply)
+            self.assertIn("Article 3", reply)
+            self.assertIn("Article 4", reply)
 
     async def test_unread_command_with_topic_and_limit(self):
         """/unread accepts topic filters and limits results."""
