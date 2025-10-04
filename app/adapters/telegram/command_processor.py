@@ -716,15 +716,41 @@ class CommandProcessor:
 
         max_limit = 20
         limit = 5
+        limit_inferred = False
         topic_parts: list[str] = []
+        topic_seen = False
+
+        has_explicit_limit = any(
+            token.casefold().startswith("limit=") or token.casefold().startswith("limit:")
+            for token in tokens
+        )
+
         for raw_token in tokens:
             token = raw_token.strip()
             if not token:
                 continue
+
             lowered = token.casefold()
             if lowered.startswith("limit=") or lowered.startswith("limit:"):
                 candidate = token.split("=", 1)[-1] if "=" in token else token.split(":", 1)[-1]
             elif token.isdigit():
+                if has_explicit_limit or topic_seen or limit_inferred:
+                    topic_parts.append(token)
+                    topic_seen = True
+                    continue
+
+                try:
+                    parsed_candidate = int(token)
+                except ValueError:
+                    topic_parts.append(token)
+                    topic_seen = True
+                    continue
+
+                if parsed_candidate > max_limit:
+                    topic_parts.append(token)
+                    topic_seen = True
+                    continue
+
                 candidate = token
             else:
                 candidate = None
@@ -734,11 +760,15 @@ class CommandProcessor:
                     parsed = int(candidate)
                 except ValueError:
                     topic_parts.append(token)
+                    topic_seen = True
                     continue
+
                 limit = max(1, min(parsed, max_limit))
+                limit_inferred = True
                 continue
 
             topic_parts.append(token)
+            topic_seen = True
 
         topic = " ".join(topic_parts).strip() or None
         return limit, topic
