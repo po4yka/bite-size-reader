@@ -5,6 +5,7 @@ import contextlib
 import datetime as dt
 import json
 import logging
+import re
 import sqlite3
 from collections.abc import Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
@@ -1155,12 +1156,23 @@ class Database:
             .order_by(Summary.created_at.asc())
         )
 
-        fetch_limit = limit
+        fetch_limit: int | None = limit
         if topic_query:
-            fetch_limit = max(limit * 5, 25)
-            fetch_limit = min(fetch_limit, 100)
+            candidate_limit = max(limit * 5, 25)
+            topic_request_ids = self._find_topic_search_request_ids(
+                topic_query, candidate_limit=candidate_limit
+            )
+            if topic_request_ids:
+                fetch_limit = len(topic_request_ids)
+                base_query = base_query.where(Summary.request.in_(topic_request_ids))
+            else:
+                fetch_limit = None
 
-        rows = base_query.limit(fetch_limit)
+        rows_query = base_query
+        if fetch_limit is not None:
+            rows_query = base_query.limit(fetch_limit)
+
+        rows = rows_query
 
         results: list[dict[str, Any]] = []
         for row in rows:
@@ -1181,6 +1193,85 @@ class Database:
             if len(results) >= limit:
                 break
         return results
+
+    @staticmethod
+    def _sanitize_fts_term(term: str) -> str:
+        sanitized = re.sub(r"[^\w-]+", " ", term)
+        sanitized = re.sub(r"\s+", " ", sanitized).strip()
+        return sanitized
+
+    def _find_topic_search_request_ids(
+        self, topic: str, *, candidate_limit: int
+    ) -> list[int] | None:
+        terms = tokenize(topic)
+
+        if not terms:
+            sanitized = self._sanitize_fts_term(topic.casefold())
+            if not sanitized:
+                return None
+            fts_query = f'"{sanitized}"*'
+        else:
+            sanitized_terms = [self._sanitize_fts_term(term) for term in terms]
+            sanitized_terms = [term for term in sanitized_terms if term]
+            if not sanitized_terms:
+                return None
+            phrase = self._sanitize_fts_term(" ".join(terms))
+            components: list[str] = []
+            wildcard_terms = [f'"{term}"*' for term in sanitized_terms]
+            if wildcard_terms:
+                components.append(" AND ".join(wildcard_terms))
+            if phrase:
+                components.append(f'"{phrase}"')
+            fts_query = " OR ".join(component for component in components if component)
+            if not fts_query:
+                return None
+
+        sql = (
+            "SELECT rowid FROM topic_search_index "
+            "WHERE topic_search_index MATCH ? "
+            "ORDER BY bm25(topic_search_index) ASC "
+            "LIMIT ?"
+        )
+
+        try:
+            with self._database.connection_context():
+                cursor = self._database.execute_sql(sql, (fts_query, candidate_limit))
+                rows = list(cursor)
+        except Exception as exc:  # noqa: BLE001 - fallback to scan logic
+            self._logger.warning("topic_search_index_lookup_failed", extra={"error": str(exc)})
+            return None
+
+        request_ids: list[int] = []
+        seen: set[int] = set()
+        for row in rows:
+            value: Any | None = None
+            if isinstance(row, Mapping):
+                value = row.get("rowid") or row.get("request_id")
+            elif hasattr(row, "keys"):
+                try:
+                    value = row["rowid"]
+                except Exception:
+                    try:
+                        value = row["request_id"]
+                    except Exception:
+                        value = None
+            if value is None:
+                try:
+                    value = row[0]
+                except Exception:
+                    value = None
+            if value is None:
+                continue
+            try:
+                request_id = int(value)
+            except (TypeError, ValueError):
+                continue
+            if request_id in seen:
+                continue
+            request_ids.append(request_id)
+            seen.add(request_id)
+
+        return request_ids
 
     def get_unread_summary_by_request_id(self, request_id: int) -> dict[str, Any] | None:
         summary = (
