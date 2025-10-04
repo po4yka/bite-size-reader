@@ -18,6 +18,8 @@ from app.core.url_utils import extract_all_urls, looks_like_url
 from app.db.database import Database
 from app.db.user_interactions import async_safe_update_user_interaction
 from app.models.telegram.telegram_models import TelegramMessage
+from app.security.file_validation import FileValidationError, SecureFileValidator
+from app.security.rate_limiter import RateLimitConfig, UserRateLimiter
 
 if TYPE_CHECKING:
     from app.adapters.external.response_formatter import ResponseFormatter
@@ -58,6 +60,19 @@ class MessageRouter:
 
         # Store reference to URL processor for silent processing
         self._url_processor = url_handler.url_processor
+
+        # Initialize security components
+        self._rate_limiter = UserRateLimiter(
+            RateLimitConfig(
+                max_requests=10,  # 10 requests per window
+                window_seconds=60,  # 60 second window
+                max_concurrent=3,  # Max 3 concurrent operations per user
+                cooldown_multiplier=2.0,  # 2x window cooldown after limit
+            )
+        )
+        self._file_validator = SecureFileValidator(
+            max_file_size=10 * 1024 * 1024  # 10 MB max file size
+        )
 
     async def route_message(self, message: Any) -> None:
         """Main message routing entry point."""
@@ -155,8 +170,69 @@ class MessageRouter:
             ):
                 return
 
-            if self._task_manager is not None:
-                async with self._task_manager.track(uid, enabled=not text.startswith("/cancel")):
+            # Rate limiting check
+            allowed, error_msg = await self._rate_limiter.check_and_record(
+                uid, operation=interaction_type
+            )
+            if not allowed:
+                logger.warning(
+                    "rate_limit_rejected",
+                    extra={
+                        "uid": uid,
+                        "interaction_type": interaction_type,
+                        "cid": correlation_id,
+                    },
+                )
+                await self.response_formatter.safe_reply(message, error_msg)
+                if interaction_id:
+                    await async_safe_update_user_interaction(
+                        self.db,
+                        interaction_id=interaction_id,
+                        response_sent=True,
+                        response_type="rate_limited",
+                        error_occurred=True,
+                        error_message="Rate limit exceeded",
+                        start_time=start_time,
+                        logger_=logger,
+                    )
+                return
+
+            # Acquire concurrent slot
+            if not await self._rate_limiter.acquire_concurrent_slot(uid):
+                logger.warning(
+                    "concurrent_limit_rejected",
+                    extra={"uid": uid, "interaction_type": interaction_type, "cid": correlation_id},
+                )
+                await self.response_formatter.safe_reply(
+                    message,
+                    "⏸️ Too many concurrent operations. Please wait for your previous requests to complete.",
+                )
+                if interaction_id:
+                    await async_safe_update_user_interaction(
+                        self.db,
+                        interaction_id=interaction_id,
+                        response_sent=True,
+                        response_type="concurrent_limited",
+                        error_occurred=True,
+                        error_message="Concurrent operations limit exceeded",
+                        start_time=start_time,
+                        logger_=logger,
+                    )
+                return
+
+            try:
+                if self._task_manager is not None:
+                    async with self._task_manager.track(uid, enabled=not text.startswith("/cancel")):
+                        await self._route_message_content(
+                            message,
+                            text,
+                            uid,
+                            has_forward,
+                            correlation_id,
+                            interaction_id,
+                            start_time,
+                        )
+                else:
                     await self._route_message_content(
                         message,
                         text,
@@ -166,16 +242,9 @@ class MessageRouter:
                         interaction_id,
                         start_time,
                     )
-            else:
-                await self._route_message_content(
-                    message,
-                    text,
-                    uid,
-                    has_forward,
-                    correlation_id,
-                    interaction_id,
-                    start_time,
-                )
+            finally:
+                # Always release concurrent slot
+                await self._rate_limiter.release_concurrent_slot(uid)
 
         except asyncio.CancelledError:
             logger.info(
@@ -191,6 +260,8 @@ class MessageRouter:
                     start_time=start_time,
                     logger_=logger,
                 )
+            # Release concurrent slot on cancellation
+            await self._rate_limiter.release_concurrent_slot(uid)
             return
         except Exception as e:  # noqa: BLE001
             logger.exception("handler_error", extra={"cid": correlation_id})
@@ -213,6 +284,8 @@ class MessageRouter:
                     start_time=start_time,
                     logger_=logger,
                 )
+            # Release concurrent slot on error
+            await self._rate_limiter.release_concurrent_slot(uid)
 
     async def _route_message_content(
         self,
@@ -387,6 +460,7 @@ class MessageRouter:
         start_time: float,
     ) -> None:
         """Handle .txt file processing (files containing URLs)."""
+        file_path = None
         try:
             # Download and parse the file
             file_path = await self._download_file(message)
@@ -394,8 +468,19 @@ class MessageRouter:
                 await self.response_formatter.safe_reply(message, "Failed to download the file.")
                 return
 
-            # Parse URLs from the file
-            urls = self._parse_txt_file(file_path)
+            # Parse URLs from the file with security validation
+            try:
+                urls = self._parse_txt_file(file_path)
+            except FileValidationError as e:
+                logger.error(
+                    "file_validation_failed",
+                    extra={"error": str(e), "cid": correlation_id},
+                )
+                await self.response_formatter.safe_reply(
+                    message, f"❌ File validation failed: {str(e)}"
+                )
+                return
+
             if not urls:
                 await self.response_formatter.safe_reply(
                     message, "No valid URLs found in the file."
@@ -486,6 +571,16 @@ class MessageRouter:
             await self.response_formatter.safe_reply(
                 message, "An error occurred while processing the file."
             )
+        finally:
+            # Clean up downloaded file
+            if file_path:
+                try:
+                    self._file_validator.cleanup_file(file_path)
+                except Exception as e:
+                    logger.debug(
+                        "file_cleanup_error",
+                        extra={"error": str(e), "file_path": file_path, "cid": correlation_id},
+                    )
 
     async def _download_file(self, message: Any) -> str | None:
         """Download document file to temporary location."""
@@ -504,16 +599,40 @@ class MessageRouter:
             return None
 
     def _parse_txt_file(self, file_path: str) -> list[str]:
-        """Parse URLs from .txt file."""
+        """Parse URLs from .txt file with security validation.
+
+        Args:
+            file_path: Path to text file containing URLs
+
+        Returns:
+            List of URLs found in file
+
+        Raises:
+            FileValidationError: If file validation fails
+        """
+        # Use secure file validator to read file
+        lines = self._file_validator.safe_read_text_file(file_path)
+
+        # Extract URLs from lines
         urls = []
-        try:
-            with open(file_path, encoding="utf-8") as f:
-                for line in f:
-                    line = line.strip()
-                    if line and line.startswith("http"):
-                        urls.append(line)
-        except Exception as e:
-            logger.error("file_parse_error", extra={"error": str(e), "file_path": file_path})
+        for line in lines:
+            line = line.strip()
+            # Basic URL validation - starts with http/https
+            if line and (line.startswith("http://") or line.startswith("https://")):
+                # Additional validation: check for suspicious patterns
+                if " " not in line and "\t" not in line:  # No spaces/tabs in URL
+                    urls.append(line)
+                else:
+                    logger.warning(
+                        "suspicious_url_skipped",
+                        extra={"url_preview": line[:50], "reason": "contains whitespace"},
+                    )
+
+        logger.info(
+            "file_parsed_successfully",
+            extra={"file_path": file_path, "urls_found": len(urls), "lines_read": len(lines)},
+        )
+
         return urls
 
     async def _process_urls_sequentially(
