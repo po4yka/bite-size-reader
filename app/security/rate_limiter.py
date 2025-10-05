@@ -236,7 +236,8 @@ class UserRateLimiter:
                 "concurrent_operations": self._user_concurrent.get(user_id, 0),
                 "max_concurrent": self._config.max_concurrent,
                 "cooldown_remaining": cooldown_remaining,
-                "is_limited": len(user_queue) >= self._config.max_requests or cooldown_remaining > 0,
+                "is_limited": len(user_queue) >= self._config.max_requests
+                or cooldown_remaining > 0,
             }
 
     async def reset_user(self, user_id: int) -> None:

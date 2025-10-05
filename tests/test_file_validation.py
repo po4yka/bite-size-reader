@@ -175,7 +175,9 @@ class TestFileValidation(unittest.TestCase):
     def test_unicode_file_content(self):
         """Test reading files with Unicode content."""
         # Create file with Unicode content
-        with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".txt", encoding="utf-8") as f:
+        with tempfile.NamedTemporaryFile(
+            mode="w", delete=False, suffix=".txt", encoding="utf-8"
+        ) as f:
             f.write("Hello 世界\n")
             f.write("Привет мир\n")
             f.write("مرحبا العالم\n")

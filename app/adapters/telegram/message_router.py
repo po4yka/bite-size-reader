@@ -222,7 +222,9 @@ class MessageRouter:
 
             try:
                 if self._task_manager is not None:
-                    async with self._task_manager.track(uid, enabled=not text.startswith("/cancel")):
+                    async with self._task_manager.track(
+                        uid, enabled=not text.startswith("/cancel")
+                    ):
                         await self._route_message_content(
                             message,
                             text,
