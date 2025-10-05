@@ -134,7 +134,7 @@ class SecureFileValidator:
                 raise FileValidationError(
                     f"File too large: {file_size} bytes "
                     f"(max: {self._max_file_size} bytes / "
-                    f"{self._max_file_size / (1024*1024):.1f} MB)"
+                    f"{self._max_file_size / (1024 * 1024):.1f} MB)"
                 )
         except FileValidationError:
             raise
@@ -174,7 +174,7 @@ class SecureFileValidator:
 
         lines = []
         try:
-            with open(validated_path, "r", encoding=encoding, errors="replace") as f:
+            with open(validated_path, encoding=encoding, errors="replace") as f:
                 for line_num, line in enumerate(f, start=1):
                     # Check line count limit
                     if line_num > self.MAX_LINES:

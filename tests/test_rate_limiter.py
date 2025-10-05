@@ -1,7 +1,6 @@
 """Tests for rate limiter security module."""
 
 import asyncio
-import time
 import unittest
 
 from app.security.rate_limiter import RateLimitConfig, UserRateLimiter
@@ -109,7 +108,9 @@ class TestRateLimiter(unittest.IsolatedAsyncioTestCase):
 
     async def test_get_user_status(self):
         """Test getting user status."""
-        limiter = UserRateLimiter(RateLimitConfig(max_requests=5, window_seconds=10, max_concurrent=3))
+        limiter = UserRateLimiter(
+            RateLimitConfig(max_requests=5, window_seconds=10, max_concurrent=3)
+        )
 
         user_id = 12345
 
@@ -165,9 +166,7 @@ class TestRateLimiter(unittest.IsolatedAsyncioTestCase):
     async def test_cooldown_after_limit(self):
         """Test that cooldown is applied after exceeding limit."""
         limiter = UserRateLimiter(
-            RateLimitConfig(
-                max_requests=2, window_seconds=1, cooldown_multiplier=2.0
-            )
+            RateLimitConfig(max_requests=2, window_seconds=1, cooldown_multiplier=2.0)
         )
 
         user_id = 12345
