@@ -50,6 +50,28 @@ class TestRateLimiter(unittest.IsolatedAsyncioTestCase):
         allowed, _ = await limiter.check_and_record(user_id)
         self.assertTrue(allowed)
 
+    async def test_default_cooldown_allows_after_window(self):
+        """Ensure default cooldown duration matches the sliding window length."""
+        limiter = UserRateLimiter(RateLimitConfig(max_requests=2, window_seconds=1))
+
+        user_id = 54321
+
+        # Hit the limit quickly
+        await limiter.check_and_record(user_id)
+        await limiter.check_and_record(user_id)
+
+        allowed, message = await limiter.check_and_record(user_id)
+        self.assertFalse(allowed)
+        self.assertIsNotNone(message)
+        self.assertIn("Cooldown active for 1 seconds", message)
+
+        # Wait just longer than the configured window/cooldown length
+        await asyncio.sleep(1.05)
+
+        allowed, message = await limiter.check_and_record(user_id)
+        self.assertTrue(allowed)
+        self.assertIsNone(message)
+
     async def test_concurrent_operations(self):
         """Test concurrent operation limiting."""
         limiter = UserRateLimiter(RateLimitConfig(max_requests=10, max_concurrent=2))
