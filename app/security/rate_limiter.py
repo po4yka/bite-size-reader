@@ -19,7 +19,7 @@ class RateLimitConfig:
     max_requests: int = 10  # Maximum requests per window
     window_seconds: int = 60  # Time window in seconds
     max_concurrent: int = 3  # Maximum concurrent operations per user
-    cooldown_multiplier: float = 2.0  # Cooldown multiplier after limit exceeded
+    cooldown_multiplier: float = 1.0  # Cooldown multiplier after limit exceeded
 
 
 class UserRateLimiter:
