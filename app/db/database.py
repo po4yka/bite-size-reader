@@ -1579,20 +1579,38 @@ class Database:
         if model is None:
             return
         field = getattr(model, column)
-        query = model.select(model.id, field).where(field.is_null(False)).tuples()
-        updates = 0
-        wrapped = 0
-        blanks = 0
-        for row_id, raw_value in query:
-            normalized, should_update, reason = self._normalize_legacy_json_value(raw_value)
-            if not should_update:
-                continue
-            if reason == "invalid_json" and isinstance(raw_value, str):
-                wrapped += 1
-            if reason == "blank":
-                blanks += 1
-            model.update({field: normalized}).where(model.id == row_id).execute()
-            updates += 1
+
+        # Wrap the entire migration in a transaction for atomicity
+        with self._database.atomic():
+            query = model.select(model.id, field).where(field.is_null(False)).tuples()
+            updates = 0
+            wrapped = 0
+            blanks = 0
+
+            try:
+                for row_id, raw_value in query:
+                    normalized, should_update, reason = self._normalize_legacy_json_value(raw_value)
+                    if not should_update:
+                        continue
+                    if reason == "invalid_json" and isinstance(raw_value, str):
+                        wrapped += 1
+                    if reason == "blank":
+                        blanks += 1
+                    model.update({field: normalized}).where(model.id == row_id).execute()
+                    updates += 1
+            except Exception as exc:
+                self._logger.error(
+                    "json_column_coercion_failed",
+                    extra={
+                        "table": table,
+                        "column": column,
+                        "error": str(exc),
+                        "rows_processed": updates,
+                    },
+                )
+                # Transaction will be rolled back automatically
+                raise
+
         if updates:
             extra: dict[str, Any] = {"table": table, "column": column, "rows": updates}
             if wrapped:

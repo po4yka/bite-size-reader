@@ -31,19 +31,68 @@ _DANGEROUS_URL_SUBSTRINGS: tuple[str, ...] = (
     "data:",
 )
 
+# Comprehensive list of allowed URL schemes (only http and https)
+_ALLOWED_SCHEMES: frozenset[str] = frozenset(["http", "https"])
+
+# Dangerous schemes that should always be rejected
+_DANGEROUS_SCHEMES: frozenset[str] = frozenset(
+    [
+        "file",
+        "ftp",
+        "ftps",
+        "javascript",
+        "data",
+        "vbscript",
+        "about",
+        "blob",
+        "filesystem",
+        "ws",
+        "wss",
+        "mailto",
+        "tel",
+        "sms",
+        "ssh",
+        "sftp",
+        "telnet",
+        "gopher",
+        "ldap",
+        "ldaps",
+    ]
+)
+
 
 def _validate_url_input(url: str) -> None:
-    """Validate URL input for security."""
+    """Validate URL input for security.
+
+    Args:
+        url: URL string to validate
+
+    Raises:
+        ValueError: If URL is invalid or contains dangerous content
+    """
     if not url:
         raise ValueError("URL cannot be empty")
     if not isinstance(url, str):
         raise ValueError("URL must be a string")
     if len(url) > 2048:  # RFC 2616 limit
         raise ValueError("URL too long")
+
     # Basic security: no obvious injection attempts
     url_lower = url.lower()
     if any(needle in url_lower for needle in _DANGEROUS_URL_SUBSTRINGS):
         raise ValueError("URL contains potentially dangerous content")
+
+    # Check for dangerous schemes early (before parsing)
+    # This catches schemes even if they're not properly formatted
+    for dangerous_scheme in _DANGEROUS_SCHEMES:
+        if url_lower.startswith(f"{dangerous_scheme}:"):
+            raise ValueError(f"URL scheme '{dangerous_scheme}' is not allowed")
+
+    # Additional validation: check for null bytes and control characters
+    if "\x00" in url:
+        raise ValueError("URL contains null bytes")
+    if any(ord(char) < 32 and char not in ("\t", "\n", "\r") for char in url):
+        raise ValueError("URL contains control characters")
 
 
 def normalize_url(url: str) -> str:
@@ -53,10 +102,26 @@ def normalize_url(url: str) -> str:
     - Strip fragment
     - Sort query params and remove common tracking params
     - Collapse trailing slash
+
+    Args:
+        url: URL to normalize
+
+    Returns:
+        Normalized URL string
+
+    Raises:
+        ValueError: If URL is invalid or uses disallowed scheme
+
+    Security:
+        - Only allows http:// and https:// schemes
+        - Rejects file://, javascript:, data:, and other dangerous schemes
+        - Validates hostname presence
+        - Checks for malicious content patterns
     """
+    # First pass validation - catches obvious security issues
     _validate_url_input(url)
 
-    # Add protocol if missing
+    # Add protocol if missing (only http or https)
     if "://" not in url:
         url = f"http://{url}"
 
@@ -67,11 +132,30 @@ def normalize_url(url: str) -> str:
         if not p.netloc:
             raise ValueError("Invalid URL: missing hostname")
 
-        # Security: validate scheme
-        if p.scheme and p.scheme.lower() not in {"http", "https"}:
-            raise ValueError(f"Unsupported URL scheme: {p.scheme}")
+        # Security: strict scheme validation
+        # Reject if scheme exists but is not in allowed list
+        if p.scheme:
+            scheme_lower = p.scheme.lower()
+            # Explicitly check against dangerous schemes first
+            if scheme_lower in _DANGEROUS_SCHEMES:
+                raise ValueError(
+                    f"URL scheme '{p.scheme}' is not allowed. Only http and https are supported."
+                )
+            # Then validate against allowed list
+            if scheme_lower not in _ALLOWED_SCHEMES:
+                raise ValueError(
+                    f"Unsupported URL scheme: {p.scheme}. Only http and https are allowed."
+                )
+            scheme = scheme_lower
+        else:
+            # If no scheme after parsing, default to http
+            scheme = "http"
 
-        scheme = (p.scheme or "http").lower()
+        # Additional security: validate netloc doesn't contain suspicious characters
+        if any(char in p.netloc for char in ["@", "<", ">", '"', "'"]):
+            # '@' can be used for credential injection: http://user:pass@malicious.com
+            raise ValueError("URL hostname contains suspicious characters")
+
         netloc = p.netloc.lower()
         path = p.path or "/"
 

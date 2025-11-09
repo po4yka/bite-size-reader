@@ -3,12 +3,12 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import threading
 import time
 import weakref
 from collections.abc import AsyncGenerator, Callable
 from contextlib import asynccontextmanager
 from importlib.util import find_spec
-from threading import Lock
 from typing import Any
 
 import httpx
@@ -43,8 +43,29 @@ class OpenRouterClient:
 
     # Class-level client pool for connection reuse
     _client_pool: dict[str, httpx.AsyncClient] = {}
-    _client_pool_lock = Lock()
     _cleanup_registry: weakref.WeakSet[OpenRouterClient] = weakref.WeakSet()
+
+    # Thread lock to protect asyncio.Lock creation (solves chicken-and-egg problem)
+    _pool_lock_init = threading.Lock()
+    _client_pool_lock: asyncio.Lock | None = None
+
+    @classmethod
+    def _get_pool_lock(cls) -> asyncio.Lock:
+        """Get or create the async lock for client pool access.
+
+        Thread-safe lazy initialization using double-checked locking pattern.
+        Uses threading.Lock to protect asyncio.Lock creation.
+        """
+        # Fast path: lock already exists (no synchronization needed)
+        if cls._client_pool_lock is not None:
+            return cls._client_pool_lock
+
+        # Slow path: need to create the lock with thread-safe initialization
+        with cls._pool_lock_init:
+            # Double-check after acquiring thread lock
+            if cls._client_pool_lock is None:
+                cls._client_pool_lock = asyncio.Lock()
+            return cls._client_pool_lock
 
     def __init__(
         self,
@@ -191,7 +212,7 @@ class OpenRouterClient:
     @classmethod
     async def cleanup_all_clients(cls) -> None:
         """Clean up all shared HTTP clients."""
-        with cls._client_pool_lock:
+        async with cls._get_pool_lock():
             clients = list(cls._client_pool.values())
             cls._client_pool.clear()
 
@@ -218,7 +239,7 @@ class OpenRouterClient:
         if self._client is not None:
             self._client = None
 
-    def _ensure_client(self) -> httpx.AsyncClient:
+    async def _ensure_client(self) -> httpx.AsyncClient:
         """Lazily construct or reuse a pooled AsyncClient instance."""
         if self._closed:
             raise RuntimeError("Client has been closed")
@@ -228,7 +249,7 @@ class OpenRouterClient:
             return self._client
 
         # Use shared client pool for better connection reuse
-        with self._client_pool_lock:
+        async with self._get_pool_lock():
             client = self._client_pool.get(self._client_key)
             if client is None or client.is_closed:
                 client = httpx.AsyncClient(
@@ -397,7 +418,7 @@ class OpenRouterClient:
         if self._closed:
             raise ClientError("Cannot use client after it has been closed")
 
-        client = self._ensure_client()
+        client = await self._ensure_client()
 
         try:
             yield client

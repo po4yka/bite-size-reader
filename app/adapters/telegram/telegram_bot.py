@@ -295,7 +295,10 @@ class TelegramBot:
     async def _run_backup_loop(
         self, interval_minutes: int, retention: int, backup_dir: str | None
     ) -> None:
-        """Periodically create database backups until cancelled."""
+        """Periodically create database backups until cancelled.
+
+        Implements failure tracking with alerting after consecutive failures.
+        """
 
         if interval_minutes <= 0:
             return
@@ -310,14 +313,70 @@ class TelegramBot:
             },
         )
 
+        # Failure tracking
+        consecutive_failures = 0
+        max_consecutive_failures = 5
+        last_success_time = None
+
         try:
             while True:
                 try:
                     await self._create_database_backup(backup_directory, retention)
+                    # Reset failure counter on success
+                    if consecutive_failures > 0:
+                        logger.info(
+                            "db_backup_recovered",
+                            extra={
+                                "consecutive_failures": consecutive_failures,
+                                "recovery_time": datetime.utcnow().isoformat(),
+                            },
+                        )
+                    consecutive_failures = 0
+                    last_success_time = datetime.utcnow()
                 except asyncio.CancelledError:
                     raise
                 except Exception as exc:  # noqa: BLE001
-                    logger.error("db_backup_iteration_failed", extra={"error": str(exc)})
+                    consecutive_failures += 1
+                    logger.error(
+                        "db_backup_iteration_failed",
+                        extra={
+                            "error": str(exc),
+                            "consecutive_failures": consecutive_failures,
+                            "last_success": (
+                                last_success_time.isoformat() if last_success_time else "never"
+                            ),
+                        },
+                    )
+
+                    # Alert on consecutive failures
+                    if consecutive_failures >= max_consecutive_failures:
+                        logger.critical(
+                            "db_backup_critical_failure",
+                            extra={
+                                "consecutive_failures": consecutive_failures,
+                                "max_failures": max_consecutive_failures,
+                                "last_success": (
+                                    last_success_time.isoformat() if last_success_time else "never"
+                                ),
+                                "action_required": "Manual intervention required - backups failing",
+                            },
+                        )
+                        # Audit log for critical failures
+                        try:
+                            self._audit(
+                                "CRITICAL",
+                                "db_backup_critical_failure",
+                                {
+                                    "consecutive_failures": consecutive_failures,
+                                    "last_success": (
+                                        last_success_time.isoformat()
+                                        if last_success_time
+                                        else "never"
+                                    ),
+                                },
+                            )
+                        except Exception:  # noqa: BLE001
+                            pass
 
                 await asyncio.sleep(interval_minutes * 60)
         except asyncio.CancelledError:
