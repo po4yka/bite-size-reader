@@ -35,28 +35,30 @@ _DANGEROUS_URL_SUBSTRINGS: tuple[str, ...] = (
 _ALLOWED_SCHEMES: frozenset[str] = frozenset(["http", "https"])
 
 # Dangerous schemes that should always be rejected
-_DANGEROUS_SCHEMES: frozenset[str] = frozenset([
-    "file",
-    "ftp",
-    "ftps",
-    "javascript",
-    "data",
-    "vbscript",
-    "about",
-    "blob",
-    "filesystem",
-    "ws",
-    "wss",
-    "mailto",
-    "tel",
-    "sms",
-    "ssh",
-    "sftp",
-    "telnet",
-    "gopher",
-    "ldap",
-    "ldaps",
-])
+_DANGEROUS_SCHEMES: frozenset[str] = frozenset(
+    [
+        "file",
+        "ftp",
+        "ftps",
+        "javascript",
+        "data",
+        "vbscript",
+        "about",
+        "blob",
+        "filesystem",
+        "ws",
+        "wss",
+        "mailto",
+        "tel",
+        "sms",
+        "ssh",
+        "sftp",
+        "telnet",
+        "gopher",
+        "ldap",
+        "ldaps",
+    ]
+)
 
 
 def _validate_url_input(url: str) -> None:
