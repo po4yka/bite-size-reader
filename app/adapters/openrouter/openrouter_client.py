@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import threading
 import time
 import weakref
 from collections.abc import AsyncGenerator, Callable
@@ -42,15 +43,29 @@ class OpenRouterClient:
 
     # Class-level client pool for connection reuse
     _client_pool: dict[str, httpx.AsyncClient] = {}
-    _client_pool_lock: asyncio.Lock | None = None
     _cleanup_registry: weakref.WeakSet[OpenRouterClient] = weakref.WeakSet()
+
+    # Thread lock to protect asyncio.Lock creation (solves chicken-and-egg problem)
+    _pool_lock_init = threading.Lock()
+    _client_pool_lock: asyncio.Lock | None = None
 
     @classmethod
     def _get_pool_lock(cls) -> asyncio.Lock:
-        """Get or create the async lock for client pool access."""
-        if cls._client_pool_lock is None:
-            cls._client_pool_lock = asyncio.Lock()
-        return cls._client_pool_lock
+        """Get or create the async lock for client pool access.
+
+        Thread-safe lazy initialization using double-checked locking pattern.
+        Uses threading.Lock to protect asyncio.Lock creation.
+        """
+        # Fast path: lock already exists (no synchronization needed)
+        if cls._client_pool_lock is not None:
+            return cls._client_pool_lock
+
+        # Slow path: need to create the lock with thread-safe initialization
+        with cls._pool_lock_init:
+            # Double-check after acquiring thread lock
+            if cls._client_pool_lock is None:
+                cls._client_pool_lock = asyncio.Lock()
+            return cls._client_pool_lock
 
     def __init__(
         self,
