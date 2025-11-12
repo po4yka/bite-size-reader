@@ -289,6 +289,42 @@ class MessageRouter:
             # Release concurrent slot on error
             await self._rate_limiter.release_concurrent_slot(uid)
 
+    async def handle_multi_confirm_response(
+        self, message: Any, uid: int, response: str
+    ) -> None:
+        """Handle multi-link confirmation response from button or text.
+
+        Args:
+            message: The Telegram message object
+            uid: User ID
+            response: The response text ("yes" or "no")
+        """
+        # Generate correlation ID and start time for this interaction
+        correlation_id = generate_correlation_id()
+        start_time = time.time()
+
+        # Log interaction
+        interaction_id = self._log_user_interaction(
+            user_id=uid,
+            chat_id=getattr(getattr(message, "chat", None), "id", None),
+            message_id=getattr(message, "message_id", 0) or getattr(message, "id", 0),
+            interaction_type="confirmation",
+            command=None,
+            input_text=response,
+            input_url=None,
+            has_forward=False,
+            forward_from_chat_id=None,
+            forward_from_chat_title=None,
+            forward_from_message_id=None,
+            media_type=None,
+            correlation_id=correlation_id,
+        )
+
+        # Call the existing URL handler method
+        await self.url_handler.handle_multi_link_confirmation(
+            message, response, uid, correlation_id, interaction_id, start_time
+        )
+
     async def _route_message_content(
         self,
         message: Any,

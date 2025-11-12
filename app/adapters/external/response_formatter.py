@@ -158,6 +158,36 @@ class ResponseFormatter:
         self._last_message_time = current_time
         return True
 
+    def create_inline_keyboard(self, buttons: list[dict[str, str]]) -> Any:
+        """Create an inline keyboard markup from button definitions.
+
+        Args:
+            buttons: List of button dictionaries with 'text' and 'callback_data' keys.
+                    Each button dict should have 'text' (display text) and 'callback_data' (data sent when clicked).
+
+        Returns:
+            InlineKeyboardMarkup object or None if pyrogram is not available.
+
+        Example:
+            buttons = [
+                {"text": "✅ Yes", "callback_data": "confirm_yes"},
+                {"text": "❌ No", "callback_data": "confirm_no"}
+            ]
+            keyboard = create_inline_keyboard(buttons)
+        """
+        try:
+            from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+
+            # Create button rows - each button gets its own row for better mobile UX
+            keyboard_buttons = [[InlineKeyboardButton(btn["text"], callback_data=btn["callback_data"])] for btn in buttons]
+            return InlineKeyboardMarkup(keyboard_buttons)
+        except ImportError:
+            logger.warning("pyrogram_not_available_for_inline_keyboard")
+            return None
+        except Exception as e:  # noqa: BLE001
+            logger.error("failed_to_create_inline_keyboard", extra={"error": str(e)})
+            return None
+
     async def send_help(self, message: Any) -> None:
         """Send help message to user."""
         help_text = (
@@ -1038,7 +1068,7 @@ class ResponseFormatter:
             logger.error("reply_document_failed", extra={"error": str(e)})
         await self.safe_reply(message, f"```json\n{pretty}\n```")
 
-    async def safe_reply(self, message: Any, text: str, *, parse_mode: str | None = None) -> None:
+    async def safe_reply(self, message: Any, text: str, *, parse_mode: str | None = None, reply_markup: Any = None) -> None:
         """Safely reply to a message with comprehensive security checks."""
         # Input validation
         if not text or not text.strip():
@@ -1070,18 +1100,24 @@ class ResponseFormatter:
             logger.warning("safe_reply_rate_limited", extra={"text_length": len(text)})
 
         if self._safe_reply_func is not None:
-            kwargs = {"parse_mode": parse_mode} if parse_mode is not None else {}
+            kwargs = {}
+            if parse_mode is not None:
+                kwargs["parse_mode"] = parse_mode
+            if reply_markup is not None:
+                kwargs["reply_markup"] = reply_markup
             await self._safe_reply_func(message, text, **kwargs)
             return
 
         try:
             msg_any: Any = message
+            kwargs = {}
             if parse_mode:
-                await msg_any.reply_text(text, parse_mode=parse_mode)
-            else:
-                await msg_any.reply_text(text)
+                kwargs["parse_mode"] = parse_mode
+            if reply_markup:
+                kwargs["reply_markup"] = reply_markup
+            await msg_any.reply_text(text, **kwargs)
             try:
-                logger.debug("reply_text_sent", extra={"length": len(text)})
+                logger.debug("reply_text_sent", extra={"length": len(text), "has_buttons": reply_markup is not None})
             except Exception:
                 pass
         except Exception as e:  # noqa: BLE001

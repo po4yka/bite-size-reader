@@ -272,7 +272,13 @@ class URLHandler:
         start_time: float,
     ) -> None:
         self._pending_multi_links[uid] = urls
-        await self.response_formatter.safe_reply(message, f"Process {len(urls)} links? (yes/no)")
+        # Create inline keyboard buttons for confirmation
+        buttons = [
+            {"text": "✅ Yes", "callback_data": "multi_confirm_yes"},
+            {"text": "❌ No", "callback_data": "multi_confirm_no"},
+        ]
+        keyboard = self.response_formatter.create_inline_keyboard(buttons)
+        await self.response_formatter.safe_reply(message, f"Process {len(urls)} links?", reply_markup=keyboard)
         logger.debug("awaiting_multi_confirm", extra={"uid": uid, "count": len(urls)})
         if interaction_id:
             await async_safe_update_user_interaction(

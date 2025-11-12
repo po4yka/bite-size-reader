@@ -50,8 +50,12 @@ class TelegramClient:
                 in_memory=True,
             )
 
-    async def start(self, message_handler: Callable[[Any], Awaitable[None]]) -> None:
-        """Start the Telegram client with message handler."""
+    async def start(
+        self,
+        message_handler: Callable[[Any], Awaitable[None]],
+        callback_query_handler: Callable[[Any], Awaitable[None]] | None = None,
+    ) -> None:
+        """Start the Telegram client with message and callback query handlers."""
         if not self.client:
             logger.warning("telegram_client_not_available")
             return
@@ -64,6 +68,12 @@ class TelegramClient:
             @client_any.on_message(filters.private)
             async def _handler(client: Any, message: Any) -> None:  # noqa: ANN401
                 await message_handler(message)
+
+            # Register callback query handler for inline button clicks
+            if callback_query_handler:
+                @client_any.on_callback_query()
+                async def _callback_handler(client: Any, callback_query: Any) -> None:  # noqa: ANN401
+                    await callback_query_handler(callback_query)
 
         await client_any.start()
         logger.info("bot_started")
