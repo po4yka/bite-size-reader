@@ -179,7 +179,10 @@ class ResponseFormatter:
             from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
             # Create button rows - each button gets its own row for better mobile UX
-            keyboard_buttons = [[InlineKeyboardButton(btn["text"], callback_data=btn["callback_data"])] for btn in buttons]
+            keyboard_buttons = [
+                [InlineKeyboardButton(btn["text"], callback_data=btn["callback_data"])]
+                for btn in buttons
+            ]
             return InlineKeyboardMarkup(keyboard_buttons)
         except ImportError:
             logger.warning("pyrogram_not_available_for_inline_keyboard")
@@ -1068,7 +1071,9 @@ class ResponseFormatter:
             logger.error("reply_document_failed", extra={"error": str(e)})
         await self.safe_reply(message, f"```json\n{pretty}\n```")
 
-    async def safe_reply(self, message: Any, text: str, *, parse_mode: str | None = None, reply_markup: Any = None) -> None:
+    async def safe_reply(
+        self, message: Any, text: str, *, parse_mode: str | None = None, reply_markup: Any = None
+    ) -> None:
         """Safely reply to a message with comprehensive security checks."""
         # Input validation
         if not text or not text.strip():
@@ -1117,7 +1122,10 @@ class ResponseFormatter:
                 kwargs["reply_markup"] = reply_markup
             await msg_any.reply_text(text, **kwargs)
             try:
-                logger.debug("reply_text_sent", extra={"length": len(text), "has_buttons": reply_markup is not None})
+                logger.debug(
+                    "reply_text_sent",
+                    extra={"length": len(text), "has_buttons": reply_markup is not None},
+                )
             except Exception:
                 pass
         except Exception as e:  # noqa: BLE001
@@ -1801,7 +1809,13 @@ class ResponseFormatter:
             pass
 
     async def send_language_detection_notification(
-        self, message: Any, detected: str | None, content_preview: str, *, url: str | None = None, silent: bool = False
+        self,
+        message: Any,
+        detected: str | None,
+        content_preview: str,
+        *,
+        url: str | None = None,
+        silent: bool = False,
     ) -> None:
         """Send language detection notification."""
         if silent:
@@ -1812,10 +1826,11 @@ class ResponseFormatter:
             if url:
                 try:
                     from urllib.parse import urlparse
+
                     parsed = urlparse(url)
-                    domain = parsed.netloc or parsed.path.split('/')[0] if parsed.path else url
+                    domain = parsed.netloc or parsed.path.split("/")[0] if parsed.path else url
                     # Clean up domain
-                    if domain.startswith('www.'):
+                    if domain.startswith("www."):
                         domain = domain[4:]
                     if domain and len(domain) <= 40:
                         url_line = f"🔗 Source: {domain}\n"
@@ -1899,10 +1914,11 @@ class ResponseFormatter:
             if url:
                 try:
                     from urllib.parse import urlparse
+
                     parsed = urlparse(url)
-                    domain = parsed.netloc or parsed.path.split('/')[0] if parsed.path else url
+                    domain = parsed.netloc or parsed.path.split("/")[0] if parsed.path else url
                     # Clean up domain
-                    if domain.startswith('www.'):
+                    if domain.startswith("www."):
                         domain = domain[4:]
                     if domain and len(domain) <= 40:
                         url_line = f"🔗 Source: {domain}\n"
@@ -2171,15 +2187,17 @@ class ResponseFormatter:
                 if error_detail:
                     message_parts.append(error_detail)
 
-                message_parts.extend([
-                    "",
-                    "💡 **Possible Solutions:**",
-                    "• Check your account balance/credits",
-                    "• Try again in a few moments",
-                    "• Contact support if the issue persists",
-                    "",
-                    f"🆔 Error ID: `{correlation_id}`",
-                ])
+                message_parts.extend(
+                    [
+                        "",
+                        "💡 **Possible Solutions:**",
+                        "• Check your account balance/credits",
+                        "• Try again in a few moments",
+                        "• Contact support if the issue persists",
+                        "",
+                        f"🆔 Error ID: `{correlation_id}`",
+                    ]
+                )
 
                 await self.safe_reply(message, "\n".join(message_parts))
             else:

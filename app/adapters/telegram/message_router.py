@@ -289,9 +289,7 @@ class MessageRouter:
             # Release concurrent slot on error
             await self._rate_limiter.release_concurrent_slot(uid)
 
-    async def handle_multi_confirm_response(
-        self, message: Any, uid: int, response: str
-    ) -> None:
+    async def handle_multi_confirm_response(self, message: Any, uid: int, response: str) -> None:
         """Handle multi-link confirmation response from button or text.
 
         Args:

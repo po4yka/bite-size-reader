@@ -71,6 +71,7 @@ class TelegramClient:
 
             # Register callback query handler for inline button clicks
             if callback_query_handler:
+
                 @client_any.on_callback_query()
                 async def _callback_handler(client: Any, callback_query: Any) -> None:  # noqa: ANN401
                     await callback_query_handler(callback_query)

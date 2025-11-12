@@ -126,7 +126,11 @@ class LLMResponseWorkflow:
             await self._persist_llm_call(llm, req_id, correlation_id)
 
             # Only send completion notifications for successful attempts or the last attempt
-            if notifications and notifications.completion and (llm.status == "ok" or is_last_attempt):
+            if (
+                notifications
+                and notifications.completion
+                and (llm.status == "ok" or is_last_attempt)
+            ):
                 await notifications.completion(llm, attempt)
 
             summary = await self._process_attempt(
