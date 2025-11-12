@@ -44,6 +44,9 @@ class ResponseFormatter:
         self.MIN_MESSAGE_INTERVAL_MS = 100  # Rate limiting
         self._last_message_time: float = 0.0
 
+        # Error notification deduplication
+        self._notified_error_ids: set[str] = set()
+
     def _is_safe_content(self, text: str) -> tuple[bool, str]:
         """Validate content for security issues."""
         import re
@@ -154,6 +157,36 @@ class ResponseFormatter:
 
         self._last_message_time = current_time
         return True
+
+    def create_inline_keyboard(self, buttons: list[dict[str, str]]) -> Any:
+        """Create an inline keyboard markup from button definitions.
+
+        Args:
+            buttons: List of button dictionaries with 'text' and 'callback_data' keys.
+                    Each button dict should have 'text' (display text) and 'callback_data' (data sent when clicked).
+
+        Returns:
+            InlineKeyboardMarkup object or None if pyrogram is not available.
+
+        Example:
+            buttons = [
+                {"text": "✅ Yes", "callback_data": "confirm_yes"},
+                {"text": "❌ No", "callback_data": "confirm_no"}
+            ]
+            keyboard = create_inline_keyboard(buttons)
+        """
+        try:
+            from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+
+            # Create button rows - each button gets its own row for better mobile UX
+            keyboard_buttons = [[InlineKeyboardButton(btn["text"], callback_data=btn["callback_data"])] for btn in buttons]
+            return InlineKeyboardMarkup(keyboard_buttons)
+        except ImportError:
+            logger.warning("pyrogram_not_available_for_inline_keyboard")
+            return None
+        except Exception as e:  # noqa: BLE001
+            logger.error("failed_to_create_inline_keyboard", extra={"error": str(e)})
+            return None
 
     async def send_help(self, message: Any) -> None:
         """Send help message to user."""
@@ -1035,7 +1068,7 @@ class ResponseFormatter:
             logger.error("reply_document_failed", extra={"error": str(e)})
         await self.safe_reply(message, f"```json\n{pretty}\n```")
 
-    async def safe_reply(self, message: Any, text: str, *, parse_mode: str | None = None) -> None:
+    async def safe_reply(self, message: Any, text: str, *, parse_mode: str | None = None, reply_markup: Any = None) -> None:
         """Safely reply to a message with comprehensive security checks."""
         # Input validation
         if not text or not text.strip():
@@ -1067,18 +1100,24 @@ class ResponseFormatter:
             logger.warning("safe_reply_rate_limited", extra={"text_length": len(text)})
 
         if self._safe_reply_func is not None:
-            kwargs = {"parse_mode": parse_mode} if parse_mode is not None else {}
+            kwargs = {}
+            if parse_mode is not None:
+                kwargs["parse_mode"] = parse_mode
+            if reply_markup is not None:
+                kwargs["reply_markup"] = reply_markup
             await self._safe_reply_func(message, text, **kwargs)
             return
 
         try:
             msg_any: Any = message
+            kwargs = {}
             if parse_mode:
-                await msg_any.reply_text(text, parse_mode=parse_mode)
-            else:
-                await msg_any.reply_text(text)
+                kwargs["parse_mode"] = parse_mode
+            if reply_markup:
+                kwargs["reply_markup"] = reply_markup
+            await msg_any.reply_text(text, **kwargs)
             try:
-                logger.debug("reply_text_sent", extra={"length": len(text)})
+                logger.debug("reply_text_sent", extra={"length": len(text), "has_buttons": reply_markup is not None})
             except Exception:
                 pass
         except Exception as e:  # noqa: BLE001
@@ -1613,16 +1652,25 @@ class ResponseFormatter:
             pass
 
     async def send_firecrawl_start_notification(
-        self, message: Any, *, silent: bool = False
+        self, message: Any, url: str | None = None, *, silent: bool = False
     ) -> None:
         """Send Firecrawl start notification."""
         if silent:
             return
 
         try:
+            # Format URL for display (truncate if too long)
+            url_display = ""
+            if url:
+                # Extract domain or truncate URL
+                if len(url) > 60:
+                    url_display = f"\n🔗 {url[:57]}..."
+                else:
+                    url_display = f"\n🔗 {url}"
+
             await self.safe_reply(
                 message,
-                "🕷️ **Firecrawl Extraction**\n"
+                f"🕷️ **Firecrawl Extraction**{url_display}\n"
                 "📡 Connecting to Firecrawl API...\n"
                 "⏱️ This may take 10-30 seconds\n"
                 "🔄 Processing pipeline active",
@@ -1753,15 +1801,31 @@ class ResponseFormatter:
             pass
 
     async def send_language_detection_notification(
-        self, message: Any, detected: str | None, content_preview: str, *, silent: bool = False
+        self, message: Any, detected: str | None, content_preview: str, *, url: str | None = None, silent: bool = False
     ) -> None:
         """Send language detection notification."""
         if silent:
             return
         try:
+            # Format URL for display (extract domain)
+            url_line = ""
+            if url:
+                try:
+                    from urllib.parse import urlparse
+                    parsed = urlparse(url)
+                    domain = parsed.netloc or parsed.path.split('/')[0] if parsed.path else url
+                    # Clean up domain
+                    if domain.startswith('www.'):
+                        domain = domain[4:]
+                    if domain and len(domain) <= 40:
+                        url_line = f"🔗 Source: {domain}\n"
+                except Exception:
+                    pass
+
             await self.safe_reply(
                 message,
                 f"🌍 **Language Detection**\n"
+                f"{url_line}"
                 f"📝 Detected: `{detected or 'unknown'}`\n"
                 f"📄 Content preview:\n"
                 f"```\n{content_preview}\n```\n"
@@ -1822,6 +1886,7 @@ class ResponseFormatter:
         content_len: int,
         structured_output_mode: str,
         *,
+        url: str | None = None,
         silent: bool = False,
     ) -> None:
         """Send LLM start notification."""
@@ -1829,9 +1894,33 @@ class ResponseFormatter:
             return
 
         try:
+            # Format URL for display (extract domain or truncate)
+            url_line = ""
+            if url:
+                try:
+                    from urllib.parse import urlparse
+                    parsed = urlparse(url)
+                    domain = parsed.netloc or parsed.path.split('/')[0] if parsed.path else url
+                    # Clean up domain
+                    if domain.startswith('www.'):
+                        domain = domain[4:]
+                    if domain and len(domain) <= 40:
+                        url_line = f"🔗 Source: {domain}\n"
+                    elif len(url) <= 50:
+                        url_line = f"🔗 {url}\n"
+                    else:
+                        url_line = f"🔗 {url[:47]}...\n"
+                except Exception:
+                    # Fallback to simple truncation
+                    if len(url) <= 50:
+                        url_line = f"🔗 {url}\n"
+                    else:
+                        url_line = f"🔗 {url[:47]}...\n"
+
             await self.safe_reply(
                 message,
                 f"🤖 **AI Analysis Starting**\n"
+                f"{url_line}"
                 f"🧠 Model: `{model}`\n"
                 f"📊 Content: {content_len:,} characters\n"
                 f"🔧 Mode: {structured_output_mode.upper()} with smart fallbacks\n"
@@ -1995,6 +2084,14 @@ class ResponseFormatter:
         details: str | None = None,
     ) -> None:
         """Send error notification with rich formatting."""
+        # Deduplication: check if we've already sent a notification for this error ID
+        if correlation_id and correlation_id in self._notified_error_ids:
+            return
+
+        # Mark this error ID as notified
+        if correlation_id:
+            self._notified_error_ids.add(correlation_id)
+
         try:
             if error_type == "firecrawl_error":
                 details_block = f"\n\n{details}" if details else ""
@@ -2035,20 +2132,56 @@ class ResponseFormatter:
                         f"Invalid summary format. Error ID: {correlation_id}{detail_block}",
                     )
                 else:
-                    await self.safe_reply(
-                        message,
-                        f"❌ **Processing Failed**\n"
-                        f"🚨 Invalid summary format despite smart fallbacks{detail_block}\n"
+                    message_parts = [
+                        "❌ **Processing Failed**",
+                        f"🚨 Invalid summary format despite smart fallbacks{detail_block}",
+                        "",
+                        "💡 **What happened:**",
+                        "• The AI models returned data that couldn't be processed",
+                        "• All automatic repair attempts were unsuccessful",
+                        "",
+                        "💡 **Try:**",
+                        "• Submit the URL again",
+                        "• Try a different article from the same source",
+                        "",
                         f"🆔 Error ID: `{correlation_id}`",
-                    )
+                    ]
+                    await self.safe_reply(message, "\n".join(message_parts))
             elif error_type == "llm_error":
-                detail_block = f"\n🔍 Provider response: {details}" if details else ""
-                await self.safe_reply(
-                    message,
-                    f"❌ **Processing Failed**\n"
-                    f"🚨 LLM error despite smart fallbacks{detail_block}\n"
+                # Parse details to extract models tried if present
+                models_info = ""
+                error_info = details or ""
+
+                if "Tried" in error_info and "model(s):" in error_info:
+                    # Extract models and error details
+                    lines = error_info.split("\n")
+                    models_info = lines[0] if lines else ""
+                    error_detail = "\n".join(lines[1:]) if len(lines) > 1 else ""
+                else:
+                    error_detail = f"\n🔍 Provider response: {details}" if details else ""
+
+                message_parts = [
+                    "❌ **Processing Failed**",
+                    "🚨 All AI models failed despite automatic fallbacks",
+                ]
+
+                if models_info:
+                    message_parts.append(f"📊 {models_info}")
+
+                if error_detail:
+                    message_parts.append(error_detail)
+
+                message_parts.extend([
+                    "",
+                    "💡 **Possible Solutions:**",
+                    "• Check your account balance/credits",
+                    "• Try again in a few moments",
+                    "• Contact support if the issue persists",
+                    "",
                     f"🆔 Error ID: `{correlation_id}`",
-                )
+                ])
+
+                await self.safe_reply(message, "\n".join(message_parts))
             else:
                 # Generic error
                 await self.safe_reply(

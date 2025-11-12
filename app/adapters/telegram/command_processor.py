@@ -588,8 +588,14 @@ class CommandProcessor:
             pass
 
         if len(urls) > 1:
+            # Create inline keyboard buttons for confirmation
+            buttons = [
+                {"text": "✅ Yes", "callback_data": "multi_confirm_yes"},
+                {"text": "❌ No", "callback_data": "multi_confirm_no"},
+            ]
+            keyboard = self.response_formatter.create_inline_keyboard(buttons)
             await self.response_formatter.safe_reply(
-                message, f"Process {len(urls)} links? (yes/no)"
+                message, f"Process {len(urls)} links?", reply_markup=keyboard
             )
             logger.debug("awaiting_multi_confirm", extra={"uid": uid, "count": len(urls)})
             if interaction_id:

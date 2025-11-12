@@ -192,7 +192,10 @@ class TelegramBot:
             )
 
         try:
-            await self.telegram_client.start(self.message_handler.handle_message)
+            await self.telegram_client.start(
+                self.message_handler.handle_message,
+                self.message_handler.handle_callback_query,
+            )
         finally:
             if backup_task is not None:
                 backup_task.cancel()

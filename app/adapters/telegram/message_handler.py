@@ -81,6 +81,54 @@ class MessageHandler:
         """Main message handling entry point."""
         await self.message_router.route_message(message)
 
+    async def handle_callback_query(self, callback_query: Any) -> None:
+        """Handle inline button callback queries."""
+        try:
+            # Extract callback data and user info
+            data = getattr(callback_query, "data", None)
+            from_user = getattr(callback_query, "from_user", None)
+            message = getattr(callback_query, "message", None)
+
+            if not data or not from_user or not message:
+                logger.warning("invalid_callback_query", extra={"has_data": data is not None})
+                return
+
+            uid = from_user.id
+            callback_data = data.decode() if isinstance(data, bytes) else str(data)
+
+            logger.info(
+                "callback_query_received",
+                extra={"uid": uid, "data": callback_data},
+            )
+
+            # Answer the callback query to remove the loading state
+            try:
+                await callback_query.answer()
+            except Exception as e:  # noqa: BLE001
+                logger.warning("callback_answer_failed", extra={"error": str(e)})
+
+            # Handle multi-link confirmation callbacks
+            if callback_data == "multi_confirm_yes":
+                await self._handle_multi_confirm_yes(message, uid)
+            elif callback_data == "multi_confirm_no":
+                await self._handle_multi_confirm_no(message, uid)
+            else:
+                logger.warning("unknown_callback_data", extra={"data": callback_data})
+
+        except Exception as e:  # noqa: BLE001
+            logger.error("callback_query_handler_failed", extra={"error": str(e)})
+
+    async def _handle_multi_confirm_yes(self, message: Any, uid: int) -> None:
+        """Handle 'Yes' confirmation for multi-link processing."""
+        # Simulate typing "yes" text message to trigger existing flow
+        # This reuses the existing multi-link confirmation logic
+        await self.message_router.handle_multi_confirm_response(message, uid, "yes")
+
+    async def _handle_multi_confirm_no(self, message: Any, uid: int) -> None:
+        """Handle 'No' confirmation for multi-link processing."""
+        # Simulate typing "no" text message to trigger existing flow
+        await self.message_router.handle_multi_confirm_response(message, uid, "no")
+
     def _audit(self, level: str, event: str, details: dict) -> None:
         """Audit log helper."""
         try:
