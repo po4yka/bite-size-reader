@@ -111,7 +111,13 @@ class LLMResponseWorkflow:
         if not requests:
             raise ValueError("requests must include at least one attempt")
 
-        for attempt in requests:
+        # Track all failed attempts for final error reporting
+        failed_attempts: list[tuple[Any, LLMRequestConfig]] = []
+        total_attempts = len(requests)
+
+        for attempt_index, attempt in enumerate(requests):
+            is_last_attempt = attempt_index == total_attempts - 1
+
             llm = await self._invoke_llm(attempt, req_id)
 
             if on_attempt is not None:
@@ -119,7 +125,8 @@ class LLMResponseWorkflow:
 
             await self._persist_llm_call(llm, req_id, correlation_id)
 
-            if notifications and notifications.completion:
+            # Only send completion notifications for successful attempts or the last attempt
+            if notifications and notifications.completion and (llm.status == "ok" or is_last_attempt):
                 await notifications.completion(llm, attempt)
 
             summary = await self._process_attempt(
@@ -135,17 +142,25 @@ class LLMResponseWorkflow:
                 ensure_summary=ensure_summary,
                 on_success=on_success,
                 required_summary_fields=required_summary_fields,
+                is_last_attempt=is_last_attempt,
+                failed_attempts=failed_attempts,
             )
 
             if summary is not None:
                 return summary
 
-        await self._handle_parsing_failure(
+            # Track failed attempt for final error reporting
+            if llm.status != "ok":
+                failed_attempts.append((llm, attempt))
+
+        # All attempts failed - send consolidated error notification
+        await self._handle_all_attempts_failed(
             message,
             req_id,
             correlation_id,
             interaction_config,
             notifications,
+            failed_attempts,
         )
         return None
 
@@ -201,6 +216,8 @@ class LLMResponseWorkflow:
         ensure_summary: Callable[[dict[str, Any]], Awaitable[dict[str, Any]]] | None,
         on_success: Callable[[dict[str, Any], Any], Awaitable[None]] | None,
         required_summary_fields: Sequence[str],
+        is_last_attempt: bool = False,
+        failed_attempts: list[tuple[Any, LLMRequestConfig]] | None = None,
     ) -> dict[str, Any] | None:
         if llm.status != "ok":
             salvage = None
@@ -218,14 +235,21 @@ class LLMResponseWorkflow:
                     on_success,
                 )
 
-            await self._handle_llm_error(
-                message,
-                llm,
-                req_id,
-                correlation_id,
-                interaction_config,
-                notifications,
-            )
+            # Only handle LLM error immediately if this is the last attempt
+            # Otherwise, we'll batch all errors and report once at the end
+            if is_last_attempt:
+                await self._handle_llm_error(
+                    message,
+                    llm,
+                    req_id,
+                    correlation_id,
+                    interaction_config,
+                    notifications,
+                    is_final_error=True,
+                )
+            else:
+                # Just update database status, don't send notifications yet
+                await self.db.async_update_request_status(req_id, "error")
             return None
 
         parse_result = parse_summary_response(llm.response_json, llm.response_text)
@@ -460,6 +484,7 @@ class LLMResponseWorkflow:
         correlation_id: str | None,
         interaction_config: LLMInteractionConfig,
         notifications: LLMWorkflowNotifications | None,
+        is_final_error: bool = False,
     ) -> None:
         await self.db.async_update_request_status(req_id, "error")
 
@@ -501,7 +526,8 @@ class LLMResponseWorkflow:
         except Exception:
             pass
 
-        if notifications and notifications.llm_error:
+        # Only send notifications if this is the final error
+        if is_final_error and notifications and notifications.llm_error:
             try:
                 await notifications.llm_error(llm, error_details)
             except Exception:
@@ -579,6 +605,102 @@ class LLMResponseWorkflow:
             except Exception as exc:  # noqa: BLE001
                 logger.error(
                     "interaction_parsing_update_failed",
+                    extra={"cid": correlation_id, "error": str(exc)},
+                )
+
+    async def _handle_all_attempts_failed(
+        self,
+        message: Any,
+        req_id: int,
+        correlation_id: str | None,
+        interaction_config: LLMInteractionConfig,
+        notifications: LLMWorkflowNotifications | None,
+        failed_attempts: list[tuple[Any, LLMRequestConfig]],
+    ) -> None:
+        """Handle the case when all LLM attempts have failed."""
+        await self.db.async_update_request_status(req_id, "error")
+
+        # Collect error details from all failed attempts
+        error_details_list: list[str] = []
+        models_tried: list[str] = []
+
+        for llm, config in failed_attempts:
+            model_name = config.model_override or llm.model or "unknown"
+            models_tried.append(model_name)
+
+            context = getattr(llm, "error_context", None) or {}
+
+            # Build error parts for this attempt
+            error_parts: list[str] = []
+            status_code = context.get("status_code") if isinstance(context, dict) else None
+            if status_code is not None:
+                error_parts.append(f"HTTP {status_code}")
+
+            message_text = context.get("message") if isinstance(context, dict) else None
+            if message_text:
+                error_parts.append(str(message_text))
+
+            if llm.error_text and llm.error_text not in error_parts:
+                error_parts.append(str(llm.error_text))
+
+            if error_parts:
+                error_details_list.append(" | ".join(error_parts))
+
+        # Use the most recent error details
+        final_error_details = error_details_list[-1] if error_details_list else None
+
+        # Build comprehensive error message
+        comprehensive_details = f"Tried {len(failed_attempts)} model(s): {', '.join(models_tried)}"
+        if final_error_details:
+            comprehensive_details += f"\n🔍 Last error: {final_error_details}"
+
+        logger.error(
+            "all_llm_attempts_failed",
+            extra={
+                "error": final_error_details,
+                "cid": correlation_id,
+                "models_tried": models_tried,
+                "total_attempts": len(failed_attempts),
+            },
+        )
+
+        try:
+            self._audit(
+                "ERROR",
+                "all_llm_attempts_failed",
+                {
+                    "request_id": req_id,
+                    "cid": correlation_id,
+                    "models_tried": models_tried,
+                    "error": final_error_details,
+                },
+            )
+        except Exception:
+            pass
+
+        # Send a single consolidated error notification
+        if notifications and notifications.llm_error:
+            try:
+                await notifications.llm_error(
+                    failed_attempts[-1][0] if failed_attempts else None,
+                    comprehensive_details,
+                )
+            except Exception:
+                pass
+
+        if interaction_config.interaction_id and interaction_config.llm_error_builder:
+            try:
+                last_llm = failed_attempts[-1][0] if failed_attempts else None
+                kwargs = interaction_config.llm_error_builder(last_llm, comprehensive_details)
+                await async_safe_update_user_interaction(
+                    self.db,
+                    interaction_id=interaction_config.interaction_id,
+                    logger_=logger,
+                    **kwargs,
+                )
+            except Exception as exc:  # noqa: BLE001
+                logger.error(
+                    "interaction_error_update_failed",
                     extra={"cid": correlation_id, "error": str(exc)},
                 )
 

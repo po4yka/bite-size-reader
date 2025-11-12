@@ -44,6 +44,9 @@ class ResponseFormatter:
         self.MIN_MESSAGE_INTERVAL_MS = 100  # Rate limiting
         self._last_message_time: float = 0.0
 
+        # Error notification deduplication
+        self._notified_error_ids: set[str] = set()
+
     def _is_safe_content(self, text: str) -> tuple[bool, str]:
         """Validate content for security issues."""
         import re
@@ -1995,6 +1998,14 @@ class ResponseFormatter:
         details: str | None = None,
     ) -> None:
         """Send error notification with rich formatting."""
+        # Deduplication: check if we've already sent a notification for this error ID
+        if correlation_id and correlation_id in self._notified_error_ids:
+            return
+
+        # Mark this error ID as notified
+        if correlation_id:
+            self._notified_error_ids.add(correlation_id)
+
         try:
             if error_type == "firecrawl_error":
                 details_block = f"\n\n{details}" if details else ""
@@ -2035,20 +2046,56 @@ class ResponseFormatter:
                         f"Invalid summary format. Error ID: {correlation_id}{detail_block}",
                     )
                 else:
-                    await self.safe_reply(
-                        message,
-                        f"❌ **Processing Failed**\n"
-                        f"🚨 Invalid summary format despite smart fallbacks{detail_block}\n"
+                    message_parts = [
+                        "❌ **Processing Failed**",
+                        f"🚨 Invalid summary format despite smart fallbacks{detail_block}",
+                        "",
+                        "💡 **What happened:**",
+                        "• The AI models returned data that couldn't be processed",
+                        "• All automatic repair attempts were unsuccessful",
+                        "",
+                        "💡 **Try:**",
+                        "• Submit the URL again",
+                        "• Try a different article from the same source",
+                        "",
                         f"🆔 Error ID: `{correlation_id}`",
-                    )
+                    ]
+                    await self.safe_reply(message, "\n".join(message_parts))
             elif error_type == "llm_error":
-                detail_block = f"\n🔍 Provider response: {details}" if details else ""
-                await self.safe_reply(
-                    message,
-                    f"❌ **Processing Failed**\n"
-                    f"🚨 LLM error despite smart fallbacks{detail_block}\n"
+                # Parse details to extract models tried if present
+                models_info = ""
+                error_info = details or ""
+
+                if "Tried" in error_info and "model(s):" in error_info:
+                    # Extract models and error details
+                    lines = error_info.split("\n")
+                    models_info = lines[0] if lines else ""
+                    error_detail = "\n".join(lines[1:]) if len(lines) > 1 else ""
+                else:
+                    error_detail = f"\n🔍 Provider response: {details}" if details else ""
+
+                message_parts = [
+                    "❌ **Processing Failed**",
+                    "🚨 All AI models failed despite automatic fallbacks",
+                ]
+
+                if models_info:
+                    message_parts.append(f"📊 {models_info}")
+
+                if error_detail:
+                    message_parts.append(error_detail)
+
+                message_parts.extend([
+                    "",
+                    "💡 **Possible Solutions:**",
+                    "• Check your account balance/credits",
+                    "• Try again in a few moments",
+                    "• Contact support if the issue persists",
+                    "",
                     f"🆔 Error ID: `{correlation_id}`",
-                )
+                ])
+
+                await self.safe_reply(message, "\n".join(message_parts))
             else:
                 # Generic error
                 await self.safe_reply(
