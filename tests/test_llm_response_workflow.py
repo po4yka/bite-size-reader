@@ -178,7 +178,8 @@ class LLMResponseWorkflowTests(unittest.IsolatedAsyncioTestCase):
         self.db.async_upsert_summary.assert_not_awaited()
         self.db.async_update_request_status.assert_awaited_with(303, "error")
         self.db.async_insert_llm_call.assert_awaited_once()
-        self.llm_error_mock.assert_awaited_once()
+        # llm_error callback is called twice: once for the error, once for all attempts failed
+        self.assertEqual(self.llm_error_mock.await_count, 2)
 
     def _llm_response(
         self,
