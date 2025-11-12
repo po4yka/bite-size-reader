@@ -137,6 +137,7 @@ class LLMSummarizer:
         correlation_id: str | None = None,
         interaction_id: int | None = None,
         *,
+        url: str | None = None,
         silent: bool = False,
     ) -> dict[str, Any] | None:
         """Summarize content using LLM and return shaped summary."""
@@ -164,6 +165,7 @@ class LLMSummarizer:
             self.cfg.openrouter.model,
             len(content_text),
             self.cfg.openrouter.structured_output_mode,
+            url=url,
             silent=silent,
         )
 

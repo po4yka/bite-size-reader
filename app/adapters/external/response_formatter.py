@@ -1652,16 +1652,25 @@ class ResponseFormatter:
             pass
 
     async def send_firecrawl_start_notification(
-        self, message: Any, *, silent: bool = False
+        self, message: Any, url: str | None = None, *, silent: bool = False
     ) -> None:
         """Send Firecrawl start notification."""
         if silent:
             return
 
         try:
+            # Format URL for display (truncate if too long)
+            url_display = ""
+            if url:
+                # Extract domain or truncate URL
+                if len(url) > 60:
+                    url_display = f"\n🔗 {url[:57]}..."
+                else:
+                    url_display = f"\n🔗 {url}"
+
             await self.safe_reply(
                 message,
-                "🕷️ **Firecrawl Extraction**\n"
+                f"🕷️ **Firecrawl Extraction**{url_display}\n"
                 "📡 Connecting to Firecrawl API...\n"
                 "⏱️ This may take 10-30 seconds\n"
                 "🔄 Processing pipeline active",
@@ -1792,15 +1801,31 @@ class ResponseFormatter:
             pass
 
     async def send_language_detection_notification(
-        self, message: Any, detected: str | None, content_preview: str, *, silent: bool = False
+        self, message: Any, detected: str | None, content_preview: str, *, url: str | None = None, silent: bool = False
     ) -> None:
         """Send language detection notification."""
         if silent:
             return
         try:
+            # Format URL for display (extract domain)
+            url_line = ""
+            if url:
+                try:
+                    from urllib.parse import urlparse
+                    parsed = urlparse(url)
+                    domain = parsed.netloc or parsed.path.split('/')[0] if parsed.path else url
+                    # Clean up domain
+                    if domain.startswith('www.'):
+                        domain = domain[4:]
+                    if domain and len(domain) <= 40:
+                        url_line = f"🔗 Source: {domain}\n"
+                except Exception:
+                    pass
+
             await self.safe_reply(
                 message,
                 f"🌍 **Language Detection**\n"
+                f"{url_line}"
                 f"📝 Detected: `{detected or 'unknown'}`\n"
                 f"📄 Content preview:\n"
                 f"```\n{content_preview}\n```\n"
@@ -1861,6 +1886,7 @@ class ResponseFormatter:
         content_len: int,
         structured_output_mode: str,
         *,
+        url: str | None = None,
         silent: bool = False,
     ) -> None:
         """Send LLM start notification."""
@@ -1868,9 +1894,33 @@ class ResponseFormatter:
             return
 
         try:
+            # Format URL for display (extract domain or truncate)
+            url_line = ""
+            if url:
+                try:
+                    from urllib.parse import urlparse
+                    parsed = urlparse(url)
+                    domain = parsed.netloc or parsed.path.split('/')[0] if parsed.path else url
+                    # Clean up domain
+                    if domain.startswith('www.'):
+                        domain = domain[4:]
+                    if domain and len(domain) <= 40:
+                        url_line = f"🔗 Source: {domain}\n"
+                    elif len(url) <= 50:
+                        url_line = f"🔗 {url}\n"
+                    else:
+                        url_line = f"🔗 {url[:47]}...\n"
+                except Exception:
+                    # Fallback to simple truncation
+                    if len(url) <= 50:
+                        url_line = f"🔗 {url}\n"
+                    else:
+                        url_line = f"🔗 {url[:47]}...\n"
+
             await self.safe_reply(
                 message,
                 f"🤖 **AI Analysis Starting**\n"
+                f"{url_line}"
                 f"🧠 Model: `{model}`\n"
                 f"📊 Content: {content_len:,} characters\n"
                 f"🔧 Mode: {structured_output_mode.upper()} with smart fallbacks\n"

@@ -141,7 +141,7 @@ class URLProcessor:
                     content_text[:150] + "..." if len(content_text) > 150 else content_text
                 )
                 await self.response_formatter.send_language_detection_notification(
-                    message, detected, content_preview, silent=silent
+                    message, detected, content_preview, url=url_text, silent=silent
                 )
 
             # Check if content should be chunked
@@ -235,6 +235,7 @@ class URLProcessor:
                 max_chars,
                 correlation_id,
                 interaction_id,
+                url=url_text,
                 silent=silent,
             )
 

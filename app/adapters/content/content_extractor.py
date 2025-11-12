@@ -353,7 +353,7 @@ class ContentExtractor:
     ) -> tuple[str, str]:
         """Perform new Firecrawl extraction."""
         # Notify: starting Firecrawl with progress indicator
-        await self.response_formatter.send_firecrawl_start_notification(message, silent=silent)
+        await self.response_formatter.send_firecrawl_start_notification(message, url=url_text, silent=silent)
 
         async with self._sem():
             crawl = await self.firecrawl.scrape_markdown(url_text, request_id=req_id)
