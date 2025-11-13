@@ -8,7 +8,7 @@ import sys
 import uuid
 from typing import Any
 
-UTC = getattr(dt, "UTC", getattr(dt, "timezone").utc)
+UTC = getattr(dt, "UTC", dt.UTC)
 
 try:  # Optional: modern logging via loguru
     from loguru import logger as loguru_logger
@@ -183,6 +183,7 @@ def setup_json_logging(
         log_file: Optional log file path for persistent logging
         max_file_size: Maximum size per log file (loguru format)
         retention: Log retention period (loguru format)
+
     """
     lvl = getattr(logging, level.upper(), logging.INFO)
 
@@ -372,6 +373,7 @@ def truncate_log_content(content: str | None, max_length: int = 1000) -> str | N
 
     Returns:
         Truncated content with ellipsis if truncated, or original content if short enough
+
     """
     if not content:
         return content
@@ -395,8 +397,8 @@ def truncate_log_content(content: str | None, max_length: int = 1000) -> str | N
 
 # Export commonly used items
 __all__ = [
-    "setup_json_logging",
-    "generate_correlation_id",
-    "truncate_log_content",
     "EnhancedJsonFormatter",
+    "generate_correlation_id",
+    "setup_json_logging",
+    "truncate_log_content",
 ]

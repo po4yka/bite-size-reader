@@ -4,10 +4,8 @@ from __future__ import annotations
 
 import json
 import logging
-from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
-from app.config import AppConfig
 from app.core.async_utils import raise_if_cancelled
 from app.core.html_utils import chunk_sentences, split_sentences
 from app.core.lang import LANG_RU
@@ -15,8 +13,11 @@ from app.core.summary_aggregate import aggregate_chunk_summaries
 from app.core.summary_contract import validate_and_shape_summary
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from app.adapters.external.response_formatter import ResponseFormatter
     from app.adapters.openrouter.openrouter_client import OpenRouterClient
+    from app.config import AppConfig
 
 logger = logging.getLogger(__name__)
 
@@ -178,7 +179,6 @@ class ContentChunker:
                         chunk_summaries.append(shaped_chunk)
                     except Exception as exc:
                         raise_if_cancelled(exc)
-                        pass
 
         # Aggregate chunk summaries into final
         if chunk_summaries:
@@ -200,8 +200,7 @@ class ContentChunker:
                         "strict": True,
                     },
                 }
-            else:
-                return {"type": "json_object"}
+            return {"type": "json_object"}
         except Exception as exc:
             raise_if_cancelled(exc)
             # Fallback to basic JSON object mode

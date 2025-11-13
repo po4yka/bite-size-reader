@@ -38,6 +38,7 @@ class UserRateLimiter:
 
         Args:
             config: Rate limit configuration. Uses defaults if None.
+
         """
         self._config = config or RateLimitConfig()
         self._user_requests: dict[int, deque[float]] = defaultdict(deque)
@@ -57,6 +58,7 @@ class UserRateLimiter:
 
         Returns:
             Tuple of (allowed, error_message). If allowed is False, error_message explains why.
+
         """
         async with self._lock:
             now = time.time()
@@ -78,9 +80,8 @@ class UserRateLimiter:
                         False,
                         f"⏳ Rate limit cooldown active. Try again in {remaining} seconds.",
                     )
-                else:
-                    # Cooldown expired, remove it
-                    del self._user_cooldowns[user_id]
+                # Cooldown expired, remove it
+                del self._user_cooldowns[user_id]
 
             # Get user's request queue
             user_queue = self._user_requests[user_id]
@@ -169,6 +170,7 @@ class UserRateLimiter:
 
         Returns:
             True if slot acquired, False if limit exceeded
+
         """
         async with self._lock:
             concurrent_count = self._user_concurrent.get(user_id, 0)
@@ -195,6 +197,7 @@ class UserRateLimiter:
 
         Args:
             user_id: Telegram user ID
+
         """
         async with self._lock:
             if user_id in self._user_concurrent:
@@ -214,6 +217,7 @@ class UserRateLimiter:
 
         Returns:
             Dictionary with user's current status
+
         """
         async with self._lock:
             now = time.time()
@@ -245,6 +249,7 @@ class UserRateLimiter:
 
         Args:
             user_id: Telegram user ID
+
         """
         async with self._lock:
             if user_id in self._user_requests:
@@ -260,6 +265,7 @@ class UserRateLimiter:
 
         Returns:
             Number of users cleaned up
+
         """
         async with self._lock:
             now = time.time()

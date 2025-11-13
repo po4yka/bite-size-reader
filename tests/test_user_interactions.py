@@ -2,17 +2,19 @@ from __future__ import annotations
 
 import asyncio
 from types import SimpleNamespace
-from typing import cast
+from typing import TYPE_CHECKING, cast
 from unittest.mock import Mock
 
 from app.adapters.telegram.message_router import MessageRouter
-from app.adapters.telegram.url_handler import URLHandler
 from app.config import AppConfig, FirecrawlConfig, OpenRouterConfig, RuntimeConfig, TelegramConfig
 from app.db.database import Database
 from app.db.user_interactions import (
     async_safe_update_user_interaction,
     safe_update_user_interaction,
 )
+
+if TYPE_CHECKING:
+    from app.adapters.telegram.url_handler import URLHandler
 
 
 def _make_config() -> AppConfig:
@@ -27,7 +29,7 @@ def _make_config() -> AppConfig:
         openrouter=OpenRouterConfig(
             api_key="openrouter-key",
             model="test-model",
-            fallback_models=tuple(),
+            fallback_models=(),
             http_referer=None,
             x_title=None,
         ),
@@ -56,13 +58,13 @@ def test_message_router_logs_interaction(tmp_path) -> None:
         db=db,
         access_controller=Mock(),
         command_processor=Mock(),
-        url_handler=cast(URLHandler, SimpleNamespace(url_processor=Mock())),
+        url_handler=cast("URLHandler", SimpleNamespace(url_processor=Mock())),
         forward_processor=Mock(),
         response_formatter=Mock(),
         audit_func=lambda *args, **kwargs: None,
     )
 
-    interaction_id = router._log_user_interaction(  # noqa: SLF001
+    interaction_id = router._log_user_interaction(
         user_id=42,
         chat_id=99,
         message_id=7,

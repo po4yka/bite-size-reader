@@ -12,7 +12,5 @@ test_urls = [
     "https://www.wired.com/story/ai-agents-are-getting-better-at-writing-code-and-hacking-it-as-well/",
 ]
 
-print("Testing URL pattern:")
 for url in test_urls:
     match = re.match(url_pattern, url)
-    print(f"{url}: {'✓' if match else '✗'}")

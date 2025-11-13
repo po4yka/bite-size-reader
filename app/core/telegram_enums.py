@@ -10,4 +10,4 @@ from __future__ import annotations
 
 from app.models.telegram.telegram_enums import ChatType, MediaType, MessageEntityType
 
-__all__ = ["ChatType", "MessageEntityType", "MediaType"]
+__all__ = ["ChatType", "MediaType", "MessageEntityType"]

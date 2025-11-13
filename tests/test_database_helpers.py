@@ -5,6 +5,8 @@ import sqlite3
 import tempfile
 import unittest
 
+import pytest
+
 from app.db.database import Database
 
 
@@ -24,24 +26,24 @@ class TestDatabaseHelpers(unittest.TestCase):
 
         created = self.db.create_backup_copy(backup_path)
 
-        self.assertTrue(os.path.exists(created))
+        assert os.path.exists(created)
         with sqlite3.connect(created) as conn:
             row = conn.execute(
                 "SELECT name FROM sqlite_master WHERE type='table' AND name='requests'"
             ).fetchone()
-            self.assertIsNotNone(row)
+            assert row is not None
 
     def test_create_backup_copy_rejects_memory_db(self):
         mem_db = Database(":memory:")
         mem_db.migrate()
 
-        with self.assertRaises(ValueError):
+        with pytest.raises(ValueError):
             mem_db.create_backup_copy(os.path.join(self.tmp.name, "memory.db"))
 
     def test_create_backup_copy_requires_source_file(self):
         db = Database(os.path.join(self.tmp.name, "missing.db"))
 
-        with self.assertRaises(FileNotFoundError):
+        with pytest.raises(FileNotFoundError):
             db.create_backup_copy(os.path.join(self.tmp.name, "missing-backup.db"))
 
     def test_create_request_and_fetch_by_hash(self):
@@ -56,21 +58,21 @@ class TestDatabaseHelpers(unittest.TestCase):
             dedupe_hash="abc",
             route_version=1,
         )
-        self.assertIsInstance(rid, int)
+        assert isinstance(rid, int)
         row = self.db.get_request_by_dedupe_hash("abc")
-        self.assertIsNotNone(row)
-        self.assertEqual(row["id"], rid)
-        self.assertEqual(row["status"], "pending")
-        self.assertEqual(row["correlation_id"], "abc123")
+        assert row is not None
+        assert row["id"] == rid
+        assert row["status"] == "pending"
+        assert row["correlation_id"] == "abc123"
 
         # Update status and lang
         self.db.update_request_status(rid, "ok")
         self.db.update_request_lang_detected(rid, "en")
         self.db.update_request_correlation_id(rid, "zzz999")
         row2 = self.db.get_request_by_dedupe_hash("abc")
-        self.assertEqual(row2["status"], "ok")
-        self.assertEqual(row2["lang_detected"], "en")
-        self.assertEqual(row2["correlation_id"], "zzz999")
+        assert row2["status"] == "ok"
+        assert row2["lang_detected"] == "en"
+        assert row2["correlation_id"] == "zzz999"
 
     def test_create_request_handles_duplicate_hash_race(self):
         first_id = self.db.create_request(
@@ -97,18 +99,18 @@ class TestDatabaseHelpers(unittest.TestCase):
             route_version=1,
         )
 
-        self.assertEqual(first_id, second_id)
+        assert first_id == second_id
 
         row = self.db.get_request_by_dedupe_hash("shared-hash")
-        self.assertEqual(row["id"], first_id)
+        assert row["id"] == first_id
         # Latest correlation id should be persisted
-        self.assertEqual(row["correlation_id"], "cid-2")
+        assert row["correlation_id"] == "cid-2"
 
         # Only one record should exist
         count = self.db.fetchone(
             "SELECT COUNT(*) AS c FROM requests WHERE dedupe_hash = ?", ("shared-hash",)
         )
-        self.assertEqual(count["c"], 1)
+        assert count["c"] == 1
 
     def test_crawl_result_helpers(self):
         rid = self.db.create_request(
@@ -141,14 +143,14 @@ class TestDatabaseHelpers(unittest.TestCase):
             latency_ms=123,
             error_text=None,
         )
-        self.assertIsInstance(cid, int)
+        assert isinstance(cid, int)
         row = self.db.get_crawl_result_by_request(rid)
-        self.assertIsNotNone(row)
-        self.assertEqual(row["http_status"], 200)
-        self.assertEqual(row["content_markdown"], "# md")
-        self.assertEqual(row["correlation_id"], "fc-123")
-        self.assertTrue(row["firecrawl_success"])
-        self.assertIsNone(row["raw_response_json"])
+        assert row is not None
+        assert row["http_status"] == 200
+        assert row["content_markdown"] == "# md"
+        assert row["correlation_id"] == "fc-123"
+        assert row["firecrawl_success"]
+        assert row["raw_response_json"] is None
 
     def test_summary_upsert(self):
         rid = self.db.create_request(
@@ -160,22 +162,22 @@ class TestDatabaseHelpers(unittest.TestCase):
             route_version=1,
         )
         v1 = self.db.upsert_summary(request_id=rid, lang="en", json_payload={"a": 1})
-        self.assertEqual(v1, 1)
+        assert v1 == 1
         row = self.db.get_summary_by_request(rid)
-        self.assertIsNotNone(row)
-        self.assertEqual(row["version"], 1)
-        self.assertEqual(row["lang"], "en")
-        self.assertIsNone(row["insights_json"])
+        assert row is not None
+        assert row["version"] == 1
+        assert row["lang"] == "en"
+        assert row["insights_json"] is None
 
         v2 = self.db.upsert_summary(request_id=rid, lang="en", json_payload={"a": 2})
-        self.assertEqual(v2, 2)
+        assert v2 == 2
         row2 = self.db.get_summary_by_request(rid)
-        self.assertEqual(row2["version"], 2)
+        assert row2["version"] == 2
 
         insights_payload = {"topic_overview": "Context", "new_facts": []}
         self.db.update_summary_insights(rid, insights_payload)
         row3 = self.db.get_summary_by_request(rid)
-        self.assertEqual(row3["insights_json"], insights_payload)
+        assert row3["insights_json"] == insights_payload
 
     def test_insert_llm_and_telegram_and_audit(self):
         rid = self.db.create_request(
@@ -203,11 +205,11 @@ class TestDatabaseHelpers(unittest.TestCase):
             forward_date_ts=1700000001,
             telegram_raw_json={"k": "v"},
         )
-        self.assertIsInstance(mid, int)
+        assert isinstance(mid, int)
         row = self.db.fetchone("SELECT * FROM telegram_messages WHERE request_id = ?", (rid,))
-        self.assertIsNotNone(row)
-        self.assertEqual(row["media_type"], "photo")
-        self.assertEqual(row["chat_id"], 1)
+        assert row is not None
+        assert row["media_type"] == "photo"
+        assert row["chat_id"] == 1
 
         # LLM call
         lid = self.db.insert_llm_call(
@@ -229,28 +231,25 @@ class TestDatabaseHelpers(unittest.TestCase):
             structured_output_mode="json_schema",
             error_context_json={"status_code": 200},
         )
-        self.assertIsInstance(lid, int)
+        assert isinstance(lid, int)
         lrow = self.db.fetchone("SELECT * FROM llm_calls WHERE id = ?", (lid,))
-        self.assertIsNotNone(lrow)
-        self.assertEqual(lrow["status"], "ok")
-        self.assertEqual(lrow["tokens_completion"], 2)
-        self.assertEqual(lrow["structured_output_used"], 1)
-        self.assertEqual(lrow["structured_output_mode"], "json_schema")
-        self.assertEqual(json.loads(lrow["error_context_json"]), {"status_code": 200})
-        self.assertIsNone(lrow["response_text"])
-        self.assertIsNone(lrow["response_json"])
-        self.assertEqual(lrow["openrouter_response_text"], "{}")
-        self.assertEqual(
-            json.loads(lrow["openrouter_response_json"] or "{}"),
-            {"choices": []},
-        )
+        assert lrow is not None
+        assert lrow["status"] == "ok"
+        assert lrow["tokens_completion"] == 2
+        assert lrow["structured_output_used"] == 1
+        assert lrow["structured_output_mode"] == "json_schema"
+        assert json.loads(lrow["error_context_json"]) == {"status_code": 200}
+        assert lrow["response_text"] is None
+        assert lrow["response_json"] is None
+        assert lrow["openrouter_response_text"] == "{}"
+        assert json.loads(lrow["openrouter_response_json"] or "{}") == {"choices": []}
 
         # Audit
         aid = self.db.insert_audit_log(level="INFO", event="test", details_json={"x": 1})
-        self.assertIsInstance(aid, int)
+        assert isinstance(aid, int)
         arow = self.db.fetchone("SELECT * FROM audit_logs WHERE id = ?", (aid,))
-        self.assertIsNotNone(arow)
-        self.assertEqual(arow["level"], "INFO")
+        assert arow is not None
+        assert arow["level"] == "INFO"
 
     def test_verify_processing_integrity(self):
         base_summary = {
@@ -399,51 +398,51 @@ class TestDatabaseHelpers(unittest.TestCase):
 
         verification = self.db.verify_processing_integrity()
 
-        self.assertIn("overview", verification)
+        assert "overview" in verification
         posts = verification.get("posts")
-        self.assertIsInstance(posts, dict)
+        assert isinstance(posts, dict)
         overview = verification.get("overview")
-        self.assertIsInstance(overview, dict)
-        self.assertEqual(posts.get("checked"), 4)
-        self.assertEqual(posts.get("with_summary"), 3)
-        self.assertEqual(overview.get("total_requests"), 4)
-        self.assertEqual(overview.get("total_summaries"), 3)
+        assert isinstance(overview, dict)
+        assert posts.get("checked") == 4
+        assert posts.get("with_summary") == 3
+        assert overview.get("total_requests") == 4
+        assert overview.get("total_summaries") == 3
 
         missing_summary = posts.get("missing_summary") or []
-        self.assertEqual(len(missing_summary), 1)
-        self.assertEqual(missing_summary[0]["request_id"], rid_missing)
+        assert len(missing_summary) == 1
+        assert missing_summary[0]["request_id"] == rid_missing
 
         missing_fields = posts.get("missing_fields") or []
         bad_entries = [entry for entry in missing_fields if entry.get("request_id") == rid_bad]
-        self.assertTrue(bad_entries)
+        assert bad_entries
         bad_missing = bad_entries[0].get("missing") or []
-        self.assertIn("summary_250", bad_missing)
-        self.assertIn("summary_1000", bad_missing)
-        self.assertIn("tldr", bad_missing)
-        self.assertIn("metadata", bad_missing)
+        assert "summary_250" in bad_missing
+        assert "summary_1000" in bad_missing
+        assert "tldr" in bad_missing
+        assert "metadata" in bad_missing
 
         links_info = posts.get("links") or {}
-        self.assertEqual(links_info.get("total_links"), 2)
-        self.assertEqual(links_info.get("posts_with_links"), 4)
+        assert links_info.get("total_links") == 2
+        assert links_info.get("posts_with_links") == 4
         missing_links = links_info.get("missing_data") or []
         missing_map = {entry.get("request_id"): entry for entry in missing_links}
-        self.assertIn(rid_bad, missing_map)
-        self.assertEqual(missing_map[rid_bad].get("reason"), "absent_links_json")
-        self.assertIn(rid_missing, missing_map)
-        self.assertEqual(missing_map[rid_missing].get("reason"), "absent_links_json")
+        assert rid_bad in missing_map
+        assert missing_map[rid_bad].get("reason") == "absent_links_json"
+        assert rid_missing in missing_map
+        assert missing_map[rid_missing].get("reason") == "absent_links_json"
 
         reprocess_entries = posts.get("reprocess") or []
-        self.assertEqual(len(reprocess_entries), 2)
+        assert len(reprocess_entries) == 2
         reprocess_map = {
             entry.get("request_id"): set(entry.get("reasons") or []) for entry in reprocess_entries
         }
-        self.assertIn(rid_bad, reprocess_map)
-        self.assertIn("missing_fields", reprocess_map[rid_bad])
-        self.assertIn("missing_links", reprocess_map[rid_bad])
-        self.assertIn(rid_missing, reprocess_map)
-        self.assertIn("missing_summary", reprocess_map[rid_missing])
-        self.assertIn("missing_links", reprocess_map[rid_missing])
-        self.assertNotIn(rid_empty_links, reprocess_map)
+        assert rid_bad in reprocess_map
+        assert "missing_fields" in reprocess_map[rid_bad]
+        assert "missing_links" in reprocess_map[rid_bad]
+        assert rid_missing in reprocess_map
+        assert "missing_summary" in reprocess_map[rid_missing]
+        assert "missing_links" in reprocess_map[rid_missing]
+        assert rid_empty_links not in reprocess_map
 
     def test_insert_telegram_message_handles_duplicate_request(self):
         rid = self.db.create_request(
@@ -492,13 +491,13 @@ class TestDatabaseHelpers(unittest.TestCase):
             telegram_raw_json={"k": "v"},
         )
 
-        self.assertEqual(mid1, mid2)
+        assert mid1 == mid2
 
         row = self.db.fetchone("SELECT * FROM telegram_messages WHERE request_id = ?", (rid,))
-        self.assertIsNotNone(row)
+        assert row is not None
         # The original payload should remain intact
-        self.assertEqual(row["media_type"], "photo")
-        self.assertEqual(json.loads(row["media_file_ids_json"]), ["file_a"])
+        assert row["media_type"] == "photo"
+        assert json.loads(row["media_file_ids_json"]) == ["file_a"]
 
 
 if __name__ == "__main__":

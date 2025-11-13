@@ -30,7 +30,8 @@ class FakeMessage:
 
 class BoomBot(TelegramBot):
     async def _handle_url_flow(self, message, url_text: str, **_: object):
-        raise RuntimeError("boom")
+        msg = "boom"
+        raise RuntimeError(msg)
 
 
 def make_bot(tmp_path: str) -> BoomBot:
@@ -42,7 +43,7 @@ def make_bot(tmp_path: str) -> BoomBot:
         openrouter=OpenRouterConfig(
             api_key="y",
             model="m",
-            fallback_models=tuple(),
+            fallback_models=(),
             http_referer=None,
             x_title=None,
             max_tokens=None,
@@ -59,8 +60,8 @@ def make_bot(tmp_path: str) -> BoomBot:
     )
     from app.adapters import telegram_bot as tbmod
 
-    setattr(tbmod, "Client", object)
-    setattr(tbmod, "filters", None)
+    tbmod.Client = object
+    tbmod.filters = None
 
     # Mock the OpenRouter client to avoid API key validation
     with patch("app.adapters.telegram.telegram_bot.OpenRouterClient") as mock_openrouter:
@@ -74,7 +75,7 @@ class TestCommandErrors(unittest.IsolatedAsyncioTestCase):
             bot = make_bot(os.path.join(tmp, "app.db"))
             msg = FakeMessage("/summarize https://example.com")
             await bot._on_message(msg)
-            self.assertTrue(any("error" in r.lower() for r in msg._replies))
+            assert any("error" in r.lower() for r in msg._replies)
 
 
 if __name__ == "__main__":

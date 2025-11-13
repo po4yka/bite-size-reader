@@ -304,7 +304,7 @@ class TelegramMessage:
             )
 
         except Exception as e:
-            logger.error("Failed to parse Telegram message", extra={"error": str(e)})
+            logger.exception("Failed to parse Telegram message", extra={"error": str(e)})
             # Return minimal message object with best-effort user extraction
             from_user_data = getattr(message, "from_user", None)
             from_user = None
@@ -317,10 +317,10 @@ class TelegramMessage:
                             id=int(user_id),
                             is_bot=getattr(from_user_data, "is_bot", False),
                             first_name=getattr(from_user_data, "first_name", ""),
-                            last_name=getattr(from_user_data, "last_name"),
-                            username=getattr(from_user_data, "username"),
-                            language_code=getattr(from_user_data, "language_code"),
-                            is_premium=getattr(from_user_data, "is_premium"),
+                            last_name=from_user_data.last_name,
+                            username=from_user_data.username,
+                            language_code=from_user_data.language_code,
+                            is_premium=from_user_data.is_premium,
                             added_to_attachment_menu=getattr(
                                 from_user_data, "added_to_attachment_menu", None
                             ),
@@ -463,7 +463,7 @@ class TelegramMessage:
         """Get the effective entities (text entities or caption entities)."""
         if self.text and self.entities:
             return self.entities
-        elif self.caption and self.caption_entities:
+        if self.caption and self.caption_entities:
             return self.caption_entities
         return []
 
@@ -574,9 +574,8 @@ class TelegramMessage:
                 errors.append("Missing from_user.first_name")
 
         # Chat validation
-        if self.chat:
-            if not isinstance(self.chat.id, int):
-                errors.append("Invalid chat.id")
+        if self.chat and not isinstance(self.chat.id, int):
+            errors.append("Invalid chat.id")
 
         # Content validation
         has_valid_content = self.text or self.caption or self.has_media or self.photo_list

@@ -20,10 +20,10 @@ from app.adapters.content.llm_response_workflow import (  # noqa: E402
 
 
 class _DummySemaphore:
-    async def __aenter__(self) -> None:  # noqa: D401 - simple semaphore
+    async def __aenter__(self) -> None:
         return None
 
-    async def __aexit__(self, exc_type, exc, tb) -> None:  # noqa: D401 - simple semaphore
+    async def __aexit__(self, exc_type, exc, tb) -> None:
         return None
 
 
@@ -116,11 +116,11 @@ class LLMResponseWorkflowTests(unittest.IsolatedAsyncioTestCase):
                 notifications=self.notifications,
             )
 
-        self.assertIsNotNone(summary)
+        assert summary is not None
         self.db.async_upsert_summary.assert_awaited_once()
         _args, kwargs = self.db.async_upsert_summary.await_args
-        self.assertEqual(kwargs["request_id"], 101)
-        self.assertEqual(kwargs["lang"], "en")
+        assert kwargs["request_id"] == 101
+        assert kwargs["lang"] == "en"
         self.db.async_update_request_status.assert_awaited_once_with(101, "ok")
         self.db.async_insert_llm_call.assert_awaited_once()
         self.completion_mock.assert_awaited_once()
@@ -153,11 +153,11 @@ class LLMResponseWorkflowTests(unittest.IsolatedAsyncioTestCase):
                 notifications=self.notifications,
             )
 
-        self.assertIsNotNone(summary)
-        self.assertEqual(self.openrouter.chat.await_count, 2)
+        assert summary is not None
+        assert self.openrouter.chat.await_count == 2
         self.repair_failure_mock.assert_not_awaited()
         self.db.async_upsert_summary.assert_awaited_once()
-        self.assertGreaterEqual(self.db.async_insert_llm_call.await_count, 1)
+        assert self.db.async_insert_llm_call.await_count >= 1
 
     async def test_execute_handles_llm_error(self) -> None:
         llm_error = self._llm_response({}, status="error", error_text="boom", text=None)
@@ -174,12 +174,12 @@ class LLMResponseWorkflowTests(unittest.IsolatedAsyncioTestCase):
             notifications=self.notifications,
         )
 
-        self.assertIsNone(summary)
+        assert summary is None
         self.db.async_upsert_summary.assert_not_awaited()
         self.db.async_update_request_status.assert_awaited_with(303, "error")
         self.db.async_insert_llm_call.assert_awaited_once()
         # llm_error callback is called twice: once for the error, once for all attempts failed
-        self.assertEqual(self.llm_error_mock.await_count, 2)
+        assert self.llm_error_mock.await_count == 2
 
     def _llm_response(
         self,

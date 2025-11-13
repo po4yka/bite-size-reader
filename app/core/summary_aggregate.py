@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 from typing import Any
 
 
@@ -124,10 +125,8 @@ def aggregate_chunk_summaries(summaries: list[dict[str, Any]]) -> dict[str, Any]
             key_ideas.extend([str(x) for x in (s.get("key_ideas") or [])])
             topic_tags.extend([str(x) for x in (s.get("topic_tags") or [])])
             entities = _merge_entities(entities, s.get("entities") or {})
-            try:
+            with contextlib.suppress(Exception):
                 ert_sum += int(s.get("estimated_reading_time_min") or 0)
-            except Exception:
-                pass
             key_stats = _merge_key_stats(key_stats, s.get("key_stats") or [])
             answered.extend([str(x) for x in (s.get("answered_questions") or [])])
             seo_keywords.extend([str(x) for x in (s.get("seo_keywords") or [])])

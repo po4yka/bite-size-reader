@@ -10,13 +10,13 @@ from app.adapters.telegram.command_processor import CommandProcessor
 from app.adapters.telegram.message_router import MessageRouter
 from app.adapters.telegram.task_manager import UserTaskManager
 from app.adapters.telegram.url_handler import URLHandler
-from app.config import AppConfig
-from app.db.database import Database
 
 if TYPE_CHECKING:
     from app.adapters.content.url_processor import URLProcessor
     from app.adapters.external.response_formatter import ResponseFormatter
     from app.adapters.telegram.forward_processor import ForwardProcessor
+    from app.config import AppConfig
+    from app.db.database import Database
     from app.services.topic_search import LocalTopicSearchService, TopicSearchService
 
 logger = logging.getLogger(__name__)
@@ -34,6 +34,7 @@ class MessageHandler:
         forward_processor: ForwardProcessor,
         topic_searcher: TopicSearchService | None = None,
         local_searcher: LocalTopicSearchService | None = None,
+        container: Any | None = None,
     ) -> None:
         self.cfg = cfg
         self.db = db
@@ -63,6 +64,7 @@ class MessageHandler:
             topic_searcher=topic_searcher,
             local_searcher=local_searcher,
             task_manager=self.task_manager,
+            container=container,
         )
 
         self.message_router = MessageRouter(
@@ -104,7 +106,7 @@ class MessageHandler:
             # Answer the callback query to remove the loading state
             try:
                 await callback_query.answer()
-            except Exception as e:  # noqa: BLE001
+            except Exception as e:
                 logger.warning("callback_answer_failed", extra={"error": str(e)})
 
             # Handle multi-link confirmation callbacks
@@ -115,8 +117,8 @@ class MessageHandler:
             else:
                 logger.warning("unknown_callback_data", extra={"data": callback_data})
 
-        except Exception as e:  # noqa: BLE001
-            logger.error("callback_query_handler_failed", extra={"error": str(e)})
+        except Exception as e:
+            logger.exception("callback_query_handler_failed", extra={"error": str(e)})
 
     async def _handle_multi_confirm_yes(self, message: Any, uid: int) -> None:
         """Handle 'Yes' confirmation for multi-link processing."""
@@ -133,5 +135,5 @@ class MessageHandler:
         """Audit log helper."""
         try:
             self.db.insert_audit_log(level=level, event=event, details_json=details)
-        except Exception as e:  # noqa: BLE001
-            logger.error("audit_persist_failed", extra={"error": str(e), "event": event})
+        except Exception as e:
+            logger.exception("audit_persist_failed", extra={"error": str(e), "event": event})

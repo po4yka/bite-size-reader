@@ -42,6 +42,7 @@ class CommandProcessor:
         topic_searcher: TopicSearchService | None = None,
         local_searcher: LocalTopicSearchService | None = None,
         task_manager: UserTaskManager | None = None,
+        container: Any | None = None,
     ) -> None:
         self.cfg = cfg
         self.response_formatter = response_formatter
@@ -52,6 +53,7 @@ class CommandProcessor:
         self.topic_searcher = topic_searcher
         self.local_searcher = local_searcher
         self._task_manager = task_manager
+        self._container = container
 
     @staticmethod
     def _maybe_load_json(payload: Any) -> Any:
@@ -430,7 +432,46 @@ class CommandProcessor:
             return
 
         try:
-            results = await searcher.find_articles(topic, correlation_id=correlation_id)
+            # Use hexagonal architecture use case for local search if available
+            if (
+                self._container is not None
+                and formatter_source == "library"
+                and isinstance(searcher, LocalTopicSearchService)
+            ):
+                from app.application.use_cases.search_topics import SearchTopicsQuery
+
+                # Use the use case for local topic search
+                query = SearchTopicsQuery(
+                    topic=topic,
+                    user_id=uid,
+                    max_results=getattr(searcher, "max_results", 5),
+                    correlation_id=correlation_id,
+                )
+                use_case = self._container.search_topics_use_case()
+                if use_case is not None:
+                    topic_articles = await use_case.execute(query)
+
+                    # Convert TopicArticleDTO to format expected by formatter
+                    results = []
+                    for article in topic_articles:
+                        results.append(
+                            {
+                                "request_id": article.request_id,
+                                "url": article.url,
+                                "title": article.title,
+                                "created_at": article.created_at.isoformat()
+                                if article.created_at
+                                else None,
+                                "relevance_score": article.relevance_score,
+                                "matched_topics": article.matched_topics,
+                            }
+                        )
+                else:
+                    # Fallback if use case unavailable
+                    results = await searcher.find_articles(topic, correlation_id=correlation_id)  # type: ignore[assignment]
+            else:
+                # Use the service directly for online search or if container unavailable
+                results = await searcher.find_articles(topic, correlation_id=correlation_id)  # type: ignore[assignment]
         except ValueError:
             invalid = invalid_message.format(cmd=command)
             await self.response_formatter.safe_reply(message, invalid)
@@ -474,7 +515,10 @@ class CommandProcessor:
             return
 
         await self.response_formatter.send_topic_search_results(
-            message, topic=topic, articles=results, source=formatter_source
+            message,
+            topic=topic,
+            articles=results,  # type: ignore[arg-type]
+            source=formatter_source,
         )
         if interaction_id:
             await async_safe_update_user_interaction(
@@ -661,7 +705,9 @@ class CommandProcessor:
         multi_cancelled = False
         active_cancelled = 0
         if self.url_handler is not None:
-            awaiting_cancelled, multi_cancelled = self.url_handler.cancel_pending_requests(uid)
+            awaiting_cancelled, multi_cancelled = await self.url_handler.cancel_pending_requests(
+                uid
+            )
 
         if self._task_manager is not None:
             active_cancelled = await self._task_manager.cancel(uid, exclude_current=True)
@@ -791,7 +837,39 @@ class CommandProcessor:
         limit, topic = self._parse_unread_arguments(text)
 
         try:
-            unread_summaries = self.db.get_unread_summaries(limit=limit, topic=topic)
+            # Use hexagonal architecture use case if available
+            if self._container is not None:
+                from app.application.dto.summary_dto import SummaryDTO
+                from app.application.use_cases.get_unread_summaries import GetUnreadSummariesQuery
+
+                # Use the use case with topic filtering support
+                query = GetUnreadSummariesQuery(
+                    user_id=uid,
+                    chat_id=chat_id,
+                    limit=limit,
+                    topic=topic,
+                )
+                use_case = self._container.get_unread_summaries_use_case()
+                domain_summaries = await use_case.execute(query)
+
+                # Convert domain models to database format for compatibility
+                unread_summaries = []
+                for summary in domain_summaries:
+                    unread_summaries.append(
+                        {
+                            "request_id": summary.request_id,
+                            "input_url": "Unknown URL",  # Not available in domain model
+                            "created_at": summary.created_at.isoformat()
+                            if hasattr(summary, "created_at") and summary.created_at
+                            else "Unknown date",
+                            "json_payload": summary.content,
+                            "is_read": summary.is_read,
+                            "id": summary.id,
+                        }
+                    )
+            else:
+                # Fallback to direct database access if container not available
+                unread_summaries = self.db.get_unread_summaries(limit=limit, topic=topic)
 
             if not unread_summaries:
                 if topic:
@@ -927,8 +1005,29 @@ class CommandProcessor:
                     )
                     return
 
-            # Mark as read
-            self.db.mark_summary_as_read(request_id)
+            # Mark as read using hexagonal architecture if available
+            if self._container is not None:
+                from app.application.use_cases.mark_summary_as_read import MarkSummaryAsReadCommand
+
+                summary_id = summary.get("id")
+                if summary_id:
+                    # Use the use case for marking as read
+                    command = MarkSummaryAsReadCommand(
+                        summary_id=summary_id,
+                        user_id=uid,
+                    )
+                    use_case = self._container.mark_summary_as_read_use_case()
+                    event = await use_case.execute(command)
+
+                    # Publish the event to trigger side effects (analytics, audit log, etc.)
+                    event_bus = self._container.event_bus()
+                    await event_bus.publish(event)
+                else:
+                    # Fallback to direct database access if summary_id not available
+                    self.db.mark_summary_as_read(request_id)
+            else:
+                # Fallback to direct database access if container not available
+                self.db.mark_summary_as_read(request_id)
 
             # Send the article
             input_url = summary.get("input_url", "Unknown URL")

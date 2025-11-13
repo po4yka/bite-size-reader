@@ -1,20 +1,21 @@
-# ruff: noqa: E501
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
-from collections.abc import Awaitable, Callable
 from typing import TYPE_CHECKING, Any
-
-from app.config import AppConfig
 
 # Flag used at runtime to decide whether Telegram client is available
 PYROGRAM_AVAILABLE: bool = True
 
 if TYPE_CHECKING:
     # Type-only imports; mypy sees these, runtime won't execute
+    from collections.abc import Awaitable, Callable
+
     from pyrogram import Client, filters  # pragma: no cover
     from pyrogram.types import Message  # pragma: no cover
+
+    from app.config import AppConfig
 else:
     try:
         # Runtime aliases that tests can monkeypatch
@@ -66,14 +67,14 @@ class TelegramClient:
         if filters:
             # Register a simple on_message handler in private chats
             @client_any.on_message(filters.private)
-            async def _handler(client: Any, message: Any) -> None:  # noqa: ANN401
+            async def _handler(client: Any, message: Any) -> None:
                 await message_handler(message)
 
             # Register callback query handler for inline button clicks
             if callback_query_handler:
 
                 @client_any.on_callback_query()
-                async def _callback_handler(client: Any, callback_query: Any) -> None:  # noqa: ANN401
+                async def _callback_handler(client: Any, callback_query: Any) -> None:
                     await callback_query_handler(callback_query)
 
         await client_any.start()
@@ -151,15 +152,13 @@ class TelegramClient:
                 except Exception:
                     pass
                 # Ensure default menu button (best-effort)
-                try:
+                with contextlib.suppress(Exception):
                     await client_any.set_chat_menu_button()
-                except Exception:
-                    pass
                 logger.info(
                     "bot_commands_set",
                     extra={"count_en": len(commands_en), "count_ru": len(commands_ru)},
                 )
-            except Exception as e:  # noqa: BLE001
+            except Exception as e:
                 logger.warning("bot_commands_set_failed", extra={"error": str(e)})
         except Exception:
             return

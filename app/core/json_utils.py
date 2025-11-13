@@ -22,10 +22,7 @@ def extract_json(text: str) -> dict[str, Any] | None:
 
     # Handle markdown-style code fences: ```json ... ```
     fence_match = re.search(r"```(?:json)?\s*(.*?)```", candidate, flags=re.IGNORECASE | re.DOTALL)
-    if fence_match:
-        candidate = fence_match.group(1).strip()
-    else:
-        candidate = candidate.strip("`")
+    candidate = fence_match.group(1).strip() if fence_match else candidate.strip("`")
 
     # Remove leading "json" language hint if present
     candidate = re.sub(r"^json\s*", "", candidate, flags=re.IGNORECASE)
@@ -46,10 +43,7 @@ def extract_json(text: str) -> dict[str, Any] | None:
     if start == -1:
         return None
     end = candidate.rfind("}")
-    if end == -1 or end <= start:
-        snippet = candidate[start:]
-    else:
-        snippet = candidate[start : end + 1]
+    snippet = candidate[start:] if end == -1 or end <= start else candidate[start : end + 1]
     parsed = _try_parse(snippet)
     if parsed is not None:
         return parsed

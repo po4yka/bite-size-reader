@@ -21,7 +21,7 @@ def _make_config() -> AppConfig:
         openrouter=OpenRouterConfig(
             api_key="openrouter-key",
             model="test-model",
-            fallback_models=tuple(),
+            fallback_models=(),
             http_referer=None,
             x_title=None,
         ),
@@ -44,7 +44,7 @@ def _make_db(tmp_path) -> Database:
 @pytest.mark.asyncio
 async def test_forward_message_with_url_prefers_forward_flow(
     tmp_path, tmp_path_factory, request
-) -> None:  # noqa: ANN001
+) -> None:
     del tmp_path_factory
     del request
     cfg = _make_config()
@@ -86,7 +86,7 @@ async def test_forward_message_with_url_prefers_forward_flow(
         forward_from_message_id=123,
     )
 
-    await router._route_message_content(  # noqa: SLF001
+    await router._route_message_content(
         message,
         text=message.text,
         uid=1,

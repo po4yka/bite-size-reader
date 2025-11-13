@@ -49,7 +49,7 @@ class _DummyMessage:
         return {"id": self.id, "message_id": self.message_id}
 
 
-@pytest.fixture()
+@pytest.fixture
 def db(tmp_path) -> Database:
     path = tmp_path / "app.db"
     database = Database(str(path))
@@ -57,7 +57,7 @@ def db(tmp_path) -> Database:
     return database
 
 
-@pytest.fixture()
+@pytest.fixture
 def persistence(db: Database) -> MessagePersistence:
     return MessagePersistence(db=db)
 

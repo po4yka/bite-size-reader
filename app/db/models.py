@@ -226,7 +226,6 @@ ALL_MODELS: tuple[type[BaseModel], ...] = (
 
 def model_to_dict(model: BaseModel | None) -> dict[str, Any] | None:
     """Convert a Peewee model instance to a plain dictionary."""
-
     if model is None:
         return None
     data: dict[str, Any] = {}

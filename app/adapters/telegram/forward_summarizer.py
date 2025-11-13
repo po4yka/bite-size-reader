@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
 from app.adapters.content.llm_response_workflow import (
@@ -14,13 +13,15 @@ from app.adapters.content.llm_response_workflow import (
     LLMSummaryPersistenceSettings,
     LLMWorkflowNotifications,
 )
-from app.config import AppConfig
 from app.core.lang import LANG_RU
-from app.db.database import Database
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from app.adapters.external.response_formatter import ResponseFormatter
     from app.adapters.openrouter.openrouter_client import OpenRouterClient
+    from app.config import AppConfig
+    from app.db.database import Database
 
 logger = logging.getLogger(__name__)
 

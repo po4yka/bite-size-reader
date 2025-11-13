@@ -114,14 +114,13 @@ class ModelCapabilities:
                         "structured_outputs_capabilities_loaded",
                         extra={"models_count": len(models)},
                     )
-                else:
-                    # Keep existing cache or use known models as fallback
-                    if self._structured_supported_models is None:
-                        self._structured_supported_models = self._known_structured_models.copy()
-                        self._logger.warning(
-                            "using_fallback_structured_models",
-                            extra={"models_count": len(self._structured_supported_models)},
-                        )
+                # Keep existing cache or use known models as fallback
+                elif self._structured_supported_models is None:
+                    self._structured_supported_models = self._known_structured_models.copy()
+                    self._logger.warning(
+                        "using_fallback_structured_models",
+                        extra={"models_count": len(self._structured_supported_models)},
+                    )
 
                 self._capabilities_last_load = now
 
@@ -152,7 +151,7 @@ class ModelCapabilities:
                 resp.raise_for_status()
                 return resp.json()
         except Exception as e:
-            self._logger.error("openrouter_models_error", extra={"error": str(e)})
+            self._logger.exception("openrouter_models_error", extra={"error": str(e)})
             raise
 
     async def get_structured_models(self) -> set[str]:
@@ -168,7 +167,7 @@ class ModelCapabilities:
         enable_structured_outputs: bool = True,
     ) -> list[str]:
         """Build list of models to try, including structured output fallbacks."""
-        models_to_try = [primary_model] + fallback_models
+        models_to_try = [primary_model, *fallback_models]
 
         # Add structured output fallbacks if needed
         if (

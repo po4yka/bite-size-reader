@@ -40,6 +40,13 @@ from app.services.topic_search_utils import (
 
 JSONValue = Mapping[str, Any] | Sequence[Any] | str | None
 
+# Database operation timeout in seconds
+# Prevents indefinite hangs on lock acquisition or slow operations
+DB_OPERATION_TIMEOUT = 30.0
+
+# Maximum retries for transient database errors
+DB_MAX_RETRIES = 3
+
 
 class TopicSearchIndexRebuiltError(RuntimeError):
     """Raised to signal that the topic search index was rebuilt mid-operation."""
@@ -63,6 +70,7 @@ class Database:
     _database: peewee.SqliteDatabase = field(init=False)
     _topic_search_index_reset_in_progress: bool = field(default=False, init=False)
     _topic_search_index_delete_warned: bool = field(default=False, init=False)
+    _db_lock: asyncio.Lock = field(init=False)
 
     def __post_init__(self) -> None:
         if self.path != ":memory":
@@ -73,14 +81,128 @@ class Database:
                 "journal_mode": "wal",
                 "synchronous": "normal",
             },
-            check_same_thread=False,
+            check_same_thread=False,  # Still needed for asyncio.to_thread() but protected by lock
         )
         database_proxy.initialize(self._database)
+        # Initialize lock for thread-safe database access
+        # This serializes all database operations to prevent race conditions
+        self._db_lock = asyncio.Lock()
+
+    async def _safe_db_operation(
+        self,
+        operation: Any,
+        *args: Any,
+        timeout: float = DB_OPERATION_TIMEOUT,
+        operation_name: str = "database_operation",
+        **kwargs: Any,
+    ) -> Any:
+        """Execute database operation with timeout and retry protection.
+
+        Args:
+            operation: The database operation to execute
+            *args: Positional arguments for the operation
+            timeout: Timeout in seconds (default: DB_OPERATION_TIMEOUT)
+            operation_name: Name for logging purposes
+            **kwargs: Keyword arguments for the operation
+
+        Returns:
+            Result of the operation
+
+        Raises:
+            asyncio.TimeoutError: If operation times out
+            peewee.OperationalError: If database is locked or busy after retries
+            peewee.IntegrityError: If constraint violation occurs
+            Exception: Other database errors
+
+        """
+        retries = 0
+        last_error = None
+
+        while retries <= DB_MAX_RETRIES:
+            try:
+                # Acquire lock with timeout to prevent indefinite hangs
+                async with asyncio.timeout(timeout):
+                    async with self._db_lock:
+                        # Execute operation in thread pool
+                        return await asyncio.to_thread(operation, *args, **kwargs)
+
+            except TimeoutError:
+                self._logger.exception(
+                    "db_operation_timeout",
+                    extra={
+                        "operation": operation_name,
+                        "timeout": timeout,
+                        "retries": retries,
+                    },
+                )
+                raise
+
+            except peewee.OperationalError as e:
+                # Handle database locked or busy errors
+                last_error = e
+                error_msg = str(e).lower()
+
+                if "locked" in error_msg or "busy" in error_msg:
+                    if retries < DB_MAX_RETRIES:
+                        retries += 1
+                        wait_time = 0.1 * (2**retries)  # Exponential backoff
+                        self._logger.warning(
+                            "db_locked_retrying",
+                            extra={
+                                "operation": operation_name,
+                                "retry": retries,
+                                "max_retries": DB_MAX_RETRIES,
+                                "wait_time": wait_time,
+                                "error": str(e),
+                            },
+                        )
+                        await asyncio.sleep(wait_time)
+                        continue
+
+                # Non-retryable operational error or max retries exceeded
+                self._logger.exception(
+                    "db_operational_error",
+                    extra={
+                        "operation": operation_name,
+                        "retries": retries,
+                        "error": str(e),
+                    },
+                )
+                raise
+
+            except peewee.IntegrityError as e:
+                # Constraint violations should not be retried
+                self._logger.exception(
+                    "db_integrity_error",
+                    extra={
+                        "operation": operation_name,
+                        "error": str(e),
+                    },
+                )
+                raise
+
+            except Exception as e:
+                # Unexpected error
+                self._logger.exception(
+                    "db_unexpected_error",
+                    extra={
+                        "operation": operation_name,
+                        "retries": retries,
+                        "error": str(e),
+                        "error_type": type(e).__name__,
+                    },
+                )
+                raise
+
+        # Should not reach here, but handle it anyway
+        if last_error:
+            raise last_error
+        msg = f"Database operation {operation_name} failed after {DB_MAX_RETRIES} retries"
+        raise RuntimeError(msg)
 
     @contextlib.contextmanager
     def connect(self) -> Iterator[sqlite3.Connection]:
         """Return a context manager yielding the raw sqlite3 connection."""
-
         with self._database.connection_context():
             yield self._database.connection()
 
@@ -180,28 +302,28 @@ class Database:
         return value, False, None
 
     def migrate(self) -> None:
-        with self._database.connection_context():
-            with self._database.bind_ctx(ALL_MODELS):
-                self._database.create_tables(ALL_MODELS, safe=True)
-                self._ensure_schema_compatibility()
+        with self._database.connection_context(), self._database.bind_ctx(ALL_MODELS):
+            self._database.create_tables(ALL_MODELS, safe=True)
+            self._ensure_schema_compatibility()
         self._run_database_maintenance()
         self._logger.info("db_migrated", extra={"path": self.path})
 
     def create_backup_copy(self, dest_path: str) -> Path:
         if self.path == ":memory:":
-            raise ValueError("Cannot create a backup for an in-memory database")
+            msg = "Cannot create a backup for an in-memory database"
+            raise ValueError(msg)
 
         source = Path(self.path)
         if not source.exists():
-            raise FileNotFoundError(f"Database file not found at {self.path}")
+            msg = f"Database file not found at {self.path}"
+            raise FileNotFoundError(msg)
 
         destination = Path(dest_path)
         destination.parent.mkdir(parents=True, exist_ok=True)
 
-        with self.connect() as conn:
-            with sqlite3.connect(str(destination)) as dest_conn:
-                conn.backup(dest_conn)
-                dest_conn.commit()
+        with self.connect() as conn, sqlite3.connect(str(destination)) as dest_conn:
+            conn.backup(dest_conn)
+            dest_conn.commit()
 
         self._logger.info(
             "db_backup_copy_created",
@@ -283,7 +405,7 @@ class Database:
                         tables[table] = self._count_table_rows(table)
                     except peewee.DatabaseError as exc:
                         overview["errors"].append(f"Failed to count rows for table '{table}'")
-                        self._logger.error(
+                        self._logger.exception(
                             "db_table_count_failed",
                             extra={"table": table, "error": str(exc)},
                         )
@@ -301,7 +423,9 @@ class Database:
                         }
                     except peewee.DatabaseError as exc:
                         overview["errors"].append("Failed to aggregate request statuses")
-                        self._logger.error("db_requests_status_failed", extra={"error": str(exc)})
+                        self._logger.exception(
+                            "db_requests_status_failed", extra={"error": str(exc)}
+                        )
 
                     overview["last_request_at"] = self._fetch_single_value(
                         "SELECT created_at FROM requests ORDER BY created_at DESC LIMIT 1"
@@ -318,7 +442,7 @@ class Database:
                     )
         except peewee.DatabaseError as exc:
             overview["errors"].append("Failed to query database overview")
-            self._logger.error("db_overview_failed", extra={"error": str(exc)})
+            self._logger.exception("db_overview_failed", extra={"error": str(exc)})
 
         tables = overview.get("tables")
         if isinstance(tables, dict):
@@ -340,7 +464,6 @@ class Database:
 
     def _count_table_rows(self, table_name: str) -> int:
         """Return the number of rows in the given table using Peewee queries."""
-
         model = next(
             (model for model in ALL_MODELS if model._meta.table_name == table_name),
             None,
@@ -608,8 +731,11 @@ class Database:
 
     async def async_get_request_by_dedupe_hash(self, dedupe_hash: str) -> dict[str, Any] | None:
         """Async wrapper for :meth:`get_request_by_dedupe_hash`."""
-
-        return await asyncio.to_thread(self.get_request_by_dedupe_hash, dedupe_hash)
+        return await self._safe_db_operation(
+            self.get_request_by_dedupe_hash,
+            dedupe_hash,
+            operation_name="get_request_by_dedupe_hash",
+        )
 
     def get_request_by_id(self, request_id: int) -> dict[str, Any] | None:
         request = Request.get_or_none(Request.id == request_id)
@@ -617,8 +743,11 @@ class Database:
 
     async def async_get_request_by_id(self, request_id: int) -> dict[str, Any] | None:
         """Async wrapper for :meth:`get_request_by_id`."""
-
-        return await asyncio.to_thread(self.get_request_by_id, request_id)
+        return await self._safe_db_operation(
+            self.get_request_by_id,
+            request_id,
+            operation_name="get_request_by_id",
+        )
 
     def get_crawl_result_by_request(self, request_id: int) -> dict[str, Any] | None:
         result = CrawlResult.get_or_none(CrawlResult.request == request_id)
@@ -629,8 +758,11 @@ class Database:
 
     async def async_get_crawl_result_by_request(self, request_id: int) -> dict[str, Any] | None:
         """Async wrapper for :meth:`get_crawl_result_by_request`."""
-
-        return await asyncio.to_thread(self.get_crawl_result_by_request, request_id)
+        return await self._safe_db_operation(
+            self.get_crawl_result_by_request,
+            request_id,
+            operation_name="get_crawl_result_by_request",
+        )
 
     def get_summary_by_request(self, request_id: int) -> dict[str, Any] | None:
         summary = Summary.get_or_none(Summary.request == request_id)
@@ -641,8 +773,52 @@ class Database:
 
     async def async_get_summary_by_request(self, request_id: int) -> dict[str, Any] | None:
         """Async wrapper for :meth:`get_summary_by_request`."""
+        return await self._safe_db_operation(
+            self.get_summary_by_request,
+            request_id,
+            operation_name="get_summary_by_request",
+        )
 
-        return await asyncio.to_thread(self.get_summary_by_request, request_id)
+    def get_summary_by_id(self, summary_id: int) -> dict[str, Any] | None:
+        """Get a summary by its ID, including request_id."""
+        summary = (
+            Summary.select(Summary, Request).join(Request).where(Summary.id == summary_id).first()
+        )
+        if not summary:
+            return None
+
+        data = model_to_dict(summary)
+        if data:
+            # Add request_id from the foreign key
+            if "request" in data:
+                data["request_id"] = data["request"]
+            self._convert_bool_fields(data, ["is_read"])
+        return data
+
+    async def async_get_summary_by_id(self, summary_id: int) -> dict[str, Any] | None:
+        """Async wrapper for :meth:`get_summary_by_id`."""
+        return await self._safe_db_operation(
+            self.get_summary_by_id,
+            summary_id,
+            operation_name="get_summary_by_id",
+        )
+
+    def mark_summary_as_read_by_id(self, summary_id: int) -> None:
+        """Mark a summary as read by its ID.
+
+        Args:
+            summary_id: The ID of the summary to mark as read.
+
+        """
+        Summary.update({Summary.is_read: True}).where(Summary.id == summary_id).execute()
+
+    async def async_mark_summary_as_read(self, summary_id: int) -> None:
+        """Async wrapper for :meth:`mark_summary_as_read_by_id`."""
+        await self._safe_db_operation(
+            self.mark_summary_as_read_by_id,
+            summary_id,
+            operation_name="mark_summary_as_read",
+        )
 
     def get_request_by_forward(
         self,
@@ -709,7 +885,8 @@ class Database:
             request_id,
         )
         if updates and any(field is not None for field in legacy_fields):
-            raise ValueError("Cannot mix explicit field arguments with the updates mapping")
+            msg = "Cannot mix explicit field arguments with the updates mapping"
+            raise ValueError(msg)
 
         update_values: dict[Any, Any] = {}
         if updates:
@@ -719,7 +896,8 @@ class Database:
                 if not isinstance(getattr(UserInteraction, key, None), peewee.Field)
             ]
             if invalid_fields:
-                raise ValueError(f"Unknown user interaction fields: {', '.join(invalid_fields)}")
+                msg = f"Unknown user interaction fields: {', '.join(invalid_fields)}"
+                raise ValueError(msg)
             for key, value in updates.items():
                 field_obj = getattr(UserInteraction, key)
                 update_values[field_obj] = value
@@ -762,11 +940,11 @@ class Database:
         **fields: Any,
     ) -> None:
         """Async wrapper for :meth:`update_user_interaction`."""
-
-        await asyncio.to_thread(
+        await self._safe_db_operation(
             self.update_user_interaction,
             interaction_id,
             updates=updates,
+            operation_name="update_user_interaction",
             **fields,
         )
 
@@ -834,8 +1012,12 @@ class Database:
 
     async def async_update_request_status(self, request_id: int, status: str) -> None:
         """Asynchronously update the request status."""
-
-        await asyncio.to_thread(self.update_request_status, request_id, status)
+        await self._safe_db_operation(
+            self.update_request_status,
+            request_id,
+            status,
+            operation_name="update_request_status",
+        )
 
     def update_request_correlation_id(self, request_id: int, correlation_id: str) -> None:
         Request.update({Request.correlation_id: correlation_id}).where(
@@ -997,8 +1179,11 @@ class Database:
 
     async def async_insert_llm_call(self, **kwargs: Any) -> int:
         """Persist an LLM call without blocking the event loop."""
-
-        return await asyncio.to_thread(self.insert_llm_call, **kwargs)
+        return await self._safe_db_operation(
+            self.insert_llm_call,
+            operation_name="insert_llm_call",
+            **kwargs,
+        )
 
     def get_latest_llm_model_by_request_id(self, request_id: int) -> str | None:
         call = (
@@ -1072,8 +1257,11 @@ class Database:
 
     async def async_upsert_summary(self, **kwargs: Any) -> int:
         """Asynchronously upsert a summary entry."""
-
-        return await asyncio.to_thread(self.upsert_summary, **kwargs)
+        return await self._safe_db_operation(
+            self.upsert_summary,
+            operation_name="upsert_summary",
+            **kwargs,
+        )
 
     def update_summary_insights(self, request_id: int, insights_json: JSONValue) -> None:
         Summary.update({Summary.insights_json: self._prepare_json_payload(insights_json)}).where(
@@ -1083,7 +1271,6 @@ class Database:
     @staticmethod
     def _yield_topic_fragments(value: Any) -> Iterator[str]:
         """Yield normalized text fragments from arbitrary payload values."""
-
         if value is None:
             return
         if isinstance(value, str):
@@ -1102,7 +1289,6 @@ class Database:
         payload: Mapping[str, Any], request_data: Mapping[str, Any], topic: str
     ) -> bool:
         """Return True when a stored summary appears to match the requested topic."""
-
         terms = [term for term in tokenize(topic) if term]
         if not terms:
             normalized = topic.casefold().strip()
@@ -1144,7 +1330,6 @@ class Database:
         self, *, limit: int = 10, topic: str | None = None
     ) -> list[dict[str, Any]]:
         """Return unread summary rows optionally filtered by topic text."""
-
         if limit <= 0:
             return []
 
@@ -1194,11 +1379,32 @@ class Database:
                 break
         return results
 
+    async def async_get_unread_summaries(
+        self, uid: int, cid: int, limit: int = 10, topic: str | None = None
+    ) -> list[dict[str, Any]]:
+        """Async wrapper for :meth:`get_unread_summaries`.
+
+        Args:
+            uid: User ID (unused but kept for compatibility).
+            cid: Chat ID (unused but kept for compatibility).
+            limit: Maximum number of summaries to return.
+            topic: Optional topic filter for searching summaries.
+
+        Returns:
+            List of unread summary dictionaries.
+
+        """
+        return await self._safe_db_operation(
+            self.get_unread_summaries,
+            limit=limit,
+            topic=topic,
+            operation_name="get_unread_summaries",
+        )
+
     @staticmethod
     def _sanitize_fts_term(term: str) -> str:
         sanitized = re.sub(r"[^\w-]+", " ", term)
-        sanitized = re.sub(r"\s+", " ", sanitized).strip()
-        return sanitized
+        return re.sub(r"\s+", " ", sanitized).strip()
 
     def _find_topic_search_request_ids(
         self, topic: str, *, candidate_limit: int
@@ -1237,7 +1443,7 @@ class Database:
             with self._database.connection_context():
                 cursor = self._database.execute_sql(sql, (fts_query, candidate_limit))
                 rows = list(cursor)
-        except Exception as exc:  # noqa: BLE001 - fallback to scan logic
+        except Exception as exc:
             self._logger.warning("topic_search_index_lookup_failed", extra={"error": str(exc)})
             return None
 
@@ -1437,7 +1643,7 @@ class Database:
                     self._write_topic_search_index(document)
                 except TopicSearchIndexRebuiltError:
                     return
-        except Exception as exc:  # noqa: BLE001 - logging and continue
+        except Exception as exc:
             self._logger.warning(
                 "topic_search_index_refresh_failed",
                 extra={"request_id": request_id, "error": str(exc)},
@@ -1502,14 +1708,12 @@ class Database:
 
     def _clear_topic_search_index(self) -> None:
         """Remove all rows from the topic search FTS index."""
-
         self._database.execute_sql(
             "INSERT INTO topic_search_index(topic_search_index) VALUES ('delete-all')"
         )
 
     def _delete_topic_search_index_row(self, rowid: int) -> None:
         """Remove a single row from the topic search FTS index."""
-
         try:
             self._database.execute_sql(
                 "DELETE FROM topic_search_index WHERE rowid = ?",
@@ -1525,7 +1729,6 @@ class Database:
 
     def _log_topic_search_delete_fallback(self, rowid: int, message: str) -> None:
         """Log degraded delete path, but only warn once to avoid noise."""
-
         log_extra = {"rowid": rowid, "error": message}
         if not self._topic_search_index_delete_warned:
             self._topic_search_index_delete_warned = True
@@ -1535,7 +1738,6 @@ class Database:
 
     def _handle_topic_search_index_error(self, exc: peewee.DatabaseError, rowid: int) -> None:
         """Handle unrecoverable FTS errors by rebuilding the index."""
-
         message = str(exc)
         self._logger.error(
             "topic_search_index_delete_failed",
@@ -1549,7 +1751,6 @@ class Database:
 
     def _reset_topic_search_index(self) -> None:
         """Drop and rebuild the topic search index to recover from corruption."""
-
         if self._topic_search_index_reset_in_progress:
             return
 
@@ -1557,10 +1758,8 @@ class Database:
         try:
             self._logger.warning("topic_search_index_resetting_due_to_error")
             with self._database.connection_context():
-                try:
+                with contextlib.suppress(peewee.DatabaseError):
                     TopicSearchIndex.drop_table(safe=True)
-                except peewee.DatabaseError:
-                    pass
                 TopicSearchIndex.create_table()
             try:
                 self._rebuild_topic_search_index()
@@ -1599,7 +1798,7 @@ class Database:
                     model.update({field: normalized}).where(model.id == row_id).execute()
                     updates += 1
             except Exception as exc:
-                self._logger.error(
+                self._logger.exception(
                     "json_column_coercion_failed",
                     extra={
                         "table": table,

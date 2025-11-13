@@ -1,5 +1,7 @@
 import unittest
 
+import pytest
+
 from app.core.summary_contract import validate_and_shape_summary
 from app.core.summary_schema import PydanticAvailable
 
@@ -25,7 +27,7 @@ class TestPydanticSummary(unittest.TestCase):
             "seo_keywords": [],
         }
 
-        with self.assertRaises(ValidationError):
+        with pytest.raises(ValidationError):
             SummaryModel(**payload)
 
     def test_validate_and_shape_is_model_compatible(self):
@@ -50,19 +52,19 @@ class TestPydanticSummary(unittest.TestCase):
 
         shaped = validate_and_shape_summary(payload)
         # Should respect caps and dedupe
-        self.assertLessEqual(len(shaped["summary_250"]), 250)
-        self.assertLessEqual(len(shaped["summary_1000"]), 1000)
-        self.assertEqual(shaped["topic_tags"], ["#tag"])  # dedup
-        self.assertEqual(shaped["entities"]["people"], ["A"])  # dedup case-insensitive
+        assert len(shaped["summary_250"]) <= 250
+        assert len(shaped["summary_1000"]) <= 1000
+        assert shaped["topic_tags"] == ["#tag"]  # dedup
+        assert shaped["entities"]["people"] == ["A"]  # dedup case-insensitive
         # Should be valid per pydantic model
         model = SummaryModel(**shaped)
         dumped = model.model_dump()
         # spot check a few fields
-        self.assertIn("summary_250", dumped)
-        self.assertIn("summary_1000", dumped)
-        self.assertIn("tldr", dumped)
-        self.assertIn("entities", dumped)
-        self.assertIsInstance(dumped["estimated_reading_time_min"], int)
+        assert "summary_250" in dumped
+        assert "summary_1000" in dumped
+        assert "tldr" in dumped
+        assert "entities" in dumped
+        assert isinstance(dumped["estimated_reading_time_min"], int)
 
 
 if __name__ == "__main__":

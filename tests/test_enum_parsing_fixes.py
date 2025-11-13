@@ -21,7 +21,7 @@ class TestChatTypeEnumParsing(unittest.TestCase):
             "first_name": "John",
         }
         chat = TelegramChat.from_dict(data)
-        self.assertEqual(chat.type, ChatType.PRIVATE)
+        assert chat.type == ChatType.PRIVATE
 
     def test_from_dict_enum_object_with_value(self):
         """Test parsing enum object with value attribute."""
@@ -36,7 +36,7 @@ class TestChatTypeEnumParsing(unittest.TestCase):
             "title": "Test Group",
         }
         chat = TelegramChat.from_dict(data)
-        self.assertEqual(chat.type, ChatType.GROUP)
+        assert chat.type == ChatType.GROUP
 
     def test_from_dict_enum_object_with_name(self):
         """Test parsing enum object with name attribute."""
@@ -51,7 +51,7 @@ class TestChatTypeEnumParsing(unittest.TestCase):
             "title": "Test Channel",
         }
         chat = TelegramChat.from_dict(data)
-        self.assertEqual(chat.type, ChatType.CHANNEL)
+        assert chat.type == ChatType.CHANNEL
 
     def test_from_dict_invalid_type_fallback(self):
         """Test fallback to PRIVATE for invalid chat types."""
@@ -61,7 +61,7 @@ class TestChatTypeEnumParsing(unittest.TestCase):
             "first_name": "John",
         }
         chat = TelegramChat.from_dict(data)
-        self.assertEqual(chat.type, ChatType.PRIVATE)
+        assert chat.type == ChatType.PRIVATE
 
     def test_from_dict_none_type_fallback(self):
         """Test fallback to PRIVATE for None chat type."""
@@ -71,7 +71,7 @@ class TestChatTypeEnumParsing(unittest.TestCase):
             "first_name": "John",
         }
         chat = TelegramChat.from_dict(data)
-        self.assertEqual(chat.type, ChatType.PRIVATE)
+        assert chat.type == ChatType.PRIVATE
 
     def test_from_dict_missing_type_fallback(self):
         """Test fallback to PRIVATE for missing chat type."""
@@ -80,7 +80,7 @@ class TestChatTypeEnumParsing(unittest.TestCase):
             "first_name": "John",
         }
         chat = TelegramChat.from_dict(data)
-        self.assertEqual(chat.type, ChatType.PRIVATE)
+        assert chat.type == ChatType.PRIVATE
 
     def test_from_dict_uppercase_string(self):
         """Test parsing uppercase string values."""
@@ -90,7 +90,7 @@ class TestChatTypeEnumParsing(unittest.TestCase):
             "title": "Test Supergroup",
         }
         chat = TelegramChat.from_dict(data)
-        self.assertEqual(chat.type, ChatType.SUPERGROUP)
+        assert chat.type == ChatType.SUPERGROUP
 
 
 class TestMessageEntityTypeEnumParsing(unittest.TestCase):
@@ -104,7 +104,7 @@ class TestMessageEntityTypeEnumParsing(unittest.TestCase):
             "length": 10,
         }
         entity = MessageEntity.from_dict(data)
-        self.assertEqual(entity.type, MessageEntityType.URL)
+        assert entity.type == MessageEntityType.URL
 
     def test_from_dict_enum_object_with_value(self):
         """Test parsing enum object with value attribute."""
@@ -119,7 +119,7 @@ class TestMessageEntityTypeEnumParsing(unittest.TestCase):
             "length": 6,
         }
         entity = MessageEntity.from_dict(data)
-        self.assertEqual(entity.type, MessageEntityType.BOT_COMMAND)
+        assert entity.type == MessageEntityType.BOT_COMMAND
 
     def test_from_dict_enum_object_with_name(self):
         """Test parsing enum object with name attribute."""
@@ -135,7 +135,7 @@ class TestMessageEntityTypeEnumParsing(unittest.TestCase):
             "url": "https://example.com",
         }
         entity = MessageEntity.from_dict(data)
-        self.assertEqual(entity.type, MessageEntityType.TEXT_LINK)
+        assert entity.type == MessageEntityType.TEXT_LINK
 
     def test_from_dict_invalid_type_fallback(self):
         """Test fallback to MENTION for invalid entity types."""
@@ -145,7 +145,7 @@ class TestMessageEntityTypeEnumParsing(unittest.TestCase):
             "length": 10,
         }
         entity = MessageEntity.from_dict(data)
-        self.assertEqual(entity.type, MessageEntityType.MENTION)
+        assert entity.type == MessageEntityType.MENTION
 
     def test_from_dict_none_type_fallback(self):
         """Test fallback to MENTION for None entity type."""
@@ -155,7 +155,7 @@ class TestMessageEntityTypeEnumParsing(unittest.TestCase):
             "length": 10,
         }
         entity = MessageEntity.from_dict(data)
-        self.assertEqual(entity.type, MessageEntityType.MENTION)
+        assert entity.type == MessageEntityType.MENTION
 
     def test_from_dict_missing_type_fallback(self):
         """Test fallback to MENTION for missing entity type."""
@@ -164,7 +164,7 @@ class TestMessageEntityTypeEnumParsing(unittest.TestCase):
             "length": 10,
         }
         entity = MessageEntity.from_dict(data)
-        self.assertEqual(entity.type, MessageEntityType.MENTION)
+        assert entity.type == MessageEntityType.MENTION
 
     def test_from_dict_uppercase_string(self):
         """Test parsing uppercase string values."""
@@ -174,7 +174,7 @@ class TestMessageEntityTypeEnumParsing(unittest.TestCase):
             "length": 5,
         }
         entity = MessageEntity.from_dict(data)
-        self.assertEqual(entity.type, MessageEntityType.HASHTAG)
+        assert entity.type == MessageEntityType.HASHTAG
 
     def test_from_dict_pyrogram_enum_simulation(self):
         """Test parsing simulated Pyrogram enum objects."""
@@ -190,7 +190,7 @@ class TestMessageEntityTypeEnumParsing(unittest.TestCase):
             "length": 6,
         }
         entity = MessageEntity.from_dict(data)
-        self.assertEqual(entity.type, MessageEntityType.BOT_COMMAND)
+        assert entity.type == MessageEntityType.BOT_COMMAND
 
 
 if __name__ == "__main__":

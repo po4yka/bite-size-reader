@@ -16,7 +16,8 @@ class _FakeResponse:
 
     def raise_for_status(self):
         if self.status_code >= 400:
-            raise Exception(f"HTTP {self.status_code}")
+            msg = f"HTTP {self.status_code}"
+            raise Exception(msg)
 
 
 class _FakeAsyncClient:
@@ -29,14 +30,15 @@ class _FakeAsyncClient:
     async def __aexit__(self, exc_type, exc, tb):
         return False
 
-    async def post(self, url, headers=None, json=None):  # noqa: A002 - shadowing 'json'
+    async def post(self, url, headers=None, json=None):
         # decide response by URL
         for key, resp in self.response_map.items():
             if key in url:
                 return _FakeResponse(resp[0], resp[1])
-        raise AssertionError(f"Unexpected URL: {url}")
+        msg = f"Unexpected URL: {url}"
+        raise AssertionError(msg)
 
-    async def get(self, url, headers=None):  # noqa: A002
+    async def get(self, url, headers=None):
         # Handle models endpoint
         if "/models" in url:
             return _FakeResponse(
@@ -51,7 +53,8 @@ class _FakeAsyncClient:
                     ]
                 },
             )
-        raise AssertionError(f"Unexpected URL: {url}")
+        msg = f"Unexpected URL: {url}"
+        raise AssertionError(msg)
 
 
 class TestAdaptersIntegration(unittest.IsolatedAsyncioTestCase):
@@ -75,15 +78,15 @@ class TestAdaptersIntegration(unittest.IsolatedAsyncioTestCase):
             def _make_fc_client(*args, **kwargs):
                 return fake
 
-            firecrawl_httpx.AsyncClient = cast(Any, _make_fc_client)
+            firecrawl_httpx.AsyncClient = cast("Any", _make_fc_client)
 
             client = FirecrawlClient(api_key="fc-dummy-key", timeout_sec=5)
             res = await client.scrape_markdown("https://example.com")
-            self.assertEqual(res.status, "ok")
-            self.assertEqual(res.http_status, 200)
-            self.assertIn("Title", res.content_markdown)
+            assert res.status == "ok"
+            assert res.http_status == 200
+            assert "Title" in res.content_markdown
         finally:
-            firecrawl_httpx.AsyncClient = cast(Any, original)
+            firecrawl_httpx.AsyncClient = cast("Any", original)
 
     async def test_openrouter_chat_mocked(self):
         # Patch httpx.AsyncClient in openrouter module
@@ -99,7 +102,7 @@ class TestAdaptersIntegration(unittest.IsolatedAsyncioTestCase):
             def _make_or_client(*args, **kwargs):
                 return fake
 
-            or_httpx.AsyncClient = cast(Any, _make_or_client)
+            or_httpx.AsyncClient = cast("Any", _make_or_client)
 
             client = OpenRouterClient(
                 api_key="sk-test-key-123456789",
@@ -110,12 +113,12 @@ class TestAdaptersIntegration(unittest.IsolatedAsyncioTestCase):
                 log_truncate_length=1000,
             )
             res = await client.chat([{"role": "user", "content": "hi"}])
-            self.assertEqual(res.status, "ok")
-            self.assertIsNotNone(res.response_text)
-            self.assertEqual(res.tokens_prompt, 10)
-            self.assertEqual(res.tokens_completion, 20)
+            assert res.status == "ok"
+            assert res.response_text is not None
+            assert res.tokens_prompt == 10
+            assert res.tokens_completion == 20
         finally:
-            or_httpx.AsyncClient = cast(Any, original)
+            or_httpx.AsyncClient = cast("Any", original)
 
 
 if __name__ == "__main__":

@@ -55,14 +55,15 @@ async def test_find_articles_normalizes_and_limits() -> None:
     )
 
     dummy = DummyFirecrawl(result)
-    service = TopicSearchService(cast(FirecrawlClient, dummy), max_results=2)
+    service = TopicSearchService(cast("FirecrawlClient", dummy), max_results=2)
 
     articles = await service.find_articles("Android System Design", correlation_id="cid-42")
 
     assert dummy.calls == [("Android System Design", 2)]
     assert len(articles) == 2
     assert articles[0].url == "https://example.com/android-architecture"
-    assert articles[0].snippet is not None and articles[0].snippet.endswith("...")
+    assert articles[0].snippet is not None
+    assert articles[0].snippet.endswith("...")
     assert articles[1].url == "https://example.com/android-services"
 
 
@@ -76,7 +77,7 @@ async def test_find_articles_raises_on_error_status() -> None:
     )
 
     dummy = DummyFirecrawl(result)
-    service = TopicSearchService(cast(FirecrawlClient, dummy), max_results=3)
+    service = TopicSearchService(cast("FirecrawlClient", dummy), max_results=3)
 
     with pytest.raises(RuntimeError, match="quota exceeded"):
         await service.find_articles("Android System Design")
@@ -143,7 +144,8 @@ async def test_local_search_returns_recent_matches(tmp_path) -> None:
     assert article.url == "https://example.com/android"
     assert article.title.startswith("Android System Design")
     assert article.source == "example.com"
-    assert article.snippet is not None and "android" in article.snippet.lower()
+    assert article.snippet is not None
+    assert "android" in article.snippet.lower()
 
 
 @pytest.mark.asyncio

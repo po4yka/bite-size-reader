@@ -3,17 +3,18 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
 from app.adapters.telegram.message_persistence import MessagePersistence
-from app.config import AppConfig
 from app.core.html_utils import normalize_with_textacy
 from app.core.lang import choose_language, detect_language
-from app.db.database import Database
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from app.adapters.external.response_formatter import ResponseFormatter
+    from app.config import AppConfig
+    from app.db.database import Database
 
 logger = logging.getLogger(__name__)
 
@@ -60,8 +61,8 @@ class ForwardContentProcessor:
         detected = detect_language(text)
         try:
             self.db.update_request_lang_detected(req_id, detected)
-        except Exception as e:  # noqa: BLE001
-            logger.error("persist_lang_detected_error", extra={"error": str(e)})
+        except Exception as e:
+            logger.exception("persist_lang_detected_error", extra={"error": str(e)})
 
         chosen_lang = choose_language(self.cfg.runtime.preferred_lang, detected)
         system_prompt = await self._load_system_prompt(chosen_lang)
@@ -120,8 +121,8 @@ class ForwardContentProcessor:
             if correlation_id:
                 try:
                     self.db.update_request_correlation_id(req_id, correlation_id)
-                except Exception as exc:  # noqa: BLE001
-                    logger.error(
+                except Exception as exc:
+                    logger.exception(
                         "persist_cid_error",
                         extra={"error": str(exc), "cid": correlation_id},
                     )
@@ -143,8 +144,8 @@ class ForwardContentProcessor:
         # Snapshot telegram message
         try:
             self._persist_message_snapshot(req_id, message)
-        except Exception as e:  # noqa: BLE001
-            logger.error("snapshot_error", extra={"error": str(e)})
+        except Exception as e:
+            logger.exception("snapshot_error", extra={"error": str(e)})
 
         return req_id
 
@@ -170,7 +171,7 @@ class ForwardContentProcessor:
                     title=str(chat_title) if isinstance(chat_title, str) else None,
                     username=str(chat_username) if isinstance(chat_username, str) else None,
                 )
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 logger.warning(
                     "chat_upsert_failed",
                     extra={"chat_id": chat_id, "error": str(exc)},
@@ -187,7 +188,7 @@ class ForwardContentProcessor:
                     telegram_user_id=user_id,
                     username=str(username) if isinstance(username, str) else None,
                 )
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 logger.warning(
                     "user_upsert_failed",
                     extra={"user_id": user_id, "error": str(exc)},

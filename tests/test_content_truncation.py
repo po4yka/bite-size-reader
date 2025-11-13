@@ -44,7 +44,7 @@ def make_bot(tmp_path: str, allowed_ids):
         openrouter=OpenRouterConfig(
             api_key="or-dummy-key",
             model="openai/gpt-4o-mini",
-            fallback_models=tuple(),
+            fallback_models=(),
             http_referer=None,
             x_title=None,
             max_tokens=None,
@@ -61,8 +61,8 @@ def make_bot(tmp_path: str, allowed_ids):
     )
     from app.adapters import telegram_bot as tbmod
 
-    setattr(tbmod, "Client", object)
-    setattr(tbmod, "filters", None)
+    tbmod.Client = object
+    tbmod.filters = None
     return TelegramBot(cfg=cfg, db=db)
 
 
@@ -113,7 +113,7 @@ class TestContentTruncation(unittest.IsolatedAsyncioTestCase):
                 # The truncation warning is logged, not sent to user
                 # We can verify this by checking the log output or by ensuring the test passes
                 # The important thing is that the content was processed without errors
-                self.assertTrue(len(msg._replies) > 0)  # Should have some response
+                assert len(msg._replies) > 0  # Should have some response
 
     async def test_forward_flow_content_truncation(self):
         """Test content truncation in forward flow."""
@@ -147,7 +147,7 @@ class TestContentTruncation(unittest.IsolatedAsyncioTestCase):
                 # The truncation warning is logged, not sent to user
                 # We can verify this by checking the log output or by ensuring the test passes
                 # The important thing is that the content was processed without errors
-                self.assertTrue(len(msg._replies) > 0)  # Should have some response
+                assert len(msg._replies) > 0  # Should have some response
 
     async def test_no_truncation_when_content_short(self):
         """Test that short content is not truncated."""
@@ -190,7 +190,7 @@ class TestContentTruncation(unittest.IsolatedAsyncioTestCase):
 
                 # Check that content was NOT truncated
                 # Short content should not trigger truncation warnings
-                self.assertTrue(len(msg._replies) > 0)  # Should have some response
+                assert len(msg._replies) > 0  # Should have some response
 
     async def test_truncation_exact_boundary(self):
         """Test truncation at exact boundary (45,000 characters)."""
@@ -233,7 +233,7 @@ class TestContentTruncation(unittest.IsolatedAsyncioTestCase):
 
                 # Content at exact boundary should not be truncated
                 # Should have some response
-                self.assertTrue(len(msg._replies) > 0)
+                assert len(msg._replies) > 0
 
     async def test_truncation_one_character_over(self):
         """Test truncation when content is just one character over the limit."""
@@ -278,7 +278,7 @@ class TestContentTruncation(unittest.IsolatedAsyncioTestCase):
                 # The truncation warning is logged, not sent to user
                 # We can verify this by checking the log output or by ensuring the test passes
                 # The important thing is that the content was processed without errors
-                self.assertTrue(len(msg._replies) > 0)  # Should have some response
+                assert len(msg._replies) > 0  # Should have some response
 
 
 if __name__ == "__main__":

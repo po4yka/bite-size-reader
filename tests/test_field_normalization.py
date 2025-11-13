@@ -41,25 +41,25 @@ class TestFieldNormalization(unittest.TestCase):
         result = validate_and_shape_summary(payload)
 
         # Check that the normalized fields exist
-        self.assertIn("summary_250", result)
-        self.assertIn("summary_1000", result)
-        self.assertIn("tldr", result)
-        self.assertIn("key_ideas", result)
-        self.assertIn("topic_tags", result)
-        self.assertIn("estimated_reading_time_min", result)
-        self.assertIn("key_stats", result)
-        self.assertIn("answered_questions", result)
-        self.assertIn("seo_keywords", result)
+        assert "summary_250" in result
+        assert "summary_1000" in result
+        assert "tldr" in result
+        assert "key_ideas" in result
+        assert "topic_tags" in result
+        assert "estimated_reading_time_min" in result
+        assert "key_stats" in result
+        assert "answered_questions" in result
+        assert "seo_keywords" in result
 
         # Check that the content was preserved
-        self.assertEqual(
-            result["summary_250"],
-            "No source content provided; unable to generate a factual summary.",
+        assert (
+            result["summary_250"]
+            == "No source content provided; unable to generate a factual summary."
         )
-        self.assertEqual(result["summary_1000"], payload["summary1000"])
-        self.assertEqual(len(result["key_ideas"]), 5)
-        self.assertEqual(len(result["topic_tags"]), 6)
-        self.assertEqual(result["estimated_reading_time_min"], 0)
+        assert result["summary_1000"] == payload["summary1000"]
+        assert len(result["key_ideas"]) == 5
+        assert len(result["topic_tags"]) == 6
+        assert result["estimated_reading_time_min"] == 0
 
     def test_mixed_case_field_names(self) -> None:
         """Test normalization of mixed case field names."""
@@ -78,20 +78,20 @@ class TestFieldNormalization(unittest.TestCase):
         result = validate_and_shape_summary(payload)
 
         # Check that all fields are normalized
-        self.assertIn("summary_250", result)
-        self.assertIn("key_ideas", result)
-        self.assertIn("topic_tags", result)
-        self.assertIn("estimated_reading_time_min", result)
-        self.assertIn("key_stats", result)
-        self.assertIn("answered_questions", result)
-        self.assertIn("seo_keywords", result)
+        assert "summary_250" in result
+        assert "key_ideas" in result
+        assert "topic_tags" in result
+        assert "estimated_reading_time_min" in result
+        assert "key_stats" in result
+        assert "answered_questions" in result
+        assert "seo_keywords" in result
 
         # Check content preservation
-        self.assertEqual(result["summary_250"], "Test summary 250")
-        self.assertEqual(result["summary_1000"], "Test summary 250")
-        self.assertEqual(result["key_ideas"], ["idea1", "idea2"])
-        self.assertEqual(result["topic_tags"], ["#tag1", "#tag2"])  # Should be hash-tagged
-        self.assertEqual(result["estimated_reading_time_min"], 5)
+        assert result["summary_250"] == "Test summary 250"
+        assert result["summary_1000"] == "Test summary 250"
+        assert result["key_ideas"] == ["idea1", "idea2"]
+        assert result["topic_tags"] == ["#tag1", "#tag2"]  # Should be hash-tagged
+        assert result["estimated_reading_time_min"] == 5
 
     def test_already_correct_field_names(self) -> None:
         """Test that already correct snake_case field names are preserved."""
@@ -111,21 +111,21 @@ class TestFieldNormalization(unittest.TestCase):
         result = validate_and_shape_summary(payload)
 
         # Check that all fields are preserved
-        self.assertIn("summary_250", result)
-        self.assertIn("summary_1000", result)
-        self.assertIn("tldr", result)
-        self.assertIn("key_ideas", result)
-        self.assertIn("topic_tags", result)
-        self.assertIn("estimated_reading_time_min", result)
-        self.assertIn("key_stats", result)
-        self.assertIn("answered_questions", result)
-        self.assertIn("seo_keywords", result)
+        assert "summary_250" in result
+        assert "summary_1000" in result
+        assert "tldr" in result
+        assert "key_ideas" in result
+        assert "topic_tags" in result
+        assert "estimated_reading_time_min" in result
+        assert "key_stats" in result
+        assert "answered_questions" in result
+        assert "seo_keywords" in result
 
         # Check content preservation
-        self.assertEqual(result["summary_250"], "Test summary 250")
-        self.assertEqual(result["summary_1000"], "Test summary 1000")
-        self.assertEqual(result["tldr"], "Test summary 1000")
-        self.assertEqual(result["key_ideas"], ["idea1", "idea2"])
+        assert result["summary_250"] == "Test summary 250"
+        assert result["summary_1000"] == "Test summary 1000"
+        assert result["tldr"] == "Test summary 1000"
+        assert result["key_ideas"] == ["idea1", "idea2"]
 
 
 if __name__ == "__main__":

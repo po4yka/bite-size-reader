@@ -213,7 +213,6 @@ class ResponseProcessor:
 
     def is_completion_truncated(self, data: dict) -> tuple[bool, str | None, str | None]:
         """Inspect response metadata and determine if the completion was truncated."""
-
         try:
             choices = data.get("choices") or []
             if not choices:

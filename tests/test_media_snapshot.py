@@ -50,7 +50,7 @@ def _bot_with_tmpdb(tmp_path):
         openrouter=OpenRouterConfig(
             api_key="y",
             model="m",
-            fallback_models=tuple(),
+            fallback_models=(),
             http_referer=None,
             x_title=None,
             max_tokens=1024,
@@ -99,14 +99,14 @@ class TestMediaSnapshot(unittest.TestCase):
             "SELECT media_type, media_file_ids_json FROM telegram_messages WHERE request_id = ?",
             (self.req_id,),
         )
-        self.assertIsNotNone(row)
-        self.assertEqual(row["media_type"], expected_type)
+        assert row is not None
+        assert row["media_type"] == expected_type
         if expected_ids:
-            self.assertIsNotNone(row["media_file_ids_json"])
+            assert row["media_file_ids_json"] is not None
             ids = json.loads(row["media_file_ids_json"]) if row["media_file_ids_json"] else []
-            self.assertEqual(ids, expected_ids)
+            assert ids == expected_ids
         else:
-            self.assertIsNone(row["media_file_ids_json"])
+            assert row["media_file_ids_json"] is None
 
     def test_photo_snapshot(self):
         class Msg(_MsgBase):
@@ -184,7 +184,7 @@ class TestMediaSnapshot(unittest.TestCase):
         row = self.db.fetchone(
             "SELECT entities_json FROM telegram_messages WHERE request_id = ?", (self.req_id,)
         )
-        self.assertIsNotNone(row)
+        assert row is not None
         ents = json.loads(row["entities_json"]) if row["entities_json"] else []
         types = {e.get("type") for e in ents}
         self.assertSetEqual(types, {"bold", "url"})
@@ -208,12 +208,12 @@ class TestMediaSnapshot(unittest.TestCase):
             "SELECT forward_from_chat_id, forward_from_chat_type, forward_from_chat_title, forward_from_message_id, forward_date_ts FROM telegram_messages WHERE request_id = ?",
             (self.req_id,),
         )
-        self.assertIsNotNone(row)
-        self.assertEqual(row["forward_from_chat_id"], 777)
-        self.assertEqual(row["forward_from_chat_type"], "channel")
-        self.assertEqual(row["forward_from_chat_title"], "My Channel")
-        self.assertEqual(row["forward_from_message_id"], 555)
-        self.assertEqual(row["forward_date_ts"], 1700000000)
+        assert row is not None
+        assert row["forward_from_chat_id"] == 777
+        assert row["forward_from_chat_type"] == "channel"
+        assert row["forward_from_chat_title"] == "My Channel"
+        assert row["forward_from_message_id"] == 555
+        assert row["forward_date_ts"] == 1700000000
 
 
 if __name__ == "__main__":

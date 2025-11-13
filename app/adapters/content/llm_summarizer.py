@@ -5,7 +5,6 @@ from __future__ import annotations
 import json
 import logging
 import re
-from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 from urllib.parse import urlparse
 
@@ -22,16 +21,18 @@ from app.adapters.content.llm_response_workflow import (
     LLMSummaryPersistenceSettings,
     LLMWorkflowNotifications,
 )
-from app.config import AppConfig
 from app.core.async_utils import raise_if_cancelled
 from app.core.json_utils import extract_json
 from app.core.lang import LANG_RU
-from app.db.database import Database
 from app.db.user_interactions import async_safe_update_user_interaction
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from app.adapters.external.response_formatter import ResponseFormatter
     from app.adapters.openrouter.openrouter_client import OpenRouterClient
+    from app.config import AppConfig
+    from app.db.database import Database
 
 logger = logging.getLogger(__name__)
 
@@ -474,7 +475,7 @@ class LLMSummarizer:
 
             logger.warning("custom_article_generation_exhausted", extra={"cid": correlation_id})
             return None
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             raise_if_cancelled(exc)
             logger.exception(
                 "custom_article_generation_failed",
@@ -869,9 +870,11 @@ class LLMSummarizer:
         request_row: dict[str, Any] | None = None
         try:
             request_row = self.db.get_request_by_id(req_id)
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             raise_if_cancelled(exc)
-            logger.error("request_lookup_failed", extra={"error": str(exc), "cid": correlation_id})
+            logger.exception(
+                "request_lookup_failed", extra={"error": str(exc), "cid": correlation_id}
+            )
 
         request_url: str | None = None
         if request_row:
@@ -953,9 +956,9 @@ class LLMSummarizer:
         """Load and flatten Firecrawl metadata for a request."""
         try:
             crawl_row = self.db.get_crawl_result_by_request(req_id)
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             raise_if_cancelled(exc)
-            logger.error("firecrawl_lookup_failed", extra={"error": str(exc)})
+            logger.exception("firecrawl_lookup_failed", extra={"error": str(exc)})
             return {}
 
         if not crawl_row:
@@ -966,7 +969,7 @@ class LLMSummarizer:
         if metadata_raw:
             try:
                 parsed = json.loads(metadata_raw)
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 raise_if_cancelled(exc)
                 logger.debug("firecrawl_metadata_parse_error", extra={"error": str(exc)})
 
@@ -979,7 +982,7 @@ class LLMSummarizer:
                         data_block = payload.get("data")
                         if isinstance(data_block, dict):
                             parsed = data_block.get("metadata") or data_block.get("meta")
-                except Exception as exc:  # noqa: BLE001
+                except Exception as exc:
                     raise_if_cancelled(exc)
                     logger.debug("firecrawl_raw_metadata_parse_error", extra={"error": str(exc)})
 
@@ -1111,7 +1114,7 @@ class LLMSummarizer:
                     request_id=req_id,
                     response_format=response_format,
                 )
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             raise_if_cancelled(exc)
             logger.warning(
                 "metadata_completion_call_failed",
@@ -1165,7 +1168,7 @@ class LLMSummarizer:
                         loaded = json.loads(parsed)
                         if isinstance(loaded, dict):
                             candidate = loaded
-                    except Exception:  # noqa: BLE001
+                    except Exception:
                         candidate = None
                 if candidate is None:
                     content = message.get("content")
@@ -1186,10 +1189,9 @@ class LLMSummarizer:
             if not netloc and parsed.path:
                 netloc = parsed.path.split("/")[0]
             netloc = netloc.strip().lower()
-            if netloc.startswith("www."):
-                netloc = netloc[4:]
+            netloc = netloc.removeprefix("www.")
             return netloc or None
-        except Exception:  # noqa: BLE001
+        except Exception:
             return None
 
     @property
@@ -1218,7 +1220,7 @@ class LLMSummarizer:
                 json_payload = row.get("json_payload") if row else None
                 if json_payload:
                     summary_candidate = json.loads(json_payload)
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 raise_if_cancelled(exc)
                 logger.debug(
                     "insights_summary_load_failed",
@@ -1327,7 +1329,7 @@ class LLMSummarizer:
             self._last_insights = None
             return None
 
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             raise_if_cancelled(exc)
             logger.exception(
                 "insights_generation_failed", extra={"cid": correlation_id, "error": str(exc)}
@@ -1337,7 +1339,6 @@ class LLMSummarizer:
 
     def _insights_has_content(self, payload: dict[str, Any]) -> bool:
         """Return True when the insights payload contains meaningful data."""
-
         for field in ("topic_overview", "caution"):
             value = payload.get(field)
             if isinstance(value, str) and value.strip():
@@ -1487,7 +1488,7 @@ class LLMSummarizer:
                                 loaded = json.loads(json.dumps(parsed))
                                 if isinstance(loaded, dict):
                                     candidate = loaded
-                            except Exception:  # noqa: BLE001
+                            except Exception:
                                 candidate = None
                         if candidate is None:
                             content = message.get("content")

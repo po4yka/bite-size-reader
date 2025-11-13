@@ -27,14 +27,72 @@ exclude = [".git", "data", "build", "dist", "venv"]
 
 [tool.ruff.lint]
 select = [
-  "E",  # pycodestyle errors
-  "F",  # pyflakes
-  "UP", # pyupgrade
+  "E",     # pycodestyle errors
+  "F",     # pyflakes
+  "UP",    # pyupgrade
   "ASYNC", # async issues
-  "N",  # pep8-naming
+  "N",     # pep8-naming
+  "B",     # flake8-bugbear
+  "C4",    # flake8-comprehensions
+  "DTZ",   # flake8-datetimez
+  "T10",   # flake8-debugger
+  "EXE",   # flake8-executable
+  "ISC",   # flake8-implicit-str-concat
+  "PIE",   # flake8-pie
+  "PT",    # flake8-pytest-style
+  "RET",   # flake8-return
+  "SIM",   # flake8-simplify
+  "TID",   # flake8-tidy-imports
+  "TCH",   # flake8-type-checking
+  "ERA",   # eradicate (commented code)
+  "PL",    # pylint
+  "RUF",   # ruff-specific rules
 ]
 ignore = [
-  "E501",  # line length handled by formatter
+  "E501",    # line length handled by formatter
+  "PLR0913", # too many arguments
+  "PLR2004", # magic value comparison
+  "PLR0911", # too many return statements
+  "PLR0912", # too many branches
+  "PLR0915", # too many statements
+  "BLE001",  # blind exception catch - intentional for resilience in many cases
+  "FBT001",  # boolean positional arg - acceptable in many contexts
+  "FBT002",  # boolean default value - acceptable in many contexts
+  "FBT003",  # boolean positional value - acceptable in many contexts
+  "TRY300",  # consider else block - style preference
+  "S110",    # try-except-pass - sometimes appropriate for optional features
+  "PLC0415", # import outside top-level - needed for circular dependencies
+  "SLF001",  # private member access - sometimes necessary
+  "ERA001",  # commented code - may be kept for documentation
+  "RUF001",  # ambiguous unicode - false positives in Russian text
+  "DTZ003",  # datetime without timezone - not always needed
+  "DTZ005",  # datetime.now without tz - not always needed
+  "SIM102",  # nested if - style preference, sometimes clearer
+  "SIM105",  # use contextlib.suppress - style preference
+  "PLW2901", # loop variable overwritten - sometimes intentional
+  "RUF012",  # mutable class attributes - acceptable in many cases
+  "RUF009",  # function call in dataclass defaults - safe for Logger objects
+  "N818",    # exception naming - DDD naming convention
+  "ASYNC109", # async timeout parameter - trio-specific, not relevant
+]
+
+# Per-file ignores for test files
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = [
+  "S101",    # assert used - normal in tests
+  "PLR2004", # magic values - acceptable in tests
+  "SLF001",  # private member access - sometimes needed in tests
+  "ARG001",  # unused function arguments - test fixtures
+  "ARG002",  # unused method arguments - test methods
+  "PLR0913", # too many arguments - test setup
+  "C901",    # complex functions - test scenarios
+  "PTH118",  # os.path.join - legacy test code
+  "PT011",   # pytest.raises too broad - can be improved later
+  "PT009",   # unittest assertions - can be migrated later
+  "DTZ005",  # datetime.now without tz - acceptable in tests
+]
+"test_*.py" = [
+  "EXE001",  # shebang present - test files in root
 ]
 
 [tool.ruff.format]
@@ -99,4 +157,41 @@ dev = [
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
-addopts = "-v --tb=short"
+addopts = "-v --tb=short --strict-markers"
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "integration: marks tests as integration tests",
+    "unit: marks tests as unit tests",
+]
+asyncio_default_fixture_loop_scope = "function"
+
+[tool.coverage.run]
+source = ["app"]
+omit = [
+    "*/tests/*",
+    "*/test_*.py",
+    "*/__pycache__/*",
+    "*/venv/*",
+    "*/build/*",
+    "*/dist/*",
+]
+branch = true
+parallel = true
+
+[tool.coverage.report]
+precision = 2
+show_missing = true
+skip_covered = false
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+    "class .*\\bProtocol\\):",
+    "@(abc\\.)?abstractmethod",
+]
+
+[tool.coverage.html]
+directory = "htmlcov"

@@ -3,13 +3,11 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
-import threading
 import time
 import weakref
-from collections.abc import AsyncGenerator, Callable
 from contextlib import asynccontextmanager
 from importlib.util import find_spec
-from typing import Any
+from typing import TYPE_CHECKING, Any, Self
 
 import httpx
 
@@ -26,6 +24,9 @@ from app.adapters.openrouter.request_builder import RequestBuilder
 from app.adapters.openrouter.response_processor import ResponseProcessor
 from app.core.async_utils import raise_if_cancelled
 from app.models.llm.llm_models import ChatRequest, LLMCallResult
+
+if TYPE_CHECKING:
+    from collections.abc import AsyncGenerator, Callable
 
 logger = logging.getLogger(__name__)
 
@@ -45,27 +46,25 @@ class OpenRouterClient:
     _client_pool: dict[str, httpx.AsyncClient] = {}
     _cleanup_registry: weakref.WeakSet[OpenRouterClient] = weakref.WeakSet()
 
-    # Thread lock to protect asyncio.Lock creation (solves chicken-and-egg problem)
-    _pool_lock_init = threading.Lock()
+    # Async lock for client pool access (created lazily per event loop)
     _client_pool_lock: asyncio.Lock | None = None
 
     @classmethod
     def _get_pool_lock(cls) -> asyncio.Lock:
         """Get or create the async lock for client pool access.
 
-        Thread-safe lazy initialization using double-checked locking pattern.
-        Uses threading.Lock to protect asyncio.Lock creation.
+        Creates lock lazily on first access. Safe for asyncio since
+        we're always called from async context within a single event loop.
         """
-        # Fast path: lock already exists (no synchronization needed)
+        # Fast path: lock already exists
         if cls._client_pool_lock is not None:
             return cls._client_pool_lock
 
-        # Slow path: need to create the lock with thread-safe initialization
-        with cls._pool_lock_init:
-            # Double-check after acquiring thread lock
-            if cls._client_pool_lock is None:
-                cls._client_pool_lock = asyncio.Lock()
-            return cls._client_pool_lock
+        # Slow path: create the lock
+        # This is safe in asyncio because we're single-threaded within an event loop
+        # No threading.Lock needed - async context handles serialization
+        cls._client_pool_lock = asyncio.Lock()
+        return cls._client_pool_lock
 
     def __init__(
         self,
@@ -145,8 +144,9 @@ class OpenRouterClient:
             )
         except Exception as e:
             raise_if_cancelled(e)
+            msg = f"Failed to initialize request builder: {e}"
             raise ConfigurationError(
-                f"Failed to initialize request builder: {e}",
+                msg,
                 context={"component": "request_builder", "original_error": str(e)},
             ) from e
 
@@ -156,8 +156,9 @@ class OpenRouterClient:
             )
         except Exception as e:
             raise_if_cancelled(e)
+            msg = f"Failed to initialize response processor: {e}"
             raise ConfigurationError(
-                f"Failed to initialize response processor: {e}",
+                msg,
                 context={"component": "response_processor", "original_error": str(e)},
             ) from e
 
@@ -171,8 +172,9 @@ class OpenRouterClient:
             )
         except Exception as e:
             raise_if_cancelled(e)
+            msg = f"Failed to initialize model capabilities: {e}"
             raise ConfigurationError(
-                f"Failed to initialize model capabilities: {e}",
+                msg,
                 context={"component": "model_capabilities", "original_error": str(e)},
             ) from e
 
@@ -185,8 +187,9 @@ class OpenRouterClient:
             )
         except Exception as e:
             raise_if_cancelled(e)
+            msg = f"Failed to initialize error handler: {e}"
             raise ConfigurationError(
-                f"Failed to initialize error handler: {e}",
+                msg,
                 context={"component": "error_handler", "original_error": str(e)},
             ) from e
 
@@ -197,8 +200,9 @@ class OpenRouterClient:
             )
         except Exception as e:
             raise_if_cancelled(e)
+            msg = f"Failed to initialize payload logger: {e}"
             raise ConfigurationError(
-                f"Failed to initialize payload logger: {e}",
+                msg,
                 context={"component": "payload_logger", "original_error": str(e)},
             ) from e
 
@@ -220,7 +224,7 @@ class OpenRouterClient:
         if clients:
             await asyncio.gather(*[client.aclose() for client in clients], return_exceptions=True)
 
-    async def __aenter__(self) -> OpenRouterClient:
+    async def __aenter__(self) -> Self:
         """Async context manager entry."""
         return self
 
@@ -242,7 +246,8 @@ class OpenRouterClient:
     async def _ensure_client(self) -> httpx.AsyncClient:
         """Lazily construct or reuse a pooled AsyncClient instance."""
         if self._closed:
-            raise RuntimeError("Client has been closed")
+            msg = "Client has been closed"
+            raise RuntimeError(msg)
 
         # Check if we already have a client reference
         if self._client is not None:
@@ -321,47 +326,54 @@ class OpenRouterClient:
         """Validate initialization parameters with specific error types."""
         # Security: Validate API key presence
         if not api_key or not isinstance(api_key, str):
+            msg = "API key is required and must be a non-empty string"
             raise ConfigurationError(
-                "API key is required and must be a non-empty string",
+                msg,
                 context={"parameter": "api_key", "type": type(api_key).__name__},
             )
         if len(api_key.strip()) < 10:  # Basic sanity check
+            msg = "API key appears to be invalid (too short)"
             raise ConfigurationError(
-                "API key appears to be invalid (too short)",
+                msg,
                 context={"parameter": "api_key", "length": len(api_key.strip())},
             )
 
         # Security: Validate model
         if not model or not isinstance(model, str):
+            msg = "Model is required and must be a non-empty string"
             raise ConfigurationError(
-                "Model is required and must be a non-empty string",
+                msg,
                 context={"parameter": "model", "type": type(model).__name__},
             )
         if len(model) > 100:
+            msg = f"Model name too long (max 100 characters, got {len(model)})"
             raise ConfigurationError(
-                f"Model name too long (max 100 characters, got {len(model)})",
+                msg,
                 context={"parameter": "model", "length": len(model)},
             )
 
         # Security: Validate headers
         if http_referer and (not isinstance(http_referer, str) or len(http_referer) > 500):
+            msg = f"HTTP referer must be a string with max 500 characters (got {len(http_referer)})"
             raise ConfigurationError(
-                f"HTTP referer must be a string with max 500 characters (got {len(http_referer)})",
+                msg,
                 context={
                     "parameter": "http_referer",
                     "length": len(http_referer) if http_referer else 0,
                 },
             )
         if x_title and (not isinstance(x_title, str) or len(x_title) > 200):
+            msg = f"X-Title must be a string with max 200 characters (got {len(x_title)})"
             raise ConfigurationError(
-                f"X-Title must be a string with max 200 characters (got {len(x_title)})",
+                msg,
                 context={"parameter": "x_title", "length": len(x_title) if x_title else 0},
             )
 
         # Security: Validate timeout
         if not isinstance(timeout_sec, int | float) or timeout_sec <= 0:
+            msg = f"Timeout must be a positive number (got {timeout_sec})"
             raise ConfigurationError(
-                f"Timeout must be a positive number (got {timeout_sec})",
+                msg,
                 context={
                     "parameter": "timeout_sec",
                     "value": timeout_sec,
@@ -369,15 +381,17 @@ class OpenRouterClient:
                 },
             )
         if timeout_sec > 300:  # 5 minutes max
+            msg = f"Timeout too large (max 300 seconds, got {timeout_sec})"
             raise ConfigurationError(
-                f"Timeout too large (max 300 seconds, got {timeout_sec})",
+                msg,
                 context={"parameter": "timeout_sec", "value": timeout_sec},
             )
 
         # Security: Validate retry parameters
         if not isinstance(max_retries, int) or max_retries < 0 or max_retries > 10:
+            msg = f"Max retries must be an integer between 0 and 10 (got {max_retries})"
             raise ConfigurationError(
-                f"Max retries must be an integer between 0 and 10 (got {max_retries})",
+                msg,
                 context={
                     "parameter": "max_retries",
                     "value": max_retries,
@@ -385,8 +399,9 @@ class OpenRouterClient:
                 },
             )
         if not isinstance(backoff_base, int | float) or backoff_base < 0:
+            msg = f"Backoff base must be a non-negative number (got {backoff_base})"
             raise ConfigurationError(
-                f"Backoff base must be a non-negative number (got {backoff_base})",
+                msg,
                 context={
                     "parameter": "backoff_base",
                     "value": backoff_base,
@@ -396,8 +411,9 @@ class OpenRouterClient:
 
         # Validate structured output settings
         if structured_output_mode not in {"json_schema", "json_object"}:
+            msg = f"Structured output mode must be 'json_schema' or 'json_object' (got '{structured_output_mode}')"
             raise ConfigurationError(
-                f"Structured output mode must be 'json_schema' or 'json_object' (got '{structured_output_mode}')",
+                msg,
                 context={"parameter": "structured_output_mode", "value": structured_output_mode},
             )
 
@@ -416,15 +432,17 @@ class OpenRouterClient:
     async def _request_context(self) -> AsyncGenerator[httpx.AsyncClient, None]:
         """Context manager for request handling with proper error handling."""
         if self._closed:
-            raise ClientError("Cannot use client after it has been closed")
+            msg = "Cannot use client after it has been closed"
+            raise ClientError(msg)
 
         client = await self._ensure_client()
 
         try:
             yield client
         except httpx.TimeoutException as e:
+            msg = f"Request timeout: {e}"
             raise NetworkError(
-                f"Request timeout: {e}",
+                msg,
                 context={
                     "client": "shared" if client in self._client_pool.values() else "dedicated",
                     "timeout_seconds": (
@@ -435,8 +453,9 @@ class OpenRouterClient:
                 },
             ) from e
         except httpx.ConnectError as e:
+            msg = f"Connection failed: {e}"
             raise NetworkError(
-                f"Connection failed: {e}",
+                msg,
                 context={
                     "client": "shared" if client in self._client_pool.values() else "dedicated",
                     "base_url": self._base_url,
@@ -448,8 +467,9 @@ class OpenRouterClient:
             raise
         except Exception as e:
             raise_if_cancelled(e)
+            msg = f"Unexpected client error: {e}"
             raise ClientError(
-                f"Unexpected client error: {e}",
+                msg,
                 context={
                     "client": "shared" if client in self._client_pool.values() else "dedicated",
                     "error_type": type(e).__name__,
@@ -470,15 +490,18 @@ class OpenRouterClient:
     ) -> LLMCallResult:
         """Enhanced chat method with structured output support."""
         if self._closed:
-            raise RuntimeError("Client has been closed")
+            msg = "Client has been closed"
+            raise RuntimeError(msg)
 
         # Early validation to fail fast
         if not messages:
-            raise ValidationError("Messages cannot be empty", context={"messages_count": 0})
+            msg = "Messages cannot be empty"
+            raise ValidationError(msg, context={"messages_count": 0})
 
         if not isinstance(messages, list):
+            msg = f"Messages must be a list, got {type(messages).__name__}"
             raise ValidationError(
-                f"Messages must be a list, got {type(messages).__name__}",
+                msg,
                 context={"messages_type": type(messages).__name__},
             )
 
@@ -496,8 +519,9 @@ class OpenRouterClient:
             )
         except Exception as e:
             raise_if_cancelled(e)
+            msg = f"Invalid chat request parameters: {e}"
             raise ValidationError(
-                f"Invalid chat request parameters: {e}",
+                msg,
                 context={"original_error": str(e), "messages_count": len(messages)},
             ) from e
 
@@ -507,8 +531,9 @@ class OpenRouterClient:
             sanitized_messages = self.request_builder.sanitize_messages(messages)
         except Exception as e:
             raise_if_cancelled(e)
+            msg = f"Request validation failed: {e}"
             raise ValidationError(
-                f"Request validation failed: {e}",
+                msg,
                 context={"original_error": str(e), "messages_count": len(messages)},
             ) from e
 
@@ -524,7 +549,8 @@ class OpenRouterClient:
         )
 
         if not models_to_try:
-            raise ValueError("No models available to try")
+            msg = "No models available to try"
+            raise ValueError(msg)
 
         # State tracking
         builder_rf_mode_original = self.request_builder._structured_output_mode
@@ -633,7 +659,7 @@ class OpenRouterClient:
 
                         except httpx.TimeoutException as e:
                             # Handle timeout specifically
-                            last_error_text = f"Request timeout: {str(e)}"
+                            last_error_text = f"Request timeout: {e!s}"
                             last_error_context = {
                                 "status_code": None,
                                 "message": "Request timeout",
@@ -643,11 +669,10 @@ class OpenRouterClient:
                             if attempt < self.error_handler._max_retries:
                                 await self.error_handler.sleep_backoff(attempt)
                                 continue
-                            else:
-                                break  # Try next model
+                            break  # Try next model
                         except httpx.ConnectError as e:
                             # Handle connection errors specifically
-                            last_error_text = f"Connection error: {str(e)}"
+                            last_error_text = f"Connection error: {e!s}"
                             last_error_context = {
                                 "status_code": None,
                                 "message": "Connection failed",
@@ -657,11 +682,10 @@ class OpenRouterClient:
                             if attempt < self.error_handler._max_retries:
                                 await self.error_handler.sleep_backoff(attempt)
                                 continue
-                            else:
-                                break  # Try next model
+                            break  # Try next model
                         except httpx.HTTPStatusError as e:
                             # Handle HTTP status errors specifically
-                            last_error_text = f"HTTP {e.response.status_code} error: {str(e)}"
+                            last_error_text = f"HTTP {e.response.status_code} error: {e!s}"
                             last_error_context = {
                                 "status_code": e.response.status_code,
                                 "message": "HTTP status error",
@@ -671,12 +695,11 @@ class OpenRouterClient:
                             if attempt < self.error_handler._max_retries:
                                 await self.error_handler.sleep_backoff(attempt)
                                 continue
-                            else:
-                                break  # Try next model
+                            break  # Try next model
                         except Exception as e:
                             raise_if_cancelled(e)
                             # Handle other unexpected exceptions
-                            last_error_text = f"Unexpected error: {str(e)}"
+                            last_error_text = f"Unexpected error: {e!s}"
                             last_error_context = {
                                 "status_code": None,
                                 "message": "Client exception",
@@ -686,8 +709,7 @@ class OpenRouterClient:
                             if attempt < self.error_handler._max_retries:
                                 await self.error_handler.sleep_backoff(attempt)
                                 continue
-                            else:
-                                break  # Try next model
+                            break  # Try next model
 
                     # Break if structured output parse error (don't try other models)
                     if structured_parse_error:
@@ -701,7 +723,7 @@ class OpenRouterClient:
         except Exception as e:
             raise_if_cancelled(e)
             # Handle context manager or other critical errors
-            last_error_text = f"Critical error: {str(e)}"
+            last_error_text = f"Critical error: {e!s}"
             last_error_context = {
                 "status_code": None,
                 "message": "Critical client error",
@@ -761,7 +783,6 @@ class OpenRouterClient:
         request_id: int | None,
     ) -> dict[str, Any]:
         """Attempt a single request with comprehensive error handling."""
-
         self.error_handler.log_attempt(attempt, model, request_id)
 
         # Build request components
@@ -906,7 +927,6 @@ class OpenRouterClient:
         sanitized_messages: list[dict[str, str]],
     ) -> dict[str, Any]:
         """Handle successful API response."""
-
         # Extract response data
         text, usage, cost_usd = self.response_processor.extract_response_data(data, rf_included)
 
@@ -932,7 +952,7 @@ class OpenRouterClient:
                         "structured_output_used": True,
                         "structured_output_mode_used": "json_object",
                     }
-                elif rf_mode_current == "json_object":
+                if rf_mode_current == "json_object":
                     return {
                         "success": False,
                         "should_retry": True,
@@ -971,7 +991,7 @@ class OpenRouterClient:
                         "backoff_needed": True,
                     }
                 # Second attempt: try with even lower temperature and higher max_tokens
-                elif attempt == 1 and truncated:
+                if attempt == 1 and truncated:
                     logger.info(
                         "gpt5_truncation_attempt_2",
                         extra={
@@ -986,7 +1006,7 @@ class OpenRouterClient:
                         "backoff_needed": True,
                     }
                 # Only fallback to next model as last resort
-                elif attempt >= 2 and truncated:
+                if attempt >= 2 and truncated:
                     logger.warning(
                         "gpt5_fallback_to_next_model",
                         extra={
@@ -1041,8 +1061,7 @@ class OpenRouterClient:
                     "structured_parse_error": True,
                     "should_try_next_model": False,  # Don't try other models for parse errors
                 }
-            else:
-                text = processed_text
+            text = processed_text
 
         # Extract finish reason and tokens
         finish_reason = None
@@ -1139,7 +1158,6 @@ class OpenRouterClient:
         sanitized_messages: list[dict[str, str]],
     ) -> dict[str, Any]:
         """Handle error responses with appropriate retry/fallback logic."""
-
         # Handle response format errors with graceful degradation
         if self.response_processor.should_downgrade_response_format(status_code, data, rf_included):
             should_downgrade, new_mode = self.error_handler.should_downgrade_response_format(
@@ -1162,20 +1180,19 @@ class OpenRouterClient:
                         ),
                         "backoff_needed": True,
                     }
-                else:
-                    self.error_handler.log_structured_outputs_disabled(model, request_id)
-                    return {
-                        "success": False,
-                        "should_retry": True,
-                        "new_rf_mode": rf_mode_current,
-                        "new_response_format": None,
-                        "structured_output_used": False,
-                        "structured_output_mode_used": None,
-                        "backoff_needed": True,
-                    }
+                self.error_handler.log_structured_outputs_disabled(model, request_id)
+                return {
+                    "success": False,
+                    "should_retry": True,
+                    "new_rf_mode": rf_mode_current,
+                    "new_response_format": None,
+                    "structured_output_used": False,
+                    "structured_output_mode_used": None,
+                    "backoff_needed": True,
+                }
 
         # Extract response content and error context
-        text, usage, cost_usd = self.response_processor.extract_response_data(data, rf_included)
+        text, usage, _cost_usd = self.response_processor.extract_response_data(data, rf_included)
         error_context = self.response_processor.get_error_context(status_code, data)
         error_message = error_context["message"]
 
@@ -1236,7 +1253,7 @@ class OpenRouterClient:
                         "new_response_format": {"type": "json_object"},
                         "backoff_needed": True,
                     }
-                elif rf_mode_current == "json_object":
+                if rf_mode_current == "json_object":
                     self.error_handler.log_structured_outputs_disabled(model, request_id)
                     return {
                         "success": False,
@@ -1289,13 +1306,15 @@ class OpenRouterClient:
     async def get_models(self) -> dict[str, Any]:
         """Get available models from OpenRouter API."""
         if self._closed:
-            raise RuntimeError("Client has been closed")
+            msg = "Client has been closed"
+            raise RuntimeError(msg)
         return await self.model_capabilities.get_models()
 
     async def get_structured_models(self) -> set[str]:
         """Get set of models that support structured outputs."""
         if self._closed:
-            raise RuntimeError("Client has been closed")
+            msg = "Client has been closed"
+            raise RuntimeError(msg)
         return await self.model_capabilities.get_structured_models()
 
 

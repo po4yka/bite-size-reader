@@ -396,9 +396,9 @@ class MessageRouter:
                 message, text, uid, correlation_id, interaction_id, start_time
             )
             if action == "multi_confirm":
-                self.url_handler.add_pending_multi_links(uid, extract_all_urls(text))
+                await self.url_handler.add_pending_multi_links(uid, extract_all_urls(text))
             elif action == "awaiting_url":
-                self.url_handler.add_awaiting_user(uid)
+                await self.url_handler.add_awaiting_user(uid)
             return
 
         if text.startswith("/cancel"):
@@ -431,7 +431,7 @@ class MessageRouter:
             return
 
         # If awaiting a URL due to prior /summarize
-        if self.url_handler.is_awaiting_url(uid) and looks_like_url(text):
+        if await self.url_handler.is_awaiting_url(uid) and looks_like_url(text):
             await self.url_handler.handle_awaited_url(
                 message, text, uid, correlation_id, interaction_id, start_time
             )
@@ -445,7 +445,7 @@ class MessageRouter:
             return
 
         # Handle yes/no responses for pending multi-link confirmation
-        if self.url_handler.has_pending_multi_links(uid):
+        if await self.url_handler.has_pending_multi_links(uid):
             await self.url_handler.handle_multi_link_confirmation(
                 message, text, uid, correlation_id, interaction_id, start_time
             )

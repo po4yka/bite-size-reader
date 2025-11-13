@@ -34,7 +34,6 @@ def parse_summary_response(
     Tries structured responses, raw text parsing, and finally local repair helpers
     before signaling failure so the caller can escalate with a repair call.
     """
-
     errors: list[str] = []
 
     candidate = _extract_structured_dict(response_json)
@@ -91,7 +90,7 @@ def _shape_candidate(candidate: dict[str, Any]) -> tuple[dict[str, Any] | None, 
         shaped = validate_and_shape_summary(candidate)
         finalize_summary_texts(shaped)
         return shaped, None
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         return None, str(exc)
 
 
@@ -123,19 +122,18 @@ def _extract_structured_dict(response_json: Any) -> dict[str, Any] | None:
         if len(response_json) > 0:
             # Try to use the first item if it's a dict
             first_item = response_json[0]
-            if isinstance(first_item, dict):
-                if any(
-                    key in first_item
-                    for key in (
-                        "summary_250",
-                        "tldr",
-                        "summary_1000",
-                        "summary250",
-                        "summary1000",
-                        "key_ideas",
-                    )
-                ):
-                    return first_item
+            if isinstance(first_item, dict) and any(
+                key in first_item
+                for key in (
+                    "summary_250",
+                    "tldr",
+                    "summary_1000",
+                    "summary250",
+                    "summary1000",
+                    "key_ideas",
+                )
+            ):
+                return first_item
         return None
 
     if isinstance(response_json, dict):
@@ -166,7 +164,7 @@ def _extract_structured_dict(response_json: Any) -> dict[str, Any] | None:
                     try:
                         materialized = json.loads(json.dumps(parsed))
                         return materialized if isinstance(materialized, dict) else None
-                    except Exception:  # noqa: BLE001
+                    except Exception:
                         return None
     return None
 
@@ -176,7 +174,6 @@ _SUMMARY_250_RE = re.compile(r'"summary_250"\s*:\s*"([^"\\]*(?:\\.[^"\\]*)*)"')
 
 def _extract_minimal_summary(response_text: str | None) -> dict[str, Any] | None:
     """Extract a minimal summary payload from unstructured text."""
-
     if not response_text:
         return None
 
@@ -251,7 +248,7 @@ def _parse_json_text(candidate_text: str) -> tuple[dict[str, Any] | None, str | 
         parsed = json.loads(candidate_text)
     except json.JSONDecodeError as exc:
         return None, f"json_decode_error: {exc.msg} at line {exc.lineno} column {exc.colno}"
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         return None, f"json_error: {exc}"
     if not isinstance(parsed, dict):
         return None, "parsed_value_not_object"
@@ -270,7 +267,7 @@ def _attempt_local_repair(
         if "json_repair" in sys.modules:
             return None, "json_repair_disabled", False
         return None, "json_repair_not_available", False
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         return None, f"json_repair_import_error: {exc}", False
 
     repair_func = getattr(module, "repair_json", None)
@@ -280,7 +277,7 @@ def _attempt_local_repair(
     cleaned = _strip_code_fence(response_text.strip()).strip("` ")
     try:
         repaired_text = repair_func(cleaned)
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         return None, f"json_repair_runtime_error: {exc}", False
 
     if not isinstance(repaired_text, str):
@@ -292,4 +289,4 @@ def _attempt_local_repair(
     return parsed, None, True
 
 
-__all__ = ["SummaryJsonParseResult", "parse_summary_response", "finalize_summary_texts"]
+__all__ = ["SummaryJsonParseResult", "finalize_summary_texts", "parse_summary_response"]

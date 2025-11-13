@@ -5,7 +5,7 @@ import pytest
 from app.db.database import Database
 
 
-@pytest.fixture()
+@pytest.fixture
 def db(tmp_path) -> Database:
     path = tmp_path / "app.db"
     database = Database(str(path))

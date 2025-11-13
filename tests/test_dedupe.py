@@ -50,15 +50,16 @@ class FakeForwardMessage(FakeMessage):
 
 
 class FakeFirecrawl:
-    async def scrape_markdown(self, url: str, request_id=None):  # noqa: ARG002
-        raise AssertionError("Firecrawl should not be called on dedupe hit")
+    async def scrape_markdown(self, url: str, request_id=None):
+        msg = "Firecrawl should not be called on dedupe hit"
+        raise AssertionError(msg)
 
 
 class FakeOpenRouter:
     def __init__(self) -> None:
         self.calls = 0
 
-    async def chat(self, messages, request_id=None, **kwargs):  # noqa: ARG002
+    async def chat(self, messages, request_id=None, **kwargs):
         # return minimal valid JSON content
         self.calls += 1
         content = json.dumps({"summary_250": "ok", "summary_1000": "ok", "tldr": "ok"})
@@ -130,7 +131,7 @@ class TestDedupeReuse(unittest.IsolatedAsyncioTestCase):
                 openrouter=OpenRouterConfig(
                     api_key="y",
                     model="m",
-                    fallback_models=tuple(),
+                    fallback_models=(),
                     http_referer=None,
                     x_title=None,
                     max_tokens=1024,
@@ -149,15 +150,15 @@ class TestDedupeReuse(unittest.IsolatedAsyncioTestCase):
             # Avoid creating real Telegram client
             from app.adapters import telegram_bot as tbmod
 
-            setattr(tbmod, "Client", object)
-            setattr(tbmod, "filters", None)
+            tbmod.Client = object
+            tbmod.filters = None
 
             # Mock the OpenRouter client to avoid API key validation
             with patch("app.adapters.telegram.telegram_bot.OpenRouterClient") as mock_openrouter:
                 mock_openrouter.return_value = AsyncMock()
                 bot = TelegramBot(cfg=cfg, db=db)
             # Replace external clients with fakes
-            bot_any = cast(Any, bot)
+            bot_any = cast("Any", bot)
             bot_any._firecrawl = FakeFirecrawl()
             fake_or = FakeOpenRouter()
             bot_any._openrouter = fake_or
@@ -166,21 +167,21 @@ class TestDedupeReuse(unittest.IsolatedAsyncioTestCase):
             # First run: should reuse crawl and insert summary version 1
             await bot._handle_url_flow(msg, url, correlation_id="cid1")
             s1 = db.get_summary_by_request(req_id)
-            self.assertIsNotNone(s1)
-            self.assertEqual(int(s1["version"]), 1)
+            assert s1 is not None
+            assert int(s1["version"]) == 1
             # correlation id updated
             row = db.get_request_by_dedupe_hash(dedupe)
-            self.assertEqual(row["correlation_id"], "cid1")
+            assert row["correlation_id"] == "cid1"
 
             # Second run: dedupe again; summary should be served from cache without a new call
             await bot._handle_url_flow(msg, url, correlation_id="cid2")
             s2 = db.get_summary_by_request(req_id)
-            self.assertIsNotNone(s2)
-            self.assertEqual(int(s2["version"]), 1)
+            assert s2 is not None
+            assert int(s2["version"]) == 1
             row2 = db.get_request_by_dedupe_hash(dedupe)
-            self.assertEqual(row2["correlation_id"], "cid2")
-            self.assertEqual(
-                fake_or.calls, 3
+            assert row2["correlation_id"] == "cid2"
+            assert (
+                fake_or.calls == 3
             )  # 1 for summary + 2 for insights (json_schema + json_object fallback)
 
     async def test_forward_cached_summary_reuse(self):
@@ -215,7 +216,7 @@ class TestDedupeReuse(unittest.IsolatedAsyncioTestCase):
                 openrouter=OpenRouterConfig(
                     api_key="y",
                     model="m",
-                    fallback_models=tuple(),
+                    fallback_models=(),
                     http_referer=None,
                     x_title=None,
                     max_tokens=1024,
@@ -233,8 +234,8 @@ class TestDedupeReuse(unittest.IsolatedAsyncioTestCase):
 
             from app.adapters import telegram_bot as tbmod
 
-            setattr(tbmod, "Client", object)
-            setattr(tbmod, "filters", None)
+            tbmod.Client = object
+            tbmod.filters = None
 
             # Mock the OpenRouter client to avoid API key validation
             with patch("app.adapters.telegram.telegram_bot.OpenRouterClient") as mock_openrouter:
@@ -242,10 +243,11 @@ class TestDedupeReuse(unittest.IsolatedAsyncioTestCase):
                 bot = TelegramBot(cfg=cfg, db=db)
 
             class FailOpenRouter:
-                async def chat(self, *_, **__):  # noqa: ANN002
-                    raise AssertionError("LLM should not run for cached forward summaries")
+                async def chat(self, *_, **__):
+                    msg = "LLM should not run for cached forward summaries"
+                    raise AssertionError(msg)
 
-            bot_any = cast(Any, bot)
+            bot_any = cast("Any", bot)
             bot_any._openrouter = FailOpenRouter()
 
             msg = FakeForwardMessage(
@@ -259,12 +261,12 @@ class TestDedupeReuse(unittest.IsolatedAsyncioTestCase):
             await bot._handle_forward_flow(msg, correlation_id="newcid")
 
             cached_summary = db.get_summary_by_request(req_id)
-            self.assertIsNotNone(cached_summary)
-            self.assertEqual(int(cached_summary["version"]), 1)
+            assert cached_summary is not None
+            assert int(cached_summary["version"]) == 1
 
             existing_request = db.get_request_by_forward(fwd_chat_id, fwd_msg_id)
-            self.assertIsNotNone(existing_request)
-            self.assertEqual(existing_request["correlation_id"], "newcid")
+            assert existing_request is not None
+            assert existing_request["correlation_id"] == "newcid"
 
 
 if __name__ == "__main__":

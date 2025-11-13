@@ -25,7 +25,6 @@ class TopicSearchDocument:
 
 def ensure_mapping(value: Any) -> dict[str, Any]:
     """Return a mapping for JSON-like data, gracefully handling text payloads."""
-
     if isinstance(value, Mapping):
         return dict(value)
     if isinstance(value, str):
@@ -40,7 +39,6 @@ def ensure_mapping(value: Any) -> dict[str, Any]:
 
 def normalize_text(value: Any) -> str | None:
     """Normalize primitive values into trimmed text suitable for display."""
-
     if value is None:
         return None
     if isinstance(value, int | float):
@@ -51,7 +49,6 @@ def normalize_text(value: Any) -> str | None:
 
 def clean_snippet(snippet: str | None, *, limit: int = 300) -> str | None:
     """Normalize snippet text into a compact preview."""
-
     if not snippet:
         return None
     compact = " ".join(snippet.split())
@@ -64,7 +61,6 @@ def clean_snippet(snippet: str | None, *, limit: int = 300) -> str | None:
 
 def build_snippet(payload: Mapping[str, Any]) -> str | None:
     """Return the best available short summary snippet from a payload."""
-
     for key in ("summary_250", "summary_1000", "tldr"):
         value = payload.get(key)
         if isinstance(value, str) and value.strip():
@@ -74,7 +70,6 @@ def build_snippet(payload: Mapping[str, Any]) -> str | None:
 
 def tokenize(query: str) -> list[str]:
     """Split a query into normalized search terms."""
-
     return [piece for piece in re.findall(r"[\w-]+", query.casefold()) if piece]
 
 
@@ -93,7 +88,6 @@ def compose_search_body(
     content_text: str | None,
 ) -> tuple[str, str | None]:
     """Compose a lower-cased document body and tag text for indexing/search."""
-
     parts: list[str] = []
     if title:
         parts.append(title)
@@ -138,7 +132,6 @@ def build_topic_search_document(
     request_data: Mapping[str, Any],
 ) -> TopicSearchDocument | None:
     """Create a document payload for indexing from a stored summary."""
-
     metadata = ensure_mapping(payload.get("metadata"))
 
     url = (

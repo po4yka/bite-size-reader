@@ -5,12 +5,9 @@ from __future__ import annotations
 import asyncio
 import logging
 import re
-from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from app.adapters.external.firecrawl_parser import FirecrawlClient, FirecrawlSearchItem
-from app.db.database import Database
 from app.db.models import Request, Summary
 from app.services.topic_search_utils import (
     build_snippet,
@@ -20,6 +17,12 @@ from app.services.topic_search_utils import (
     normalize_text,
     tokenize,
 )
+
+if TYPE_CHECKING:
+    from collections.abc import Callable, Iterable, Sequence
+
+    from app.adapters.external.firecrawl_parser import FirecrawlClient, FirecrawlSearchItem
+    from app.db.database import Database
 
 logger = logging.getLogger(__name__)
 
@@ -46,9 +49,11 @@ class TopicSearchService:
         audit_func: Callable[[str, str, dict[str, Any]], None] | None = None,
     ) -> None:
         if max_results <= 0:
-            raise ValueError("max_results must be positive")
+            msg = "max_results must be positive"
+            raise ValueError(msg)
         if max_results > 10:
-            raise ValueError("max_results must be 10 or fewer")
+            msg = "max_results must be 10 or fewer"
+            raise ValueError(msg)
 
         self._firecrawl = firecrawl
         self._max_results = max_results
@@ -58,14 +63,14 @@ class TopicSearchService:
         self, topic: str, *, correlation_id: str | None = None
     ) -> list[TopicArticle]:
         """Return a curated list of articles for the provided topic."""
-
         query = (topic or "").strip()
         if not query:
-            raise ValueError("Topic query must not be empty")
+            msg = "Topic query must not be empty"
+            raise ValueError(msg)
 
         try:
             result = await self._firecrawl.search(query, limit=self._max_results)
-        except Exception:  # noqa: BLE001
+        except Exception:
             logger.exception(
                 "topic_search_request_failed", extra={"cid": correlation_id, "topic": query}
             )
@@ -111,7 +116,6 @@ class TopicSearchService:
 
     def _normalize_articles(self, raw_items: Iterable[FirecrawlSearchItem]) -> list[TopicArticle]:
         """Normalize Firecrawl search items into ``TopicArticle`` objects."""
-
         articles: list[TopicArticle] = []
         seen_urls: set[str] = set()
         for item in raw_items:
@@ -152,9 +156,11 @@ class LocalTopicSearchService:
         max_scan: int | None = None,
     ) -> None:
         if max_results <= 0:
-            raise ValueError("max_results must be positive")
+            msg = "max_results must be positive"
+            raise ValueError(msg)
         if max_results > 25:
-            raise ValueError("max_results must be 25 or fewer")
+            msg = "max_results must be 25 or fewer"
+            raise ValueError(msg)
 
         self._db = db
         self._max_results = max_results
@@ -167,14 +173,14 @@ class LocalTopicSearchService:
         self, topic: str, *, correlation_id: str | None = None
     ) -> list[TopicArticle]:
         """Return locally stored articles that match the requested topic."""
-
         query = (topic or "").strip()
         if not query:
-            raise ValueError("Topic query must not be empty")
+            msg = "Topic query must not be empty"
+            raise ValueError(msg)
 
         try:
             articles = await asyncio.to_thread(self._search_sync, query)
-        except Exception:  # noqa: BLE001
+        except Exception:
             logger.exception(
                 "local_topic_search_failed", extra={"cid": correlation_id, "topic": query}
             )
@@ -252,7 +258,7 @@ class LocalTopicSearchService:
             with self._db._database.connection_context():
                 cursor = self._db._database.execute_sql(sql, (fts_query, candidate_limit))
                 rows = list(cursor)
-        except Exception as exc:  # noqa: BLE001 - fall back to scan logic
+        except Exception as exc:
             logger.warning("local_topic_search_index_query_failed", extra={"error": str(exc)})
             return []
 
@@ -368,8 +374,7 @@ class LocalTopicSearchService:
     @staticmethod
     def _sanitize_fts_term(term: str) -> str:
         sanitized = re.sub(r"[^\w-]+", " ", term)
-        sanitized = re.sub(r"\s+", " ", sanitized).strip()
-        return sanitized
+        return re.sub(r"\s+", " ", sanitized).strip()
 
     @staticmethod
     def _row_value(row: Any, index: int, key: str) -> Any:

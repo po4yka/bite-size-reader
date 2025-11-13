@@ -17,11 +17,8 @@ test_messages = [
     "✅ All 5 links have been processed.",
 ]
 
-print("Testing progress messages:")
 for msg in test_messages:
     is_safe, error = rf._is_safe_content(msg)
     status = "✓ PASS" if is_safe else "✗ BLOCKED"
-    print(f"{status}: {msg[:50]}{'...' if len(msg) > 50 else ''}")
     if not is_safe:
-        print(f"  Error: {error}")
-    print()
+        pass

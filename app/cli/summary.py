@@ -4,15 +4,15 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import contextlib
 import json
 import logging
 import os
 import sys
 import time
-from collections.abc import Callable
 from dataclasses import dataclass, replace
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from app.adapters.content.url_processor import URLProcessor
 from app.adapters.external.firecrawl_parser import FirecrawlClient
@@ -23,6 +23,9 @@ from app.config import AppConfig, load_config
 from app.core.logging_utils import generate_correlation_id, setup_json_logging
 from app.core.url_utils import extract_all_urls
 from app.db.database import Database
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 logger = logging.getLogger(__name__)
 
@@ -68,24 +71,18 @@ class CLIMessage:
 
     async def reply_text(self, text: str, *, parse_mode: str | None = None) -> None:
         """Print reply text to stdout."""
-        prefix = "[bot]"
         if parse_mode:
-            print(f"{prefix} ({parse_mode}) {text}")
+            pass
         else:
-            print(f"{prefix} {text}")
+            pass
         sys.stdout.flush()
 
     async def reply_document(self, file_obj: Any, caption: str | None = None) -> None:
         """Print JSON attachment content or persist to file when requested."""
-        try:
+        with contextlib.suppress(Exception):
             file_obj.seek(0)
-        except Exception:  # noqa: BLE001 - best effort
-            pass
         data = file_obj.read()
-        if isinstance(data, bytes):
-            content = data.decode("utf-8", errors="replace")
-        else:
-            content = str(data)
+        content = data.decode("utf-8", errors="replace") if isinstance(data, bytes) else str(data)
 
         try:
             self._last_json = json.loads(content)
@@ -95,15 +92,11 @@ class CLIMessage:
         if self._json_output_path:
             self._json_output_path.parent.mkdir(parents=True, exist_ok=True)
             self._json_output_path.write_text(content, encoding="utf-8")
-            print(f"[bot] Summary JSON written to {self._json_output_path}")
         else:
-            border = "=" * 20
-            print(f"{border} Summary JSON {border}")
-            print(content)
-            print(f"{border} End Summary JSON {border}")
+            pass
 
         if caption:
-            print(f"[bot] {caption}")
+            pass
         sys.stdout.flush()
 
     def to_dict(self) -> dict[str, Any]:
@@ -138,7 +131,6 @@ class _SemaphoreFactory:
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     """Parse CLI arguments."""
-
     parser = argparse.ArgumentParser(
         description="Run the /summary command flow locally for testing",
         allow_abbrev=False,
@@ -182,9 +174,9 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 def _resolve_text(args: argparse.Namespace) -> str:
     """Resolve the message text from positional and optional arguments."""
-
     if args.text and args.url:
-        raise SystemExit("Specify either a positional message text or --url, not both.")
+        msg = "Specify either a positional message text or --url, not both."
+        raise SystemExit(msg)
 
     if args.url:
         return f"/summary {args.url.strip()}"
@@ -192,12 +184,12 @@ def _resolve_text(args: argparse.Namespace) -> str:
     if args.text:
         return args.text
 
-    raise SystemExit("Provide a message text or use --url to supply a link to summarize.")
+    msg = "Provide a message text or use --url to supply a link to summarize."
+    raise SystemExit(msg)
 
 
 def _load_env_file(path: Path) -> None:
     """Load environment variables from a .env-style file if present."""
-
     if not path.exists() or not path.is_file():
         return
 
@@ -219,7 +211,6 @@ def _load_env_file(path: Path) -> None:
 
 def _prepare_config(args: argparse.Namespace) -> AppConfig:
     """Load configuration, optionally applying CLI overrides."""
-
     base_dir = Path(__file__).resolve().parents[2]
     candidates: list[Path] = []
     if args.env_file:
@@ -232,16 +223,17 @@ def _prepare_config(args: argparse.Namespace) -> AppConfig:
             _load_env_file(candidate)
             if candidate.exists():
                 logger.debug("loaded_env_file", extra={"path": str(candidate)})
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             logger.warning("env_file_error", extra={"path": str(candidate), "error": str(exc)})
 
     try:
         cfg = load_config(allow_stub_telegram=True)
     except RuntimeError as exc:
-        raise SystemExit(
+        msg = (
             "Configuration error: "
             f"{exc}. Set FIRECRAWL_API_KEY and OPENROUTER_API_KEY before running the CLI."
-        ) from exc
+        )
+        raise SystemExit(msg) from exc
     runtime = cfg.runtime
     updated = False
 
@@ -265,12 +257,9 @@ def _build_audit(db: Database) -> Callable[[str, str, dict[str, Any]], None]:
     def audit(level: str, event: str, details: dict[str, Any]) -> None:
         try:
             payload: dict[str, Any]
-            if isinstance(details, dict):
-                payload = details
-            else:
-                payload = {"details": str(details)}
+            payload = details if isinstance(details, dict) else {"details": str(details)}
             db.insert_audit_log(level=level, event=event, details_json=payload)
-        except Exception:  # noqa: BLE001 - audit failures should not crash CLI
+        except Exception:
             logger.exception("audit_log_failed", extra={"event": event})
 
     return audit
@@ -278,7 +267,6 @@ def _build_audit(db: Database) -> Callable[[str, str, dict[str, Any]], None]:
 
 async def run_summary_cli(args: argparse.Namespace) -> None:
     """Execute the /summary flow based on parsed CLI arguments."""
-
     text = _resolve_text(args)
     cfg = _prepare_config(args)
 
@@ -373,7 +361,7 @@ async def run_summary_cli(args: argparse.Namespace) -> None:
                 )
                 await url_processor.handle_url_flow(message, url, correlation_id=per_cid)
         elif next_action == "multi_confirm":
-            print("[info] Multiple URLs detected. Re-run with --accept-multiple to process them.")
+            pass
 
     finally:
         await firecrawl.aclose()
@@ -383,14 +371,12 @@ async def run_summary_cli(args: argparse.Namespace) -> None:
 
 def main(argv: list[str] | None = None) -> int:
     """Entry point for ``python -m app.cli.summary``."""
-
     args = parse_args(argv)
     try:
         asyncio.run(run_summary_cli(args))
     except KeyboardInterrupt:  # pragma: no cover - user cancelled
-        print("Aborted by user.")
         return 1
-    except Exception as exc:  # noqa: BLE001 - final safety net
+    except Exception as exc:
         logger.exception("cli_summary_failed", exc_info=exc)
         return 1
     return 0

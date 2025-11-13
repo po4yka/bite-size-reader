@@ -54,7 +54,7 @@ class TestForwardMessagePersistence(unittest.IsolatedAsyncioTestCase):
                 openrouter=OpenRouterConfig(
                     api_key="or-dummy-key",
                     model="openai/gpt-4o-mini",
-                    fallback_models=tuple(),
+                    fallback_models=(),
                     http_referer=None,
                     x_title=None,
                     max_tokens=1024,
@@ -94,12 +94,12 @@ class TestForwardMessagePersistence(unittest.IsolatedAsyncioTestCase):
                 (req_id,),
             )
 
-            self.assertIsNotNone(row)
-            self.assertEqual(row["forward_from_chat_id"], message.forward_from_chat.id)
-            self.assertEqual(row["forward_from_chat_type"], "channel")
-            self.assertEqual(row["forward_from_chat_title"], message.forward_from_chat.title)
-            self.assertEqual(row["forward_from_message_id"], message.forward_from_message_id)
-            self.assertEqual(row["forward_date_ts"], message.forward_date)
-            self.assertEqual(row["message_id"], message.id)
-            self.assertEqual(row["chat_id"], message.chat.id)
-            self.assertEqual(row["text_full"], message.text)
+            assert row is not None
+            assert row["forward_from_chat_id"] == message.forward_from_chat.id
+            assert row["forward_from_chat_type"] == "channel"
+            assert row["forward_from_chat_title"] == message.forward_from_chat.title
+            assert row["forward_from_message_id"] == message.forward_from_message_id
+            assert row["forward_date_ts"] == message.forward_date
+            assert row["message_id"] == message.id
+            assert row["chat_id"] == message.chat.id
+            assert row["text_full"] == message.text

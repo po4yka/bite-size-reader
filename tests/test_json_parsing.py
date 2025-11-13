@@ -131,8 +131,8 @@ class TestJsonParsing(unittest.TestCase):
             message = MagicMock()
             await bot._handle_url_flow(message, "http://example.com")
 
-            self.assertEqual(
-                mock_openrouter_instance.chat.await_count, 3
+            assert (
+                mock_openrouter_instance.chat.await_count == 3
             )  # 1 for summary + 2 for insights (json_schema + json_object fallback)
             bot._reply_json.assert_called_once()
 
@@ -164,7 +164,7 @@ class TestJsonParsing(unittest.TestCase):
             messages = [
                 call.args[1] for call in bot._safe_reply.await_args_list if len(call.args) >= 2
             ]
-            self.assertTrue(any("Invalid summary format" in str(msg) for msg in messages))
+            assert any("Invalid summary format" in str(msg) for msg in messages)
 
         asyncio.run(run_test())
 
@@ -207,13 +207,13 @@ class TestJsonParsing(unittest.TestCase):
             message = MagicMock()
             await bot._handle_url_flow(message, "http://example.com")
 
-            self.assertEqual(
-                mock_openrouter_instance.chat.await_count, 3
+            assert (
+                mock_openrouter_instance.chat.await_count == 3
             )  # 1 for summary + 2 for insights (json_schema + json_object fallback)
             bot._reply_json.assert_called_once()
             summary_json = bot._reply_json.call_args[0][1]
-            self.assertEqual(summary_json["summary_250"], "Summary.")
-            self.assertIn("summary_1000", summary_json)
+            assert summary_json["summary_250"] == "Summary."
+            assert "summary_1000" in summary_json
 
         asyncio.run(run_test())
 
@@ -259,17 +259,17 @@ class TestJsonParsing(unittest.TestCase):
             message = MagicMock()
             await bot._handle_url_flow(message, "http://example.com")
 
-            self.assertEqual(
-                mock_openrouter_instance.chat.await_count, 3
+            assert (
+                mock_openrouter_instance.chat.await_count == 3
             )  # 1 for summary + 2 for insights (json_schema + json_object fallback)
             bot._reply_json.assert_called_once()
             summary_json = bot._reply_json.call_args[0][1]
-            self.assertEqual(summary_json["summary_250"], "Fixed.")
-            self.assertIn("summary_1000", summary_json)
+            assert summary_json["summary_250"] == "Fixed."
+            assert "summary_1000" in summary_json
             # Ensure we did not send the invalid summary format error
             for call_args in bot._safe_reply.await_args_list:
                 if len(call_args.args) >= 2 and isinstance(call_args.args[1], str):
-                    self.assertNotIn("Invalid summary format", call_args.args[1])
+                    assert "Invalid summary format" not in call_args.args[1]
 
         asyncio.run(run_test())
 
@@ -325,7 +325,7 @@ class TestJsonParsing(unittest.TestCase):
             mock_openrouter_instance.chat.assert_awaited_once()
             bot._reply_json.assert_called_once()
             summary_json = bot._reply_json.call_args[0][1]
-            self.assertEqual(summary_json["summary_250"], "Forward.")
+            assert summary_json["summary_250"] == "Forward."
 
         asyncio.run(run_test())
 
@@ -333,14 +333,14 @@ class TestJsonParsing(unittest.TestCase):
 class TestExtractJson(unittest.TestCase):
     def test_extracts_from_code_fence(self) -> None:
         payload = 'Here you go:\n```json\n{"a": 1}\n```'
-        self.assertEqual(extract_json(payload), {"a": 1})
+        assert extract_json(payload) == {"a": 1}
 
     def test_balances_braces(self) -> None:
         payload = '{"a": "incomplete"'
-        self.assertEqual(extract_json(payload), {"a": "incomplete"})
+        assert extract_json(payload) == {"a": "incomplete"}
 
     def test_returns_none_for_non_objects(self) -> None:
-        self.assertIsNone(extract_json("[1, 2, 3]"))
+        assert extract_json("[1, 2, 3]") is None
 
     def test_extract_structured_dict_handles_list_response(self) -> None:
         """Test that _extract_structured_dict can handle list responses from models."""
@@ -356,26 +356,26 @@ class TestExtractJson(unittest.TestCase):
         ]
 
         result = _extract_structured_dict(list_response)
-        self.assertIsNotNone(result)
-        self.assertIsInstance(result, dict)
-        self.assertEqual(result["summary_250"], "This is a short summary")
-        self.assertEqual(result["tldr"], "This is a longer summary with more details")
+        assert result is not None
+        assert isinstance(result, dict)
+        assert result["summary_250"] == "This is a short summary"
+        assert result["tldr"] == "This is a longer summary with more details"
 
         # Test with a list containing invalid items
         invalid_list_response = [{"invalid": "data"}, "string_item", 123]
 
         result = _extract_structured_dict(invalid_list_response)
-        self.assertIsNone(result)
+        assert result is None
 
         # Test with an empty list
         empty_list: list[Any] = []
         result = _extract_structured_dict(empty_list)
-        self.assertIsNone(result)
+        assert result is None
 
         # Test with a list of non-dict items
         non_dict_list = ["string", 123, True]
         result = _extract_structured_dict(non_dict_list)
-        self.assertIsNone(result)
+        assert result is None
 
 
 if __name__ == "__main__":

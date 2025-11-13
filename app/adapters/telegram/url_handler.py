@@ -9,12 +9,12 @@ from typing import TYPE_CHECKING, Any
 
 from app.core.logging_utils import generate_correlation_id
 from app.core.url_utils import extract_all_urls
-from app.db.database import Database
 from app.db.user_interactions import async_safe_update_user_interaction
 
 if TYPE_CHECKING:
     from app.adapters.content.url_processor import URLProcessor
     from app.adapters.external.response_formatter import ResponseFormatter
+    from app.db.database import Database
 
 logger = logging.getLogger(__name__)
 
@@ -32,30 +32,35 @@ class URLHandler:
         self.response_formatter = response_formatter
         self.url_processor = url_processor
 
+        # Lock to protect shared state from concurrent access
+        self._state_lock = asyncio.Lock()
         # Simple in-memory state: users awaiting a URL after /summarize
         self._awaiting_url_users: set[int] = set()
         # Pending multiple links confirmation: uid -> list of urls
         self._pending_multi_links: dict[int, list[str]] = {}
 
-    def add_awaiting_user(self, uid: int) -> None:
+    async def add_awaiting_user(self, uid: int) -> None:
         """Add user to awaiting URL list."""
-        self._awaiting_url_users.add(uid)
+        async with self._state_lock:
+            self._awaiting_url_users.add(uid)
 
-    def add_pending_multi_links(self, uid: int, urls: list[str]) -> None:
+    async def add_pending_multi_links(self, uid: int, urls: list[str]) -> None:
         """Add user to pending multi-links confirmation."""
-        self._pending_multi_links[uid] = urls
+        async with self._state_lock:
+            self._pending_multi_links[uid] = urls
 
-    def cancel_pending_requests(self, uid: int) -> tuple[bool, bool]:
+    async def cancel_pending_requests(self, uid: int) -> tuple[bool, bool]:
         """Cancel any pending URL or multi-link confirmation requests for a user."""
-        awaiting_cancelled = uid in self._awaiting_url_users
-        if awaiting_cancelled:
-            self._awaiting_url_users.discard(uid)
+        async with self._state_lock:
+            awaiting_cancelled = uid in self._awaiting_url_users
+            if awaiting_cancelled:
+                self._awaiting_url_users.discard(uid)
 
-        multi_cancelled = uid in self._pending_multi_links
-        if multi_cancelled:
-            self._pending_multi_links.pop(uid, None)
+            multi_cancelled = uid in self._pending_multi_links
+            if multi_cancelled:
+                self._pending_multi_links.pop(uid, None)
 
-        return awaiting_cancelled, multi_cancelled
+            return awaiting_cancelled, multi_cancelled
 
     async def handle_awaited_url(
         self,
@@ -68,7 +73,8 @@ class URLHandler:
     ) -> None:
         """Handle URL sent after /summarize command."""
         urls = extract_all_urls(text)
-        self._awaiting_url_users.discard(uid)
+        async with self._state_lock:
+            self._awaiting_url_users.discard(uid)
 
         if len(urls) > 1:
             await self._request_multi_link_confirmation(
@@ -159,7 +165,8 @@ class URLHandler:
         normalized = self._normalize_response(text)
 
         if self._is_affirmative(normalized):
-            urls = self._pending_multi_links.get(uid)
+            async with self._state_lock:
+                urls = self._pending_multi_links.get(uid)
             if not urls:
                 logger.warning(
                     "multi_confirm_missing_state", extra={"uid": uid, "cid": correlation_id}
@@ -194,7 +201,8 @@ class URLHandler:
                     },
                 )
                 # Drop the corrupted state to avoid repeated failures
-                self._pending_multi_links.pop(uid, None)
+                async with self._state_lock:
+                    self._pending_multi_links.pop(uid, None)
                 await self.response_formatter.safe_reply(
                     message,
                     "❌ Pending multi-link request is invalid. Please send the links again.",
@@ -213,7 +221,8 @@ class URLHandler:
                 return
 
             # State is valid; remove it before processing to prevent double handling
-            self._pending_multi_links.pop(uid, None)
+            async with self._state_lock:
+                self._pending_multi_links.pop(uid, None)
             await self.response_formatter.safe_reply(
                 message, f"🚀 Processing {len(urls)} links in parallel..."
             )
@@ -232,7 +241,8 @@ class URLHandler:
             return
 
         if self._is_negative(normalized):
-            self._pending_multi_links.pop(uid, None)
+            async with self._state_lock:
+                self._pending_multi_links.pop(uid, None)
             await self.response_formatter.safe_reply(message, "Cancelled.")
             if interaction_id:
                 await async_safe_update_user_interaction(
@@ -244,13 +254,15 @@ class URLHandler:
                     logger_=logger,
                 )
 
-    def is_awaiting_url(self, uid: int) -> bool:
+    async def is_awaiting_url(self, uid: int) -> bool:
         """Check if user is awaiting a URL."""
-        return uid in self._awaiting_url_users
+        async with self._state_lock:
+            return uid in self._awaiting_url_users
 
-    def has_pending_multi_links(self, uid: int) -> bool:
+    async def has_pending_multi_links(self, uid: int) -> bool:
         """Check if user has pending multi-link confirmation."""
-        return uid in self._pending_multi_links
+        async with self._state_lock:
+            return uid in self._pending_multi_links
 
     def _normalize_response(self, text: str) -> str:
         return text.strip().lower()
@@ -271,7 +283,8 @@ class URLHandler:
         interaction_id: int,
         start_time: float,
     ) -> None:
-        self._pending_multi_links[uid] = urls
+        async with self._state_lock:
+            self._pending_multi_links[uid] = urls
         # Create inline keyboard buttons for confirmation
         buttons = [
             {"text": "✅ Yes", "callback_data": "multi_confirm_yes"},
@@ -326,12 +339,12 @@ class URLHandler:
 
             async def increment_and_update(self) -> tuple[int, int]:
                 """Atomically increment counter and queue progress update if needed."""
-                # Fast path: only increment counter under lock
+                # All progress tracking state updates must be atomic
                 async with self._lock:
                     self._completed += 1
                     current_time = time.time()
 
-                    # Check if we should update (don't call external methods in lock)
+                    # Check if we should update
                     progress_threshold = max(1, self.total // 20)  # Update every 5% or 1 URL
                     # For small batches, be more responsive - update every URL
                     if self.total <= 5:
@@ -368,22 +381,23 @@ class URLHandler:
                         self._last_update = current_time
                         self._last_displayed = self._completed
 
+                        # Queue progress update inside lock to prevent race conditions
+                        # put_nowait is non-blocking, so minimal performance impact
+                        try:
+                            # Non-blocking queue put - if full, skip this update
+                            self._update_queue.put_nowait((self._completed, self.total))
+                            logger.debug(
+                                "progress_update_queued",
+                                extra={"completed": self._completed, "total": self.total},
+                            )
+                        except asyncio.QueueFull:
+                            logger.debug(
+                                "progress_update_queue_full", extra={"completed": self._completed}
+                            )
+                            # Skip if update queue is full (prevents blocking)
+
                     completed = self._completed
-
-                # Slow path: call external method outside lock to prevent deadlocks
-                if should_update:
-                    try:
-                        # Non-blocking queue put - if full, skip this update
-                        self._update_queue.put_nowait((completed, self.total))
-                        logger.debug(
-                            "progress_update_queued",
-                            extra={"completed": completed, "total": self.total},
-                        )
-                    except asyncio.QueueFull:
-                        logger.debug("progress_update_queue_full", extra={"completed": completed})
-                        pass  # Skip if update queue is full (prevents blocking)
-
-                return completed, self.total
+                    return completed, self.total
 
             async def process_update_queue(self) -> None:
                 """Process queued progress updates outside of locks."""
@@ -468,7 +482,7 @@ class URLHandler:
                     return url, True, ""
                 except TimeoutError:
                     error_msg = "Timeout processing URL after 10 minutes"
-                    logger.error(
+                    logger.exception(
                         "parallel_url_processing_timeout",
                         extra={"url": url, "cid": per_link_cid, "error": error_msg, "uid": uid},
                     )
@@ -487,7 +501,7 @@ class URLHandler:
                         )
                         # Could implement retry logic here in the future
 
-                    logger.error(
+                    logger.exception(
                         "parallel_url_processing_failed",
                         extra={"url": url, "cid": per_link_cid, "error": error_msg, "uid": uid},
                     )
@@ -558,7 +572,7 @@ class URLHandler:
                             raise result
                         # This should rarely happen due to return_exceptions=True, but handle it
                         failed += 1
-                        logger.error(
+                        logger.exception(
                             "unexpected_task_exception", extra={"error": str(result), "uid": uid}
                         )
                         failed_urls.append(f"Unknown URL (task exception: {type(result).__name__})")
@@ -586,7 +600,7 @@ class URLHandler:
                     else:
                         # Unexpected result type - this is a programming error
                         failed += 1
-                        logger.error(
+                        logger.exception(
                             "unexpected_result_type",
                             extra={
                                 "result_type": type(result).__name__,
@@ -638,7 +652,7 @@ class URLHandler:
         actual_total = successful + failed
 
         if actual_total != expected_total:
-            logger.error(
+            logger.exception(
                 "parallel_processing_count_mismatch",
                 extra={
                     "uid": uid,

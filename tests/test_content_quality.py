@@ -1,16 +1,19 @@
 from __future__ import annotations
 
-from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from types import SimpleNamespace
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 from app.adapters.content.content_extractor import ContentExtractor
 from app.adapters.external.firecrawl_parser import FirecrawlResult
-from app.config import AppConfig
+
+if TYPE_CHECKING:
+    from collections.abc import AsyncIterator
+
+    from app.config import AppConfig
 
 
 @asynccontextmanager
@@ -22,7 +25,7 @@ def _make_extractor(
     db: MagicMock, response_formatter: MagicMock, firecrawl: MagicMock
 ) -> ContentExtractor:
     cfg = cast(
-        AppConfig,
+        "AppConfig",
         SimpleNamespace(runtime=SimpleNamespace(enable_textacy=False, request_timeout_sec=5)),
     )
     return ContentExtractor(
@@ -73,7 +76,7 @@ async def test_low_value_content_triggers_failure() -> None:
     )
 
     extractor = _make_extractor(db, response_formatter, firecrawl)
-    cast(Any, extractor)._attempt_direct_html_salvage = AsyncMock(return_value=None)
+    cast("Any", extractor)._attempt_direct_html_salvage = AsyncMock(return_value=None)
 
     with pytest.raises(ValueError) as exc_info:
         await extractor._perform_new_crawl(

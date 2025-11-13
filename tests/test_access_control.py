@@ -39,7 +39,7 @@ def make_bot(tmp_path: str, allowed_ids):
         openrouter=OpenRouterConfig(
             api_key="y",
             model="m",
-            fallback_models=tuple(),
+            fallback_models=(),
             http_referer=None,
             x_title=None,
             max_tokens=None,
@@ -56,8 +56,8 @@ def make_bot(tmp_path: str, allowed_ids):
     )
     from app.adapters import telegram_bot as tbmod
 
-    setattr(tbmod, "Client", object)
-    setattr(tbmod, "filters", None)
+    tbmod.Client = object
+    tbmod.filters = None
 
     # Mock the OpenRouter client to avoid API key validation
     with patch("app.adapters.telegram.telegram_bot.OpenRouterClient") as mock_openrouter:
@@ -71,14 +71,14 @@ class TestAccessControl(unittest.IsolatedAsyncioTestCase):
             bot = make_bot(os.path.join(tmp, "app.db"), allowed_ids=[1])
             msg = FakeMessage("/help", uid=999)
             await bot._on_message(msg)
-            self.assertTrue(any("denied" in r.lower() for r in msg._replies))
+            assert any("denied" in r.lower() for r in msg._replies)
 
     async def test_allowed_user_passes(self):
         with tempfile.TemporaryDirectory() as tmp:
             bot = make_bot(os.path.join(tmp, "app.db"), allowed_ids=[7])
             msg = FakeMessage("/help", uid=7)
             await bot._on_message(msg)
-            self.assertTrue(any("commands" in r.lower() for r in msg._replies))
+            assert any("commands" in r.lower() for r in msg._replies)
 
 
 if __name__ == "__main__":

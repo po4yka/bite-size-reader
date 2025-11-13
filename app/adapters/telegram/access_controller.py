@@ -2,17 +2,19 @@
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import time
-from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
-from app.config import AppConfig
-from app.db.database import Database
 from app.db.user_interactions import async_safe_update_user_interaction
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from app.adapters.external.response_formatter import ResponseFormatter
+    from app.config import AppConfig
+    from app.db.database import Database
 
 logger = logging.getLogger(__name__)
 
@@ -33,9 +35,8 @@ class AccessController:
         self._audit = audit_func
 
         if not self.cfg.telegram.allowed_user_ids:
-            raise RuntimeError(
-                "Telegram access control requires ALLOWED_USER_IDS to be configured."
-            )
+            msg = "Telegram access control requires ALLOWED_USER_IDS to be configured."
+            raise RuntimeError(msg)
 
         # Security tracking
         self._failed_attempts: dict[int, int] = {}
@@ -62,13 +63,11 @@ class AccessController:
                         "failed_attempts": self._failed_attempts.get(uid, 0),
                     },
                 )
-                try:
+                with contextlib.suppress(Exception):
                     await self.response_formatter.safe_reply(
                         message,
                         "❌ Access temporarily blocked due to too many failed attempts. Please try again later.",
                     )
-                except Exception:
-                    pass
                 return False
 
         if uid in allowed_ids:
@@ -103,20 +102,16 @@ class AccessController:
                     "block_duration_seconds": self.BLOCK_DURATION_SECONDS,
                 },
             )
-            try:
+            with contextlib.suppress(Exception):
                 await self.response_formatter.safe_reply(
                     message,
                     f"❌ Access blocked after {failed_count} failed attempts. "
                     f"Try again in {self.BLOCK_DURATION_SECONDS // 60} minutes.",
                 )
-            except Exception:
-                pass
             return False
 
-        try:
+        with contextlib.suppress(Exception):
             self._audit("WARN", "access_denied", {"uid": uid, "cid": correlation_id})
-        except Exception:
-            pass
 
         await self.response_formatter.safe_reply(
             message,

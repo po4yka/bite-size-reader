@@ -1,4 +1,3 @@
-# ruff: noqa: E501
 from __future__ import annotations
 
 import asyncio
@@ -10,7 +9,7 @@ import os
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from app.adapters.content.url_processor import URLProcessor
 from app.adapters.external.firecrawl_parser import FirecrawlClient
@@ -20,10 +19,12 @@ from app.adapters.telegram import telegram_client as telegram_client_module
 from app.adapters.telegram.forward_processor import ForwardProcessor
 from app.adapters.telegram.message_handler import MessageHandler
 from app.adapters.telegram.telegram_client import TelegramClient
-from app.config import AppConfig
 from app.core.logging_utils import generate_correlation_id, setup_json_logging
-from app.db.database import Database
 from app.services.topic_search import LocalTopicSearchService, TopicSearchService
+
+if TYPE_CHECKING:
+    from app.config import AppConfig
+    from app.db.database import Database
 
 DEFAULT_TOPIC_SEARCH_MAX_RESULTS = 5
 
@@ -57,8 +58,8 @@ class TelegramBot:
 
         # Reflect monkeypatches from tests into the telegram_client module so
         # that no real Pyrogram client is constructed.
-        setattr(telegram_client_module, "Client", Client)
-        setattr(telegram_client_module, "filters", filters)
+        setattr(telegram_client_module, "Client", Client)  # noqa: B010
+        setattr(telegram_client_module, "filters", filters)  # noqa: B010
         if Client is object:
             telegram_client_module.PYROGRAM_AVAILABLE = False
 
@@ -141,6 +142,28 @@ class TelegramBot:
             audit_func=self._audit,
         )
 
+        # Initialize hexagonal architecture DI container before MessageHandler
+        from app.di.container import Container
+
+        self._container = Container(
+            database=self.db,
+            topic_search_service=self.local_searcher,
+            content_fetcher=self._firecrawl,
+            llm_client=self._openrouter,
+            analytics_service=None,  # No analytics service yet
+        )
+        # Wire event handlers automatically
+        self._container.wire_event_handlers_auto()
+
+        logger.info(
+            "hexagonal_architecture_initialized",
+            extra={
+                "event_bus_handlers": self._container.event_bus().get_handler_count(
+                    type("DomainEvent", (), {})  # Base event type
+                ),
+            },
+        )
+
         self.message_handler = MessageHandler(
             cfg=self.cfg,
             db=self.db,
@@ -149,12 +172,13 @@ class TelegramBot:
             forward_processor=self.forward_processor,
             topic_searcher=self.topic_searcher,
             local_searcher=self.local_searcher,
+            container=self._container,
         )
 
         # Route URL handling via the bot instance so legacy tests overriding
         # ``_handle_url_flow`` keep working.
-        self.message_handler.command_processor.url_processor = cast(URLProcessor, self)
-        self.message_handler.url_handler.url_processor = cast(URLProcessor, self)
+        self.message_handler.command_processor.url_processor = cast("URLProcessor", self)
+        self.message_handler.url_handler.url_processor = cast("URLProcessor", self)
 
         # Expose in-memory state containers for unit tests
         self._awaiting_url_users = self.message_handler.url_handler._awaiting_url_users
@@ -206,8 +230,8 @@ class TelegramBot:
         """Audit log helper."""
         try:
             self.db.insert_audit_log(level=level, event=event, details_json=details)
-        except Exception as e:  # noqa: BLE001
-            logger.error("audit_persist_failed", extra={"error": str(e), "event": event})
+        except Exception as e:
+            logger.exception("audit_persist_failed", extra={"error": str(e), "event": event})
 
     def _sync_client_dependencies(self) -> None:
         """Ensure helper components reference the active external clients."""
@@ -237,7 +261,6 @@ class TelegramBot:
 
     def _get_topic_search_limit(self) -> int:
         """Return a sanitized topic search limit from runtime config."""
-
         runtime = getattr(self.cfg, "runtime", None)
         raw_value = getattr(runtime, "topic_search_max_results", DEFAULT_TOPIC_SEARCH_MAX_RESULTS)
 
@@ -268,7 +291,6 @@ class TelegramBot:
 
     def _get_backup_settings(self) -> tuple[bool, int, int, str | None]:
         """Return sanitized backup configuration values."""
-
         runtime = getattr(self.cfg, "runtime", None)
         if runtime is None:
             return False, 0, 0, None
@@ -278,13 +300,11 @@ class TelegramBot:
 
         interval_raw = getattr(runtime, "db_backup_interval_minutes", 0)
         interval = interval_raw if isinstance(interval_raw, int) else 0
-        if interval <= 0:
-            interval = 0
+        interval = max(0, interval)
 
         retention_raw = getattr(runtime, "db_backup_retention", 0)
         retention = retention_raw if isinstance(retention_raw, int) else 0
-        if retention < 0:
-            retention = 0
+        retention = max(retention, 0)
 
         backup_dir_raw = getattr(runtime, "db_backup_dir", None)
         backup_dir = (
@@ -302,7 +322,6 @@ class TelegramBot:
 
         Implements failure tracking with alerting after consecutive failures.
         """
-
         if interval_minutes <= 0:
             return
 
@@ -338,9 +357,9 @@ class TelegramBot:
                     last_success_time = datetime.utcnow()
                 except asyncio.CancelledError:
                     raise
-                except Exception as exc:  # noqa: BLE001
+                except Exception as exc:
                     consecutive_failures += 1
-                    logger.error(
+                    logger.exception(
                         "db_backup_iteration_failed",
                         extra={
                             "error": str(exc),
@@ -365,7 +384,7 @@ class TelegramBot:
                             },
                         )
                         # Audit log for critical failures
-                        try:
+                        with contextlib.suppress(Exception):
                             self._audit(
                                 "CRITICAL",
                                 "db_backup_critical_failure",
@@ -378,8 +397,6 @@ class TelegramBot:
                                     ),
                                 },
                             )
-                        except Exception:  # noqa: BLE001
-                            pass
 
                 await asyncio.sleep(interval_minutes * 60)
         except asyncio.CancelledError:
@@ -388,7 +405,6 @@ class TelegramBot:
 
     async def _create_database_backup(self, backup_directory: Path, retention: int) -> None:
         """Create a single backup and prune according to retention settings."""
-
         db_path = getattr(self.db, "path", "")
         if db_path == ":memory:":
             logger.debug("db_backup_skipped_in_memory")
@@ -407,13 +423,13 @@ class TelegramBot:
         except ValueError as exc:
             logger.debug("db_backup_not_applicable", extra={"reason": str(exc)})
             return
-        except Exception as exc:  # noqa: BLE001
-            logger.error("db_backup_failed", extra={"error": str(exc)})
+        except Exception as exc:
+            logger.exception("db_backup_failed", extra={"error": str(exc)})
             return
 
         try:
             self._cleanup_old_backups(backup_directory, base_path.stem, suffix, retention)
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             logger.warning("db_backup_cleanup_failed", extra={"error": str(exc)})
 
         logger.info(
@@ -423,12 +439,11 @@ class TelegramBot:
 
     def _resolve_backup_dir(self, override: str | None) -> Path:
         """Determine the directory to store backups in."""
-
         if override:
             path = Path(override).expanduser()
         else:
             base = Path(self.db.path)
-            parent = base.parent if base.parent != Path("") else Path(".")
+            parent = base.parent if base.parent != Path() else Path()
             path = parent / "backups"
         path.mkdir(parents=True, exist_ok=True)
         return path
@@ -437,7 +452,6 @@ class TelegramBot:
         self, backup_directory: Path, base_name: str, suffix: str, retention: int
     ) -> None:
         """Remove older backup files beyond the retention limit."""
-
         if retention <= 0:
             return
 
@@ -480,7 +494,7 @@ class TelegramBot:
                     await message.reply_text(text, parse_mode=parse_mode)
                 else:
                     await message.reply_text(text)
-        except Exception:  # noqa: BLE001
+        except Exception:
             # Swallow in tests; production response path logs and continues.
             pass
 
@@ -535,7 +549,7 @@ class TelegramBot:
             # Fallback to text
             if hasattr(message, "reply_text"):
                 await message.reply_text(f"```json\n{pretty}\n```")
-        except Exception:  # noqa: BLE001
+        except Exception:
             try:
                 text = json.dumps(payload, ensure_ascii=False)
                 if hasattr(message, "reply_text"):
@@ -611,7 +625,7 @@ class TelegramBot:
         logger.info("handling_message uid=%s", uid, extra={"uid": uid})
         await self.message_handler.handle_message(message)
 
-    def __setattr__(self, name: str, value: Any) -> None:  # noqa: D401
+    def __setattr__(self, name: str, value: Any) -> None:
         """Track client updates so helper components stay in sync."""
         super().__setattr__(name, value)
         if name in {"_firecrawl", "_openrouter"}:
