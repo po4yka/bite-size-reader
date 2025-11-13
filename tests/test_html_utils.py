@@ -8,9 +8,8 @@ from app.core import html_utils
 @pytest.fixture(autouse=True)
 def disable_optional_dependencies(monkeypatch):
     """Force html_utils helpers to exercise their lightweight fallbacks."""
-    monkeypatch.setattr(html_utils, "_HAS_READABILITY", False)
-    monkeypatch.setattr(html_utils, "Document", None)
-    monkeypatch.setattr(html_utils, "lxml_html", None)
+    monkeypatch.setattr(html_utils, "_HAS_TRAFILATURA", False)
+    monkeypatch.setattr(html_utils, "trafilatura", None)
 
 
 def test_html_to_text_fallback_strips_scripts_and_formats_lists():

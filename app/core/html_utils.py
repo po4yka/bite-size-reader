@@ -7,14 +7,12 @@ from html.parser import HTMLParser
 from threading import Lock
 
 try:
-    from lxml import html as lxml_html
-    from readability import Document
+    import trafilatura
 
-    _HAS_READABILITY = True
+    _HAS_TRAFILATURA = True
 except Exception:  # pragma: no cover
-    Document = None
-    lxml_html = None
-    _HAS_READABILITY = False
+    trafilatura = None
+    _HAS_TRAFILATURA = False
 
 # No longer using textacy - using built-in regex normalization
 
@@ -68,17 +66,17 @@ class _TextExtractor(HTMLParser):
 
 
 def html_to_text(html: str) -> str:
-    # Prefer readability (main content) + lxml text extraction if available
-    if _HAS_READABILITY and Document is not None and lxml_html is not None:
+    # Prefer trafilatura for main content extraction if available
+    if _HAS_TRAFILATURA and trafilatura is not None:
         try:
-            doc = Document(html)
-            summary_html = doc.summary() or ""
-            title = (doc.title() or "").strip()
-            if summary_html:
-                root = lxml_html.fromstring(summary_html)
-                text = root.text_content()
-                if title and title not in text:
-                    text = f"{title}\n\n{text}"
+            # Extract main content with tables included, comments excluded
+            text = trafilatura.extract(
+                html,
+                include_comments=False,
+                include_tables=True,
+                no_fallback=False,
+            )
+            if text:
                 # Normalize whitespace
                 text = "\n".join(line.strip() for line in text.splitlines())
                 text = _collapse_blank_lines(text)

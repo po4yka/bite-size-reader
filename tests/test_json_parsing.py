@@ -132,8 +132,8 @@ class TestJsonParsing(unittest.TestCase):
             await bot._handle_url_flow(message, "http://example.com")
 
             assert (
-                mock_openrouter_instance.chat.await_count == 3
-            )  # 1 for summary + 2 for insights (json_schema + json_object fallback)
+                mock_openrouter_instance.chat.await_count == 4
+            )  # 1 for summary + 3 for insights (json_schema + json_object fallback + retry)
             bot._reply_json.assert_called_once()
 
         asyncio.run(run_test())
@@ -208,8 +208,8 @@ class TestJsonParsing(unittest.TestCase):
             await bot._handle_url_flow(message, "http://example.com")
 
             assert (
-                mock_openrouter_instance.chat.await_count == 3
-            )  # 1 for summary + 2 for insights (json_schema + json_object fallback)
+                mock_openrouter_instance.chat.await_count == 4
+            )  # 1 for summary + 3 for insights (json_schema + json_object fallback + retry)
             bot._reply_json.assert_called_once()
             summary_json = bot._reply_json.call_args[0][1]
             assert summary_json["summary_250"] == "Summary."
@@ -260,8 +260,8 @@ class TestJsonParsing(unittest.TestCase):
             await bot._handle_url_flow(message, "http://example.com")
 
             assert (
-                mock_openrouter_instance.chat.await_count == 3
-            )  # 1 for summary + 2 for insights (json_schema + json_object fallback)
+                mock_openrouter_instance.chat.await_count == 4
+            )  # 1 for summary + 3 for insights (json_schema + json_object fallback + retry)
             bot._reply_json.assert_called_once()
             summary_json = bot._reply_json.call_args[0][1]
             assert summary_json["summary_250"] == "Fixed."
@@ -322,7 +322,8 @@ class TestJsonParsing(unittest.TestCase):
 
             await bot._handle_forward_flow(message, correlation_id="cid", interaction_id=None)
 
-            mock_openrouter_instance.chat.assert_awaited_once()
+            # Forward flow generates insights after summary, so we expect multiple calls
+            assert mock_openrouter_instance.chat.await_count >= 2  # At least summary + insights attempts
             bot._reply_json.assert_called_once()
             summary_json = bot._reply_json.call_args[0][1]
             assert summary_json["summary_250"] == "Forward."

@@ -125,10 +125,12 @@ dependencies = [
   "tgcrypto>=1.2.5",
   "pydantic>=2.12.4",
   "peewee>=3.18.3",
-  "readability-lxml==0.8.4.1",
+  "trafilatura>=2.0.0",
   "spacy>=3.8.8,<4",
   "json_repair>=0.52.4",
   "scikit-learn>=1.7.2",
+  "orjson>=3.10.0",
+  "uvloop>=0.22.1",
   # spaCy language models
   "en-core-web-sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl",
   "ru-core-news-sm @ https://github.com/explosion/spacy-models/releases/download/ru_core_news_sm-3.8.0/ru_core_news_sm-3.8.0-py3-none-any.whl",

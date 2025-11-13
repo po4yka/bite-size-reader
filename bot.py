@@ -7,6 +7,14 @@ from app.adapters.telegram.telegram_bot import TelegramBot
 from app.config import load_config
 from app.db.database import Database
 
+# Use uvloop for better async performance if available
+try:
+    import uvloop
+
+    uvloop.install()
+except ImportError:  # pragma: no cover
+    pass
+
 
 async def main() -> None:
     cfg = load_config()
