@@ -49,10 +49,20 @@ class SqliteSummaryRepositoryAdapter:
         return await self._db.async_get_summary_by_request(request_id)
 
     async def async_get_unread_summaries(
-        self, uid: int, cid: int, limit: int = 10
+        self, uid: int, cid: int, limit: int = 10, topic: str | None = None
     ) -> list[dict[str, Any]]:
-        """Get unread summaries for a user."""
-        return await self._db.async_get_unread_summaries(uid, cid, limit)
+        """Get unread summaries for a user.
+
+        Args:
+            uid: User ID.
+            cid: Chat ID.
+            limit: Maximum number of summaries to return.
+            topic: Optional topic filter for searching summaries.
+
+        Returns:
+            List of unread summary dictionaries.
+        """
+        return await self._db.async_get_unread_summaries(uid, cid, limit, topic)
 
     async def async_get_unread_summary_by_request_id(
         self, request_id: int

@@ -25,6 +25,7 @@ class GetUnreadSummariesQuery:
     user_id: int
     chat_id: int
     limit: int = 10
+    topic: str | None = None
 
     def __post_init__(self) -> None:
         """Validate query parameters."""
@@ -36,6 +37,8 @@ class GetUnreadSummariesQuery:
             raise ValueError("limit must be positive")
         if self.limit > 100:
             raise ValueError("limit cannot exceed 100")
+        if self.topic is not None and not self.topic.strip():
+            raise ValueError("topic cannot be empty string")
 
 
 class GetUnreadSummariesUseCase:
@@ -66,7 +69,7 @@ class GetUnreadSummariesUseCase:
         """Execute the query to get unread summaries.
 
         Args:
-            query: Query parameters including user ID, chat ID, and limit.
+            query: Query parameters including user ID, chat ID, limit, and optional topic filter.
 
         Returns:
             List of unread Summary domain models.
@@ -77,6 +80,7 @@ class GetUnreadSummariesUseCase:
                 "user_id": query.user_id,
                 "chat_id": query.chat_id,
                 "limit": query.limit,
+                "topic": query.topic,
             },
         )
 
@@ -85,6 +89,7 @@ class GetUnreadSummariesUseCase:
             uid=query.user_id,
             cid=query.chat_id,
             limit=query.limit,
+            topic=query.topic,
         )
 
         # Convert to domain models
@@ -98,6 +103,7 @@ class GetUnreadSummariesUseCase:
             extra={
                 "user_id": query.user_id,
                 "chat_id": query.chat_id,
+                "topic": query.topic,
                 "count": len(summaries),
             },
         )

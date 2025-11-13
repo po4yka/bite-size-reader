@@ -1338,6 +1338,27 @@ class Database:
                 break
         return results
 
+    async def async_get_unread_summaries(
+        self, uid: int, cid: int, limit: int = 10, topic: str | None = None
+    ) -> list[dict[str, Any]]:
+        """Async wrapper for :meth:`get_unread_summaries`.
+
+        Args:
+            uid: User ID (unused but kept for compatibility).
+            cid: Chat ID (unused but kept for compatibility).
+            limit: Maximum number of summaries to return.
+            topic: Optional topic filter for searching summaries.
+
+        Returns:
+            List of unread summary dictionaries.
+        """
+        return await self._safe_db_operation(
+            self.get_unread_summaries,
+            limit=limit,
+            topic=topic,
+            operation_name="get_unread_summaries",
+        )
+
     @staticmethod
     def _sanitize_fts_term(term: str) -> str:
         sanitized = re.sub(r"[^\w-]+", " ", term)

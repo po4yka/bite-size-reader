@@ -832,34 +832,26 @@ class CommandProcessor:
                 from app.application.dto.summary_dto import SummaryDTO
                 from app.application.use_cases.get_unread_summaries import GetUnreadSummariesQuery
 
-                # TODO: Add topic filtering support to GetUnreadSummariesUseCase
-                if topic:
-                    # Fallback to direct database access for topic filtering
-                    logger.info(
-                        "unread_topic_filter_fallback",
-                        extra={"topic": topic, "cid": correlation_id},
-                    )
-                    unread_summaries = self.db.get_unread_summaries(limit=limit, topic=topic)
-                else:
-                    # Use the use case for standard unread retrieval
-                    query = GetUnreadSummariesQuery(
-                        user_id=uid,
-                        chat_id=chat_id,
-                        limit=limit,
-                    )
-                    use_case = self._container.get_unread_summaries_use_case()
-                    domain_summaries = await use_case.execute(query)
+                # Use the use case with topic filtering support
+                query = GetUnreadSummariesQuery(
+                    user_id=uid,
+                    chat_id=chat_id,
+                    limit=limit,
+                    topic=topic,
+                )
+                use_case = self._container.get_unread_summaries_use_case()
+                domain_summaries = await use_case.execute(query)
 
-                    # Convert domain models to database format for compatibility
-                    unread_summaries = []
-                    for summary in domain_summaries:
-                        dto = SummaryDTO.from_domain(summary)
-                        unread_summaries.append({
-                            "request_id": dto.request_id,
-                            "input_url": "Unknown URL",  # Not available in domain model
-                            "created_at": dto.created_at.isoformat() if dto.created_at else "Unknown date",
-                            "json_payload": dto.content,
-                        })
+                # Convert domain models to database format for compatibility
+                unread_summaries = []
+                for summary in domain_summaries:
+                    dto = SummaryDTO.from_domain(summary)
+                    unread_summaries.append({
+                        "request_id": dto.request_id,
+                        "input_url": "Unknown URL",  # Not available in domain model
+                        "created_at": dto.created_at.isoformat() if dto.created_at else "Unknown date",
+                        "json_payload": dto.content,
+                    })
             else:
                 # Fallback to direct database access if container not available
                 unread_summaries = self.db.get_unread_summaries(limit=limit, topic=topic)
