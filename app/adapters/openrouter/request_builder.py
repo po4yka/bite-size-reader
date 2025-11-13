@@ -79,7 +79,9 @@ class RequestBuilder:
                     },
                 )
             if not isinstance(message["content"], str):
-                error_msg = f"Message {i} content must be string, got {type(message['content']).__name__}"
+                error_msg = (
+                    f"Message {i} content must be string, got {type(message['content']).__name__}"
+                )
                 raise ValidationError(
                     error_msg,
                     context={"message_index": i, "content_type": type(message["content"]).__name__},

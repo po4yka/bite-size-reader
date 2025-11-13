@@ -515,7 +515,10 @@ class CommandProcessor:
             return
 
         await self.response_formatter.send_topic_search_results(
-            message, topic=topic, articles=results, source=formatter_source  # type: ignore[arg-type]
+            message,
+            topic=topic,
+            articles=results,  # type: ignore[arg-type]
+            source=formatter_source,
         )
         if interaction_id:
             await async_safe_update_user_interaction(
@@ -702,7 +705,9 @@ class CommandProcessor:
         multi_cancelled = False
         active_cancelled = 0
         if self.url_handler is not None:
-            awaiting_cancelled, multi_cancelled = await self.url_handler.cancel_pending_requests(uid)
+            awaiting_cancelled, multi_cancelled = await self.url_handler.cancel_pending_requests(
+                uid
+            )
 
         if self._task_manager is not None:
             active_cancelled = await self._task_manager.cancel(uid, exclude_current=True)
