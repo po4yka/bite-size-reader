@@ -9,8 +9,8 @@ from typing import Any
 
 from app.core.json_utils import extract_json
 from app.core.summary_contract import validate_and_shape_summary
-from app.db.database import Database
 from app.db.user_interactions import async_safe_update_user_interaction
+from app.protocols import LLMCallRepository, RequestRepository, SummaryRepository
 from app.utils.json_validation import finalize_summary_texts, parse_summary_response
 
 logger = logging.getLogger(__name__)
@@ -71,18 +71,34 @@ class LLMSummaryPersistenceSettings:
 
 
 class LLMResponseWorkflow:
-    """Reusable helper encapsulating shared LLM response automation."""
+    """Reusable helper encapsulating shared LLM response automation.
+
+    This class depends on the following repository interfaces:
+    - SummaryRepository: for persisting summaries
+    - RequestRepository: for updating request status
+    - LLMCallRepository: for logging LLM calls
+    """
 
     def __init__(
         self,
         *,
         cfg: Any,
-        db: Database,
+        db: SummaryRepository & RequestRepository & LLMCallRepository,
         openrouter: Any,
         response_formatter: Any,
         audit_func: Callable[[str, str, dict[str, Any]], None],
         sem: Callable[[], Any],
     ) -> None:
+        """Initialize the workflow.
+
+        Args:
+            cfg: Application configuration.
+            db: Database implementation providing summary, request, and LLM call repositories.
+            openrouter: LLM client for making API calls.
+            response_formatter: Formatter for messages.
+            audit_func: Function for audit logging.
+            sem: Semaphore factory for rate limiting.
+        """
         self.cfg = cfg
         self.db = db
         self.openrouter = openrouter
