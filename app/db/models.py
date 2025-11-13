@@ -210,6 +210,23 @@ class AuditLog(BaseModel):
         table_name = "audit_logs"
 
 
+class SummaryEmbedding(BaseModel):
+    """Vector embeddings for semantic search."""
+
+    summary = peewee.ForeignKeyField(
+        Summary, backref="embedding", unique=True, on_delete="CASCADE"
+    )
+    model_name = peewee.TextField()
+    model_version = peewee.TextField()
+    embedding_blob = peewee.BlobField()
+    dimensions = peewee.IntegerField()
+    created_at = peewee.DateTimeField(default=_dt.datetime.utcnow)
+
+    class Meta:
+        table_name = "summary_embeddings"
+        indexes = ((("model_name", "model_version"), False),)
+
+
 ALL_MODELS: tuple[type[BaseModel], ...] = (
     User,
     Chat,
@@ -221,6 +238,7 @@ ALL_MODELS: tuple[type[BaseModel], ...] = (
     TopicSearchIndex,
     UserInteraction,
     AuditLog,
+    SummaryEmbedding,
 )
 
 
