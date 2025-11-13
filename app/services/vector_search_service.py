@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from app.db.database import Database
     from app.services.embedding_service import EmbeddingService
+    from app.services.search_filters import SearchFilters
 
 logger = logging.getLogger(__name__)
 
@@ -63,12 +64,14 @@ class VectorSearchService:
         self,
         query: str,
         *,
+        filters: SearchFilters | None = None,
         correlation_id: str | None = None,
     ) -> list[VectorSearchResult]:
         """Find articles semantically similar to query.
 
         Args:
             query: Search query text
+            filters: Optional search filters (date, source, language)
             correlation_id: Optional correlation ID for logging
 
         Returns:
@@ -105,6 +108,10 @@ class VectorSearchService:
         # Filter by minimum similarity
         filtered = [r for r in results if r.similarity_score >= self._min_similarity]
 
+        # Apply search filters
+        if filters and filters.has_filters():
+            filtered = [r for r in filtered if filters.matches(r)]
+
         # Sort by similarity (highest first)
         filtered.sort(key=lambda x: x.similarity_score, reverse=True)
 
@@ -116,6 +123,7 @@ class VectorSearchService:
                 "total_candidates": len(candidates),
                 "filtered_results": len(filtered),
                 "returned_results": min(len(filtered), self._max_results),
+                "filters": str(filters) if filters else "none",
             },
         )
 

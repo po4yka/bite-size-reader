@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 from app.services.topic_search import TopicArticle
 
 if TYPE_CHECKING:
+    from app.services.search_filters import SearchFilters
     from app.services.topic_search import LocalTopicSearchService
     from app.services.vector_search_service import VectorSearchService
 
@@ -56,12 +57,14 @@ class HybridSearchService:
         self,
         query: str,
         *,
+        filters: SearchFilters | None = None,
         correlation_id: str | None = None,
     ) -> list[TopicArticle]:
         """Hybrid search combining keyword matching and semantic similarity.
 
         Args:
             query: Search query text
+            filters: Optional search filters (date, source, language)
             correlation_id: Optional correlation ID for logging
 
         Returns:
@@ -76,10 +79,14 @@ class HybridSearchService:
             self._fts.find_articles(query.strip(), correlation_id=correlation_id)
         )
         vector_task = asyncio.create_task(
-            self._vector.search(query.strip(), correlation_id=correlation_id)
+            self._vector.search(query.strip(), filters=filters, correlation_id=correlation_id)
         )
 
         fts_results, vector_results = await asyncio.gather(fts_task, vector_task)
+
+        # Apply filters to FTS results (vector results already filtered)
+        if filters and filters.has_filters():
+            fts_results = [r for r in fts_results if filters.matches(r)]
 
         # Combine and rank results
         combined = self._combine_results(fts_results, vector_results)
@@ -108,6 +115,7 @@ class HybridSearchService:
                 "vector_results": len(vector_results),
                 "combined_unique": len(combined),
                 "returned_results": len(articles),
+                "filters": str(filters) if filters else "none",
             },
         )
 

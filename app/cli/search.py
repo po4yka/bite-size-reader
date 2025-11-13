@@ -79,13 +79,14 @@ async def search_fts(db_path: str, query: str, max_results: int = 10) -> list:
     return await service.find_articles(query)
 
 
-async def search_vector(db_path: str, query: str, max_results: int = 10) -> list:
+async def search_vector(db_path: str, query: str, max_results: int = 10, filters=None) -> list:
     """Perform vector similarity search.
 
     Args:
         db_path: Path to database
         query: Search query
         max_results: Maximum results to return
+        filters: Optional SearchFilters object
 
     Returns:
         List of search results
@@ -104,7 +105,7 @@ async def search_vector(db_path: str, query: str, max_results: int = 10) -> list
         min_similarity=0.3,
     )
 
-    vector_results = await service.search(query)
+    vector_results = await service.search(query, filters=filters)
 
     # Convert to TopicArticle format for consistent output
     return [
@@ -119,13 +120,14 @@ async def search_vector(db_path: str, query: str, max_results: int = 10) -> list
     ]
 
 
-async def search_hybrid(db_path: str, query: str, max_results: int = 10) -> list:
+async def search_hybrid(db_path: str, query: str, max_results: int = 10, filters=None) -> list:
     """Perform hybrid search (FTS + vector).
 
     Args:
         db_path: Path to database
         query: Search query
         max_results: Maximum results to return
+        filters: Optional SearchFilters object
 
     Returns:
         List of search results
@@ -159,7 +161,7 @@ async def search_hybrid(db_path: str, query: str, max_results: int = 10) -> list
         max_results=max_results,
     )
 
-    return await hybrid_service.search(query)
+    return await hybrid_service.search(query, filters=filters)
 
 
 async def main() -> int:
@@ -171,26 +173,46 @@ async def main() -> int:
         print("Search for articles using full-text, vector, or hybrid search.")
         print()
         print("Arguments:")
-        print("  query              Search query (required)")
+        print("  query                 Search query (required)")
         print()
         print("Options:")
-        print("  --mode=MODE        Search mode: fts, vector, or hybrid (default: hybrid)")
-        print("  --db=PATH          Database path (default: /data/app.db)")
-        print("  --limit=N          Maximum results to return (default: 10)")
-        print("  --help, -h         Show this help message")
+        print("  --mode=MODE           Search mode: fts, vector, or hybrid (default: hybrid)")
+        print("  --db=PATH             Database path (default: /data/app.db)")
+        print("  --limit=N             Maximum results to return (default: 10)")
+        print()
+        print("Filters:")
+        print("  --date-from=DATE      Filter by publish date >= DATE (format: YYYY-MM-DD)")
+        print("  --date-to=DATE        Filter by publish date <= DATE (format: YYYY-MM-DD)")
+        print("  --source=SOURCE       Filter by source (can specify multiple, comma-separated)")
+        print("  --exclude-source=SRC  Exclude source (can specify multiple, comma-separated)")
+        print("  --lang=LANG           Filter by language code (e.g., en, ru)")
+        print()
+        print("  --help, -h            Show this help message")
         print()
         print("Examples:")
         print('  python -m app.cli.search "machine learning"')
         print('  python -m app.cli.search "neural networks" --mode=vector')
-        print('  python -m app.cli.search "deep learning" --mode=fts --limit=5')
-        print('  python -m app.cli.search "AI applications" --db=/path/to/app.db')
+        print('  python -m app.cli.search "AI" --date-from=2024-01-01 --date-to=2024-12-31')
+        print('  python -m app.cli.search "python" --source=github.com,stackoverflow.com')
+        print('  python -m app.cli.search "news" --exclude-source=reddit.com')
         return 0
 
-    # Extract query (all non-option arguments)
+    # Extract query and options
+    import datetime as dt
+
+    from app.services.search_filters import SearchFilters
+
     query_parts = []
     db_path = "/data/app.db"
     mode = "hybrid"
     max_results = 10
+
+    # Filter parameters
+    date_from = None
+    date_to = None
+    sources = None
+    exclude_sources = None
+    languages = None
 
     for arg in sys.argv[1:]:
         if arg.startswith("--mode="):
@@ -209,6 +231,26 @@ async def main() -> int:
             except ValueError:
                 print(f"Error: Invalid limit value: {arg}")
                 return 1
+        elif arg.startswith("--date-from="):
+            try:
+                date_str = arg.split("=", 1)[1]
+                date_from = dt.datetime.strptime(date_str, "%Y-%m-%d")  # noqa: DTZ007
+            except ValueError:
+                print("Error: Invalid date format for --date-from. Use YYYY-MM-DD")
+                return 1
+        elif arg.startswith("--date-to="):
+            try:
+                date_str = arg.split("=", 1)[1]
+                date_to = dt.datetime.strptime(date_str, "%Y-%m-%d")  # noqa: DTZ007
+            except ValueError:
+                print("Error: Invalid date format for --date-to. Use YYYY-MM-DD")
+                return 1
+        elif arg.startswith("--source="):
+            sources = [s.strip() for s in arg.split("=", 1)[1].split(",")]
+        elif arg.startswith("--exclude-source="):
+            exclude_sources = [s.strip() for s in arg.split("=", 1)[1].split(",")]
+        elif arg.startswith("--lang="):
+            languages = [lang.strip() for lang in arg.split("=", 1)[1].split(",")]
         elif not arg.startswith("--"):
             query_parts.append(arg)
 
@@ -218,6 +260,15 @@ async def main() -> int:
 
     query = " ".join(query_parts)
 
+    # Create filters if any are specified
+    filters = SearchFilters(
+        date_from=date_from,
+        date_to=date_to,
+        sources=sources,
+        exclude_sources=exclude_sources,
+        languages=languages,
+    )
+
     # Check database exists (unless it's :memory:)
     if db_path != ":memory:" and not Path(db_path).exists():
         print(f"Error: Database file not found: {db_path}")
@@ -225,14 +276,18 @@ async def main() -> int:
 
     # Perform search
     try:
-        print(f"Searching for: '{query}' using {mode} search...")
+        filter_msg = f" with filters: {filters}" if filters.has_filters() else ""
+        print(f"Searching for: '{query}' using {mode} search{filter_msg}...")
 
         if mode == "fts":
             results = await search_fts(db_path, query, max_results)
+            # Apply filters manually for FTS
+            if filters.has_filters():
+                results = [r for r in results if filters.matches(r)]
         elif mode == "vector":
-            results = await search_vector(db_path, query, max_results)
+            results = await search_vector(db_path, query, max_results, filters)
         else:  # hybrid
-            results = await search_hybrid(db_path, query, max_results)
+            results = await search_hybrid(db_path, query, max_results, filters)
 
         # Display results
         print_results(results, mode, query)
