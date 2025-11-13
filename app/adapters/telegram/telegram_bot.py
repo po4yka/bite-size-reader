@@ -20,7 +20,11 @@ from app.adapters.telegram.forward_processor import ForwardProcessor
 from app.adapters.telegram.message_handler import MessageHandler
 from app.adapters.telegram.telegram_client import TelegramClient
 from app.core.logging_utils import generate_correlation_id, setup_json_logging
+from app.services.embedding_service import EmbeddingService
+from app.services.hybrid_search_service import HybridSearchService
+from app.services.query_expansion_service import QueryExpansionService
 from app.services.topic_search import LocalTopicSearchService, TopicSearchService
+from app.services.vector_search_service import VectorSearchService
 
 if TYPE_CHECKING:
     from app.config import AppConfig
@@ -142,6 +146,30 @@ class TelegramBot:
             audit_func=self._audit,
         )
 
+        # Initialize hybrid search services (embedding, vector, hybrid)
+        self.embedding_service = EmbeddingService()
+        self.vector_search_service = VectorSearchService(
+            db=self.db,
+            embedding_service=self.embedding_service,
+            max_results=topic_search_max_results,
+            min_similarity=0.3,
+        )
+        self.query_expansion_service = QueryExpansionService(
+            max_expansions=5,
+            use_synonyms=True,
+        )
+        # Re-ranking is optional and slower, so disabled by default
+        self.reranking_service = None
+        self.hybrid_search_service = HybridSearchService(
+            fts_service=self.local_searcher,
+            vector_service=self.vector_search_service,
+            fts_weight=0.4,
+            vector_weight=0.6,
+            max_results=topic_search_max_results,
+            query_expansion=self.query_expansion_service,
+            reranking=self.reranking_service,
+        )
+
         # Initialize hexagonal architecture DI container before MessageHandler
         from app.di.container import Container
 
@@ -173,6 +201,7 @@ class TelegramBot:
             topic_searcher=self.topic_searcher,
             local_searcher=self.local_searcher,
             container=self._container,
+            hybrid_search=self.hybrid_search_service,
         )
 
         # Route URL handling via the bot instance so legacy tests overriding

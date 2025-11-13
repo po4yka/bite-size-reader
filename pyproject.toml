@@ -89,6 +89,7 @@ ignore = [
   "PTH118",  # os.path.join - legacy test code
   "PT011",   # pytest.raises too broad - can be improved later
   "PT009",   # unittest assertions - can be migrated later
+  "PT027",   # unittest-style assertRaises - using unittest.TestCase
   "DTZ005",  # datetime.now without tz - acceptable in tests
 ]
 "test_*.py" = [
@@ -129,6 +130,7 @@ dependencies = [
   "spacy>=3.8.8,<4",
   "json_repair>=0.52.4",
   "scikit-learn>=1.7.2",
+  "sentence-transformers>=3.0.0",
   "orjson>=3.10.0",
   "uvloop>=0.22.1",
   # spaCy language models

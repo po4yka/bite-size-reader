@@ -17,6 +17,7 @@ if TYPE_CHECKING:
     from app.adapters.telegram.forward_processor import ForwardProcessor
     from app.config import AppConfig
     from app.db.database import Database
+    from app.services.hybrid_search_service import HybridSearchService
     from app.services.topic_search import LocalTopicSearchService, TopicSearchService
 
 logger = logging.getLogger(__name__)
@@ -35,6 +36,7 @@ class MessageHandler:
         topic_searcher: TopicSearchService | None = None,
         local_searcher: LocalTopicSearchService | None = None,
         container: Any | None = None,
+        hybrid_search: HybridSearchService | None = None,
     ) -> None:
         self.cfg = cfg
         self.db = db
@@ -65,6 +67,7 @@ class MessageHandler:
             local_searcher=local_searcher,
             task_manager=self.task_manager,
             container=container,
+            hybrid_search=hybrid_search,
         )
 
         self.message_router = MessageRouter(
