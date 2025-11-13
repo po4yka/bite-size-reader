@@ -46,6 +46,10 @@ class SqliteSummaryRepositoryAdapter:
         """Get the latest summary for a request."""
         return await self._db.async_get_summary_by_request(request_id)
 
+    async def async_get_summary_by_id(self, summary_id: int) -> dict[str, Any] | None:
+        """Get a summary by its ID."""
+        return await self._db.async_get_summary_by_id(summary_id)
+
     async def async_get_unread_summaries(
         self, uid: int, cid: int, limit: int = 10, topic: str | None = None
     ) -> list[dict[str, Any]]:

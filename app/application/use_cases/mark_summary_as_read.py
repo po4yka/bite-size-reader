@@ -14,6 +14,7 @@ from datetime import datetime
 from app.domain.events.summary_events import SummaryMarkedAsRead
 from app.domain.exceptions.domain_exceptions import (
     InvalidStateTransitionError,
+    ResourceNotFoundError,
 )
 from app.domain.services.summary_validator import SummaryValidator
 from app.infrastructure.persistence.sqlite.repositories.summary_repository import (
@@ -158,21 +159,15 @@ class MarkSummaryAsReadUseCase:
             ResourceNotFoundError: If summary doesn't exist.
 
         """
-        # Note: We need to query by summary ID, but the existing repository
-        # only has get_by_request_id. For now, we'll need to enhance the
-        # repository interface or work with what we have.
-
-        # This is a simplified version - in a full implementation, we'd need
-        # to add a get_by_id method to the repository
+        # Fetch the summary by ID from the repository
         logger.debug("fetch_summary", extra={"summary_id": summary_id})
 
-        # For now, we'll work with the existing async_mark_summary_as_read
-        # which already validates existence internally.
-        # In a full implementation, we'd fetch first, validate, then update.
+        summary_data = await self._summary_repo.async_get_summary_by_id(summary_id)
+        if not summary_data:
+            msg = f"Summary with ID {summary_id} not found"
+            raise ResourceNotFoundError(
+                msg,
+                details={"summary_id": summary_id},
+            )
 
-        # Placeholder: In real implementation, fetch from repository
-        # For now, we trust that the repository's mark_as_read will fail
-        # if the summary doesn't exist.
-
-        # TODO: Add get_by_id method to repository interface
-        return {"id": summary_id}  # Placeholder
+        return summary_data

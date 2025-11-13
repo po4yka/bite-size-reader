@@ -855,15 +855,16 @@ class CommandProcessor:
                 # Convert domain models to database format for compatibility
                 unread_summaries = []
                 for summary in domain_summaries:
-                    dto = SummaryDTO.from_domain(summary)  # type: ignore[attr-defined]
                     unread_summaries.append(
                         {
-                            "request_id": dto.request_id,
+                            "request_id": summary.request_id,
                             "input_url": "Unknown URL",  # Not available in domain model
-                            "created_at": dto.created_at.isoformat()
-                            if dto.created_at
+                            "created_at": summary.created_at.isoformat()
+                            if hasattr(summary, "created_at") and summary.created_at
                             else "Unknown date",
-                            "json_payload": dto.content,
+                            "json_payload": summary.content,
+                            "is_read": summary.is_read,
+                            "id": summary.id,
                         }
                     )
             else:

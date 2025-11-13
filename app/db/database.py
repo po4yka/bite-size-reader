@@ -779,6 +779,30 @@ class Database:
             operation_name="get_summary_by_request",
         )
 
+    def get_summary_by_id(self, summary_id: int) -> dict[str, Any] | None:
+        """Get a summary by its ID, including request_id."""
+        summary = (
+            Summary.select(Summary, Request).join(Request).where(Summary.id == summary_id).first()
+        )
+        if not summary:
+            return None
+
+        data = model_to_dict(summary)
+        if data:
+            # Add request_id from the foreign key
+            if "request" in data:
+                data["request_id"] = data["request"]
+            self._convert_bool_fields(data, ["is_read"])
+        return data
+
+    async def async_get_summary_by_id(self, summary_id: int) -> dict[str, Any] | None:
+        """Async wrapper for :meth:`get_summary_by_id`."""
+        return await self._safe_db_operation(
+            self.get_summary_by_id,
+            summary_id,
+            operation_name="get_summary_by_id",
+        )
+
     def get_request_by_forward(
         self,
         fwd_chat_id: int,
