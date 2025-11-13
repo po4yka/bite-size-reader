@@ -319,7 +319,7 @@ class LLMResponseWorkflow:
             try:
                 insights_json = persistence.insights_getter(summary)
             except Exception as exc:  # noqa: BLE001
-                logger.error(
+                logger.exception(
                     "insights_getter_failed",
                     extra={"cid": correlation_id, "error": str(exc)},
                 )
@@ -334,11 +334,14 @@ class LLMResponseWorkflow:
             )
             await self.db.async_update_request_status(req_id, "ok")
             self._audit("INFO", "summary_upserted", {"request_id": req_id, "version": new_version})
-        except Exception as exc:  # noqa: BLE001
-            logger.error(
+        except Exception as exc:
+            logger.exception(
                 "persist_summary_error",
                 extra={"error": str(exc), "cid": correlation_id},
             )
+            # Re-raise to ensure database errors don't go unnoticed
+            # This prevents the workflow from continuing with unsaved data
+            raise
 
         if interaction_config.interaction_id and interaction_config.success_kwargs:
             try:
@@ -349,7 +352,7 @@ class LLMResponseWorkflow:
                     **interaction_config.success_kwargs,
                 )
             except Exception as exc:  # noqa: BLE001
-                logger.error(
+                logger.exception(
                     "interaction_success_update_failed",
                     extra={"cid": correlation_id, "error": str(exc)},
                 )
@@ -396,7 +399,7 @@ class LLMResponseWorkflow:
                 )
                 return shaped
         except Exception as exc:  # noqa: BLE001
-            logger.error(
+            logger.exception(
                 "salvage_error",
                 extra={"error": str(exc), "cid": correlation_id},
             )
@@ -527,15 +530,21 @@ class LLMResponseWorkflow:
                 "openrouter_error",
                 {"request_id": req_id, "cid": correlation_id, "error": llm.error_text},
             )
-        except Exception:
-            pass
+        except Exception as audit_exc:
+            logger.warning(
+                "audit_log_failed",
+                extra={"error": str(audit_exc), "cid": correlation_id},
+            )
 
         # Only send notifications if this is the final error
         if is_final_error and notifications and notifications.llm_error:
             try:
                 await notifications.llm_error(llm, error_details)
-            except Exception:
-                pass
+            except Exception as notif_exc:
+                logger.warning(
+                    "llm_error_notification_failed",
+                    extra={"error": str(notif_exc), "cid": correlation_id},
+                )
 
         if interaction_config.interaction_id and interaction_config.llm_error_builder:
             try:
@@ -547,7 +556,7 @@ class LLMResponseWorkflow:
                     **kwargs,
                 )
             except Exception as exc:  # noqa: BLE001
-                logger.error(
+                logger.exception(
                     "interaction_error_update_failed",
                     extra={"cid": correlation_id, "error": str(exc)},
                 )
@@ -565,8 +574,11 @@ class LLMResponseWorkflow:
         if notifications and notifications.repair_failure:
             try:
                 await notifications.repair_failure()
-            except Exception:
-                pass
+            except Exception as notif_exc:
+                logger.warning(
+                    "repair_failure_notification_failed",
+                    extra={"error": str(notif_exc), "cid": correlation_id},
+                )
 
         if interaction_config.interaction_id and interaction_config.repair_failure_kwargs:
             try:
@@ -577,7 +589,7 @@ class LLMResponseWorkflow:
                     **interaction_config.repair_failure_kwargs,
                 )
             except Exception as exc:  # noqa: BLE001
-                logger.error(
+                logger.exception(
                     "interaction_repair_update_failed",
                     extra={"cid": correlation_id, "error": str(exc)},
                 )
@@ -595,8 +607,11 @@ class LLMResponseWorkflow:
         if notifications and notifications.parsing_failure:
             try:
                 await notifications.parsing_failure()
-            except Exception:
-                pass
+            except Exception as notif_exc:
+                logger.warning(
+                    "parsing_failure_notification_failed",
+                    extra={"error": str(notif_exc), "cid": correlation_id},
+                )
 
         if interaction_config.interaction_id and interaction_config.parsing_failure_kwargs:
             try:
@@ -607,7 +622,7 @@ class LLMResponseWorkflow:
                     **interaction_config.parsing_failure_kwargs,
                 )
             except Exception as exc:  # noqa: BLE001
-                logger.error(
+                logger.exception(
                     "interaction_parsing_update_failed",
                     extra={"cid": correlation_id, "error": str(exc)},
                 )
@@ -679,8 +694,11 @@ class LLMResponseWorkflow:
                     "error": final_error_details,
                 },
             )
-        except Exception:
-            pass
+        except Exception as audit_exc:
+            logger.warning(
+                "audit_log_failed",
+                extra={"error": str(audit_exc), "cid": correlation_id},
+            )
 
         # Send a single consolidated error notification
         if notifications and notifications.llm_error:
@@ -689,8 +707,11 @@ class LLMResponseWorkflow:
                     failed_attempts[-1][0] if failed_attempts else None,
                     comprehensive_details,
                 )
-            except Exception:
-                pass
+            except Exception as notif_exc:
+                logger.warning(
+                    "llm_error_notification_failed",
+                    extra={"error": str(notif_exc), "cid": correlation_id},
+                )
 
         if interaction_config.interaction_id and interaction_config.llm_error_builder:
             try:
@@ -703,7 +724,7 @@ class LLMResponseWorkflow:
                     **kwargs,
                 )
             except Exception as exc:  # noqa: BLE001
-                logger.error(
+                logger.exception(
                     "interaction_error_update_failed",
                     extra={"cid": correlation_id, "error": str(exc)},
                 )
@@ -741,7 +762,7 @@ class LLMResponseWorkflow:
                 ),
             )
         except Exception as exc:  # noqa: BLE001
-            logger.error(
+            logger.exception(
                 "persist_llm_error",
                 extra={"error": str(exc), "cid": correlation_id},
             )

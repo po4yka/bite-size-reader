@@ -63,6 +63,7 @@ class Database:
     _database: peewee.SqliteDatabase = field(init=False)
     _topic_search_index_reset_in_progress: bool = field(default=False, init=False)
     _topic_search_index_delete_warned: bool = field(default=False, init=False)
+    _db_lock: asyncio.Lock = field(init=False)
 
     def __post_init__(self) -> None:
         if self.path != ":memory":
@@ -73,9 +74,12 @@ class Database:
                 "journal_mode": "wal",
                 "synchronous": "normal",
             },
-            check_same_thread=False,
+            check_same_thread=False,  # Still needed for asyncio.to_thread() but protected by lock
         )
         database_proxy.initialize(self._database)
+        # Initialize lock for thread-safe database access
+        # This serializes all database operations to prevent race conditions
+        self._db_lock = asyncio.Lock()
 
     @contextlib.contextmanager
     def connect(self) -> Iterator[sqlite3.Connection]:
@@ -609,7 +613,8 @@ class Database:
     async def async_get_request_by_dedupe_hash(self, dedupe_hash: str) -> dict[str, Any] | None:
         """Async wrapper for :meth:`get_request_by_dedupe_hash`."""
 
-        return await asyncio.to_thread(self.get_request_by_dedupe_hash, dedupe_hash)
+        async with self._db_lock:
+            return await asyncio.to_thread(self.get_request_by_dedupe_hash, dedupe_hash)
 
     def get_request_by_id(self, request_id: int) -> dict[str, Any] | None:
         request = Request.get_or_none(Request.id == request_id)
@@ -618,7 +623,8 @@ class Database:
     async def async_get_request_by_id(self, request_id: int) -> dict[str, Any] | None:
         """Async wrapper for :meth:`get_request_by_id`."""
 
-        return await asyncio.to_thread(self.get_request_by_id, request_id)
+        async with self._db_lock:
+            return await asyncio.to_thread(self.get_request_by_id, request_id)
 
     def get_crawl_result_by_request(self, request_id: int) -> dict[str, Any] | None:
         result = CrawlResult.get_or_none(CrawlResult.request == request_id)
@@ -630,7 +636,8 @@ class Database:
     async def async_get_crawl_result_by_request(self, request_id: int) -> dict[str, Any] | None:
         """Async wrapper for :meth:`get_crawl_result_by_request`."""
 
-        return await asyncio.to_thread(self.get_crawl_result_by_request, request_id)
+        async with self._db_lock:
+            return await asyncio.to_thread(self.get_crawl_result_by_request, request_id)
 
     def get_summary_by_request(self, request_id: int) -> dict[str, Any] | None:
         summary = Summary.get_or_none(Summary.request == request_id)
@@ -642,7 +649,8 @@ class Database:
     async def async_get_summary_by_request(self, request_id: int) -> dict[str, Any] | None:
         """Async wrapper for :meth:`get_summary_by_request`."""
 
-        return await asyncio.to_thread(self.get_summary_by_request, request_id)
+        async with self._db_lock:
+            return await asyncio.to_thread(self.get_summary_by_request, request_id)
 
     def get_request_by_forward(
         self,
@@ -763,12 +771,13 @@ class Database:
     ) -> None:
         """Async wrapper for :meth:`update_user_interaction`."""
 
-        await asyncio.to_thread(
-            self.update_user_interaction,
-            interaction_id,
-            updates=updates,
-            **fields,
-        )
+        async with self._db_lock:
+            await asyncio.to_thread(
+                self.update_user_interaction,
+                interaction_id,
+                updates=updates,
+                **fields,
+            )
 
     def create_request(
         self,
@@ -835,7 +844,8 @@ class Database:
     async def async_update_request_status(self, request_id: int, status: str) -> None:
         """Asynchronously update the request status."""
 
-        await asyncio.to_thread(self.update_request_status, request_id, status)
+        async with self._db_lock:
+            await asyncio.to_thread(self.update_request_status, request_id, status)
 
     def update_request_correlation_id(self, request_id: int, correlation_id: str) -> None:
         Request.update({Request.correlation_id: correlation_id}).where(
@@ -998,7 +1008,8 @@ class Database:
     async def async_insert_llm_call(self, **kwargs: Any) -> int:
         """Persist an LLM call without blocking the event loop."""
 
-        return await asyncio.to_thread(self.insert_llm_call, **kwargs)
+        async with self._db_lock:
+            return await asyncio.to_thread(self.insert_llm_call, **kwargs)
 
     def get_latest_llm_model_by_request_id(self, request_id: int) -> str | None:
         call = (
@@ -1073,7 +1084,8 @@ class Database:
     async def async_upsert_summary(self, **kwargs: Any) -> int:
         """Asynchronously upsert a summary entry."""
 
-        return await asyncio.to_thread(self.upsert_summary, **kwargs)
+        async with self._db_lock:
+            return await asyncio.to_thread(self.upsert_summary, **kwargs)
 
     def update_summary_insights(self, request_id: int, insights_json: JSONValue) -> None:
         Summary.update({Summary.insights_json: self._prepare_json_payload(insights_json)}).where(
