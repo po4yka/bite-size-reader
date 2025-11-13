@@ -40,6 +40,13 @@ from app.services.topic_search_utils import (
 
 JSONValue = Mapping[str, Any] | Sequence[Any] | str | None
 
+# Database operation timeout in seconds
+# Prevents indefinite hangs on lock acquisition or slow operations
+DB_OPERATION_TIMEOUT = 30.0
+
+# Maximum retries for transient database errors
+DB_MAX_RETRIES = 3
+
 
 class TopicSearchIndexRebuiltError(RuntimeError):
     """Raised to signal that the topic search index was rebuilt mid-operation."""
@@ -80,6 +87,117 @@ class Database:
         # Initialize lock for thread-safe database access
         # This serializes all database operations to prevent race conditions
         self._db_lock = asyncio.Lock()
+
+    async def _safe_db_operation(
+        self,
+        operation: Any,
+        *args: Any,
+        timeout: float = DB_OPERATION_TIMEOUT,
+        operation_name: str = "database_operation",
+        **kwargs: Any,
+    ) -> Any:
+        """Execute database operation with timeout and retry protection.
+
+        Args:
+            operation: The database operation to execute
+            *args: Positional arguments for the operation
+            timeout: Timeout in seconds (default: DB_OPERATION_TIMEOUT)
+            operation_name: Name for logging purposes
+            **kwargs: Keyword arguments for the operation
+
+        Returns:
+            Result of the operation
+
+        Raises:
+            asyncio.TimeoutError: If operation times out
+            peewee.OperationalError: If database is locked or busy after retries
+            peewee.IntegrityError: If constraint violation occurs
+            Exception: Other database errors
+        """
+        retries = 0
+        last_error = None
+
+        while retries <= DB_MAX_RETRIES:
+            try:
+                # Acquire lock with timeout to prevent indefinite hangs
+                async with asyncio.timeout(timeout):
+                    async with self._db_lock:
+                        # Execute operation in thread pool
+                        result = await asyncio.to_thread(operation, *args, **kwargs)
+                        return result
+
+            except asyncio.TimeoutError:
+                self._logger.error(
+                    "db_operation_timeout",
+                    extra={
+                        "operation": operation_name,
+                        "timeout": timeout,
+                        "retries": retries,
+                    },
+                )
+                raise
+
+            except peewee.OperationalError as e:
+                # Handle database locked or busy errors
+                last_error = e
+                error_msg = str(e).lower()
+
+                if "locked" in error_msg or "busy" in error_msg:
+                    if retries < DB_MAX_RETRIES:
+                        retries += 1
+                        wait_time = 0.1 * (2**retries)  # Exponential backoff
+                        self._logger.warning(
+                            "db_locked_retrying",
+                            extra={
+                                "operation": operation_name,
+                                "retry": retries,
+                                "max_retries": DB_MAX_RETRIES,
+                                "wait_time": wait_time,
+                                "error": str(e),
+                            },
+                        )
+                        await asyncio.sleep(wait_time)
+                        continue
+
+                # Non-retryable operational error or max retries exceeded
+                self._logger.exception(
+                    "db_operational_error",
+                    extra={
+                        "operation": operation_name,
+                        "retries": retries,
+                        "error": str(e),
+                    },
+                )
+                raise
+
+            except peewee.IntegrityError as e:
+                # Constraint violations should not be retried
+                self._logger.exception(
+                    "db_integrity_error",
+                    extra={
+                        "operation": operation_name,
+                        "error": str(e),
+                    },
+                )
+                raise
+
+            except Exception as e:
+                # Unexpected error
+                self._logger.exception(
+                    "db_unexpected_error",
+                    extra={
+                        "operation": operation_name,
+                        "retries": retries,
+                        "error": str(e),
+                        "error_type": type(e).__name__,
+                    },
+                )
+                raise
+
+        # Should not reach here, but handle it anyway
+        if last_error:
+            raise last_error
+        raise RuntimeError(f"Database operation {operation_name} failed after {DB_MAX_RETRIES} retries")
 
     @contextlib.contextmanager
     def connect(self) -> Iterator[sqlite3.Connection]:
@@ -612,9 +730,11 @@ class Database:
 
     async def async_get_request_by_dedupe_hash(self, dedupe_hash: str) -> dict[str, Any] | None:
         """Async wrapper for :meth:`get_request_by_dedupe_hash`."""
-
-        async with self._db_lock:
-            return await asyncio.to_thread(self.get_request_by_dedupe_hash, dedupe_hash)
+        return await self._safe_db_operation(
+            self.get_request_by_dedupe_hash,
+            dedupe_hash,
+            operation_name="get_request_by_dedupe_hash",
+        )
 
     def get_request_by_id(self, request_id: int) -> dict[str, Any] | None:
         request = Request.get_or_none(Request.id == request_id)
@@ -622,9 +742,11 @@ class Database:
 
     async def async_get_request_by_id(self, request_id: int) -> dict[str, Any] | None:
         """Async wrapper for :meth:`get_request_by_id`."""
-
-        async with self._db_lock:
-            return await asyncio.to_thread(self.get_request_by_id, request_id)
+        return await self._safe_db_operation(
+            self.get_request_by_id,
+            request_id,
+            operation_name="get_request_by_id",
+        )
 
     def get_crawl_result_by_request(self, request_id: int) -> dict[str, Any] | None:
         result = CrawlResult.get_or_none(CrawlResult.request == request_id)
@@ -635,9 +757,11 @@ class Database:
 
     async def async_get_crawl_result_by_request(self, request_id: int) -> dict[str, Any] | None:
         """Async wrapper for :meth:`get_crawl_result_by_request`."""
-
-        async with self._db_lock:
-            return await asyncio.to_thread(self.get_crawl_result_by_request, request_id)
+        return await self._safe_db_operation(
+            self.get_crawl_result_by_request,
+            request_id,
+            operation_name="get_crawl_result_by_request",
+        )
 
     def get_summary_by_request(self, request_id: int) -> dict[str, Any] | None:
         summary = Summary.get_or_none(Summary.request == request_id)
@@ -648,9 +772,11 @@ class Database:
 
     async def async_get_summary_by_request(self, request_id: int) -> dict[str, Any] | None:
         """Async wrapper for :meth:`get_summary_by_request`."""
-
-        async with self._db_lock:
-            return await asyncio.to_thread(self.get_summary_by_request, request_id)
+        return await self._safe_db_operation(
+            self.get_summary_by_request,
+            request_id,
+            operation_name="get_summary_by_request",
+        )
 
     def get_request_by_forward(
         self,
@@ -770,14 +896,13 @@ class Database:
         **fields: Any,
     ) -> None:
         """Async wrapper for :meth:`update_user_interaction`."""
-
-        async with self._db_lock:
-            await asyncio.to_thread(
-                self.update_user_interaction,
-                interaction_id,
-                updates=updates,
-                **fields,
-            )
+        await self._safe_db_operation(
+            self.update_user_interaction,
+            interaction_id,
+            updates=updates,
+            operation_name="update_user_interaction",
+            **fields,
+        )
 
     def create_request(
         self,
@@ -843,9 +968,12 @@ class Database:
 
     async def async_update_request_status(self, request_id: int, status: str) -> None:
         """Asynchronously update the request status."""
-
-        async with self._db_lock:
-            await asyncio.to_thread(self.update_request_status, request_id, status)
+        await self._safe_db_operation(
+            self.update_request_status,
+            request_id,
+            status,
+            operation_name="update_request_status",
+        )
 
     def update_request_correlation_id(self, request_id: int, correlation_id: str) -> None:
         Request.update({Request.correlation_id: correlation_id}).where(
@@ -1007,9 +1135,11 @@ class Database:
 
     async def async_insert_llm_call(self, **kwargs: Any) -> int:
         """Persist an LLM call without blocking the event loop."""
-
-        async with self._db_lock:
-            return await asyncio.to_thread(self.insert_llm_call, **kwargs)
+        return await self._safe_db_operation(
+            self.insert_llm_call,
+            operation_name="insert_llm_call",
+            **kwargs,
+        )
 
     def get_latest_llm_model_by_request_id(self, request_id: int) -> str | None:
         call = (
@@ -1083,9 +1213,11 @@ class Database:
 
     async def async_upsert_summary(self, **kwargs: Any) -> int:
         """Asynchronously upsert a summary entry."""
-
-        async with self._db_lock:
-            return await asyncio.to_thread(self.upsert_summary, **kwargs)
+        return await self._safe_db_operation(
+            self.upsert_summary,
+            operation_name="upsert_summary",
+            **kwargs,
+        )
 
     def update_summary_insights(self, request_id: int, insights_json: JSONValue) -> None:
         Summary.update({Summary.insights_json: self._prepare_json_payload(insights_json)}).where(
