@@ -19,7 +19,8 @@ class DomainEvent:
     def __post_init__(self) -> None:
         """Validate event data after initialization."""
         if not isinstance(self.occurred_at, datetime):
-            raise TypeError("occurred_at must be a datetime")
+            msg = "occurred_at must be a datetime"
+            raise TypeError(msg)
 
 
 @dataclass(frozen=True)
@@ -35,9 +36,11 @@ class SummaryCreated(DomainEvent):
         """Validate event data."""
         super().__post_init__()
         if self.summary_id <= 0:
-            raise ValueError("summary_id must be positive")
+            msg = "summary_id must be positive"
+            raise ValueError(msg)
         if self.request_id <= 0:
-            raise ValueError("request_id must be positive")
+            msg = "request_id must be positive"
+            raise ValueError(msg)
 
 
 @dataclass(frozen=True)
@@ -50,7 +53,8 @@ class SummaryMarkedAsRead(DomainEvent):
         """Validate event data."""
         super().__post_init__()
         if self.summary_id <= 0:
-            raise ValueError("summary_id must be positive")
+            msg = "summary_id must be positive"
+            raise ValueError(msg)
 
 
 @dataclass(frozen=True)
@@ -63,7 +67,8 @@ class SummaryMarkedAsUnread(DomainEvent):
         """Validate event data."""
         super().__post_init__()
         if self.summary_id <= 0:
-            raise ValueError("summary_id must be positive")
+            msg = "summary_id must be positive"
+            raise ValueError(msg)
 
 
 @dataclass(frozen=True)
@@ -77,6 +82,8 @@ class SummaryInsightsAdded(DomainEvent):
         """Validate event data."""
         super().__post_init__()
         if self.summary_id <= 0:
-            raise ValueError("summary_id must be positive")
+            msg = "summary_id must be positive"
+            raise ValueError(msg)
         if not self.insights:
-            raise ValueError("insights cannot be empty")
+            msg = "insights cannot be empty"
+            raise ValueError(msg)

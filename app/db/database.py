@@ -113,6 +113,7 @@ class Database:
             peewee.OperationalError: If database is locked or busy after retries
             peewee.IntegrityError: If constraint violation occurs
             Exception: Other database errors
+
         """
         retries = 0
         last_error = None
@@ -123,11 +124,10 @@ class Database:
                 async with asyncio.timeout(timeout):
                     async with self._db_lock:
                         # Execute operation in thread pool
-                        result = await asyncio.to_thread(operation, *args, **kwargs)
-                        return result
+                        return await asyncio.to_thread(operation, *args, **kwargs)
 
-            except asyncio.TimeoutError:
-                self._logger.error(
+            except TimeoutError:
+                self._logger.exception(
                     "db_operation_timeout",
                     extra={
                         "operation": operation_name,
@@ -197,12 +197,12 @@ class Database:
         # Should not reach here, but handle it anyway
         if last_error:
             raise last_error
-        raise RuntimeError(f"Database operation {operation_name} failed after {DB_MAX_RETRIES} retries")
+        msg = f"Database operation {operation_name} failed after {DB_MAX_RETRIES} retries"
+        raise RuntimeError(msg)
 
     @contextlib.contextmanager
     def connect(self) -> Iterator[sqlite3.Connection]:
         """Return a context manager yielding the raw sqlite3 connection."""
-
         with self._database.connection_context():
             yield self._database.connection()
 
@@ -302,28 +302,28 @@ class Database:
         return value, False, None
 
     def migrate(self) -> None:
-        with self._database.connection_context():
-            with self._database.bind_ctx(ALL_MODELS):
-                self._database.create_tables(ALL_MODELS, safe=True)
-                self._ensure_schema_compatibility()
+        with self._database.connection_context(), self._database.bind_ctx(ALL_MODELS):
+            self._database.create_tables(ALL_MODELS, safe=True)
+            self._ensure_schema_compatibility()
         self._run_database_maintenance()
         self._logger.info("db_migrated", extra={"path": self.path})
 
     def create_backup_copy(self, dest_path: str) -> Path:
         if self.path == ":memory:":
-            raise ValueError("Cannot create a backup for an in-memory database")
+            msg = "Cannot create a backup for an in-memory database"
+            raise ValueError(msg)
 
         source = Path(self.path)
         if not source.exists():
-            raise FileNotFoundError(f"Database file not found at {self.path}")
+            msg = f"Database file not found at {self.path}"
+            raise FileNotFoundError(msg)
 
         destination = Path(dest_path)
         destination.parent.mkdir(parents=True, exist_ok=True)
 
-        with self.connect() as conn:
-            with sqlite3.connect(str(destination)) as dest_conn:
-                conn.backup(dest_conn)
-                dest_conn.commit()
+        with self.connect() as conn, sqlite3.connect(str(destination)) as dest_conn:
+            conn.backup(dest_conn)
+            dest_conn.commit()
 
         self._logger.info(
             "db_backup_copy_created",
@@ -405,7 +405,7 @@ class Database:
                         tables[table] = self._count_table_rows(table)
                     except peewee.DatabaseError as exc:
                         overview["errors"].append(f"Failed to count rows for table '{table}'")
-                        self._logger.error(
+                        self._logger.exception(
                             "db_table_count_failed",
                             extra={"table": table, "error": str(exc)},
                         )
@@ -423,7 +423,7 @@ class Database:
                         }
                     except peewee.DatabaseError as exc:
                         overview["errors"].append("Failed to aggregate request statuses")
-                        self._logger.error("db_requests_status_failed", extra={"error": str(exc)})
+                        self._logger.exception("db_requests_status_failed", extra={"error": str(exc)})
 
                     overview["last_request_at"] = self._fetch_single_value(
                         "SELECT created_at FROM requests ORDER BY created_at DESC LIMIT 1"
@@ -440,7 +440,7 @@ class Database:
                     )
         except peewee.DatabaseError as exc:
             overview["errors"].append("Failed to query database overview")
-            self._logger.error("db_overview_failed", extra={"error": str(exc)})
+            self._logger.exception("db_overview_failed", extra={"error": str(exc)})
 
         tables = overview.get("tables")
         if isinstance(tables, dict):
@@ -462,7 +462,6 @@ class Database:
 
     def _count_table_rows(self, table_name: str) -> int:
         """Return the number of rows in the given table using Peewee queries."""
-
         model = next(
             (model for model in ALL_MODELS if model._meta.table_name == table_name),
             None,
@@ -843,7 +842,8 @@ class Database:
             request_id,
         )
         if updates and any(field is not None for field in legacy_fields):
-            raise ValueError("Cannot mix explicit field arguments with the updates mapping")
+            msg = "Cannot mix explicit field arguments with the updates mapping"
+            raise ValueError(msg)
 
         update_values: dict[Any, Any] = {}
         if updates:
@@ -853,7 +853,8 @@ class Database:
                 if not isinstance(getattr(UserInteraction, key, None), peewee.Field)
             ]
             if invalid_fields:
-                raise ValueError(f"Unknown user interaction fields: {', '.join(invalid_fields)}")
+                msg = f"Unknown user interaction fields: {', '.join(invalid_fields)}"
+                raise ValueError(msg)
             for key, value in updates.items():
                 field_obj = getattr(UserInteraction, key)
                 update_values[field_obj] = value
@@ -1227,7 +1228,6 @@ class Database:
     @staticmethod
     def _yield_topic_fragments(value: Any) -> Iterator[str]:
         """Yield normalized text fragments from arbitrary payload values."""
-
         if value is None:
             return
         if isinstance(value, str):
@@ -1246,7 +1246,6 @@ class Database:
         payload: Mapping[str, Any], request_data: Mapping[str, Any], topic: str
     ) -> bool:
         """Return True when a stored summary appears to match the requested topic."""
-
         terms = [term for term in tokenize(topic) if term]
         if not terms:
             normalized = topic.casefold().strip()
@@ -1288,7 +1287,6 @@ class Database:
         self, *, limit: int = 10, topic: str | None = None
     ) -> list[dict[str, Any]]:
         """Return unread summary rows optionally filtered by topic text."""
-
         if limit <= 0:
             return []
 
@@ -1351,6 +1349,7 @@ class Database:
 
         Returns:
             List of unread summary dictionaries.
+
         """
         return await self._safe_db_operation(
             self.get_unread_summaries,
@@ -1362,8 +1361,7 @@ class Database:
     @staticmethod
     def _sanitize_fts_term(term: str) -> str:
         sanitized = re.sub(r"[^\w-]+", " ", term)
-        sanitized = re.sub(r"\s+", " ", sanitized).strip()
-        return sanitized
+        return re.sub(r"\s+", " ", sanitized).strip()
 
     def _find_topic_search_request_ids(
         self, topic: str, *, candidate_limit: int
@@ -1667,14 +1665,12 @@ class Database:
 
     def _clear_topic_search_index(self) -> None:
         """Remove all rows from the topic search FTS index."""
-
         self._database.execute_sql(
             "INSERT INTO topic_search_index(topic_search_index) VALUES ('delete-all')"
         )
 
     def _delete_topic_search_index_row(self, rowid: int) -> None:
         """Remove a single row from the topic search FTS index."""
-
         try:
             self._database.execute_sql(
                 "DELETE FROM topic_search_index WHERE rowid = ?",
@@ -1690,7 +1686,6 @@ class Database:
 
     def _log_topic_search_delete_fallback(self, rowid: int, message: str) -> None:
         """Log degraded delete path, but only warn once to avoid noise."""
-
         log_extra = {"rowid": rowid, "error": message}
         if not self._topic_search_index_delete_warned:
             self._topic_search_index_delete_warned = True
@@ -1700,7 +1695,6 @@ class Database:
 
     def _handle_topic_search_index_error(self, exc: peewee.DatabaseError, rowid: int) -> None:
         """Handle unrecoverable FTS errors by rebuilding the index."""
-
         message = str(exc)
         self._logger.error(
             "topic_search_index_delete_failed",
@@ -1714,7 +1708,6 @@ class Database:
 
     def _reset_topic_search_index(self) -> None:
         """Drop and rebuild the topic search index to recover from corruption."""
-
         if self._topic_search_index_reset_in_progress:
             return
 
@@ -1722,10 +1715,8 @@ class Database:
         try:
             self._logger.warning("topic_search_index_resetting_due_to_error")
             with self._database.connection_context():
-                try:
+                with contextlib.suppress(peewee.DatabaseError):
                     TopicSearchIndex.drop_table(safe=True)
-                except peewee.DatabaseError:
-                    pass
                 TopicSearchIndex.create_table()
             try:
                 self._rebuild_topic_search_index()
@@ -1764,7 +1755,7 @@ class Database:
                     model.update({field: normalized}).where(model.id == row_id).execute()
                     updates += 1
             except Exception as exc:
-                self._logger.error(
+                self._logger.exception(
                     "json_column_coercion_failed",
                     extra={
                         "table": table,

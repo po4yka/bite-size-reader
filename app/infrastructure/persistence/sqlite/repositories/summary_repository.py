@@ -6,7 +6,6 @@ This adapter translates between domain Summary models and database records.
 from typing import Any
 
 from app.domain.models.summary import Summary
-from app.protocols import SummaryRepository
 
 
 class SqliteSummaryRepositoryAdapter:
@@ -22,6 +21,7 @@ class SqliteSummaryRepositoryAdapter:
 
         Args:
             database: The existing Database instance to wrap.
+
         """
         self._db = database
 
@@ -61,6 +61,7 @@ class SqliteSummaryRepositoryAdapter:
 
         Returns:
             List of unread summary dictionaries.
+
         """
         return await self._db.async_get_unread_summaries(uid, cid, limit, topic)
 
@@ -88,6 +89,7 @@ class SqliteSummaryRepositoryAdapter:
 
         Returns:
             Summary domain model.
+
         """
         from datetime import datetime
 
@@ -110,6 +112,7 @@ class SqliteSummaryRepositoryAdapter:
 
         Returns:
             Dictionary suitable for database operations.
+
         """
         result: dict[str, Any] = {
             "request_id": summary.request_id,

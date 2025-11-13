@@ -5,7 +5,8 @@ from typing import Any, cast
 
 import httpx
 
-from app.adapters.external.firecrawl_parser import FirecrawlClient, httpx as fc_httpx
+from app.adapters.external.firecrawl_parser import FirecrawlClient
+from app.adapters.external.firecrawl_parser import httpx as fc_httpx
 from app.adapters.openrouter.openrouter_client import httpx as or_httpx
 
 
@@ -20,10 +21,10 @@ class _SeqAsyncClient:
     async def __aexit__(self, exc_type, exc, tb):
         return False
 
-    async def post(self, url, headers=None, json=None):  # noqa: A002
+    async def post(self, url, headers=None, json=None):
         return await self.handler(url, headers, json)
 
-    async def get(self, url, headers=None):  # noqa: A002
+    async def get(self, url, headers=None):
         return await self.handler(url, headers, None)
 
 
@@ -37,7 +38,8 @@ class _Resp:
 
     def raise_for_status(self):
         if self.status_code >= 400:
-            raise Exception(f"HTTP {self.status_code}")
+            msg = f"HTTP {self.status_code}"
+            raise Exception(msg)
 
 
 class TestRetries(unittest.IsolatedAsyncioTestCase):
@@ -70,16 +72,15 @@ class TestRetries(unittest.IsolatedAsyncioTestCase):
             if model == "primary/model":
                 # Always fail for primary
                 return _Resp(500, {"error": "server error"})
-            else:
-                # Fallback succeeds
-                return _Resp(
-                    200,
-                    {
-                        "model": model,
-                        "choices": [{"message": {"content": json.dumps({"summary_250": "ok"})}}],
-                        "usage": {"prompt_tokens": 3, "completion_tokens": 4},
-                    },
-                )
+            # Fallback succeeds
+            return _Resp(
+                200,
+                {
+                    "model": model,
+                    "choices": [{"message": {"content": json.dumps({"summary_250": "ok"})}}],
+                    "usage": {"prompt_tokens": 3, "completion_tokens": 4},
+                },
+            )
 
         original_or = or_httpx.AsyncClient
         original_httpx = httpx.AsyncClient
@@ -88,11 +89,11 @@ class TestRetries(unittest.IsolatedAsyncioTestCase):
             def _make_or_client(*args, **kwargs):
                 return _SeqAsyncClient(handler)
 
-            setattr(or_httpx, "AsyncClient", cast(Any, _make_or_client))
-            setattr(httpx, "AsyncClient", cast(Any, _make_or_client))
+            or_httpx.AsyncClient = cast("Any", _make_or_client)
+            httpx.AsyncClient = cast("Any", _make_or_client)
         finally:
-            setattr(or_httpx, "AsyncClient", cast(Any, original_or))
-            setattr(httpx, "AsyncClient", cast(Any, original_httpx))
+            or_httpx.AsyncClient = cast("Any", original_or)
+            httpx.AsyncClient = cast("Any", original_httpx)
 
     async def test_firecrawl_retries_then_success(self):
         attempts = {"n": 0}
@@ -109,16 +110,16 @@ class TestRetries(unittest.IsolatedAsyncioTestCase):
             def _make_fc_client(*args, **kwargs):
                 return _SeqAsyncClient(handler)
 
-            fc_httpx.AsyncClient = cast(Any, _make_fc_client)
+            fc_httpx.AsyncClient = cast("Any", _make_fc_client)
             client = FirecrawlClient(
                 api_key="fc-dummy-key", timeout_sec=2, max_retries=2, backoff_base=0.0
             )
             res = await client.scrape_markdown("https://example.com")
-            self.assertEqual(res.status, "ok")
-            self.assertEqual(res.http_status, 200)
-            self.assertEqual(res.content_markdown, "# ok")
+            assert res.status == "ok"
+            assert res.http_status == 200
+            assert res.content_markdown == "# ok"
         finally:
-            fc_httpx.AsyncClient = cast(Any, original)
+            fc_httpx.AsyncClient = cast("Any", original)
 
 
 if __name__ == "__main__":

@@ -5,6 +5,8 @@ import json
 import unittest
 from unittest.mock import AsyncMock, Mock, patch
 
+import pytest
+
 from app.adapters.openrouter.openrouter_client import OpenRouterClient
 
 
@@ -45,7 +47,7 @@ class TestOpenRouterCompliance(unittest.TestCase):
 
                 # Verify the correct endpoint is called
                 call_args = mock_client.return_value.post.call_args
-                self.assertEqual(call_args[0][0], "/chat/completions")
+                assert call_args[0][0] == "/chat/completions"
 
         asyncio.run(_test())
 
@@ -67,7 +69,7 @@ class TestOpenRouterCompliance(unittest.TestCase):
                 # Verify Authorization header
                 call_args = mock_client.return_value.post.call_args
                 headers = call_args[1]["headers"]
-                self.assertEqual(headers["Authorization"], "Bearer sk-or-test-key")
+                assert headers["Authorization"] == "Bearer sk-or-test-key"
 
         asyncio.run(_test())
 
@@ -93,10 +95,10 @@ class TestOpenRouterCompliance(unittest.TestCase):
                 # Verify request body structure
                 call_args = mock_client.return_value.post.call_args
                 body = call_args[1]["json"]
-                self.assertEqual(body["model"], "openai/gpt-4o-mini")
-                self.assertEqual(body["messages"], messages)
-                self.assertEqual(body["temperature"], 0.7)
-                self.assertEqual(body["max_tokens"], 100)
+                assert body["model"] == "openai/gpt-4o-mini"
+                assert body["messages"] == messages
+                assert body["temperature"] == 0.7
+                assert body["max_tokens"] == 100
 
         asyncio.run(_test())
 
@@ -124,10 +126,10 @@ class TestOpenRouterCompliance(unittest.TestCase):
                 # Verify optional parameters
                 call_args = mock_client.return_value.post.call_args
                 body = call_args[1]["json"]
-                self.assertEqual(body["temperature"], 0.5)
-                self.assertEqual(body["max_tokens"], 50)
-                self.assertEqual(body["top_p"], 0.9)
-                self.assertTrue(body["stream"])
+                assert body["temperature"] == 0.5
+                assert body["max_tokens"] == 50
+                assert body["top_p"] == 0.9
+                assert body["stream"]
 
         asyncio.run(_test())
 
@@ -149,9 +151,9 @@ class TestOpenRouterCompliance(unittest.TestCase):
                 # Verify headers
                 call_args = mock_client.return_value.post.call_args
                 headers = call_args[1]["headers"]
-                self.assertEqual(headers["Content-Type"], "application/json")
-                self.assertEqual(headers["HTTP-Referer"], "https://github.com/test-repo")
-                self.assertEqual(headers["X-Title"], "Test Bot")
+                assert headers["Content-Type"] == "application/json"
+                assert headers["HTTP-Referer"] == "https://github.com/test-repo"
+                assert headers["X-Title"] == "Test Bot"
 
         asyncio.run(_test())
 
@@ -169,8 +171,8 @@ class TestOpenRouterCompliance(unittest.TestCase):
 
                 result = await self.client.chat([{"role": "user", "content": "Hello"}])
 
-                self.assertEqual(result.status, "error")
-                self.assertIn("Invalid or missing request parameters", result.error_text)
+                assert result.status == "error"
+                assert "Invalid or missing request parameters" in result.error_text
 
         asyncio.run(_test())
 
@@ -186,8 +188,8 @@ class TestOpenRouterCompliance(unittest.TestCase):
 
                 result = await self.client.chat([{"role": "user", "content": "Hello"}])
 
-                self.assertEqual(result.status, "error")
-                self.assertIn("Authentication failed", result.error_text)
+                assert result.status == "error"
+                assert "Authentication failed" in result.error_text
 
         asyncio.run(_test())
 
@@ -203,8 +205,8 @@ class TestOpenRouterCompliance(unittest.TestCase):
 
                 result = await self.client.chat([{"role": "user", "content": "Hello"}])
 
-                self.assertEqual(result.status, "error")
-                self.assertIn("Insufficient account balance", result.error_text)
+                assert result.status == "error"
+                assert "Insufficient account balance" in result.error_text
 
         asyncio.run(_test())
 
@@ -220,8 +222,8 @@ class TestOpenRouterCompliance(unittest.TestCase):
 
                 result = await self.client.chat([{"role": "user", "content": "Hello"}])
 
-                self.assertEqual(result.status, "error")
-                self.assertIn("Requested resource not found", result.error_text)
+                assert result.status == "error"
+                assert "Requested resource not found" in result.error_text
 
         asyncio.run(_test())
 
@@ -258,7 +260,7 @@ class TestOpenRouterCompliance(unittest.TestCase):
                     await self.client.chat([{"role": "user", "content": "Hello"}])
 
                     # Should have retried with exponential backoff
-                    self.assertGreater(mock_sleep.call_count, 0)
+                    assert mock_sleep.call_count > 0
 
         asyncio.run(_test())
 
@@ -278,12 +280,12 @@ class TestOpenRouterCompliance(unittest.TestCase):
 
                 result = await self.client.chat([{"role": "user", "content": "Hello"}])
 
-                self.assertEqual(result.status, "ok")
-                self.assertEqual(result.response_text, "Test response")
-                self.assertEqual(result.tokens_prompt, 10)
-                self.assertEqual(result.tokens_completion, 5)
-                self.assertEqual(result.model, "openai/gpt-4o-mini")
-                self.assertEqual(result.endpoint, "/api/v1/chat/completions")
+                assert result.status == "ok"
+                assert result.response_text == "Test response"
+                assert result.tokens_prompt == 10
+                assert result.tokens_completion == 5
+                assert result.model == "openai/gpt-4o-mini"
+                assert result.endpoint == "/api/v1/chat/completions"
 
         asyncio.run(_test())
 
@@ -353,12 +355,12 @@ class TestOpenRouterCompliance(unittest.TestCase):
                     response_format=response_format,
                 )
 
-                self.assertEqual(result.status, "ok")
-                self.assertIsNotNone(result.response_text)
+                assert result.status == "ok"
+                assert result.response_text is not None
                 parsed = json.loads(result.response_text or "{}")
-                self.assertEqual(parsed["summary_250"], "Short summary")
-                self.assertEqual(parsed["summary_1000"], "Medium summary")
-                self.assertEqual(parsed["tldr"], "Longer summary")
+                assert parsed["summary_250"] == "Short summary"
+                assert parsed["summary_1000"] == "Medium summary"
+                assert parsed["tldr"] == "Longer summary"
 
         asyncio.run(_test())
 
@@ -384,11 +386,11 @@ class TestOpenRouterCompliance(unittest.TestCase):
 
                 # Verify models endpoint is called
                 call_args = mock_client.return_value.get.call_args
-                self.assertEqual(call_args[0][0], "https://openrouter.ai/api/v1/models")
+                assert call_args[0][0] == "https://openrouter.ai/api/v1/models"
 
                 # Verify response
-                self.assertIn("data", models)
-                self.assertEqual(len(models["data"]), 2)
+                assert "data" in models
+                assert len(models["data"]) == 2
 
         asyncio.run(_test())
 
@@ -416,9 +418,9 @@ class TestOpenRouterCompliance(unittest.TestCase):
                 with patch("asyncio.sleep"):
                     result = await self.client.chat([{"role": "user", "content": "Hello"}])
 
-                    self.assertEqual(result.status, "ok")
-                    self.assertEqual(result.response_text, "Fallback response")
-                    self.assertEqual(result.model, "google/gemini-2.5-pro")
+                    assert result.status == "ok"
+                    assert result.response_text == "Fallback response"
+                    assert result.model == "google/gemini-2.5-pro"
 
         asyncio.run(_test())
 
@@ -427,19 +429,19 @@ class TestOpenRouterCompliance(unittest.TestCase):
         from app.adapters.openrouter.exceptions import ValidationError
 
         # Test invalid temperature
-        with self.assertRaises(ValidationError):
+        with pytest.raises(ValidationError):
             asyncio.run(self.client.chat([{"role": "user", "content": "Hello"}], temperature=3.0))
 
         # Test invalid max_tokens
-        with self.assertRaises(ValidationError):
+        with pytest.raises(ValidationError):
             asyncio.run(self.client.chat([{"role": "user", "content": "Hello"}], max_tokens=-1))
 
         # Test invalid top_p
-        with self.assertRaises(ValidationError):
+        with pytest.raises(ValidationError):
             asyncio.run(self.client.chat([{"role": "user", "content": "Hello"}], top_p=1.5))
 
         # Test invalid stream
-        with self.assertRaises(ValidationError):
+        with pytest.raises(ValidationError):
             asyncio.run(self.client.chat([{"role": "user", "content": "Hello"}], stream="true"))  # type: ignore[arg-type]
 
     def test_message_validation(self) -> None:
@@ -447,52 +449,52 @@ class TestOpenRouterCompliance(unittest.TestCase):
         from app.adapters.openrouter.exceptions import ValidationError
 
         # Test empty messages
-        with self.assertRaises(ValidationError):
+        with pytest.raises(ValidationError):
             asyncio.run(self.client.chat([]))
 
         # Test invalid message structure
-        with self.assertRaises(ValidationError):
+        with pytest.raises(ValidationError):
             asyncio.run(self.client.chat([{"role": "user"}]))
 
         # Test invalid role
-        with self.assertRaises(ValidationError):
+        with pytest.raises(ValidationError):
             asyncio.run(self.client.chat([{"role": "invalid", "content": "Hello"}]))
 
         # Test too many messages
-        with self.assertRaises(ValidationError):
+        with pytest.raises(ValidationError):
             asyncio.run(self.client.chat([{"role": "user", "content": "Hello"}] * 51))
 
     def test_error_message_generation(self) -> None:
         """Test error message generation for different status codes."""
         # Test 400 error
         error_msg = self.client._get_error_message(400, {"error": {"message": "Bad request"}})
-        self.assertIn("Invalid or missing request parameters", error_msg)
-        self.assertIn("Bad request", error_msg)
+        assert "Invalid or missing request parameters" in error_msg
+        assert "Bad request" in error_msg
 
         # Test 401 error
         error_msg = self.client._get_error_message(401, {"error": "Unauthorized"})
-        self.assertIn("Authentication failed", error_msg)
-        self.assertIn("Unauthorized", error_msg)
+        assert "Authentication failed" in error_msg
+        assert "Unauthorized" in error_msg
 
         # Test 402 error
         error_msg = self.client._get_error_message(402, {})
-        self.assertIn("Insufficient account balance", error_msg)
+        assert "Insufficient account balance" in error_msg
 
         # Test 404 error
         error_msg = self.client._get_error_message(404, {})
-        self.assertIn("Requested resource not found", error_msg)
+        assert "Requested resource not found" in error_msg
 
         # Test 429 error
         error_msg = self.client._get_error_message(429, {})
-        self.assertIn("Rate limit exceeded", error_msg)
+        assert "Rate limit exceeded" in error_msg
 
         # Test 500 error
         error_msg = self.client._get_error_message(500, {})
-        self.assertIn("Internal server error", error_msg)
+        assert "Internal server error" in error_msg
 
         # Test unknown status code
         error_msg = self.client._get_error_message(999, {})
-        self.assertIn("HTTP 999 error", error_msg)
+        assert "HTTP 999 error" in error_msg
 
 
 if __name__ == "__main__":

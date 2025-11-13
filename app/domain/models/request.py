@@ -7,7 +7,6 @@ to process content (URL, forward, etc.).
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any
 
 
 class RequestType(str, Enum):
@@ -60,10 +59,12 @@ class Request:
 
         Raises:
             ValueError: If request is not in a valid state for crawling.
+
         """
         if self.status not in (RequestStatus.PENDING, RequestStatus.ERROR):
+            msg = f"Cannot mark request as crawling from status: {self.status}"
             raise ValueError(
-                f"Cannot mark request as crawling from status: {self.status}"
+                msg
             )
         self.status = RequestStatus.CRAWLING
 
@@ -72,14 +73,16 @@ class Request:
 
         Raises:
             ValueError: If request is not in a valid state for summarizing.
+
         """
         if self.status not in (
             RequestStatus.PENDING,
             RequestStatus.CRAWLING,
             RequestStatus.ERROR,
         ):
+            msg = f"Cannot mark request as summarizing from status: {self.status}"
             raise ValueError(
-                f"Cannot mark request as summarizing from status: {self.status}"
+                msg
             )
         self.status = RequestStatus.SUMMARIZING
 
@@ -88,10 +91,12 @@ class Request:
 
         Raises:
             ValueError: If request is already completed or cancelled.
+
         """
         if self.status in (RequestStatus.COMPLETED, RequestStatus.CANCELLED):
+            msg = f"Cannot mark request as completed from status: {self.status}"
             raise ValueError(
-                f"Cannot mark request as completed from status: {self.status}"
+                msg
             )
         self.status = RequestStatus.COMPLETED
 
@@ -101,7 +106,8 @@ class Request:
         Can be called from any status except cancelled.
         """
         if self.status == RequestStatus.CANCELLED:
-            raise ValueError("Cannot mark cancelled request as error")
+            msg = "Cannot mark cancelled request as error"
+            raise ValueError(msg)
         self.status = RequestStatus.ERROR
 
     def mark_as_cancelled(self) -> None:
@@ -109,9 +115,11 @@ class Request:
 
         Raises:
             ValueError: If request is already completed.
+
         """
         if self.status == RequestStatus.COMPLETED:
-            raise ValueError("Cannot cancel completed request")
+            msg = "Cannot cancel completed request"
+            raise ValueError(msg)
         self.status = RequestStatus.CANCELLED
 
     def is_completed(self) -> bool:
@@ -119,6 +127,7 @@ class Request:
 
         Returns:
             True if status is COMPLETED.
+
         """
         return self.status == RequestStatus.COMPLETED
 
@@ -127,6 +136,7 @@ class Request:
 
         Returns:
             True if status is PENDING.
+
         """
         return self.status == RequestStatus.PENDING
 
@@ -135,6 +145,7 @@ class Request:
 
         Returns:
             True if status is CRAWLING or SUMMARIZING.
+
         """
         return self.status in (RequestStatus.CRAWLING, RequestStatus.SUMMARIZING)
 
@@ -143,6 +154,7 @@ class Request:
 
         Returns:
             True if status is ERROR.
+
         """
         return self.status == RequestStatus.ERROR
 
@@ -151,6 +163,7 @@ class Request:
 
         Returns:
             True if request type is URL.
+
         """
         return self.request_type == RequestType.URL
 
@@ -159,6 +172,7 @@ class Request:
 
         Returns:
             True if request type is FORWARD.
+
         """
         return self.request_type == RequestType.FORWARD
 
@@ -167,6 +181,7 @@ class Request:
 
         Returns:
             True if input_url or normalized_url is set.
+
         """
         return bool(self.input_url or self.normalized_url)
 
@@ -175,6 +190,7 @@ class Request:
 
         Returns:
             Normalized URL if available, otherwise input URL.
+
         """
         return self.normalized_url or self.input_url
 
@@ -183,6 +199,7 @@ class Request:
 
         Returns:
             True if both forward chat ID and message ID are set.
+
         """
         return bool(self.fwd_from_chat_id and self.fwd_from_msg_id)
 
@@ -194,9 +211,11 @@ class Request:
 
         Raises:
             ValueError: If language is empty.
+
         """
         if not language or not language.strip():
-            raise ValueError("Language cannot be empty")
+            msg = "Language cannot be empty"
+            raise ValueError(msg)
         self.lang_detected = language.strip()
 
     def set_correlation_id(self, correlation_id: str) -> None:
@@ -207,9 +226,11 @@ class Request:
 
         Raises:
             ValueError: If correlation_id is empty.
+
         """
         if not correlation_id or not correlation_id.strip():
-            raise ValueError("Correlation ID cannot be empty")
+            msg = "Correlation ID cannot be empty"
+            raise ValueError(msg)
         self.correlation_id = correlation_id.strip()
 
     def __str__(self) -> str:

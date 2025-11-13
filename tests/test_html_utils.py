@@ -16,7 +16,8 @@ def disable_optional_dependencies(monkeypatch):
 
     def guarded_import(name, *args, **kwargs):
         if name.startswith("textacy"):
-            raise ImportError("textacy intentionally disabled for fallback tests")
+            msg = "textacy intentionally disabled for fallback tests"
+            raise ImportError(msg)
         return original_import(name, *args, **kwargs)
 
     monkeypatch.setattr(builtins, "__import__", guarded_import)

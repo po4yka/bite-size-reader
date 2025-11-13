@@ -6,7 +6,6 @@ This adapter translates between domain Request models and database records.
 from typing import Any
 
 from app.domain.models.request import Request, RequestStatus, RequestType
-from app.protocols import RequestRepository
 
 
 class SqliteRequestRepositoryAdapter:
@@ -22,6 +21,7 @@ class SqliteRequestRepositoryAdapter:
 
         Args:
             database: The existing Database instance to wrap.
+
         """
         self._db = database
 
@@ -88,6 +88,7 @@ class SqliteRequestRepositoryAdapter:
 
         Returns:
             Request domain model.
+
         """
         from datetime import datetime
 
@@ -132,6 +133,7 @@ class SqliteRequestRepositoryAdapter:
 
         Returns:
             Dictionary suitable for database operations.
+
         """
         result: dict[str, Any] = {
             "user_id": request.user_id,

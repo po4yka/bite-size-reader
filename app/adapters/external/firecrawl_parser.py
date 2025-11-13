@@ -1,18 +1,21 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import logging
 import time
-from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import httpx
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.core.async_utils import raise_if_cancelled
 from app.core.logging_utils import truncate_log_content
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 
 class FirecrawlResult(BaseModel):
@@ -115,51 +118,62 @@ class FirecrawlClient:
     ) -> None:
         # Security: Validate API key presence and format
         if not api_key or not isinstance(api_key, str):
-            raise ValueError("API key is required")
+            msg = "API key is required"
+            raise ValueError(msg)
         # Validate Bearer token format (should start with 'fc-' for Firecrawl)
         if not api_key.startswith("fc-"):
-            raise ValueError("API key must start with 'fc-'")
+            msg = "API key must start with 'fc-'"
+            raise ValueError(msg)
 
         # Security: Validate timeout
-        if not isinstance(timeout_sec, (int, float)) or timeout_sec <= 0:  # noqa: UP038
-            raise ValueError("Timeout must be positive")
+        if not isinstance(timeout_sec, (int, float)) or timeout_sec <= 0:
+            msg = "Timeout must be positive"
+            raise ValueError(msg)
         if timeout_sec > 300:  # 5 minutes max
-            raise ValueError("Timeout too large")
+            msg = "Timeout too large"
+            raise ValueError(msg)
 
         # Security: Validate retry parameters
         if not isinstance(max_retries, int) or max_retries < 0 or max_retries > 10:
-            raise ValueError("Max retries must be between 0 and 10")
+            msg = "Max retries must be between 0 and 10"
+            raise ValueError(msg)
         # Allow zero to disable waits in tests; only negative is invalid
-        if not isinstance(backoff_base, (int, float)) or backoff_base < 0:  # noqa: UP038
-            raise ValueError("Backoff base must be non-negative")
+        if not isinstance(backoff_base, (int, float)) or backoff_base < 0:
+            msg = "Backoff base must be non-negative"
+            raise ValueError(msg)
 
         # Validate connection pooling parameters
         if not isinstance(max_connections, int) or max_connections < 1 or max_connections > 100:
-            raise ValueError("Max connections must be between 1 and 100")
+            msg = "Max connections must be between 1 and 100"
+            raise ValueError(msg)
         if (
             not isinstance(max_keepalive_connections, int)
             or max_keepalive_connections < 1
             or max_keepalive_connections > 50
         ):
-            raise ValueError("Max keepalive connections must be between 1 and 50")
+            msg = "Max keepalive connections must be between 1 and 50"
+            raise ValueError(msg)
         if (
-            not isinstance(keepalive_expiry, (int, float))  # noqa: UP038
+            not isinstance(keepalive_expiry, (int, float))
             or keepalive_expiry < 1.0
             or keepalive_expiry > 300.0
         ):
-            raise ValueError("Keepalive expiry must be between 1.0 and 300.0 seconds")
+            msg = "Keepalive expiry must be between 1.0 and 300.0 seconds"
+            raise ValueError(msg)
         if (
             not isinstance(credit_warning_threshold, int)
             or credit_warning_threshold < 1
             or credit_warning_threshold > 10000
         ):
-            raise ValueError("Credit warning threshold must be between 1 and 10000")
+            msg = "Credit warning threshold must be between 1 and 10000"
+            raise ValueError(msg)
         if (
             not isinstance(credit_critical_threshold, int)
             or credit_critical_threshold < 1
             or credit_critical_threshold > 1000
         ):
-            raise ValueError("Credit critical threshold must be between 1 and 1000")
+            msg = "Credit critical threshold must be between 1 and 1000"
+            raise ValueError(msg)
 
         self._api_key = api_key
         self._timeout = int(timeout_sec)
@@ -197,33 +211,35 @@ class FirecrawlClient:
         request_id: int | None = None,
     ) -> FirecrawlSearchResult:
         """Call Firecrawl's search endpoint and normalize the response."""
-
         trimmed_query = str(query or "").strip()
         if not trimmed_query:
-            raise ValueError("Search query is required")
+            msg = "Search query is required"
+            raise ValueError(msg)
         if len(trimmed_query) > 500:
-            raise ValueError("Search query too long")
+            msg = "Search query too long"
+            raise ValueError(msg)
 
         if not isinstance(limit, int):
-            raise ValueError("Search limit must be an integer")
+            msg = "Search limit must be an integer"
+            raise ValueError(msg)
         if limit <= 0 or limit > 10:
-            raise ValueError("Search limit must be between 1 and 10")
+            msg = "Search limit must be between 1 and 10"
+            raise ValueError(msg)
 
         if request_id is not None and (not isinstance(request_id, int) or request_id <= 0):
-            raise ValueError("Invalid request_id")
+            msg = "Invalid request_id"
+            raise ValueError(msg)
 
         headers = {"Authorization": f"Bearer {self._api_key}"}
         body = {"query": trimmed_query, "numResults": limit, "page": 1}
 
         if self._audit:
-            try:
+            with contextlib.suppress(Exception):
                 self._audit(
                     "INFO",
                     "firecrawl_search_request",
                     {"query": trimmed_query, "limit": limit, "request_id": request_id},
                 )
-            except Exception:
-                pass
 
         self._logger.debug(
             "firecrawl_search_request",
@@ -238,19 +254,17 @@ class FirecrawlClient:
         except httpx.HTTPError as exc:
             latency = int((time.perf_counter() - started) * 1000)
             error_text = str(exc)
-            self._logger.error(
+            self._logger.exception(
                 "firecrawl_search_http_error",
                 extra={"error": error_text, "query": trimmed_query},
             )
             if self._audit:
-                try:
+                with contextlib.suppress(Exception):
                     self._audit(
                         "ERROR",
                         "firecrawl_search_http_error",
                         {"error": error_text, "query": trimmed_query},
                     )
-                except Exception:
-                    pass
             return FirecrawlSearchResult(
                 status="error",
                 results=[],
@@ -264,19 +278,17 @@ class FirecrawlClient:
             data = resp.json()
         except json.JSONDecodeError as exc:
             error_text = f"invalid_json: {exc}"
-            self._logger.error(
+            self._logger.exception(
                 "firecrawl_search_invalid_json",
                 extra={"error": error_text, "status": resp.status_code},
             )
             if self._audit:
-                try:
+                with contextlib.suppress(Exception):
                     self._audit(
                         "ERROR",
                         "firecrawl_search_invalid_json",
                         {"status": resp.status_code, "error": error_text},
                     )
-                except Exception:
-                    pass
             return FirecrawlSearchResult(
                 status="error",
                 results=[],
@@ -314,7 +326,7 @@ class FirecrawlClient:
             final_error = raw_error or f"HTTP {resp.status_code}"
 
         if self._audit:
-            try:
+            with contextlib.suppress(Exception):
                 self._audit(
                     "INFO" if status == "success" else "ERROR",
                     "firecrawl_search_response",
@@ -325,8 +337,6 @@ class FirecrawlClient:
                         "query": trimmed_query,
                     },
                 )
-            except Exception:
-                pass
 
         self._logger.debug(
             "firecrawl_search_response",
@@ -351,7 +361,6 @@ class FirecrawlClient:
     @classmethod
     def _extract_total_results(cls, payload: Any) -> int | None:
         """Attempt to extract a total results count from the payload."""
-
         queue: list[Any] = [payload]
         seen: set[int] = set()
         while queue:
@@ -375,7 +384,6 @@ class FirecrawlClient:
     @classmethod
     def _extract_error_message(cls, payload: Any) -> str | None:
         """Extract an error message from Firecrawl payloads if present."""
-
         if isinstance(payload, dict):
             for key in ("error", "message"):
                 value = payload.get(key)
@@ -396,7 +404,6 @@ class FirecrawlClient:
     @classmethod
     def _extract_result_items(cls, payload: Any) -> list[dict[str, Any]]:
         """Locate the list of search result dictionaries within the payload."""
-
         queue: list[Any] = [payload]
         seen: set[int] = set()
         while queue:
@@ -422,14 +429,11 @@ class FirecrawlClient:
     @staticmethod
     def _has_url_field(item: dict[str, Any]) -> bool:
         url_value = item.get("url") or item.get("link") or item.get("sourceUrl")
-        if isinstance(url_value, str) and url_value.strip():
-            return True
-        return False
+        return bool(isinstance(url_value, str) and url_value.strip())
 
     @classmethod
     def _normalize_search_item(cls, raw: dict[str, Any]) -> FirecrawlSearchItem | None:
         """Normalize a raw search item dictionary into ``FirecrawlSearchItem``."""
-
         url = cls._normalize_text(
             raw.get("url") or raw.get("link") or raw.get("sourceUrl") or raw.get("permalink")
         )
@@ -487,13 +491,16 @@ class FirecrawlClient:
     ) -> FirecrawlResult:
         # Security: Validate URL input
         if not url or not isinstance(url, str):
-            raise ValueError("URL is required")
+            msg = "URL is required"
+            raise ValueError(msg)
         if len(url) > 2048:
-            raise ValueError("URL too long")
+            msg = "URL too long"
+            raise ValueError(msg)
 
         # Security: Validate request_id
         if request_id is not None and (not isinstance(request_id, int) or request_id <= 0):
-            raise ValueError("Invalid request_id")
+            msg = "Invalid request_id"
+            raise ValueError(msg)
 
         headers = {"Authorization": f"Bearer {self._api_key}"}
         body_base = {"url": url, "formats": ["markdown", "html"]}
@@ -541,7 +548,7 @@ class FirecrawlClient:
                 except json.JSONDecodeError as e:
                     last_error = f"invalid_json: {e}"
                     last_latency = latency
-                    self._logger.error(
+                    self._logger.exception(
                         "firecrawl_invalid_json",
                         extra={"error": str(e), "status": resp.status_code},
                     )
@@ -944,12 +951,12 @@ class FirecrawlClient:
                     },
                     correlation_id=data.get("cid"),
                 )
-            except Exception as e:  # noqa: BLE001
+            except Exception as e:
                 raise_if_cancelled(e)
                 latency = int((time.perf_counter() - started) * 1000)
                 last_latency = latency
                 last_error = str(e)
-                self._logger.error(
+                self._logger.exception(
                     "firecrawl_exception", extra={"error": str(e), "attempt": attempt}
                 )
                 if attempt < self._max_retries:

@@ -4,9 +4,6 @@ from typing import Any
 
 from .summary_schema import PydanticAvailable
 
-# ruff: noqa: E501
-
-
 SummaryModelT: Any
 if PydanticAvailable:
     from .summary_schema import SummaryModel as SummaryModelT
@@ -31,11 +28,13 @@ def _cap_text(text: str, limit: int) -> str:
     if not isinstance(text, str):
         text = str(text) if text is not None else ""
     if not isinstance(limit, int) or limit <= 0:
-        raise ValueError("Limit must be a positive integer")
+        msg = "Limit must be a positive integer"
+        raise ValueError(msg)
 
     # Security: Prevent extremely large limits
     if limit > 10000:
-        raise ValueError("Limit too large")
+        msg = "Limit too large"
+        raise ValueError(msg)
 
     if len(text) <= limit:
         return text
@@ -299,10 +298,7 @@ def _clean_string_list(values: Any, *, limit: int | None = None) -> list[str]:
     result: list[str] = []
     seen: set[str] = set()
     iterable: list[Any]
-    if isinstance(values, list | tuple | set):
-        iterable = list(values)
-    else:
-        iterable = [values]
+    iterable = list(values) if isinstance(values, list | tuple | set) else [values]
     for item in iterable:
         text = str(item).strip()
         if not text:
@@ -443,11 +439,13 @@ def validate_and_shape_summary(payload: SummaryJSON) -> SummaryJSON:
     """
     # Security: Validate input
     if not payload or not isinstance(payload, dict):
-        raise ValueError("Summary payload must be a non-empty dictionary")
+        msg = "Summary payload must be a non-empty dictionary"
+        raise ValueError(msg)
 
     # Security: Prevent extremely large payloads
     if len(str(payload)) > 100000:  # 100KB limit
-        raise ValueError("Summary payload too large")
+        msg = "Summary payload too large"
+        raise ValueError(msg)
 
     # Normalize field names first
     normalized_payload = _normalize_field_names(payload)

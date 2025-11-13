@@ -6,9 +6,6 @@ from html import unescape
 from html.parser import HTMLParser
 from threading import Lock
 
-# ruff: noqa: E501
-
-
 try:
     from lxml import html as lxml_html
     from readability import Document
@@ -54,9 +51,8 @@ class _TextExtractor(HTMLParser):
     def handle_endtag(self, tag: str) -> None:
         if tag in ("script", "style") and self._skip_depth > 0:
             self._skip_depth -= 1
-        elif self._skip_depth == 0:
-            if tag in ("p", "div"):
-                self._buf.append("\n")
+        elif self._skip_depth == 0 and tag in ("p", "div"):
+            self._buf.append("\n")
 
     def handle_data(self, data: str) -> None:
         if self._skip_depth == 0:
@@ -100,10 +96,10 @@ def html_to_text(html: str) -> str:
         # Fallback: very naive strip
         import re
 
-        txt = re.sub(r"<script[\s\S]*?</script>", "", html, flags=re.I)
-        txt = re.sub(r"<style[\s\S]*?</style>", "", txt, flags=re.I)
-        txt = re.sub(r"<br\s*/?>", "\n", txt, flags=re.I)
-        txt = re.sub(r"</p>", "\n\n", txt, flags=re.I)
+        txt = re.sub(r"<script[\s\S]*?</script>", "", html, flags=re.IGNORECASE)
+        txt = re.sub(r"<style[\s\S]*?</style>", "", txt, flags=re.IGNORECASE)
+        txt = re.sub(r"<br\s*/?>", "\n", txt, flags=re.IGNORECASE)
+        txt = re.sub(r"</p>", "\n\n", txt, flags=re.IGNORECASE)
         txt = re.sub(r"<[^>]+>", " ", txt)
         txt = unescape(txt)
         lines = [line.strip() for line in txt.splitlines() if line.strip()]
@@ -131,7 +127,7 @@ def clean_markdown_article_text(markdown: str) -> str:
     # Convert links [text](url) -> text
     text = re.sub(r"\[([^\]]+)\]\([^\)]+\)", r"\1", text)
     # Remove reference-style link definitions and bare image refs
-    text = re.sub(r"^\s*\[[^\]]+\]:\s*\S+\s*$", "", text, flags=re.M)
+    text = re.sub(r"^\s*\[[^\]]+\]:\s*\S+\s*$", "", text, flags=re.MULTILINE)
 
     # Line-level filtering of boilerplate
     lines = [ln.rstrip() for ln in text.splitlines()]
@@ -192,8 +188,7 @@ def clean_markdown_article_text(markdown: str) -> str:
     # Normalize excessive spaces within lines
     cleaned = re.sub(r"[ \t]{2,}", " ", cleaned)
     # Final collapse of triple newlines if any remain
-    cleaned = _collapse_blank_lines(cleaned)
-    return cleaned
+    return _collapse_blank_lines(cleaned)
 
 
 def normalize_with_textacy(text: str) -> str:

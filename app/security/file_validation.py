@@ -13,7 +13,6 @@ logger = logging.getLogger(__name__)
 class FileValidationError(Exception):
     """Raised when file validation fails."""
 
-    pass
 
 
 class SecureFileValidator:
@@ -36,6 +35,7 @@ class SecureFileValidator:
 
         Args:
             max_file_size: Maximum allowed file size in bytes. Uses default if None.
+
         """
         self._max_file_size = max_file_size or self.MAX_FILE_SIZE_BYTES
         self._allowed_dirs = self._get_allowed_directories()
@@ -45,6 +45,7 @@ class SecureFileValidator:
 
         Returns:
             List of allowed directory paths (resolved and normalized)
+
         """
         allowed = []
 
@@ -76,29 +77,35 @@ class SecureFileValidator:
 
         Raises:
             FileValidationError: If validation fails
+
         """
         try:
             path = Path(file_path)
         except Exception as e:
-            raise FileValidationError(f"Invalid file path format: {e}") from e
+            msg = f"Invalid file path format: {e}"
+            raise FileValidationError(msg) from e
 
         # Resolve to absolute path (follows symlinks)
         try:
             resolved_path = path.resolve(strict=True)
         except FileNotFoundError as e:
-            raise FileValidationError(f"File does not exist: {file_path}") from e
+            msg = f"File does not exist: {file_path}"
+            raise FileValidationError(msg) from e
         except Exception as e:
-            raise FileValidationError(f"Cannot resolve file path: {e}") from e
+            msg = f"Cannot resolve file path: {e}"
+            raise FileValidationError(msg) from e
 
         # Check if path is a symlink (security risk)
         if path.is_symlink():
+            msg = f"Symbolic links are not allowed: {file_path}"
             raise FileValidationError(
-                f"Symbolic links are not allowed: {file_path}",
+                msg,
             )
 
         # Verify file exists and is a regular file
         if not resolved_path.is_file():
-            raise FileValidationError(f"Path is not a regular file: {file_path}")
+            msg = f"Path is not a regular file: {file_path}"
+            raise FileValidationError(msg)
 
         # Check if file is within allowed directories
         is_in_allowed_dir = False
@@ -122,28 +129,36 @@ class SecureFileValidator:
 
         if not is_in_allowed_dir:
             allowed_dirs_str = ", ".join(str(d) for d in self._allowed_dirs)
-            raise FileValidationError(
+            msg = (
                 f"File path outside allowed directories. "
                 f"File: {resolved_path}, Allowed: {allowed_dirs_str}"
+            )
+            raise FileValidationError(
+                msg
             )
 
         # Check file size
         try:
             file_size = resolved_path.stat().st_size
             if file_size > self._max_file_size:
-                raise FileValidationError(
+                msg = (
                     f"File too large: {file_size} bytes "
                     f"(max: {self._max_file_size} bytes / "
                     f"{self._max_file_size / (1024 * 1024):.1f} MB)"
                 )
+                raise FileValidationError(
+                    msg
+                )
         except FileValidationError:
             raise
         except Exception as e:
-            raise FileValidationError(f"Cannot read file size: {e}") from e
+            msg = f"Cannot read file size: {e}"
+            raise FileValidationError(msg) from e
 
         # Check file permissions (readable)
         if not os.access(resolved_path, os.R_OK):
-            raise FileValidationError(f"File is not readable: {file_path}")
+            msg = f"File is not readable: {file_path}"
+            raise FileValidationError(msg)
 
         logger.info(
             "file_validation_passed",
@@ -168,6 +183,7 @@ class SecureFileValidator:
 
         Raises:
             FileValidationError: If validation or reading fails
+
         """
         # Validate path first
         validated_path = self.validate_file_path(file_path)
@@ -178,8 +194,9 @@ class SecureFileValidator:
                 for line_num, line in enumerate(f, start=1):
                     # Check line count limit
                     if line_num > self.MAX_LINES:
+                        msg = f"File exceeds maximum line count: {self.MAX_LINES} lines"
                         raise FileValidationError(
-                            f"File exceeds maximum line count: {self.MAX_LINES} lines"
+                            msg
                         )
 
                     # Check line length limit
@@ -201,9 +218,11 @@ class SecureFileValidator:
         except FileValidationError:
             raise
         except UnicodeDecodeError as e:
-            raise FileValidationError(f"File encoding error: {e}") from e
+            msg = f"File encoding error: {e}"
+            raise FileValidationError(msg) from e
         except Exception as e:
-            raise FileValidationError(f"Error reading file: {e}") from e
+            msg = f"Error reading file: {e}"
+            raise FileValidationError(msg) from e
 
         logger.debug(
             "file_read_successful",
@@ -220,6 +239,7 @@ class SecureFileValidator:
 
         Args:
             file_path: Path to file to delete
+
         """
         try:
             validated_path = self.validate_file_path(file_path)
@@ -229,4 +249,4 @@ class SecureFileValidator:
             # File validation failed, don't delete
             logger.warning("file_cleanup_skipped_validation_failed", extra={"file_path": file_path})
         except Exception as e:
-            logger.error("file_cleanup_failed", extra={"file_path": file_path, "error": str(e)})
+            logger.exception("file_cleanup_failed", extra={"file_path": file_path, "error": str(e)})

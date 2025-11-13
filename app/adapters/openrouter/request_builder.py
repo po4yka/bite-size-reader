@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import re
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from app.adapters.openrouter.exceptions import ValidationError
-from app.models.llm.llm_models import ChatRequest
+
+if TYPE_CHECKING:
+    from app.models.llm.llm_models import ChatRequest
 
 
 class RequestBuilder:
@@ -34,25 +36,29 @@ class RequestBuilder:
         """Validate chat request parameters."""
         # Security: Validate messages
         if not request.messages or not isinstance(request.messages, list):
+            msg = "Messages list is required"
             raise ValidationError(
-                "Messages list is required",
+                msg,
                 context={"messages_count": len(request.messages) if request.messages else 0},
             )
         if len(request.messages) > 50:  # Prevent extremely long conversations
+            msg = f"Too many messages (max 50, got {len(request.messages)})"
             raise ValidationError(
-                f"Too many messages (max 50, got {len(request.messages)})",
+                msg,
                 context={"messages_count": len(request.messages)},
             )
 
         for i, msg in enumerate(request.messages):
             if not isinstance(msg, dict):
+                msg = f"Message {i} must be a dictionary, got {type(msg).__name__}"
                 raise ValidationError(
-                    f"Message {i} must be a dictionary, got {type(msg).__name__}",
+                    msg,
                     context={"message_index": i, "message_type": type(msg).__name__},
                 )
             if "role" not in msg or "content" not in msg:
+                msg = f"Message {i} missing required fields 'role' or 'content'"
                 raise ValidationError(
-                    f"Message {i} missing required fields 'role' or 'content'",
+                    msg,
                     context={
                         "message_index": i,
                         "missing_fields": [k for k in ["role", "content"] if k not in msg],
@@ -63,8 +69,9 @@ class RequestBuilder:
                 "user",
                 "assistant",
             }:
+                msg = f"Message {i} has invalid role '{msg.get('role', 'missing')}', must be one of: system, user, assistant"
                 raise ValidationError(
-                    f"Message {i} has invalid role '{msg.get('role', 'missing')}', must be one of: system, user, assistant",
+                    msg,
                     context={
                         "message_index": i,
                         "invalid_role": msg.get("role"),
@@ -72,15 +79,17 @@ class RequestBuilder:
                     },
                 )
             if not isinstance(msg["content"], str):
+                msg = f"Message {i} content must be string, got {type(msg['content']).__name__}"
                 raise ValidationError(
-                    f"Message {i} content must be string, got {type(msg['content']).__name__}",
+                    msg,
                     context={"message_index": i, "content_type": type(msg["content"]).__name__},
                 )
 
         # Validate other parameters
         if not isinstance(request.temperature, int | float):
+            msg = f"Temperature must be numeric, got {type(request.temperature).__name__}"
             raise ValidationError(
-                f"Temperature must be numeric, got {type(request.temperature).__name__}",
+                msg,
                 context={
                     "parameter": "temperature",
                     "value": request.temperature,
@@ -88,15 +97,17 @@ class RequestBuilder:
                 },
             )
         if request.temperature < 0 or request.temperature > 2:
+            msg = f"Temperature must be between 0 and 2, got {request.temperature}"
             raise ValidationError(
-                f"Temperature must be between 0 and 2, got {request.temperature}",
+                msg,
                 context={"parameter": "temperature", "value": request.temperature},
             )
 
         if request.max_tokens is not None:
             if not isinstance(request.max_tokens, int) or request.max_tokens <= 0:
+                msg = f"Max tokens must be a positive integer, got {request.max_tokens}"
                 raise ValidationError(
-                    f"Max tokens must be a positive integer, got {request.max_tokens}",
+                    msg,
                     context={
                         "parameter": "max_tokens",
                         "value": request.max_tokens,
@@ -104,15 +115,17 @@ class RequestBuilder:
                     },
                 )
             if request.max_tokens > 100000:
+                msg = f"Max tokens too large (max 100000, got {request.max_tokens})"
                 raise ValidationError(
-                    f"Max tokens too large (max 100000, got {request.max_tokens})",
+                    msg,
                     context={"parameter": "max_tokens", "value": request.max_tokens},
                 )
 
         if request.top_p is not None:
             if not isinstance(request.top_p, int | float):
+                msg = f"Top_p must be numeric, got {type(request.top_p).__name__}"
                 raise ValidationError(
-                    f"Top_p must be numeric, got {type(request.top_p).__name__}",
+                    msg,
                     context={
                         "parameter": "top_p",
                         "value": request.top_p,
@@ -120,14 +133,16 @@ class RequestBuilder:
                     },
                 )
             if request.top_p < 0 or request.top_p > 1:
+                msg = f"Top_p must be between 0 and 1, got {request.top_p}"
                 raise ValidationError(
-                    f"Top_p must be between 0 and 1, got {request.top_p}",
+                    msg,
                     context={"parameter": "top_p", "value": request.top_p},
                 )
 
         if not isinstance(request.stream, bool):
+            msg = f"Stream must be boolean, got {type(request.stream).__name__}"
             raise ValidationError(
-                f"Stream must be boolean, got {type(request.stream).__name__}",
+                msg,
                 context={
                     "parameter": "stream",
                     "value": request.stream,
@@ -138,8 +153,9 @@ class RequestBuilder:
         if request.request_id is not None and (
             not isinstance(request.request_id, int) or request.request_id <= 0
         ):
+            msg = f"Invalid request_id (must be positive integer, got {request.request_id})"
             raise ValidationError(
-                f"Invalid request_id (must be positive integer, got {request.request_id})",
+                msg,
                 context={
                     "parameter": "request_id",
                     "value": request.request_id,

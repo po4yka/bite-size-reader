@@ -30,12 +30,12 @@ class TestTelegramUser(unittest.TestCase):
         }
         user = TelegramUser.from_dict(data)
 
-        self.assertEqual(user.id, 12345)
-        self.assertFalse(user.is_bot)
-        self.assertEqual(user.first_name, "John")
-        self.assertEqual(user.last_name, "Doe")
-        self.assertEqual(user.username, "johndoe")
-        self.assertEqual(user.language_code, "en")
+        assert user.id == 12345
+        assert not user.is_bot
+        assert user.first_name == "John"
+        assert user.last_name == "Doe"
+        assert user.username == "johndoe"
+        assert user.language_code == "en"
 
     def test_from_dict_minimal(self):
         """Test creating TelegramUser from minimal dictionary."""
@@ -46,12 +46,12 @@ class TestTelegramUser(unittest.TestCase):
         }
         user = TelegramUser.from_dict(data)
 
-        self.assertEqual(user.id, 12345)
-        self.assertFalse(user.is_bot)
-        self.assertEqual(user.first_name, "John")
-        self.assertIsNone(user.last_name)
-        self.assertIsNone(user.username)
-        self.assertIsNone(user.language_code)
+        assert user.id == 12345
+        assert not user.is_bot
+        assert user.first_name == "John"
+        assert user.last_name is None
+        assert user.username is None
+        assert user.language_code is None
 
 
 class TestTelegramChat(unittest.TestCase):
@@ -67,11 +67,11 @@ class TestTelegramChat(unittest.TestCase):
         }
         chat = TelegramChat.from_dict(data)
 
-        self.assertEqual(chat.id, 12345)
-        self.assertEqual(chat.type, ChatType.PRIVATE)
-        self.assertEqual(chat.first_name, "John")
-        self.assertEqual(chat.last_name, "Doe")
-        self.assertIsNone(chat.title)
+        assert chat.id == 12345
+        assert chat.type == ChatType.PRIVATE
+        assert chat.first_name == "John"
+        assert chat.last_name == "Doe"
+        assert chat.title is None
 
     def test_from_dict_group(self):
         """Test creating group chat from dictionary."""
@@ -82,10 +82,10 @@ class TestTelegramChat(unittest.TestCase):
         }
         chat = TelegramChat.from_dict(data)
 
-        self.assertEqual(chat.id, -12345)
-        self.assertEqual(chat.type, ChatType.GROUP)
-        self.assertEqual(chat.title, "Test Group")
-        self.assertIsNone(chat.first_name)
+        assert chat.id == -12345
+        assert chat.type == ChatType.GROUP
+        assert chat.title == "Test Group"
+        assert chat.first_name is None
 
     def test_from_dict_channel(self):
         """Test creating channel chat from dictionary."""
@@ -97,10 +97,10 @@ class TestTelegramChat(unittest.TestCase):
         }
         chat = TelegramChat.from_dict(data)
 
-        self.assertEqual(chat.id, -10012345)
-        self.assertEqual(chat.type, ChatType.CHANNEL)
-        self.assertEqual(chat.title, "Test Channel")
-        self.assertEqual(chat.username, "testchannel")
+        assert chat.id == -10012345
+        assert chat.type == ChatType.CHANNEL
+        assert chat.title == "Test Channel"
+        assert chat.username == "testchannel"
 
 
 class TestMessageEntity(unittest.TestCase):
@@ -115,10 +115,10 @@ class TestMessageEntity(unittest.TestCase):
         }
         entity = MessageEntity.from_dict(data)
 
-        self.assertEqual(entity.type, MessageEntityType.URL)
-        self.assertEqual(entity.offset, 10)
-        self.assertEqual(entity.length, 20)
-        self.assertIsNone(entity.url)
+        assert entity.type == MessageEntityType.URL
+        assert entity.offset == 10
+        assert entity.length == 20
+        assert entity.url is None
 
     def test_from_dict_text_link(self):
         """Test creating text link entity from dictionary."""
@@ -130,10 +130,10 @@ class TestMessageEntity(unittest.TestCase):
         }
         entity = MessageEntity.from_dict(data)
 
-        self.assertEqual(entity.type, MessageEntityType.TEXT_LINK)
-        self.assertEqual(entity.offset, 10)
-        self.assertEqual(entity.length, 20)
-        self.assertEqual(entity.url, "https://example.com")
+        assert entity.type == MessageEntityType.TEXT_LINK
+        assert entity.offset == 10
+        assert entity.length == 20
+        assert entity.url == "https://example.com"
 
     def test_from_dict_mention(self):
         """Test creating mention entity from dictionary."""
@@ -150,11 +150,11 @@ class TestMessageEntity(unittest.TestCase):
         }
         entity = MessageEntity.from_dict(data)
 
-        self.assertEqual(entity.type, MessageEntityType.TEXT_MENTION)
-        self.assertEqual(entity.offset, 0)
-        self.assertEqual(entity.length, 5)
-        self.assertIsNotNone(entity.user)
-        self.assertEqual(entity.user.id, 12345)
+        assert entity.type == MessageEntityType.TEXT_MENTION
+        assert entity.offset == 0
+        assert entity.length == 5
+        assert entity.user is not None
+        assert entity.user.id == 12345
 
 
 class TestTelegramMessage(unittest.TestCase):
@@ -277,14 +277,14 @@ class TestTelegramMessage(unittest.TestCase):
 
         message = TelegramMessage.from_pyrogram_message(mock_message)
 
-        self.assertEqual(message.message_id, 12345)
-        self.assertIsNotNone(message.from_user)
-        self.assertEqual(message.from_user.id, 12345)
-        self.assertIsNotNone(message.chat)
-        self.assertEqual(message.chat.id, 67890)
-        self.assertEqual(message.text, "Hello world")
-        self.assertFalse(message.has_media)
-        self.assertTrue(message.has_text)
+        assert message.message_id == 12345
+        assert message.from_user is not None
+        assert message.from_user.id == 12345
+        assert message.chat is not None
+        assert message.chat.id == 67890
+        assert message.text == "Hello world"
+        assert not message.has_media
+        assert message.has_text
 
     def test_from_pyrogram_message_with_photo(self):
         """Test creating TelegramMessage with photo media."""
@@ -296,10 +296,10 @@ class TestTelegramMessage(unittest.TestCase):
 
         message = TelegramMessage.from_pyrogram_message(self.mock_message)
 
-        self.assertEqual(message.media_type, MediaType.PHOTO)
-        self.assertTrue(message.has_media)
-        self.assertIsNotNone(message.photo)
-        self.assertEqual(len(message.photo), 2)
+        assert message.media_type == MediaType.PHOTO
+        assert message.has_media
+        assert message.photo is not None
+        assert len(message.photo) == 2
 
     def test_from_pyrogram_message_with_entities(self):
         """Test creating TelegramMessage with entities."""
@@ -320,9 +320,9 @@ class TestTelegramMessage(unittest.TestCase):
 
         message = TelegramMessage.from_pyrogram_message(self.mock_message)
 
-        self.assertEqual(len(message.entities), 2)
-        self.assertEqual(message.entities[0].type, MessageEntityType.URL)
-        self.assertEqual(message.entities[1].type, MessageEntityType.BOLD)
+        assert len(message.entities) == 2
+        assert message.entities[0].type == MessageEntityType.URL
+        assert message.entities[1].type == MessageEntityType.BOLD
 
     def test_from_pyrogram_message_forwarded(self):
         """Test creating TelegramMessage with forward information."""
@@ -385,10 +385,10 @@ class TestTelegramMessage(unittest.TestCase):
 
         message = TelegramMessage.from_pyrogram_message(mock_message)
 
-        self.assertTrue(message.is_forwarded)
-        self.assertIsNotNone(message.forward_from_chat)
-        self.assertEqual(message.forward_from_chat.id, -10012345)
-        self.assertEqual(message.forward_from_message_id, 54321)
+        assert message.is_forwarded
+        assert message.forward_from_chat is not None
+        assert message.forward_from_chat.id == -10012345
+        assert message.forward_from_message_id == 54321
 
     def test_validate_basic(self):
         """Test basic message validation."""
@@ -403,7 +403,7 @@ class TestTelegramMessage(unittest.TestCase):
         )
 
         errors = message.validate()
-        self.assertEqual(len(errors), 0)
+        assert len(errors) == 0
 
     def test_validate_missing_message_id(self):
         """Test validation with missing message ID."""
@@ -413,7 +413,7 @@ class TestTelegramMessage(unittest.TestCase):
         )
 
         errors = message.validate()
-        self.assertIn("Message ID is required", errors)
+        assert "Message ID is required" in errors
 
     def test_validate_missing_content(self):
         """Test validation with missing content."""
@@ -422,7 +422,7 @@ class TestTelegramMessage(unittest.TestCase):
         )
 
         errors = message.validate()
-        self.assertIn("Message must have text, caption, or media content", errors)
+        assert "Message must have text, caption, or media content" in errors
 
     def test_validate_entity_bounds(self):
         """Test validation of entity bounds."""
@@ -439,7 +439,7 @@ class TestTelegramMessage(unittest.TestCase):
         )
 
         errors = message.validate()
-        self.assertIn("Entity extends beyond text length", errors)
+        assert "Entity extends beyond text length" in errors
 
     def test_get_effective_text(self):
         """Test getting effective text content."""
@@ -448,20 +448,20 @@ class TestTelegramMessage(unittest.TestCase):
             message_id=12345,
             text="Hello world",
         )
-        self.assertEqual(message.get_effective_text(), "Hello world")
+        assert message.get_effective_text() == "Hello world"
 
         # Test with caption only
         message = TelegramMessage(
             message_id=12345,
             caption="Hello caption",
         )
-        self.assertEqual(message.get_effective_text(), "Hello caption")
+        assert message.get_effective_text() == "Hello caption"
 
         # Test with no text or caption
         message = TelegramMessage(
             message_id=12345,
         )
-        self.assertIsNone(message.get_effective_text())
+        assert message.get_effective_text() is None
 
     def test_get_effective_entities(self):
         """Test getting effective entities."""
@@ -477,7 +477,7 @@ class TestTelegramMessage(unittest.TestCase):
                 )
             ],
         )
-        self.assertEqual(len(message.get_effective_entities()), 1)
+        assert len(message.get_effective_entities()) == 1
 
         # Test with caption entities only
         message = TelegramMessage(
@@ -491,7 +491,7 @@ class TestTelegramMessage(unittest.TestCase):
                 )
             ],
         )
-        self.assertEqual(len(message.get_effective_entities()), 1)
+        assert len(message.get_effective_entities()) == 1
 
     def test_is_command(self):
         """Test command detection."""
@@ -507,7 +507,7 @@ class TestTelegramMessage(unittest.TestCase):
                 )
             ],
         )
-        self.assertTrue(message.is_command())
+        assert message.is_command()
 
         # Test without command
         message = TelegramMessage(
@@ -521,7 +521,7 @@ class TestTelegramMessage(unittest.TestCase):
                 )
             ],
         )
-        self.assertFalse(message.is_command())
+        assert not message.is_command()
 
     def test_get_command(self):
         """Test command extraction."""
@@ -536,7 +536,7 @@ class TestTelegramMessage(unittest.TestCase):
                 )
             ],
         )
-        self.assertEqual(message.get_command(), "/start")
+        assert message.get_command() == "/start"
 
     def test_get_urls(self):
         """Test URL extraction."""
@@ -557,9 +557,9 @@ class TestTelegramMessage(unittest.TestCase):
             ],
         )
         urls = message.get_urls()
-        self.assertEqual(len(urls), 2)
-        self.assertIn("https://example.com", urls)
-        self.assertIn("https://test.com", urls)
+        assert len(urls) == 2
+        assert "https://example.com" in urls
+        assert "https://test.com" in urls
 
     def test_get_media_info(self):
         """Test media information retrieval."""
@@ -570,8 +570,8 @@ class TestTelegramMessage(unittest.TestCase):
             photo=[{"file_id": "photo1", "width": 100, "height": 100}],
         )
         media_info = message.get_media_info()
-        self.assertIsNotNone(media_info)
-        self.assertEqual(len(media_info), 1)
+        assert media_info is not None
+        assert len(media_info) == 1
 
         # Test without media
         message = TelegramMessage(
@@ -579,7 +579,7 @@ class TestTelegramMessage(unittest.TestCase):
             text="Hello world",
         )
         media_info = message.get_media_info()
-        self.assertIsNone(media_info)
+        assert media_info is None
 
     def test_to_dict(self):
         """Test conversion to dictionary."""
@@ -595,11 +595,11 @@ class TestTelegramMessage(unittest.TestCase):
         )
 
         data = message.to_dict()
-        self.assertIsInstance(data, dict)
-        self.assertEqual(data["message_id"], 12345)
-        self.assertEqual(data["text"], "Hello world")
-        self.assertEqual(data["media_type"], "photo")
-        self.assertIn("from_user", data)
+        assert isinstance(data, dict)
+        assert data["message_id"] == 12345
+        assert data["text"] == "Hello world"
+        assert data["media_type"] == "photo"
+        assert "from_user" in data
 
 
 if __name__ == "__main__":

@@ -34,7 +34,6 @@ def parse_summary_response(
     Tries structured responses, raw text parsing, and finally local repair helpers
     before signaling failure so the caller can escalate with a repair call.
     """
-
     errors: list[str] = []
 
     candidate = _extract_structured_dict(response_json)
@@ -123,19 +122,18 @@ def _extract_structured_dict(response_json: Any) -> dict[str, Any] | None:
         if len(response_json) > 0:
             # Try to use the first item if it's a dict
             first_item = response_json[0]
-            if isinstance(first_item, dict):
-                if any(
-                    key in first_item
-                    for key in (
-                        "summary_250",
-                        "tldr",
-                        "summary_1000",
-                        "summary250",
-                        "summary1000",
-                        "key_ideas",
-                    )
-                ):
-                    return first_item
+            if isinstance(first_item, dict) and any(
+                key in first_item
+                for key in (
+                    "summary_250",
+                    "tldr",
+                    "summary_1000",
+                    "summary250",
+                    "summary1000",
+                    "key_ideas",
+                )
+            ):
+                return first_item
         return None
 
     if isinstance(response_json, dict):
@@ -176,7 +174,6 @@ _SUMMARY_250_RE = re.compile(r'"summary_250"\s*:\s*"([^"\\]*(?:\\.[^"\\]*)*)"')
 
 def _extract_minimal_summary(response_text: str | None) -> dict[str, Any] | None:
     """Extract a minimal summary payload from unstructured text."""
-
     if not response_text:
         return None
 
@@ -292,4 +289,4 @@ def _attempt_local_repair(
     return parsed, None, True
 
 
-__all__ = ["SummaryJsonParseResult", "parse_summary_response", "finalize_summary_texts"]
+__all__ = ["SummaryJsonParseResult", "finalize_summary_texts", "parse_summary_response"]

@@ -26,6 +26,7 @@ class SummaryContentDTO:
 
         Returns:
             Dictionary representation of the DTO.
+
         """
         result: dict[str, Any] = {
             "tldr": self.tldr,
@@ -56,6 +57,7 @@ class SummaryContentDTO:
 
         Returns:
             SummaryContentDTO instance.
+
         """
         return cls(
             tldr=data.get("tldr", ""),
@@ -90,6 +92,7 @@ class SummaryDTO:
 
         Returns:
             SummaryDTO instance.
+
         """
         return cls(
             summary_id=summary.id,
@@ -106,6 +109,7 @@ class SummaryDTO:
 
         Returns:
             Domain Summary model.
+
         """
         from app.domain.models.summary import Summary
 

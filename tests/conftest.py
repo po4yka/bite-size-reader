@@ -3,9 +3,10 @@
 This module provides common fixtures for all tests.
 """
 
-import pytest
 from datetime import datetime
 from typing import Any
+
+import pytest
 
 
 class MockSummaryRepository:

@@ -1,6 +1,8 @@
 import os
 import unittest
 
+import pytest
+
 
 class TestModelValidation(unittest.TestCase):
     def test_validate_model_name_allows_openrouter_ids(self) -> None:
@@ -13,7 +15,7 @@ class TestModelValidation(unittest.TestCase):
         ]
 
         for model in valid_models:
-            self.assertEqual(validate_model_name(model), model)
+            assert validate_model_name(model) == model
 
     def test_validate_model_name_rejects_invalid(self) -> None:
         from app.config import validate_model_name
@@ -28,7 +30,7 @@ class TestModelValidation(unittest.TestCase):
         ]
 
         for model in invalid_models:
-            with self.assertRaises(ValueError):
+            with pytest.raises(ValueError):
                 validate_model_name(model)
 
     def test_load_config_with_openrouter_model_and_fallbacks(self) -> None:
@@ -50,11 +52,8 @@ class TestModelValidation(unittest.TestCase):
 
             cfg = load_config()
 
-            self.assertEqual(cfg.openrouter.model, "openai/gpt-5")
-            self.assertEqual(
-                cfg.openrouter.fallback_models,
-                ("fallback/model", "google/gemini-2.5-pro"),
-            )
+            assert cfg.openrouter.model == "openai/gpt-5"
+            assert cfg.openrouter.fallback_models == ("fallback/model", "google/gemini-2.5-pro")
         finally:
             os.environ.clear()
             os.environ.update(old_env)
@@ -78,11 +77,11 @@ class TestModelValidation(unittest.TestCase):
 
             cfg = load_config()
 
-            self.assertEqual(cfg.openrouter.max_tokens, 4096)
+            assert cfg.openrouter.max_tokens == 4096
             self.assertAlmostEqual(cfg.openrouter.top_p or 0, 0.75)
-            self.assertEqual(cfg.runtime.log_level, "DEBUG")
-            self.assertTrue(cfg.runtime.debug_payloads)
-            self.assertEqual(cfg.telegram.allowed_user_ids, (1001, 1002))
+            assert cfg.runtime.log_level == "DEBUG"
+            assert cfg.runtime.debug_payloads
+            assert cfg.telegram.allowed_user_ids == (1001, 1002)
         finally:
             os.environ.clear()
             os.environ.update(old_env)
@@ -102,9 +101,9 @@ class TestModelValidation(unittest.TestCase):
 
             cfg = load_config()
 
-            self.assertEqual(cfg.runtime.db_path, "/data/app.db")
-            self.assertEqual(cfg.openrouter.temperature, 0.2)
-            self.assertEqual(cfg.openrouter.fallback_models, tuple())
+            assert cfg.runtime.db_path == "/data/app.db"
+            assert cfg.openrouter.temperature == 0.2
+            assert cfg.openrouter.fallback_models == ()
         finally:
             os.environ.clear()
             os.environ.update(old_env)
@@ -120,10 +119,10 @@ class TestModelValidation(unittest.TestCase):
 
             cfg = load_config(allow_stub_telegram=True)
 
-            self.assertEqual(cfg.telegram.api_id, 1)
-            self.assertTrue(cfg.telegram.api_hash.startswith("test_api_hash_placeholder_value"))
-            self.assertTrue(cfg.telegram.bot_token.startswith("1000000000:"))
-            self.assertEqual(cfg.telegram.allowed_user_ids, tuple())
+            assert cfg.telegram.api_id == 1
+            assert cfg.telegram.api_hash.startswith("test_api_hash_placeholder_value")
+            assert cfg.telegram.bot_token.startswith("1000000000:")
+            assert cfg.telegram.allowed_user_ids == ()
         finally:
             os.environ.clear()
             os.environ.update(old_env)
@@ -140,7 +139,7 @@ class TestModelValidation(unittest.TestCase):
             os.environ["FIRECRAWL_API_KEY"] = "fc_" + "l" * 20
             os.environ["OPENROUTER_API_KEY"] = "or_" + "m" * 20
 
-            with self.assertRaises(RuntimeError):
+            with pytest.raises(RuntimeError):
                 load_config()
         finally:
             os.environ.clear()

@@ -45,6 +45,7 @@ class Container:
         query = GetUnreadSummariesQuery(user_id=123, chat_id=456)
         summaries = await get_summaries.execute(query)
         ```
+
     """
 
     def __init__(
@@ -73,6 +74,7 @@ class Container:
             cache_service: Optional cache service (Redis, Memcached, etc.).
             webhook_client: Optional HTTP client for sending webhooks.
             webhook_url: Optional webhook URL to send events to.
+
         """
         self._database = database
         self._topic_search_service = topic_search_service
@@ -106,6 +108,7 @@ class Container:
 
         Returns:
             Singleton EventBus instance.
+
         """
         if self._event_bus is None:
             self._event_bus = EventBus()
@@ -116,6 +119,7 @@ class Container:
 
         Returns:
             Summary repository adapter wrapping the database.
+
         """
         if self._summary_repo is None:
             self._summary_repo = SqliteSummaryRepositoryAdapter(self._database)
@@ -126,6 +130,7 @@ class Container:
 
         Returns:
             Request repository adapter wrapping the database.
+
         """
         if self._request_repo is None:
             self._request_repo = SqliteRequestRepositoryAdapter(self._database)
@@ -136,6 +141,7 @@ class Container:
 
         Returns:
             Crawl result repository adapter wrapping the database.
+
         """
         if self._crawl_result_repo is None:
             self._crawl_result_repo = SqliteCrawlResultRepositoryAdapter(self._database)
@@ -148,6 +154,7 @@ class Container:
 
         Returns:
             SummaryValidator domain service.
+
         """
         if self._summary_validator is None:
             self._summary_validator = SummaryValidator()
@@ -160,6 +167,7 @@ class Container:
 
         Returns:
             Use case for querying unread summaries.
+
         """
         if self._get_unread_summaries_use_case is None:
             self._get_unread_summaries_use_case = GetUnreadSummariesUseCase(
@@ -172,6 +180,7 @@ class Container:
 
         Returns:
             Use case for marking summaries as read.
+
         """
         if self._mark_summary_as_read_use_case is None:
             self._mark_summary_as_read_use_case = MarkSummaryAsReadUseCase(
@@ -184,6 +193,7 @@ class Container:
 
         Returns:
             Use case for marking summaries as unread.
+
         """
         if self._mark_summary_as_unread_use_case is None:
             self._mark_summary_as_unread_use_case = MarkSummaryAsUnreadUseCase(
@@ -196,6 +206,7 @@ class Container:
 
         Returns:
             Use case for searching topics, or None if topic search service not configured.
+
         """
         if self._topic_search_service is None:
             return None
@@ -211,6 +222,7 @@ class Container:
 
         Returns:
             Use case for summarizing URLs, or None if required services not configured.
+
         """
         if self._content_fetcher is None or self._llm_client is None:
             return None
@@ -244,6 +256,7 @@ class Container:
             container.wire_event_handlers_auto()
             # Now all events will be handled automatically
             ```
+
         """
         wire_event_handlers(
             event_bus=self.event_bus(),

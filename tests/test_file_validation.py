@@ -4,6 +4,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
+import pytest
+
 from app.security.file_validation import FileValidationError, SecureFileValidator
 
 
@@ -25,8 +27,8 @@ class TestFileValidation(unittest.TestCase):
         try:
             # Should validate successfully
             validated_path = self.validator.validate_file_path(temp_file)
-            self.assertTrue(validated_path.exists())
-            self.assertTrue(validated_path.is_file())
+            assert validated_path.exists()
+            assert validated_path.is_file()
         finally:
             Path(temp_file).unlink(missing_ok=True)
 
@@ -34,17 +36,17 @@ class TestFileValidation(unittest.TestCase):
         """Test that non-existent files are rejected."""
         fake_path = self.temp_dir / "nonexistent_file_12345.txt"
 
-        with self.assertRaises(FileValidationError) as ctx:
+        with pytest.raises(FileValidationError) as ctx:
             self.validator.validate_file_path(fake_path)
 
-        self.assertIn("does not exist", str(ctx.exception))
+        assert "does not exist" in str(ctx.value)
 
     def test_reject_directory(self):
         """Test that directories are rejected."""
-        with self.assertRaises(FileValidationError) as ctx:
+        with pytest.raises(FileValidationError) as ctx:
             self.validator.validate_file_path(self.temp_dir)
 
-        self.assertIn("not a regular file", str(ctx.exception))
+        assert "not a regular file" in str(ctx.value)
 
     def test_reject_symlink(self):
         """Test that symbolic links are rejected."""
@@ -58,10 +60,10 @@ class TestFileValidation(unittest.TestCase):
         try:
             symlink_path.symlink_to(real_file)
 
-            with self.assertRaises(FileValidationError) as ctx:
+            with pytest.raises(FileValidationError) as ctx:
                 self.validator.validate_file_path(symlink_path)
 
-            self.assertIn("Symbolic links are not allowed", str(ctx.exception))
+            assert "Symbolic links are not allowed" in str(ctx.value)
         finally:
             symlink_path.unlink(missing_ok=True)
             Path(real_file).unlink(missing_ok=True)
@@ -77,10 +79,10 @@ class TestFileValidation(unittest.TestCase):
             large_file = f.name
 
         try:
-            with self.assertRaises(FileValidationError) as ctx:
+            with pytest.raises(FileValidationError) as ctx:
                 small_validator.validate_file_path(large_file)
 
-            self.assertIn("File too large", str(ctx.exception))
+            assert "File too large" in str(ctx.value)
         finally:
             Path(large_file).unlink(missing_ok=True)
 
@@ -89,10 +91,10 @@ class TestFileValidation(unittest.TestCase):
         # Try to access a file outside temp directory
         # Use /etc/hosts as an example (exists on Unix systems)
         if Path("/etc/hosts").exists():
-            with self.assertRaises(FileValidationError) as ctx:
+            with pytest.raises(FileValidationError) as ctx:
                 self.validator.validate_file_path("/etc/hosts")
 
-            self.assertIn("outside allowed directories", str(ctx.exception))
+            assert "outside allowed directories" in str(ctx.value)
 
     def test_safe_read_text_file(self):
         """Test safe reading of text file."""
@@ -105,10 +107,10 @@ class TestFileValidation(unittest.TestCase):
 
         try:
             lines = self.validator.safe_read_text_file(test_file)
-            self.assertEqual(len(lines), 3)
-            self.assertEqual(lines[0], "line 1")
-            self.assertEqual(lines[1], "line 2")
-            self.assertEqual(lines[2], "line 3")
+            assert len(lines) == 3
+            assert lines[0] == "line 1"
+            assert lines[1] == "line 2"
+            assert lines[2] == "line 3"
         finally:
             Path(test_file).unlink(missing_ok=True)
 
@@ -125,10 +127,10 @@ class TestFileValidation(unittest.TestCase):
             test_file = f.name
 
         try:
-            with self.assertRaises(FileValidationError) as ctx:
+            with pytest.raises(FileValidationError) as ctx:
                 validator.safe_read_text_file(test_file)
 
-            self.assertIn("exceeds maximum line count", str(ctx.exception))
+            assert "exceeds maximum line count" in str(ctx.value)
         finally:
             Path(test_file).unlink(missing_ok=True)
 
@@ -146,8 +148,8 @@ class TestFileValidation(unittest.TestCase):
         try:
             lines = validator.safe_read_text_file(test_file)
             # First line should be truncated to 100 chars
-            self.assertEqual(len(lines[0]), 100)
-            self.assertEqual(lines[1], "normal line")
+            assert len(lines[0]) == 100
+            assert lines[1] == "normal line"
         finally:
             Path(test_file).unlink(missing_ok=True)
 
@@ -159,13 +161,13 @@ class TestFileValidation(unittest.TestCase):
             test_file = f.name
 
         # Verify file exists
-        self.assertTrue(Path(test_file).exists())
+        assert Path(test_file).exists()
 
         # Clean up
         self.validator.cleanup_file(test_file)
 
         # Verify file is deleted
-        self.assertFalse(Path(test_file).exists())
+        assert not Path(test_file).exists()
 
     def test_cleanup_invalid_file_path(self):
         """Test cleanup with invalid path doesn't crash."""
@@ -185,10 +187,10 @@ class TestFileValidation(unittest.TestCase):
 
         try:
             lines = self.validator.safe_read_text_file(test_file)
-            self.assertEqual(len(lines), 3)
-            self.assertIn("世界", lines[0])
-            self.assertIn("мир", lines[1])
-            self.assertIn("العالم", lines[2])
+            assert len(lines) == 3
+            assert "世界" in lines[0]
+            assert "мир" in lines[1]
+            assert "العالم" in lines[2]
         finally:
             Path(test_file).unlink(missing_ok=True)
 

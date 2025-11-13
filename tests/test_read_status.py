@@ -66,7 +66,7 @@ class ReadStatusBot(TelegramBot):
                     self.latency_ms = 100  # Add missing attribute
 
             # Use setattr to mock the method
-            setattr(self._firecrawl, "scrape_markdown", AsyncMock(return_value=MockCrawlResult()))
+            self._firecrawl.scrape_markdown = AsyncMock(return_value=MockCrawlResult())
 
     async def _handle_url_flow(self, message: Any, url_text: str, **_: object) -> None:
         self.seen_urls.append(url_text)
@@ -82,7 +82,7 @@ def make_bot(tmp_path: str) -> ReadStatusBot:
         openrouter=OpenRouterConfig(
             api_key="y",
             model="m",
-            fallback_models=tuple(),
+            fallback_models=(),
             http_referer=None,
             x_title=None,
         ),
@@ -96,56 +96,56 @@ def make_bot(tmp_path: str) -> ReadStatusBot:
     )
     from app.adapters import telegram_bot as tbmod
 
-    setattr(tbmod, "Client", object)
-    setattr(tbmod, "filters", None)
+    tbmod.Client = object
+    tbmod.filters = None
     return ReadStatusBot(cfg=cfg, db=Database(tmp_path))
 
 
 class TestParseUnreadArguments(unittest.TestCase):
     def test_parse_unread_with_mention_only(self) -> None:
         limit, topic = CommandProcessor._parse_unread_arguments("/unread@bot")
-        self.assertEqual(limit, 5)
-        self.assertIsNone(topic)
+        assert limit == 5
+        assert topic is None
 
     def test_parse_unread_with_mention_and_limit(self) -> None:
         limit, topic = CommandProcessor._parse_unread_arguments("/unread@bot 3")
-        self.assertEqual(limit, 3)
-        self.assertIsNone(topic)
+        assert limit == 3
+        assert topic is None
 
     def test_parse_unread_with_mention_and_topic(self) -> None:
         limit, topic = CommandProcessor._parse_unread_arguments("/unread@bot gardening")
-        self.assertEqual(limit, 5)
-        self.assertEqual(topic, "gardening")
+        assert limit == 5
+        assert topic == "gardening"
 
     def test_parse_unread_with_numeric_topic_only(self) -> None:
         limit, topic = CommandProcessor._parse_unread_arguments("/unread 2024")
-        self.assertEqual(limit, 5)
-        self.assertEqual(topic, "2024")
+        assert limit == 5
+        assert topic == "2024"
 
     def test_parse_unread_with_numeric_topic_and_limit(self) -> None:
         limit, topic = CommandProcessor._parse_unread_arguments("/unread 2024 limit=3")
-        self.assertEqual(limit, 3)
-        self.assertEqual(topic, "2024")
+        assert limit == 3
+        assert topic == "2024"
 
     def test_parse_unread_with_topic_and_trailing_limit(self) -> None:
         limit, topic = CommandProcessor._parse_unread_arguments("/unread ai 2")
-        self.assertEqual(limit, 2)
-        self.assertEqual(topic, "ai")
+        assert limit == 2
+        assert topic == "ai"
 
     def test_parse_unread_trailing_limit_above_max_is_topic(self) -> None:
         limit, topic = CommandProcessor._parse_unread_arguments("/unread ai 99")
-        self.assertEqual(limit, 5)
-        self.assertEqual(topic, "ai 99")
+        assert limit == 5
+        assert topic == "ai 99"
 
     def test_parse_unread_numeric_only_without_mention_is_topic(self) -> None:
         limit, topic = CommandProcessor._parse_unread_arguments("/unread 3")
-        self.assertEqual(limit, 5)
-        self.assertEqual(topic, "3")
+        assert limit == 5
+        assert topic == "3"
 
     def test_parse_unread_numeric_only_with_mention_is_limit(self) -> None:
         limit, topic = CommandProcessor._parse_unread_arguments("/unread@bot 4")
-        self.assertEqual(limit, 4)
-        self.assertIsNone(topic)
+        assert limit == 4
+        assert topic is None
 
 
 class TestReadStatusDatabase(unittest.TestCase):
@@ -177,8 +177,8 @@ class TestReadStatusDatabase(unittest.TestCase):
         )
 
         row = self.db.get_summary_by_request(rid)
-        self.assertIsNotNone(row)
-        self.assertEqual(row["is_read"], 0)  # Should default to false
+        assert row is not None
+        assert row["is_read"] == 0  # Should default to false
 
     def test_summary_read_status_explicit(self):
         """Test setting explicit read status."""
@@ -218,8 +218,8 @@ class TestReadStatusDatabase(unittest.TestCase):
         row1 = self.db.get_summary_by_request(rid1)
         row2 = self.db.get_summary_by_request(rid2)
 
-        self.assertEqual(row1["is_read"], 0)  # Unread
-        self.assertEqual(row2["is_read"], 1)  # Read
+        assert row1["is_read"] == 0  # Unread
+        assert row2["is_read"] == 1  # Read
 
     def test_get_unread_summaries(self):
         """Test querying unread summaries."""
@@ -274,9 +274,9 @@ class TestReadStatusDatabase(unittest.TestCase):
 
         # Get unread summaries
         unread = self.db.get_unread_summaries(limit=10)
-        self.assertEqual(len(unread), 2)
-        self.assertEqual(unread[0]["input_url"], "https://example1.com")
-        self.assertEqual(unread[1]["input_url"], "https://example3.com")
+        assert len(unread) == 2
+        assert unread[0]["input_url"] == "https://example1.com"
+        assert unread[1]["input_url"] == "https://example3.com"
 
     def test_get_unread_summaries_limit(self):
         """Test limiting unread summaries."""
@@ -300,18 +300,10 @@ class TestReadStatusDatabase(unittest.TestCase):
 
         # Get limited unread summaries
         unread = self.db.get_unread_summaries(limit=3)
-        self.assertEqual(
-            [row["input_url"] for row in unread],
-            [
-                "https://example0.com",
-                "https://example1.com",
-                "https://example2.com",
-            ],
-        )
+        assert [row["input_url"] for row in unread] == ["https://example0.com", "https://example1.com", "https://example2.com"]
 
     def test_get_unread_summaries_topic_filter(self):
         """Unread summaries can be filtered by a topic query."""
-
         payloads = (
             {
                 "title": "AI breakthroughs",
@@ -348,21 +340,15 @@ class TestReadStatusDatabase(unittest.TestCase):
             )
 
         unread_ai = self.db.get_unread_summaries(limit=5, topic="AI")
-        self.assertEqual(len(unread_ai), 2)
-        self.assertTrue(
-            all(
-                "example0" in row["input_url"] or "example2" in row["input_url"]
-                for row in unread_ai
-            )
-        )
+        assert len(unread_ai) == 2
+        assert all("example0" in row["input_url"] or "example2" in row["input_url"] for row in unread_ai)
 
         unread_garden = self.db.get_unread_summaries(limit=5, topic="garden")
-        self.assertEqual(len(unread_garden), 1)
-        self.assertIn("example1", unread_garden[0]["input_url"])
+        assert len(unread_garden) == 1
+        assert "example1" in unread_garden[0]["input_url"]
 
     def test_get_unread_summaries_topic_filter_no_matches(self):
         """Topic filter returns empty when nothing matches."""
-
         rid = self.db.create_request(
             type_="url",
             status="pending",
@@ -384,11 +370,10 @@ class TestReadStatusDatabase(unittest.TestCase):
         )
 
         unread_none = self.db.get_unread_summaries(limit=5, topic="space")
-        self.assertEqual(unread_none, [])
+        assert unread_none == []
 
     def test_get_unread_summaries_topic_filter_large_backlog(self):
         """Topic filtering consults the search index beyond the initial window."""
-
         matching_ids: list[int] = []
         for i in range(130):
             rid = self.db.create_request(
@@ -424,8 +409,8 @@ class TestReadStatusDatabase(unittest.TestCase):
             )
 
         unread = self.db.get_unread_summaries(limit=3, topic="gardening")
-        self.assertEqual(len(unread), 3)
-        self.assertEqual([row["request_id"] for row in unread], matching_ids[:3])
+        assert len(unread) == 3
+        assert [row["request_id"] for row in unread] == matching_ids[:3]
 
     def test_mark_summary_as_read(self):
         """Test marking summary as read."""
@@ -447,14 +432,14 @@ class TestReadStatusDatabase(unittest.TestCase):
 
         # Verify it's unread
         row = self.db.get_summary_by_request(rid)
-        self.assertEqual(row["is_read"], 0)
+        assert row["is_read"] == 0
 
         # Mark as read
         self.db.mark_summary_as_read(rid)
 
         # Verify it's read
         row = self.db.get_summary_by_request(rid)
-        self.assertEqual(row["is_read"], 1)
+        assert row["is_read"] == 1
 
     def test_get_read_status(self):
         """Test checking read status."""
@@ -488,9 +473,9 @@ class TestReadStatusDatabase(unittest.TestCase):
             is_read=True,
         )
 
-        self.assertFalse(self.db.get_read_status(rid1))  # Unread
-        self.assertTrue(self.db.get_read_status(rid2))  # Read
-        self.assertFalse(self.db.get_read_status(999))  # Non-existent
+        assert not self.db.get_read_status(rid1)  # Unread
+        assert self.db.get_read_status(rid2)  # Read
+        assert not self.db.get_read_status(999)  # Non-existent
 
     def test_get_unread_summary_by_request_id(self):
         """Test getting specific unread summary by request_id."""
@@ -513,15 +498,15 @@ class TestReadStatusDatabase(unittest.TestCase):
 
         # Should find unread summary
         summary = self.db.get_unread_summary_by_request_id(rid)
-        self.assertIsNotNone(summary)
-        self.assertEqual(summary["input_url"], "https://example.com")
+        assert summary is not None
+        assert summary["input_url"] == "https://example.com"
 
         # Mark as read
         self.db.mark_summary_as_read(rid)
 
         # Should not find it anymore (it's now read)
         summary = self.db.get_unread_summary_by_request_id(rid)
-        self.assertIsNone(summary)
+        assert summary is None
 
 
 class TestReadStatusCommands(unittest.IsolatedAsyncioTestCase):
@@ -534,8 +519,8 @@ class TestReadStatusCommands(unittest.IsolatedAsyncioTestCase):
             await bot._on_message(msg)
 
             # Should get message about no unread articles
-            self.assertEqual(len(msg._replies), 1)
-            self.assertIn("No unread articles found", msg._replies[0])
+            assert len(msg._replies) == 1
+            assert "No unread articles found" in msg._replies[0]
 
     async def test_unread_command_with_unread(self):
         """Test /unread command when unread articles exist."""
@@ -586,18 +571,17 @@ class TestReadStatusCommands(unittest.IsolatedAsyncioTestCase):
             await bot._on_message(msg)
 
             # Should get message with unread articles list
-            self.assertEqual(len(msg._replies), 1)
+            assert len(msg._replies) == 1
             reply = msg._replies[0]
-            self.assertIn("Unread Articles", reply)
-            self.assertIn("Article 1", reply)
-            self.assertIn("Article 2", reply)
-            self.assertIn("Request ID", reply)
-            self.assertIn("Article 3", reply)
-            self.assertIn("Article 4", reply)
+            assert "Unread Articles" in reply
+            assert "Article 1" in reply
+            assert "Article 2" in reply
+            assert "Request ID" in reply
+            assert "Article 3" in reply
+            assert "Article 4" in reply
 
     async def test_unread_command_with_topic_and_limit(self):
         """/unread accepts topic filters and limits results."""
-
         with tempfile.TemporaryDirectory() as tmp:
             bot = make_bot(os.path.join(tmp, "app.db"))
 
@@ -631,16 +615,15 @@ class TestReadStatusCommands(unittest.IsolatedAsyncioTestCase):
             msg = FakeMessage("/unread ai 1", uid=1)
             await bot._on_message(msg)
 
-            self.assertEqual(len(msg._replies), 1)
+            assert len(msg._replies) == 1
             reply = msg._replies[0]
-            self.assertIn("topic filter: ai", reply.casefold())
-            self.assertIn("Showing up to 1 article", reply)
-            self.assertIn("AI Revolution", reply)
-            self.assertNotIn("Web Dev", reply)
+            assert "topic filter: ai" in reply.casefold()
+            assert "Showing up to 1 article" in reply
+            assert "AI Revolution" in reply
+            assert "Web Dev" not in reply
 
     async def test_unread_command_topic_no_results(self):
         """/unread reports when a topic has no unread articles."""
-
         with tempfile.TemporaryDirectory() as tmp:
             bot = make_bot(os.path.join(tmp, "app.db"))
 
@@ -667,12 +650,11 @@ class TestReadStatusCommands(unittest.IsolatedAsyncioTestCase):
             msg = FakeMessage("/unread gardening", uid=1)
             await bot._on_message(msg)
 
-            self.assertEqual(len(msg._replies), 1)
-            self.assertIn('No unread articles found for topic "gardening"', msg._replies[0])
+            assert len(msg._replies) == 1
+            assert 'No unread articles found for topic "gardening"' in msg._replies[0]
 
     async def test_unread_command_topic_large_backlog(self):
         """/unread topic queries surface matches beyond the default scan window."""
-
         with tempfile.TemporaryDirectory() as tmp:
             bot = make_bot(os.path.join(tmp, "app.db"))
 
@@ -715,11 +697,11 @@ class TestReadStatusCommands(unittest.IsolatedAsyncioTestCase):
             msg = FakeMessage("/unread gardening", uid=1)
             await bot._on_message(msg)
 
-            self.assertEqual(len(msg._replies), 1)
+            assert len(msg._replies) == 1
             reply = msg._replies[0]
             for title in gardening_titles[:5]:
-                self.assertIn(title, reply)
-            self.assertIn("Topic filter: gardening", reply)
+                assert title in reply
+            assert "Topic filter: gardening" in reply
 
     async def test_read_command_invalid_id(self):
         """Test /read command with invalid request ID."""
@@ -730,8 +712,8 @@ class TestReadStatusCommands(unittest.IsolatedAsyncioTestCase):
             await bot._on_message(msg)
 
             # Should get error message about invalid ID
-            self.assertEqual(len(msg._replies), 1)
-            self.assertIn("Invalid request ID", msg._replies[0])
+            assert len(msg._replies) == 1
+            assert "Invalid request ID" in msg._replies[0]
 
     async def test_read_command_nonexistent_id(self):
         """Test /read command with non-existent request ID."""
@@ -742,8 +724,8 @@ class TestReadStatusCommands(unittest.IsolatedAsyncioTestCase):
             await bot._on_message(msg)
 
             # Should get error message
-            self.assertEqual(len(msg._replies), 1)
-            self.assertIn("not found", msg._replies[0])
+            assert len(msg._replies) == 1
+            assert "not found" in msg._replies[0]
 
     async def test_read_command_read_article(self):
         """Test /read command with existing unread article."""
@@ -775,13 +757,13 @@ class TestReadStatusCommands(unittest.IsolatedAsyncioTestCase):
             await bot._on_message(msg)
 
             # Should get article content and mark as read
-            self.assertGreaterEqual(len(msg._replies), 2)
+            assert len(msg._replies) >= 2
             reply_text = "\n".join(msg._replies)
-            self.assertIn("Reading Article", reply_text)
-            self.assertIn("Test Article", reply_text)
+            assert "Reading Article" in reply_text
+            assert "Test Article" in reply_text
 
             # Verify it's now marked as read
-            self.assertTrue(bot.db.get_read_status(rid))
+            assert bot.db.get_read_status(rid)
 
     async def test_read_command_already_read_article(self):
         """Test /read command with already read article."""
@@ -809,8 +791,8 @@ class TestReadStatusCommands(unittest.IsolatedAsyncioTestCase):
             await bot._on_message(msg)
 
             # Should get error message
-            self.assertEqual(len(msg._replies), 1)
-            self.assertIn("already read", msg._replies[0])
+            assert len(msg._replies) == 1
+            assert "already read" in msg._replies[0]
 
 
 class TestReadStatusIntegration(unittest.IsolatedAsyncioTestCase):
@@ -833,7 +815,7 @@ class TestReadStatusIntegration(unittest.IsolatedAsyncioTestCase):
             # Check that read articles were created
             # Note: This test might not work perfectly due to mocked Firecrawl
             # but we can at least verify the URL was seen
-            self.assertIn("https://example.com/article", bot.seen_urls)
+            assert "https://example.com/article" in bot.seen_urls
 
     async def test_read_command_marks_article_read(self):
         """Test that /read command properly marks articles as read."""
@@ -862,7 +844,7 @@ class TestReadStatusIntegration(unittest.IsolatedAsyncioTestCase):
             await bot._on_message(msg)
 
             # Verify article is now read
-            self.assertTrue(bot.db.get_read_status(rid))
+            assert bot.db.get_read_status(rid)
 
 
 if __name__ == "__main__":

@@ -31,9 +31,11 @@ class Summary:
 
         Raises:
             ValueError: If summary is already marked as read.
+
         """
         if self.is_read:
-            raise ValueError("Summary is already marked as read")
+            msg = "Summary is already marked as read"
+            raise ValueError(msg)
         self.is_read = True
 
     def mark_as_unread(self) -> None:
@@ -41,9 +43,11 @@ class Summary:
 
         Raises:
             ValueError: If summary is already marked as unread.
+
         """
         if not self.is_read:
-            raise ValueError("Summary is already marked as unread")
+            msg = "Summary is already marked as unread"
+            raise ValueError(msg)
         self.is_read = False
 
     def validate_content(self) -> bool:
@@ -51,6 +55,7 @@ class Summary:
 
         Returns:
             True if content has all required fields with non-empty values.
+
         """
         required_fields = ["tldr", "summary_250", "key_ideas"]
         return all(
@@ -68,6 +73,7 @@ class Summary:
 
         Returns:
             True if insights exist and are not empty.
+
         """
         return self.insights is not None and bool(self.insights)
 
@@ -76,6 +82,7 @@ class Summary:
 
         Returns:
             Estimated reading time, or 0 if not available.
+
         """
         return self.content.get("estimated_reading_time_min", 0)
 
@@ -84,6 +91,7 @@ class Summary:
 
         Returns:
             TL;DR text, or empty string if not available.
+
         """
         return self.content.get("tldr", "")
 
@@ -92,6 +100,7 @@ class Summary:
 
         Returns:
             Summary text, or empty string if not available.
+
         """
         return self.content.get("summary_250", "")
 
@@ -100,6 +109,7 @@ class Summary:
 
         Returns:
             Summary text, or empty string if not available.
+
         """
         return self.content.get("summary_1000", "")
 
@@ -108,6 +118,7 @@ class Summary:
 
         Returns:
             List of key ideas, or empty list if not available.
+
         """
         key_ideas = self.content.get("key_ideas", [])
         return key_ideas if isinstance(key_ideas, list) else []
@@ -117,6 +128,7 @@ class Summary:
 
         Returns:
             List of topic tags, or empty list if not available.
+
         """
         tags = self.content.get("topic_tags", [])
         return tags if isinstance(tags, list) else []
@@ -126,6 +138,7 @@ class Summary:
 
         Returns:
             List of entity dictionaries, or empty list if not available.
+
         """
         entities = self.content.get("entities", [])
         return entities if isinstance(entities, list) else []
@@ -135,6 +148,7 @@ class Summary:
 
         Returns:
             List of SEO keywords, or empty list if not available.
+
         """
         keywords = self.content.get("seo_keywords", [])
         return keywords if isinstance(keywords, list) else []
@@ -144,6 +158,7 @@ class Summary:
 
         Returns:
             True if at least one summary field (tldr, summary_250, or summary_1000) exists.
+
         """
         return bool(self.get_tldr() or self.get_summary_250() or self.get_summary_1000())
 
@@ -152,6 +167,7 @@ class Summary:
 
         Returns:
             Total character count.
+
         """
         return (
             len(self.get_tldr())

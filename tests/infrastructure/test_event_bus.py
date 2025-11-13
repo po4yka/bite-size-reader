@@ -1,7 +1,8 @@
 """Unit tests for EventBus."""
 
-import pytest
 from datetime import datetime
+
+import pytest
 
 from app.domain.events.summary_events import SummaryCreated, SummaryMarkedAsRead
 from app.infrastructure.messaging.event_bus import EventBus
@@ -91,11 +92,11 @@ class TestEventBus:
     @pytest.mark.asyncio
     async def test_handler_error_does_not_affect_other_handlers(self, event_bus):
         """Test that error in one handler doesn't stop other handlers."""
-        handler1_called = False
         handler2_called = False
 
         async def handler1(event: SummaryCreated):
-            raise ValueError("Handler 1 error")
+            msg = "Handler 1 error"
+            raise ValueError(msg)
 
         async def handler2(event: SummaryCreated):
             nonlocal handler2_called

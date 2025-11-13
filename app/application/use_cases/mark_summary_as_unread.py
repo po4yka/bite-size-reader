@@ -9,11 +9,6 @@ from dataclasses import dataclass
 from datetime import datetime
 
 from app.domain.events.summary_events import SummaryMarkedAsUnread
-from app.domain.exceptions.domain_exceptions import (
-    InvalidStateTransitionError,
-    ResourceNotFoundError,
-)
-from app.domain.services.summary_validator import SummaryValidator
 from app.infrastructure.persistence.sqlite.repositories.summary_repository import (
     SqliteSummaryRepositoryAdapter,
 )
@@ -34,9 +29,11 @@ class MarkSummaryAsUnreadCommand:
     def __post_init__(self) -> None:
         """Validate command parameters."""
         if self.summary_id <= 0:
-            raise ValueError("summary_id must be positive")
+            msg = "summary_id must be positive"
+            raise ValueError(msg)
         if self.user_id <= 0:
-            raise ValueError("user_id must be positive")
+            msg = "user_id must be positive"
+            raise ValueError(msg)
 
 
 class MarkSummaryAsUnreadUseCase:
@@ -53,6 +50,7 @@ class MarkSummaryAsUnreadUseCase:
         command = MarkSummaryAsUnreadCommand(summary_id=123, user_id=456)
         event = await use_case.execute(command)
         ```
+
     """
 
     def __init__(self, summary_repository: SqliteSummaryRepositoryAdapter) -> None:
@@ -60,6 +58,7 @@ class MarkSummaryAsUnreadUseCase:
 
         Args:
             summary_repository: Repository for summary persistence.
+
         """
         self._summary_repo = summary_repository
 
@@ -77,6 +76,7 @@ class MarkSummaryAsUnreadUseCase:
         Raises:
             ResourceNotFoundError: If summary doesn't exist.
             InvalidStateTransitionError: If summary is already unread.
+
         """
         logger.info(
             "mark_summary_as_unread_started",

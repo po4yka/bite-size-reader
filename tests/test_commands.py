@@ -50,7 +50,7 @@ def make_bot(tmp_path: str) -> BotSpy:
         openrouter=OpenRouterConfig(
             api_key="y",
             model="m",
-            fallback_models=tuple(),
+            fallback_models=(),
             http_referer=None,
             x_title=None,
             max_tokens=None,
@@ -67,8 +67,8 @@ def make_bot(tmp_path: str) -> BotSpy:
     )
     from app.adapters import telegram_bot as tbmod
 
-    setattr(tbmod, "Client", object)
-    setattr(tbmod, "filters", None)
+    tbmod.Client = object
+    tbmod.filters = None
 
     # Mock the OpenRouter client to avoid API key validation
     with patch("app.adapters.telegram.telegram_bot.OpenRouterClient") as mock_openrouter:
@@ -82,7 +82,7 @@ class TestCommands(unittest.IsolatedAsyncioTestCase):
             bot = make_bot(os.path.join(tmp, "app.db"))
             msg = FakeMessage("/help")
             await bot._on_message(msg)
-            self.assertTrue(any("Commands" in r for r in msg._replies))
+            assert any("Commands" in r for r in msg._replies)
 
     async def test_summarize_same_message(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -90,18 +90,18 @@ class TestCommands(unittest.IsolatedAsyncioTestCase):
             url = "https://example.com/a"
             msg = FakeMessage(f"/summarize {url}")
             await bot._on_message(msg)
-            self.assertIn(url, bot.seen_urls)
+            assert url in bot.seen_urls
 
     async def test_summarize_next_message(self):
         with tempfile.TemporaryDirectory() as tmp:
             bot = make_bot(os.path.join(tmp, "app.db"))
             uid = 42
             await bot._on_message(FakeMessage("/summarize", uid=uid))
-            self.assertIn(uid, bot._awaiting_url_users)
+            assert uid in bot._awaiting_url_users
             url = "https://example.com/b"
             await bot._on_message(FakeMessage(url, uid=uid))
-            self.assertIn(url, bot.seen_urls)
-            self.assertNotIn(uid, bot._awaiting_url_users)
+            assert url in bot.seen_urls
+            assert uid not in bot._awaiting_url_users
 
     async def test_cancel_awaiting_request(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -110,15 +110,13 @@ class TestCommands(unittest.IsolatedAsyncioTestCase):
             uid = 42
 
             await bot._on_message(FakeMessage("/summarize", uid=uid))
-            self.assertIn(uid, bot._awaiting_url_users)
+            assert uid in bot._awaiting_url_users
 
             cancel_msg = FakeMessage("/cancel", uid=uid)
             await bot._on_message(cancel_msg)
 
-            self.assertNotIn(uid, bot._awaiting_url_users)
-            self.assertTrue(
-                any("Cancelled your pending URL request" in reply for reply in cancel_msg._replies)
-            )
+            assert uid not in bot._awaiting_url_users
+            assert any("Cancelled your pending URL request" in reply for reply in cancel_msg._replies)
 
     async def test_cancel_pending_multi_links_command(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -128,15 +126,13 @@ class TestCommands(unittest.IsolatedAsyncioTestCase):
             multi_text = "https://example.com/a\nhttps://example.com/b"
 
             await bot._on_message(FakeMessage(multi_text, uid=uid))
-            self.assertIn(uid, bot._pending_multi_links)
+            assert uid in bot._pending_multi_links
 
             cancel_msg = FakeMessage("/cancel", uid=uid)
             await bot._on_message(cancel_msg)
 
-            self.assertNotIn(uid, bot._pending_multi_links)
-            self.assertTrue(
-                any("pending multi-link confirmation" in reply for reply in cancel_msg._replies)
-            )
+            assert uid not in bot._pending_multi_links
+            assert any("pending multi-link confirmation" in reply for reply in cancel_msg._replies)
 
     async def test_cancel_without_pending_requests(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -147,9 +143,7 @@ class TestCommands(unittest.IsolatedAsyncioTestCase):
             cancel_msg = FakeMessage("/cancel", uid=uid)
             await bot._on_message(cancel_msg)
 
-            self.assertTrue(
-                any("No pending link requests" in reply for reply in cancel_msg._replies)
-            )
+            assert any("No pending link requests" in reply for reply in cancel_msg._replies)
 
     async def test_cancel_includes_active_requests(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -165,7 +159,7 @@ class TestCommands(unittest.IsolatedAsyncioTestCase):
             bot.message_handler.task_manager.cancel.assert_awaited_once_with(
                 uid, exclude_current=True
             )
-            self.assertTrue(any("ongoing requests" in reply for reply in cancel_msg._replies))
+            assert any("ongoing requests" in reply for reply in cancel_msg._replies)
 
     async def test_dbinfo_command(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -184,10 +178,10 @@ class TestCommands(unittest.IsolatedAsyncioTestCase):
 
             msg = FakeMessage("/dbinfo")
             await bot._on_message(msg)
-            self.assertTrue(any("Database Overview" in reply for reply in msg._replies))
-            self.assertTrue(any("Requests by status" in reply for reply in msg._replies))
-            self.assertTrue(any("Totals" in reply for reply in msg._replies))
-            self.assertFalse(any(db_path in reply for reply in msg._replies))
+            assert any("Database Overview" in reply for reply in msg._replies)
+            assert any("Requests by status" in reply for reply in msg._replies)
+            assert any("Totals" in reply for reply in msg._replies)
+            assert not any(db_path in reply for reply in msg._replies)
 
     async def test_dbverify_command(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -335,20 +329,18 @@ class TestCommands(unittest.IsolatedAsyncioTestCase):
             msg = FakeMessage("/dbverify")
             await bot._on_message(msg)
 
-            self.assertTrue(any("Database Verification" in reply for reply in msg._replies))
-            self.assertTrue(any("Missing summaries" in reply for reply in msg._replies))
-            self.assertTrue(any("Link coverage" in reply for reply in msg._replies))
-            self.assertTrue(any("tldr" in reply for reply in msg._replies))
-            self.assertTrue(
-                any("Starting automated reprocessing" in reply for reply in msg._replies)
-            )
-            self.assertTrue(any("Reprocessing complete" in reply for reply in msg._replies))
+            assert any("Database Verification" in reply for reply in msg._replies)
+            assert any("Missing summaries" in reply for reply in msg._replies)
+            assert any("Link coverage" in reply for reply in msg._replies)
+            assert any("tldr" in reply for reply in msg._replies)
+            assert any("Starting automated reprocessing" in reply for reply in msg._replies)
+            assert any("Reprocessing complete" in reply for reply in msg._replies)
 
             expected_urls = {
                 "https://example.com/bad",
                 "https://example.com/missing",
             }
-            self.assertTrue(expected_urls.issubset(set(bot.seen_urls)))
+            assert expected_urls.issubset(set(bot.seen_urls))
 
     async def test_findweb_command_success(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -387,10 +379,10 @@ class TestCommands(unittest.IsolatedAsyncioTestCase):
             msg = FakeMessage("/findweb Android System Design")
             await bot._on_message(msg)
 
-            self.assertTrue(fake_search.queries)
-            self.assertEqual(fake_search.queries[0][0], "Android System Design")
-            self.assertTrue(any("Online search results" in reply for reply in msg._replies))
-            self.assertTrue(any("summarize" in reply.lower() for reply in msg._replies))
+            assert fake_search.queries
+            assert fake_search.queries[0][0] == "Android System Design"
+            assert any("Online search results" in reply for reply in msg._replies)
+            assert any("summarize" in reply.lower() for reply in msg._replies)
 
     async def test_find_alias_uses_online_search(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -412,8 +404,8 @@ class TestCommands(unittest.IsolatedAsyncioTestCase):
             msg = FakeMessage("/find Android")
             await bot._on_message(msg)
 
-            self.assertEqual(fake_search.queries, ["Android"])
-            self.assertTrue(any("No recent online articles" in reply for reply in msg._replies))
+            assert fake_search.queries == ["Android"]
+            assert any("No recent online articles" in reply for reply in msg._replies)
 
     async def test_finddb_command_success(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -443,9 +435,9 @@ class TestCommands(unittest.IsolatedAsyncioTestCase):
             msg = FakeMessage("/finddb Android System Design")
             await bot._on_message(msg)
 
-            self.assertEqual(fake_local.queries, ["Android System Design"])
-            self.assertTrue(any("Saved library results" in reply for reply in msg._replies))
-            self.assertTrue(any("summarize" in reply.lower() for reply in msg._replies))
+            assert fake_local.queries == ["Android System Design"]
+            assert any("Saved library results" in reply for reply in msg._replies)
+            assert any("summarize" in reply.lower() for reply in msg._replies)
 
     async def test_find_commands_require_topic(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -457,7 +449,8 @@ class TestCommands(unittest.IsolatedAsyncioTestCase):
 
             class StubLocalSearch:
                 async def find_articles(self, topic: str, *, correlation_id: str | None = None):
-                    raise AssertionError("Should not be called when topic missing")
+                    msg = "Should not be called when topic missing"
+                    raise AssertionError(msg)
 
             stub = StubLocalSearch()
             bot.local_searcher = stub
@@ -466,8 +459,8 @@ class TestCommands(unittest.IsolatedAsyncioTestCase):
             msg_db = FakeMessage("/finddb")
             await bot._on_message(msg_db)
 
-            self.assertTrue(any("Usage" in reply for reply in msg_web._replies))
-            self.assertTrue(any("Usage" in reply for reply in msg_db._replies))
+            assert any("Usage" in reply for reply in msg_web._replies)
+            assert any("Usage" in reply for reply in msg_db._replies)
 
 
 if __name__ == "__main__":

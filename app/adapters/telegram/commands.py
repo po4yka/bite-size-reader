@@ -52,6 +52,7 @@ class Command(Protocol):
         Returns:
             True if routing should continue to check other handlers,
             False if this command handled the message and routing should stop.
+
         """
         ...
 
@@ -117,6 +118,7 @@ class CommandRegistry:
             prefixes: Command prefix(es) to match (e.g., "/start" or ["/find", "/findonline"]).
                      If None, this is a fallback handler that matches any message.
             handler: Command handler (Command protocol or async callable).
+
         """
         # Normalize prefixes to list
         if prefixes is None:
@@ -143,6 +145,7 @@ class CommandRegistry:
         Args:
             condition: Function that returns True if handler should execute.
             handler: Async handler function to execute.
+
         """
         self._commands.append((None, ConditionalCommand(condition, handler)))
 
@@ -154,6 +157,7 @@ class CommandRegistry:
 
         Returns:
             True if a command handled the message, False otherwise.
+
         """
         text = context.text
 
@@ -233,6 +237,7 @@ def create_command_adapter(
         # Register with command registry
         registry.register_command("/start", adapted_handler)
         ```
+
     """
 
     async def adapter(context: CommandContext) -> None:

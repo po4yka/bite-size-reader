@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import logging
 import time
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from .database import Database
+if TYPE_CHECKING:
+    from .database import Database
 
 logger = logging.getLogger(__name__)
 
@@ -51,8 +52,8 @@ def safe_update_user_interaction(
         :meth:`Database.update_user_interaction`.
     **fields:
         Individual field overrides that mirror the database method signature.
-    """
 
+    """
     prepared = _prepare_interaction_update(
         interaction_id,
         updates=updates,
@@ -91,7 +92,6 @@ async def async_safe_update_user_interaction(
     **fields: Any,
 ) -> None:
     """Async counterpart to :func:`safe_update_user_interaction`."""
-
     prepared = _prepare_interaction_update(
         interaction_id,
         updates=updates,
@@ -128,12 +128,12 @@ def _prepare_interaction_update(
     fields: dict[str, Any],
 ) -> tuple[dict[str, Any], dict[str, Any] | None] | None:
     """Normalize arguments shared between sync and async helpers."""
-
     if interaction_id is None or interaction_id <= 0:
         return None
 
     if updates is not None and fields:
-        raise ValueError("Cannot mix 'updates' with individual field arguments")
+        msg = "Cannot mix 'updates' with individual field arguments"
+        raise ValueError(msg)
 
     payload = dict(fields)
 

@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from app.db.database import Database
+if TYPE_CHECKING:
+    from app.db.database import Database
 
 logger = logging.getLogger(__name__)
 
@@ -20,11 +21,13 @@ class MessagePersistence:
         """Persist message snapshot to database."""
         # Security: Validate request_id
         if not isinstance(request_id, int) or request_id <= 0:
-            raise ValueError("Invalid request_id")
+            msg = "Invalid request_id"
+            raise ValueError(msg)
 
         # Security: Validate message object
         if message is None:
-            raise ValueError("Message cannot be None")
+            msg = "Message cannot be None"
+            raise ValueError(msg)
 
         # Extract basic fields with best-effort approach
         msg_id_raw = getattr(message, "id", getattr(message, "message_id", 0))
@@ -113,7 +116,7 @@ class MessagePersistence:
             # Some libraries expose pyrogram types with .timestamp or int-like
             if hasattr(val, "timestamp"):
                 try:
-                    ts_val = getattr(val, "timestamp")
+                    ts_val = val.timestamp
                     if callable(ts_val):
                         return int(ts_val())
                 except Exception:
@@ -153,38 +156,38 @@ class MessagePersistence:
         try:
             if getattr(message, "photo", None) is not None:
                 media_type = "photo"
-                photo = getattr(message, "photo")
+                photo = message.photo
                 fid = getattr(photo, "file_id", None)
                 if fid:
                     media_file_ids.append(fid)
             elif getattr(message, "video", None) is not None:
                 media_type = "video"
-                fid = getattr(getattr(message, "video"), "file_id", None)
+                fid = getattr(message.video, "file_id", None)
                 if fid:
                     media_file_ids.append(fid)
             elif getattr(message, "document", None) is not None:
                 media_type = "document"
-                fid = getattr(getattr(message, "document"), "file_id", None)
+                fid = getattr(message.document, "file_id", None)
                 if fid:
                     media_file_ids.append(fid)
             elif getattr(message, "audio", None) is not None:
                 media_type = "audio"
-                fid = getattr(getattr(message, "audio"), "file_id", None)
+                fid = getattr(message.audio, "file_id", None)
                 if fid:
                     media_file_ids.append(fid)
             elif getattr(message, "voice", None) is not None:
                 media_type = "voice"
-                fid = getattr(getattr(message, "voice"), "file_id", None)
+                fid = getattr(message.voice, "file_id", None)
                 if fid:
                     media_file_ids.append(fid)
             elif getattr(message, "animation", None) is not None:
                 media_type = "animation"
-                fid = getattr(getattr(message, "animation"), "file_id", None)
+                fid = getattr(message.animation, "file_id", None)
                 if fid:
                     media_file_ids.append(fid)
             elif getattr(message, "sticker", None) is not None:
                 media_type = "sticker"
-                fid = getattr(getattr(message, "sticker"), "file_id", None)
+                fid = getattr(message.sticker, "file_id", None)
                 if fid:
                     media_file_ids.append(fid)
         except Exception:

@@ -5,6 +5,8 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
+import pytest
+
 from app.adapters.telegram.telegram_bot import TelegramBot
 from app.config import AppConfig, FirecrawlConfig, OpenRouterConfig, RuntimeConfig, TelegramConfig
 from app.db.database import Database
@@ -45,7 +47,7 @@ def make_bot(tmp_path: str, allowed_ids):
         openrouter=OpenRouterConfig(
             api_key="or-dummy-key",
             model="openai/gpt-4o-mini",
-            fallback_models=tuple(),
+            fallback_models=(),
             http_referer=None,
             x_title=None,
             max_tokens=None,
@@ -62,8 +64,8 @@ def make_bot(tmp_path: str, allowed_ids):
     )
     from app.adapters import telegram_bot as tbmod
 
-    setattr(tbmod, "Client", object)
-    setattr(tbmod, "filters", None)
+    tbmod.Client = object
+    tbmod.filters = None
     return TelegramBot(cfg=cfg, db=db)
 
 
@@ -80,7 +82,7 @@ class TestUserValidationFixes(unittest.IsolatedAsyncioTestCase):
             await bot._on_message(msg)
 
             # Should be allowed
-            self.assertTrue(any("commands" in reply.lower() for reply in msg._replies))
+            assert any("commands" in reply.lower() for reply in msg._replies)
 
     async def test_user_id_string_conversion(self):
         """Test that string user IDs are properly converted to integers."""
@@ -97,7 +99,7 @@ class TestUserValidationFixes(unittest.IsolatedAsyncioTestCase):
             await bot._on_message(msg)
 
             # Should be allowed after conversion
-            self.assertTrue(any("commands" in reply.lower() for reply in msg._replies))
+            assert any("commands" in reply.lower() for reply in msg._replies)
 
     async def test_user_id_validation_with_different_types(self):
         """Test user validation with different ID types."""
@@ -110,17 +112,17 @@ class TestUserValidationFixes(unittest.IsolatedAsyncioTestCase):
             # Test with integer
             msg1 = FakeMessage("/help", uid=94225168)
             await bot._on_message(msg1)
-            self.assertTrue(any("commands" in reply.lower() for reply in msg1._replies))
+            assert any("commands" in reply.lower() for reply in msg1._replies)
 
             # Test with different integer
             msg2 = FakeMessage("/help", uid=12345)
             await bot._on_message(msg2)
-            self.assertTrue(any("commands" in reply.lower() for reply in msg2._replies))
+            assert any("commands" in reply.lower() for reply in msg2._replies)
 
             # Test with denied user
             msg3 = FakeMessage("/help", uid=99999)
             await bot._on_message(msg3)
-            self.assertTrue(any("denied" in reply.lower() for reply in msg3._replies))
+            assert any("denied" in reply.lower() for reply in msg3._replies)
 
     async def test_telegram_message_parsing_with_enum_objects(self):
         """Test TelegramMessage parsing with Pyrogram enum objects."""
@@ -225,11 +227,11 @@ class TestUserValidationFixes(unittest.IsolatedAsyncioTestCase):
         telegram_message = TelegramMessage.from_pyrogram_message(mock_message)
 
         # Should parse successfully
-        self.assertEqual(telegram_message.message_id, 12345)
-        self.assertIsNotNone(telegram_message.from_user)
-        self.assertEqual(telegram_message.from_user.id, 94225168)
-        self.assertIsNotNone(telegram_message.chat)
-        self.assertEqual(telegram_message.chat.type, ChatType.PRIVATE)
+        assert telegram_message.message_id == 12345
+        assert telegram_message.from_user is not None
+        assert telegram_message.from_user.id == 94225168
+        assert telegram_message.chat is not None
+        assert telegram_message.chat.type == ChatType.PRIVATE
 
     async def test_telegram_user_id_conversion(self):
         """Test TelegramUser ID conversion from various types."""
@@ -240,8 +242,8 @@ class TestUserValidationFixes(unittest.IsolatedAsyncioTestCase):
             "first_name": "Test",
         }
         user_int = TelegramUser.from_dict(user_data_int)
-        self.assertEqual(user_int.id, 94225168)
-        self.assertIsInstance(user_int.id, int)
+        assert user_int.id == 94225168
+        assert isinstance(user_int.id, int)
 
         # Test with string
         user_data_str = {
@@ -250,8 +252,8 @@ class TestUserValidationFixes(unittest.IsolatedAsyncioTestCase):
             "first_name": "Test",
         }
         user_str = TelegramUser.from_dict(user_data_str)
-        self.assertEqual(user_str.id, 94225168)
-        self.assertIsInstance(user_str.id, int)
+        assert user_str.id == 94225168
+        assert isinstance(user_str.id, int)
 
         # Test with invalid string
         user_data_invalid = {
@@ -260,7 +262,7 @@ class TestUserValidationFixes(unittest.IsolatedAsyncioTestCase):
             "first_name": "Test",
         }
         user_invalid = TelegramUser.from_dict(user_data_invalid)
-        self.assertEqual(user_invalid.id, 0)  # Should fallback to 0
+        assert user_invalid.id == 0  # Should fallback to 0
 
         # Test with None
         user_data_none = {
@@ -269,13 +271,12 @@ class TestUserValidationFixes(unittest.IsolatedAsyncioTestCase):
             "first_name": "Test",
         }
         user_none = TelegramUser.from_dict(user_data_none)
-        self.assertEqual(user_none.id, 0)  # Should fallback to 0
+        assert user_none.id == 0  # Should fallback to 0
 
     async def test_empty_allowed_user_ids_raises(self):
         """Empty allowed user IDs should now be rejected during initialization."""
-        with tempfile.TemporaryDirectory() as tmp:
-            with self.assertRaises(RuntimeError):
-                make_bot(os.path.join(tmp, "app.db"), allowed_ids=[])
+        with tempfile.TemporaryDirectory() as tmp, pytest.raises(RuntimeError):
+            make_bot(os.path.join(tmp, "app.db"), allowed_ids=[])
 
     async def test_user_validation_logging(self):
         """Test that user validation logging works correctly."""
@@ -292,7 +293,7 @@ class TestUserValidationFixes(unittest.IsolatedAsyncioTestCase):
 
                 # Check that the log contains user ID information
                 log_calls = [call.args for call in mock_logger.info.call_args_list]
-                self.assertTrue(any("94225168" in str(call) for call in log_calls))
+                assert any("94225168" in str(call) for call in log_calls)
 
 
 if __name__ == "__main__":

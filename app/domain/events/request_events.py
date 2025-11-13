@@ -23,9 +23,11 @@ class RequestCreated(DomainEvent):
         """Validate event data."""
         super().__post_init__()
         if self.request_id <= 0:
-            raise ValueError("request_id must be positive")
+            msg = "request_id must be positive"
+            raise ValueError(msg)
         if self.user_id <= 0:
-            raise ValueError("user_id must be positive")
+            msg = "user_id must be positive"
+            raise ValueError(msg)
 
 
 @dataclass(frozen=True)
@@ -40,9 +42,11 @@ class RequestStatusChanged(DomainEvent):
         """Validate event data."""
         super().__post_init__()
         if self.request_id <= 0:
-            raise ValueError("request_id must be positive")
+            msg = "request_id must be positive"
+            raise ValueError(msg)
         if self.old_status == self.new_status:
-            raise ValueError("old_status and new_status must be different")
+            msg = "old_status and new_status must be different"
+            raise ValueError(msg)
 
 
 @dataclass(frozen=True)
@@ -56,7 +60,8 @@ class RequestCompleted(DomainEvent):
         """Validate event data."""
         super().__post_init__()
         if self.request_id <= 0:
-            raise ValueError("request_id must be positive")
+            msg = "request_id must be positive"
+            raise ValueError(msg)
 
 
 @dataclass(frozen=True)
@@ -71,9 +76,11 @@ class RequestFailed(DomainEvent):
         """Validate event data."""
         super().__post_init__()
         if self.request_id <= 0:
-            raise ValueError("request_id must be positive")
+            msg = "request_id must be positive"
+            raise ValueError(msg)
         if not self.error_message:
-            raise ValueError("error_message cannot be empty")
+            msg = "error_message cannot be empty"
+            raise ValueError(msg)
 
 
 @dataclass(frozen=True)
@@ -87,6 +94,8 @@ class RequestCancelled(DomainEvent):
         """Validate event data."""
         super().__post_init__()
         if self.request_id <= 0:
-            raise ValueError("request_id must be positive")
+            msg = "request_id must be positive"
+            raise ValueError(msg)
         if self.cancelled_by_user_id <= 0:
-            raise ValueError("cancelled_by_user_id must be positive")
+            msg = "cancelled_by_user_id must be positive"
+            raise ValueError(msg)

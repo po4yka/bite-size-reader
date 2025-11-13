@@ -5,8 +5,6 @@ This adapter translates between crawl result data and database records.
 
 from typing import Any
 
-from app.protocols import CrawlResultRepository
-
 
 class SqliteCrawlResultRepositoryAdapter:
     """Adapter that wraps the existing Database class for crawl result operations.
@@ -21,6 +19,7 @@ class SqliteCrawlResultRepositoryAdapter:
 
         Args:
             database: The existing Database instance to wrap.
+
         """
         self._db = database
 

@@ -25,6 +25,7 @@ class SearchIndexEventHandler:
 
         Args:
             database: Database instance with FTS methods.
+
         """
         self._db = database
 
@@ -33,6 +34,7 @@ class SearchIndexEventHandler:
 
         Args:
             event: SummaryCreated domain event.
+
         """
         logger.info(
             "updating_search_index_for_new_summary",
@@ -53,7 +55,7 @@ class SearchIndexEventHandler:
                 extra={"request_id": event.request_id, "summary_id": event.summary_id},
             )
 
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             # Log error but don't fail - search index update is not critical
             logger.exception(
                 "search_index_update_failed",
@@ -71,6 +73,7 @@ class SearchIndexEventHandler:
 
         Args:
             event: SummaryMarkedAsRead domain event.
+
         """
         logger.debug(
             "summary_marked_as_read_event",
@@ -93,6 +96,7 @@ class AnalyticsEventHandler:
 
         Args:
             analytics_service: Optional analytics service client.
+
         """
         self._analytics = analytics_service
 
@@ -101,6 +105,7 @@ class AnalyticsEventHandler:
 
         Args:
             event: RequestCompleted domain event.
+
         """
         logger.info(
             "request_completed_analytics",
@@ -133,6 +138,7 @@ class AnalyticsEventHandler:
 
         Args:
             event: RequestFailed domain event.
+
         """
         logger.warning(
             "request_failed_analytics",
@@ -165,6 +171,7 @@ class AnalyticsEventHandler:
 
         Args:
             event: SummaryMarkedAsRead domain event.
+
         """
         logger.debug(
             "summary_read_analytics",
@@ -199,6 +206,7 @@ class AuditLogEventHandler:
 
         Args:
             database: Database instance with audit log methods.
+
         """
         self._db = database
 
@@ -207,6 +215,7 @@ class AuditLogEventHandler:
 
         Args:
             event: SummaryCreated domain event.
+
         """
         try:
             await self._db.async_insert_audit_log(
@@ -231,6 +240,7 @@ class AuditLogEventHandler:
 
         Args:
             event: RequestCompleted domain event.
+
         """
         try:
             await self._db.async_insert_audit_log(
@@ -253,6 +263,7 @@ class AuditLogEventHandler:
 
         Args:
             event: RequestFailed domain event.
+
         """
         try:
             await self._db.async_insert_audit_log(
@@ -285,6 +296,7 @@ class NotificationEventHandler:
         Args:
             telegram_client: Optional Telegram client for sending messages.
             notification_service: Optional notification service for other channels.
+
         """
         self._telegram = telegram_client
         self._notification_service = notification_service
@@ -294,6 +306,7 @@ class NotificationEventHandler:
 
         Args:
             event: RequestCompleted domain event.
+
         """
         logger.debug(
             "request_completed_notification",
@@ -353,6 +366,7 @@ class NotificationEventHandler:
 
         Args:
             event: RequestFailed domain event.
+
         """
         logger.debug(
             "request_failed_notification",
@@ -395,6 +409,7 @@ class CacheInvalidationEventHandler:
 
         Args:
             cache_service: Optional cache service (Redis, Memcached, etc.).
+
         """
         self._cache = cache_service
 
@@ -403,6 +418,7 @@ class CacheInvalidationEventHandler:
 
         Args:
             event: SummaryCreated domain event.
+
         """
         logger.debug(
             "invalidating_summary_cache",
@@ -448,6 +464,7 @@ class CacheInvalidationEventHandler:
 
         Args:
             event: SummaryMarkedAsRead domain event.
+
         """
         logger.debug(
             "invalidating_read_status_cache",
@@ -488,6 +505,7 @@ class CacheInvalidationEventHandler:
 
         Args:
             event: RequestCompleted domain event.
+
         """
         logger.debug(
             "invalidating_request_cache",
@@ -536,6 +554,7 @@ class WebhookEventHandler:
         Args:
             webhook_client: Optional HTTP client for sending webhooks.
             webhook_url: Optional webhook URL to send events to.
+
         """
         self._webhook_client = webhook_client
         self._webhook_url = webhook_url
@@ -545,6 +564,7 @@ class WebhookEventHandler:
 
         Args:
             event: SummaryCreated domain event.
+
         """
         logger.debug(
             "sending_summary_created_webhook",
@@ -598,6 +618,7 @@ class WebhookEventHandler:
 
         Args:
             event: RequestCompleted domain event.
+
         """
         logger.debug(
             "sending_request_completed_webhook",
@@ -649,6 +670,7 @@ class WebhookEventHandler:
 
         Args:
             event: RequestFailed domain event.
+
         """
         logger.debug(
             "sending_request_failed_webhook",
@@ -739,6 +761,7 @@ def wire_event_handlers(
         # Now when events are published, all handlers are called
         await event_bus.publish(SummaryCreated(...))
         ```
+
     """
     # Create core handler instances (always enabled)
     search_index_handler = SearchIndexEventHandler(database)

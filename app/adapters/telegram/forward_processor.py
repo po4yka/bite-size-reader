@@ -9,13 +9,13 @@ from typing import TYPE_CHECKING, Any
 
 from app.adapters.telegram.forward_content_processor import ForwardContentProcessor
 from app.adapters.telegram.forward_summarizer import ForwardSummarizer
-from app.config import AppConfig
-from app.db.database import Database
 from app.db.user_interactions import async_safe_update_user_interaction
 
 if TYPE_CHECKING:
     from app.adapters.external.response_formatter import ResponseFormatter
     from app.adapters.openrouter.openrouter_client import OpenRouterClient
+    from app.config import AppConfig
+    from app.db.database import Database
 
 logger = logging.getLogger(__name__)
 
@@ -193,7 +193,7 @@ class ForwardProcessor:
                     return row[0]
             return None
         except Exception as exc:
-            logger.error(
+            logger.exception(
                 "get_forward_content_text_failed",
                 extra={"error": str(exc), "req_id": req_id},
             )
@@ -208,7 +208,6 @@ class ForwardProcessor:
         correlation_id: str | None,
     ) -> None:
         """Generate a standalone article for forwarded content when topics are present."""
-
         if not summary:
             return
 
@@ -349,7 +348,7 @@ class ForwardProcessor:
                         extra={"cid": correlation_id, "request_id": req_id},
                     )
                 except Exception as exc:
-                    logger.error(
+                    logger.exception(
                         "persist_insights_error_for_forward",
                         extra={"cid": correlation_id, "error": str(exc)},
                     )

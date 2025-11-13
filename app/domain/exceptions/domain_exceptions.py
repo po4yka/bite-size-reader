@@ -14,6 +14,7 @@ class DomainException(Exception):
         Args:
             message: Human-readable error message.
             details: Optional dictionary with additional error context.
+
         """
         super().__init__(message)
         self.message = message
@@ -23,46 +24,38 @@ class DomainException(Exception):
 class InvalidRequestError(DomainException):
     """Raised when a request violates business rules."""
 
-    pass
 
 
 class InvalidSummaryError(DomainException):
     """Raised when a summary violates business rules."""
 
-    pass
 
 
 class ContentFetchError(DomainException):
     """Raised when content cannot be fetched."""
 
-    pass
 
 
 class SummaryGenerationError(DomainException):
     """Raised when summary generation fails."""
 
-    pass
 
 
 class InvalidStateTransitionError(DomainException):
     """Raised when an invalid state transition is attempted."""
 
-    pass
 
 
 class ResourceNotFoundError(DomainException):
     """Raised when a requested resource does not exist."""
 
-    pass
 
 
 class DuplicateResourceError(DomainException):
     """Raised when attempting to create a duplicate resource."""
 
-    pass
 
 
 class ValidationError(DomainException):
     """Raised when domain validation fails."""
 
-    pass

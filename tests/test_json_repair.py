@@ -99,8 +99,8 @@ class TestJsonRepair(unittest.TestCase):
             self.bot._reply_json.assert_called_once()
             call_args = self.bot._reply_json.call_args[0]
             summary_json = call_args[1]
-            self.assertIn("summary_1000", summary_json)
-            self.assertEqual(summary_json["tldr"], "Full summary.")
+            assert "summary_1000" in summary_json
+            assert summary_json["tldr"] == "Full summary."
 
         asyncio.run(run_test())
 
@@ -180,7 +180,7 @@ class TestJsonRepair(unittest.TestCase):
 
             self.bot._reply_json.assert_called_once()
             summary_json = self.bot._reply_json.call_args[0][1]
-            self.assertEqual(summary_json["summary_250"], "Summary.")
+            assert summary_json["summary_250"] == "Summary."
 
         asyncio.run(run_test())
 
@@ -223,16 +223,12 @@ class TestJsonRepair(unittest.TestCase):
 
             # With local JSON repair, the broken JSON is fixed locally and no LLM repair call is made
             # The test should verify that the summary was processed successfully despite broken JSON
-            self.assertEqual(
-                mock_openrouter_instance.chat.call_count, 3
-            )  # 1 for summary + 2 for insights
+            assert mock_openrouter_instance.chat.call_count == 3  # 1 for summary + 2 for insights
 
             # Verify that the summary was processed successfully with local JSON repair
             self.bot._reply_json.assert_called_once()
             summary_json = self.bot._reply_json.call_args[0][1]
-            self.assertEqual(
-                summary_json["summary_250"], "Truncated..."
-            )  # Local repair extracted this from broken JSON
+            assert summary_json["summary_250"] == "Truncated..."  # Local repair extracted this from broken JSON
 
         asyncio.run(run_test())
 
@@ -278,9 +274,7 @@ class TestJsonRepair(unittest.TestCase):
                 await self.bot._handle_url_flow(message, "http://example.com")
 
             self.bot._reply_json.assert_called_once()
-            self.assertEqual(
-                mock_openrouter_instance.chat.await_count, 3
-            )  # 1 for summary + 2 for insights (json_schema + json_object fallback)
+            assert mock_openrouter_instance.chat.await_count == 3  # 1 for summary + 2 for insights (json_schema + json_object fallback)
 
         asyncio.run(run_test())
 

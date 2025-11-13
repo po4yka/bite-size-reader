@@ -17,11 +17,11 @@ from app.models.telegram.telegram_user import TelegramUser
 # Re-export all classes for backward compatibility
 __all__ = [
     "ChatType",
-    "MessageEntityType",
-    "MediaType",
-    "TelegramUser",
-    "TelegramChat",
-    "MessageEntity",
     "ForwardInfo",
+    "MediaType",
+    "MessageEntity",
+    "MessageEntityType",
+    "TelegramChat",
     "TelegramMessage",
+    "TelegramUser",
 ]

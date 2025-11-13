@@ -69,30 +69,38 @@ def _validate_url_input(url: str) -> None:
 
     Raises:
         ValueError: If URL is invalid or contains dangerous content
+
     """
     if not url:
-        raise ValueError("URL cannot be empty")
+        msg = "URL cannot be empty"
+        raise ValueError(msg)
     if not isinstance(url, str):
-        raise ValueError("URL must be a string")
+        msg = "URL must be a string"
+        raise ValueError(msg)
     if len(url) > 2048:  # RFC 2616 limit
-        raise ValueError("URL too long")
+        msg = "URL too long"
+        raise ValueError(msg)
 
     # Basic security: no obvious injection attempts
     url_lower = url.lower()
     if any(needle in url_lower for needle in _DANGEROUS_URL_SUBSTRINGS):
-        raise ValueError("URL contains potentially dangerous content")
+        msg = "URL contains potentially dangerous content"
+        raise ValueError(msg)
 
     # Check for dangerous schemes early (before parsing)
     # This catches schemes even if they're not properly formatted
     for dangerous_scheme in _DANGEROUS_SCHEMES:
         if url_lower.startswith(f"{dangerous_scheme}:"):
-            raise ValueError(f"URL scheme '{dangerous_scheme}' is not allowed")
+            msg = f"URL scheme '{dangerous_scheme}' is not allowed"
+            raise ValueError(msg)
 
     # Additional validation: check for null bytes and control characters
     if "\x00" in url:
-        raise ValueError("URL contains null bytes")
+        msg = "URL contains null bytes"
+        raise ValueError(msg)
     if any(ord(char) < 32 and char not in ("\t", "\n", "\r") for char in url):
-        raise ValueError("URL contains control characters")
+        msg = "URL contains control characters"
+        raise ValueError(msg)
 
 
 def normalize_url(url: str) -> str:
@@ -117,6 +125,7 @@ def normalize_url(url: str) -> str:
         - Rejects file://, javascript:, data:, and other dangerous schemes
         - Validates hostname presence
         - Checks for malicious content patterns
+
     """
     # First pass validation - catches obvious security issues
     _validate_url_input(url)
@@ -130,7 +139,8 @@ def normalize_url(url: str) -> str:
 
         # Validate parsed components
         if not p.netloc:
-            raise ValueError("Invalid URL: missing hostname")
+            msg = "Invalid URL: missing hostname"
+            raise ValueError(msg)
 
         # Security: strict scheme validation
         # Reject if scheme exists but is not in allowed list
@@ -138,13 +148,15 @@ def normalize_url(url: str) -> str:
             scheme_lower = p.scheme.lower()
             # Explicitly check against dangerous schemes first
             if scheme_lower in _DANGEROUS_SCHEMES:
+                msg = f"URL scheme '{p.scheme}' is not allowed. Only http and https are supported."
                 raise ValueError(
-                    f"URL scheme '{p.scheme}' is not allowed. Only http and https are supported."
+                    msg
                 )
             # Then validate against allowed list
             if scheme_lower not in _ALLOWED_SCHEMES:
+                msg = f"Unsupported URL scheme: {p.scheme}. Only http and https are allowed."
                 raise ValueError(
-                    f"Unsupported URL scheme: {p.scheme}. Only http and https are allowed."
+                    msg
                 )
             scheme = scheme_lower
         else:
@@ -154,7 +166,8 @@ def normalize_url(url: str) -> str:
         # Additional security: validate netloc doesn't contain suspicious characters
         if any(char in p.netloc for char in ["@", "<", ">", '"', "'"]):
             # '@' can be used for credential injection: http://user:pass@malicious.com
-            raise ValueError("URL hostname contains suspicious characters")
+            msg = "URL hostname contains suspicious characters"
+            raise ValueError(msg)
 
         netloc = p.netloc.lower()
         path = p.path or "/"
@@ -176,24 +189,28 @@ def normalize_url(url: str) -> str:
         logger.debug("normalize_url", extra={"url": url[:100], "normalized": normalized[:100]})
         return normalized
     except Exception as e:
-        logger.error("url_normalization_failed", extra={"url": url[:100], "error": str(e)})
-        raise ValueError(f"URL normalization failed: {e}") from e
+        logger.exception("url_normalization_failed", extra={"url": url[:100], "error": str(e)})
+        msg = f"URL normalization failed: {e}"
+        raise ValueError(msg) from e
 
 
 def url_hash_sha256(normalized_url: str) -> str:
     """Generate SHA256 hash of normalized URL."""
     if not normalized_url or not isinstance(normalized_url, str):
-        raise ValueError("Normalized URL is required")
+        msg = "Normalized URL is required"
+        raise ValueError(msg)
     if len(normalized_url) > 2048:
-        raise ValueError("Normalized URL too long")
+        msg = "Normalized URL too long"
+        raise ValueError(msg)
 
     try:
         h = hashlib.sha256(normalized_url.encode("utf-8")).hexdigest()
         logger.debug("url_hash", extra={"normalized": normalized_url[:100], "sha256": h})
         return h
     except Exception as e:
-        logger.error("url_hash_failed", extra={"error": str(e)})
-        raise ValueError(f"URL hashing failed: {e}") from e
+        logger.exception("url_hash_failed", extra={"error": str(e)})
+        msg = f"URL hashing failed: {e}"
+        raise ValueError(msg) from e
 
 
 def looks_like_url(text: str) -> bool:
@@ -208,7 +225,7 @@ def looks_like_url(text: str) -> bool:
         logger.debug("looks_like_url", extra={"text_sample": text[:80], "match": ok})
         return ok
     except Exception as e:
-        logger.error("looks_like_url_failed", extra={"error": str(e)})
+        logger.exception("looks_like_url_failed", extra={"error": str(e)})
         return False
 
 
@@ -246,5 +263,5 @@ def extract_all_urls(text: str) -> list[str]:
         logger.debug("extract_all_urls", extra={"count": len(valid_urls), "input_len": len(text)})
         return valid_urls
     except Exception as e:
-        logger.error("extract_all_urls_failed", extra={"error": str(e)})
+        logger.exception("extract_all_urls_failed", extra={"error": str(e)})
         return []

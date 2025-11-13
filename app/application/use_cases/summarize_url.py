@@ -48,11 +48,14 @@ class SummarizeUrlCommand:
     def __post_init__(self) -> None:
         """Validate command parameters."""
         if not self.url or not self.url.strip():
-            raise ValueError("url must not be empty")
+            msg = "url must not be empty"
+            raise ValueError(msg)
         if self.user_id <= 0:
-            raise ValueError("user_id must be positive")
+            msg = "user_id must be positive"
+            raise ValueError(msg)
         if self.chat_id <= 0:
-            raise ValueError("chat_id must be positive")
+            msg = "chat_id must be positive"
+            raise ValueError(msg)
 
 
 @dataclass
@@ -105,6 +108,7 @@ class SummarizeUrlUseCase:
         # result.summary - generated summary
         # result.events - [RequestCreated, SummaryCreated, RequestCompleted]
         ```
+
     """
 
     def __init__(
@@ -125,6 +129,7 @@ class SummarizeUrlUseCase:
             content_fetcher: Service for fetching content from URLs.
             llm_client: Service for generating summaries via LLM.
             summary_validator: Domain service for validating summaries.
+
         """
         self._request_repo = request_repository
         self._summary_repo = summary_repository
@@ -146,6 +151,7 @@ class SummarizeUrlUseCase:
             ContentFetchError: If content cannot be fetched.
             SummaryGenerationError: If summary cannot be generated.
             ValidationError: If summary fails validation.
+
         """
         events: list[Any] = []
 
@@ -263,6 +269,7 @@ class SummarizeUrlUseCase:
 
         Returns:
             Created Request domain model with ID.
+
         """
         logger.debug("creating_request", extra={"url": command.url})
 
@@ -304,6 +311,7 @@ class SummarizeUrlUseCase:
 
         Raises:
             ContentFetchError: If content cannot be fetched.
+
         """
         logger.debug("fetching_content", extra={"url": command.url})
 
@@ -344,8 +352,9 @@ class SummarizeUrlUseCase:
                 error=str(e),
             )
 
+            msg = f"Failed to fetch content from {command.url}: {e}"
             raise ContentFetchError(
-                f"Failed to fetch content from {command.url}: {e}",
+                msg,
                 details={"url": command.url, "error": str(e)},
             ) from e
 
@@ -364,6 +373,7 @@ class SummarizeUrlUseCase:
 
         Raises:
             SummaryGenerationError: If summary cannot be generated.
+
         """
         logger.debug("generating_summary", extra={"request_id": request.id})
 
@@ -403,8 +413,9 @@ class SummarizeUrlUseCase:
             return request, summary
 
         except Exception as e:
+            msg = f"Failed to generate summary: {e}"
             raise SummaryGenerationError(
-                f"Failed to generate summary: {e}",
+                msg,
                 details={"request_id": request.id, "error": str(e)},
             ) from e
 
@@ -413,6 +424,7 @@ class SummarizeUrlUseCase:
 
         Args:
             summary: Summary domain model to persist.
+
         """
         logger.debug("persisting_summary", extra={"request_id": summary.request_id})
 

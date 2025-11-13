@@ -21,14 +21,14 @@ class TestSummaryContract(unittest.TestCase):
 
         out = validate_and_shape_summary(payload)
 
-        self.assertLessEqual(len(out["summary_250"]), 250)
-        self.assertLessEqual(len(out["summary_1000"]), 1000)
-        self.assertTrue(out["tldr"].startswith("C" * 100))
-        self.assertEqual(out["topic_tags"], ["#tag1", "#tag2"])  # dedup + hash prefix
-        self.assertEqual(out["entities"]["people"], ["Alice", "Bob"])  # dedup case-insensitive
-        self.assertEqual(out["estimated_reading_time_min"], 7)
-        self.assertIn("key_stats", out)
-        self.assertIn("readability", out)
+        assert len(out["summary_250"]) <= 250
+        assert len(out["summary_1000"]) <= 1000
+        assert out["tldr"].startswith("C" * 100)
+        assert out["topic_tags"] == ["#tag1", "#tag2"]  # dedup + hash prefix
+        assert out["entities"]["people"] == ["Alice", "Bob"]  # dedup case-insensitive
+        assert out["estimated_reading_time_min"] == 7
+        assert "key_stats" in out
+        assert "readability" in out
 
     def test_entities_handles_list_payloads(self):
         payload = {
@@ -53,11 +53,11 @@ class TestSummaryContract(unittest.TestCase):
 
         out = validate_and_shape_summary(payload)
 
-        self.assertEqual(out["summary_1000"], "Longer summary that provides more detail.")
-        self.assertEqual(out["tldr"], "Longer summary that provides more detail.")
-        self.assertEqual(out["entities"]["people"], ["Alice", "Bob", "Charlie"])
-        self.assertEqual(out["entities"]["organizations"], ["OpenAI", "Anthropic"])
-        self.assertEqual(out["entities"]["locations"], ["San Francisco", "New York"])
+        assert out["summary_1000"] == "Longer summary that provides more detail."
+        assert out["tldr"] == "Longer summary that provides more detail."
+        assert out["entities"]["people"] == ["Alice", "Bob", "Charlie"]
+        assert out["entities"]["organizations"] == ["OpenAI", "Anthropic"]
+        assert out["entities"]["locations"] == ["San Francisco", "New York"]
 
     def test_fallback_summary_from_supporting_fields(self):
         payload = {
@@ -71,10 +71,10 @@ class TestSummaryContract(unittest.TestCase):
 
         out = validate_and_shape_summary(payload)
 
-        self.assertTrue(out["summary_250"].strip())
-        self.assertTrue(out["summary_1000"].strip())
-        self.assertTrue(out["tldr"].strip())
-        self.assertIn("Key idea one", out["summary_1000"])
+        assert out["summary_250"].strip()
+        assert out["summary_1000"].strip()
+        assert out["tldr"].strip()
+        assert "Key idea one" in out["summary_1000"]
 
 
 if __name__ == "__main__":

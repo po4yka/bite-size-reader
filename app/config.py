@@ -22,42 +22,46 @@ from pydantic import (
 
 def validate_model_name(model: str) -> str:
     """Validate model name for security and allow OpenRouter-style IDs."""
-
     if not model:
-        raise ValueError("Model name cannot be empty")
+        msg = "Model name cannot be empty"
+        raise ValueError(msg)
     if len(model) > 100:
-        raise ValueError("Model name too long")
+        msg = "Model name too long"
+        raise ValueError(msg)
 
     if ".." in model or "<" in model or ">" in model or "\\" in model:
-        raise ValueError("Model name contains invalid characters")
+        msg = "Model name contains invalid characters"
+        raise ValueError(msg)
 
     allowed = set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_.:/")
     if any(ch not in allowed for ch in model):
-        raise ValueError("Model name contains invalid characters")
+        msg = "Model name contains invalid characters"
+        raise ValueError(msg)
 
     return model
 
 
 def _ensure_api_key(value: str, *, name: str) -> str:
     if not value:
-        raise ValueError(f"{name} API key is required")
+        msg = f"{name} API key is required"
+        raise ValueError(msg)
     value = value.strip()
     if not value:
-        raise ValueError(f"{name} API key is required")
+        msg = f"{name} API key is required"
+        raise ValueError(msg)
     if len(value) > 500:
-        raise ValueError(f"{name} API key appears to be too long")
+        msg = f"{name} API key appears to be too long"
+        raise ValueError(msg)
     if any(char in value for char in [" ", "\n", "\t"]):
-        raise ValueError(f"{name} API key contains invalid characters")
+        msg = f"{name} API key contains invalid characters"
+        raise ValueError(msg)
     return value
 
 
 def _parse_allowed_user_ids(value: Any) -> tuple[int, ...]:
     if value in (None, ""):
-        return tuple()
-    if isinstance(value, list | tuple):
-        values = value
-    else:
-        values = str(value).split(",")
+        return ()
+    values = value if isinstance(value, list | tuple) else str(value).split(",")
 
     user_ids: list[int] = []
     for piece in values:
@@ -101,17 +105,21 @@ class TelegramConfig(BaseModel):
         if isinstance(value, int):
             api_id = value
         elif value is None or value == "":
-            raise ValueError("API ID is required")
+            msg = "API ID is required"
+            raise ValueError(msg)
         else:
             try:
                 api_id = int(str(value))
             except ValueError as exc:  # pragma: no cover - defensive
-                raise ValueError("API ID must be a valid integer") from exc
+                msg = "API ID must be a valid integer"
+                raise ValueError(msg) from exc
 
         if api_id < 0:
-            raise ValueError("API ID must be non-negative")
+            msg = "API ID must be non-negative"
+            raise ValueError(msg)
         if api_id > 2**31 - 1:
-            raise ValueError("API ID too large")
+            msg = "API ID too large"
+            raise ValueError(msg)
         return api_id
 
     @field_validator("api_hash", mode="before")
@@ -129,14 +137,18 @@ class TelegramConfig(BaseModel):
         if not token:
             return ""
         if ":" not in token:
-            raise ValueError("Bot token format appears invalid")
+            msg = "Bot token format appears invalid"
+            raise ValueError(msg)
         parts = token.split(":")
         if len(parts) != 2:
-            raise ValueError("Bot token format appears invalid")
+            msg = "Bot token format appears invalid"
+            raise ValueError(msg)
         if not parts[0].isdigit():
-            raise ValueError("Bot token ID part appears invalid")
+            msg = "Bot token ID part appears invalid"
+            raise ValueError(msg)
         if len(parts[1]) < 30:
-            raise ValueError("Bot token secret part appears too short")
+            msg = "Bot token secret part appears too short"
+            raise ValueError(msg)
         return token
 
     @field_validator("allowed_user_ids", mode="before")
@@ -187,13 +199,15 @@ class FirecrawlConfig(BaseModel):
         if value in (None, ""):
             default = cls.model_fields[info.field_name].default
             if default is None:
-                raise ValueError(f"{info.field_name.replace('_', ' ')} is required")
+                msg = f"{info.field_name.replace('_', ' ')} is required"
+                raise ValueError(msg)
             return int(default)
         try:
             parsed = int(str(value))
         except ValueError as exc:  # pragma: no cover - defensive
+            msg = f"{info.field_name.replace('_', ' ')} must be a valid integer"
             raise ValueError(
-                f"{info.field_name.replace('_', ' ')} must be a valid integer"
+                msg
             ) from exc
 
         limits: dict[str, tuple[int, int]] = {
@@ -205,8 +219,9 @@ class FirecrawlConfig(BaseModel):
         }
         min_val, max_val = limits[info.field_name]
         if parsed < min_val or parsed > max_val:
+            msg = f"{info.field_name.replace('_', ' ').capitalize()} must be between {min_val} and {max_val}"
             raise ValueError(
-                f"{info.field_name.replace('_', ' ').capitalize()} must be between {min_val} and {max_val}"
+                msg
             )
         return parsed
 
@@ -222,12 +237,14 @@ class FirecrawlConfig(BaseModel):
         if value in (None, ""):
             default = cls.model_fields[info.field_name].default
             if default is None:
-                raise ValueError(f"{info.field_name.replace('_', ' ')} is required")
+                msg = f"{info.field_name.replace('_', ' ')} is required"
+                raise ValueError(msg)
             return float(default)
         try:
             parsed = float(str(value))
         except ValueError as exc:  # pragma: no cover - defensive
-            raise ValueError(f"{info.field_name.replace('_', ' ')} must be a valid number") from exc
+            msg = f"{info.field_name.replace('_', ' ')} must be a valid number"
+            raise ValueError(msg) from exc
 
         limits: dict[str, tuple[float, float]] = {
             "keepalive_expiry": (1.0, 300.0),
@@ -237,8 +254,9 @@ class FirecrawlConfig(BaseModel):
         }
         min_val, max_val = limits[info.field_name]
         if parsed < min_val or parsed > max_val:
+            msg = f"{info.field_name.replace('_', ' ').capitalize()} must be between {min_val} and {max_val}"
             raise ValueError(
-                f"{info.field_name.replace('_', ' ').capitalize()} must be between {min_val} and {max_val}"
+                msg
             )
         return parsed
 
@@ -288,11 +306,8 @@ class OpenRouterConfig(BaseModel):
     @classmethod
     def _parse_fallback_models(cls, value: Any) -> tuple[str, ...]:
         if value in (None, ""):
-            return tuple()
-        if isinstance(value, list | tuple):
-            iterable = value
-        else:
-            iterable = str(value).split(",")
+            return ()
+        iterable = value if isinstance(value, list | tuple) else str(value).split(",")
 
         validated: list[str] = []
         for raw in iterable:
@@ -320,11 +335,14 @@ class OpenRouterConfig(BaseModel):
         try:
             tokens = int(str(value))
         except ValueError as exc:
-            raise ValueError("Max tokens must be a valid integer") from exc
+            msg = "Max tokens must be a valid integer"
+            raise ValueError(msg) from exc
         if tokens <= 0:
-            raise ValueError("Max tokens must be positive")
+            msg = "Max tokens must be positive"
+            raise ValueError(msg)
         if tokens > 100000:
-            raise ValueError("Max tokens too large")
+            msg = "Max tokens too large"
+            raise ValueError(msg)
         return tokens
 
     @field_validator("top_p", mode="before")
@@ -335,9 +353,11 @@ class OpenRouterConfig(BaseModel):
         try:
             top_p = float(str(value))
         except ValueError as exc:
-            raise ValueError("Top_p must be a valid number") from exc
+            msg = "Top_p must be a valid number"
+            raise ValueError(msg) from exc
         if top_p < 0 or top_p > 1:
-            raise ValueError("Top_p must be between 0 and 1")
+            msg = "Top_p must be between 0 and 1"
+            raise ValueError(msg)
         return top_p
 
     @field_validator("temperature", mode="before")
@@ -348,9 +368,11 @@ class OpenRouterConfig(BaseModel):
         try:
             temperature = float(str(value))
         except ValueError as exc:
-            raise ValueError("Temperature must be a valid number") from exc
+            msg = "Temperature must be a valid number"
+            raise ValueError(msg) from exc
         if temperature < 0 or temperature > 2:
-            raise ValueError("Temperature must be between 0 and 2")
+            msg = "Temperature must be between 0 and 2"
+            raise ValueError(msg)
         return temperature
 
     @field_validator("structured_output_mode", mode="before")
@@ -360,8 +382,9 @@ class OpenRouterConfig(BaseModel):
             return "json_schema"
         mode_value = str(value)
         if mode_value not in {"json_schema", "json_object"}:
+            msg = f"Invalid structured output mode: {mode_value}. Must be one of {{'json_schema', 'json_object'}}"
             raise ValueError(
-                f"Invalid structured output mode: {mode_value}. Must be one of {{'json_schema', 'json_object'}}"
+                msg
             )
         return mode_value
 
@@ -369,11 +392,8 @@ class OpenRouterConfig(BaseModel):
     @classmethod
     def _parse_provider_order(cls, value: Any) -> tuple[str, ...]:
         if value in (None, ""):
-            return tuple()
-        if isinstance(value, list | tuple):
-            iterable = value
-        else:
-            iterable = str(value).split(",")
+            return ()
+        iterable = value if isinstance(value, list | tuple) else str(value).split(",")
 
         allowed = set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-:")
         parsed: list[str] = []
@@ -413,7 +433,8 @@ class RuntimeConfig(BaseModel):
         log_level = str(value or "INFO").upper()
         valid_levels = {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"}
         if log_level not in valid_levels:
-            raise ValueError(f"Invalid log level: {value}. Must be one of {valid_levels}")
+            msg = f"Invalid log level: {value}. Must be one of {valid_levels}"
+            raise ValueError(msg)
         return log_level
 
     @field_validator("request_timeout_sec", mode="before")
@@ -422,11 +443,14 @@ class RuntimeConfig(BaseModel):
         try:
             timeout = int(str(value or 60))
         except ValueError as exc:  # pragma: no cover - defensive
-            raise ValueError("Timeout must be a valid integer") from exc
+            msg = "Timeout must be a valid integer"
+            raise ValueError(msg) from exc
         if timeout <= 0:
-            raise ValueError("Timeout must be positive")
+            msg = "Timeout must be positive"
+            raise ValueError(msg)
         if timeout > 3600:
-            raise ValueError("Timeout too large (max 3600 seconds)")
+            msg = "Timeout too large (max 3600 seconds)"
+            raise ValueError(msg)
         return timeout
 
     @field_validator("preferred_lang", mode="before")
@@ -434,7 +458,8 @@ class RuntimeConfig(BaseModel):
     def _validate_lang(cls, value: Any) -> str:
         lang = str(value or "auto")
         if lang not in {"auto", "en", "ru"}:
-            raise ValueError(f"Invalid language: {lang}. Must be one of {{'auto', 'en', 'ru'}}")
+            msg = f"Invalid language: {lang}. Must be one of {{'auto', 'en', 'ru'}}"
+            raise ValueError(msg)
         return lang
 
     @field_validator("chunk_max_chars", "log_truncate_length", mode="before")
@@ -444,11 +469,13 @@ class RuntimeConfig(BaseModel):
         try:
             parsed = int(str(value if value not in (None, "") else default))
         except ValueError as exc:  # pragma: no cover - defensive
+            msg = f"{info.field_name.replace('_', ' ')} must be a valid integer"
             raise ValueError(
-                f"{info.field_name.replace('_', ' ')} must be a valid integer"
+                msg
             ) from exc
         if parsed <= 0:
-            raise ValueError(f"{info.field_name.replace('_', ' ').capitalize()} must be positive")
+            msg = f"{info.field_name.replace('_', ' ').capitalize()} must be positive"
+            raise ValueError(msg)
         return parsed
 
     @field_validator("topic_search_max_results", mode="before")
@@ -458,11 +485,14 @@ class RuntimeConfig(BaseModel):
         try:
             parsed = int(str(value if value not in (None, "") else default))
         except ValueError as exc:  # pragma: no cover - defensive
-            raise ValueError("Topic search max results must be a valid integer") from exc
+            msg = "Topic search max results must be a valid integer"
+            raise ValueError(msg) from exc
         if parsed <= 0:
-            raise ValueError("Topic search max results must be positive")
+            msg = "Topic search max results must be positive"
+            raise ValueError(msg)
         if parsed > 10:
-            raise ValueError("Topic search max results must be 10 or fewer")
+            msg = "Topic search max results must be 10 or fewer"
+            raise ValueError(msg)
         return parsed
 
     @field_validator("db_backup_interval_minutes", mode="before")
@@ -471,9 +501,11 @@ class RuntimeConfig(BaseModel):
         try:
             parsed = int(str(value or 360))
         except ValueError as exc:
-            raise ValueError("DB backup interval (minutes) must be a valid integer") from exc
+            msg = "DB backup interval (minutes) must be a valid integer"
+            raise ValueError(msg) from exc
         if parsed < 5 or parsed > 10080:
-            raise ValueError("DB backup interval (minutes) must be between 5 and 10080")
+            msg = "DB backup interval (minutes) must be between 5 and 10080"
+            raise ValueError(msg)
         return parsed
 
     @field_validator("db_backup_retention", mode="before")
@@ -482,9 +514,11 @@ class RuntimeConfig(BaseModel):
         try:
             parsed = int(str(value or 14))
         except ValueError as exc:
-            raise ValueError("DB backup retention must be a valid integer") from exc
+            msg = "DB backup retention must be a valid integer"
+            raise ValueError(msg) from exc
         if parsed < 0 or parsed > 1000:
-            raise ValueError("DB backup retention must be between 0 and 1000")
+            msg = "DB backup retention must be between 0 and 1000"
+            raise ValueError(msg)
         return parsed
 
     @field_validator("db_backup_dir", mode="before")
@@ -496,7 +530,8 @@ class RuntimeConfig(BaseModel):
         if not trimmed:
             return None
         if "\x00" in trimmed:
-            raise ValueError("DB backup directory contains invalid characters")
+            msg = "DB backup directory contains invalid characters"
+            raise ValueError(msg)
         return trimmed
 
 
@@ -558,9 +593,12 @@ class Settings(BaseModel):
     @model_validator(mode="after")
     def _ensure_allowed_users(self) -> Self:
         if not self.allow_stub_telegram and not self.telegram.allowed_user_ids:
-            raise RuntimeError(
+            msg = (
                 "ALLOWED_USER_IDS must contain at least one Telegram user ID; "
                 "set the environment variable to a comma-separated list."
+            )
+            raise RuntimeError(
+                msg
             )
         return self
 
@@ -600,7 +638,8 @@ def load_config(*, allow_stub_telegram: bool = False) -> AppConfig:
         merged["allow_stub_telegram"] = allow_stub_telegram
         settings = Settings(**merged)
     except (ValidationError, RuntimeError) as exc:  # pragma: no cover - defensive
-        raise RuntimeError(f"Configuration validation failed: {exc}") from exc
+        msg = f"Configuration validation failed: {exc}"
+        raise RuntimeError(msg) from exc
 
     if using_stub_telegram:
         logger.warning(
@@ -614,7 +653,7 @@ def _deep_merge(base: Mapping[str, Any], updates: Mapping[str, Any]) -> dict[str
     if not updates:
         return dict(base)
 
-    result: dict[str, Any] = {k: v for k, v in base.items()}
+    result: dict[str, Any] = dict(base.items())
     for key, value in updates.items():
         if key in result and isinstance(result[key], Mapping) and isinstance(value, Mapping):
             result[key] = _deep_merge(result[key], value)

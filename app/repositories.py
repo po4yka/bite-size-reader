@@ -20,6 +20,7 @@ class RequestRepositoryImpl:
 
         Args:
             database: The database instance to wrap.
+
         """
         self._db = database
 
@@ -90,6 +91,7 @@ class SummaryRepositoryImpl:
 
         Args:
             database: The database instance to wrap.
+
         """
         self._db = database
 
@@ -150,6 +152,7 @@ class CrawlResultRepositoryImpl:
 
         Args:
             database: The database instance to wrap.
+
         """
         self._db = database
 
@@ -188,6 +191,7 @@ class UserInteractionRepositoryImpl:
 
         Args:
             database: The database instance to wrap.
+
         """
         self._db = database
 
@@ -231,6 +235,7 @@ class LLMCallRepositoryImpl:
 
         Args:
             database: The database instance to wrap.
+
         """
         self._db = database
 

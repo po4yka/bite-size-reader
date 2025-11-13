@@ -30,6 +30,7 @@ class CreateRequestDTO:
 
         Returns:
             Domain Request model.
+
         """
         from app.domain.models.request import Request, RequestStatus, RequestType
 
@@ -74,6 +75,7 @@ class RequestDTO:
 
         Returns:
             RequestDTO instance.
+
         """
         return cls(
             request_id=request.id or 0,
@@ -93,6 +95,7 @@ class RequestDTO:
 
         Returns:
             Domain Request model.
+
         """
         from app.domain.models.request import Request, RequestStatus, RequestType
 

@@ -14,7 +14,6 @@ from datetime import datetime
 from app.domain.events.summary_events import SummaryMarkedAsRead
 from app.domain.exceptions.domain_exceptions import (
     InvalidStateTransitionError,
-    ResourceNotFoundError,
 )
 from app.domain.services.summary_validator import SummaryValidator
 from app.infrastructure.persistence.sqlite.repositories.summary_repository import (
@@ -37,9 +36,11 @@ class MarkSummaryAsReadCommand:
     def __post_init__(self) -> None:
         """Validate command parameters."""
         if self.summary_id <= 0:
-            raise ValueError("summary_id must be positive")
+            msg = "summary_id must be positive"
+            raise ValueError(msg)
         if self.user_id <= 0:
-            raise ValueError("user_id must be positive")
+            msg = "user_id must be positive"
+            raise ValueError(msg)
 
 
 class MarkSummaryAsReadUseCase:
@@ -56,6 +57,7 @@ class MarkSummaryAsReadUseCase:
         command = MarkSummaryAsReadCommand(summary_id=123, user_id=456)
         event = await use_case.execute(command)
         ```
+
     """
 
     def __init__(self, summary_repository: SqliteSummaryRepositoryAdapter) -> None:
@@ -63,6 +65,7 @@ class MarkSummaryAsReadUseCase:
 
         Args:
             summary_repository: Repository for summary persistence.
+
         """
         self._summary_repo = summary_repository
 
@@ -78,6 +81,7 @@ class MarkSummaryAsReadUseCase:
         Raises:
             ResourceNotFoundError: If summary doesn't exist.
             InvalidStateTransitionError: If summary is already read.
+
         """
         logger.info(
             "mark_summary_as_read_started",
@@ -101,8 +105,9 @@ class MarkSummaryAsReadUseCase:
                     "is_read": summary.is_read,
                 },
             )
+            msg = f"Cannot mark summary as read: {reason}"
             raise InvalidStateTransitionError(
-                f"Cannot mark summary as read: {reason}",
+                msg,
                 details={"summary_id": command.summary_id, "current_state": "read" if summary.is_read else "unread"},
             )
 
@@ -111,7 +116,7 @@ class MarkSummaryAsReadUseCase:
             summary.mark_as_read()
         except ValueError as e:
             # Domain model raised validation error
-            logger.error(
+            logger.exception(
                 "mark_summary_as_read_domain_error",
                 extra={"summary_id": command.summary_id, "error": str(e)},
             )
@@ -148,6 +153,7 @@ class MarkSummaryAsReadUseCase:
 
         Raises:
             ResourceNotFoundError: If summary doesn't exist.
+
         """
         # Note: We need to query by summary ID, but the existing repository
         # only has get_by_request_id. For now, we'll need to enhance the

@@ -37,13 +37,17 @@ class SearchTopicsQuery:
     def __post_init__(self) -> None:
         """Validate query parameters."""
         if not self.topic or not self.topic.strip():
-            raise ValueError("topic must not be empty")
+            msg = "topic must not be empty"
+            raise ValueError(msg)
         if self.user_id <= 0:
-            raise ValueError("user_id must be positive")
+            msg = "user_id must be positive"
+            raise ValueError(msg)
         if self.max_results <= 0:
-            raise ValueError("max_results must be positive")
+            msg = "max_results must be positive"
+            raise ValueError(msg)
         if self.max_results > 10:
-            raise ValueError("max_results cannot exceed 10")
+            msg = "max_results cannot exceed 10"
+            raise ValueError(msg)
 
 
 class SearchTopicsUseCase:
@@ -68,6 +72,7 @@ class SearchTopicsUseCase:
         )
         articles = await use_case.execute(query)
         ```
+
     """
 
     def __init__(self, topic_search_service: Any) -> None:
@@ -75,6 +80,7 @@ class SearchTopicsUseCase:
 
         Args:
             topic_search_service: Service for searching topics (TopicSearchService).
+
         """
         self._search_service = topic_search_service
 
@@ -90,6 +96,7 @@ class SearchTopicsUseCase:
         Raises:
             ValueError: If topic is invalid.
             Exception: If search service fails.
+
         """
         logger.info(
             "search_topics_started",

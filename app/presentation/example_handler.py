@@ -11,13 +11,11 @@ from typing import Any
 
 from app.application.use_cases.get_unread_summaries import (
     GetUnreadSummariesQuery,
-    GetUnreadSummariesUseCase,
 )
 from app.application.use_cases.mark_summary_as_read import (
     MarkSummaryAsReadCommand,
-    MarkSummaryAsReadUseCase,
 )
-from app.application.use_cases.search_topics import SearchTopicsQuery, SearchTopicsUseCase
+from app.application.use_cases.search_topics import SearchTopicsQuery
 from app.di.container import Container
 from app.domain.exceptions.domain_exceptions import InvalidStateTransitionError
 from app.infrastructure.messaging.event_bus import EventBus
@@ -49,6 +47,7 @@ class ExampleCommandHandler:
         Args:
             container: DI container with all dependencies.
             response_formatter: Formatter for sending messages to users.
+
         """
         self._container = container
         self._formatter = response_formatter
@@ -70,6 +69,7 @@ class ExampleCommandHandler:
             message: Telegram message object.
             user_id: User ID from message.
             chat_id: Chat ID from message.
+
         """
         try:
             # 1. Create query object
@@ -124,6 +124,7 @@ class ExampleCommandHandler:
             message: Telegram message object.
             summary_id: ID of the summary to mark as read.
             user_id: User ID from message.
+
         """
         try:
             # 1. Create command object
@@ -177,6 +178,7 @@ class ExampleCommandHandler:
             topic: Search topic.
             user_id: User ID from message.
             correlation_id: Correlation ID for tracking.
+
         """
         try:
             # 1. Create query object
@@ -235,6 +237,7 @@ def integrate_with_existing_code(database: Any, topic_search_service: Any) -> No
     Args:
         database: Your existing Database instance.
         topic_search_service: Your existing TopicSearchService instance.
+
     """
     # 1. Create the DI container
     container = Container(

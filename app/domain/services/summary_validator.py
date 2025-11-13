@@ -22,10 +22,12 @@ class SummaryValidator:
 
         Raises:
             ValidationError: If content structure is invalid.
+
         """
         if not isinstance(content, dict):
+            msg = "Summary content must be a dictionary"
             raise ValidationError(
-                "Summary content must be a dictionary",
+                msg,
                 details={"content_type": str(type(content))},
             )
 
@@ -35,8 +37,9 @@ class SummaryValidator:
         ]
 
         if missing_fields:
+            msg = f"Summary content missing required fields: {', '.join(missing_fields)}"
             raise ValidationError(
-                f"Summary content missing required fields: {', '.join(missing_fields)}",
+                msg,
                 details={
                     "missing_fields": missing_fields,
                     "provided_fields": list(content.keys()),
@@ -52,6 +55,7 @@ class SummaryValidator:
 
         Raises:
             ValidationError: If content quality is insufficient.
+
         """
         # Check that at least one summary field has content
         tldr = content.get("tldr", "")
@@ -64,16 +68,18 @@ class SummaryValidator:
         )
 
         if not has_content:
+            msg = "Summary must have at least one non-empty summary field"
             raise ValidationError(
-                "Summary must have at least one non-empty summary field",
+                msg,
                 details={"fields_checked": ["tldr", "summary_250", "summary_1000"]},
             )
 
         # Check that key_ideas is a non-empty list
         key_ideas = content.get("key_ideas", [])
         if not isinstance(key_ideas, list) or not key_ideas:
+            msg = "Summary must have at least one key idea"
             raise ValidationError(
-                "Summary must have at least one key idea",
+                msg,
                 details={"key_ideas": key_ideas},
             )
 
@@ -86,24 +92,28 @@ class SummaryValidator:
 
         Raises:
             ValidationError: If language code is invalid.
+
         """
         if not language or not isinstance(language, str):
+            msg = "Language must be a non-empty string"
             raise ValidationError(
-                "Language must be a non-empty string",
+                msg,
                 details={"language": language},
             )
 
         # Check that it's not just whitespace
         if not language.strip():
+            msg = "Language cannot be empty or whitespace"
             raise ValidationError(
-                "Language cannot be empty or whitespace",
+                msg,
                 details={"language": language},
             )
 
         # Check reasonable length (ISO codes are 2-3 characters, but allow up to 10 for variants)
         if len(language.strip()) > 10:
+            msg = "Language code is too long"
             raise ValidationError(
-                "Language code is too long",
+                msg,
                 details={"language": language, "length": len(language.strip())},
             )
 
@@ -116,6 +126,7 @@ class SummaryValidator:
 
         Raises:
             ValidationError: If summary is invalid.
+
         """
         # Validate language
         SummaryValidator.validate_language(summary.language)
@@ -128,8 +139,9 @@ class SummaryValidator:
 
         # Validate request_id
         if summary.request_id <= 0:
+            msg = "Summary must have a valid request_id"
             raise ValidationError(
-                "Summary must have a valid request_id",
+                msg,
                 details={"request_id": summary.request_id},
             )
 
@@ -142,6 +154,7 @@ class SummaryValidator:
 
         Returns:
             Tuple of (can_mark, reason). If can_mark is False, reason explains why.
+
         """
         if summary.is_read:
             return False, "Summary is already marked as read"
@@ -160,6 +173,7 @@ class SummaryValidator:
 
         Returns:
             Tuple of (can_mark, reason). If can_mark is False, reason explains why.
+
         """
         if not summary.is_read:
             return False, "Summary is already marked as unread"

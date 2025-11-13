@@ -24,6 +24,7 @@ class RequestRepository(Protocol):
 
         Returns:
             The ID of the created request.
+
         """
         ...
 
@@ -32,6 +33,7 @@ class RequestRepository(Protocol):
 
         Returns:
             Dictionary with request data or None if not found.
+
         """
         ...
 
@@ -42,6 +44,7 @@ class RequestRepository(Protocol):
 
         Returns:
             Dictionary with request data or None if not found.
+
         """
         ...
 
@@ -52,6 +55,7 @@ class RequestRepository(Protocol):
 
         Returns:
             Dictionary with request data or None if not found.
+
         """
         ...
 
@@ -89,6 +93,7 @@ class SummaryRepository(Protocol):
 
         Returns:
             The version number of the summary.
+
         """
         ...
 
@@ -99,6 +104,7 @@ class SummaryRepository(Protocol):
 
         Returns:
             Dictionary with summary data or None if not found.
+
         """
         ...
 
@@ -109,6 +115,7 @@ class SummaryRepository(Protocol):
 
         Returns:
             List of dictionaries with summary data.
+
         """
         ...
 
@@ -119,6 +126,7 @@ class SummaryRepository(Protocol):
 
         Returns:
             Dictionary with summary data or None if not found or already read.
+
         """
         ...
 
@@ -148,6 +156,7 @@ class CrawlResultRepository(Protocol):
 
         Returns:
             The ID of the inserted crawl result.
+
         """
         ...
 
@@ -158,6 +167,7 @@ class CrawlResultRepository(Protocol):
 
         Returns:
             Dictionary with crawl result data or None if not found.
+
         """
         ...
 
@@ -176,6 +186,7 @@ class UserInteractionRepository(Protocol):
 
         Returns:
             The ID of the inserted interaction.
+
         """
         ...
 
@@ -208,6 +219,7 @@ class LLMCallRepository(Protocol):
 
         Returns:
             The ID of the inserted log record.
+
         """
         ...
 
@@ -234,6 +246,7 @@ class LLMClient(Protocol):
 
         Returns:
             LLM response object.
+
         """
         ...
 
@@ -254,6 +267,7 @@ class MessageFormatter(Protocol):
 
         Returns:
             Formatted message string.
+
         """
         ...
 
@@ -266,6 +280,7 @@ class MessageFormatter(Protocol):
 
         Returns:
             Formatted error message string.
+
         """
         ...
 
@@ -288,6 +303,7 @@ class FileValidator(Protocol):
 
         Returns:
             Tuple of (is_valid, error_message). error_message is None if valid.
+
         """
         ...
 
@@ -303,6 +319,7 @@ class RateLimiter(Protocol):
 
         Returns:
             Tuple of (is_allowed, error_message). error_message is None if allowed.
+
         """
         ...
 
@@ -311,5 +328,6 @@ class RateLimiter(Protocol):
 
         Args:
             user_id: The user identifier.
+
         """
         ...

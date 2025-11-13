@@ -7,7 +7,7 @@ It follows the Observer pattern and enables loose coupling for side effects.
 import logging
 from collections import defaultdict
 from collections.abc import Awaitable, Callable
-from typing import Any, TypeVar
+from typing import TypeVar
 
 from app.domain.events.summary_events import DomainEvent
 
@@ -46,6 +46,7 @@ class EventBus:
         )
         await event_bus.publish(event)
         ```
+
     """
 
     def __init__(self) -> None:
@@ -63,6 +64,7 @@ class EventBus:
         Args:
             event_type: The type of event to subscribe to (e.g., SummaryCreated).
             handler: Async function to call when event is published.
+
         """
         self._handlers[event_type].append(handler)
         logger.debug(
@@ -84,6 +86,7 @@ class EventBus:
         Args:
             event_type: The type of event to unsubscribe from.
             handler: The handler function to remove.
+
         """
         if event_type in self._handlers:
             try:
@@ -112,6 +115,7 @@ class EventBus:
 
         Args:
             event: The domain event to publish.
+
         """
         event_type = type(event)
         handlers = self._handlers.get(event_type, [])
@@ -139,7 +143,7 @@ class EventBus:
         for handler in handlers:
             try:
                 await handler(event)
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 # Log error but continue with other handlers
                 logger.exception(
                     "event_handler_failed",
@@ -156,6 +160,7 @@ class EventBus:
         Args:
             event_type: If provided, clear handlers for this event type only.
                        If None, clear all handlers.
+
         """
         if event_type is not None:
             if event_type in self._handlers:
@@ -181,6 +186,7 @@ class EventBus:
 
         Returns:
             Number of handlers subscribed to this event type.
+
         """
         return len(self._handlers.get(event_type, []))
 
@@ -189,5 +195,6 @@ class EventBus:
 
         Returns:
             List of event types with at least one subscriber.
+
         """
         return list(self._handlers.keys())

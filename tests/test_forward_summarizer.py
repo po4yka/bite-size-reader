@@ -60,19 +60,19 @@ class ForwardSummarizerTests(unittest.IsolatedAsyncioTestCase):
                 interaction_id=99,
             )
 
-        self.assertEqual(result, {"summary_250": "ok", "tldr": "fine"})
+        assert result == {"summary_250": "ok", "tldr": "fine"}
         mock_workflow.assert_awaited_once()
 
         call_kwargs = mock_workflow.call_args.kwargs
         requests = call_kwargs["requests"]
-        self.assertEqual(len(requests), 1)
+        assert len(requests) == 1
         expected_tokens = max(2048, min(6144, len(prompt) // 4 + 2048))
-        self.assertEqual(requests[0].max_tokens, expected_tokens)
+        assert requests[0].max_tokens == expected_tokens
 
         repair_context = call_kwargs["repair_context"]
-        self.assertEqual(repair_context.repair_max_tokens, expected_tokens)
-        self.assertIn("Summarize the following", repair_context.base_messages[1]["content"])
+        assert repair_context.repair_max_tokens == expected_tokens
+        assert "Summarize the following" in repair_context.base_messages[1]["content"]
 
         notifications = call_kwargs["notifications"]
-        self.assertIsNotNone(notifications.completion)
-        self.assertIsNotNone(notifications.llm_error)
+        assert notifications.completion is not None
+        assert notifications.llm_error is not None

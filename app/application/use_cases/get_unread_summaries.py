@@ -30,15 +30,20 @@ class GetUnreadSummariesQuery:
     def __post_init__(self) -> None:
         """Validate query parameters."""
         if self.user_id <= 0:
-            raise ValueError("user_id must be positive")
+            msg = "user_id must be positive"
+            raise ValueError(msg)
         if self.chat_id <= 0:
-            raise ValueError("chat_id must be positive")
+            msg = "chat_id must be positive"
+            raise ValueError(msg)
         if self.limit <= 0:
-            raise ValueError("limit must be positive")
+            msg = "limit must be positive"
+            raise ValueError(msg)
         if self.limit > 100:
-            raise ValueError("limit cannot exceed 100")
+            msg = "limit cannot exceed 100"
+            raise ValueError(msg)
         if self.topic is not None and not self.topic.strip():
-            raise ValueError("topic cannot be empty string")
+            msg = "topic cannot be empty string"
+            raise ValueError(msg)
 
 
 class GetUnreadSummariesUseCase:
@@ -55,6 +60,7 @@ class GetUnreadSummariesUseCase:
         query = GetUnreadSummariesQuery(user_id=123, chat_id=456, limit=10)
         summaries = await use_case.execute(query)
         ```
+
     """
 
     def __init__(self, summary_repository: SqliteSummaryRepositoryAdapter) -> None:
@@ -62,6 +68,7 @@ class GetUnreadSummariesUseCase:
 
         Args:
             summary_repository: Repository for summary queries.
+
         """
         self._summary_repo = summary_repository
 
@@ -73,6 +80,7 @@ class GetUnreadSummariesUseCase:
 
         Returns:
             List of unread Summary domain models.
+
         """
         logger.info(
             "get_unread_summaries_started",

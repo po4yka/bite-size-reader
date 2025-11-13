@@ -47,7 +47,7 @@ class SpyBot(TelegramBot):
                 await self._safe_reply(message, f"OK {url_text}")
 
             # Use setattr to avoid mypy method assignment error
-            setattr(self.url_processor, "handle_url_flow", mock_handle_url_flow)
+            self.url_processor.handle_url_flow = mock_handle_url_flow
 
     async def _handle_url_flow(self, message: Any, url_text: str, **_: object) -> None:
         self.seen_urls.append(url_text)
@@ -65,7 +65,7 @@ def make_bot(tmp_path: str) -> SpyBot:
         openrouter=OpenRouterConfig(
             api_key="y",
             model="m",
-            fallback_models=tuple(),
+            fallback_models=(),
             http_referer=None,
             x_title=None,
             max_tokens=None,
@@ -82,8 +82,8 @@ def make_bot(tmp_path: str) -> SpyBot:
     )
     from app.adapters import telegram_bot as tbmod
 
-    setattr(tbmod, "Client", object)
-    setattr(tbmod, "filters", None)
+    tbmod.Client = object
+    tbmod.filters = None
     return SpyBot(cfg=cfg, db=Database(tmp_path))
 
 
@@ -96,11 +96,11 @@ class TestMultiLinks(unittest.IsolatedAsyncioTestCase):
             # Send message with multiple links
             await bot._on_message(FakeMessage(text, uid=uid))
             # Bot should keep pending state
-            self.assertIn(uid, bot._pending_multi_links)
+            assert uid in bot._pending_multi_links
             # Confirm
             await bot._on_message(FakeMessage("yes", uid=uid))
-            self.assertIn("https://a.example/a", bot.seen_urls)
-            self.assertIn("https://b.example/b", bot.seen_urls)
+            assert "https://a.example/a" in bot.seen_urls
+            assert "https://b.example/b" in bot.seen_urls
 
     async def test_cancel_multi_links(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -108,10 +108,10 @@ class TestMultiLinks(unittest.IsolatedAsyncioTestCase):
             text = "https://a.example/a\nhttps://b.example/b\nhttps://a.example/a"  # duplicate should dedupe
             uid = 66
             await bot._on_message(FakeMessage(text, uid=uid))
-            self.assertIn(uid, bot._pending_multi_links)
+            assert uid in bot._pending_multi_links
             await bot._on_message(FakeMessage("no", uid=uid))
-            self.assertNotIn(uid, bot._pending_multi_links)
-            self.assertEqual(bot.seen_urls, [])
+            assert uid not in bot._pending_multi_links
+            assert bot.seen_urls == []
 
     async def test_document_file_processing(self):
         """Test processing of .txt file containing URLs."""
@@ -142,17 +142,16 @@ class TestMultiLinks(unittest.IsolatedAsyncioTestCase):
                     with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".txt") as f:
                         for url in test_urls:
                             f.write(f"{url}\n")
-                        temp_path = f.name
-                    return temp_path
+                        return f.name
 
             # Test processing .txt file
             msg = MockDocumentMessage("urls.txt", uid=77)
             await bot._on_message(msg)
 
             # Check that all URLs were processed
-            self.assertEqual(len(bot.seen_urls), len(test_urls))
+            assert len(bot.seen_urls) == len(test_urls)
             for url in test_urls:
-                self.assertIn(url, bot.seen_urls)
+                assert url in bot.seen_urls
 
     async def test_invalid_document_file(self):
         """Test handling of non-.txt files."""
@@ -174,7 +173,7 @@ class TestMultiLinks(unittest.IsolatedAsyncioTestCase):
             await bot._on_message(msg)
 
             # Should not process URLs (bot.seen_urls should be empty)
-            self.assertEqual(len(bot.seen_urls), 0)
+            assert len(bot.seen_urls) == 0
 
     async def test_confirm_without_pending_links(self):
         """Confirm responses should be safe when no pending state exists."""
@@ -191,12 +190,9 @@ class TestMultiLinks(unittest.IsolatedAsyncioTestCase):
                 start_time=time.time(),
             )
 
-            self.assertTrue(message._replies, "Expected a notification reply to be sent")
-            self.assertEqual(
-                message._replies[-1],
-                "ℹ️ No pending multi-link request to confirm. Please send the links again.",
-            )
-            self.assertEqual(bot.seen_urls, [])
+            assert message._replies, "Expected a notification reply to be sent"
+            assert message._replies[-1] == "ℹ️ No pending multi-link request to confirm. Please send the links again."
+            assert bot.seen_urls == []
 
 
 if __name__ == "__main__":

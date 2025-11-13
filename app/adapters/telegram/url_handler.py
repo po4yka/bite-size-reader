@@ -9,12 +9,12 @@ from typing import TYPE_CHECKING, Any
 
 from app.core.logging_utils import generate_correlation_id
 from app.core.url_utils import extract_all_urls
-from app.db.database import Database
 from app.db.user_interactions import async_safe_update_user_interaction
 
 if TYPE_CHECKING:
     from app.adapters.content.url_processor import URLProcessor
     from app.adapters.external.response_formatter import ResponseFormatter
+    from app.db.database import Database
 
 logger = logging.getLogger(__name__)
 

@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from collections.abc import AsyncIterator
 
 
 class UserTaskManager:
@@ -17,7 +20,6 @@ class UserTaskManager:
     @asynccontextmanager
     async def track(self, uid: int, *, enabled: bool = True) -> AsyncIterator[None]:
         """Register the current task for the provided ``uid`` while the context is active."""
-
         if not enabled:
             yield
             return
@@ -43,7 +45,6 @@ class UserTaskManager:
 
     async def cancel(self, uid: int, *, exclude_current: bool = False) -> int:
         """Cancel all active tasks for ``uid`` and return the number of tasks cancelled."""
-
         current_task = asyncio.current_task() if exclude_current else None
         async with self._lock:
             tasks = list(self._tasks.get(uid, set()))
@@ -60,7 +61,6 @@ class UserTaskManager:
 
     async def has_active_tasks(self, uid: int) -> bool:
         """Return ``True`` if the user currently has active tracked tasks."""
-
         async with self._lock:
             tasks = self._tasks.get(uid)
             return bool(tasks)
