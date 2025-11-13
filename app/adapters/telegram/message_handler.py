@@ -106,7 +106,7 @@ class MessageHandler:
             # Answer the callback query to remove the loading state
             try:
                 await callback_query.answer()
-            except Exception as e:  # noqa: BLE001
+            except Exception as e:
                 logger.warning("callback_answer_failed", extra={"error": str(e)})
 
             # Handle multi-link confirmation callbacks

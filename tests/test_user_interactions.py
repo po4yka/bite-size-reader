@@ -64,7 +64,7 @@ def test_message_router_logs_interaction(tmp_path) -> None:
         audit_func=lambda *args, **kwargs: None,
     )
 
-    interaction_id = router._log_user_interaction(  # noqa: SLF001
+    interaction_id = router._log_user_interaction(
         user_id=42,
         chat_id=99,
         message_id=7,

@@ -90,7 +90,7 @@ def _shape_candidate(candidate: dict[str, Any]) -> tuple[dict[str, Any] | None, 
         shaped = validate_and_shape_summary(candidate)
         finalize_summary_texts(shaped)
         return shaped, None
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         return None, str(exc)
 
 
@@ -164,7 +164,7 @@ def _extract_structured_dict(response_json: Any) -> dict[str, Any] | None:
                     try:
                         materialized = json.loads(json.dumps(parsed))
                         return materialized if isinstance(materialized, dict) else None
-                    except Exception:  # noqa: BLE001
+                    except Exception:
                         return None
     return None
 
@@ -248,7 +248,7 @@ def _parse_json_text(candidate_text: str) -> tuple[dict[str, Any] | None, str | 
         parsed = json.loads(candidate_text)
     except json.JSONDecodeError as exc:
         return None, f"json_decode_error: {exc.msg} at line {exc.lineno} column {exc.colno}"
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         return None, f"json_error: {exc}"
     if not isinstance(parsed, dict):
         return None, "parsed_value_not_object"
@@ -267,7 +267,7 @@ def _attempt_local_repair(
         if "json_repair" in sys.modules:
             return None, "json_repair_disabled", False
         return None, "json_repair_not_available", False
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         return None, f"json_repair_import_error: {exc}", False
 
     repair_func = getattr(module, "repair_json", None)
@@ -277,7 +277,7 @@ def _attempt_local_repair(
     cleaned = _strip_code_fence(response_text.strip()).strip("` ")
     try:
         repaired_text = repair_func(cleaned)
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         return None, f"json_repair_runtime_error: {exc}", False
 
     if not isinstance(repaired_text, str):

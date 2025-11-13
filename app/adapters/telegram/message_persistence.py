@@ -48,7 +48,7 @@ class MessagePersistence:
                     title=str(chat_title) if isinstance(chat_title, str) else None,
                     username=str(chat_username) if isinstance(chat_username, str) else None,
                 )
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 logger.warning(
                     "chat_upsert_failed",
                     extra={"chat_id": chat_id, "error": str(exc)},
@@ -64,7 +64,7 @@ class MessagePersistence:
                     telegram_user_id=user_id,
                     username=str(username) if isinstance(username, str) else None,
                 )
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 logger.warning(
                     "user_upsert_failed",
                     extra={"user_id": user_id, "error": str(exc)},

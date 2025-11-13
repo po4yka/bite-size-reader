@@ -50,7 +50,7 @@ class FakeForwardMessage(FakeMessage):
 
 
 class FakeFirecrawl:
-    async def scrape_markdown(self, url: str, request_id=None):  # noqa: ARG002
+    async def scrape_markdown(self, url: str, request_id=None):
         msg = "Firecrawl should not be called on dedupe hit"
         raise AssertionError(msg)
 
@@ -59,7 +59,7 @@ class FakeOpenRouter:
     def __init__(self) -> None:
         self.calls = 0
 
-    async def chat(self, messages, request_id=None, **kwargs):  # noqa: ARG002
+    async def chat(self, messages, request_id=None, **kwargs):
         # return minimal valid JSON content
         self.calls += 1
         content = json.dumps({"summary_250": "ok", "summary_1000": "ok", "tldr": "ok"})

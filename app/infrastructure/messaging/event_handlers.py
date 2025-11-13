@@ -127,7 +127,7 @@ class AnalyticsEventHandler:
                         "timestamp": event.occurred_at.isoformat(),
                     },
                 )
-            except Exception as e:  # noqa: BLE001
+            except Exception as e:
                 logger.warning(
                     "analytics_tracking_failed",
                     extra={"event": "request_completed", "error": str(e)},
@@ -160,7 +160,7 @@ class AnalyticsEventHandler:
                         "timestamp": event.occurred_at.isoformat(),
                     },
                 )
-            except Exception as e:  # noqa: BLE001
+            except Exception as e:
                 logger.warning(
                     "analytics_tracking_failed",
                     extra={"event": "request_failed", "error": str(e)},
@@ -187,7 +187,7 @@ class AnalyticsEventHandler:
                         "timestamp": event.occurred_at.isoformat(),
                     },
                 )
-            except Exception as e:  # noqa: BLE001
+            except Exception as e:
                 logger.warning(
                     "analytics_tracking_failed",
                     extra={"event": "summary_marked_as_read", "error": str(e)},
@@ -229,7 +229,7 @@ class AuditLogEventHandler:
                     "timestamp": event.occurred_at.isoformat(),
                 },
             )
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             logger.warning(
                 "audit_log_failed",
                 extra={"event_type": "summary_created", "error": str(e)},
@@ -252,7 +252,7 @@ class AuditLogEventHandler:
                     "timestamp": event.occurred_at.isoformat(),
                 },
             )
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             logger.warning(
                 "audit_log_failed",
                 extra={"event_type": "request_completed", "error": str(e)},
@@ -276,7 +276,7 @@ class AuditLogEventHandler:
                     "timestamp": event.occurred_at.isoformat(),
                 },
             )
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             logger.warning(
                 "audit_log_failed",
                 extra={"event_type": "request_failed", "error": str(e)},
@@ -330,7 +330,7 @@ class NotificationEventHandler:
                         "channel": "telegram",
                     },
                 )
-            except Exception as e:  # noqa: BLE001
+            except Exception as e:
                 logger.warning(
                     "notification_send_failed",
                     extra={
@@ -351,7 +351,7 @@ class NotificationEventHandler:
                         "timestamp": event.occurred_at.isoformat(),
                     },
                 )
-            except Exception as e:  # noqa: BLE001
+            except Exception as e:
                 logger.warning(
                     "notification_send_failed",
                     extra={
@@ -387,7 +387,7 @@ class NotificationEventHandler:
                         "channel": "telegram",
                     },
                 )
-            except Exception as e:  # noqa: BLE001
+            except Exception as e:
                 logger.warning(
                     "notification_send_failed",
                     extra={
@@ -450,7 +450,7 @@ class CacheInvalidationEventHandler:
                     },
                 )
 
-            except Exception as e:  # noqa: BLE001
+            except Exception as e:
                 logger.warning(
                     "cache_invalidation_failed",
                     extra={
@@ -491,7 +491,7 @@ class CacheInvalidationEventHandler:
                     },
                 )
 
-            except Exception as e:  # noqa: BLE001
+            except Exception as e:
                 logger.warning(
                     "cache_invalidation_failed",
                     extra={
@@ -531,7 +531,7 @@ class CacheInvalidationEventHandler:
                     },
                 )
 
-            except Exception as e:  # noqa: BLE001
+            except Exception as e:
                 logger.warning(
                     "cache_invalidation_failed",
                     extra={
@@ -603,7 +603,7 @@ class WebhookEventHandler:
                     },
                 )
 
-            except Exception as e:  # noqa: BLE001
+            except Exception as e:
                 logger.warning(
                     "webhook_send_failed",
                     extra={
@@ -655,7 +655,7 @@ class WebhookEventHandler:
                     },
                 )
 
-            except Exception as e:  # noqa: BLE001
+            except Exception as e:
                 logger.warning(
                     "webhook_send_failed",
                     extra={
@@ -708,7 +708,7 @@ class WebhookEventHandler:
                     },
                 )
 
-            except Exception as e:  # noqa: BLE001
+            except Exception as e:
                 logger.warning(
                     "webhook_send_failed",
                     extra={

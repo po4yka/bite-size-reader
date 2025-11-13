@@ -490,7 +490,7 @@ class LLMResponseWorkflow:
                 raise ValueError(msg)
             msg = "repair_call_error"
             raise ValueError(msg)
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             logger.warning(
                 "json_repair_failed",
                 extra={"cid": correlation_id, "error": str(exc)},

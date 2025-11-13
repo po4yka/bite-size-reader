@@ -246,7 +246,7 @@ class ForwardProcessor:
                 message,
                 "📝 Crafting a standalone article from topics & tags…",
             )
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             raise_if_cancelled(exc)
             logger.debug(
                 "forward_custom_article_notice_failed",

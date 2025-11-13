@@ -258,7 +258,7 @@ class LocalTopicSearchService:
             with self._db._database.connection_context():
                 cursor = self._db._database.execute_sql(sql, (fts_query, candidate_limit))
                 rows = list(cursor)
-        except Exception as exc:  # noqa: BLE001 - fall back to scan logic
+        except Exception as exc:
             logger.warning("local_topic_search_index_query_failed", extra={"error": str(exc)})
             return []
 

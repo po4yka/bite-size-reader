@@ -1400,7 +1400,7 @@ class Database:
             with self._database.connection_context():
                 cursor = self._database.execute_sql(sql, (fts_query, candidate_limit))
                 rows = list(cursor)
-        except Exception as exc:  # noqa: BLE001 - fallback to scan logic
+        except Exception as exc:
             self._logger.warning("topic_search_index_lookup_failed", extra={"error": str(exc)})
             return None
 
@@ -1600,7 +1600,7 @@ class Database:
                     self._write_topic_search_index(document)
                 except TopicSearchIndexRebuiltError:
                     return
-        except Exception as exc:  # noqa: BLE001 - logging and continue
+        except Exception as exc:
             self._logger.warning(
                 "topic_search_index_refresh_failed",
                 extra={"request_id": request_id, "error": str(exc)},

@@ -967,7 +967,7 @@ class LLMSummarizer:
         if metadata_raw:
             try:
                 parsed = json.loads(metadata_raw)
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 raise_if_cancelled(exc)
                 logger.debug("firecrawl_metadata_parse_error", extra={"error": str(exc)})
 
@@ -980,7 +980,7 @@ class LLMSummarizer:
                         data_block = payload.get("data")
                         if isinstance(data_block, dict):
                             parsed = data_block.get("metadata") or data_block.get("meta")
-                except Exception as exc:  # noqa: BLE001
+                except Exception as exc:
                     raise_if_cancelled(exc)
                     logger.debug("firecrawl_raw_metadata_parse_error", extra={"error": str(exc)})
 
@@ -1112,7 +1112,7 @@ class LLMSummarizer:
                     request_id=req_id,
                     response_format=response_format,
                 )
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             raise_if_cancelled(exc)
             logger.warning(
                 "metadata_completion_call_failed",
@@ -1166,7 +1166,7 @@ class LLMSummarizer:
                         loaded = json.loads(parsed)
                         if isinstance(loaded, dict):
                             candidate = loaded
-                    except Exception:  # noqa: BLE001
+                    except Exception:
                         candidate = None
                 if candidate is None:
                     content = message.get("content")
@@ -1189,7 +1189,7 @@ class LLMSummarizer:
             netloc = netloc.strip().lower()
             netloc = netloc.removeprefix("www.")
             return netloc or None
-        except Exception:  # noqa: BLE001
+        except Exception:
             return None
 
     @property
@@ -1218,7 +1218,7 @@ class LLMSummarizer:
                 json_payload = row.get("json_payload") if row else None
                 if json_payload:
                     summary_candidate = json.loads(json_payload)
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 raise_if_cancelled(exc)
                 logger.debug(
                     "insights_summary_load_failed",
@@ -1486,7 +1486,7 @@ class LLMSummarizer:
                                 loaded = json.loads(json.dumps(parsed))
                                 if isinstance(loaded, dict):
                                     candidate = loaded
-                            except Exception:  # noqa: BLE001
+                            except Exception:
                                 candidate = None
                         if candidate is None:
                             content = message.get("content")

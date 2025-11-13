@@ -73,7 +73,7 @@ def safe_update_user_interaction(
             updates=update_mapping,
             **payload,
         )
-    except Exception as exc:  # noqa: BLE001 - best-effort logging
+    except Exception as exc:
         log = logger_ if logger_ is not None else logger
         log.warning(
             "user_interaction_update_failed",
@@ -111,7 +111,7 @@ async def async_safe_update_user_interaction(
             updates=update_mapping,
             **payload,
         )
-    except Exception as exc:  # noqa: BLE001 - best-effort logging
+    except Exception as exc:
         log = logger_ if logger_ is not None else logger
         log.warning(
             "user_interaction_update_failed",

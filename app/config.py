@@ -17,7 +17,6 @@ from pydantic import (
     model_validator,
 )
 
-# ruff: noqa: E501
 
 
 def validate_model_name(model: str) -> str:

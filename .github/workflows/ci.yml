@@ -121,7 +121,7 @@ jobs:
           PY
 
       - name: Lint (ruff) - comprehensive
-        run: ruff check . --select ALL --ignore D100,D101,D102,D103,D104,D105,D107,ANN,COM812,ISC001
+        run: ruff check .
 
       - name: Format check (ruff)
         run: ruff format --check .

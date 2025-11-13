@@ -384,7 +384,7 @@ class TelegramBot:
                             },
                         )
                         # Audit log for critical failures
-                        try:
+                        with contextlib.suppress(Exception):
                             self._audit(
                                 "CRITICAL",
                                 "db_backup_critical_failure",
@@ -397,8 +397,6 @@ class TelegramBot:
                                     ),
                                 },
                             )
-                        except Exception:  # noqa: BLE001
-                            pass
 
                 await asyncio.sleep(interval_minutes * 60)
         except asyncio.CancelledError:
@@ -431,7 +429,7 @@ class TelegramBot:
 
         try:
             self._cleanup_old_backups(backup_directory, base_path.stem, suffix, retention)
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             logger.warning("db_backup_cleanup_failed", extra={"error": str(exc)})
 
         logger.info(
@@ -496,7 +494,7 @@ class TelegramBot:
                     await message.reply_text(text, parse_mode=parse_mode)
                 else:
                     await message.reply_text(text)
-        except Exception:  # noqa: BLE001
+        except Exception:
             # Swallow in tests; production response path logs and continues.
             pass
 
@@ -551,7 +549,7 @@ class TelegramBot:
             # Fallback to text
             if hasattr(message, "reply_text"):
                 await message.reply_text(f"```json\n{pretty}\n```")
-        except Exception:  # noqa: BLE001
+        except Exception:
             try:
                 text = json.dumps(payload, ensure_ascii=False)
                 if hasattr(message, "reply_text"):

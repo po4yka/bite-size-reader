@@ -22,6 +22,7 @@ from app.config import AppConfig, load_config
 from app.core.logging_utils import generate_correlation_id, setup_json_logging
 from app.core.url_utils import extract_all_urls
 from app.db.database import Database
+import contextlib
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -78,10 +79,8 @@ class CLIMessage:
 
     async def reply_document(self, file_obj: Any, caption: str | None = None) -> None:
         """Print JSON attachment content or persist to file when requested."""
-        try:
+        with contextlib.suppress(Exception):
             file_obj.seek(0)
-        except Exception:  # noqa: BLE001 - best effort
-            pass
         data = file_obj.read()
         content = data.decode("utf-8", errors="replace") if isinstance(data, bytes) else str(data)
 
@@ -224,7 +223,7 @@ def _prepare_config(args: argparse.Namespace) -> AppConfig:
             _load_env_file(candidate)
             if candidate.exists():
                 logger.debug("loaded_env_file", extra={"path": str(candidate)})
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             logger.warning("env_file_error", extra={"path": str(candidate), "error": str(exc)})
 
     try:

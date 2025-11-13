@@ -1,4 +1,3 @@
-# ruff: noqa: E501
 from __future__ import annotations
 
 import asyncio
@@ -159,7 +158,7 @@ class TelegramClient:
                     "bot_commands_set",
                     extra={"count_en": len(commands_en), "count_ru": len(commands_ru)},
                 )
-            except Exception as e:  # noqa: BLE001
+            except Exception as e:
                 logger.warning("bot_commands_set_failed", extra={"error": str(e)})
         except Exception:
             return

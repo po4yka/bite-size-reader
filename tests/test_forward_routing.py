@@ -86,7 +86,7 @@ async def test_forward_message_with_url_prefers_forward_flow(
         forward_from_message_id=123,
     )
 
-    await router._route_message_content(  # noqa: SLF001
+    await router._route_message_content(
         message,
         text=message.text,
         uid=1,
