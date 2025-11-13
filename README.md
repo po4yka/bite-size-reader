@@ -75,6 +75,7 @@ Repository layout
 Notes
 - Dependencies include Pyrogram; if using PyroTGFork, align installation accordingly.
 - Bot commands are registered on startup for private chats: `/help`, `/summarize`.
+- Python 3.13+ required for all dependencies including scikit-learn for text processing and optional uvloop for async performance.
 
 Commands & usage
 - `/help` or `/start` — Show help and usage.

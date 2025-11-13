@@ -3,7 +3,7 @@
 This guide explains how to prepare environments, configure secrets, and run the service locally and in production (Docker).
 
 ## Prerequisites
-- Python 3.11+
+- Python 3.13+
 - Telegram account and bot token
 - OpenRouter API key
 - Firecrawl API key

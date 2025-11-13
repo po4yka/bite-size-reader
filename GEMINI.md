@@ -17,7 +17,7 @@ This repository is private and intended solely for the service owner's use.
 
 ## Python Service Coding Guidelines
 
-- Use Python 3.11+ with `async`/`await` syntax for all I/O and network calls.
+- Use Python 3.13+ with `async`/`await` syntax for all I/O and network calls.
 - Follow PEP8 style conventions strictly.
 - Use type hints and docstrings on all public functions/classes.
 - Modularize concerns: separate bot client, parser, API client, and DB layers. The business logic should be cleanly separated from request/response handling.
@@ -73,7 +73,7 @@ Use these commands:
 
 ## Docker Container Guidelines
 
-- Use official Python base images with appropriate tags (e.g., `python:3.11-slim`).
+- Use official Python base images with appropriate tags (e.g., `python:3.13-slim`).
 - Minimize image layer size by cleaning cache and unnecessary files.
 - Use multi-stage builds if needed to separate build/dependency and runtime layers.
 - Pass secrets like API keys as environment variables, never baked into the image.

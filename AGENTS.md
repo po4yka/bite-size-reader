@@ -17,7 +17,7 @@ This repository is private and intended solely for the service owner's use.
 
 ## Coding and Style Conventions
 
-- Python 3.11+ with asyncio and async/await syntax.
+- Python 3.13+ with asyncio and async/await syntax.
 - Follow PEP8 style guidelines for code readability.
 - Use type hints and docstrings for all public functions and classes.
 - Separation of concerns: Telegram bot client, Firecrawl parsing, OpenRouter calls, and database operations should be modularized.
