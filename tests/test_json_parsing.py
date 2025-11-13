@@ -323,7 +323,9 @@ class TestJsonParsing(unittest.TestCase):
             await bot._handle_forward_flow(message, correlation_id="cid", interaction_id=None)
 
             # Forward flow generates insights after summary, so we expect multiple calls
-            assert mock_openrouter_instance.chat.await_count >= 2  # At least summary + insights attempts
+            assert (
+                mock_openrouter_instance.chat.await_count >= 2
+            )  # At least summary + insights attempts
             bot._reply_json.assert_called_once()
             summary_json = bot._reply_json.call_args[0][1]
             assert summary_json["summary_250"] == "Forward."

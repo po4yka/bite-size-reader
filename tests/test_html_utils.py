@@ -1,5 +1,3 @@
-import builtins
-
 import pytest
 
 from app.core import html_utils

@@ -24,18 +24,18 @@ def _compute_flesch_reading_ease(text: str) -> float:
         return 0.0
 
     # Count sentences (split on .!?)
-    sentences = re.split(r'[.!?]+', text)
+    sentences = re.split(r"[.!?]+", text)
     sentences = [s.strip() for s in sentences if s.strip()]
     num_sentences = len(sentences) if sentences else 1
 
     # Count words
-    words = re.findall(r'\b\w+\b', text.lower())
+    words = re.findall(r"\b\w+\b", text.lower())
     num_words = len(words) if words else 1
 
     # Estimate syllables (simple heuristic: count vowel groups)
     def count_syllables(word: str) -> int:
         word = word.lower()
-        vowels = 'aeiouy'
+        vowels = "aeiouy"
         syllable_count = 0
         previous_was_vowel = False
 
@@ -46,7 +46,7 @@ def _compute_flesch_reading_ease(text: str) -> float:
             previous_was_vowel = is_vowel
 
         # Adjust for silent 'e' at end
-        if word.endswith('e') and syllable_count > 1:
+        if word.endswith("e") and syllable_count > 1:
             syllable_count -= 1
 
         # Every word has at least 1 syllable
@@ -83,7 +83,7 @@ def _extract_keywords_tfidf(text: str, topn: int = 10) -> list[str]:
         vectorizer = TfidfVectorizer(
             max_features=topn * 3,  # Extract more candidates
             ngram_range=(1, 3),  # 1-3 word phrases
-            stop_words='english',
+            stop_words="english",
             lowercase=True,
             min_df=1,
             max_df=1.0,
@@ -105,18 +105,61 @@ def _extract_keywords_tfidf(text: str, topn: int = 10) -> list[str]:
 
     except Exception:
         # Fallback: extract most common words (simple frequency)
-        words = re.findall(r'\b[a-z]{4,}\b', text.lower())
+        words = re.findall(r"\b[a-z]{4,}\b", text.lower())
         # Remove common stop words
-        stop_words = {'this', 'that', 'with', 'from', 'have', 'they', 'what', 'been',
-                     'will', 'would', 'there', 'their', 'about', 'which', 'when', 'make',
-                     'like', 'time', 'just', 'know', 'take', 'into', 'year', 'some',
-                     'could', 'them', 'other', 'than', 'then', 'look', 'only', 'come',
-                     'over', 'also', 'back', 'after', 'work', 'first', 'well', 'even',
-                     'want', 'because', 'these', 'give', 'most', 'very'}
+        stop_words = {
+            "this",
+            "that",
+            "with",
+            "from",
+            "have",
+            "they",
+            "what",
+            "been",
+            "will",
+            "would",
+            "there",
+            "their",
+            "about",
+            "which",
+            "when",
+            "make",
+            "like",
+            "time",
+            "just",
+            "know",
+            "take",
+            "into",
+            "year",
+            "some",
+            "could",
+            "them",
+            "other",
+            "than",
+            "then",
+            "look",
+            "only",
+            "come",
+            "over",
+            "also",
+            "back",
+            "after",
+            "work",
+            "first",
+            "well",
+            "even",
+            "want",
+            "because",
+            "these",
+            "give",
+            "most",
+            "very",
+        }
         words = [w for w in words if w not in stop_words]
 
         # Count frequency
         from collections import Counter
+
         word_counts = Counter(words)
         return [word for word, count in word_counts.most_common(topn)]
 

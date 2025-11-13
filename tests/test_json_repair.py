@@ -223,7 +223,9 @@ class TestJsonRepair(unittest.TestCase):
 
             # With local JSON repair, the broken JSON is fixed locally and no LLM repair call is made
             # The test should verify that the summary was processed successfully despite broken JSON
-            assert mock_openrouter_instance.chat.call_count == 4  # 1 for summary + 3 for insights (with fallbacks/retry)
+            assert (
+                mock_openrouter_instance.chat.call_count == 4
+            )  # 1 for summary + 3 for insights (with fallbacks/retry)
 
             # Verify that the summary was processed successfully with local JSON repair
             self.bot._reply_json.assert_called_once()

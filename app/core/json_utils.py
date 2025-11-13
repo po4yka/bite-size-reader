@@ -26,11 +26,10 @@ def loads(data: str | bytes) -> Any:
     if _HAS_ORJSON and orjson is not None:
         # orjson.loads accepts both str and bytes
         return orjson.loads(data)
-    else:
-        # stdlib json only accepts str
-        if isinstance(data, bytes):
-            data = data.decode("utf-8")
-        return json.loads(data)
+    # stdlib json only accepts str
+    if isinstance(data, bytes):
+        data = data.decode("utf-8")
+    return json.loads(data)
 
 
 def dumps(obj: Any, *, indent: int | None = None, ensure_ascii: bool = False) -> str:
@@ -53,8 +52,7 @@ def dumps(obj: Any, *, indent: int | None = None, ensure_ascii: bool = False) ->
             options |= orjson.OPT_NON_STR_KEYS
         result = orjson.dumps(obj, option=options)
         return result.decode("utf-8")
-    else:
-        return json.dumps(obj, indent=indent, ensure_ascii=ensure_ascii)
+    return json.dumps(obj, indent=indent, ensure_ascii=ensure_ascii)
 
 
 def extract_json(text: str) -> dict[str, Any] | None:
