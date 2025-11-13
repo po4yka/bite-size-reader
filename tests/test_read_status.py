@@ -66,7 +66,7 @@ class ReadStatusBot(TelegramBot):
                     self.latency_ms = 100  # Add missing attribute
 
             # Use setattr to mock the method
-            self._firecrawl.scrape_markdown = AsyncMock(return_value=MockCrawlResult())
+            self._firecrawl.scrape_markdown = AsyncMock(return_value=MockCrawlResult())  # type: ignore[method-assign]
 
     async def _handle_url_flow(self, message: Any, url_text: str, **_: object) -> None:
         self.seen_urls.append(url_text)

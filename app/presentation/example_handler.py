@@ -232,7 +232,7 @@ def integrate_with_existing_code(database: Any, topic_search_service: Any) -> No
     )
 
     # 2. Wire up event handlers (optional)
-    container.wire_event_handlers()
+    container.wire_event_handlers_auto()
 
     # 3. Create handler with container
     # response_formatter = YourExistingResponseFormatter(...)

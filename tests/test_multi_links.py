@@ -47,7 +47,7 @@ class SpyBot(TelegramBot):
                 await self._safe_reply(message, f"OK {url_text}")
 
             # Use setattr to avoid mypy method assignment error
-            self.url_processor.handle_url_flow = mock_handle_url_flow
+            self.url_processor.handle_url_flow = mock_handle_url_flow  # type: ignore[method-assign]
 
     async def _handle_url_flow(self, message: Any, url_text: str, **_: object) -> None:
         self.seen_urls.append(url_text)

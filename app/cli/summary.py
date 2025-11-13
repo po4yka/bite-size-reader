@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import contextlib
 import json
 import logging
 import os
@@ -22,7 +23,6 @@ from app.config import AppConfig, load_config
 from app.core.logging_utils import generate_correlation_id, setup_json_logging
 from app.core.url_utils import extract_all_urls
 from app.db.database import Database
-import contextlib
 
 if TYPE_CHECKING:
     from collections.abc import Callable

@@ -48,41 +48,41 @@ class RequestBuilder:
                 context={"messages_count": len(request.messages)},
             )
 
-        for i, msg in enumerate(request.messages):
-            if not isinstance(msg, dict):
-                msg = f"Message {i} must be a dictionary, got {type(msg).__name__}"
+        for i, message in enumerate(request.messages):
+            if not isinstance(message, dict):
+                error_msg = f"Message {i} must be a dictionary, got {type(message).__name__}"
                 raise ValidationError(
-                    msg,
-                    context={"message_index": i, "message_type": type(msg).__name__},
+                    error_msg,
+                    context={"message_index": i, "message_type": type(message).__name__},
                 )
-            if "role" not in msg or "content" not in msg:
-                msg = f"Message {i} missing required fields 'role' or 'content'"
+            if "role" not in message or "content" not in message:
+                error_msg = f"Message {i} missing required fields 'role' or 'content'"
                 raise ValidationError(
-                    msg,
+                    error_msg,
                     context={
                         "message_index": i,
-                        "missing_fields": [k for k in ["role", "content"] if k not in msg],
+                        "missing_fields": [k for k in ["role", "content"] if k not in message],
                     },
                 )
-            if not isinstance(msg["role"], str) or msg["role"] not in {
+            if not isinstance(message["role"], str) or message["role"] not in {
                 "system",
                 "user",
                 "assistant",
             }:
-                msg = f"Message {i} has invalid role '{msg.get('role', 'missing')}', must be one of: system, user, assistant"
+                error_msg = f"Message {i} has invalid role '{message.get('role', 'missing')}', must be one of: system, user, assistant"
                 raise ValidationError(
-                    msg,
+                    error_msg,
                     context={
                         "message_index": i,
-                        "invalid_role": msg.get("role"),
+                        "invalid_role": message.get("role"),
                         "valid_roles": ["system", "user", "assistant"],
                     },
                 )
-            if not isinstance(msg["content"], str):
-                msg = f"Message {i} content must be string, got {type(msg['content']).__name__}"
+            if not isinstance(message["content"], str):
+                error_msg = f"Message {i} content must be string, got {type(message['content']).__name__}"
                 raise ValidationError(
-                    msg,
-                    context={"message_index": i, "content_type": type(msg["content"]).__name__},
+                    error_msg,
+                    context={"message_index": i, "content_type": type(message["content"]).__name__},
                 )
 
         # Validate other parameters

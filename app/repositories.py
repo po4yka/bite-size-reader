@@ -35,7 +35,7 @@ class RequestRepositoryImpl:
         correlation_id: str | None = None,
     ) -> int:
         """Create a new request record."""
-        return await self._db.async_create_request(
+        return await self._db.async_create_request(  # type: ignore[attr-defined]
             uid=uid,
             cid=cid,
             url=url,
@@ -57,7 +57,7 @@ class RequestRepositoryImpl:
         self, cid: int, fwd_message_id: int
     ) -> dict[str, Any] | None:
         """Get a request by forwarded message details."""
-        return await self._db.async_get_request_by_forward(cid, fwd_message_id)
+        return await self._db.async_get_request_by_forward(cid, fwd_message_id)  # type: ignore[attr-defined]
 
     async def async_update_request_status(self, request_id: int, status: str) -> None:
         """Update the status of a request."""
@@ -67,11 +67,11 @@ class RequestRepositoryImpl:
         self, request_id: int, correlation_id: str
     ) -> None:
         """Update the correlation ID of a request."""
-        await self._db.async_update_request_correlation_id(request_id, correlation_id)
+        await self._db.async_update_request_correlation_id(request_id, correlation_id)  # type: ignore[attr-defined]
 
     async def async_update_request_lang_detected(self, request_id: int, lang: str) -> None:
         """Update the detected language of a request."""
-        await self._db.async_update_request_lang_detected(request_id, lang)
+        await self._db.async_update_request_lang_detected(request_id, lang)  # type: ignore[attr-defined]
 
 
 class SummaryRepositoryImpl:
@@ -120,17 +120,17 @@ class SummaryRepositoryImpl:
         self, request_id: int
     ) -> dict[str, Any] | None:
         """Get an unread summary by request ID."""
-        return await self._db.async_get_unread_summary_by_request_id(request_id)
+        return await self._db.async_get_unread_summary_by_request_id(request_id)  # type: ignore[attr-defined]
 
     async def async_mark_summary_as_read(self, summary_id: int) -> None:
         """Mark a summary as read."""
-        await self._db.async_mark_summary_as_read(summary_id)
+        await self._db.async_mark_summary_as_read(summary_id)  # type: ignore[attr-defined]
 
     async def async_update_summary_insights(
         self, summary_id: int, insights_json: dict[str, Any]
     ) -> None:
         """Update the insights field of a summary."""
-        await self._db.async_update_summary_insights(summary_id, insights_json)
+        await self._db.async_update_summary_insights(summary_id, insights_json)  # type: ignore[attr-defined]
 
 
 class CrawlResultRepositoryImpl:
@@ -157,7 +157,7 @@ class CrawlResultRepositoryImpl:
         metadata_json: dict[str, Any] | None = None,
     ) -> int:
         """Insert a crawl result."""
-        return await self._db.async_insert_crawl_result(
+        return await self._db.async_insert_crawl_result(  # type: ignore[attr-defined]
             request_id=request_id,
             success=success,
             markdown=markdown,
@@ -193,7 +193,7 @@ class UserInteractionRepositoryImpl:
         detail: str | None = None,
     ) -> int:
         """Insert a user interaction record."""
-        return await self._db.async_insert_user_interaction(
+        return await self._db.async_insert_user_interaction(  # type: ignore[attr-defined]
             uid=uid,
             cid=cid,
             interaction_type=interaction_type,

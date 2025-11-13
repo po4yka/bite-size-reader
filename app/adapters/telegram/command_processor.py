@@ -443,6 +443,7 @@ class CommandProcessor:
                 # Use the use case for local topic search
                 query = SearchTopicsQuery(
                     topic=topic,
+                    user_id=uid,
                     max_results=getattr(searcher, "max_results", 5),
                     correlation_id=correlation_id,
                 )
@@ -467,10 +468,10 @@ class CommandProcessor:
                         )
                 else:
                     # Fallback if use case unavailable
-                    results = await searcher.find_articles(topic, correlation_id=correlation_id)
+                    results = await searcher.find_articles(topic, correlation_id=correlation_id)  # type: ignore[assignment]
             else:
                 # Use the service directly for online search or if container unavailable
-                results = await searcher.find_articles(topic, correlation_id=correlation_id)
+                results = await searcher.find_articles(topic, correlation_id=correlation_id)  # type: ignore[assignment]
         except ValueError:
             invalid = invalid_message.format(cmd=command)
             await self.response_formatter.safe_reply(message, invalid)
@@ -514,7 +515,7 @@ class CommandProcessor:
             return
 
         await self.response_formatter.send_topic_search_results(
-            message, topic=topic, articles=results, source=formatter_source
+            message, topic=topic, articles=results, source=formatter_source  # type: ignore[arg-type]
         )
         if interaction_id:
             await async_safe_update_user_interaction(
@@ -701,7 +702,7 @@ class CommandProcessor:
         multi_cancelled = False
         active_cancelled = 0
         if self.url_handler is not None:
-            awaiting_cancelled, multi_cancelled = self.url_handler.cancel_pending_requests(uid)
+            awaiting_cancelled, multi_cancelled = await self.url_handler.cancel_pending_requests(uid)
 
         if self._task_manager is not None:
             active_cancelled = await self._task_manager.cancel(uid, exclude_current=True)
@@ -849,7 +850,7 @@ class CommandProcessor:
                 # Convert domain models to database format for compatibility
                 unread_summaries = []
                 for summary in domain_summaries:
-                    dto = SummaryDTO.from_domain(summary)
+                    dto = SummaryDTO.from_domain(summary)  # type: ignore[attr-defined]
                     unread_summaries.append(
                         {
                             "request_id": dto.request_id,

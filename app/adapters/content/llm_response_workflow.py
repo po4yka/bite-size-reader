@@ -86,7 +86,7 @@ class LLMResponseWorkflow:
         self,
         *,
         cfg: Any,
-        db: SummaryRepository & RequestRepository & LLMCallRepository,
+        db: Any,  # SummaryRepository & RequestRepository & LLMCallRepository
         openrouter: Any,
         response_formatter: Any,
         audit_func: Callable[[str, str, dict[str, Any]], None],

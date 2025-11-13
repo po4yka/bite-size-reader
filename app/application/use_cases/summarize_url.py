@@ -333,11 +333,13 @@ class SummarizeUrlUseCase:
             }
 
             # Persist crawl result
+            markdown_value = content.get("markdown")
+            metadata_value = content.get("metadata")
             await self._crawl_result_repo.async_insert_crawl_result(
                 request_id=request.id or 0,
                 success=True,
-                markdown=content.get("markdown"),
-                metadata_json=content.get("metadata"),
+                markdown=markdown_value if isinstance(markdown_value, str) else None,
+                metadata_json=metadata_value if isinstance(metadata_value, dict) else None,
             )
 
             return request, content

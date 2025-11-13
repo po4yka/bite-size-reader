@@ -5,8 +5,7 @@ from typing import Any, cast
 
 import httpx
 
-from app.adapters.external.firecrawl_parser import FirecrawlClient
-from app.adapters.external.firecrawl_parser import httpx as fc_httpx
+from app.adapters.external.firecrawl_parser import FirecrawlClient, httpx as fc_httpx
 from app.adapters.openrouter.openrouter_client import httpx as or_httpx
 
 

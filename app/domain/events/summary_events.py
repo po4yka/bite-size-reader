@@ -9,7 +9,7 @@ from datetime import datetime
 from typing import Any
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class DomainEvent:
     """Base class for all domain events."""
 
