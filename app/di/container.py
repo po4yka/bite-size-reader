@@ -10,7 +10,10 @@ from app.application.use_cases.get_unread_summaries import GetUnreadSummariesUse
 from app.application.use_cases.mark_summary_as_read import MarkSummaryAsReadUseCase
 from app.application.use_cases.mark_summary_as_unread import MarkSummaryAsUnreadUseCase
 from app.application.use_cases.search_topics import SearchTopicsUseCase
+from app.application.use_cases.summarize_url import SummarizeUrlUseCase
+from app.domain.services.summary_validator import SummaryValidator
 from app.infrastructure.messaging.event_bus import EventBus
+from app.infrastructure.messaging.event_handlers import wire_event_handlers
 from app.infrastructure.persistence.sqlite.repositories.crawl_result_repository import (
     SqliteCrawlResultRepositoryAdapter,
 )
@@ -48,27 +51,38 @@ class Container:
         self,
         database: Any,
         topic_search_service: Any | None = None,
+        content_fetcher: Any | None = None,
+        llm_client: Any | None = None,
+        analytics_service: Any | None = None,
     ) -> None:
         """Initialize the container.
 
         Args:
             database: The Database instance (existing infrastructure).
             topic_search_service: Optional TopicSearchService for search use case.
+            content_fetcher: Optional content fetcher service (e.g., FirecrawlClient).
+            llm_client: Optional LLM client (e.g., OpenRouterClient).
+            analytics_service: Optional analytics service client.
         """
         self._database = database
         self._topic_search_service = topic_search_service
+        self._content_fetcher = content_fetcher
+        self._llm_client = llm_client
+        self._analytics_service = analytics_service
 
         # Lazy-initialized components
         self._event_bus: EventBus | None = None
         self._summary_repo: SqliteSummaryRepositoryAdapter | None = None
         self._request_repo: SqliteRequestRepositoryAdapter | None = None
         self._crawl_result_repo: SqliteCrawlResultRepositoryAdapter | None = None
+        self._summary_validator: SummaryValidator | None = None
 
         # Lazy-initialized use cases
         self._get_unread_summaries_use_case: GetUnreadSummariesUseCase | None = None
         self._mark_summary_as_read_use_case: MarkSummaryAsReadUseCase | None = None
         self._mark_summary_as_unread_use_case: MarkSummaryAsUnreadUseCase | None = None
         self._search_topics_use_case: SearchTopicsUseCase | None = None
+        self._summarize_url_use_case: SummarizeUrlUseCase | None = None
 
     # ==================== Infrastructure Layer ====================
 
@@ -111,6 +125,18 @@ class Container:
         if self._crawl_result_repo is None:
             self._crawl_result_repo = SqliteCrawlResultRepositoryAdapter(self._database)
         return self._crawl_result_repo
+
+    # ==================== Domain Layer ====================
+
+    def summary_validator(self) -> SummaryValidator:
+        """Get or create the summary validator.
+
+        Returns:
+            SummaryValidator domain service.
+        """
+        if self._summary_validator is None:
+            self._summary_validator = SummaryValidator()
+        return self._summary_validator
 
     # ==================== Application Layer (Use Cases) ====================
 
@@ -165,30 +191,46 @@ class Container:
             )
         return self._search_topics_use_case
 
+    def summarize_url_use_case(self) -> SummarizeUrlUseCase | None:
+        """Get or create the SummarizeUrlUseCase.
+
+        Returns:
+            Use case for summarizing URLs, or None if required services not configured.
+        """
+        if self._content_fetcher is None or self._llm_client is None:
+            return None
+
+        if self._summarize_url_use_case is None:
+            self._summarize_url_use_case = SummarizeUrlUseCase(
+                request_repository=self.request_repository(),
+                summary_repository=self.summary_repository(),
+                crawl_result_repository=self.crawl_result_repository(),
+                content_fetcher=self._content_fetcher,
+                llm_client=self._llm_client,
+                summary_validator=self.summary_validator(),
+            )
+        return self._summarize_url_use_case
+
     # ==================== Helper Methods ====================
 
-    def wire_event_handlers(self) -> None:
-        """Wire up event handlers to the event bus.
+    def wire_event_handlers_auto(self) -> None:
+        """Wire up event handlers to the event bus automatically.
 
-        This method shows how to subscribe handlers to domain events.
-        Add your event handlers here.
+        This method uses the event_handlers module to subscribe all
+        event handlers to their respective events.
+
+        Call this during application initialization to enable side effects
+        like search indexing, analytics, and audit logging.
 
         Example:
             ```python
-            async def on_summary_created(event: SummaryCreated):
-                # Send notification, update search index, etc.
-                pass
-
-            event_bus = self.event_bus()
-            event_bus.subscribe(SummaryCreated, on_summary_created)
+            container = Container(database, ...)
+            container.wire_event_handlers_auto()
+            # Now all events will be handled automatically
             ```
         """
-        # TODO: Add event handler subscriptions here
-        # Example:
-        # from app.domain.events.summary_events import SummaryMarkedAsRead
-        #
-        # async def on_summary_marked_as_read(event: SummaryMarkedAsRead):
-        #     logger.info(f"Summary {event.summary_id} was marked as read")
-        #
-        # self.event_bus().subscribe(SummaryMarkedAsRead, on_summary_marked_as_read)
-        pass
+        wire_event_handlers(
+            event_bus=self.event_bus(),
+            database=self._database,
+            analytics_service=self._analytics_service,
+        )
