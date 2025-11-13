@@ -124,7 +124,7 @@ class SummaryRepositoryImpl:
 
     async def async_mark_summary_as_read(self, summary_id: int) -> None:
         """Mark a summary as read."""
-        await self._db.async_mark_summary_as_read(summary_id)  # type: ignore[attr-defined]
+        await self._db.async_mark_summary_as_read(summary_id)
 
     async def async_update_summary_insights(
         self, summary_id: int, insights_json: dict[str, Any]

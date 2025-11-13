@@ -803,6 +803,23 @@ class Database:
             operation_name="get_summary_by_id",
         )
 
+    def mark_summary_as_read_by_id(self, summary_id: int) -> None:
+        """Mark a summary as read by its ID.
+
+        Args:
+            summary_id: The ID of the summary to mark as read.
+
+        """
+        Summary.update({Summary.is_read: True}).where(Summary.id == summary_id).execute()
+
+    async def async_mark_summary_as_read(self, summary_id: int) -> None:
+        """Async wrapper for :meth:`mark_summary_as_read_by_id`."""
+        await self._safe_db_operation(
+            self.mark_summary_as_read_by_id,
+            summary_id,
+            operation_name="mark_summary_as_read",
+        )
+
     def get_request_by_forward(
         self,
         fwd_chat_id: int,

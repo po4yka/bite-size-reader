@@ -841,7 +841,11 @@ class TestReadStatusIntegration(unittest.IsolatedAsyncioTestCase):
             bot.db.insert_summary(
                 request_id=rid,
                 lang="en",
-                json_payload={"title": "Test Article"},
+                json_payload={
+                    "title": "Test Article",
+                    "tldr": "Test article summary",
+                    "summary_250": "This is a test article for integration testing.",
+                },
                 is_read=False,
             )
 
