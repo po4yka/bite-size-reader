@@ -38,8 +38,8 @@ jobs:
             pyproject.toml
             uv.lock
 
-      - name: Install Python 3.11
-        run: uv python install 3.11
+      - name: Install Python 3.13
+        run: uv python install 3.13
 
       - name: Regenerate lockfiles (uv compile)
         run: |

@@ -16,8 +16,7 @@ except Exception:  # pragma: no cover
     lxml_html = None
     _HAS_READABILITY = False
 
-# Optional textacy / spacy normalization imports
-_HAS_TEXTACY = True  # will be validated at runtime in functions
+# No longer using textacy - using built-in regex normalization
 
 
 _BLANK_LINE_RE = re.compile(r"\n{3,}")
@@ -191,39 +190,36 @@ def clean_markdown_article_text(markdown: str) -> str:
     return _collapse_blank_lines(cleaned)
 
 
-def normalize_with_textacy(text: str) -> str:
-    """Apply lightweight normalization using textacy if available.
+def normalize_text(text: str) -> str:
+    """Apply lightweight text normalization.
 
     Operations:
     - normalize unicode quotes/dashes
-    - replace URLs/emails with placeholders
+    - replace URLs/emails/phone numbers with spaces
     - collapse repeated whitespace
     - strip control characters
-    Fallbacks to simple regex-based cleanup if textacy isn't installed.
     """
     if not isinstance(text, str):
         text = str(text) if text is not None else ""
 
-    try:
-        import textacy.preprocessing as tprep
-
-        normalized = text
-        normalized = tprep.normalize.unicode(normalized)
-        normalized = tprep.replace.urls(normalized, repl=" ")
-        normalized = tprep.replace.emails(normalized, repl=" ")
-        normalized = tprep.replace.phone_numbers(normalized, repl=" ")
-        normalized = tprep.normalize.whitespace(normalized)
-        return normalized.strip()
-    except Exception:
-        pass
-
-    # Fallbacks without textacy
+    # Normalize unicode quotes and dashes
     out = text
+    out = out.replace("'", "'").replace("'", "'")
+    out = out.replace(""", '"').replace(""", '"')
+    out = out.replace("—", "-").replace("–", "-")
+
+    # Remove URLs, emails, and phone numbers
     out = re.sub(r"https?://\S+", " ", out)
     out = re.sub(r"\S+@\S+", " ", out)
+    out = re.sub(r"\+?\d[\d\s\-\(\)]{7,}\d", " ", out)  # phone numbers
+
+    # Remove control characters
     out = re.sub(r"[\u0000-\u001F\u007F]", " ", out)
+
+    # Normalize whitespace
     out = re.sub(r"[ \t]{2,}", " ", out)
     out = _collapse_blank_lines(out)
+
     return out.strip()
 
 
