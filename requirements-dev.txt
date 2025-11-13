@@ -167,7 +167,7 @@ python-dateutil==2.9.0.post0
     #   htmldate
 pytz==2025.2
     # via dateparser
-pyyaml==6.0.2
+pyyaml==6.0.3
     # via pre-commit
 regex==2025.11.3
     # via dateparser
