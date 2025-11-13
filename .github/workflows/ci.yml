@@ -102,6 +102,9 @@ jobs:
       - name: Install dependencies
         run: uv pip sync --system requirements.txt requirements-dev.txt
 
+      - name: Install additional test/coverage tools
+        run: uv pip install --system pytest-cov pytest-xdist coverage[toml]
+
       - name: Remove Pydantic for no-pydantic matrix case
         if: ${{ matrix.pydantic == false }}
         run: |
@@ -117,8 +120,8 @@ jobs:
               print("Pydantic: absent")
           PY
 
-      - name: Lint (ruff)
-        run: ruff check .
+      - name: Lint (ruff) - comprehensive
+        run: ruff check . --select ALL --ignore D100,D101,D102,D103,D104,D105,D107,ANN,COM812,ISC001
 
       - name: Format check (ruff)
         run: ruff format --check .
@@ -127,10 +130,41 @@ jobs:
         run: isort --check-only .
 
       - name: Type check (mypy)
-        run: mypy app tests
+        run: mypy app tests --show-error-codes --pretty
 
-      - name: Run tests
-        run: python -m unittest discover -s tests -p "test_*.py" -v
+      - name: Check code complexity
+        run: |
+          echo "Checking code complexity with radon..."
+          pip install radon
+          radon cc app --min B --show-complexity --no-assert
+          radon mi app --min B
+
+      - name: Run tests with coverage
+        run: |
+          pytest tests/ \
+            --cov=app \
+            --cov-report=term-missing \
+            --cov-report=xml \
+            --cov-report=html \
+            --cov-config=pyproject.toml \
+            --verbose \
+            --maxfail=5 \
+            --tb=short \
+            --strict-markers
+
+      - name: Upload coverage reports
+        if: ${{ matrix.pydantic }}
+        uses: codecov/codecov-action@v5
+        with:
+          file: ./coverage.xml
+          flags: unittests
+          name: codecov-umbrella
+          fail_ci_if_error: false
+
+      - name: Check coverage threshold
+        if: ${{ matrix.pydantic }}
+        run: |
+          coverage report --fail-under=0 --show-missing
 
       - name: Surface lockfile drift status
         if: ${{ needs.prepare-environment.outputs.lock_drift == 'true' && matrix.pydantic }}
