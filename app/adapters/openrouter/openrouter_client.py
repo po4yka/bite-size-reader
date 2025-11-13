@@ -429,7 +429,7 @@ class OpenRouterClient:
         return validated_fallbacks
 
     @asynccontextmanager
-    async def _request_context(self) -> AsyncGenerator[httpx.AsyncClient, None]:
+    async def _request_context(self) -> AsyncGenerator[httpx.AsyncClient]:
         """Context manager for request handling with proper error handling."""
         if self._closed:
             msg = "Cannot use client after it has been closed"

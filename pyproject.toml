@@ -1,6 +1,6 @@
 [tool.black]
 line-length = 100
-target-version = ["py311"]
+target-version = ["py313"]
 include = '\.pyi?$'
 extend-exclude = '''
 /(
@@ -22,7 +22,7 @@ known_first_party = ["app", "tests"]
 
 [tool.ruff]
 line-length = 100
-target-version = "py311"
+target-version = "py313"
 exclude = [".git", "data", "build", "dist", "venv"]
 
 [tool.ruff.lint]
@@ -101,7 +101,7 @@ indent-style = "space"
 skip-magic-trailing-comma = false
 
 [tool.mypy]
-python_version = "3.11"
+python_version = "3.13"
 ignore_missing_imports = true
 warn_unused_ignores = true
 warn_redundant_casts = true
@@ -118,17 +118,19 @@ strict_optional = false
 name = "bite-size-reader"
 version = "0.1.0"
 description = "Telegram bot that summarizes URLs and forwarded posts via Firecrawl + OpenRouter"
-requires-python = ">=3.11"
+requires-python = ">=3.13"
 dependencies = [
   "httpx[http2]>=0.28.1",
   "pyrogram>=2.0.106",
   "tgcrypto>=1.2.5",
-  "pydantic>=2.11.9",
-  "peewee>=3.17.6",
-  "readability-lxml==0.8.4.1",
-  "textacy>=0.13.0,<0.14",
-  "spacy>=3.8.7,<4",
-  "json_repair>=0.51.0",
+  "pydantic>=2.12.4",
+  "peewee>=3.18.3",
+  "trafilatura>=2.0.0",
+  "spacy>=3.8.8,<4",
+  "json_repair>=0.52.4",
+  "scikit-learn>=1.7.2",
+  "orjson>=3.10.0",
+  "uvloop>=0.22.1",
   # spaCy language models
   "en-core-web-sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl",
   "ru-core-news-sm @ https://github.com/explosion/spacy-models/releases/download/ru_core_news_sm-3.8.0/ru_core_news_sm-3.8.0-py3-none-any.whl",
@@ -136,22 +138,22 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
-  "isort>=6.0.1",
-  "pytest>=8.4.2",
-  "pytest-asyncio>=1.2.0",
-  "ruff>=0.13.1",
+  "isort>=7.0.0",
+  "pytest>=9.0.0",
+  "pytest-asyncio>=1.3.0",
+  "ruff>=0.14.4",
   "mypy>=1.18.2",
-  "pre-commit>=4.3.0",
+  "pre-commit>=4.4.0",
 ]
 
 [dependency-groups]
 dev = [
-    "isort>=6.0.1",
+    "isort>=7.0.0",
     "mypy>=1.18.2",
-    "pre-commit>=4.3.0",
-    "pytest>=8.4.2",
-    "pytest-asyncio>=1.2.0",
-    "ruff>=0.13.1",
+    "pre-commit>=4.4.0",
+    "pytest>=9.0.0",
+    "pytest-asyncio>=1.3.0",
+    "ruff>=0.14.4",
 ]
 
 [tool.pytest.ini_options]

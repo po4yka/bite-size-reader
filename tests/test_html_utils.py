@@ -1,5 +1,3 @@
-import builtins
-
 import pytest
 
 from app.core import html_utils
@@ -8,19 +6,8 @@ from app.core import html_utils
 @pytest.fixture(autouse=True)
 def disable_optional_dependencies(monkeypatch):
     """Force html_utils helpers to exercise their lightweight fallbacks."""
-    monkeypatch.setattr(html_utils, "_HAS_READABILITY", False)
-    monkeypatch.setattr(html_utils, "Document", None)
-    monkeypatch.setattr(html_utils, "lxml_html", None)
-
-    original_import = builtins.__import__
-
-    def guarded_import(name, *args, **kwargs):
-        if name.startswith("textacy"):
-            msg = "textacy intentionally disabled for fallback tests"
-            raise ImportError(msg)
-        return original_import(name, *args, **kwargs)
-
-    monkeypatch.setattr(builtins, "__import__", guarded_import)
+    monkeypatch.setattr(html_utils, "_HAS_TRAFILATURA", False)
+    monkeypatch.setattr(html_utils, "trafilatura", None)
 
 
 def test_html_to_text_fallback_strips_scripts_and_formats_lists():
@@ -51,10 +38,10 @@ def test_clean_markdown_article_text_removes_boilerplate_and_noise():
     assert cleaned == "Normal text with link and\n\nAnother line."
 
 
-def test_normalize_with_textacy_fallback_removes_urls_and_emails():
+def test_normalize_text_removes_urls_and_emails():
     noisy = "Email me at foo@example.com!! Visit https://example.com   now"
 
-    normalized = html_utils.normalize_with_textacy(noisy)
+    normalized = html_utils.normalize_text(noisy)
 
     assert "example.com" not in normalized
     assert "foo@" not in normalized

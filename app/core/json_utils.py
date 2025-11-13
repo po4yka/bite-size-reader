@@ -1,8 +1,58 @@
 from __future__ import annotations
 
-import json
 import re
 from typing import Any
+
+try:
+    import orjson
+
+    _HAS_ORJSON = True
+except Exception:  # pragma: no cover
+    import json
+
+    orjson = None
+    _HAS_ORJSON = False
+
+
+def loads(data: str | bytes) -> Any:
+    """Parse JSON string or bytes using orjson if available, else stdlib json.
+
+    Args:
+        data: JSON string or bytes to parse
+
+    Returns:
+        Parsed Python object
+    """
+    if _HAS_ORJSON and orjson is not None:
+        # orjson.loads accepts both str and bytes
+        return orjson.loads(data)
+    # stdlib json only accepts str
+    if isinstance(data, bytes):
+        data = data.decode("utf-8")
+    return json.loads(data)
+
+
+def dumps(obj: Any, *, indent: int | None = None, ensure_ascii: bool = False) -> str:
+    """Serialize object to JSON string using orjson if available, else stdlib json.
+
+    Args:
+        obj: Python object to serialize
+        indent: Number of spaces for indentation (None for compact)
+        ensure_ascii: Whether to escape non-ASCII characters
+
+    Returns:
+        JSON string
+    """
+    if _HAS_ORJSON and orjson is not None:
+        # orjson.dumps returns bytes, so decode to str
+        options = 0
+        if indent is not None:
+            options |= orjson.OPT_INDENT_2
+        if not ensure_ascii:
+            options |= orjson.OPT_NON_STR_KEYS
+        result = orjson.dumps(obj, option=options)
+        return result.decode("utf-8")
+    return json.dumps(obj, indent=indent, ensure_ascii=ensure_ascii)
 
 
 def extract_json(text: str) -> dict[str, Any] | None:
@@ -29,7 +79,7 @@ def extract_json(text: str) -> dict[str, Any] | None:
 
     def _try_parse(raw: str) -> dict[str, Any] | None:
         try:
-            parsed = json.loads(raw)
+            parsed = loads(raw)
         except Exception:
             return None
         return parsed if isinstance(parsed, dict) else None

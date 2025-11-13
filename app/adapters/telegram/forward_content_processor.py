@@ -6,7 +6,7 @@ import logging
 from typing import TYPE_CHECKING, Any
 
 from app.adapters.telegram.message_persistence import MessagePersistence
-from app.core.html_utils import normalize_with_textacy
+from app.core.html_utils import normalize_text
 from app.core.lang import choose_language, detect_language
 
 if TYPE_CHECKING:
@@ -50,7 +50,7 @@ class ForwardContentProcessor:
         # Optional normalization for forwards as well
         try:
             if getattr(self.cfg.runtime, "enable_textacy", False):
-                prompt = normalize_with_textacy(prompt)
+                prompt = normalize_text(prompt)
         except Exception:
             pass
 

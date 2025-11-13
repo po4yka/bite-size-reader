@@ -23,7 +23,7 @@ from app.config import AppConfig
 from app.core.html_utils import (
     clean_markdown_article_text,
     html_to_text,
-    normalize_with_textacy,
+    normalize_text,
 )
 from app.core.lang import detect_language
 from app.core.url_utils import normalize_url, url_hash_sha256
@@ -301,7 +301,7 @@ class ContentExtractor:
         # Optional normalization (feature-flagged)
         try:
             if getattr(self.cfg.runtime, "enable_textacy", False):
-                content_text = normalize_with_textacy(content_text)
+                content_text = normalize_text(content_text)
         except Exception:
             pass
 
@@ -767,7 +767,7 @@ class ContentExtractor:
         # Optional normalization (feature-flagged)
         try:
             if getattr(self.cfg.runtime, "enable_textacy", False):
-                content_text = normalize_with_textacy(content_text)
+                content_text = normalize_text(content_text)
         except Exception:
             pass
 
