@@ -213,9 +213,7 @@ class AuditLog(BaseModel):
 class SummaryEmbedding(BaseModel):
     """Vector embeddings for semantic search."""
 
-    summary = peewee.ForeignKeyField(
-        Summary, backref="embedding", unique=True, on_delete="CASCADE"
-    )
+    summary = peewee.ForeignKeyField(Summary, backref="embedding", unique=True, on_delete="CASCADE")
     model_name = peewee.TextField()
     model_version = peewee.TextField()
     embedding_blob = peewee.BlobField()

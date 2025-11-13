@@ -126,11 +126,7 @@ class SearchFilters:
             True if at least one filter is set, False otherwise
         """
         return bool(
-            self.date_from
-            or self.date_to
-            or self.sources
-            or self.exclude_sources
-            or self.languages
+            self.date_from or self.date_to or self.sources or self.exclude_sources or self.languages
         )
 
     def __str__(self) -> str:

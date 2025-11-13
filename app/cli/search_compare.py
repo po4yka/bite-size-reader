@@ -86,10 +86,10 @@ def print_comparison(results: dict, query: str) -> None:
         results: Dict with search results from all modes
         query: Search query
     """
-    print(f"\n{'='*100}")
+    print(f"\n{'=' * 100}")
     print("SEARCH COMPARISON")
     print(f"Query: '{query}'")
-    print(f"{'='*100}\n")
+    print(f"{'=' * 100}\n")
 
     # Print summary
     print("Results Summary:")
@@ -115,22 +115,22 @@ def print_comparison(results: dict, query: str) -> None:
     # Print top results from each mode
     max_display = 5
 
-    print(f"{'─'*100}")
+    print(f"{'─' * 100}")
     print(f"TOP {max_display} RESULTS - FTS (FULL-TEXT SEARCH)")
-    print(f"{'─'*100}")
+    print(f"{'─' * 100}")
     print_mode_results(results["fts"][:max_display])
 
-    print(f"{'─'*100}")
+    print(f"{'─' * 100}")
     print(f"TOP {max_display} RESULTS - VECTOR (SEMANTIC SEARCH)")
-    print(f"{'─'*100}")
+    print(f"{'─' * 100}")
     print_mode_results(results["vector"][:max_display])
 
-    print(f"{'─'*100}")
+    print(f"{'─' * 100}")
     print(f"TOP {max_display} RESULTS - HYBRID (COMBINED)")
-    print(f"{'─'*100}")
+    print(f"{'─' * 100}")
     print_mode_results(results["hybrid"][:max_display])
 
-    print(f"{'='*100}\n")
+    print(f"{'=' * 100}\n")
 
 
 def print_mode_results(results: list) -> None:

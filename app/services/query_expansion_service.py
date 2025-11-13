@@ -166,7 +166,9 @@ class QueryExpansionService:
         }
 
         return [
-            term.strip() for term in terms if len(term.strip()) > 2 and term.strip() not in stop_words
+            term.strip()
+            for term in terms
+            if len(term.strip()) > 2 and term.strip() not in stop_words
         ]
 
     def _find_synonyms(self, term: str) -> list[str]:

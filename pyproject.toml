@@ -89,6 +89,7 @@ ignore = [
   "PTH118",  # os.path.join - legacy test code
   "PT011",   # pytest.raises too broad - can be improved later
   "PT009",   # unittest assertions - can be migrated later
+  "PT027",   # unittest-style assertRaises - using unittest.TestCase
   "DTZ005",  # datetime.now without tz - acceptable in tests
 ]
 "test_*.py" = [

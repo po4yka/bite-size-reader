@@ -1159,9 +1159,7 @@ class CommandProcessor:
             return
 
         # Send searching message
-        await self.response_formatter.safe_reply(
-            message, f"🔍 Searching for: **{query}**..."
-        )
+        await self.response_formatter.safe_reply(message, f"🔍 Searching for: **{query}**...")
 
         try:
             # Perform hybrid search with all advanced features
@@ -1177,7 +1175,7 @@ class CommandProcessor:
                     "💡 Try:\n"
                     "• Broader search terms\n"
                     "• Different keywords\n"
-                    "• Check `/find` for online search"
+                    "• Check `/find` for online search",
                 )
                 if interaction_id:
                     await async_safe_update_user_interaction(
@@ -1262,8 +1260,6 @@ class CommandProcessor:
 
             response_lines.append(result_text)
 
-        response_lines.append(
-            "\n💡 **Tip:** Use `/read <request_id>` to view full summaries"
-        )
+        response_lines.append("\n💡 **Tip:** Use `/read <request_id>` to view full summaries")
 
         await self.response_formatter.safe_reply(message, "\n\n".join(response_lines))

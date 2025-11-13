@@ -418,10 +418,7 @@ class TestSearchServiceIntegration(unittest.IsolatedAsyncioTestCase):
 
             # Verify services are wired correctly
             assert bot.message_handler.command_processor.hybrid_search is not None
-            assert (
-                bot.message_handler.command_processor.hybrid_search
-                == bot.hybrid_search_service
-            )
+            assert bot.message_handler.command_processor.hybrid_search == bot.hybrid_search_service
 
     async def test_search_service_parameters(self):
         """Test that search services are configured with correct parameters."""

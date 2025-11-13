@@ -19,10 +19,7 @@ class TestQueryExpansionService(unittest.TestCase):
         assert len(result.expanded_terms) > 0
         # Should include synonyms like "programming", "code", etc.
         expanded_text = " ".join(result.expanded_terms)
-        assert any(
-            term in expanded_text
-            for term in ["programming", "code"]
-        )
+        assert any(term in expanded_text for term in ["programming", "code"])
 
     def test_expand_query_respects_max_expansions(self):
         """Test that expansion respects max_expansions limit."""
@@ -99,9 +96,7 @@ class TestQueryExpansionService(unittest.TestCase):
 
         for term in test_terms:
             result = service.expand_query(term)
-            assert (
-                len(result.expanded_terms) > 0
-            ), f"Term '{term}' should have synonyms"
+            assert len(result.expanded_terms) > 0, f"Term '{term}' should have synonyms"
 
     def test_extract_key_terms(self):
         """Test key term extraction from queries."""

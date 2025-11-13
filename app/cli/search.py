@@ -22,11 +22,11 @@ def print_results(results: list, mode: str, query: str) -> None:
         mode: Search mode used
         query: Query string
     """
-    print(f"\n{'='*80}")
+    print(f"\n{'=' * 80}")
     print(f"Search Mode: {mode.upper()}")
     print(f"Query: '{query}'")
     print(f"Results: {len(results)}")
-    print(f"{'='*80}\n")
+    print(f"{'=' * 80}\n")
 
     if not results:
         print("No results found.")
@@ -314,7 +314,9 @@ async def main() -> int:
         elif mode == "vector":
             results = await search_vector(db_path, query, max_results, filters)
         else:  # hybrid
-            results = await search_hybrid(db_path, query, max_results, filters, use_expansion, use_reranking)
+            results = await search_hybrid(
+                db_path, query, max_results, filters, use_expansion, use_reranking
+            )
 
         # Display results
         print_results(results, mode, query)

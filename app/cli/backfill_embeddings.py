@@ -37,7 +37,9 @@ def get_summaries_without_embeddings(db: Database, limit: int | None = None) -> 
 
         # Query summaries without embeddings, join with Request to get language
         query = (
-            Summary.select(Summary.id, Summary.request_id, Summary.json_payload, Request.lang_detected)
+            Summary.select(
+                Summary.id, Summary.request_id, Summary.json_payload, Request.lang_detected
+            )
             .join(Request, on=(Summary.request == Request.id))
             .where(Summary.id.not_in(subquery))
             .where(Summary.json_payload.is_null(False))
@@ -52,9 +54,13 @@ def get_summaries_without_embeddings(db: Database, limit: int | None = None) -> 
             results.append(
                 {
                     "id": summary.id,
-                    "request_id": summary.request_id.id if hasattr(summary.request_id, "id") else summary.request_id,
+                    "request_id": summary.request_id.id
+                    if hasattr(summary.request_id, "id")
+                    else summary.request_id,
                     "json_payload": summary.json_payload,
-                    "language": summary.request_id.lang_detected if hasattr(summary.request_id, "lang_detected") else None,
+                    "language": summary.request_id.lang_detected
+                    if hasattr(summary.request_id, "lang_detected")
+                    else None,
                 }
             )
 
@@ -77,7 +83,9 @@ async def backfill_embeddings(
         limit: Maximum number of embeddings to generate (None = all)
         force: If True, regenerate all embeddings even if they exist
     """
-    logger.info("Starting embedding backfill", extra={"db_path": db_path, "limit": limit, "force": force})
+    logger.info(
+        "Starting embedding backfill", extra={"db_path": db_path, "limit": limit, "force": force}
+    )
 
     # Initialize services
     db = Database(path=db_path)
