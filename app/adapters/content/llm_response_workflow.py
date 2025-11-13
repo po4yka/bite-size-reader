@@ -14,7 +14,6 @@ from app.utils.json_validation import finalize_summary_texts, parse_summary_resp
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable, Sequence
 
-    from app.protocols import LLMCallRepository, RequestRepository, SummaryRepository
 
 logger = logging.getLogger(__name__)
 
