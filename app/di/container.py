@@ -54,6 +54,11 @@ class Container:
         content_fetcher: Any | None = None,
         llm_client: Any | None = None,
         analytics_service: Any | None = None,
+        telegram_client: Any | None = None,
+        notification_service: Any | None = None,
+        cache_service: Any | None = None,
+        webhook_client: Any | None = None,
+        webhook_url: str | None = None,
     ) -> None:
         """Initialize the container.
 
@@ -63,12 +68,22 @@ class Container:
             content_fetcher: Optional content fetcher service (e.g., FirecrawlClient).
             llm_client: Optional LLM client (e.g., OpenRouterClient).
             analytics_service: Optional analytics service client.
+            telegram_client: Optional Telegram client for notifications.
+            notification_service: Optional notification service for other channels.
+            cache_service: Optional cache service (Redis, Memcached, etc.).
+            webhook_client: Optional HTTP client for sending webhooks.
+            webhook_url: Optional webhook URL to send events to.
         """
         self._database = database
         self._topic_search_service = topic_search_service
         self._content_fetcher = content_fetcher
         self._llm_client = llm_client
         self._analytics_service = analytics_service
+        self._telegram_client = telegram_client
+        self._notification_service = notification_service
+        self._cache_service = cache_service
+        self._webhook_client = webhook_client
+        self._webhook_url = webhook_url
 
         # Lazy-initialized components
         self._event_bus: EventBus | None = None
@@ -220,7 +235,8 @@ class Container:
         event handlers to their respective events.
 
         Call this during application initialization to enable side effects
-        like search indexing, analytics, and audit logging.
+        like search indexing, analytics, audit logging, notifications,
+        cache invalidation, and webhooks.
 
         Example:
             ```python
@@ -233,4 +249,9 @@ class Container:
             event_bus=self.event_bus(),
             database=self._database,
             analytics_service=self._analytics_service,
+            telegram_client=self._telegram_client,
+            notification_service=self._notification_service,
+            cache_service=self._cache_service,
+            webhook_client=self._webhook_client,
+            webhook_url=self._webhook_url,
         )
