@@ -58,8 +58,8 @@ class TelegramBot:
 
         # Reflect monkeypatches from tests into the telegram_client module so
         # that no real Pyrogram client is constructed.
-        telegram_client_module.Client = Client
-        telegram_client_module.filters = filters
+        setattr(telegram_client_module, "Client", Client)  # noqa: B010
+        setattr(telegram_client_module, "filters", filters)  # noqa: B010
         if Client is object:
             telegram_client_module.PYROGRAM_AVAILABLE = False
 
