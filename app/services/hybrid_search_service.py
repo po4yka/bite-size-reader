@@ -10,6 +10,7 @@ from app.services.topic_search import TopicArticle
 
 if TYPE_CHECKING:
     from app.services.query_expansion_service import QueryExpansionService
+    from app.services.reranking_service import RerankingService
     from app.services.search_filters import SearchFilters
     from app.services.topic_search import LocalTopicSearchService
     from app.services.vector_search_service import VectorSearchService
@@ -29,6 +30,7 @@ class HybridSearchService:
         vector_weight: float = 0.6,
         max_results: int = 25,
         query_expansion: QueryExpansionService | None = None,
+        reranking: RerankingService | None = None,
     ) -> None:
         """Initialize hybrid search service.
 
@@ -39,6 +41,7 @@ class HybridSearchService:
             vector_weight: Weight for vector scores (0.0-1.0)
             max_results: Maximum number of results to return
             query_expansion: Optional query expansion service for FTS
+            reranking: Optional cross-encoder re-ranking service
         """
         if not 0.0 <= fts_weight <= 1.0:
             msg = "fts_weight must be between 0.0 and 1.0"
@@ -56,6 +59,7 @@ class HybridSearchService:
         self._vector_weight = vector_weight
         self._max_results = max_results
         self._query_expansion = query_expansion
+        self._reranking = reranking
 
     async def search(
         self,
@@ -109,6 +113,20 @@ class HybridSearchService:
         # Sort by combined score (highest first)
         combined.sort(key=lambda x: x["combined_score"], reverse=True)
 
+        # Optionally re-rank top results with cross-encoder
+        if self._reranking:
+            # Re-rank top candidates for better precision
+            top_candidates = combined[: self._max_results * 2]  # Re-rank 2x max for better quality
+            if top_candidates:
+                reranked = await self._reranking.rerank(
+                    query=query.strip(),
+                    results=top_candidates,
+                    text_field="snippet",
+                    title_field="title",
+                )
+                # Use re-ranked results, fall back to combined if re-ranking fails
+                combined = reranked if reranked else combined
+
         # Convert to TopicArticle format
         articles = [
             TopicArticle(
@@ -130,6 +148,7 @@ class HybridSearchService:
                 "vector_results": len(vector_results),
                 "combined_unique": len(combined),
                 "returned_results": len(articles),
+                "reranking_used": bool(self._reranking),
                 "filters": str(filters) if filters else "none",
             },
         )
