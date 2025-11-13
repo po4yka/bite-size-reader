@@ -120,7 +120,9 @@ async def search_vector(db_path: str, query: str, max_results: int = 10, filters
     ]
 
 
-async def search_hybrid(db_path: str, query: str, max_results: int = 10, filters=None) -> list:
+async def search_hybrid(
+    db_path: str, query: str, max_results: int = 10, filters=None, use_expansion: bool = True
+) -> list:
     """Perform hybrid search (FTS + vector).
 
     Args:
@@ -128,6 +130,7 @@ async def search_hybrid(db_path: str, query: str, max_results: int = 10, filters
         query: Search query
         max_results: Maximum results to return
         filters: Optional SearchFilters object
+        use_expansion: Whether to use query expansion for FTS
 
     Returns:
         List of search results
@@ -135,6 +138,7 @@ async def search_hybrid(db_path: str, query: str, max_results: int = 10, filters
     from app.db.database import Database
     from app.services.embedding_service import EmbeddingService
     from app.services.hybrid_search_service import HybridSearchService
+    from app.services.query_expansion_service import QueryExpansionService
     from app.services.topic_search import LocalTopicSearchService
     from app.services.vector_search_service import VectorSearchService
 
@@ -152,6 +156,9 @@ async def search_hybrid(db_path: str, query: str, max_results: int = 10, filters
         min_similarity=0.3,
     )
 
+    # Optionally initialize query expansion
+    query_expansion = QueryExpansionService() if use_expansion else None
+
     # Initialize hybrid service
     hybrid_service = HybridSearchService(
         fts_service=fts_service,
@@ -159,6 +166,7 @@ async def search_hybrid(db_path: str, query: str, max_results: int = 10, filters
         fts_weight=0.4,
         vector_weight=0.6,
         max_results=max_results,
+        query_expansion=query_expansion,
     )
 
     return await hybrid_service.search(query, filters=filters)
@@ -179,6 +187,7 @@ async def main() -> int:
         print("  --mode=MODE           Search mode: fts, vector, or hybrid (default: hybrid)")
         print("  --db=PATH             Database path (default: /data/app.db)")
         print("  --limit=N             Maximum results to return (default: 10)")
+        print("  --no-expansion        Disable query expansion for FTS (enabled by default)")
         print()
         print("Filters:")
         print("  --date-from=DATE      Filter by publish date >= DATE (format: YYYY-MM-DD)")
@@ -206,6 +215,7 @@ async def main() -> int:
     db_path = "/data/app.db"
     mode = "hybrid"
     max_results = 10
+    use_expansion = True  # Query expansion enabled by default
 
     # Filter parameters
     date_from = None
@@ -231,6 +241,8 @@ async def main() -> int:
             except ValueError:
                 print(f"Error: Invalid limit value: {arg}")
                 return 1
+        elif arg == "--no-expansion":
+            use_expansion = False
         elif arg.startswith("--date-from="):
             try:
                 date_str = arg.split("=", 1)[1]
@@ -287,7 +299,7 @@ async def main() -> int:
         elif mode == "vector":
             results = await search_vector(db_path, query, max_results, filters)
         else:  # hybrid
-            results = await search_hybrid(db_path, query, max_results, filters)
+            results = await search_hybrid(db_path, query, max_results, filters, use_expansion)
 
         # Display results
         print_results(results, mode, query)

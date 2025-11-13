@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 from app.services.topic_search import TopicArticle
 
 if TYPE_CHECKING:
+    from app.services.query_expansion_service import QueryExpansionService
     from app.services.search_filters import SearchFilters
     from app.services.topic_search import LocalTopicSearchService
     from app.services.vector_search_service import VectorSearchService
@@ -27,6 +28,7 @@ class HybridSearchService:
         fts_weight: float = 0.4,
         vector_weight: float = 0.6,
         max_results: int = 25,
+        query_expansion: QueryExpansionService | None = None,
     ) -> None:
         """Initialize hybrid search service.
 
@@ -36,6 +38,7 @@ class HybridSearchService:
             fts_weight: Weight for FTS scores (0.0-1.0)
             vector_weight: Weight for vector scores (0.0-1.0)
             max_results: Maximum number of results to return
+            query_expansion: Optional query expansion service for FTS
         """
         if not 0.0 <= fts_weight <= 1.0:
             msg = "fts_weight must be between 0.0 and 1.0"
@@ -52,6 +55,7 @@ class HybridSearchService:
         self._fts_weight = fts_weight
         self._vector_weight = vector_weight
         self._max_results = max_results
+        self._query_expansion = query_expansion
 
     async def search(
         self,
@@ -74,9 +78,20 @@ class HybridSearchService:
             logger.warning("empty_query_for_hybrid_search", extra={"cid": correlation_id})
             return []
 
+        # Optionally expand query for FTS (improves keyword matching)
+        fts_query = query.strip()
+        if self._query_expansion:
+            expanded = self._query_expansion.expand_for_fts(fts_query)
+            logger.debug(
+                "query_expanded_for_fts",
+                extra={"cid": correlation_id, "original": fts_query, "expanded": expanded},
+            )
+            fts_query = expanded
+
         # Run both searches in parallel
+        # FTS uses expanded query, vector uses original (semantic search handles variations)
         fts_task = asyncio.create_task(
-            self._fts.find_articles(query.strip(), correlation_id=correlation_id)
+            self._fts.find_articles(fts_query, correlation_id=correlation_id)
         )
         vector_task = asyncio.create_task(
             self._vector.search(query.strip(), filters=filters, correlation_id=correlation_id)
