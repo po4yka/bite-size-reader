@@ -397,7 +397,7 @@ class TestSearchCommand(unittest.IsolatedAsyncioTestCase):
             interactions = bot.db.get_user_interactions(uid=42, limit=10)
             assert len(interactions) > 0
             last_interaction = interactions[0]
-            assert last_interaction["command"] == "search"
+            assert last_interaction["command"] == "/search"
             assert last_interaction["response_type"] == "search_results"
             assert last_interaction["response_sent"] is True
 
