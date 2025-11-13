@@ -191,7 +191,10 @@ class TestMultiLinks(unittest.IsolatedAsyncioTestCase):
             )
 
             assert message._replies, "Expected a notification reply to be sent"
-            assert message._replies[-1] == "ℹ️ No pending multi-link request to confirm. Please send the links again."
+            assert (
+                message._replies[-1]
+                == "ℹ️ No pending multi-link request to confirm. Please send the links again."
+            )
             assert bot.seen_urls == []
 
 

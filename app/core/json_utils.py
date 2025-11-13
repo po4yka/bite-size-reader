@@ -43,7 +43,7 @@ def extract_json(text: str) -> dict[str, Any] | None:
     if start == -1:
         return None
     end = candidate.rfind("}")
-    snippet = candidate[start:] if end == -1 or end <= start else candidate[start:end + 1]
+    snippet = candidate[start:] if end == -1 or end <= start else candidate[start : end + 1]
     parsed = _try_parse(snippet)
     if parsed is not None:
         return parsed

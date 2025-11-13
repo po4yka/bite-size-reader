@@ -32,9 +32,7 @@ class SummaryValidator:
             )
 
         required_fields = ["tldr", "summary_250", "key_ideas"]
-        missing_fields = [
-            field for field in required_fields if field not in content
-        ]
+        missing_fields = [field for field in required_fields if field not in content]
 
         if missing_fields:
             msg = f"Summary content missing required fields: {', '.join(missing_fields)}"
@@ -63,8 +61,7 @@ class SummaryValidator:
         summary_1000 = content.get("summary_1000", "")
 
         has_content = any(
-            isinstance(field, str) and field.strip()
-            for field in [tldr, summary_250, summary_1000]
+            isinstance(field, str) and field.strip() for field in [tldr, summary_250, summary_1000]
         )
 
         if not has_content:

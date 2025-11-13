@@ -50,9 +50,7 @@ class SqliteRequestRepositoryAdapter:
         """Get a request by its ID."""
         return await self._db.async_get_request_by_id(request_id)
 
-    async def async_get_request_by_dedupe_hash(
-        self, dedupe_hash: str
-    ) -> dict[str, Any] | None:
+    async def async_get_request_by_dedupe_hash(self, dedupe_hash: str) -> dict[str, Any] | None:
         """Get a request by its deduplication hash."""
         return await self._db.async_get_request_by_dedupe_hash(dedupe_hash)
 
@@ -62,9 +60,7 @@ class SqliteRequestRepositoryAdapter:
         """Get a request by forwarded message details."""
         return await self._db.async_get_request_by_forward(cid, fwd_message_id)
 
-    async def async_update_request_status(
-        self, request_id: int, status: str
-    ) -> None:
+    async def async_update_request_status(self, request_id: int, status: str) -> None:
         """Update the status of a request."""
         await self._db.async_update_request_status(request_id, status)
 
@@ -74,9 +70,7 @@ class SqliteRequestRepositoryAdapter:
         """Update the correlation ID of a request."""
         await self._db.async_update_request_correlation_id(request_id, correlation_id)
 
-    async def async_update_request_lang_detected(
-        self, request_id: int, lang: str
-    ) -> None:
+    async def async_update_request_lang_detected(self, request_id: int, lang: str) -> None:
         """Update the detected language of a request."""
         await self._db.async_update_request_lang_detected(request_id, lang)
 

@@ -49,9 +49,7 @@ class RequestRepositoryImpl:
         """Get a request by its ID."""
         return await self._db.async_get_request_by_id(request_id)
 
-    async def async_get_request_by_dedupe_hash(
-        self, dedupe_hash: str
-    ) -> dict[str, Any] | None:
+    async def async_get_request_by_dedupe_hash(self, dedupe_hash: str) -> dict[str, Any] | None:
         """Get a request by its deduplication hash."""
         return await self._db.async_get_request_by_dedupe_hash(dedupe_hash)
 
@@ -61,9 +59,7 @@ class RequestRepositoryImpl:
         """Get a request by forwarded message details."""
         return await self._db.async_get_request_by_forward(cid, fwd_message_id)
 
-    async def async_update_request_status(
-        self, request_id: int, status: str
-    ) -> None:
+    async def async_update_request_status(self, request_id: int, status: str) -> None:
         """Update the status of a request."""
         await self._db.async_update_request_status(request_id, status)
 
@@ -73,9 +69,7 @@ class RequestRepositoryImpl:
         """Update the correlation ID of a request."""
         await self._db.async_update_request_correlation_id(request_id, correlation_id)
 
-    async def async_update_request_lang_detected(
-        self, request_id: int, lang: str
-    ) -> None:
+    async def async_update_request_lang_detected(self, request_id: int, lang: str) -> None:
         """Update the detected language of a request."""
         await self._db.async_update_request_lang_detected(request_id, lang)
 
@@ -112,9 +106,7 @@ class SummaryRepositoryImpl:
             is_read=is_read,
         )
 
-    async def async_get_summary_by_request(
-        self, request_id: int
-    ) -> dict[str, Any] | None:
+    async def async_get_summary_by_request(self, request_id: int) -> dict[str, Any] | None:
         """Get the latest summary for a request."""
         return await self._db.async_get_summary_by_request(request_id)
 
@@ -173,9 +165,7 @@ class CrawlResultRepositoryImpl:
             metadata_json=metadata_json,
         )
 
-    async def async_get_crawl_result_by_request(
-        self, request_id: int
-    ) -> dict[str, Any] | None:
+    async def async_get_crawl_result_by_request(self, request_id: int) -> dict[str, Any] | None:
         """Get a crawl result by request ID."""
         return await self._db.async_get_crawl_result_by_request(request_id)
 

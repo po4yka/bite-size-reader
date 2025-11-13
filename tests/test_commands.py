@@ -116,7 +116,9 @@ class TestCommands(unittest.IsolatedAsyncioTestCase):
             await bot._on_message(cancel_msg)
 
             assert uid not in bot._awaiting_url_users
-            assert any("Cancelled your pending URL request" in reply for reply in cancel_msg._replies)
+            assert any(
+                "Cancelled your pending URL request" in reply for reply in cancel_msg._replies
+            )
 
     async def test_cancel_pending_multi_links_command(self):
         with tempfile.TemporaryDirectory() as tmp:

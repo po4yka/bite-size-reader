@@ -423,7 +423,9 @@ class Database:
                         }
                     except peewee.DatabaseError as exc:
                         overview["errors"].append("Failed to aggregate request statuses")
-                        self._logger.exception("db_requests_status_failed", extra={"error": str(exc)})
+                        self._logger.exception(
+                            "db_requests_status_failed", extra={"error": str(exc)}
+                        )
 
                     overview["last_request_at"] = self._fetch_single_value(
                         "SELECT created_at FROM requests ORDER BY created_at DESC LIMIT 1"

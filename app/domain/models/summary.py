@@ -61,10 +61,7 @@ class Summary:
         return all(
             field in self.content
             and self.content[field]
-            and (
-                not isinstance(self.content[field], str)
-                or self.content[field].strip()
-            )
+            and (not isinstance(self.content[field], str) or self.content[field].strip())
             for field in required_fields
         )
 
@@ -169,16 +166,14 @@ class Summary:
             Total character count.
 
         """
-        return (
-            len(self.get_tldr())
-            + len(self.get_summary_250())
-            + len(self.get_summary_1000())
-        )
+        return len(self.get_tldr()) + len(self.get_summary_250()) + len(self.get_summary_1000())
 
     def __str__(self) -> str:
         """String representation of the summary."""
         status = "read" if self.is_read else "unread"
-        return f"Summary(id={self.id}, request_id={self.request_id}, lang={self.language}, {status})"
+        return (
+            f"Summary(id={self.id}, request_id={self.request_id}, lang={self.language}, {status})"
+        )
 
     def __repr__(self) -> str:
         """Detailed representation of the summary."""

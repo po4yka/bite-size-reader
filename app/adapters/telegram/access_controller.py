@@ -36,9 +36,7 @@ class AccessController:
 
         if not self.cfg.telegram.allowed_user_ids:
             msg = "Telegram access control requires ALLOWED_USER_IDS to be configured."
-            raise RuntimeError(
-                msg
-            )
+            raise RuntimeError(msg)
 
         # Security tracking
         self._failed_attempts: dict[int, int] = {}

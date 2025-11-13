@@ -1,6 +1,5 @@
 """Unit tests for Summary domain model."""
 
-
 import pytest
 
 from app.domain.models.summary import Summary

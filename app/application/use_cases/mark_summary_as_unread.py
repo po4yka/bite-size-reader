@@ -62,9 +62,7 @@ class MarkSummaryAsUnreadUseCase:
         """
         self._summary_repo = summary_repository
 
-    async def execute(
-        self, command: MarkSummaryAsUnreadCommand
-    ) -> SummaryMarkedAsUnread:
+    async def execute(self, command: MarkSummaryAsUnreadCommand) -> SummaryMarkedAsUnread:
         """Execute the use case.
 
         Args:

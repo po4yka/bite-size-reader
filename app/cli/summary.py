@@ -233,9 +233,7 @@ def _prepare_config(args: argparse.Namespace) -> AppConfig:
             "Configuration error: "
             f"{exc}. Set FIRECRAWL_API_KEY and OPENROUTER_API_KEY before running the CLI."
         )
-        raise SystemExit(
-            msg
-        ) from exc
+        raise SystemExit(msg) from exc
     runtime = cfg.runtime
     updated = False
 

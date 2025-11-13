@@ -290,7 +290,9 @@ class NotificationEventHandler:
     via various channels (Telegram, email, push notifications, etc.).
     """
 
-    def __init__(self, telegram_client: Any | None = None, notification_service: Any | None = None) -> None:
+    def __init__(
+        self, telegram_client: Any | None = None, notification_service: Any | None = None
+    ) -> None:
         """Initialize the handler.
 
         Args:
@@ -779,15 +781,9 @@ def wire_event_handlers(
     event_bus.subscribe(SummaryCreated, cache_handler.on_summary_created)
     event_bus.subscribe(SummaryCreated, webhook_handler.on_summary_created)
 
-    event_bus.subscribe(
-        SummaryMarkedAsRead, search_index_handler.on_summary_marked_as_read
-    )
-    event_bus.subscribe(
-        SummaryMarkedAsRead, analytics_handler.on_summary_marked_as_read
-    )
-    event_bus.subscribe(
-        SummaryMarkedAsRead, cache_handler.on_summary_marked_as_read
-    )
+    event_bus.subscribe(SummaryMarkedAsRead, search_index_handler.on_summary_marked_as_read)
+    event_bus.subscribe(SummaryMarkedAsRead, analytics_handler.on_summary_marked_as_read)
+    event_bus.subscribe(SummaryMarkedAsRead, cache_handler.on_summary_marked_as_read)
 
     # Wire up request events
     event_bus.subscribe(RequestCompleted, analytics_handler.on_request_completed)

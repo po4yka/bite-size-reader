@@ -42,6 +42,5 @@ async def test_progress_message_editing():
     )
 
 
-
 if __name__ == "__main__":
     asyncio.run(test_progress_message_editing())

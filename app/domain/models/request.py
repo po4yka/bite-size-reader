@@ -63,9 +63,7 @@ class Request:
         """
         if self.status not in (RequestStatus.PENDING, RequestStatus.ERROR):
             msg = f"Cannot mark request as crawling from status: {self.status}"
-            raise ValueError(
-                msg
-            )
+            raise ValueError(msg)
         self.status = RequestStatus.CRAWLING
 
     def mark_as_summarizing(self) -> None:
@@ -81,9 +79,7 @@ class Request:
             RequestStatus.ERROR,
         ):
             msg = f"Cannot mark request as summarizing from status: {self.status}"
-            raise ValueError(
-                msg
-            )
+            raise ValueError(msg)
         self.status = RequestStatus.SUMMARIZING
 
     def mark_as_completed(self) -> None:
@@ -95,9 +91,7 @@ class Request:
         """
         if self.status in (RequestStatus.COMPLETED, RequestStatus.CANCELLED):
             msg = f"Cannot mark request as completed from status: {self.status}"
-            raise ValueError(
-                msg
-            )
+            raise ValueError(msg)
         self.status = RequestStatus.COMPLETED
 
     def mark_as_error(self) -> None:

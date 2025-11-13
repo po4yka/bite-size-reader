@@ -121,6 +121,7 @@ class TestEventBus:
 
     def test_get_handler_count(self, event_bus):
         """Test getting handler count for an event type."""
+
         async def handler1(event: SummaryCreated):
             pass
 
@@ -135,6 +136,7 @@ class TestEventBus:
 
     def test_unsubscribe(self, event_bus):
         """Test unsubscribing a handler."""
+
         async def handler(event: SummaryCreated):
             pass
 
@@ -146,6 +148,7 @@ class TestEventBus:
 
     def test_clear_handlers_for_specific_event(self, event_bus):
         """Test clearing handlers for specific event type."""
+
         async def handler1(event: SummaryCreated):
             pass
 
@@ -162,6 +165,7 @@ class TestEventBus:
 
     def test_clear_all_handlers(self, event_bus):
         """Test clearing all handlers."""
+
         async def handler1(event: SummaryCreated):
             pass
 
@@ -178,6 +182,7 @@ class TestEventBus:
 
     def test_get_all_event_types(self, event_bus):
         """Test getting all event types with subscribers."""
+
         async def handler1(event: SummaryCreated):
             pass
 

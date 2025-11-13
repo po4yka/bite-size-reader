@@ -52,7 +52,10 @@ class TestFieldNormalization(unittest.TestCase):
         assert "seo_keywords" in result
 
         # Check that the content was preserved
-        assert result["summary_250"] == "No source content provided; unable to generate a factual summary."
+        assert (
+            result["summary_250"]
+            == "No source content provided; unable to generate a factual summary."
+        )
         assert result["summary_1000"] == payload["summary1000"]
         assert len(result["key_ideas"]) == 5
         assert len(result["topic_tags"]) == 6

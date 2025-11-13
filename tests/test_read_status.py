@@ -300,7 +300,11 @@ class TestReadStatusDatabase(unittest.TestCase):
 
         # Get limited unread summaries
         unread = self.db.get_unread_summaries(limit=3)
-        assert [row["input_url"] for row in unread] == ["https://example0.com", "https://example1.com", "https://example2.com"]
+        assert [row["input_url"] for row in unread] == [
+            "https://example0.com",
+            "https://example1.com",
+            "https://example2.com",
+        ]
 
     def test_get_unread_summaries_topic_filter(self):
         """Unread summaries can be filtered by a topic query."""
@@ -341,7 +345,9 @@ class TestReadStatusDatabase(unittest.TestCase):
 
         unread_ai = self.db.get_unread_summaries(limit=5, topic="AI")
         assert len(unread_ai) == 2
-        assert all("example0" in row["input_url"] or "example2" in row["input_url"] for row in unread_ai)
+        assert all(
+            "example0" in row["input_url"] or "example2" in row["input_url"] for row in unread_ai
+        )
 
         unread_garden = self.db.get_unread_summaries(limit=5, topic="garden")
         assert len(unread_garden) == 1

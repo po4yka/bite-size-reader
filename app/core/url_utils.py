@@ -149,15 +149,11 @@ def normalize_url(url: str) -> str:
             # Explicitly check against dangerous schemes first
             if scheme_lower in _DANGEROUS_SCHEMES:
                 msg = f"URL scheme '{p.scheme}' is not allowed. Only http and https are supported."
-                raise ValueError(
-                    msg
-                )
+                raise ValueError(msg)
             # Then validate against allowed list
             if scheme_lower not in _ALLOWED_SCHEMES:
                 msg = f"Unsupported URL scheme: {p.scheme}. Only http and https are allowed."
-                raise ValueError(
-                    msg
-                )
+                raise ValueError(msg)
             scheme = scheme_lower
         else:
             # If no scheme after parsing, default to http

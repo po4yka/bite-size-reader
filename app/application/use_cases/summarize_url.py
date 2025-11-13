@@ -317,9 +317,7 @@ class SummarizeUrlUseCase:
 
         # Update request status
         request.mark_as_crawling()
-        await self._request_repo.async_update_request_status(
-            request.id or 0, request.status.value
-        )
+        await self._request_repo.async_update_request_status(request.id or 0, request.status.value)
 
         try:
             # Call external service (this would be the actual implementation)
@@ -379,9 +377,7 @@ class SummarizeUrlUseCase:
 
         # Update request status
         request.mark_as_summarizing()
-        await self._request_repo.async_update_request_status(
-            request.id or 0, request.status.value
-        )
+        await self._request_repo.async_update_request_status(request.id or 0, request.status.value)
 
         try:
             # Call LLM service (this would be the actual implementation)

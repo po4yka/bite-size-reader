@@ -14,7 +14,6 @@ class FileValidationError(Exception):
     """Raised when file validation fails."""
 
 
-
 class SecureFileValidator:
     """Validates file paths and sizes to prevent security vulnerabilities.
 
@@ -133,9 +132,7 @@ class SecureFileValidator:
                 f"File path outside allowed directories. "
                 f"File: {resolved_path}, Allowed: {allowed_dirs_str}"
             )
-            raise FileValidationError(
-                msg
-            )
+            raise FileValidationError(msg)
 
         # Check file size
         try:
@@ -146,9 +143,7 @@ class SecureFileValidator:
                     f"(max: {self._max_file_size} bytes / "
                     f"{self._max_file_size / (1024 * 1024):.1f} MB)"
                 )
-                raise FileValidationError(
-                    msg
-                )
+                raise FileValidationError(msg)
         except FileValidationError:
             raise
         except Exception as e:
@@ -195,9 +190,7 @@ class SecureFileValidator:
                     # Check line count limit
                     if line_num > self.MAX_LINES:
                         msg = f"File exceeds maximum line count: {self.MAX_LINES} lines"
-                        raise FileValidationError(
-                            msg
-                        )
+                        raise FileValidationError(msg)
 
                     # Check line length limit
                     if len(line) > self.MAX_LINE_LENGTH:

@@ -101,10 +101,7 @@ class GetUnreadSummariesUseCase:
         )
 
         # Convert to domain models
-        summaries = [
-            self._summary_repo.to_domain_model(db_summary)
-            for db_summary in db_summaries
-        ]
+        summaries = [self._summary_repo.to_domain_model(db_summary) for db_summary in db_summaries]
 
         logger.info(
             "get_unread_summaries_completed",

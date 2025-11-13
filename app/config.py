@@ -18,7 +18,6 @@ from pydantic import (
 )
 
 
-
 def validate_model_name(model: str) -> str:
     """Validate model name for security and allow OpenRouter-style IDs."""
     if not model:
@@ -205,9 +204,7 @@ class FirecrawlConfig(BaseModel):
             parsed = int(str(value))
         except ValueError as exc:  # pragma: no cover - defensive
             msg = f"{info.field_name.replace('_', ' ')} must be a valid integer"
-            raise ValueError(
-                msg
-            ) from exc
+            raise ValueError(msg) from exc
 
         limits: dict[str, tuple[int, int]] = {
             "max_connections": (1, 100),
@@ -219,9 +216,7 @@ class FirecrawlConfig(BaseModel):
         min_val, max_val = limits[info.field_name]
         if parsed < min_val or parsed > max_val:
             msg = f"{info.field_name.replace('_', ' ').capitalize()} must be between {min_val} and {max_val}"
-            raise ValueError(
-                msg
-            )
+            raise ValueError(msg)
         return parsed
 
     @field_validator(
@@ -254,9 +249,7 @@ class FirecrawlConfig(BaseModel):
         min_val, max_val = limits[info.field_name]
         if parsed < min_val or parsed > max_val:
             msg = f"{info.field_name.replace('_', ' ').capitalize()} must be between {min_val} and {max_val}"
-            raise ValueError(
-                msg
-            )
+            raise ValueError(msg)
         return parsed
 
 
@@ -382,9 +375,7 @@ class OpenRouterConfig(BaseModel):
         mode_value = str(value)
         if mode_value not in {"json_schema", "json_object"}:
             msg = f"Invalid structured output mode: {mode_value}. Must be one of {{'json_schema', 'json_object'}}"
-            raise ValueError(
-                msg
-            )
+            raise ValueError(msg)
         return mode_value
 
     @field_validator("provider_order", mode="before")
@@ -469,9 +460,7 @@ class RuntimeConfig(BaseModel):
             parsed = int(str(value if value not in (None, "") else default))
         except ValueError as exc:  # pragma: no cover - defensive
             msg = f"{info.field_name.replace('_', ' ')} must be a valid integer"
-            raise ValueError(
-                msg
-            ) from exc
+            raise ValueError(msg) from exc
         if parsed <= 0:
             msg = f"{info.field_name.replace('_', ' ').capitalize()} must be positive"
             raise ValueError(msg)
@@ -596,9 +585,7 @@ class Settings(BaseModel):
                 "ALLOWED_USER_IDS must contain at least one Telegram user ID; "
                 "set the environment variable to a comma-separated list."
             )
-            raise RuntimeError(
-                msg
-            )
+            raise RuntimeError(msg)
         return self
 
     def as_app_config(self) -> AppConfig:

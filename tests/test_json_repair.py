@@ -228,7 +228,9 @@ class TestJsonRepair(unittest.TestCase):
             # Verify that the summary was processed successfully with local JSON repair
             self.bot._reply_json.assert_called_once()
             summary_json = self.bot._reply_json.call_args[0][1]
-            assert summary_json["summary_250"] == "Truncated..."  # Local repair extracted this from broken JSON
+            assert (
+                summary_json["summary_250"] == "Truncated..."
+            )  # Local repair extracted this from broken JSON
 
         asyncio.run(run_test())
 
@@ -274,7 +276,9 @@ class TestJsonRepair(unittest.TestCase):
                 await self.bot._handle_url_flow(message, "http://example.com")
 
             self.bot._reply_json.assert_called_once()
-            assert mock_openrouter_instance.chat.await_count == 3  # 1 for summary + 2 for insights (json_schema + json_object fallback)
+            assert (
+                mock_openrouter_instance.chat.await_count == 3
+            )  # 1 for summary + 2 for insights (json_schema + json_object fallback)
 
         asyncio.run(run_test())
 

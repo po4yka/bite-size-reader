@@ -131,7 +131,9 @@ class TestJsonParsing(unittest.TestCase):
             message = MagicMock()
             await bot._handle_url_flow(message, "http://example.com")
 
-            assert mock_openrouter_instance.chat.await_count == 3  # 1 for summary + 2 for insights (json_schema + json_object fallback)
+            assert (
+                mock_openrouter_instance.chat.await_count == 3
+            )  # 1 for summary + 2 for insights (json_schema + json_object fallback)
             bot._reply_json.assert_called_once()
 
         asyncio.run(run_test())
@@ -205,7 +207,9 @@ class TestJsonParsing(unittest.TestCase):
             message = MagicMock()
             await bot._handle_url_flow(message, "http://example.com")
 
-            assert mock_openrouter_instance.chat.await_count == 3  # 1 for summary + 2 for insights (json_schema + json_object fallback)
+            assert (
+                mock_openrouter_instance.chat.await_count == 3
+            )  # 1 for summary + 2 for insights (json_schema + json_object fallback)
             bot._reply_json.assert_called_once()
             summary_json = bot._reply_json.call_args[0][1]
             assert summary_json["summary_250"] == "Summary."
@@ -255,7 +259,9 @@ class TestJsonParsing(unittest.TestCase):
             message = MagicMock()
             await bot._handle_url_flow(message, "http://example.com")
 
-            assert mock_openrouter_instance.chat.await_count == 3  # 1 for summary + 2 for insights (json_schema + json_object fallback)
+            assert (
+                mock_openrouter_instance.chat.await_count == 3
+            )  # 1 for summary + 2 for insights (json_schema + json_object fallback)
             bot._reply_json.assert_called_once()
             summary_json = bot._reply_json.call_args[0][1]
             assert summary_json["summary_250"] == "Fixed."

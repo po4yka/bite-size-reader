@@ -872,7 +872,9 @@ class LLMSummarizer:
             request_row = self.db.get_request_by_id(req_id)
         except Exception as exc:
             raise_if_cancelled(exc)
-            logger.exception("request_lookup_failed", extra={"error": str(exc), "cid": correlation_id})
+            logger.exception(
+                "request_lookup_failed", extra={"error": str(exc), "cid": correlation_id}
+            )
 
         request_url: str | None = None
         if request_row:

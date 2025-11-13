@@ -37,9 +37,7 @@ class RequestRepository(Protocol):
         """
         ...
 
-    async def async_get_request_by_dedupe_hash(
-        self, dedupe_hash: str
-    ) -> dict[str, Any] | None:
+    async def async_get_request_by_dedupe_hash(self, dedupe_hash: str) -> dict[str, Any] | None:
         """Get a request by its deduplication hash.
 
         Returns:
@@ -59,9 +57,7 @@ class RequestRepository(Protocol):
         """
         ...
 
-    async def async_update_request_status(
-        self, request_id: int, status: str
-    ) -> None:
+    async def async_update_request_status(self, request_id: int, status: str) -> None:
         """Update the status of a request."""
         ...
 
@@ -71,9 +67,7 @@ class RequestRepository(Protocol):
         """Update the correlation ID of a request."""
         ...
 
-    async def async_update_request_lang_detected(
-        self, request_id: int, lang: str
-    ) -> None:
+    async def async_update_request_lang_detected(self, request_id: int, lang: str) -> None:
         """Update the detected language of a request."""
         ...
 
@@ -97,9 +91,7 @@ class SummaryRepository(Protocol):
         """
         ...
 
-    async def async_get_summary_by_request(
-        self, request_id: int
-    ) -> dict[str, Any] | None:
+    async def async_get_summary_by_request(self, request_id: int) -> dict[str, Any] | None:
         """Get the latest summary for a request.
 
         Returns:
@@ -160,9 +152,7 @@ class CrawlResultRepository(Protocol):
         """
         ...
 
-    async def async_get_crawl_result_by_request(
-        self, request_id: int
-    ) -> dict[str, Any] | None:
+    async def async_get_crawl_result_by_request(self, request_id: int) -> dict[str, Any] | None:
         """Get a crawl result by request ID.
 
         Returns:

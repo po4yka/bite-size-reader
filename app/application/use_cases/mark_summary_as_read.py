@@ -108,7 +108,10 @@ class MarkSummaryAsReadUseCase:
             msg = f"Cannot mark summary as read: {reason}"
             raise InvalidStateTransitionError(
                 msg,
-                details={"summary_id": command.summary_id, "current_state": "read" if summary.is_read else "unread"},
+                details={
+                    "summary_id": command.summary_id,
+                    "current_state": "read" if summary.is_read else "unread",
+                },
             )
 
         # 4. Perform the state transition (domain logic)

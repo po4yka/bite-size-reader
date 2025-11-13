@@ -40,8 +40,6 @@ class SqliteCrawlResultRepositoryAdapter:
             metadata_json=metadata_json,
         )
 
-    async def async_get_crawl_result_by_request(
-        self, request_id: int
-    ) -> dict[str, Any] | None:
+    async def async_get_crawl_result_by_request(self, request_id: int) -> dict[str, Any] | None:
         """Get a crawl result by request ID."""
         return await self._db.async_get_crawl_result_by_request(request_id)

@@ -453,14 +453,18 @@ class CommandProcessor:
                     # Convert TopicArticleDTO to format expected by formatter
                     results = []
                     for article in topic_articles:
-                        results.append({
-                            "request_id": article.request_id,
-                            "url": article.url,
-                            "title": article.title,
-                            "created_at": article.created_at.isoformat() if article.created_at else None,
-                            "relevance_score": article.relevance_score,
-                            "matched_topics": article.matched_topics,
-                        })
+                        results.append(
+                            {
+                                "request_id": article.request_id,
+                                "url": article.url,
+                                "title": article.title,
+                                "created_at": article.created_at.isoformat()
+                                if article.created_at
+                                else None,
+                                "relevance_score": article.relevance_score,
+                                "matched_topics": article.matched_topics,
+                            }
+                        )
                 else:
                     # Fallback if use case unavailable
                     results = await searcher.find_articles(topic, correlation_id=correlation_id)
@@ -846,12 +850,16 @@ class CommandProcessor:
                 unread_summaries = []
                 for summary in domain_summaries:
                     dto = SummaryDTO.from_domain(summary)
-                    unread_summaries.append({
-                        "request_id": dto.request_id,
-                        "input_url": "Unknown URL",  # Not available in domain model
-                        "created_at": dto.created_at.isoformat() if dto.created_at else "Unknown date",
-                        "json_payload": dto.content,
-                    })
+                    unread_summaries.append(
+                        {
+                            "request_id": dto.request_id,
+                            "input_url": "Unknown URL",  # Not available in domain model
+                            "created_at": dto.created_at.isoformat()
+                            if dto.created_at
+                            else "Unknown date",
+                            "json_payload": dto.content,
+                        }
+                    )
             else:
                 # Fallback to direct database access if container not available
                 unread_summaries = self.db.get_unread_summaries(limit=limit, topic=topic)

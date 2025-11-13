@@ -391,7 +391,9 @@ class URLHandler:
                                 extra={"completed": self._completed, "total": self.total},
                             )
                         except asyncio.QueueFull:
-                            logger.debug("progress_update_queue_full", extra={"completed": self._completed})
+                            logger.debug(
+                                "progress_update_queue_full", extra={"completed": self._completed}
+                            )
                             # Skip if update queue is full (prevents blocking)
 
                     completed = self._completed

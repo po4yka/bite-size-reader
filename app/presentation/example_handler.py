@@ -87,9 +87,7 @@ class ExampleCommandHandler:
 
             # 4. Format response for user
             if not summaries:
-                await self._formatter.safe_reply(
-                    message, "You have no unread summaries."
-                )
+                await self._formatter.safe_reply(message, "You have no unread summaries.")
                 return
 
             # Format summaries for display
@@ -106,9 +104,7 @@ class ExampleCommandHandler:
         except Exception as e:
             # Unexpected error
             logger.exception("handle_unread_command_failed", extra={"error": str(e)})
-            await self._formatter.safe_reply(
-                message, "❌ An error occurred. Please try again."
-            )
+            await self._formatter.safe_reply(message, "❌ An error occurred. Please try again.")
 
     async def handle_read_command(
         self,
@@ -143,9 +139,7 @@ class ExampleCommandHandler:
             await self._event_bus.publish(event)
 
             # 5. Send success response
-            await self._formatter.safe_reply(
-                message, f"✅ Summary {summary_id} marked as read."
-            )
+            await self._formatter.safe_reply(message, f"✅ Summary {summary_id} marked as read.")
 
         except ValueError as e:
             # Command validation error
@@ -158,9 +152,7 @@ class ExampleCommandHandler:
         except Exception as e:
             # Unexpected error
             logger.exception("handle_read_command_failed", extra={"error": str(e)})
-            await self._formatter.safe_reply(
-                message, "❌ An error occurred. Please try again."
-            )
+            await self._formatter.safe_reply(message, "❌ An error occurred. Please try again.")
 
     async def handle_search_command(
         self,
@@ -192,9 +184,7 @@ class ExampleCommandHandler:
             # 2. Get use case from container
             use_case = self._container.search_topics_use_case()
             if use_case is None:
-                await self._formatter.safe_reply(
-                    message, "❌ Search is not configured."
-                )
+                await self._formatter.safe_reply(message, "❌ Search is not configured.")
                 return
 
             # 3. Execute use case
@@ -202,9 +192,7 @@ class ExampleCommandHandler:
 
             # 4. Format response
             if not articles:
-                await self._formatter.safe_reply(
-                    message, f"No articles found for '{topic}'."
-                )
+                await self._formatter.safe_reply(message, f"No articles found for '{topic}'.")
                 return
 
             response = f"🔍 Found {len(articles)} articles about '{topic}':\n\n"
@@ -221,9 +209,7 @@ class ExampleCommandHandler:
         except Exception as e:
             # Search service error
             logger.exception("handle_search_command_failed", extra={"error": str(e)})
-            await self._formatter.safe_reply(
-                message, "❌ Search failed. Please try again."
-            )
+            await self._formatter.safe_reply(message, "❌ Search failed. Please try again.")
 
 
 # ==================== Integration Example ====================

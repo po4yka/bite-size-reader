@@ -40,9 +40,7 @@ class MockSummaryRepository:
         self.next_id += 1
         return summary_id
 
-    async def async_get_summary_by_request(
-        self, request_id: int
-    ) -> dict[str, Any] | None:
+    async def async_get_summary_by_request(self, request_id: int) -> dict[str, Any] | None:
         """Mock get summary by request."""
         return self.summaries.get(request_id)
 
@@ -51,9 +49,7 @@ class MockSummaryRepository:
     ) -> list[dict[str, Any]]:
         """Mock get unread summaries."""
         unread = [
-            summary
-            for summary in self.summaries.values()
-            if not summary.get("is_read", False)
+            summary for summary in self.summaries.values() if not summary.get("is_read", False)
         ]
         return unread[:limit]
 
