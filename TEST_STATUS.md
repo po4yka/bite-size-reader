@@ -3,12 +3,12 @@
 ## Current Test Results
 
 **Total Tests**: 122
-**Passing**: 89 (73%)
-**Failing**: 33 (27% - all due to missing dependencies)
+**Passing**: 72 (59%) ✅ - All passing without dependencies
+**Blocked**: 50 (41%) ⏳ - Require dependencies (peewee, pytest, httpx)
 
 ## Test Status by Category
 
-### ✅ Passing Tests (89 tests)
+### ✅ Passing Tests (72 tests)
 
 #### Search Feature Tests
 - **Query Expansion Service**: 18/18 tests ✅
@@ -16,16 +16,16 @@
 
 #### Core Bot Tests
 - **Rate Limiter**: 10/10 tests ✅
-- **Telegram Models**: 9/9 tests ✅
+- **Telegram Models**: 23/23 tests ✅
 - **Field Normalization**: 3/3 tests ✅
 - **Enum Parsing**: 14/14 tests ✅
 - **Summary Contract**: 3/3 tests ✅
-- **Forward Summarizer**: 1/1 tests ✅
-- **LLM Response Workflow**: 1/3 tests ✅ (2 errors due to dependencies)
 
-### ⚠️ Failing Tests (33 errors)
+**Note**: Forward Summarizer test (1 test) requires httpx dependency
 
-All failures are due to missing dependencies, not actual test failures.
+### ⏳ Blocked Tests (50 tests)
+
+All blocked tests are due to missing dependencies, not actual test failures.
 
 #### Missing Dependencies Issues
 
@@ -155,10 +155,23 @@ except ImportError:
 ## Expected Results After Installing Dependencies
 
 Once dependencies are installed, all 122 tests should pass:
-- ✅ 89 tests already passing
-- ✅ 33 tests will pass after dependency installation
+- ✅ 72 tests already passing (verified without dependencies)
+- ⏳ 50 tests blocked on dependencies (peewee, pytest, httpx)
 
 **Expected Final Result**: 122/122 tests passing (100% ✅)
+
+**Verified Passing Test Modules**:
+```bash
+python3 -m unittest \
+  tests.test_query_expansion_service \
+  tests.test_rate_limiter \
+  tests.test_telegram_models \
+  tests.test_enum_parsing_fixes \
+  tests.test_field_normalization \
+  tests.test_summary_contract
+
+# Result: 72 tests - OK
+```
 
 ## Files Modified for Testing
 
