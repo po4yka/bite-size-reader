@@ -1,0 +1,93 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+.coverage
+htmlcov/
+coverage.xml
+.tox/
+
+# Git
+.git/
+.github/
+.gitignore
+.gitattributes
+
+# IDE and editors
+.vscode/
+.idea/
+.cursor/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Documentation
+docs/
+*.md
+!README.md
+
+# Tests
+tests/
+test_*.py
+
+# CI/CD
+.pre-commit-config.yaml
+.pre-commit-config.yml
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+*.session
+*.session-journal
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+*.db-journal
+*.db-shm
+*.db-wal
+data/
+
+# Logs
+logs/
+*.log
+
+# Build artifacts
+build/
+dist/
+venv/
+.venv/
+env/
+ENV/
+
+# Requirements (using pyproject.toml)
+requirements.txt
+requirements-dev.txt
+
+# OS files
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Docker
+docker-compose*.yml
+!docker-compose.yml
+Dockerfile.dev
+
+# Scripts (not needed in container)
+scripts/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.bak
+*.swp
