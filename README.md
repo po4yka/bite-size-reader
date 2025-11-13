@@ -42,6 +42,7 @@ Quick start
 - Copy `.env.example` to `.env` and fill required secrets.
 - Build and run with Docker.
 - See DEPLOYMENT.md for full setup and deployment instructions.
+- For production refreshes, follow `docs/server_update_guide.md` for pull + redeploy steps.
 
 Docker
 - If you updated dependencies in `pyproject.toml`, generate lock files first: `make lock-uv` (or `make lock-piptools`).
