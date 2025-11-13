@@ -34,6 +34,7 @@ class MessageHandler:
         forward_processor: ForwardProcessor,
         topic_searcher: TopicSearchService | None = None,
         local_searcher: LocalTopicSearchService | None = None,
+        container: Any | None = None,
     ) -> None:
         self.cfg = cfg
         self.db = db
@@ -63,6 +64,7 @@ class MessageHandler:
             topic_searcher=topic_searcher,
             local_searcher=local_searcher,
             task_manager=self.task_manager,
+            container=container,
         )
 
         self.message_router = MessageRouter(

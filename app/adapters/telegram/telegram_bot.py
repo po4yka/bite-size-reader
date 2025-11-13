@@ -141,6 +141,28 @@ class TelegramBot:
             audit_func=self._audit,
         )
 
+        # Initialize hexagonal architecture DI container before MessageHandler
+        from app.di.container import Container
+
+        self._container = Container(
+            database=self.db,
+            topic_search_service=self.local_searcher,
+            content_fetcher=self._firecrawl,
+            llm_client=self._openrouter,
+            analytics_service=None,  # No analytics service yet
+        )
+        # Wire event handlers automatically
+        self._container.wire_event_handlers_auto()
+
+        logger.info(
+            "hexagonal_architecture_initialized",
+            extra={
+                "event_bus_handlers": self._container.event_bus().get_handler_count(
+                    type("DomainEvent", (), {})  # Base event type
+                ),
+            },
+        )
+
         self.message_handler = MessageHandler(
             cfg=self.cfg,
             db=self.db,
@@ -149,6 +171,7 @@ class TelegramBot:
             forward_processor=self.forward_processor,
             topic_searcher=self.topic_searcher,
             local_searcher=self.local_searcher,
+            container=self._container,
         )
 
         # Route URL handling via the bot instance so legacy tests overriding
