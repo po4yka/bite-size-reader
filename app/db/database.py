@@ -949,6 +949,29 @@ class Database:
             **fields,
         )
 
+    def get_user_interactions(
+        self,
+        *,
+        uid: int,
+        limit: int = 10,
+    ) -> list[dict[str, Any]]:
+        """Get recent user interactions for a user.
+
+        Args:
+            uid: The user ID to query
+            limit: Maximum number of interactions to return (default 10)
+
+        Returns:
+            List of interaction dictionaries, ordered by most recent first
+        """
+        interactions = (
+            UserInteraction.select()
+            .where(UserInteraction.user_id == uid)
+            .order_by(UserInteraction.created_at.desc())
+            .limit(limit)
+        )
+        return [model_to_dict(interaction) for interaction in interactions]
+
     def create_request(
         self,
         *,
