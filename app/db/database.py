@@ -24,6 +24,7 @@ from app.db.models import (
     LLMCall,
     Request,
     Summary,
+    SummaryEmbedding,
     TelegramMessage,
     TopicSearchIndex,
     User,
@@ -1267,6 +1268,89 @@ class Database:
         Summary.update({Summary.insights_json: self._prepare_json_payload(insights_json)}).where(
             Summary.request == request_id
         ).execute()
+
+    def create_or_update_summary_embedding(
+        self,
+        summary_id: int,
+        embedding_blob: bytes,
+        model_name: str,
+        model_version: str,
+        dimensions: int,
+    ) -> None:
+        """Store or update embedding for a summary.
+
+        Args:
+            summary_id: ID of the summary to associate embedding with
+            embedding_blob: Serialized embedding data (pickled numpy array)
+            model_name: Name of the embedding model used
+            model_version: Version of the embedding model
+            dimensions: Number of dimensions in the embedding vector
+        """
+        try:
+            # Try to create new embedding
+            SummaryEmbedding.create(
+                summary=summary_id,
+                embedding_blob=embedding_blob,
+                model_name=model_name,
+                model_version=model_version,
+                dimensions=dimensions,
+            )
+        except peewee.IntegrityError:
+            # Embedding exists, update it
+            SummaryEmbedding.update(
+                {
+                    SummaryEmbedding.embedding_blob: embedding_blob,
+                    SummaryEmbedding.model_name: model_name,
+                    SummaryEmbedding.model_version: model_version,
+                    SummaryEmbedding.dimensions: dimensions,
+                    SummaryEmbedding.created_at: dt.datetime.utcnow(),
+                }
+            ).where(SummaryEmbedding.summary == summary_id).execute()
+
+    async def async_create_or_update_summary_embedding(
+        self,
+        summary_id: int,
+        embedding_blob: bytes,
+        model_name: str,
+        model_version: str,
+        dimensions: int,
+    ) -> None:
+        """Asynchronously store or update embedding for a summary."""
+        await self._safe_db_operation(
+            self.create_or_update_summary_embedding,
+            summary_id=summary_id,
+            embedding_blob=embedding_blob,
+            model_name=model_name,
+            model_version=model_version,
+            dimensions=dimensions,
+            operation_name="create_or_update_summary_embedding",
+        )
+
+    def get_summary_embedding(self, summary_id: int) -> dict[str, Any] | None:
+        """Retrieve embedding for a summary.
+
+        Returns:
+            Dictionary with keys: embedding_blob, model_name, model_version, dimensions, created_at
+            None if no embedding exists
+        """
+        embedding = SummaryEmbedding.get_or_none(SummaryEmbedding.summary == summary_id)
+        if embedding is None:
+            return None
+        return {
+            "embedding_blob": embedding.embedding_blob,
+            "model_name": embedding.model_name,
+            "model_version": embedding.model_version,
+            "dimensions": embedding.dimensions,
+            "created_at": embedding.created_at,
+        }
+
+    async def async_get_summary_embedding(self, summary_id: int) -> dict[str, Any] | None:
+        """Asynchronously retrieve embedding for a summary."""
+        return await self._safe_db_operation(
+            self.get_summary_embedding,
+            summary_id=summary_id,
+            operation_name="get_summary_embedding",
+        )
 
     @staticmethod
     def _yield_topic_fragments(value: Any) -> Iterator[str]:

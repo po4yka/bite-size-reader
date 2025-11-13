@@ -5,9 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import pickle
-from typing import TYPE_CHECKING
-
-import numpy as np
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from sentence_transformers import SentenceTransformer
@@ -38,21 +36,20 @@ class EmbeddingService:
             )
         return self._model
 
-    async def generate_embedding(self, text: str) -> np.ndarray:
+    async def generate_embedding(self, text: str) -> Any:
         """Generate embedding vector for text."""
         model = self._ensure_model()
 
         # Run in thread pool to avoid blocking
-        embedding = await asyncio.to_thread(
+        return await asyncio.to_thread(
             model.encode, text, convert_to_numpy=True, show_progress_bar=False
         )
-        return embedding
 
-    def serialize_embedding(self, embedding: np.ndarray) -> bytes:
+    def serialize_embedding(self, embedding: Any) -> bytes:
         """Serialize numpy array to bytes for database storage."""
         return pickle.dumps(embedding, protocol=pickle.HIGHEST_PROTOCOL)
 
-    def deserialize_embedding(self, blob: bytes) -> np.ndarray:
+    def deserialize_embedding(self, blob: bytes) -> Any:
         """Deserialize embedding from database."""
         return pickle.loads(blob)
 
