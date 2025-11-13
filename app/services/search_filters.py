@@ -111,7 +111,7 @@ class SearchFilters:
 
         # Try dateutil if available (handles more formats)
         try:
-            from dateutil import parser
+            from dateutil import parser  # type: ignore[import-untyped]
 
             return parser.parse(date_str)
         except Exception:

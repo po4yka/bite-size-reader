@@ -56,7 +56,7 @@ async def run_all_searches(db_path: str, query: str, max_results: int = 10) -> d
     vector_task = asyncio.create_task(vector_service.search(query))
     hybrid_task = asyncio.create_task(hybrid_service.search(query))
 
-    fts_results, vector_results, hybrid_results = await asyncio.gather(
+    fts_results, vector_results_raw, hybrid_results = await asyncio.gather(
         fts_task, vector_task, hybrid_task
     )
 
@@ -69,7 +69,7 @@ async def run_all_searches(db_path: str, query: str, max_results: int = 10) -> d
             source=r.source,
             published_at=r.published_at,
         )
-        for r in vector_results
+        for r in vector_results_raw
     ]
 
     return {
