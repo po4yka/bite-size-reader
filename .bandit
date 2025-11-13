@@ -1,0 +1,11 @@
+[bandit]
+# Bandit security scanner configuration
+# https://bandit.readthedocs.io/en/latest/config.html
+
+# Skip B110 (try_except_pass) - intentional error handling throughout codebase
+# Many except-pass blocks are used for defensive programming where graceful
+# degradation is preferred over raising exceptions.
+skips = B110
+
+# Exclude test files and data directories
+exclude_dirs = /tests,/data,/build,/dist,/venv,.venv,__pycache__

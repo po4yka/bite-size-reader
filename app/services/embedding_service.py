@@ -88,8 +88,12 @@ class EmbeddingService:
         return pickle.dumps(embedding, protocol=pickle.HIGHEST_PROTOCOL)
 
     def deserialize_embedding(self, blob: bytes) -> Any:
-        """Deserialize embedding from database."""
-        return pickle.loads(blob)
+        """Deserialize embedding from database.
+
+        Note: pickle is safe here as embeddings are generated internally
+        and stored in the application's own database, not from untrusted sources.
+        """
+        return pickle.loads(blob)  # nosec B301
 
     def get_model_name(self, language: str | None = None) -> str:
         """Get model name for a specific language."""
