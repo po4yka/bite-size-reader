@@ -13,32 +13,70 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+# Language-specific model configuration
+# Maps language codes to optimal embedding models
+DEFAULT_MODELS = {
+    "en": "all-MiniLM-L6-v2",  # English-optimized, 384 dims
+    "ru": "paraphrase-multilingual-MiniLM-L12-v2",  # Multilingual, good for Russian, 384 dims
+    "auto": "paraphrase-multilingual-MiniLM-L12-v2",  # Default multilingual model, 384 dims
+}
+
+
 class EmbeddingService:
-    """Generate and manage semantic embeddings for articles."""
+    """Generate and manage semantic embeddings for articles with multi-language support."""
 
-    def __init__(self, model_name: str = "all-MiniLM-L6-v2") -> None:
-        self._model_name = model_name
-        self._model: SentenceTransformer | None = None
-        self._dimensions: int | None = None
+    def __init__(
+        self,
+        default_model: str = "paraphrase-multilingual-MiniLM-L12-v2",
+        model_registry: dict[str, str] | None = None,
+    ) -> None:
+        """Initialize embedding service with multi-language support.
 
-    def _ensure_model(self) -> SentenceTransformer:
-        """Lazy load the embedding model."""
-        if self._model is None:
+        Args:
+            default_model: Default model to use when language is not specified
+            model_registry: Custom mapping of language codes to model names
+                           If None, uses DEFAULT_MODELS
+        """
+        self._default_model = default_model
+        self._model_registry = model_registry or DEFAULT_MODELS.copy()
+        self._models: dict[str, SentenceTransformer] = {}  # Model cache per language
+        self._dimensions: dict[str, int] = {}  # Dimensions per model
+
+    def _get_model_name_for_language(self, language: str | None) -> str:
+        """Get the appropriate model name for a language."""
+        if not language:
+            return self._default_model
+
+        # Check registry
+        return self._model_registry.get(language, self._default_model)
+
+    def _ensure_model(self, model_name: str) -> SentenceTransformer:
+        """Lazy load the embedding model (cached per model name)."""
+        if model_name not in self._models:
             from sentence_transformers import SentenceTransformer
 
-            self._model = SentenceTransformer(self._model_name)
+            self._models[model_name] = SentenceTransformer(model_name)
             # Get embedding dimensions
-            sample = self._model.encode("test")
-            self._dimensions = len(sample)
+            sample = self._models[model_name].encode("test")
+            self._dimensions[model_name] = len(sample)
             logger.info(
                 "embedding_model_loaded",
-                extra={"model": self._model_name, "dims": self._dimensions},
+                extra={"model": model_name, "dims": self._dimensions[model_name]},
             )
-        return self._model
+        return self._models[model_name]
 
-    async def generate_embedding(self, text: str) -> Any:
-        """Generate embedding vector for text."""
-        model = self._ensure_model()
+    async def generate_embedding(self, text: str, language: str | None = None) -> Any:
+        """Generate embedding vector for text.
+
+        Args:
+            text: Text to embed
+            language: Language code (en, ru, auto) to select optimal model
+
+        Returns:
+            Numpy array embedding vector
+        """
+        model_name = self._get_model_name_for_language(language)
+        model = self._ensure_model(model_name)
 
         # Run in thread pool to avoid blocking
         return await asyncio.to_thread(
@@ -53,16 +91,29 @@ class EmbeddingService:
         """Deserialize embedding from database."""
         return pickle.loads(blob)
 
-    @property
-    def model_name(self) -> str:
-        return self._model_name
+    def get_model_name(self, language: str | None = None) -> str:
+        """Get model name for a specific language."""
+        return self._get_model_name_for_language(language)
+
+    def get_dimensions(self, language: str | None = None) -> int:
+        """Get embedding dimensions for a specific language.
+
+        Loads the model if not already loaded.
+        """
+        model_name = self._get_model_name_for_language(language)
+        if model_name not in self._dimensions:
+            self._ensure_model(model_name)
+        return self._dimensions[model_name]
 
     @property
-    def dimensions(self) -> int | None:
-        """Get embedding dimensions (None if model not loaded)."""
-        if self._dimensions is None and self._model is not None:
-            self._ensure_model()
-        return self._dimensions
+    def model_name(self) -> str:
+        """Get default model name (for backward compatibility)."""
+        return self._default_model
+
+    @property
+    def dimensions(self) -> int:
+        """Get default model dimensions (for backward compatibility)."""
+        return self.get_dimensions(None)
 
 
 def prepare_text_for_embedding(

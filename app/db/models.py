@@ -220,6 +220,7 @@ class SummaryEmbedding(BaseModel):
     model_version = peewee.TextField()
     embedding_blob = peewee.BlobField()
     dimensions = peewee.IntegerField()
+    language = peewee.TextField(null=True)  # Language code (en, ru, auto)
     created_at = peewee.DateTimeField(default=_dt.datetime.utcnow)
 
     class Meta:

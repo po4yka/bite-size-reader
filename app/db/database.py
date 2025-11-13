@@ -1276,6 +1276,7 @@ class Database:
         model_name: str,
         model_version: str,
         dimensions: int,
+        language: str | None = None,
     ) -> None:
         """Store or update embedding for a summary.
 
@@ -1285,6 +1286,7 @@ class Database:
             model_name: Name of the embedding model used
             model_version: Version of the embedding model
             dimensions: Number of dimensions in the embedding vector
+            language: Language code (en, ru, auto, etc.)
         """
         try:
             # Try to create new embedding
@@ -1294,6 +1296,7 @@ class Database:
                 model_name=model_name,
                 model_version=model_version,
                 dimensions=dimensions,
+                language=language,
             )
         except peewee.IntegrityError:
             # Embedding exists, update it
@@ -1303,6 +1306,7 @@ class Database:
                     SummaryEmbedding.model_name: model_name,
                     SummaryEmbedding.model_version: model_version,
                     SummaryEmbedding.dimensions: dimensions,
+                    SummaryEmbedding.language: language,
                     SummaryEmbedding.created_at: dt.datetime.utcnow(),
                 }
             ).where(SummaryEmbedding.summary == summary_id).execute()
@@ -1314,6 +1318,7 @@ class Database:
         model_name: str,
         model_version: str,
         dimensions: int,
+        language: str | None = None,
     ) -> None:
         """Asynchronously store or update embedding for a summary."""
         await self._safe_db_operation(
@@ -1323,6 +1328,7 @@ class Database:
             model_name=model_name,
             model_version=model_version,
             dimensions=dimensions,
+            language=language,
             operation_name="create_or_update_summary_embedding",
         )
 
@@ -1330,7 +1336,7 @@ class Database:
         """Retrieve embedding for a summary.
 
         Returns:
-            Dictionary with keys: embedding_blob, model_name, model_version, dimensions, created_at
+            Dictionary with keys: embedding_blob, model_name, model_version, dimensions, language, created_at
             None if no embedding exists
         """
         embedding = SummaryEmbedding.get_or_none(SummaryEmbedding.summary == summary_id)
@@ -1341,6 +1347,7 @@ class Database:
             "model_name": embedding.model_name,
             "model_version": embedding.model_version,
             "dimensions": embedding.dimensions,
+            "language": embedding.language,
             "created_at": embedding.created_at,
         }
 
@@ -1620,6 +1627,7 @@ class Database:
             ("llm_calls", "openrouter_response_text", "TEXT"),
             ("llm_calls", "openrouter_response_json", "TEXT"),
             ("user_interactions", "updated_at", "DATETIME"),
+            ("summary_embeddings", "language", "TEXT"),  # Multi-language support
         ]
         for table, column, coltype in checks:
             self._ensure_column(table, column, coltype)

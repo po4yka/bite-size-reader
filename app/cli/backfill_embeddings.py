@@ -27,16 +27,18 @@ def get_summaries_without_embeddings(db: Database, limit: int | None = None) -> 
         limit: Maximum number of summaries to fetch (None = all)
 
     Returns:
-        List of dicts with keys: id, request_id, json_payload
+        List of dicts with keys: id, request_id, json_payload, language
     """
+    from app.db.models import Request
 
     def _query() -> list[dict]:
         # Get IDs of summaries that already have embeddings
         subquery = SummaryEmbedding.select(SummaryEmbedding.summary)
 
-        # Query summaries without embeddings
+        # Query summaries without embeddings, join with Request to get language
         query = (
-            Summary.select(Summary.id, Summary.request_id, Summary.json_payload)
+            Summary.select(Summary.id, Summary.request_id, Summary.json_payload, Request.lang_detected)
+            .join(Request, on=(Summary.request == Request.id))
             .where(Summary.id.not_in(subquery))
             .where(Summary.json_payload.is_null(False))
             .order_by(Summary.created_at.desc())
@@ -52,6 +54,7 @@ def get_summaries_without_embeddings(db: Database, limit: int | None = None) -> 
                     "id": summary.id,
                     "request_id": summary.request_id.id if hasattr(summary.request_id, "id") else summary.request_id,
                     "json_payload": summary.json_payload,
+                    "language": summary.request_id.lang_detected if hasattr(summary.request_id, "lang_detected") else None,
                 }
             )
 
@@ -100,19 +103,22 @@ async def backfill_embeddings(
         summary_id = summary["id"]
         request_id = summary["request_id"]
         payload = summary["json_payload"]
+        language = summary.get("language")
 
         try:
             logger.info(
-                "Processing %d/%d: summary_id=%d, request_id=%d",
+                "Processing %d/%d: summary_id=%d, request_id=%d, language=%s",
                 idx,
                 len(summaries),
                 summary_id,
                 request_id,
+                language,
             )
 
             success = await generator.generate_embedding_for_summary(
                 summary_id=summary_id,
                 payload=payload,
+                language=language,
                 force=force,
             )
 

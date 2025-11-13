@@ -7,6 +7,8 @@ import logging
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+from app.core.lang import detect_language
+
 if TYPE_CHECKING:
     from app.db.database import Database
     from app.services.embedding_service import EmbeddingService
@@ -81,13 +83,18 @@ class VectorSearchService:
             logger.warning("empty_query_for_vector_search", extra={"cid": correlation_id})
             return []
 
-        # Generate query embedding
+        # Detect query language for optimal model selection
+        query_language = detect_language(query)
+
+        # Generate query embedding with language-specific model
         try:
-            query_embedding = await self._embedding_service.generate_embedding(query.strip())
+            query_embedding = await self._embedding_service.generate_embedding(
+                query.strip(), language=query_language
+            )
         except Exception:
             logger.exception(
                 "query_embedding_generation_failed",
-                extra={"cid": correlation_id, "query": query[:100]},
+                extra={"cid": correlation_id, "query": query[:100], "language": query_language},
             )
             return []
 

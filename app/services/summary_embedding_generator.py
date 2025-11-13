@@ -31,6 +31,7 @@ class SummaryEmbeddingGenerator:
         summary_id: int,
         payload: dict[str, Any],
         *,
+        language: str | None = None,
         force: bool = False,
     ) -> bool:
         """Generate and store embedding for a summary.
@@ -38,18 +39,26 @@ class SummaryEmbeddingGenerator:
         Args:
             summary_id: ID of the summary
             payload: Summary JSON payload containing title, summaries, etc.
+            language: Language code (en, ru, auto) - if None, uses default model
             force: If True, regenerate embedding even if one exists
 
         Returns:
             True if embedding was generated, False if skipped or failed
         """
+        # Determine model based on language
+        model_name = self._embedding_service.get_model_name(language)
+
         # Check if embedding already exists
         if not force:
             existing = await self._db.async_get_summary_embedding(summary_id)
-            if existing and existing.get("model_name") == self._embedding_service.model_name:
+            if existing and existing.get("model_name") == model_name:
                 logger.debug(
                     "embedding_already_exists",
-                    extra={"summary_id": summary_id, "model": existing.get("model_name")},
+                    extra={
+                        "summary_id": summary_id,
+                        "model": existing.get("model_name"),
+                        "language": language,
+                    },
                 )
                 return False
 
@@ -74,8 +83,8 @@ class SummaryEmbeddingGenerator:
                 )
                 return False
 
-            # Generate embedding
-            embedding = await self._embedding_service.generate_embedding(text)
+            # Generate embedding with language-specific model
+            embedding = await self._embedding_service.generate_embedding(text, language=language)
 
             # Serialize and store
             embedding_blob = self._embedding_service.serialize_embedding(embedding)
@@ -84,16 +93,18 @@ class SummaryEmbeddingGenerator:
             await self._db.async_create_or_update_summary_embedding(
                 summary_id=summary_id,
                 embedding_blob=embedding_blob,
-                model_name=self._embedding_service.model_name,
+                model_name=model_name,
                 model_version=self._model_version,
                 dimensions=dimensions,
+                language=language,
             )
 
             logger.info(
                 "embedding_generated",
                 extra={
                     "summary_id": summary_id,
-                    "model": self._embedding_service.model_name,
+                    "model": model_name,
+                    "language": language,
                     "dimensions": dimensions,
                     "text_length": len(text),
                 },
@@ -103,7 +114,7 @@ class SummaryEmbeddingGenerator:
         except Exception:
             logger.exception(
                 "embedding_generation_failed",
-                extra={"summary_id": summary_id},
+                extra={"summary_id": summary_id, "language": language},
             )
             return False
 
@@ -122,6 +133,18 @@ class SummaryEmbeddingGenerator:
         Returns:
             True if embedding was generated, False if skipped or failed
         """
+        # Fetch request to get language
+        request = await self._db.async_get_request_by_id(request_id)
+        if not request:
+            logger.warning(
+                "no_request_found",
+                extra={"request_id": request_id},
+            )
+            return False
+
+        # Extract detected language
+        language = request.get("lang_detected")
+
         # Fetch summary
         summary = await self._db.async_get_summary_by_request(request_id)
         if not summary:
@@ -144,5 +167,6 @@ class SummaryEmbeddingGenerator:
         return await self.generate_embedding_for_summary(
             summary_id=summary_id,
             payload=payload,
+            language=language,
             force=force,
         )
