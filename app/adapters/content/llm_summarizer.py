@@ -339,6 +339,164 @@ class LLMSummarizer:
             on_success=_on_success,
         )
 
+    async def summarize_content_pure(
+        self,
+        content_text: str,
+        chosen_lang: str,
+        system_prompt: str,
+        correlation_id: str | None = None,
+        feedback_instructions: str | None = None,
+    ) -> dict[str, Any]:
+        """Pure summarization method without message dependencies.
+
+        This method performs LLM summarization without sending Telegram notifications,
+        making it suitable for use by agents and non-interactive contexts.
+
+        Args:
+            content_text: The content to summarize
+            chosen_lang: Target language for the summary
+            system_prompt: System prompt for the LLM
+            correlation_id: Optional correlation ID for tracing
+            feedback_instructions: Optional feedback from previous validation attempts
+
+        Returns:
+            Summary dictionary with the generated JSON
+
+        Raises:
+            ValueError: If content is empty or summarization fails
+        """
+        # Validate content before sending to LLM
+        if not content_text or not content_text.strip():
+            raise ValueError("Content text is empty or contains only whitespace")
+
+        # Build user prompt with optional feedback
+        user_content = (
+            f"Analyze the following content and output ONLY a valid JSON object that matches the system contract exactly. "
+            f"Respond in {'Russian' if chosen_lang == LANG_RU else 'English'}. Do NOT include any text outside the JSON.\n\n"
+        )
+
+        if feedback_instructions:
+            user_content += f"{feedback_instructions}\n\n"
+
+        user_content += f"CONTENT START\n{content_text}\nCONTENT END"
+
+        self._log_llm_content_validation(content_text, system_prompt, user_content, correlation_id)
+
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_content},
+        ]
+
+        # Select response format and max tokens
+        response_format = self._workflow.build_structured_response_format()
+        max_tokens = self._select_max_tokens(content_text)
+
+        # Determine if we should use long-context model
+        # (assuming max_chars threshold similar to existing logic)
+        model_override = None
+        max_chars_threshold = 50000  # reasonable default
+        if len(content_text) > max_chars_threshold and (
+            self.cfg.openrouter.long_context_model or ""
+        ):
+            model_override = self.cfg.openrouter.long_context_model
+
+        logger.info(
+            "summarize_pure_start",
+            extra={
+                "cid": correlation_id,
+                "content_len": len(content_text),
+                "lang": chosen_lang,
+                "has_feedback": bool(feedback_instructions),
+                "model": model_override or self.cfg.openrouter.model,
+            },
+        )
+
+        # Make the LLM call (no request_id since this is agent-only mode)
+        try:
+            async with self._sem():
+                llm_result = await self.openrouter.chat(
+                    messages,
+                    response_format=response_format,
+                    max_tokens=max_tokens,
+                    temperature=self.cfg.openrouter.temperature,
+                    top_p=self.cfg.openrouter.top_p,
+                    request_id=None,  # No DB persistence in pure mode
+                    model_override=model_override,
+                )
+        except Exception as e:
+            logger.error(
+                "summarize_pure_llm_call_failed",
+                extra={"cid": correlation_id, "error": str(e)},
+            )
+            raise ValueError(f"LLM call failed: {e}") from e
+
+        # Check if LLM call succeeded
+        if llm_result.status != "ok":
+            error_msg = llm_result.error_text or "Unknown LLM error"
+            logger.error(
+                "summarize_pure_llm_error",
+                extra={
+                    "cid": correlation_id,
+                    "status": llm_result.status,
+                    "error": error_msg,
+                },
+            )
+            raise ValueError(f"LLM returned error status: {error_msg}")
+
+        # Parse the response
+        summary = self._parse_summary_from_llm_result(llm_result)
+        if not summary:
+            logger.error(
+                "summarize_pure_parse_failed",
+                extra={"cid": correlation_id},
+            )
+            raise ValueError("Failed to parse valid summary from LLM response")
+
+        logger.info(
+            "summarize_pure_success",
+            extra={
+                "cid": correlation_id,
+                "summary_keys": list(summary.keys()),
+            },
+        )
+
+        return summary
+
+    def _parse_summary_from_llm_result(self, llm_result: Any) -> dict[str, Any] | None:
+        """Parse summary JSON from LLM result.
+
+        Args:
+            llm_result: The LLM response object
+
+        Returns:
+            Parsed summary dictionary or None if parsing fails
+        """
+        # Try to extract from response_json first
+        if isinstance(llm_result.response_json, dict):
+            choices = llm_result.response_json.get("choices") or []
+            if choices:
+                message = (choices[0] or {}).get("message") or {}
+
+                # Try parsed field first (structured outputs)
+                parsed = message.get("parsed")
+                if isinstance(parsed, dict):
+                    return parsed
+
+                # Try content field
+                content = message.get("content")
+                if isinstance(content, str):
+                    extracted = extract_json(content)
+                    if isinstance(extracted, dict):
+                        return extracted
+
+        # Fallback to response_text
+        if llm_result.response_text:
+            extracted = extract_json(llm_result.response_text)
+            if isinstance(extracted, dict):
+                return extracted
+
+        return None
+
     def _select_max_tokens(self, content_text: str) -> int | None:
         """Choose an appropriate max_tokens budget based on content size."""
         configured = self.cfg.openrouter.max_tokens

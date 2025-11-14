@@ -86,6 +86,115 @@ class ContentExtractor:
         self._audit = audit_func
         self._sem = sem
 
+    async def extract_content_pure(
+        self,
+        url: str,
+        correlation_id: str | None = None,
+    ) -> tuple[str, str, dict[str, Any]]:
+        """Pure extraction method without message dependencies.
+
+        This method performs content extraction without requiring a Telegram message
+        object or sending notifications. Suitable for use by agents and standalone tools.
+
+        Args:
+            url: URL to extract content from
+            correlation_id: Optional correlation ID for tracing
+
+        Returns:
+            Tuple of (content_text, content_source, metadata) where:
+            - content_text: Extracted and cleaned content
+            - content_source: Source of content ("markdown", "html", or "none")
+            - metadata: Dictionary with extraction metadata
+
+        Raises:
+            ValueError: If extraction fails
+        """
+        normalized_url = normalize_url(url)
+
+        logger.info(
+            "pure_extraction_start",
+            extra={"url": url, "normalized": normalized_url, "cid": correlation_id},
+        )
+
+        # Perform Firecrawl scrape
+        async with self._sem():
+            crawl = await self.firecrawl.scrape_markdown(url, request_id=None)
+
+        # Check content quality
+        quality_issue = self._detect_low_value_content(crawl)
+        if quality_issue:
+            error_msg = f"Low-value content detected: {quality_issue.reason}"
+            logger.warning(
+                "pure_extraction_low_value",
+                extra={"cid": correlation_id, "reason": quality_issue.reason},
+            )
+            raise ValueError(error_msg)
+
+        # Validate crawl success
+        has_markdown = bool(crawl.content_markdown and crawl.content_markdown.strip())
+        has_html = bool(crawl.content_html and crawl.content_html.strip())
+
+        if crawl.status != "ok" or not (has_markdown or has_html):
+            # Try direct HTML salvage
+            try:
+                salvage_html = await self._attempt_direct_html_salvage(url)
+                if salvage_html:
+                    content_text = html_to_text(salvage_html)
+                    content_source = "html"
+                    metadata = {
+                        "extraction_method": "direct_fetch",
+                        "http_status": 200,
+                        "salvaged": True,
+                    }
+
+                    logger.info(
+                        "pure_extraction_salvaged",
+                        extra={"cid": correlation_id, "content_len": len(content_text)},
+                    )
+
+                    return content_text, content_source, metadata
+            except Exception:
+                pass
+
+            error_msg = crawl.error_text or "Firecrawl extraction failed"
+            raise ValueError(f"Extraction failed: {error_msg}")
+
+        # Process successful crawl
+        if crawl.content_markdown and crawl.content_markdown.strip():
+            content_text = clean_markdown_article_text(crawl.content_markdown)
+            content_source = "markdown"
+        elif crawl.content_html and crawl.content_html.strip():
+            content_text = html_to_text(crawl.content_html)
+            content_source = "html"
+        else:
+            content_text = ""
+            content_source = "none"
+
+        # Build metadata
+        metadata = {
+            "extraction_method": "firecrawl",
+            "http_status": crawl.http_status,
+            "endpoint": crawl.endpoint,
+            "latency_ms": crawl.latency_ms,
+            "content_length": len(content_text),
+            "source_format": content_source,
+        }
+
+        # Add Firecrawl metadata if available
+        if crawl.metadata_json:
+            metadata["firecrawl_metadata"] = crawl.metadata_json
+
+        logger.info(
+            "pure_extraction_success",
+            extra={
+                "cid": correlation_id,
+                "content_len": len(content_text),
+                "source": content_source,
+            },
+        )
+
+        return content_text, content_source, metadata
+
     async def extract_and_process_content(
         self,
         message: Any,
