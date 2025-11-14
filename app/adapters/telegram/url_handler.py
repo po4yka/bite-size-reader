@@ -454,17 +454,17 @@ class URLHandler:
                     )
                     # Keep returning the same message_id to retry on next update
                     return msg_id
-                else:
-                    logger.warning(
-                        "progress_update_skipped",
-                        extra={
-                            "chat_id": chat_id,
-                            "progress_msg_id": msg_id,
-                            "reason": "missing_chat_id_or_msg_id",
-                            "uid": uid,
-                        },
-                    )
-                    return None
+
+                logger.warning(
+                    "progress_update_skipped",
+                    extra={
+                        "chat_id": chat_id,
+                        "progress_msg_id": msg_id,
+                        "reason": "missing_chat_id_or_msg_id",
+                        "uid": uid,
+                    },
+                )
+                return None
             except Exception as e:
                 logger.warning(
                     "progress_update_failed",
