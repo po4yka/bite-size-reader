@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Any
 from app.core.logging_utils import generate_correlation_id
 from app.core.url_utils import extract_all_urls
 from app.db.user_interactions import async_safe_update_user_interaction
+from app.utils.message_formatter import format_completion_message, format_progress_message
 from app.utils.progress_tracker import ProgressTracker
 
 if TYPE_CHECKING:
@@ -379,8 +380,8 @@ class URLHandler:
 
         # Send initial progress message with error handling
         try:
-            initial_progress_text = (
-                f"🔄 Processing {len(urls)} links in parallel: 0/{len(urls)} (0%)"
+            initial_progress_text = format_progress_message(
+                0, len(urls), context="links in parallel", show_bar=False
             )
             progress_msg_id = await self.response_formatter.safe_reply_with_id(
                 message, initial_progress_text
@@ -407,8 +408,10 @@ class URLHandler:
         ) -> int | None:
             """Format and send/edit progress updates for URL processing."""
             try:
-                percentage = int((current / total_count) * 100) if total_count > 0 else 0
-                progress_text = f"🔄 Processing {total_count} links in parallel: {current}/{total_count} ({percentage}%)"
+                # Use shared formatter for consistent progress messages
+                progress_text = format_progress_message(
+                    current, total_count, context="links in parallel", show_bar=False
+                )
 
                 logger.debug(
                     "attempting_progress_update",
@@ -565,31 +568,16 @@ class URLHandler:
                     extra={"error": str(progress_exc), "uid": uid},
                 )
 
-        # Send completion summary with detailed feedback
-        if failed == 0:
-            await self.response_formatter.safe_reply(
-                message, f"✅ Successfully processed all {successful} links!"
-            )
-        elif successful > 0:
-            # Partial success - provide helpful feedback
-            failure_rate = (failed / len(urls)) * 100
-            if failure_rate <= 20:  # Less than 20% failed
-                message_text = (
-                    f"✅ Processed {successful}/{len(urls)} links successfully! "
-                    f"({failed} failed - likely temporary issues)"
-                )
-            else:
-                message_text = (
-                    f"⚠️ Processed {successful}/{len(urls)} links successfully. "
-                    f"{failed} failed. Some URLs may be inaccessible or invalid."
-                )
-            await self.response_formatter.safe_reply(message, message_text)
-        else:
-            # Complete failure
-            await self.response_formatter.safe_reply(
-                message,
-                "❌ Failed to process any links. Please check if URLs are valid and accessible.",
-            )
+        # Send completion summary with detailed feedback using shared formatter
+        completion_message = format_completion_message(
+            total=len(urls),
+            successful=successful,
+            failed=failed,
+            context="links",
+            show_stats=False,  # User-initiated batches are smaller, don't need detailed stats
+            failure_rate_threshold=20.0,
+        )
+        await self.response_formatter.safe_reply(message, completion_message)
 
         # Safety check: ensure all URLs were processed
         expected_total = len(urls)

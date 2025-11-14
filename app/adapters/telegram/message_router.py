@@ -20,6 +20,7 @@ from app.db.user_interactions import async_safe_update_user_interaction
 from app.models.telegram.telegram_models import TelegramMessage
 from app.security.file_validation import FileValidationError, SecureFileValidator
 from app.security.rate_limiter import RateLimitConfig, UserRateLimiter
+from app.utils.message_formatter import format_completion_message, format_progress_message
 from app.utils.progress_tracker import ProgressTracker
 
 if TYPE_CHECKING:
@@ -934,12 +935,14 @@ class MessageRouter:
             extra={"url_count": total, "successful": successful, "failed": len(failed_urls)},
         )
 
-        # Create completion message with statistics
-        completion_message = f"✅ Processing complete!\n"
-        completion_message += f"📊 Total: {total} links\n"
-        completion_message += f"✅ Successful: {successful}\n"
-        if failed_urls:
-            completion_message += f"❌ Failed: {len(failed_urls)}"
+        # Create completion message with statistics using shared formatter
+        completion_message = format_completion_message(
+            total=total,
+            successful=successful,
+            failed=len(failed_urls),
+            context="links",
+            show_stats=True,
+        )
 
         await self.response_formatter.safe_reply(message, completion_message)
 
@@ -1021,9 +1024,7 @@ class MessageRouter:
         Returns the message ID that should be used for subsequent edits when available.
         """
 
-        progress_bar = self._create_progress_bar(current, total)
-        percentage = int((current / total) * 100) if total > 0 else 0
-        progress_text = f"🔄 Processing links: {current}/{total} ({percentage}%)\n{progress_bar}"
+        progress_text = format_progress_message(current, total, context="links", show_bar=True)
 
         chat_id = getattr(message.chat, "id", None)
 
@@ -1106,12 +1107,6 @@ class MessageRouter:
             )
 
         return new_message_id
-
-    def _create_progress_bar(self, current: int, total: int, width: int = 20) -> str:
-        """Create a simple text progress bar."""
-        filled = int(width * current / total)
-        empty = width - filled
-        return "█" * filled + "░" * empty
 
     def _log_user_interaction(
         self,
