@@ -1029,8 +1029,12 @@ class MessageRouter:
         chat_id = getattr(message.chat, "id", None)
 
         if message_id is not None and chat_id is not None:
-            try:
-                await self.response_formatter.edit_message(chat_id, message_id, progress_text)
+            # Try to edit the existing message
+            edit_success = await self.response_formatter.edit_message(
+                chat_id, message_id, progress_text
+            )
+
+            if edit_success:
                 logger.debug(
                     "progress_update_edited",
                     extra={
@@ -1041,28 +1045,17 @@ class MessageRouter:
                     },
                 )
                 return message_id
-            except Exception as edit_error:  # noqa: BLE001
-                error_text = str(edit_error)
-                if "message is not modified" in error_text.lower():
-                    logger.debug(
-                        "progress_update_unchanged",
-                        extra={
-                            "current": current,
-                            "total": total,
-                            "message_id": message_id,
-                        },
-                    )
-                    return message_id
-
+            else:
                 logger.warning(
                     "progress_update_edit_failed",
                     extra={
-                        "error": error_text,
                         "current": current,
                         "total": total,
                         "message_id": message_id,
+                        "fallback": "will_send_new_message",
                     },
                 )
+                # Fall through to send new message below
         elif message_id is not None:
             logger.warning(
                 "progress_update_no_chat_id",

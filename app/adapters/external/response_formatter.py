@@ -1233,15 +1233,24 @@ class ResponseFormatter:
             logger.error("reply_failed", extra={"error": str(e), "text_length": len(text)})
             return None
 
-    async def edit_message(self, chat_id: int, message_id: int, text: str) -> None:
-        """Edit an existing message in Telegram with security checks."""
+    async def edit_message(self, chat_id: int, message_id: int, text: str) -> bool:
+        """Edit an existing message in Telegram with security checks.
+
+        Args:
+            chat_id: The chat ID where the message exists
+            message_id: The message ID to edit
+            text: The new text content
+
+        Returns:
+            True if the message was successfully edited, False otherwise
+        """
         try:
             # Input validation
             if not text or not text.strip():
                 logger.warning(
                     "edit_message_empty_text", extra={"chat_id": chat_id, "message_id": message_id}
                 )
-                return
+                return False
 
             # Security content check
             is_safe, error_msg = self._is_safe_content(text)
@@ -1255,7 +1264,7 @@ class ResponseFormatter:
                         "text_preview": text[:100],
                     },
                 )
-                return
+                return False
 
             # Length check
             if len(text) > self.MAX_MESSAGE_CHARS:
@@ -1268,7 +1277,7 @@ class ResponseFormatter:
                         "message_id": message_id,
                     },
                 )
-                return
+                return False
 
             # Rate limiting check
             if not await self._check_rate_limit():
@@ -1276,6 +1285,8 @@ class ResponseFormatter:
                     "edit_message_rate_limited",
                     extra={"chat_id": chat_id, "message_id": message_id},
                 )
+                # Continue despite rate limit warning, but note it
+                # This maintains backward compatibility
 
             logger.debug(
                 "edit_message_attempt",
@@ -1303,30 +1314,33 @@ class ResponseFormatter:
                                 "text_length": len(text),
                             },
                         )
-                        return
+                        return False
 
-                    logger.debug(
-                        "edit_message_success", extra={"chat_id": chat_id, "message_id": message_id}
-                    )
                     await client.edit_message_text(
                         chat_id=chat_id, message_id=message_id, text=text
                     )
-                    return
+                    logger.debug(
+                        "edit_message_success", extra={"chat_id": chat_id, "message_id": message_id}
+                    )
+                    return True
                 else:
                     logger.warning(
                         "edit_message_no_client_method",
                         extra={"chat_id": chat_id, "message_id": message_id},
                     )
+                    return False
             else:
                 logger.warning(
                     "edit_message_no_telegram_client",
                     extra={"chat_id": chat_id, "message_id": message_id},
                 )
+                return False
         except Exception as e:
             logger.warning(
                 "edit_message_failed",
                 extra={"error": str(e), "chat_id": chat_id, "message_id": message_id},
             )
+            return False
 
     async def send_url_accepted_notification(
         self, message: Any, norm: str, correlation_id: str, *, silent: bool = False

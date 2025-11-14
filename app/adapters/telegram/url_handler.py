@@ -426,18 +426,35 @@ class URLHandler:
 
                 chat_id = getattr(message.chat, "id", None)
                 if chat_id and msg_id:
-                    await self.response_formatter.edit_message(chat_id, msg_id, progress_text)
-                    logger.debug(
-                        "progress_update_sent_successfully",
-                        extra={
-                            "completed": current,
-                            "total": total_count,
-                            "chat_id": chat_id,
-                            "message_id": msg_id,
-                            "uid": uid,
-                        },
+                    # Try to edit the existing message
+                    edit_success = await self.response_formatter.edit_message(
+                        chat_id, msg_id, progress_text
                     )
-                    return msg_id
+
+                    if edit_success:
+                        logger.debug(
+                            "progress_update_sent_successfully",
+                            extra={
+                                "completed": current,
+                                "total": total_count,
+                                "chat_id": chat_id,
+                                "message_id": msg_id,
+                                "uid": uid,
+                            },
+                        )
+                        return msg_id
+                    else:
+                        logger.warning(
+                            "progress_update_edit_failed",
+                            extra={
+                                "completed": current,
+                                "total": total_count,
+                                "message_id": msg_id,
+                                "uid": uid,
+                            },
+                        )
+                        # Keep returning the same message_id to retry on next update
+                        return msg_id
                 else:
                     logger.warning(
                         "progress_update_skipped",

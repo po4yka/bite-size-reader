@@ -1,4 +1,5 @@
 import unittest
+from unittest.mock import AsyncMock, MagicMock
 
 from app.adapters.external.response_formatter import ResponseFormatter
 
@@ -92,6 +93,106 @@ class TestResponseFormatter(unittest.IsolatedAsyncioTestCase):
         ]
         assert highlight_texts
         assert recorded_json[0] == article
+
+    async def test_edit_message_returns_true_on_success(self) -> None:
+        """Test that edit_message returns True when edit succeeds."""
+        # Create mock telegram client
+        mock_client = MagicMock()
+        mock_client.edit_message_text = AsyncMock()
+
+        mock_telegram_client = MagicMock()
+        mock_telegram_client.client = mock_client
+
+        formatter = ResponseFormatter()
+        formatter._telegram_client = mock_telegram_client
+        formatter.MIN_MESSAGE_INTERVAL_MS = 0
+
+        result = await formatter.edit_message(chat_id=12345, message_id=67890, text="Updated text")
+
+        assert result is True
+        mock_client.edit_message_text.assert_called_once_with(
+            chat_id=12345, message_id=67890, text="Updated text"
+        )
+
+    async def test_edit_message_returns_false_on_empty_text(self) -> None:
+        """Test that edit_message returns False for empty text."""
+        formatter = ResponseFormatter()
+
+        result = await formatter.edit_message(chat_id=12345, message_id=67890, text="")
+
+        assert result is False
+
+    async def test_edit_message_returns_false_on_whitespace_text(self) -> None:
+        """Test that edit_message returns False for whitespace-only text."""
+        formatter = ResponseFormatter()
+
+        result = await formatter.edit_message(chat_id=12345, message_id=67890, text="   \n\t  ")
+
+        assert result is False
+
+    async def test_edit_message_returns_false_on_too_long_text(self) -> None:
+        """Test that edit_message returns False when text exceeds max length."""
+        formatter = ResponseFormatter()
+        formatter.MIN_MESSAGE_INTERVAL_MS = 0
+
+        # Create text longer than MAX_MESSAGE_CHARS (4096)
+        long_text = "x" * 5000
+
+        result = await formatter.edit_message(chat_id=12345, message_id=67890, text=long_text)
+
+        assert result is False
+
+    async def test_edit_message_returns_false_on_invalid_params(self) -> None:
+        """Test that edit_message returns False for invalid parameters."""
+        mock_client = MagicMock()
+        mock_telegram_client = MagicMock()
+        mock_telegram_client.client = mock_client
+
+        formatter = ResponseFormatter()
+        formatter._telegram_client = mock_telegram_client
+        formatter.MIN_MESSAGE_INTERVAL_MS = 0
+
+        # Invalid chat_id (not an int)
+        result = await formatter.edit_message(chat_id="invalid", message_id=67890, text="Test")
+
+        assert result is False
+
+    async def test_edit_message_returns_false_on_no_client(self) -> None:
+        """Test that edit_message returns False when no Telegram client is available."""
+        formatter = ResponseFormatter()
+        formatter.MIN_MESSAGE_INTERVAL_MS = 0
+
+        result = await formatter.edit_message(chat_id=12345, message_id=67890, text="Test")
+
+        assert result is False
+
+    async def test_edit_message_returns_false_on_exception(self) -> None:
+        """Test that edit_message returns False when an exception occurs."""
+        mock_client = MagicMock()
+        mock_client.edit_message_text = AsyncMock(side_effect=Exception("Network error"))
+
+        mock_telegram_client = MagicMock()
+        mock_telegram_client.client = mock_client
+
+        formatter = ResponseFormatter()
+        formatter._telegram_client = mock_telegram_client
+        formatter.MIN_MESSAGE_INTERVAL_MS = 0
+
+        result = await formatter.edit_message(chat_id=12345, message_id=67890, text="Test")
+
+        assert result is False
+
+    async def test_edit_message_returns_false_on_unsafe_content(self) -> None:
+        """Test that edit_message returns False for unsafe content."""
+        formatter = ResponseFormatter()
+        formatter.MIN_MESSAGE_INTERVAL_MS = 0
+
+        # Content with control characters should be blocked
+        unsafe_text = "Test\x00message"
+
+        result = await formatter.edit_message(chat_id=12345, message_id=67890, text=unsafe_text)
+
+        assert result is False
 
 
 if __name__ == "__main__":
