@@ -17,6 +17,9 @@ if TYPE_CHECKING:
     from app.agents.summarization_agent import SummarizationAgent
     from app.agents.validation_agent import ValidationAgent
 
+from app.agents.content_extraction_agent import ExtractionInput
+from app.agents.summarization_agent import SummarizationInput
+
 logger = logging.getLogger(__name__)
 
 
@@ -211,11 +214,11 @@ class AgentOrchestrator:
         )
 
         extraction_result = await self.extraction_agent.execute(
-            {
-                "url": input_data.url,
-                "correlation_id": correlation_id,
-                "force_refresh": input_data.force_refresh,
-            }
+            ExtractionInput(
+                url=input_data.url,
+                correlation_id=correlation_id,
+                force_refresh=input_data.force_refresh,
+            )
         )
 
         if not extraction_result.success:
@@ -238,13 +241,13 @@ class AgentOrchestrator:
         )
 
         summarization_result = await self.summarization_agent.execute(
-            {
-                "content": extracted_output.content_markdown,
-                "metadata": extracted_output.metadata,
-                "correlation_id": correlation_id,
-                "language": input_data.language,
-                "max_retries": input_data.max_summary_retries,
-            }
+            SummarizationInput(
+                content=extracted_output.content_markdown,
+                metadata=extracted_output.metadata,
+                correlation_id=correlation_id,
+                language=input_data.language,
+                max_retries=input_data.max_summary_retries,
+            )
         )
 
         if not summarization_result.success:
@@ -322,11 +325,11 @@ class AgentOrchestrator:
             )
 
             extraction_result = await self.extraction_agent.execute(
-                {
-                    "url": input_data.url,
-                    "correlation_id": correlation_id,
-                    "force_refresh": input_data.force_refresh,
-                }
+                ExtractionInput(
+                    url=input_data.url,
+                    correlation_id=correlation_id,
+                    force_refresh=input_data.force_refresh,
+                )
             )
 
             if not extraction_result.success:
@@ -368,13 +371,13 @@ class AgentOrchestrator:
         )
 
         summarization_result = await self.summarization_agent.execute(
-            {
-                "content": extraction_result.output.content_markdown,
-                "metadata": extraction_result.output.metadata,
-                "correlation_id": correlation_id,
-                "language": input_data.language,
-                "max_retries": input_data.max_summary_retries,
-            }
+            SummarizationInput(
+                content=extraction_result.output.content_markdown,
+                metadata=extraction_result.output.metadata,
+                correlation_id=correlation_id,
+                language=input_data.language,
+                max_retries=input_data.max_summary_retries,
+            )
         )
 
         if not summarization_result.success:

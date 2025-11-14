@@ -79,7 +79,7 @@ class SummarizationAgent(BaseAgent[SummarizationInput, SummarizationOutput]):
             f"Starting summarization - {len(input_data.content)} chars, lang={input_data.language}"
         )
 
-        corrections_applied = []
+        corrections_applied: list[str] = []
         last_error = None
 
         for attempt in range(1, input_data.max_retries + 1):

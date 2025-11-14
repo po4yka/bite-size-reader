@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from app.agents.base_agent import AgentResult, BaseAgent
-from app.core.summary_contract import validate_summary_json
+from app.core.summary_contract import validate_and_shape_summary
 
 
 @dataclass
@@ -57,9 +57,9 @@ class ValidationAgent(BaseAgent[ValidationInput, ValidationOutput]):
         summary = input_data.summary_json
         self.log_info("Starting summary validation")
 
-        errors = []
-        warnings = []
-        corrections = []
+        errors: list[str] = []
+        warnings: list[str] = []
+        corrections: list[str] = []
 
         try:
             # Required fields check
@@ -184,7 +184,7 @@ class ValidationAgent(BaseAgent[ValidationInput, ValidationOutput]):
 
             # Use the existing validation function for final check
             try:
-                validated_summary = validate_summary_json(summary)
+                validated_summary = validate_and_shape_summary(summary)
                 self.log_info("Summary validation successful")
 
                 if warnings:
