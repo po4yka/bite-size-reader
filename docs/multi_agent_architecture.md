@@ -443,20 +443,60 @@ class LLMSummarizer:
         pass
 ```
 
-**Phase 3: Full Agent Integration** (Future)
+**Phase 3: Advanced Orchestration** ✅ (COMPLETED)
 ```python
-from app.agents import AgentOrchestrator
+from app.agents.orchestrator import (
+    AgentOrchestrator, BatchPipelineInput, PipelineInput,
+    RetryConfig, RetryStrategy, PipelineProgress
+)
+from pathlib import Path
 
-# After additional orchestration refinements:
 orchestrator = AgentOrchestrator(extraction_agent, summarization_agent, validation_agent)
-result = await orchestrator.execute_pipeline(PipelineInput(url=url, correlation_id=cid))
 
-# This would add:
-# - Parallel extraction for multiple URLs
-# - Streaming results for long-running operations
-# - Advanced retry strategies
-# - Agent state persistence
+# ✅ Feature 1: Parallel Batch Processing
+batch_input = BatchPipelineInput(
+    urls=["https://example.com/1", "https://example.com/2", "https://example.com/3"],
+    base_correlation_id="batch-123",
+    max_concurrent=3,  # Process 3 URLs at a time
+    retry_config=RetryConfig(strategy=RetryStrategy.EXPONENTIAL)
+)
+results = await orchestrator.execute_batch_pipeline(batch_input)
+# Returns list of BatchPipelineOutput with per-URL success/failure
+
+# ✅ Feature 2: Streaming Progress Updates
+pipeline_input = PipelineInput(url=url, correlation_id=cid)
+async for update in orchestrator.execute_pipeline_streaming(pipeline_input):
+    if isinstance(update, PipelineProgress):
+        print(f"[{update.progress_percent}%] {update.stage}: {update.message}")
+    else:
+        # Final result
+        print(f"Complete! Output: {update['output']}")
+
+# ✅ Feature 3: Advanced Retry Strategies
+retry_config = RetryConfig(
+    strategy=RetryStrategy.EXPONENTIAL,  # or LINEAR, FIXED, NONE
+    max_attempts=5,
+    initial_delay_ms=1000,
+    max_delay_ms=30000,
+    backoff_multiplier=2.0  # 1s -> 2s -> 4s -> 8s -> 16s
+)
+pipeline_input = PipelineInput(url=url, correlation_id=cid, retry_config=retry_config)
+
+# ✅ Feature 4: Pipeline State Persistence
+pipeline_input = PipelineInput(
+    url=url,
+    correlation_id=cid,
+    enable_state_persistence=True,
+    state_dir=Path("/tmp/pipeline_states")
+)
+# State saved after each stage, resume with same correlation_id
 ```
+
+**Phase 3 Achievements:**
+- ✅ `execute_batch_pipeline()` - Parallel processing with semaphore limiting
+- ✅ `execute_pipeline_streaming()` - Async generator yielding progress updates
+- ✅ `RetryConfig` - Exponential/linear/fixed backoff strategies
+- ✅ `PipelineState` - JSON-based state persistence and resumption
 
 ## Benefits
 
@@ -581,30 +621,277 @@ Track:
 - Average attempts to success
 - Retry patterns
 
+## Phase 3: Advanced Orchestration Features
+
+Phase 3 adds production-ready orchestration capabilities for scalable, resilient pipeline execution.
+
+### 1. Parallel Batch Processing
+
+Process multiple URLs concurrently with controlled concurrency:
+
+```python
+from app.agents.orchestrator import AgentOrchestrator, BatchPipelineInput
+
+batch_input = BatchPipelineInput(
+    urls=["https://site.com/1", "https://site.com/2", "https://site.com/3"],
+    base_correlation_id="batch-20250114",
+    language="en",
+    max_concurrent=3,  # Semaphore limiting
+)
+
+results = await orchestrator.execute_batch_pipeline(batch_input)
+
+# Results is list[BatchPipelineOutput]
+for result in results:
+    if result.success:
+        print(f"✅ {result.url}: {result.output.summarization_attempts} attempts")
+    else:
+        print(f"❌ {result.url}: {result.error}")
+```
+
+**Features:**
+- Semaphore-based concurrency control
+- Per-URL error handling (one failure doesn't stop batch)
+- Automatic correlation ID generation per URL
+- Batch summary logging
+
+**Use Cases:**
+- RSS feed processing
+- Bulk URL imports
+- Scheduled batch jobs
+
+### 2. Streaming Progress Updates
+
+Real-time progress updates for long-running operations:
+
+```python
+from app.agents.orchestrator import PipelineProgress, PipelineStage
+
+async for update in orchestrator.execute_pipeline_streaming(pipeline_input):
+    if isinstance(update, PipelineProgress):
+        # Progress update
+        print(f"[{update.progress_percent:.0f}%] {update.stage.value}: {update.message}")
+        if update.metadata:
+            print(f"  Metadata: {update.metadata}")
+    else:
+        # Final result
+        if update["success"]:
+            output = update["output"]
+            print(f"✅ Complete! Attempts: {output.summarization_attempts}")
+```
+
+**Progress Stages:**
+- `PipelineStage.EXTRACTION` (10-40%)
+- `PipelineStage.SUMMARIZATION` (50-90%)
+- `PipelineStage.COMPLETE` (100%)
+
+**Metadata Included:**
+- Content length after extraction
+- Attempt counts
+- Validation corrections
+
+**Use Cases:**
+- CLI progress bars
+- Web UI progress indicators
+- Monitoring dashboards
+
+### 3. Advanced Retry Strategies
+
+Configurable retry behavior with multiple strategies:
+
+```python
+from app.agents.orchestrator import RetryConfig, RetryStrategy
+
+# Exponential backoff (recommended for API rate limits)
+exponential_retry = RetryConfig(
+    strategy=RetryStrategy.EXPONENTIAL,
+    max_attempts=5,
+    initial_delay_ms=1000,  # 1s
+    max_delay_ms=30000,     # 30s cap
+    backoff_multiplier=2.0  # 1s → 2s → 4s → 8s → 16s
+)
+
+# Linear backoff
+linear_retry = RetryConfig(
+    strategy=RetryStrategy.LINEAR,
+    max_attempts=3,
+    initial_delay_ms=2000  # 2s → 4s → 6s
+)
+
+# Fixed delay
+fixed_retry = RetryConfig(
+    strategy=RetryStrategy.FIXED,
+    max_attempts=3,
+    initial_delay_ms=5000  # 5s every time
+)
+
+# Use in pipeline
+pipeline_input = PipelineInput(
+    url=url,
+    correlation_id=cid,
+    retry_config=exponential_retry
+)
+```
+
+**Retry Strategies:**
+- `EXPONENTIAL`: Best for API rate limits (doubling delay each attempt)
+- `LINEAR`: Predictable delays for transient errors
+- `FIXED`: Consistent delays for polling scenarios
+- `NONE`: No delays between attempts
+
+**Features:**
+- Automatic delay calculation
+- Max delay cap to prevent excessive waiting
+- Per-attempt logging
+- Respects max_attempts limit
+
+**Use Cases:**
+- Firecrawl API rate limits
+- OpenRouter retry after errors
+- Network timeout handling
+
+### 4. Pipeline State Persistence
+
+Save and resume pipeline state for long-running operations:
+
+```python
+from pathlib import Path
+
+state_dir = Path("/data/pipeline_states")
+
+# Enable persistence
+pipeline_input = PipelineInput(
+    url=url,
+    correlation_id="persist-20250114-001",
+    enable_state_persistence=True,
+    state_dir=state_dir
+)
+
+# First run (saves state after each stage)
+try:
+    result = await orchestrator.execute_pipeline(pipeline_input)
+except Exception as e:
+    print(f"Pipeline interrupted: {e}")
+    # State saved to: /data/pipeline_states/persist-20250114-001.json
+
+# Resume with same correlation_id (loads saved state)
+result = await orchestrator.execute_pipeline(pipeline_input)
+print(f"Resumed and completed!")
+```
+
+**State File Format (JSON):**
+```json
+{
+  "correlation_id": "persist-20250114-001",
+  "url": "https://example.com/article",
+  "language": "en",
+  "stage": "summarization",
+  "extraction_output": {
+    "content_markdown": "...",
+    "metadata": {...}
+  },
+  "attempts": 2,
+  "errors": ["Previous error messages"]
+}
+```
+
+**Features:**
+- Saves after extraction stage
+- Saves after summarization stage
+- Automatic cleanup on completion
+- JSON-based storage (human-readable)
+
+**Use Cases:**
+- Long article processing (30+ min)
+- Batch jobs that can be interrupted
+- Development/testing (resume without re-extraction)
+- Cost optimization (avoid re-running expensive API calls)
+
+### Phase 3 vs Phase 2 Comparison
+
+| Feature | Phase 2 | Phase 3 |
+|---------|---------|---------|
+| Single URL | ✅ `execute_pipeline()` | ✅ Same + retry strategies |
+| Multiple URLs | ❌ Loop manually | ✅ `execute_batch_pipeline()` |
+| Progress Updates | ❌ Logs only | ✅ `execute_pipeline_streaming()` |
+| Retry Logic | ❌ Manual | ✅ Configurable strategies |
+| State Persistence | ❌ None | ✅ Save/resume |
+| Concurrency Control | ❌ Manual | ✅ Semaphore limiting |
+
+### Combined Example
+
+Use multiple Phase 3 features together:
+
+```python
+# Batch processing with retry and streaming
+async def process_news_articles():
+    urls = load_urls_from_rss_feed()
+
+    batch_input = BatchPipelineInput(
+        urls=urls,
+        base_correlation_id=f"news-{datetime.now().isoformat()}",
+        max_concurrent=5,
+        retry_config=RetryConfig(
+            strategy=RetryStrategy.EXPONENTIAL,
+            max_attempts=3,
+            initial_delay_ms=2000
+        )
+    )
+
+    # Execute with progress tracking
+    results = await orchestrator.execute_batch_pipeline(batch_input)
+
+    # Save successful summaries
+    for result in results:
+        if result.success:
+            save_summary_to_db(result.output.summary_json)
+
+    return results
+
+# For individual long articles, use streaming
+async def process_long_article(url):
+    pipeline_input = PipelineInput(
+        url=url,
+        correlation_id=generate_correlation_id(),
+        enable_state_persistence=True,
+        state_dir=Path("/data/states"),
+        retry_config=RetryConfig(strategy=RetryStrategy.EXPONENTIAL)
+    )
+
+    async for update in orchestrator.execute_pipeline_streaming(pipeline_input):
+        if isinstance(update, PipelineProgress):
+            update_progress_bar(update.progress_percent)
+        else:
+            return update["output"]
+```
+
+See `examples/phase3_orchestrator_example.py` for more examples.
+
 ## Future Enhancements
 
-### Potential Improvements
+### Potential Phase 4+ Improvements
 
 1. **Parallel Agent Execution**
    - Run extraction and metadata enrichment in parallel
    - Concurrent summarization for chunked content
 
-2. **Agent State Management**
-   - Persist agent state for long-running operations
-   - Resume interrupted workflows
-
-3. **Dynamic Agent Selection**
+2. **Dynamic Agent Selection**
    - Choose summarization strategy based on content type
    - Adaptive retry strategies based on error patterns
 
-4. **Agent Communication Protocol**
+3. **Agent Communication Protocol**
    - Standardized message passing between agents
    - Event-driven architecture for agent coordination
 
-5. **Performance Optimization**
+4. **Performance Optimization**
    - Cache validation results
    - Batch similar operations
-   - Intelligent retry backoff
+   - Intelligent retry backoff based on error types
+
+5. **Observability Enhancements**
+   - OpenTelemetry tracing
+   - Prometheus metrics
+   - Grafana dashboards
 
 ## References
 
