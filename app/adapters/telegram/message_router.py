@@ -419,6 +419,12 @@ class MessageRouter:
             )
             return
 
+        if text.startswith("/search"):
+            await self.command_processor.handle_search_command(
+                message, text, uid, correlation_id, interaction_id, start_time
+            )
+            return
+
         # Handle forwarded messages before URL routing so forwards containing links aren't misclassified
         if (
             has_forward

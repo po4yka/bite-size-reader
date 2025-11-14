@@ -13,6 +13,75 @@ from app.domain.events.summary_events import SummaryCreated, SummaryMarkedAsRead
 logger = logging.getLogger(__name__)
 
 
+class EmbeddingGenerationEventHandler:
+    """Event handler for generating vector embeddings for summaries.
+
+    This handler responds to summary creation events and asynchronously
+    generates embeddings for semantic search.
+    """
+
+    def __init__(self, embedding_generator: Any) -> None:
+        """Initialize the handler.
+
+        Args:
+            embedding_generator: SummaryEmbeddingGenerator instance.
+
+        """
+        self._generator = embedding_generator
+
+    async def on_summary_created(self, event: SummaryCreated) -> None:
+        """Generate embedding when a new summary is created.
+
+        Args:
+            event: SummaryCreated domain event.
+
+        """
+        logger.info(
+            "generating_embedding_for_new_summary",
+            extra={
+                "summary_id": event.summary_id,
+                "request_id": event.request_id,
+            },
+        )
+
+        try:
+            # Generate embedding asynchronously
+            # This is a background task - failures are logged but don't block
+            success = await self._generator.generate_embedding_for_request(
+                request_id=event.request_id,
+                force=False,
+            )
+
+            if success:
+                logger.info(
+                    "embedding_generated_successfully",
+                    extra={
+                        "summary_id": event.summary_id,
+                        "request_id": event.request_id,
+                    },
+                )
+            else:
+                logger.debug(
+                    "embedding_generation_skipped",
+                    extra={
+                        "summary_id": event.summary_id,
+                        "request_id": event.request_id,
+                        "reason": "already_exists_or_empty",
+                    },
+                )
+
+        except Exception as e:
+            # Log error but don't fail - embedding generation is not critical
+            logger.exception(
+                "embedding_generation_failed",
+                extra={
+                    "summary_id": event.summary_id,
+                    "request_id": event.request_id,
+                    "error": str(e),
+                },
+            )
+
+
 class SearchIndexEventHandler:
     """Event handler for updating the full-text search index.
 
@@ -730,6 +799,7 @@ def wire_event_handlers(
     cache_service: Any | None = None,
     webhook_client: Any | None = None,
     webhook_url: str | None = None,
+    embedding_generator: Any | None = None,
 ) -> None:
     """Wire up all event handlers to the event bus.
 
@@ -745,6 +815,7 @@ def wire_event_handlers(
         cache_service: Optional cache service (Redis, Memcached, etc.).
         webhook_client: Optional HTTP client for sending webhooks.
         webhook_url: Optional webhook URL to send events to.
+        embedding_generator: Optional SummaryEmbeddingGenerator for vector embeddings.
 
     Example:
         ```python
@@ -757,7 +828,8 @@ def wire_event_handlers(
             database,
             analytics_service=analytics,
             cache_service=redis_client,
-            webhook_url="https://example.com/webhooks"
+            webhook_url="https://example.com/webhooks",
+            embedding_generator=embedding_gen,
         )
 
         # Now when events are published, all handlers are called
@@ -774,12 +846,17 @@ def wire_event_handlers(
     notification_handler = NotificationEventHandler(telegram_client, notification_service)
     cache_handler = CacheInvalidationEventHandler(cache_service)
     webhook_handler = WebhookEventHandler(webhook_client, webhook_url)
+    embedding_handler = (
+        EmbeddingGenerationEventHandler(embedding_generator) if embedding_generator else None
+    )
 
     # Wire up summary events
     event_bus.subscribe(SummaryCreated, search_index_handler.on_summary_created)
     event_bus.subscribe(SummaryCreated, audit_log_handler.on_summary_created)
     event_bus.subscribe(SummaryCreated, cache_handler.on_summary_created)
     event_bus.subscribe(SummaryCreated, webhook_handler.on_summary_created)
+    if embedding_handler:
+        event_bus.subscribe(SummaryCreated, embedding_handler.on_summary_created)
 
     event_bus.subscribe(SummaryMarkedAsRead, search_index_handler.on_summary_marked_as_read)
     event_bus.subscribe(SummaryMarkedAsRead, analytics_handler.on_summary_marked_as_read)
@@ -808,6 +885,7 @@ def wire_event_handlers(
                 "notifications": telegram_client is not None or notification_service is not None,
                 "cache": cache_service is not None,
                 "webhooks": webhook_client is not None and webhook_url is not None,
+                "embeddings": embedding_generator is not None,
             },
         },
     )

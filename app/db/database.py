@@ -24,6 +24,7 @@ from app.db.models import (
     LLMCall,
     Request,
     Summary,
+    SummaryEmbedding,
     TelegramMessage,
     TopicSearchIndex,
     User,
@@ -948,6 +949,29 @@ class Database:
             **fields,
         )
 
+    def get_user_interactions(
+        self,
+        *,
+        uid: int,
+        limit: int = 10,
+    ) -> list[dict[str, Any]]:
+        """Get recent user interactions for a user.
+
+        Args:
+            uid: The user ID to query
+            limit: Maximum number of interactions to return (default 10)
+
+        Returns:
+            List of interaction dictionaries, ordered by most recent first
+        """
+        interactions = (
+            UserInteraction.select()
+            .where(UserInteraction.user_id == uid)
+            .order_by(UserInteraction.created_at.desc())
+            .limit(limit)
+        )
+        return [model_to_dict(interaction) for interaction in interactions]
+
     def create_request(
         self,
         *,
@@ -1268,6 +1292,96 @@ class Database:
             Summary.request == request_id
         ).execute()
 
+    def create_or_update_summary_embedding(
+        self,
+        summary_id: int,
+        embedding_blob: bytes,
+        model_name: str,
+        model_version: str,
+        dimensions: int,
+        language: str | None = None,
+    ) -> None:
+        """Store or update embedding for a summary.
+
+        Args:
+            summary_id: ID of the summary to associate embedding with
+            embedding_blob: Serialized embedding data (pickled numpy array)
+            model_name: Name of the embedding model used
+            model_version: Version of the embedding model
+            dimensions: Number of dimensions in the embedding vector
+            language: Language code (en, ru, auto, etc.)
+        """
+        try:
+            # Try to create new embedding
+            SummaryEmbedding.create(
+                summary=summary_id,
+                embedding_blob=embedding_blob,
+                model_name=model_name,
+                model_version=model_version,
+                dimensions=dimensions,
+                language=language,
+            )
+        except peewee.IntegrityError:
+            # Embedding exists, update it
+            SummaryEmbedding.update(
+                {
+                    SummaryEmbedding.embedding_blob: embedding_blob,
+                    SummaryEmbedding.model_name: model_name,
+                    SummaryEmbedding.model_version: model_version,
+                    SummaryEmbedding.dimensions: dimensions,
+                    SummaryEmbedding.language: language,
+                    SummaryEmbedding.created_at: dt.datetime.utcnow(),
+                }
+            ).where(SummaryEmbedding.summary == summary_id).execute()
+
+    async def async_create_or_update_summary_embedding(
+        self,
+        summary_id: int,
+        embedding_blob: bytes,
+        model_name: str,
+        model_version: str,
+        dimensions: int,
+        language: str | None = None,
+    ) -> None:
+        """Asynchronously store or update embedding for a summary."""
+        await self._safe_db_operation(
+            self.create_or_update_summary_embedding,
+            summary_id=summary_id,
+            embedding_blob=embedding_blob,
+            model_name=model_name,
+            model_version=model_version,
+            dimensions=dimensions,
+            language=language,
+            operation_name="create_or_update_summary_embedding",
+        )
+
+    def get_summary_embedding(self, summary_id: int) -> dict[str, Any] | None:
+        """Retrieve embedding for a summary.
+
+        Returns:
+            Dictionary with keys: embedding_blob, model_name, model_version, dimensions, language, created_at
+            None if no embedding exists
+        """
+        embedding = SummaryEmbedding.get_or_none(SummaryEmbedding.summary == summary_id)
+        if embedding is None:
+            return None
+        return {
+            "embedding_blob": embedding.embedding_blob,
+            "model_name": embedding.model_name,
+            "model_version": embedding.model_version,
+            "dimensions": embedding.dimensions,
+            "language": embedding.language,
+            "created_at": embedding.created_at,
+        }
+
+    async def async_get_summary_embedding(self, summary_id: int) -> dict[str, Any] | None:
+        """Asynchronously retrieve embedding for a summary."""
+        return await self._safe_db_operation(
+            self.get_summary_embedding,
+            summary_id=summary_id,
+            operation_name="get_summary_embedding",
+        )
+
     @staticmethod
     def _yield_topic_fragments(value: Any) -> Iterator[str]:
         """Yield normalized text fragments from arbitrary payload values."""
@@ -1536,6 +1650,7 @@ class Database:
             ("llm_calls", "openrouter_response_text", "TEXT"),
             ("llm_calls", "openrouter_response_json", "TEXT"),
             ("user_interactions", "updated_at", "DATETIME"),
+            ("summary_embeddings", "language", "TEXT"),  # Multi-language support
         ]
         for table, column, coltype in checks:
             self._ensure_column(table, column, coltype)

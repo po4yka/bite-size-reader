@@ -24,6 +24,9 @@ if TYPE_CHECKING:
     from app.adapters.external.response_formatter import ResponseFormatter
     from app.adapters.telegram.url_handler import URLHandler
     from app.db.database import Database
+    from app.services.embedding_service import EmbeddingService
+    from app.services.hybrid_search_service import HybridSearchService
+    from app.services.vector_search_service import VectorSearchService
 
 logger = logging.getLogger(__name__)
 
@@ -43,6 +46,7 @@ class CommandProcessor:
         local_searcher: LocalTopicSearchService | None = None,
         task_manager: UserTaskManager | None = None,
         container: Any | None = None,
+        hybrid_search: HybridSearchService | None = None,
     ) -> None:
         self.cfg = cfg
         self.response_formatter = response_formatter
@@ -54,6 +58,7 @@ class CommandProcessor:
         self.local_searcher = local_searcher
         self._task_manager = task_manager
         self._container = container
+        self.hybrid_search = hybrid_search
 
     @staticmethod
     def _maybe_load_json(payload: Any) -> Any:
@@ -1083,3 +1088,178 @@ class CommandProcessor:
                     start_time=start_time,
                     logger_=logger,
                 )
+
+    async def handle_search_command(
+        self,
+        message: Any,
+        text: str,
+        uid: int,
+        correlation_id: str,
+        interaction_id: int,
+        start_time: float,
+    ) -> None:
+        """Handle /search command - hybrid semantic + keyword search."""
+        chat_id = getattr(getattr(message, "chat", None), "id", None)
+        logger.info(
+            "command_search",
+            extra={"uid": uid, "chat_id": chat_id, "cid": correlation_id, "text": text[:100]},
+        )
+        try:
+            self._audit(
+                "INFO",
+                "command_search",
+                {"uid": uid, "chat_id": chat_id, "cid": correlation_id, "text": text[:100]},
+            )
+        except Exception:
+            pass
+
+        # Check if search service is available
+        if not self.hybrid_search:
+            await self.response_formatter.safe_reply(
+                message, "⚠️ Semantic search is currently unavailable."
+            )
+            if interaction_id:
+                await async_safe_update_user_interaction(
+                    self.db,
+                    interaction_id=interaction_id,
+                    response_sent=True,
+                    response_type="search_disabled",
+                    start_time=start_time,
+                    logger_=logger,
+                )
+            return
+
+        # Extract query from command
+        parts = text.split(maxsplit=1)
+        query = parts[1].strip() if len(parts) > 1 else ""
+
+        if not query:
+            usage_msg = (
+                "❌ Usage: `/search <query>`\n\n"
+                "**Examples:**\n"
+                "• `/search machine learning`\n"
+                "• `/search python async programming`\n"
+                "• `/search AI ethics`\n\n"
+                "💡 **Features:**\n"
+                "• Semantic vector search\n"
+                "• Keyword (FTS) search\n"
+                "• Query expansion with synonyms\n"
+                "• Hybrid scoring for best results"
+            )
+            await self.response_formatter.safe_reply(message, usage_msg)
+            if interaction_id:
+                await async_safe_update_user_interaction(
+                    self.db,
+                    interaction_id=interaction_id,
+                    response_sent=True,
+                    response_type="search_usage",
+                    start_time=start_time,
+                    logger_=logger,
+                )
+            return
+
+        # Send searching message
+        await self.response_formatter.safe_reply(message, f"🔍 Searching for: **{query}**...")
+
+        try:
+            # Perform hybrid search with all advanced features
+            results = await self.hybrid_search.search(
+                query=query,
+                correlation_id=correlation_id,
+            )
+
+            if not results:
+                await self.response_formatter.safe_reply(
+                    message,
+                    f"📭 No articles found for **{query}**.\n\n"
+                    "💡 Try:\n"
+                    "• Broader search terms\n"
+                    "• Different keywords\n"
+                    "• Check `/find` for online search",
+                )
+                if interaction_id:
+                    await async_safe_update_user_interaction(
+                        self.db,
+                        interaction_id=interaction_id,
+                        response_sent=True,
+                        response_type="search_empty",
+                        start_time=start_time,
+                        logger_=logger,
+                    )
+                return
+
+            # Format and send results
+            await self._send_search_results(message, query, results)
+
+            if interaction_id:
+                await async_safe_update_user_interaction(
+                    self.db,
+                    interaction_id=interaction_id,
+                    response_sent=True,
+                    response_type="search_results",
+                    start_time=start_time,
+                    logger_=logger,
+                )
+
+        except Exception as exc:  # noqa: BLE001 - defensive catch
+            logger.exception("command_search_failed", extra={"cid": correlation_id})
+            await self.response_formatter.safe_reply(
+                message,
+                "⚠️ Search failed. Please try again later or check bot logs for details.",
+            )
+            if interaction_id:
+                await async_safe_update_user_interaction(
+                    self.db,
+                    interaction_id=interaction_id,
+                    response_sent=True,
+                    response_type="search_error",
+                    error_occurred=True,
+                    error_message=str(exc)[:500],
+                    start_time=start_time,
+                    logger_=logger,
+                )
+
+    async def _send_search_results(
+        self,
+        message: Any,
+        query: str,
+        results: list,
+    ) -> None:
+        """Format and send search results to user."""
+        # Build results message
+        response_lines = [
+            f"🎯 **Search Results** for: **{query}**",
+            f"📊 Found {len(results)} article(s)\n",
+        ]
+
+        for i, result in enumerate(results[:10], 1):  # Limit to top 10 for Telegram
+            title = result.title or result.url or "Untitled"
+            url = result.url or ""
+            snippet = result.snippet or ""
+
+            # Truncate long titles and snippets for readability
+            if len(title) > 100:
+                title = title[:97] + "..."
+            if len(snippet) > 150:
+                snippet = snippet[:147] + "..."
+
+            result_text = f"{i}. **{title}**"
+            if url:
+                result_text += f"\n   🔗 {url}"
+            if snippet:
+                result_text += f"\n   📝 {snippet}"
+
+            # Add source and date if available
+            metadata_parts = []
+            if result.source:
+                metadata_parts.append(f"📰 {result.source}")
+            if result.published_at:
+                metadata_parts.append(f"📅 {result.published_at}")
+            if metadata_parts:
+                result_text += f"\n   {' | '.join(metadata_parts)}"
+
+            response_lines.append(result_text)
+
+        response_lines.append("\n💡 **Tip:** Use `/read <request_id>` to view full summaries")
+
+        await self.response_formatter.safe_reply(message, "\n\n".join(response_lines))
