@@ -1,0 +1,60 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 << 'PYTHON_EOF'\nimport json\nimport sys\nimport os\n\n# Read hook input from stdin\ninput_data = json.load(sys.stdin)\ntool_args = input_data.get('tool_args', {})\nfile_path = tool_args.get('file_path', '')\n\n# Protected paths - never allow modification\nprotected_patterns = [\n    'data/app.db',\n    '.env',\n    'requirements.txt',\n    'requirements-dev.txt',\n    '.git/',\n]\n\n# Check if file path matches any protected pattern\nfor pattern in protected_patterns:\n    if pattern in file_path:\n        print(f'ERROR: Cannot modify protected file: {file_path}', file=sys.stderr)\n        print(f'Protected pattern matched: {pattern}', file=sys.stderr)\n        print('\\nTo modify this file:', file=sys.stderr)\n        print('1. Review the change carefully', file=sys.stderr)\n        print('2. Ask user for explicit permission', file=sys.stderr)\n        print('3. Make changes manually if needed', file=sys.stderr)\n        sys.exit(2)\n\n# Check for dangerous operations in Python files\nif file_path.endswith('.py'):\n    content = tool_args.get('new_string', '') or tool_args.get('content', '')\n    \n    dangerous_patterns = [\n        ('os.system', 'Direct shell command execution'),\n        ('eval(', 'Arbitrary code evaluation'),\n        ('exec(', 'Arbitrary code execution'),\n        ('__import__', 'Dynamic import (potential security risk)'),\n    ]\n    \n    for pattern, reason in dangerous_patterns:\n        if pattern in content:\n            print(f'WARNING: Potentially dangerous pattern detected: {pattern}', file=sys.stderr)\n            print(f'Reason: {reason}', file=sys.stderr)\n            print(f'Location: {file_path}', file=sys.stderr)\n            print('\\nPlease review this change carefully before proceeding.', file=sys.stderr)\n            # Warning only, don't block\n\nPYTHON_EOF\n",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 << 'PYTHON_EOF'\nimport json\nimport sys\nimport re\n\n# Read hook input\ninput_data = json.load(sys.stdin)\ntool_args = input_data.get('tool_args', {})\ncommand = tool_args.get('command', '')\n\n# Dangerous bash patterns\ndangerous_patterns = [\n    (r'rm\\s+-rf\\s+/', 'Recursive deletion from root'),\n    (r'rm\\s+-rf\\s+\\$HOME', 'Deletion of home directory'),\n    (r'rm\\s+-rf\\s+~', 'Deletion of home directory'),\n    (r'rm\\s+-rf\\s+\\.\\s*$', 'Deletion of current directory'),\n    (r'rm\\s+-rf\\s+/data', 'Deletion of data directory'),\n    (r'>/dev/sd[a-z]', 'Direct disk write'),\n    (r'dd\\s+if=.*of=/dev/', 'Direct disk imaging'),\n    (r'mkfs', 'Filesystem creation'),\n    (r'chmod\\s+777', 'Overly permissive permissions'),\n    (r'curl.*\\|\\s*bash', 'Piping curl to bash'),\n    (r'wget.*\\|\\s*sh', 'Piping wget to shell'),\n]\n\nfor pattern, reason in dangerous_patterns:\n    if re.search(pattern, command, re.IGNORECASE):\n        print(f'ERROR: Dangerous command blocked: {reason}', file=sys.stderr)\n        print(f'Pattern matched: {pattern}', file=sys.stderr)\n        print(f'Command: {command}', file=sys.stderr)\n        print('\\nThis operation requires manual review and execution.', file=sys.stderr)\n        sys.exit(2)\n\n# Warn about potentially risky operations\nwarning_patterns = [\n    (r'pip\\s+install(?!.*-r\\s+requirements)', 'Installing packages without requirements file'),\n    (r'docker\\s+rm\\s+-f', 'Forcing container removal'),\n    (r'git\\s+push\\s+-f', 'Force pushing to git'),\n    (r'drop\\s+table', 'Dropping database table'),\n]\n\nfor pattern, reason in warning_patterns:\n    if re.search(pattern, command, re.IGNORECASE):\n        print(f'WARNING: Potentially risky operation: {reason}', file=sys.stderr)\n        print(f'Command: {command}', file=sys.stderr)\n        # Warning only, don't block\n\nPYTHON_EOF\n",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cd $CLAUDE_PROJECT_DIR && bash << 'BASH_EOF'\necho \"=== Bite-Size Reader Session Started ===\"\necho \"\"\n\n# Check Python version\nif command -v python3 &> /dev/null; then\n    PYTHON_VERSION=$(python3 --version 2>&1 | awk '{print $2}')\n    echo \"✓ Python: $PYTHON_VERSION\"\nelse\n    echo \"✗ Python 3 not found\"\nfi\n\n# Check virtual environment\nif [ -n \"$VIRTUAL_ENV\" ]; then\n    echo \"✓ Virtual environment: active ($VIRTUAL_ENV)\"\nelif [ -d \".venv\" ]; then\n    echo \"⚠ Virtual environment exists but not activated\"\n    echo \"  Run: source .venv/bin/activate\"\nelse\n    echo \"⚠ Virtual environment not found\"\n    echo \"  Run: make venv && source .venv/bin/activate\"\nfi\n\n# Check required dependencies\nif python3 -c \"import pyrogram, httpx, peewee\" 2>/dev/null; then\n    echo \"✓ Core dependencies: installed\"\nelse\n    echo \"⚠ Core dependencies: missing or incomplete\"\n    echo \"  Run: pip install -r requirements.txt\"\nfi\n\n# Check environment file\nif [ -f \".env\" ]; then\n    echo \"✓ Environment file: .env exists\"\n    \n    # Check for required keys (without showing values)\n    REQUIRED_KEYS=(\"FIRECRAWL_API_KEY\" \"OPENROUTER_API_KEY\" \"BOT_TOKEN\")\n    MISSING_KEYS=()\n    \n    for key in \"${REQUIRED_KEYS[@]}\"; do\n        if ! grep -q \"^${key}=\" .env 2>/dev/null; then\n            MISSING_KEYS+=(\"$key\")\n        fi\n    done\n    \n    if [ ${#MISSING_KEYS[@]} -eq 0 ]; then\n        echo \"✓ Required API keys: configured\"\n    else\n        echo \"⚠ Missing API keys: ${MISSING_KEYS[*]}\"\n    fi\nelse\n    echo \"⚠ Environment file: .env not found\"\n    echo \"  Run: cp .env.example .env (then fill in your keys)\"\nfi\n\n# Check database\nif [ -f \"data/app.db\" ]; then\n    DB_SIZE=$(du -h data/app.db | cut -f1)\n    echo \"✓ Database: data/app.db ($DB_SIZE)\"\nelse\n    echo \"⚠ Database: data/app.db not found (will be created on first run)\"\nfi\n\n# Check git status\nif git rev-parse --git-dir > /dev/null 2>&1; then\n    BRANCH=$(git branch --show-current)\n    echo \"✓ Git branch: $BRANCH\"\n    \n    # Check for uncommitted changes\n    if ! git diff-index --quiet HEAD -- 2>/dev/null; then\n        echo \"⚠ Uncommitted changes detected\"\n    fi\nfi\n\necho \"\"\necho \"=== Session Ready ===\"\necho \"\"\necho \"Quick commands:\"\necho \"  make format  - Format code (black + isort + ruff)\"\necho \"  make lint    - Lint code (ruff)\"\necho \"  make type    - Type check (mypy)\"\necho \"  python -m app.cli.summary --url <URL> - Test CLI runner\"\necho \"\"\necho \"IMPORTANT: Always preserve correlation IDs when debugging!\"\necho \"           Check SPEC.md for canonical data model.\"\necho \"\"\nBASH_EOF\n",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 << 'PYTHON_EOF'\nimport json\nimport sys\nimport subprocess\nimport os\n\n# Read hook input\ninput_data = json.load(sys.stdin)\ntool_args = input_data.get('tool_args', {})\nfile_path = tool_args.get('file_path', '')\n\n# Only check Python files\nif not file_path.endswith('.py'):\n    sys.exit(0)\n\n# Skip if file doesn't exist or is in excluded directories\nif not os.path.exists(file_path) or any(x in file_path for x in ['venv', '.venv', 'build', 'dist']):\n    sys.exit(0)\n\nprint(f\"Running quick lint on {file_path}...\")\n\ntry:\n    # Run ruff on the modified file (quick check only)\n    result = subprocess.run(\n        ['ruff', 'check', '--select', 'F,E', file_path],\n        capture_output=True,\n        text=True,\n        timeout=5\n    )\n    \n    if result.returncode != 0 and result.stdout:\n        print(\"⚠ Linting issues found:\")\n        print(result.stdout)\n        print(\"\\nRun 'make format' to auto-fix formatting issues.\")\n        print(\"Run 'make lint' for full analysis.\")\n    else:\n        print(\"✓ No critical linting issues detected.\")\n        \nexcept subprocess.TimeoutExpired:\n    print(\"⚠ Linting timed out (file may be very large)\")\nexcept FileNotFoundError:\n    print(\"⚠ ruff not installed - skipping lint check\")\n    print(\"  Install with: pip install -r requirements-dev.txt\")\nexcept Exception as e:\n    print(f\"⚠ Linting check failed: {e}\")\n\nPYTHON_EOF\n",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 << 'PYTHON_EOF'\nimport json\nimport sys\n\n# Read hook input\ninput_data = json.load(sys.stdin)\nprompt = input_data.get('prompt', '').lower()\n\n# Inject helpful context based on prompt content\ncontext_additions = []\n\nif 'correlation' in prompt or 'correlation_id' in prompt or 'error id' in prompt:\n    context_additions.append(\n        \"CONTEXT: Correlation IDs trace requests end-to-end. \"\n        \"Query: SELECT * FROM requests WHERE id = '<correlation_id>'; \"\n        \"Then check crawl_results, llm_calls, and summaries tables.\"\n    )\n\nif 'database' in prompt or 'sqlite' in prompt or 'query' in prompt:\n    context_additions.append(\n        \"CONTEXT: Database is at data/app.db. \"\n        \"Use the database-inspection skill for common query patterns.\"\n    )\n\nif 'summary' in prompt and ('validate' in prompt or 'check' in prompt):\n    context_additions.append(\n        \"CONTEXT: Summary contract validation is in app/core/summary_contract.py. \"\n        \"Use the summary-validation skill for testing.\"\n    )\n\nif 'firecrawl' in prompt or 'openrouter' in prompt or 'api' in prompt:\n    context_additions.append(\n        \"CONTEXT: API integrations: Firecrawl (app/adapters/content/content_extractor.py), \"\n        \"OpenRouter (app/adapters/openrouter/). Use api-debugging skill for troubleshooting.\"\n    )\n\nif 'test' in prompt or 'cli' in prompt:\n    context_additions.append(\n        \"CONTEXT: Use CLI runner for testing: python -m app.cli.summary --url <URL>. \"\n        \"See telegram-testing skill for workflows.\"\n    )\n\nif context_additions:\n    print('\\n'.join(context_additions))\n\nPYTHON_EOF\n",
+            "timeout": 3
+          }
+        ]
+      }
+    ]
+  }
+}

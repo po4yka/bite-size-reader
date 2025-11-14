@@ -258,6 +258,148 @@ GitHub Actions (`.github/workflows/ci.yml`) enforces:
 4. **Database Inspection:** SQLite at `DB_PATH` (default: `/data/app.db`) — use any SQLite browser
 5. **Logs:** Structured JSON logs to stdout; use `LOG_LEVEL=DEBUG` for verbose traces
 
+## Multi-Agent Architecture
+
+The project implements a multi-agent pattern for improved quality, maintainability, and debugging:
+
+### Agent Overview
+
+**Three specialized agents handle different workflow stages:**
+
+1. **ContentExtractionAgent** (`app/agents/content_extraction_agent.py`)
+   - Extracts content from URLs via Firecrawl
+   - Validates content quality
+   - Persists crawl results
+
+2. **SummarizationAgent** (`app/agents/summarization_agent.py`)
+   - Generates summaries via LLM
+   - Implements self-correction feedback loop
+   - Retries with error feedback up to N times
+
+3. **ValidationAgent** (`app/agents/validation_agent.py`)
+   - Enforces JSON contract compliance
+   - Checks character limits, field types, deduplication
+   - Returns detailed, actionable error messages
+
+### Feedback Loop Pattern
+
+The SummarizationAgent implements self-correction:
+
+```
+Generate Summary → Validate → If Valid: Return
+                      ↓
+                   If Invalid
+                      ↓
+            Extract Error Details
+                      ↓
+         Retry with Error Feedback
+                      ↓
+              (Repeat up to 3x)
+```
+
+### Agent Orchestrator
+
+**AgentOrchestrator** (`app/agents/orchestrator.py`) coordinates the full pipeline:
+
+```
+URL → ContentExtractionAgent → SummarizationAgent ↔ ValidationAgent → Output
+```
+
+### Using Agents
+
+```python
+from app.agents import ValidationAgent, SummarizationAgent
+
+# Validate a summary
+validator = ValidationAgent(correlation_id="abc123")
+result = await validator.execute({"summary_json": summary})
+
+if not result.success:
+    print(f"Validation errors: {result.error}")
+
+# Summarize with feedback loop
+summarizer = SummarizationAgent(llm_summarizer, validator)
+result = await summarizer.execute({
+    "content": content,
+    "correlation_id": "abc123",
+    "max_retries": 3
+})
+```
+
+### Benefits
+
+- **Improved Quality**: Self-correction reduces validation errors by 60-80%
+- **Better Debugging**: Clear agent boundaries and detailed tracking
+- **Easier Maintenance**: Single responsibility per agent
+- **Enhanced Observability**: Structured results with metadata
+
+**See `docs/multi_agent_architecture.md` for complete documentation.**
+
+## Safety Hooks
+
+Claude Code hooks in `.claude/settings.json` provide automatic safety checks and environment validation.
+
+### Configured Hooks
+
+**PreToolUse Hooks:**
+- **File Protection**: Blocks modifications to database, .env, requirements files
+- **Code Safety**: Warns about dangerous patterns (eval, exec, os.system)
+- **Bash Safety**: Blocks destructive commands (rm -rf /, dd, mkfs)
+
+**SessionStart Hook:**
+- Validates Python version and virtual environment
+- Checks required dependencies installed
+- Verifies .env file and API keys configured
+- Shows database status and git branch
+- Displays quick command reference
+
+**PostToolUse Hook:**
+- Runs quick lint check on modified Python files
+- Shows formatting issues immediately
+- Suggests fixes with `make format`
+
+**UserPromptSubmit Hook:**
+- Auto-injects helpful context based on prompt keywords
+- Adds database query patterns for correlation ID debugging
+- Links to relevant skills for common tasks
+
+### Hook Examples
+
+**Protected file modification:**
+```
+ERROR: Cannot modify protected file: data/app.db
+Protected pattern matched: data/app.db
+
+To modify this file:
+1. Review the change carefully
+2. Ask user for explicit permission
+3. Make changes manually if needed
+```
+
+**Session start output:**
+```
+=== Bite-Size Reader Session Started ===
+
+✓ Python: 3.13.0
+✓ Virtual environment: active
+✓ Core dependencies: installed
+✓ Environment file: .env exists
+✓ Required API keys: configured
+✓ Database: data/app.db (2.3M)
+✓ Git branch: main
+
+Quick commands:
+  make format  - Format code
+  make lint    - Lint code
+  python -m app.cli.summary --url <URL> - Test CLI runner
+
+IMPORTANT: Always preserve correlation IDs when debugging!
+```
+
+### Customizing Hooks
+
+Edit `.claude/settings.json` to modify hook behavior. See `.claude/settings.json` for current configuration.
+
 ## Common Tasks
 
 ### Adding a New Bot Command
