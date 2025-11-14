@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import time
 from typing import TYPE_CHECKING, Any
 
 from app.core.logging_utils import generate_correlation_id
@@ -443,18 +442,18 @@ class URLHandler:
                             },
                         )
                         return msg_id
-                    else:
-                        logger.warning(
-                            "progress_update_edit_failed",
-                            extra={
-                                "completed": current,
-                                "total": total_count,
-                                "message_id": msg_id,
-                                "uid": uid,
-                            },
-                        )
-                        # Keep returning the same message_id to retry on next update
-                        return msg_id
+
+                    logger.warning(
+                        "progress_update_edit_failed",
+                        extra={
+                            "completed": current,
+                            "total": total_count,
+                            "message_id": msg_id,
+                            "uid": uid,
+                        },
+                    )
+                    # Keep returning the same message_id to retry on next update
+                    return msg_id
                 else:
                     logger.warning(
                         "progress_update_skipped",

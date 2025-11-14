@@ -6,7 +6,8 @@ transient errors like network issues, rate limits, or temporary API outages.
 
 import asyncio
 import logging
-from typing import Any, Callable, TypeVar
+from collections.abc import Callable
+from typing import Any, TypeVar
 
 logger = logging.getLogger(__name__)
 
@@ -64,10 +65,7 @@ def is_transient_error(error: Exception) -> bool:
         "httperror",
     ]
 
-    if any(exc_type in exception_type for exc_type in transient_types):
-        return True
-
-    return False
+    return any(exc_type in exception_type for exc_type in transient_types)
 
 
 async def retry_with_backoff(
@@ -111,7 +109,6 @@ async def retry_with_backoff(
         ...     print("Failed after all retries")
     """
     delay = initial_delay
-    last_error = None
 
     for attempt in range(max_retries + 1):
         try:
@@ -127,8 +124,6 @@ async def retry_with_backoff(
                 )
             return result, True
         except Exception as e:
-            last_error = e
-
             # Check if this is the last attempt
             if attempt >= max_retries:
                 logger.warning(

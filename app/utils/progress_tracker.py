@@ -7,7 +7,8 @@ of batch operations and sending updates to Telegram in a thread-safe manner.
 import asyncio
 import logging
 import time
-from typing import Any, Callable, Protocol
+from collections.abc import Callable
+from typing import Any, Protocol
 
 logger = logging.getLogger(__name__)
 
@@ -139,11 +140,8 @@ class ProgressTracker:
             made_progress = self._completed > self._last_displayed
             should_update = False
             if made_progress:
-                # Always surface meaningful progress jumps immediately
-                if progress_threshold_met:
-                    should_update = True
-                # Otherwise, send periodic heartbeats while work is ongoing
-                elif time_threshold_met:
+                # Always surface meaningful progress jumps immediately or send periodic heartbeats
+                if progress_threshold_met or time_threshold_met:
                     should_update = True
 
             if should_update:
@@ -203,7 +201,7 @@ class ProgressTracker:
                 completed, total = await asyncio.wait_for(
                     self._update_queue.get(), timeout=0.5
                 )
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 continue
 
             try:

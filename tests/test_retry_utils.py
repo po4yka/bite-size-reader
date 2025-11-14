@@ -211,7 +211,7 @@ class TestRetryWithBackoff(unittest.IsolatedAsyncioTestCase):
         """Test that function arguments are passed correctly."""
         mock_func = AsyncMock(return_value="result")
 
-        result, success = await retry_with_backoff(
+        _result, success = await retry_with_backoff(
             mock_func,
             "arg1",
             "arg2",
@@ -226,7 +226,7 @@ class TestRetryWithBackoff(unittest.IsolatedAsyncioTestCase):
         """Test behavior with zero retries configured."""
         mock_func = AsyncMock(side_effect=Exception("Timeout"))
 
-        result, success = await retry_with_backoff(
+        _result, success = await retry_with_backoff(
             mock_func, max_retries=0, initial_delay=0.01
         )
 

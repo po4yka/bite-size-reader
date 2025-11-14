@@ -100,16 +100,14 @@ def format_completion_message(
     """
     if failed == 0:
         # Perfect success
-        message = f"✅ Successfully processed all {successful} {context}!"
-        return message
+        return f"✅ Successfully processed all {successful} {context}!"
 
     if successful == 0:
         # Complete failure
-        message = (
+        return (
             f"❌ Failed to process any {context}. "
             "Please check if URLs are valid and accessible."
         )
-        return message
 
     # Partial success - analyze failure rate
     failure_rate = (failed / total) * 100 if total > 0 else 0
