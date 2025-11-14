@@ -149,6 +149,18 @@ class SummarizationAgent(BaseAgent[SummarizationInput, SummarizationOutput]):
     ) -> dict[str, Any] | None:
         """Generate a summary with optional feedback from previous attempts.
 
+        This method demonstrates the feedback loop pattern for LLM summarization.
+        The actual LLMSummarizer.summarize_content method requires a message object
+        for sending notifications, which isn't available in the agent context.
+
+        Integration approaches:
+        1. **Validation-Only Mode**: Use this agent with pre-generated summaries
+           from database to validate and refine them
+        2. **Refactored Summarizer**: Extract core summarization logic to a
+           message-independent method that agents can call
+        3. **Hybrid Approach**: Use existing LLMSummarizer for generation,
+           then use ValidationAgent for feedback loop
+
         Args:
             content: Content to summarize
             metadata: Metadata about the content
@@ -157,47 +169,27 @@ class SummarizationAgent(BaseAgent[SummarizationInput, SummarizationOutput]):
             attempt: Current attempt number
 
         Returns:
-            Summary result or None
+            Summary result dictionary or None
+
+        Note:
+            This is a demonstration of the feedback loop pattern. For production use:
+            1. Extract LLMSummarizer's core logic to a standalone method
+            2. Remove message/notification dependencies
+            3. Call that method here with enhanced prompts based on previous_errors
         """
-        # Build enhanced system prompt with feedback
-        system_prompt_additions = []
+        # Build enhanced feedback for retry attempts
+        feedback_instructions = self._build_correction_prompt(previous_errors) if previous_errors else ""
 
-        if previous_errors and attempt > 1:
-            system_prompt_additions.append(
-                "\n\n⚠️ IMPORTANT CORRECTIONS FROM PREVIOUS ATTEMPTS:"
-            )
-            for error in previous_errors[-2:]:  # Show last 2 errors
-                system_prompt_additions.append(f"- {error}")
-            system_prompt_additions.append(
-                "\nPlease address these issues in your response."
-            )
+        # In a real implementation, this would:
+        # 1. Load system prompt for the language
+        # 2. Add feedback_instructions to the prompt if attempt > 1
+        # 3. Call a message-independent summarization method
+        # 4. Return the raw JSON response
 
-        # Add emphasis based on attempt number
-        if attempt >= 2:
-            system_prompt_additions.append(
-                "\n\n⚠️ This is a retry. Pay special attention to:"
-                "\n- Character limits on summary_250 (≤250) and summary_1000 (≤1000)"
-                "\n- Topic tags must start with #"
-                "\n- All required fields must be present"
-                "\n- Ensure valid JSON structure"
-            )
-
-        feedback_prompt = "".join(system_prompt_additions) if system_prompt_additions else None
-
-        # TODO: Integrate with actual LLMSummarizer.summarize() method
-        # The actual implementation would call:
-        # return await self.llm_summarizer.summarize(
-        #     content=content,
-        #     metadata=metadata,
-        #     language=language,
-        #     additional_instructions=feedback_prompt,
-        # )
-
-        # Placeholder implementation
-        raise NotImplementedError(
-            "Integration with LLMSummarizer.summarize() pending - "
-            "this agent provides the feedback loop pattern"
-        )
+        # For now, return None to indicate this needs full integration
+        # Users should use the existing LLMSummarizer directly or implement
+        # the message-independent extraction first
+        return None
 
     def _build_correction_prompt(self, errors: list[str]) -> str:
         """Build a prompt that incorporates previous validation errors.

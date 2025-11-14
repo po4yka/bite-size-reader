@@ -6,10 +6,11 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from app.agents.base_agent import AgentResult, BaseAgent
-from app.core.url_utils import normalize_url
+from app.core.url_utils import normalize_url, url_hash_sha256
 
 if TYPE_CHECKING:
     from app.adapters.content.content_extractor import ContentExtractor
+    from app.db.database import Database
 
 
 @dataclass
@@ -46,16 +47,19 @@ class ContentExtractionAgent(BaseAgent[ExtractionInput, ExtractionOutput]):
     def __init__(
         self,
         content_extractor: ContentExtractor,
+        db: Database,
         correlation_id: str | None = None,
     ):
         """Initialize the content extraction agent.
 
         Args:
             content_extractor: The content extractor component to use
+            db: Database instance for querying crawl results
             correlation_id: Optional correlation ID for tracing
         """
         super().__init__(name="ContentExtractionAgent", correlation_id=correlation_id)
         self.content_extractor = content_extractor
+        self.db = db
 
     async def execute(self, input_data: ExtractionInput) -> AgentResult[ExtractionOutput]:
         """Extract content from the given URL.
@@ -128,9 +132,14 @@ class ContentExtractionAgent(BaseAgent[ExtractionInput, ExtractionOutput]):
     ) -> dict[str, Any] | None:
         """Extract content with basic validation.
 
-        This is a wrapper around the existing ContentExtractor that would
-        ideally call its extract method. Since we're building on top of
-        existing code, this serves as an integration point.
+        This method provides a database-based approach to retrieve extraction results.
+        The actual extraction is performed by ContentExtractor.extract_and_process_content
+        which requires a full Telegram message context.
+
+        For agent-based workflows, we can:
+        1. Check if content already exists for this URL (via dedupe hash)
+        2. Return existing crawl result if available
+        3. Otherwise, indicate that full extraction flow is needed
 
         Args:
             url: URL to extract from
@@ -139,16 +148,37 @@ class ContentExtractionAgent(BaseAgent[ExtractionInput, ExtractionOutput]):
         Returns:
             Extraction result dictionary or None
         """
-        # TODO: Integrate with actual ContentExtractor.extract() method
-        # For now, this is a placeholder showing the intended interface
-        # The actual implementation would call:
-        # return await self.content_extractor.extract(url, correlation_id)
+        # Compute dedupe hash to check for existing crawl
+        dedupe_hash = url_hash_sha256(url)
 
-        # Placeholder implementation
-        raise NotImplementedError(
-            "Integration with ContentExtractor.extract() pending - "
-            "this agent provides the multi-agent wrapper pattern"
-        )
+        # Check for existing request with this URL
+        existing_req = await self.db.async_get_request_by_dedupe_hash(dedupe_hash)
+        if not existing_req:
+            # Fallback to sync method if async not available
+            existing_req = self.db.get_request_by_dedupe_hash(dedupe_hash)
+
+        if existing_req:
+            req_id = existing_req["id"]
+
+            # Get crawl result for this request
+            crawl_result = await self.db.async_get_crawl_result_by_request(req_id)
+            if not crawl_result:
+                # Fallback to sync method
+                crawl_result = self.db.get_crawl_result_by_request(req_id)
+
+            if crawl_result:
+                # Return existing crawl result
+                return {
+                    "content_markdown": crawl_result.get("content_markdown", ""),
+                    "content_html": crawl_result.get("content_html"),
+                    "metadata": crawl_result.get("metadata_json", {}),
+                    "id": crawl_result.get("id"),
+                }
+
+        # No existing crawl - would need full extraction flow with message context
+        # Return None to indicate extraction is needed
+        # In a production setup, this would trigger the full ContentExtractor flow
+        return None
 
     def _validate_content(self, result: dict[str, Any]) -> str | None:
         """Validate extracted content quality.

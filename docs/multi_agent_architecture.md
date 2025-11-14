@@ -256,6 +256,40 @@ if result["success"]:
     print(f"Attempts: {output.summarization_attempts}")
 ```
 
+## Integration Status
+
+### ✅ Fully Functional
+
+**ValidationAgent** - Ready for immediate production use:
+- No external dependencies beyond validation utilities
+- Can validate any summary JSON dictionary
+- Provides detailed, actionable error messages
+- See `examples/validate_summary_example.py` for usage
+
+```python
+from app.agents import ValidationAgent, ValidationInput
+
+validator = ValidationAgent(correlation_id="abc123")
+result = await validator.execute(ValidationInput(summary_json=summary))
+
+if not result.success:
+    print(f"Validation errors: {result.error}")
+```
+
+### 🔧 Partial Integration
+
+**ContentExtractionAgent** - Database lookup implementation:
+- Can retrieve existing crawl results from database
+- Provides content quality validation
+- **Limitation**: Cannot trigger new Firecrawl extractions independently
+  (requires Telegram message context for notifications)
+
+**SummarizationAgent** - Pattern demonstration:
+- Shows feedback loop architecture
+- Documents correction prompt building
+- **Limitation**: Requires refactoring of LLMSummarizer to separate
+  message-dependent notification logic from core summarization
+
 ## Integration with Existing Code
 
 The multi-agent architecture is designed to work alongside the existing codebase:
@@ -263,56 +297,61 @@ The multi-agent architecture is designed to work alongside the existing codebase
 ### Current Architecture
 ```
 URLProcessor → ContentExtractor → ContentChunker → LLMSummarizer
+                                                       ↓
+                                                    Database
 ```
 
 ### Multi-Agent Architecture (New Layer)
 ```
-AgentOrchestrator → ContentExtractionAgent → SummarizationAgent ↔ ValidationAgent
-                           ↓                        ↓
-                    ContentExtractor          LLMSummarizer
-                                                (existing components)
+ValidationAgent ← (Immediate use with existing pipeline)
+                     ↓
+              Existing LLMSummarizer → Database
+                     ↓
+              ValidationAgent validates result
+                     ↓
+         If invalid: Re-trigger with feedback
 ```
 
 ### Migration Path
 
-**Phase 1: Validation Agent** (Immediate Use)
+**Phase 1: Validation Agent** ✅ (READY NOW)
 ```python
-from app.agents import ValidationAgent
+from app.agents import ValidationAgent, ValidationInput
 
 # Add to existing workflow
 summary_json = await llm_summarizer.summarize(...)
-validator = ValidationAgent()
-result = await validator.execute({"summary_json": summary_json})
+
+# Validate before storing
+validator = ValidationAgent(correlation_id=cid)
+result = await validator.execute(ValidationInput(summary_json=summary_json))
 
 if not result.success:
     logger.error(f"Validation failed: {result.error}")
+    # Could trigger retry or alert
 ```
 
-**Phase 2: Summarization with Feedback** (Moderate Effort)
+**Phase 2: Extract Message-Independent Logic** (Future)
 ```python
-from app.agents import SummarizationAgent, ValidationAgent
+# Refactor ContentExtractor to separate concerns:
+class ContentExtractor:
+    async def extract_content(self, url: str) -> dict:
+        """Pure extraction without message notifications."""
+        pass
 
-# Replace direct LLM calls with agent
-validator = ValidationAgent()
-agent = SummarizationAgent(llm_summarizer, validator)
-
-result = await agent.execute({
-    "content": content,
-    "metadata": metadata,
-    "correlation_id": cid,
-    "max_retries": 3
-})
+    async def extract_and_process_content(self, message, url, ...):
+        """Full flow with Telegram notifications."""
+        content = await self.extract_content(url)
+        await self.send_notifications(message, content)
+        return content
 ```
 
-**Phase 3: Full Orchestration** (Long Term)
+**Phase 3: Full Agent Integration** (Long Term)
 ```python
 from app.agents import AgentOrchestrator
 
-# Replace URLProcessor.handle_url_flow with orchestrator
-result = await orchestrator.execute_pipeline({
-    "url": url,
-    "correlation_id": cid
-})
+# After refactoring is complete:
+orchestrator = AgentOrchestrator(extraction_agent, summarization_agent, validation_agent)
+result = await orchestrator.execute_pipeline(PipelineInput(url=url, correlation_id=cid))
 ```
 
 ## Benefits
