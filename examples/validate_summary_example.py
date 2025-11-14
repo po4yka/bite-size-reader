@@ -65,7 +65,7 @@ async def validate_summary_example():
     if result.success:
         print("✓ Validation PASSED")
     else:
-        print(f"✗ Validation FAILED (as expected):")
+        print("✗ Validation FAILED (as expected):")
         print(f"  {result.error}")
 
     print("\n" + "-" * 60 + "\n")
@@ -83,7 +83,7 @@ async def validate_summary_example():
     if result.success:
         print("✓ Validation PASSED")
     else:
-        print(f"✗ Validation FAILED (as expected):")
+        print("✗ Validation FAILED (as expected):")
         error_lines = result.error.split("\n")
         for line in error_lines[:5]:  # Show first 5 lines
             print(f"  {line}")
@@ -104,7 +104,7 @@ async def validate_summary_example():
     if result.success:
         print("✓ Validation PASSED")
     else:
-        print(f"✗ Validation FAILED (as expected):")
+        print("✗ Validation FAILED (as expected):")
         print(f"  {result.error}")
 
     print("\n" + "-" * 60 + "\n")
@@ -121,7 +121,7 @@ async def validate_summary_example():
     if result.success:
         print("✓ Validation PASSED")
     else:
-        print(f"✗ Validation FAILED (as expected):")
+        print("✗ Validation FAILED (as expected):")
         print(f"  {result.error}")
 
     print("\n=== Examples Complete ===\n")

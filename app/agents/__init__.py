@@ -17,8 +17,8 @@ from app.agents.summarization_agent import SummarizationAgent
 from app.agents.validation_agent import ValidationAgent
 
 __all__ = [
+    "AgentOrchestrator",
     "ContentExtractionAgent",
     "SummarizationAgent",
     "ValidationAgent",
-    "AgentOrchestrator",
 ]

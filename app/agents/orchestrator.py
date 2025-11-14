@@ -5,13 +5,14 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-from collections.abc import AsyncIterator
 from dataclasses import asdict, dataclass
 from enum import Enum
-from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
+    from collections.abc import AsyncIterator
+    from pathlib import Path
+
     from app.agents.content_extraction_agent import ContentExtractionAgent
     from app.agents.summarization_agent import SummarizationAgent
     from app.agents.validation_agent import ValidationAgent
@@ -270,7 +271,8 @@ class AgentOrchestrator:
         )
 
         self.logger.info(
-            "[Orchestrator] Pipeline completed successfully", extra={"correlation_id": correlation_id}
+            "[Orchestrator] Pipeline completed successfully",
+            extra={"correlation_id": correlation_id},
         )
 
         return {
@@ -507,9 +509,7 @@ class AgentOrchestrator:
 
             # Calculate delay for next attempt
             if attempt < retry_config.max_attempts:
-                delay_ms = self._calculate_retry_delay(
-                    attempt, retry_config.strategy, retry_config
-                )
+                delay_ms = self._calculate_retry_delay(attempt, retry_config.strategy, retry_config)
                 delay_sec = min(delay_ms / 1000.0, retry_config.max_delay_ms / 1000.0)
                 logger.info(
                     f"[Retry] Waiting {delay_sec:.1f}s before attempt {attempt + 1}",
@@ -594,4 +594,9 @@ class SingleAgentOrchestrator:
                 extra={"correlation_id": correlation_id},
             )
 
-        return {"success": result.success, "output": result.output, "error": result.error, "metadata": result.metadata}
+        return {
+            "success": result.success,
+            "output": result.output,
+            "error": result.error,
+            "metadata": result.metadata,
+        }

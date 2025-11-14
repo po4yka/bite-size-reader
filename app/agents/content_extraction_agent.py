@@ -109,9 +109,7 @@ class ContentExtractionAgent(BaseAgent[ExtractionInput, ExtractionOutput]):
                 crawl_result_id=result.get("id"),
             )
 
-            self.log_info(
-                f"Content extraction successful - {len(output.content_markdown)} chars"
-            )
+            self.log_info(f"Content extraction successful - {len(output.content_markdown)} chars")
 
             return AgentResult.success_result(
                 output,
@@ -122,7 +120,7 @@ class ContentExtractionAgent(BaseAgent[ExtractionInput, ExtractionOutput]):
         except Exception as e:
             self.log_error(f"Content extraction failed: {e}")
             return AgentResult.error_result(
-                f"Content extraction error: {str(e)}",
+                f"Content extraction error: {e!s}",
                 url=input_data.url,
                 exception_type=type(e).__name__,
             )
@@ -181,7 +179,11 @@ class ContentExtractionAgent(BaseAgent[ExtractionInput, ExtractionOutput]):
 
         try:
             # Call the message-independent extraction method
-            content_text, content_source, metadata = await self.content_extractor.extract_content_pure(
+            (
+                content_text,
+                content_source,
+                metadata,
+            ) = await self.content_extractor.extract_content_pure(
                 url=url,
                 correlation_id=correlation_id,
             )

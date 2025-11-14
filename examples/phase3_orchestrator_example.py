@@ -13,7 +13,6 @@ Phase 3 Achievements:
 ✅ State persistence and resumption
 """
 
-import asyncio
 import sys
 from pathlib import Path
 
@@ -175,7 +174,7 @@ print("```python")
 print("from pathlib import Path")
 print("from app.agents.orchestrator import PipelineInput")
 print()
-print("state_dir = Path(\"/tmp/pipeline_states\")")
+print('state_dir = Path("/tmp/pipeline_states")')
 print()
 print("# Enable state persistence")
 print("pipeline_input = PipelineInput(")

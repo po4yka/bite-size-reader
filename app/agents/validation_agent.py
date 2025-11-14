@@ -110,9 +110,7 @@ class ValidationAgent(BaseAgent[ValidationInput, ValidationOutput]):
                 else:
                     invalid_tags = [t for t in tags if not str(t).startswith("#")]
                     if invalid_tags:
-                        errors.append(
-                            f"Topic tags missing '#' prefix: {', '.join(invalid_tags)}"
-                        )
+                        errors.append(f"Topic tags missing '#' prefix: {', '.join(invalid_tags)}")
 
                     if len(tags) > 10:
                         warnings.append(f"Many topic tags: {len(tags)} (recommend ≤10)")
@@ -204,13 +202,13 @@ class ValidationAgent(BaseAgent[ValidationInput, ValidationOutput]):
             except Exception as e:
                 self.log_error(f"Contract validation failed: {e}")
                 return AgentResult.error_result(
-                    f"Summary contract validation failed: {str(e)}", exception_type=type(e).__name__
+                    f"Summary contract validation failed: {e!s}", exception_type=type(e).__name__
                 )
 
         except Exception as e:
             self.log_error(f"Validation error: {e}")
             return AgentResult.error_result(
-                f"Validation exception: {str(e)}", exception_type=type(e).__name__
+                f"Validation exception: {e!s}", exception_type=type(e).__name__
             )
 
     def _format_validation_errors(self, errors: list[str]) -> str:

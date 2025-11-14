@@ -65,9 +65,7 @@ class SummarizationAgent(BaseAgent[SummarizationInput, SummarizationOutput]):
         self.llm_summarizer = llm_summarizer
         self.validator_agent = validator_agent
 
-    async def execute(
-        self, input_data: SummarizationInput
-    ) -> AgentResult[SummarizationOutput]:
+    async def execute(self, input_data: SummarizationInput) -> AgentResult[SummarizationOutput]:
         """Generate a summary with self-correction feedback loop.
 
         Args:
@@ -120,17 +118,16 @@ class SummarizationAgent(BaseAgent[SummarizationInput, SummarizationOutput]):
                         attempts=attempt,
                         had_corrections=len(corrections_applied) > 0,
                     )
-                else:
-                    # Validation failed - record the error for feedback
-                    error_msg = validation_result.error or "Unknown validation error"
-                    self.log_warning(f"Validation failed (attempt {attempt}): {error_msg}")
-                    corrections_applied.append(f"Attempt {attempt}: {error_msg}")
-                    last_error = error_msg
+                # Validation failed - record the error for feedback
+                error_msg = validation_result.error or "Unknown validation error"
+                self.log_warning(f"Validation failed (attempt {attempt}): {error_msg}")
+                corrections_applied.append(f"Attempt {attempt}: {error_msg}")
+                last_error = error_msg
 
             except Exception as e:
                 self.log_error(f"Summarization attempt {attempt} failed: {e}")
                 last_error = str(e)
-                corrections_applied.append(f"Attempt {attempt}: Exception - {str(e)}")
+                corrections_applied.append(f"Attempt {attempt}: Exception - {e!s}")
 
         # All attempts exhausted
         self.log_error(
@@ -174,21 +171,17 @@ class SummarizationAgent(BaseAgent[SummarizationInput, SummarizationOutput]):
         feedback_instructions = None
         if previous_errors:
             feedback_instructions = self._build_correction_prompt(previous_errors)
-            self.log_info(
-                f"Retry attempt {attempt} with {len(previous_errors)} previous error(s)"
-            )
+            self.log_info(f"Retry attempt {attempt} with {len(previous_errors)} previous error(s)")
 
         try:
             # Call the message-independent summarization method
-            summary = await self.llm_summarizer.summarize_content_pure(
+            return await self.llm_summarizer.summarize_content_pure(
                 content_text=content,
                 chosen_lang=language,
                 system_prompt=system_prompt,
                 correlation_id=self.correlation_id,
                 feedback_instructions=feedback_instructions,
             )
-
-            return summary
 
         except ValueError as e:
             # summarize_content_pure raises ValueError for summarization failures

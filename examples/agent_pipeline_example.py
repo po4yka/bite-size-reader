@@ -19,18 +19,6 @@ from pathlib import Path
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from app.adapters.content.content_extractor import ContentExtractor
-from app.adapters.content.llm_summarizer import LLMSummarizer
-from app.adapters.openrouter.openrouter_client import OpenRouterClient
-from app.agents.content_extraction_agent import (
-    ContentExtractionAgent,
-    ExtractionInput,
-)
-from app.agents.summarization_agent import SummarizationAgent, SummarizationInput
-from app.agents.validation_agent import ValidationAgent, ValidationInput
-from app.config import AppConfig
-from app.db.database import Database
-
 
 async def run_agent_pipeline_example():
     """Demonstrate the complete Phase 2 agent pipeline."""
@@ -47,17 +35,6 @@ async def run_agent_pipeline_example():
     try:
         # Initialize configuration and dependencies
         print("🔧 Initializing components...")
-        cfg = AppConfig()
-        db = Database(cfg.db_path)
-        openrouter = OpenRouterClient(cfg)
-
-        # Create semaphore for rate limiting (mock for example)
-        import asyncio
-
-        sem = lambda: asyncio.Semaphore(4)  # noqa: E731
-
-        # Create content extractor (needs Firecrawl integration)
-        # Note: Full initialization requires additional components
         print("   ⚠️  Full initialization requires Firecrawl and ResponseFormatter setup")
         print("   ⚠️  This is a demonstration of the API structure")
         print()
@@ -105,10 +82,12 @@ async def run_agent_pipeline_example():
         print("# Initialize agents")
         print("extraction_agent = ContentExtractionAgent(content_extractor, db, correlation_id)")
         print("validation_agent = ValidationAgent(correlation_id)")
-        print("summarization_agent = SummarizationAgent(llm_summarizer, validation_agent, correlation_id)")
+        print(
+            "summarization_agent = SummarizationAgent(llm_summarizer, validation_agent, correlation_id)"
+        )
         print()
         print("# Step 1: Extract content")
-        print('extraction_result = await extraction_agent.execute(ExtractionInput(')
+        print("extraction_result = await extraction_agent.execute(ExtractionInput(")
         print('    url="https://example.com/article",')
         print('    correlation_id="example-123"')
         print("))")
@@ -117,14 +96,16 @@ async def run_agent_pipeline_example():
         print("    # Step 2: Summarize with self-correction")
         print("    summary_result = await summarization_agent.execute(SummarizationInput(")
         print("        content=extraction_result.output.content_markdown,")
-        print('        metadata=extraction_result.output.metadata,')
+        print("        metadata=extraction_result.output.metadata,")
         print('        correlation_id="example-123",')
         print('        language="en",')
         print("        max_retries=3  # Self-correction attempts")
         print("    ))")
         print()
         print("    if summary_result.success:")
-        print('        print(f"✅ Summary generated after {summary_result.output.attempts} attempt(s)")')
+        print(
+            '        print(f"✅ Summary generated after {summary_result.output.attempts} attempt(s)")'
+        )
         print('        print(f"   Corrections: {summary_result.output.corrections_applied}")')
         print("    else:")
         print('        print(f"❌ Summarization failed: {summary_result.error}")')
@@ -160,8 +141,8 @@ async def run_agent_pipeline_example():
         print("🚀 Migration Path:")
         print()
         print("Existing Code:")
-        print('  message → ContentExtractor.extract_and_process_content(message, url)')
-        print('  message → LLMSummarizer.summarize_content(message, content, ...)')
+        print("  message → ContentExtractor.extract_and_process_content(message, url)")
+        print("  message → LLMSummarizer.summarize_content(message, content, ...)")
         print()
         print("New Agent API:")
         print("  No message → ContentExtractionAgent.execute(ExtractionInput(url))")

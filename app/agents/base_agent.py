@@ -5,17 +5,13 @@ from __future__ import annotations
 import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Any, Generic, TypeVar
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
-# Type variables for input and output
-TInput = TypeVar("TInput")
-TOutput = TypeVar("TOutput")
-
 
 @dataclass
-class AgentResult(Generic[TOutput]):
+class AgentResult[TOutput]:
     """Result of an agent execution.
 
     Attributes:
@@ -41,7 +37,7 @@ class AgentResult(Generic[TOutput]):
         return cls(success=False, error=error, metadata=metadata)
 
 
-class BaseAgent(ABC, Generic[TInput, TOutput]):
+class BaseAgent[TInput, TOutput](ABC):
     """Base class for all agents in the multi-agent system.
 
     Each agent should:
@@ -73,7 +69,6 @@ class BaseAgent(ABC, Generic[TInput, TOutput]):
         Returns:
             AgentResult containing output or error information
         """
-        pass
 
     def log_info(self, message: str, **kwargs: Any) -> None:
         """Log an info message with correlation ID."""
