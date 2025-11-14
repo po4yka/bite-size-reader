@@ -102,9 +102,7 @@ class TestRetryWithBackoff(unittest.IsolatedAsyncioTestCase):
                 raise Exception("Timeout - temporary issue")
             return "success"
 
-        result, success = await retry_with_backoff(
-            flaky_func, max_retries=3, initial_delay=0.01
-        )
+        result, success = await retry_with_backoff(flaky_func, max_retries=3, initial_delay=0.01)
 
         assert success is True
         assert result == "success"
@@ -133,9 +131,7 @@ class TestRetryWithBackoff(unittest.IsolatedAsyncioTestCase):
         """Test that function fails after exhausting all retries."""
         mock_func = AsyncMock(side_effect=Exception("Timeout"))
 
-        result, success = await retry_with_backoff(
-            mock_func, max_retries=2, initial_delay=0.01
-        )
+        result, success = await retry_with_backoff(mock_func, max_retries=2, initial_delay=0.01)
 
         assert success is False
         assert result is None
@@ -145,9 +141,7 @@ class TestRetryWithBackoff(unittest.IsolatedAsyncioTestCase):
         """Test that non-transient errors are not retried."""
         mock_func = AsyncMock(side_effect=Exception("Invalid parameter"))
 
-        result, success = await retry_with_backoff(
-            mock_func, max_retries=3, initial_delay=0.01
-        )
+        result, success = await retry_with_backoff(mock_func, max_retries=3, initial_delay=0.01)
 
         assert success is False
         assert result is None
@@ -226,9 +220,7 @@ class TestRetryWithBackoff(unittest.IsolatedAsyncioTestCase):
         """Test behavior with zero retries configured."""
         mock_func = AsyncMock(side_effect=Exception("Timeout"))
 
-        _result, success = await retry_with_backoff(
-            mock_func, max_retries=0, initial_delay=0.01
-        )
+        _result, success = await retry_with_backoff(mock_func, max_retries=0, initial_delay=0.01)
 
         assert success is False
         assert mock_func.call_count == 1  # Only initial attempt
@@ -241,9 +233,7 @@ class TestRetryTelegramOperation(unittest.IsolatedAsyncioTestCase):
         """Test successful Telegram operation."""
         mock_func = AsyncMock(return_value={"message_id": 123})
 
-        result, success = await retry_telegram_operation(
-            mock_func, operation_name="test_operation"
-        )
+        result, success = await retry_telegram_operation(mock_func, operation_name="test_operation")
 
         assert success is True
         assert result == {"message_id": 123}
@@ -271,9 +261,7 @@ class TestRetryTelegramOperation(unittest.IsolatedAsyncioTestCase):
         """Test Telegram operation that fails after all retries."""
         mock_func = AsyncMock(side_effect=Exception("Network timeout"))
 
-        result, success = await retry_telegram_operation(
-            mock_func, operation_name="edit_message"
-        )
+        result, success = await retry_telegram_operation(mock_func, operation_name="edit_message")
 
         assert success is False
         assert result is None

@@ -16,9 +16,7 @@ logger = logging.getLogger(__name__)
 class ProgressFormatter(Protocol):
     """Protocol for formatting progress messages."""
 
-    async def format_and_send(
-        self, current: int, total: int, message_id: int | None
-    ) -> int | None:
+    async def format_and_send(self, current: int, total: int, message_id: int | None) -> int | None:
         """Format and send/edit a progress message.
 
         Args:
@@ -121,20 +119,14 @@ class ProgressTracker:
             current_time = time.time()
 
             # Calculate thresholds
-            progress_threshold = max(
-                1, int(self.total * self.progress_threshold_percentage / 100)
-            )
+            progress_threshold = max(1, int(self.total * self.progress_threshold_percentage / 100))
             # For small batches, be more responsive
             if self.total <= self.small_batch_threshold:
                 progress_threshold = 1
 
             # Check both time and progress thresholds
-            time_threshold_met = (
-                current_time - self._last_update_time >= self.update_interval
-            )
-            progress_threshold_met = (
-                self._completed - self._last_displayed >= progress_threshold
-            )
+            time_threshold_met = current_time - self._last_update_time >= self.update_interval
+            progress_threshold_met = self._completed - self._last_displayed >= progress_threshold
 
             # Only enqueue updates if we actually made forward progress
             made_progress = self._completed > self._last_displayed
@@ -198,17 +190,13 @@ class ProgressTracker:
 
             try:
                 # Wait for updates with timeout to allow checking shutdown
-                completed, total = await asyncio.wait_for(
-                    self._update_queue.get(), timeout=0.5
-                )
+                completed, total = await asyncio.wait_for(self._update_queue.get(), timeout=0.5)
             except TimeoutError:
                 continue
 
             try:
                 # Call the formatter to send/edit the message
-                new_message_id = await self.progress_formatter(
-                    completed, total, self.message_id
-                )
+                new_message_id = await self.progress_formatter(completed, total, self.message_id)
                 if new_message_id is not None:
                     self.message_id = new_message_id
             except Exception as e:

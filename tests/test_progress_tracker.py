@@ -14,9 +14,7 @@ class TestProgressTracker(unittest.IsolatedAsyncioTestCase):
         """Test basic progress increment and tracking."""
         formatter = AsyncMock(return_value=123)
 
-        tracker = ProgressTracker(
-            total=10, progress_formatter=formatter, initial_message_id=None
-        )
+        tracker = ProgressTracker(total=10, progress_formatter=formatter, initial_message_id=None)
 
         # Start the queue processor
         processor_task = asyncio.create_task(tracker.process_update_queue())
@@ -33,7 +31,6 @@ class TestProgressTracker(unittest.IsolatedAsyncioTestCase):
         assert tracker.completed == 10
         assert tracker.is_complete
 
-    
     async def test_progress_formatter_called_with_updates(self):
         """Test that progress formatter is called appropriately."""
         formatter = AsyncMock(return_value=456)
@@ -60,7 +57,6 @@ class TestProgressTracker(unittest.IsolatedAsyncioTestCase):
         # Formatter should have been called at least once
         assert formatter.call_count >= 1
 
-    
     async def test_message_id_tracking(self):
         """Test that message ID is properly tracked and updated."""
         # Formatter returns different message IDs
@@ -71,9 +67,7 @@ class TestProgressTracker(unittest.IsolatedAsyncioTestCase):
             call_count += 1
             return 100 + call_count  # Return incrementing message IDs
 
-        tracker = ProgressTracker(
-            total=5, progress_formatter=formatter, initial_message_id=99
-        )
+        tracker = ProgressTracker(total=5, progress_formatter=formatter, initial_message_id=99)
 
         # Verify initial message ID
         assert tracker.message_id == 99
@@ -93,7 +87,6 @@ class TestProgressTracker(unittest.IsolatedAsyncioTestCase):
         if call_count > 0:
             assert tracker.message_id == 100 + call_count
 
-    
     async def test_concurrent_increments(self):
         """Test that concurrent increments are handled correctly."""
         formatter = AsyncMock(return_value=789)
@@ -118,7 +111,6 @@ class TestProgressTracker(unittest.IsolatedAsyncioTestCase):
         assert tracker.completed == 20
         assert tracker.is_complete
 
-    
     async def test_formatter_exception_handling(self):
         """Test that exceptions in formatter don't break the tracker."""
         call_count = 0
@@ -150,7 +142,6 @@ class TestProgressTracker(unittest.IsolatedAsyncioTestCase):
         assert tracker.completed == 5
         assert call_count >= 1  # Formatter was called at least once
 
-    
     async def test_small_batch_threshold(self):
         """Test that small batch threshold triggers more frequent updates."""
         formatter = AsyncMock(return_value=111)
@@ -174,7 +165,6 @@ class TestProgressTracker(unittest.IsolatedAsyncioTestCase):
         # Should have multiple updates due to small batch
         assert formatter.call_count >= 1
 
-    
     async def test_progress_threshold_percentage(self):
         """Test that progress threshold percentage controls update frequency."""
         formatter = AsyncMock(return_value=222)
@@ -201,7 +191,6 @@ class TestProgressTracker(unittest.IsolatedAsyncioTestCase):
         # Allow some variance due to time-based updates
         assert formatter.call_count >= 3
 
-    
     async def test_queue_overflow_handling(self):
         """Test that queue overflow is handled gracefully."""
         slow_formatter_calls = []
@@ -234,7 +223,6 @@ class TestProgressTracker(unittest.IsolatedAsyncioTestCase):
         final_call = slow_formatter_calls[-1]
         assert final_call[0] <= 10  # completed <= total
 
-    
     async def test_mark_complete_before_all_increments(self):
         """Test that mark_complete can be called early."""
         formatter = AsyncMock(return_value=444)
@@ -256,7 +244,6 @@ class TestProgressTracker(unittest.IsolatedAsyncioTestCase):
         assert tracker.completed == 5
         assert not tracker.is_complete  # Not fully complete
 
-    
     async def test_update_interval_throttling(self):
         """Test that update_interval throttles frequent updates."""
         formatter = AsyncMock(return_value=555)
@@ -283,7 +270,6 @@ class TestProgressTracker(unittest.IsolatedAsyncioTestCase):
         # (plus potential progress threshold triggers)
         assert formatter.call_count >= 1
 
-    
     async def test_no_updates_for_zero_total(self):
         """Test handling of edge case with zero total."""
         formatter = AsyncMock(return_value=666)
@@ -300,7 +286,6 @@ class TestProgressTracker(unittest.IsolatedAsyncioTestCase):
         assert tracker.completed == 0
         assert tracker.is_complete
 
-    
     async def test_properties(self):
         """Test that properties return correct values."""
         formatter = AsyncMock(return_value=777)

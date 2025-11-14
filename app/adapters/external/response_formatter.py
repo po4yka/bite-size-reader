@@ -1207,7 +1207,10 @@ class ResponseFormatter:
                             message_id = getattr(sent, "id", None)
                         logger.debug(
                             "reply_with_id_result",
-                            extra={"message_id": message_id, "sent_message_type": type(sent).__name__},
+                            extra={
+                                "message_id": message_id,
+                                "sent_message_type": type(sent).__name__,
+                            },
                         )
                         return message_id
                     else:
@@ -1253,7 +1256,10 @@ class ResponseFormatter:
                 message_id = getattr(sent_message, "message_id", None)
                 logger.debug(
                     "reply_with_id_result",
-                    extra={"message_id": message_id, "sent_message_type": type(sent_message).__name__},
+                    extra={
+                        "message_id": message_id,
+                        "sent_message_type": type(sent_message).__name__,
+                    },
                 )
                 return message_id
             else:
