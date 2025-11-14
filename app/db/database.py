@@ -821,6 +821,23 @@ class Database:
             operation_name="mark_summary_as_read",
         )
 
+    def mark_summary_as_unread_by_id(self, summary_id: int) -> None:
+        """Mark a summary as unread by its ID.
+
+        Args:
+            summary_id: The ID of the summary to mark as unread.
+
+        """
+        Summary.update({Summary.is_read: False}).where(Summary.id == summary_id).execute()
+
+    async def async_mark_summary_as_unread(self, summary_id: int) -> None:
+        """Async wrapper for :meth:`mark_summary_as_unread_by_id`."""
+        await self._safe_db_operation(
+            self.mark_summary_as_unread_by_id,
+            summary_id,
+            operation_name="mark_summary_as_unread",
+        )
+
     def get_request_by_forward(
         self,
         fwd_chat_id: int,
