@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -m pytest tests/test_rate_limiter.py -v)",
+      "Bash(python3 -m pytest tests/test_rate_limiter.py tests/test_file_validation.py -v)",
+      "Bash(python3:*)",
+      "Bash(xargs:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
