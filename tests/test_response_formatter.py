@@ -152,8 +152,8 @@ class TestResponseFormatter(unittest.IsolatedAsyncioTestCase):
         formatter._telegram_client = mock_telegram_client
         formatter.MIN_MESSAGE_INTERVAL_MS = 0
 
-        # Invalid chat_id (not an int)
-        result = await formatter.edit_message(chat_id="invalid", message_id=67890, text="Test")
+        # Invalid chat_id (not an int) - intentionally testing bad input
+        result = await formatter.edit_message(chat_id="invalid", message_id=67890, text="Test")  # type: ignore[arg-type]
 
         assert result is False
 

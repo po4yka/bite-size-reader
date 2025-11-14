@@ -20,7 +20,11 @@ from app.db.user_interactions import async_safe_update_user_interaction
 from app.models.telegram.telegram_models import TelegramMessage
 from app.security.file_validation import FileValidationError, SecureFileValidator
 from app.security.rate_limiter import RateLimitConfig, UserRateLimiter
-from app.utils.message_formatter import format_completion_message, format_progress_message
+from app.utils.message_formatter import (
+    create_progress_bar,
+    format_completion_message,
+    format_progress_message,
+)
 from app.utils.progress_tracker import ProgressTracker
 
 if TYPE_CHECKING:
@@ -580,7 +584,7 @@ class MessageRouter:
             # Create a dedicated progress message that we will edit in-place
             progress_message_id = await self.response_formatter.safe_reply_with_id(
                 message,
-                f"🔄 Processing links: 0/{len(urls)}\n{self._create_progress_bar(0, len(urls))}",
+                f"🔄 Processing links: 0/{len(urls)}\n{create_progress_bar(0, len(urls))}",
             )
             logger.debug(
                 "document_file_processing_started",
