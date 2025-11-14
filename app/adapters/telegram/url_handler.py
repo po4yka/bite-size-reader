@@ -4,12 +4,13 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import time
 from typing import TYPE_CHECKING, Any
 
 from app.core.logging_utils import generate_correlation_id
 from app.core.url_utils import extract_all_urls
 from app.db.user_interactions import async_safe_update_user_interaction
+from app.utils.message_formatter import format_completion_message, format_progress_message
+from app.utils.progress_tracker import ProgressTracker
 
 if TYPE_CHECKING:
     from app.adapters.content.url_processor import URLProcessor
@@ -321,143 +322,8 @@ class URLHandler:
             min(3, len(urls))
         )  # Max 3 concurrent URLs for user-initiated batches
 
-        # Thread-safe progress tracking with proper isolation
-        class ThreadSafeProgress:
-            def __init__(
-                self, total: int, message: Any, progress_msg_id: int | None, response_formatter
-            ):
-                self.total = total
-                self._completed = 0
-                self._lock = asyncio.Lock()
-                self._last_update = 0.0
-                self._last_displayed = 0
-                self.update_interval = 1.0  # Update every 1 second minimum
-                self.message = message
-                self.progress_msg_id = progress_msg_id
-                self.response_formatter = response_formatter
-                self._update_queue: asyncio.Queue[tuple[int, int]] = asyncio.Queue(maxsize=1)
-
-            async def increment_and_update(self) -> tuple[int, int]:
-                """Atomically increment counter and queue progress update if needed."""
-                # All progress tracking state updates must be atomic
-                async with self._lock:
-                    self._completed += 1
-                    current_time = time.time()
-
-                    # Check if we should update
-                    progress_threshold = max(1, self.total // 20)  # Update every 5% or 1 URL
-                    # For small batches, be more responsive - update every URL
-                    if self.total <= 5:
-                        progress_threshold = 1
-
-                    # Check both time and progress thresholds
-                    time_threshold_met = current_time - self._last_update >= self.update_interval
-                    progress_threshold_met = (
-                        self._completed - self._last_displayed >= progress_threshold
-                    )
-
-                    # For small batches, prioritize progress threshold over time threshold
-                    should_update = (time_threshold_met and progress_threshold_met) or (
-                        self.total <= 5 and progress_threshold_met
-                    )
-
-                    # Debug logging to understand progress tracking
-                    logger.debug(
-                        "progress_tracking_debug",
-                        extra={
-                            "completed": self._completed,
-                            "total": self.total,
-                            "threshold": progress_threshold,
-                            "should_update": should_update,
-                            "time_diff": current_time - self._last_update,
-                            "update_interval": self.update_interval,
-                            "last_displayed": self._last_displayed,
-                            "time_threshold_met": time_threshold_met,
-                            "progress_threshold_met": progress_threshold_met,
-                        },
-                    )
-
-                    if should_update:
-                        self._last_update = current_time
-                        self._last_displayed = self._completed
-
-                        # Queue progress update inside lock to prevent race conditions
-                        # put_nowait is non-blocking, so minimal performance impact
-                        try:
-                            # Non-blocking queue put - if full, skip this update
-                            self._update_queue.put_nowait((self._completed, self.total))
-                            logger.debug(
-                                "progress_update_queued",
-                                extra={"completed": self._completed, "total": self.total},
-                            )
-                        except asyncio.QueueFull:
-                            logger.debug(
-                                "progress_update_queue_full", extra={"completed": self._completed}
-                            )
-                            # Skip if update queue is full (prevents blocking)
-
-                    completed = self._completed
-                    return completed, self.total
-
-            async def process_update_queue(self) -> None:
-                """Process queued progress updates outside of locks."""
-                try:
-                    while True:
-                        completed, total = await asyncio.wait_for(
-                            self._update_queue.get(), timeout=0.1
-                        )
-                        try:
-                            percentage = int((completed / total) * 100)
-                            progress_text = f"🔄 Processing {total} links in parallel: {completed}/{total} ({percentage}%)"
-
-                            logger.debug(
-                                "attempting_progress_update",
-                                extra={
-                                    "completed": completed,
-                                    "total": total,
-                                    "progress_text": progress_text,
-                                    "progress_msg_id": self.progress_msg_id,
-                                },
-                            )
-
-                            chat_id = getattr(self.message.chat, "id", None)
-                            if chat_id and self.progress_msg_id:
-                                await self.response_formatter.edit_message(
-                                    chat_id, self.progress_msg_id, progress_text
-                                )
-                                logger.debug(
-                                    "progress_update_sent_successfully",
-                                    extra={
-                                        "completed": completed,
-                                        "total": total,
-                                        "chat_id": chat_id,
-                                        "message_id": self.progress_msg_id,
-                                    },
-                                )
-                            else:
-                                logger.warning(
-                                    "progress_update_skipped",
-                                    extra={
-                                        "chat_id": chat_id,
-                                        "progress_msg_id": self.progress_msg_id,
-                                        "reason": "missing_chat_id_or_msg_id",
-                                    },
-                                )
-                        except Exception as e:
-                            logger.warning(
-                                "progress_update_failed",
-                                extra={
-                                    "error": str(e),
-                                    "completed": completed,
-                                    "total": total,
-                                    "progress_msg_id": self.progress_msg_id,
-                                },
-                            )
-                except TimeoutError:
-                    pass  # No more updates to process
-
         async def process_single_url(
-            url: str, progress_tracker: ThreadSafeProgress
+            url: str, progress_tracker: ProgressTracker
         ) -> tuple[str, bool, str]:
             """Process a single URL and return (url, success, error_message)."""
             async with semaphore:
@@ -513,8 +379,8 @@ class URLHandler:
 
         # Send initial progress message with error handling
         try:
-            initial_progress_text = (
-                f"🔄 Processing {len(urls)} links in parallel: 0/{len(urls)} (0%)"
+            initial_progress_text = format_progress_message(
+                0, len(urls), context="links in parallel", show_bar=False
             )
             progress_msg_id = await self.response_formatter.safe_reply_with_id(
                 message, initial_progress_text
@@ -535,9 +401,88 @@ class URLHandler:
             )
             progress_msg_id = None
 
-        # Create progress tracker
-        progress_tracker = ThreadSafeProgress(
-            len(urls), message, progress_msg_id, self.response_formatter
+        # Create progress tracker with shared ProgressTracker utility
+        async def progress_formatter(
+            current: int, total_count: int, msg_id: int | None
+        ) -> int | None:
+            """Format and send/edit progress updates for URL processing."""
+            try:
+                # Use shared formatter for consistent progress messages
+                progress_text = format_progress_message(
+                    current, total_count, context="links in parallel", show_bar=False
+                )
+
+                logger.debug(
+                    "attempting_progress_update",
+                    extra={
+                        "completed": current,
+                        "total": total_count,
+                        "progress_text": progress_text,
+                        "progress_msg_id": msg_id,
+                        "uid": uid,
+                    },
+                )
+
+                chat_id = getattr(message.chat, "id", None)
+                if chat_id and msg_id:
+                    # Try to edit the existing message
+                    edit_success = await self.response_formatter.edit_message(
+                        chat_id, msg_id, progress_text
+                    )
+
+                    if edit_success:
+                        logger.debug(
+                            "progress_update_sent_successfully",
+                            extra={
+                                "completed": current,
+                                "total": total_count,
+                                "chat_id": chat_id,
+                                "message_id": msg_id,
+                                "uid": uid,
+                            },
+                        )
+                        return msg_id
+
+                    logger.warning(
+                        "progress_update_edit_failed",
+                        extra={
+                            "completed": current,
+                            "total": total_count,
+                            "message_id": msg_id,
+                            "uid": uid,
+                        },
+                    )
+                    # Keep returning the same message_id to retry on next update
+                    return msg_id
+
+                logger.warning(
+                    "progress_update_skipped",
+                    extra={
+                        "chat_id": chat_id,
+                        "progress_msg_id": msg_id,
+                        "reason": "missing_chat_id_or_msg_id",
+                        "uid": uid,
+                    },
+                )
+                return None
+            except Exception as e:
+                logger.warning(
+                    "progress_update_failed",
+                    extra={
+                        "error": str(e),
+                        "completed": current,
+                        "total": total_count,
+                        "progress_msg_id": msg_id,
+                        "uid": uid,
+                    },
+                )
+                return msg_id
+
+        progress_tracker = ProgressTracker(
+            total=len(urls),
+            progress_formatter=progress_formatter,
+            initial_message_id=progress_msg_id,
+            small_batch_threshold=5,  # User-initiated batches use smaller threshold
         )
 
         # Initialize counters for result tracking
@@ -616,36 +561,39 @@ class URLHandler:
                 if batch_end < len(urls):
                     await asyncio.sleep(0.1)
 
-        # Run batch processing and progress updates concurrently
-        await asyncio.gather(
-            process_batches(), progress_tracker.process_update_queue(), return_exceptions=True
-        )
+        # Run batch processing and progress updates concurrently with proper shutdown handling
+        progress_task = asyncio.create_task(progress_tracker.process_update_queue())
+        try:
+            await process_batches()
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:
+            logger.exception(
+                "parallel_processing_failed",
+                extra={"error": str(e), "uid": uid, "url_count": len(urls)},
+            )
+        finally:
+            progress_tracker.mark_complete()
+            try:
+                await progress_task
+            except asyncio.CancelledError:
+                raise
+            except Exception as progress_exc:
+                logger.warning(
+                    "progress_update_worker_failed",
+                    extra={"error": str(progress_exc), "uid": uid},
+                )
 
-        # Send completion summary with detailed feedback
-        if failed == 0:
-            await self.response_formatter.safe_reply(
-                message, f"✅ Successfully processed all {successful} links!"
-            )
-        elif successful > 0:
-            # Partial success - provide helpful feedback
-            failure_rate = (failed / len(urls)) * 100
-            if failure_rate <= 20:  # Less than 20% failed
-                message_text = (
-                    f"✅ Processed {successful}/{len(urls)} links successfully! "
-                    f"({failed} failed - likely temporary issues)"
-                )
-            else:
-                message_text = (
-                    f"⚠️ Processed {successful}/{len(urls)} links successfully. "
-                    f"{failed} failed. Some URLs may be inaccessible or invalid."
-                )
-            await self.response_formatter.safe_reply(message, message_text)
-        else:
-            # Complete failure
-            await self.response_formatter.safe_reply(
-                message,
-                "❌ Failed to process any links. Please check if URLs are valid and accessible.",
-            )
+        # Send completion summary with detailed feedback using shared formatter
+        completion_message = format_completion_message(
+            total=len(urls),
+            successful=successful,
+            failed=failed,
+            context="links",
+            show_stats=False,  # User-initiated batches are smaller, don't need detailed stats
+            failure_rate_threshold=20.0,
+        )
+        await self.response_formatter.safe_reply(message, completion_message)
 
         # Safety check: ensure all URLs were processed
         expected_total = len(urls)

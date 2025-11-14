@@ -20,6 +20,12 @@ from app.db.user_interactions import async_safe_update_user_interaction
 from app.models.telegram.telegram_models import TelegramMessage
 from app.security.file_validation import FileValidationError, SecureFileValidator
 from app.security.rate_limiter import RateLimitConfig, UserRateLimiter
+from app.utils.message_formatter import (
+    create_progress_bar,
+    format_completion_message,
+    format_progress_message,
+)
+from app.utils.progress_tracker import ProgressTracker
 
 if TYPE_CHECKING:
     from app.adapters.external.response_formatter import ResponseFormatter
@@ -578,7 +584,7 @@ class MessageRouter:
             # Create a dedicated progress message that we will edit in-place
             progress_message_id = await self.response_formatter.safe_reply_with_id(
                 message,
-                f"🔄 Processing links: 0/{len(urls)}\n{self._create_progress_bar(0, len(urls))}",
+                f"🔄 Processing links: 0/{len(urls)}\n{create_progress_bar(0, len(urls))}",
             )
             logger.debug(
                 "document_file_processing_started",
@@ -700,7 +706,7 @@ class MessageRouter:
         )  # Allow up to 1/3 failures before reducing concurrency
 
         async def process_single_url(
-            url: str, progress_tracker: ThreadSafeProgress
+            url: str, progress_tracker: ProgressTracker
         ) -> tuple[str, bool, str]:
             """Process a single URL and return (url, success, error_message)."""
             async with semaphore:
@@ -759,128 +765,19 @@ class MessageRouter:
         chunk_size = 30 if total > 30 else total
         # Variables will be set from batch processing results
 
-        # Thread-safe progress tracking with proper isolation
-        class ThreadSafeProgress:
-            def __init__(
-                self, total: int, message: Any, progress_message_id: int | None, message_router
-            ):
-                self.total = total
-                self._completed = 0
-                self._lock = asyncio.Lock()
-                self._last_update = 0.0
-                self._last_displayed = 0
-                self.update_interval = 1.0  # Update every 1 second minimum
-                self.message = message
-                self.progress_message_id = progress_message_id
-                self.message_router = message_router
-                self._update_queue: asyncio.Queue[tuple[int, int]] = asyncio.Queue(maxsize=1)
-                self._queue_overflow_logged = False
-                self._shutdown_event = asyncio.Event()
+        # Thread-safe progress tracking with proper isolation using shared ProgressTracker
+        async def progress_formatter(
+            current: int, total_count: int, msg_id: int | None
+        ) -> int | None:
+            """Format and send progress updates."""
+            return await self._send_progress_update(message, current, total_count, msg_id)
 
-            async def increment_and_update(self) -> tuple[int, int]:
-                """Atomically increment counter and queue progress update if needed."""
-                # Fast path: only increment counter under lock
-                async with self._lock:
-                    self._completed += 1
-                    current_time = time.time()
-
-                    # Check if we should update (don't call external methods in lock)
-                    progress_threshold = max(1, self.total // 20)  # Update every 5% or 1 URL
-                    # For small batches, be more responsive - update every URL
-                    if self.total <= 10:  # File processing uses larger batches
-                        progress_threshold = 1
-
-                    # Check both time and progress thresholds
-                    time_threshold_met = current_time - self._last_update >= self.update_interval
-                    progress_threshold_met = (
-                        self._completed - self._last_displayed >= progress_threshold
-                    )
-
-                    # Only enqueue updates if we actually made forward progress
-                    made_progress = self._completed > self._last_displayed
-                    should_update = False
-                    if made_progress:
-                        # Always surface meaningful progress jumps immediately
-                        if progress_threshold_met:
-                            should_update = True
-                        # Otherwise, send periodic heartbeats while work is ongoing
-                        elif time_threshold_met:
-                            should_update = True
-                        # For very small batches we already handle every increment above
-
-                    if should_update:
-                        self._last_update = current_time
-                        self._last_displayed = self._completed
-
-                    completed = self._completed
-
-                # Slow path: call external method outside lock to prevent deadlocks
-                if should_update:
-                    try:
-                        self._update_queue.put_nowait((completed, self.total))
-                        self._queue_overflow_logged = False
-                    except asyncio.QueueFull:
-                        try:
-                            dropped_update = self._update_queue.get_nowait()
-                        except asyncio.QueueEmpty:
-                            dropped_update = None
-                        else:
-                            self._update_queue.task_done()
-
-                        if not self._queue_overflow_logged:
-                            logger.debug(
-                                "progress_update_queue_full",
-                                extra={
-                                    "last_displayed": self._last_displayed,
-                                    "completed": completed,
-                                    "dropped": dropped_update,
-                                },
-                            )
-                            self._queue_overflow_logged = True
-
-                        self._update_queue.put_nowait((completed, self.total))
-
-                if completed >= self.total:
-                    self._shutdown_event.set()
-
-                return completed, self.total
-
-            async def process_update_queue(self) -> None:
-                """Process queued progress updates outside of locks."""
-                while True:
-                    if self._shutdown_event.is_set() and self._update_queue.empty():
-                        break
-
-                    try:
-                        completed, total = await asyncio.wait_for(
-                            self._update_queue.get(), timeout=0.5
-                        )
-                    except asyncio.TimeoutError:
-                        continue
-
-                    try:
-                        new_message_id = await self.message_router._send_progress_update(
-                            self.message, completed, total, self.progress_message_id
-                        )
-                        if new_message_id is not None:
-                            self.progress_message_id = new_message_id
-                    except Exception as e:
-                        logger.warning(
-                            "progress_update_failed",
-                            extra={
-                                "error": str(e),
-                                "completed": completed,
-                                "total": total,
-                            },
-                        )
-                    finally:
-                        self._update_queue.task_done()
-
-            def mark_complete(self) -> None:
-                """Signal that no further updates will be enqueued."""
-                self._shutdown_event.set()
-
-        progress_tracker = ThreadSafeProgress(total, message, progress_message_id, self)
+        progress_tracker = ProgressTracker(
+            total=total,
+            progress_formatter=progress_formatter,
+            initial_message_id=progress_message_id,
+            small_batch_threshold=10,
+        )
 
         # Process URLs in true memory-efficient batches
         # File processing can use larger batches since users expect bulk processing
@@ -1029,10 +926,10 @@ class MessageRouter:
         # Final progress update to ensure 100% completion is shown
         try:
             final_message_id = await self._send_progress_update(
-                message, total, total, progress_tracker.progress_message_id
+                message, total, total, progress_tracker.message_id
             )
             if final_message_id is not None:
-                progress_tracker.progress_message_id = final_message_id
+                progress_tracker.message_id = final_message_id
         except Exception as e:
             logger.warning("final_progress_update_failed", extra={"error": str(e)})
 
@@ -1042,12 +939,14 @@ class MessageRouter:
             extra={"url_count": total, "successful": successful, "failed": len(failed_urls)},
         )
 
-        # Create completion message with statistics
-        completion_message = f"✅ Processing complete!\n"
-        completion_message += f"📊 Total: {total} links\n"
-        completion_message += f"✅ Successful: {successful}\n"
-        if failed_urls:
-            completion_message += f"❌ Failed: {len(failed_urls)}"
+        # Create completion message with statistics using shared formatter
+        completion_message = format_completion_message(
+            total=total,
+            successful=successful,
+            failed=len(failed_urls),
+            context="links",
+            show_stats=True,
+        )
 
         await self.response_formatter.safe_reply(message, completion_message)
 
@@ -1129,15 +1028,17 @@ class MessageRouter:
         Returns the message ID that should be used for subsequent edits when available.
         """
 
-        progress_bar = self._create_progress_bar(current, total)
-        percentage = int((current / total) * 100) if total > 0 else 0
-        progress_text = f"🔄 Processing links: {current}/{total} ({percentage}%)\n{progress_bar}"
+        progress_text = format_progress_message(current, total, context="links", show_bar=True)
 
         chat_id = getattr(message.chat, "id", None)
 
         if message_id is not None and chat_id is not None:
-            try:
-                await self.response_formatter.edit_message(chat_id, message_id, progress_text)
+            # Try to edit the existing message
+            edit_success = await self.response_formatter.edit_message(
+                chat_id, message_id, progress_text
+            )
+
+            if edit_success:
                 logger.debug(
                     "progress_update_edited",
                     extra={
@@ -1148,28 +1049,17 @@ class MessageRouter:
                     },
                 )
                 return message_id
-            except Exception as edit_error:  # noqa: BLE001
-                error_text = str(edit_error)
-                if "message is not modified" in error_text.lower():
-                    logger.debug(
-                        "progress_update_unchanged",
-                        extra={
-                            "current": current,
-                            "total": total,
-                            "message_id": message_id,
-                        },
-                    )
-                    return message_id
-
+            else:
                 logger.warning(
                     "progress_update_edit_failed",
                     extra={
-                        "error": error_text,
                         "current": current,
                         "total": total,
                         "message_id": message_id,
+                        "fallback": "will_send_new_message",
                     },
                 )
+                # Fall through to send new message below
         elif message_id is not None:
             logger.warning(
                 "progress_update_no_chat_id",
@@ -1214,12 +1104,6 @@ class MessageRouter:
             )
 
         return new_message_id
-
-    def _create_progress_bar(self, current: int, total: int, width: int = 20) -> str:
-        """Create a simple text progress bar."""
-        filled = int(width * current / total)
-        empty = width - filled
-        return "█" * filled + "░" * empty
 
     def _log_user_interaction(
         self,

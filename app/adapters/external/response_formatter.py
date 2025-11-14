@@ -12,6 +12,8 @@ from collections.abc import Awaitable, Callable, Sequence
 from datetime import datetime
 from typing import Any
 
+from app.utils.retry_utils import retry_telegram_operation
+
 logger = logging.getLogger(__name__)
 
 
@@ -1184,20 +1186,39 @@ class ResponseFormatter:
                             "chat_id": chat_id,
                         },
                     )
-                    if parse_mode is not None:
-                        sent = await client.send_message(
-                            chat_id=chat_id, text=text, parse_mode=parse_mode
-                        )
-                    else:
-                        sent = await client.send_message(chat_id=chat_id, text=text)
-                    message_id = getattr(sent, "message_id", None)
-                    if message_id is None:
-                        message_id = getattr(sent, "id", None)
-                    logger.debug(
-                        "reply_with_id_result",
-                        extra={"message_id": message_id, "sent_message_type": type(sent).__name__},
+
+                    # Define send operation for retry logic
+                    async def do_send() -> Any:
+                        if parse_mode is not None:
+                            return await client.send_message(
+                                chat_id=chat_id, text=text, parse_mode=parse_mode
+                            )
+                        else:
+                            return await client.send_message(chat_id=chat_id, text=text)
+
+                    # Retry the send operation with exponential backoff
+                    sent, success = await retry_telegram_operation(
+                        do_send, operation_name="send_message_with_id"
                     )
-                    return message_id
+
+                    if success and sent is not None:
+                        message_id = getattr(sent, "message_id", None)
+                        if message_id is None:
+                            message_id = getattr(sent, "id", None)
+                        logger.debug(
+                            "reply_with_id_result",
+                            extra={
+                                "message_id": message_id,
+                                "sent_message_type": type(sent).__name__,
+                            },
+                        )
+                        return message_id
+                    else:
+                        logger.warning(
+                            "reply_with_id_retry_failed",
+                            extra={"chat_id": chat_id, "text_length": len(text)},
+                        )
+                        return None
             except Exception as e:  # noqa: BLE001
                 # Fall back to the custom function if direct client send failed
                 logger.warning("reply_with_client_failed_fallback_custom", extra={"error": str(e)})
@@ -1213,35 +1234,62 @@ class ResponseFormatter:
 
         try:
             msg_any: Any = message
-            if parse_mode:
-                sent_message = await msg_any.reply_text(text, parse_mode=parse_mode)
-            else:
-                sent_message = await msg_any.reply_text(text)
 
-            try:
-                logger.debug("reply_text_sent", extra={"length": len(text)})
-            except Exception:
-                pass
+            # Define reply operation for retry logic
+            async def do_reply() -> Any:
+                if parse_mode:
+                    return await msg_any.reply_text(text, parse_mode=parse_mode)
+                else:
+                    return await msg_any.reply_text(text)
 
-            message_id = getattr(sent_message, "message_id", None) if sent_message else None
-            logger.debug(
-                "reply_with_id_result",
-                extra={"message_id": message_id, "sent_message_type": type(sent_message).__name__},
+            # Retry the reply operation with exponential backoff
+            sent_message, success = await retry_telegram_operation(
+                do_reply, operation_name="reply_text_with_id"
             )
-            return message_id
+
+            if success and sent_message is not None:
+                try:
+                    logger.debug("reply_text_sent", extra={"length": len(text)})
+                except Exception:
+                    pass
+
+                message_id = getattr(sent_message, "message_id", None)
+                logger.debug(
+                    "reply_with_id_result",
+                    extra={
+                        "message_id": message_id,
+                        "sent_message_type": type(sent_message).__name__,
+                    },
+                )
+                return message_id
+            else:
+                logger.warning(
+                    "reply_text_retry_failed",
+                    extra={"text_length": len(text)},
+                )
+                return None
         except Exception as e:  # noqa: BLE001
             logger.error("reply_failed", extra={"error": str(e), "text_length": len(text)})
             return None
 
-    async def edit_message(self, chat_id: int, message_id: int, text: str) -> None:
-        """Edit an existing message in Telegram with security checks."""
+    async def edit_message(self, chat_id: int, message_id: int, text: str) -> bool:
+        """Edit an existing message in Telegram with security checks.
+
+        Args:
+            chat_id: The chat ID where the message exists
+            message_id: The message ID to edit
+            text: The new text content
+
+        Returns:
+            True if the message was successfully edited, False otherwise
+        """
         try:
             # Input validation
             if not text or not text.strip():
                 logger.warning(
                     "edit_message_empty_text", extra={"chat_id": chat_id, "message_id": message_id}
                 )
-                return
+                return False
 
             # Security content check
             is_safe, error_msg = self._is_safe_content(text)
@@ -1255,7 +1303,7 @@ class ResponseFormatter:
                         "text_preview": text[:100],
                     },
                 )
-                return
+                return False
 
             # Length check
             if len(text) > self.MAX_MESSAGE_CHARS:
@@ -1268,7 +1316,7 @@ class ResponseFormatter:
                         "message_id": message_id,
                     },
                 )
-                return
+                return False
 
             # Rate limiting check
             if not await self._check_rate_limit():
@@ -1276,6 +1324,8 @@ class ResponseFormatter:
                     "edit_message_rate_limited",
                     extra={"chat_id": chat_id, "message_id": message_id},
                 )
+                # Continue despite rate limit warning, but note it
+                # This maintains backward compatibility
 
             logger.debug(
                 "edit_message_attempt",
@@ -1303,30 +1353,49 @@ class ResponseFormatter:
                                 "text_length": len(text),
                             },
                         )
-                        return
+                        return False
 
-                    logger.debug(
-                        "edit_message_success", extra={"chat_id": chat_id, "message_id": message_id}
+                    # Define API call for retry logic
+                    async def do_edit() -> None:
+                        await client.edit_message_text(
+                            chat_id=chat_id, message_id=message_id, text=text
+                        )
+
+                    # Retry the API call with exponential backoff
+                    _, success = await retry_telegram_operation(
+                        do_edit, operation_name="edit_message"
                     )
-                    await client.edit_message_text(
-                        chat_id=chat_id, message_id=message_id, text=text
-                    )
-                    return
+
+                    if success:
+                        logger.debug(
+                            "edit_message_success",
+                            extra={"chat_id": chat_id, "message_id": message_id},
+                        )
+                        return True
+                    else:
+                        logger.warning(
+                            "edit_message_retry_failed",
+                            extra={"chat_id": chat_id, "message_id": message_id},
+                        )
+                        return False
                 else:
                     logger.warning(
                         "edit_message_no_client_method",
                         extra={"chat_id": chat_id, "message_id": message_id},
                     )
+                    return False
             else:
                 logger.warning(
                     "edit_message_no_telegram_client",
                     extra={"chat_id": chat_id, "message_id": message_id},
                 )
+                return False
         except Exception as e:
             logger.warning(
                 "edit_message_failed",
                 extra={"error": str(e), "chat_id": chat_id, "message_id": message_id},
             )
+            return False
 
     async def send_url_accepted_notification(
         self, message: Any, norm: str, correlation_id: str, *, silent: bool = False
