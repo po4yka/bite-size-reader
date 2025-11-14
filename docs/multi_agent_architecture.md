@@ -258,7 +258,7 @@ if result["success"]:
 
 ## Integration Status
 
-### ✅ Fully Functional
+### ✅ Phase 2 Complete - All Agents Fully Functional
 
 **ValidationAgent** - Ready for immediate production use:
 - No external dependencies beyond validation utilities
@@ -276,19 +276,97 @@ if not result.success:
     print(f"Validation errors: {result.error}")
 ```
 
-### 🔧 Partial Integration
+**ContentExtractionAgent** - Fully functional with Phase 2 refactoring:
+- ✅ Retrieves existing crawl results from database
+- ✅ Performs fresh Firecrawl extractions via `extract_content_pure()`
+- ✅ No Telegram message dependencies
+- ✅ Comprehensive content quality validation
+- ✅ HTML salvage fallback for failed markdown extraction
+- See `app/adapters/content/content_extractor.py:extract_content_pure()` for implementation
 
-**ContentExtractionAgent** - Database lookup implementation:
-- Can retrieve existing crawl results from database
-- Provides content quality validation
-- **Limitation**: Cannot trigger new Firecrawl extractions independently
-  (requires Telegram message context for notifications)
+```python
+from app.agents import ContentExtractionAgent, ExtractionInput
 
-**SummarizationAgent** - Pattern demonstration:
-- Shows feedback loop architecture
-- Documents correction prompt building
-- **Limitation**: Requires refactoring of LLMSummarizer to separate
-  message-dependent notification logic from core summarization
+agent = ContentExtractionAgent(content_extractor, db, correlation_id="abc123")
+result = await agent.execute(ExtractionInput(
+    url="https://example.com/article",
+    correlation_id="abc123"
+))
+
+if result.success:
+    print(f"Extracted {len(result.output.content_markdown)} chars")
+```
+
+**SummarizationAgent** - Fully functional with Phase 2 refactoring:
+- ✅ Generates summaries via `summarize_content_pure()`
+- ✅ No Telegram message dependencies
+- ✅ Self-correction feedback loop with validation
+- ✅ Retries with error feedback (up to 3 attempts)
+- ✅ Tracks attempts and corrections for analysis
+- See `app/adapters/content/llm_summarizer.py:summarize_content_pure()` for implementation
+
+```python
+from app.agents import SummarizationAgent, ValidationAgent, SummarizationInput
+
+validator = ValidationAgent(correlation_id="abc123")
+agent = SummarizationAgent(llm_summarizer, validator, correlation_id="abc123")
+
+result = await agent.execute(SummarizationInput(
+    content=article_text,
+    metadata={"title": "..."},
+    correlation_id="abc123",
+    language="en",
+    max_retries=3
+))
+
+if result.success:
+    print(f"Summary generated after {result.output.attempts} attempt(s)")
+    print(f"Corrections: {result.output.corrections_applied}")
+```
+
+### 🎯 Phase 2 Achievements
+
+**Message-Independent Methods Created:**
+1. `ContentExtractor.extract_content_pure()` - Pure extraction without notifications
+2. `LLMSummarizer.summarize_content_pure()` - Pure summarization without notifications
+
+**Key Benefits:**
+- ✅ Agents work without Telegram message context
+- ✅ Suitable for CLI tools, background jobs, API endpoints
+- ✅ Easier testing and debugging
+- ✅ Better separation of concerns
+- ✅ Backward compatible (existing message-based methods unchanged)
+
+**Example: Complete Pipeline**
+```python
+# Initialize agents
+extraction_agent = ContentExtractionAgent(content_extractor, db, correlation_id)
+validation_agent = ValidationAgent(correlation_id)
+summarization_agent = SummarizationAgent(llm_summarizer, validation_agent, correlation_id)
+
+# Step 1: Extract content
+extraction_result = await extraction_agent.execute(ExtractionInput(
+    url="https://example.com/article",
+    correlation_id="abc123"
+))
+
+if extraction_result.success:
+    # Step 2: Summarize with self-correction
+    summary_result = await summarization_agent.execute(SummarizationInput(
+        content=extraction_result.output.content_markdown,
+        metadata=extraction_result.output.metadata,
+        correlation_id="abc123",
+        language="en",
+        max_retries=3  # Self-correction attempts
+    ))
+
+    if summary_result.success:
+        print(f"✅ Pipeline complete!")
+        print(f"   Attempts: {summary_result.output.attempts}")
+        print(f"   Corrections: {summary_result.output.corrections_applied}")
+```
+
+See `examples/agent_pipeline_example.py` for complete usage demonstration.
 
 ## Integration with Existing Code
 
@@ -314,7 +392,7 @@ ValidationAgent ← (Immediate use with existing pipeline)
 
 ### Migration Path
 
-**Phase 1: Validation Agent** ✅ (READY NOW)
+**Phase 1: Validation Agent** ✅ (COMPLETED)
 ```python
 from app.agents import ValidationAgent, ValidationInput
 
@@ -330,28 +408,54 @@ if not result.success:
     # Could trigger retry or alert
 ```
 
-**Phase 2: Extract Message-Independent Logic** (Future)
+**Phase 2: Extract Message-Independent Logic** ✅ (COMPLETED)
 ```python
-# Refactor ContentExtractor to separate concerns:
+# ✅ ContentExtractor now has message-independent methods:
 class ContentExtractor:
-    async def extract_content(self, url: str) -> dict:
+    async def extract_content_pure(self, url: str, correlation_id: str) -> tuple:
         """Pure extraction without message notifications."""
+        # Returns: (content_text, content_source, metadata)
         pass
 
     async def extract_and_process_content(self, message, url, ...):
-        """Full flow with Telegram notifications."""
+        """Full flow with Telegram notifications (unchanged)."""
         content = await self.extract_content(url)
         await self.send_notifications(message, content)
         return content
+
+# ✅ LLMSummarizer now has message-independent methods:
+class LLMSummarizer:
+    async def summarize_content_pure(
+        self,
+        content_text: str,
+        chosen_lang: str,
+        system_prompt: str,
+        correlation_id: str | None = None,
+        feedback_instructions: str | None = None,
+    ) -> dict[str, Any]:
+        """Pure summarization without message notifications."""
+        # Returns: summary_json
+        pass
+
+    async def summarize_content(self, message, content_text, ...):
+        """Full flow with Telegram notifications (unchanged)."""
+        # Existing message-based method remains for backward compatibility
+        pass
 ```
 
-**Phase 3: Full Agent Integration** (Long Term)
+**Phase 3: Full Agent Integration** (Future)
 ```python
 from app.agents import AgentOrchestrator
 
-# After refactoring is complete:
+# After additional orchestration refinements:
 orchestrator = AgentOrchestrator(extraction_agent, summarization_agent, validation_agent)
 result = await orchestrator.execute_pipeline(PipelineInput(url=url, correlation_id=cid))
+
+# This would add:
+# - Parallel extraction for multiple URLs
+# - Streaming results for long-running operations
+# - Advanced retry strategies
+# - Agent state persistence
 ```
 
 ## Benefits

@@ -132,21 +132,21 @@ class ContentExtractionAgent(BaseAgent[ExtractionInput, ExtractionOutput]):
     ) -> dict[str, Any] | None:
         """Extract content with basic validation.
 
-        This method provides a database-based approach to retrieve extraction results.
-        The actual extraction is performed by ContentExtractor.extract_and_process_content
-        which requires a full Telegram message context.
+        This method first checks the database for existing crawl results.
+        If not found, performs a fresh extraction using the message-independent
+        extract_content_pure() method.
 
-        For agent-based workflows, we can:
+        For agent-based workflows:
         1. Check if content already exists for this URL (via dedupe hash)
         2. Return existing crawl result if available
-        3. Otherwise, indicate that full extraction flow is needed
+        3. Otherwise, perform fresh extraction using extract_content_pure()
 
         Args:
             url: URL to extract from
             correlation_id: Correlation ID for tracing
 
         Returns:
-            Extraction result dictionary or None
+            Extraction result dictionary or None if extraction fails
         """
         # Compute dedupe hash to check for existing crawl
         dedupe_hash = url_hash_sha256(url)
@@ -167,6 +167,7 @@ class ContentExtractionAgent(BaseAgent[ExtractionInput, ExtractionOutput]):
                 crawl_result = self.db.get_crawl_result_by_request(req_id)
 
             if crawl_result:
+                self.log_info(f"Found existing crawl result (ID: {crawl_result.get('id')})")
                 # Return existing crawl result
                 return {
                     "content_markdown": crawl_result.get("content_markdown", ""),
@@ -175,10 +176,38 @@ class ContentExtractionAgent(BaseAgent[ExtractionInput, ExtractionOutput]):
                     "id": crawl_result.get("id"),
                 }
 
-        # No existing crawl - would need full extraction flow with message context
-        # Return None to indicate extraction is needed
-        # In a production setup, this would trigger the full ContentExtractor flow
-        return None
+        # No existing crawl - perform fresh extraction
+        self.log_info("No existing crawl found, performing fresh extraction")
+
+        try:
+            # Call the message-independent extraction method
+            content_text, content_source, metadata = await self.content_extractor.extract_content_pure(
+                url=url,
+                correlation_id=correlation_id,
+            )
+
+            self.log_info(
+                f"Fresh extraction successful - {len(content_text)} chars, source={content_source}"
+            )
+
+            # Return in expected format
+            # Note: No crawl_result_id since we didn't persist to DB
+            # (persistence is handled by the full message flow)
+            return {
+                "content_markdown": content_text,
+                "content_html": None,  # extract_content_pure doesn't return HTML
+                "metadata": metadata,
+                "id": None,  # No DB record created in agent-only mode
+            }
+
+        except ValueError as e:
+            # extract_content_pure raises ValueError for extraction failures
+            self.log_error(f"Fresh extraction failed: {e}")
+            return None
+        except Exception as e:
+            # Catch any other unexpected errors
+            self.log_error(f"Unexpected error during extraction: {e}")
+            return None
 
     def _validate_content(self, result: dict[str, Any]) -> str | None:
         """Validate extracted content quality.

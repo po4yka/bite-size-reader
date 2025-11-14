@@ -2,13 +2,18 @@
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from app.agents.base_agent import AgentResult, BaseAgent
 
 if TYPE_CHECKING:
     from app.adapters.content.llm_summarizer import LLMSummarizer
+
+logger = logging.getLogger(__name__)
+_PROMPT_DIR = Path(__file__).parent.parent / "prompts"
 
 
 @dataclass
@@ -149,17 +154,8 @@ class SummarizationAgent(BaseAgent[SummarizationInput, SummarizationOutput]):
     ) -> dict[str, Any] | None:
         """Generate a summary with optional feedback from previous attempts.
 
-        This method demonstrates the feedback loop pattern for LLM summarization.
-        The actual LLMSummarizer.summarize_content method requires a message object
-        for sending notifications, which isn't available in the agent context.
-
-        Integration approaches:
-        1. **Validation-Only Mode**: Use this agent with pre-generated summaries
-           from database to validate and refine them
-        2. **Refactored Summarizer**: Extract core summarization logic to a
-           message-independent method that agents can call
-        3. **Hybrid Approach**: Use existing LLMSummarizer for generation,
-           then use ValidationAgent for feedback loop
+        This method implements the feedback loop pattern for LLM summarization,
+        using the message-independent summarize_content_pure() method.
 
         Args:
             content: Content to summarize
@@ -169,27 +165,56 @@ class SummarizationAgent(BaseAgent[SummarizationInput, SummarizationOutput]):
             attempt: Current attempt number
 
         Returns:
-            Summary result dictionary or None
-
-        Note:
-            This is a demonstration of the feedback loop pattern. For production use:
-            1. Extract LLMSummarizer's core logic to a standalone method
-            2. Remove message/notification dependencies
-            3. Call that method here with enhanced prompts based on previous_errors
+            Summary result dictionary or None if generation fails
         """
+        # Load system prompt for the language
+        system_prompt = self._get_system_prompt(language)
+
         # Build enhanced feedback for retry attempts
-        feedback_instructions = self._build_correction_prompt(previous_errors) if previous_errors else ""
+        feedback_instructions = None
+        if previous_errors:
+            feedback_instructions = self._build_correction_prompt(previous_errors)
+            self.log_info(
+                f"Retry attempt {attempt} with {len(previous_errors)} previous error(s)"
+            )
 
-        # In a real implementation, this would:
-        # 1. Load system prompt for the language
-        # 2. Add feedback_instructions to the prompt if attempt > 1
-        # 3. Call a message-independent summarization method
-        # 4. Return the raw JSON response
+        try:
+            # Call the message-independent summarization method
+            summary = await self.llm_summarizer.summarize_content_pure(
+                content_text=content,
+                chosen_lang=language,
+                system_prompt=system_prompt,
+                correlation_id=self.correlation_id,
+                feedback_instructions=feedback_instructions,
+            )
 
-        # For now, return None to indicate this needs full integration
-        # Users should use the existing LLMSummarizer directly or implement
-        # the message-independent extraction first
-        return None
+            return summary
+
+        except ValueError as e:
+            # summarize_content_pure raises ValueError for summarization failures
+            self.log_error(f"Summarization failed on attempt {attempt}: {e}")
+            return None
+        except Exception as e:
+            # Catch any other unexpected errors
+            self.log_error(f"Unexpected error during summarization attempt {attempt}: {e}")
+            return None
+
+    def _get_system_prompt(self, lang: str) -> str:
+        """Load and cache the system prompt for the given language.
+
+        Args:
+            lang: Language code ('en' or 'ru')
+
+        Returns:
+            System prompt text
+        """
+        fname = "summary_system_ru.txt" if lang == "ru" else "summary_system_en.txt"
+        path = _PROMPT_DIR / fname
+        try:
+            return path.read_text(encoding="utf-8").strip()
+        except Exception as e:
+            self.log_warning(f"Failed to load system prompt from {path}: {e}")
+            return "You are a precise assistant that returns only a strict JSON object matching the provided schema."
 
     def _build_correction_prompt(self, errors: list[str]) -> str:
         """Build a prompt that incorporates previous validation errors.
