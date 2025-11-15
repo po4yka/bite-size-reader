@@ -11,6 +11,8 @@ from datetime import datetime, timezone
 from app.api.auth import get_current_user
 from app.api.models.requests import UpdateSummaryRequest
 from app.api.models.responses import SuccessResponse, SummaryCompact, PaginationInfo
+from app.api.services import SummaryService
+from app.api.exceptions import ResourceNotFoundError
 from app.db.models import Summary, Request as RequestModel, CrawlResult, LLMCall
 from app.core.logging_utils import get_logger
 
@@ -41,43 +43,21 @@ async def get_summaries(
     - end_date: Filter by creation date (ISO 8601)
     - sort: Sort order (created_at_desc/created_at_asc)
     """
-    # Build query with user authorization filter and eager loading
-    # Use .select(Summary, RequestModel) to load both in single query (fixes N+1)
-    query = (
-        Summary.select(Summary, RequestModel)
-        .join(RequestModel)
-        .where(RequestModel.user_id == user["user_id"])  # Only user's summaries
+    # Use service layer for business logic
+    summaries, total, unread_count = SummaryService.get_user_summaries(
+        user_id=user["user_id"],
+        limit=limit,
+        offset=offset,
+        is_read=is_read,
+        lang=lang,
+        start_date=start_date,
+        end_date=end_date,
+        sort=sort,
     )
 
-    # Apply filters
-    if is_read is not None:
-        query = query.where(Summary.is_read == is_read)
-
-    if lang:
-        query = query.where(Summary.lang == lang)
-
-    if start_date:
-        query = query.where(RequestModel.created_at >= start_date)
-
-    if end_date:
-        query = query.where(RequestModel.created_at <= end_date)
-
-    # Apply sorting
-    if sort == "created_at_desc":
-        query = query.order_by(RequestModel.created_at.desc())
-    else:
-        query = query.order_by(RequestModel.created_at.asc())
-
-    # Get total count before pagination
-    total = query.count()
-
-    # Apply pagination and execute query
-    summaries = list(query.limit(limit).offset(offset))
-
-    # Build response (request is already loaded, no additional queries)
+    # Build response
     summary_list = []
     for summary in summaries:
-        # Access request without triggering additional query (already eager loaded)
         request = summary.request
         json_payload = summary.json_payload or {}
         metadata = json_payload.get("metadata", {})
@@ -101,22 +81,6 @@ async def get_summaries(
             ).dict()
         )
 
-    # Get stats (only for current user) - combine into single query using aggregation
-    from peewee import fn, Case
-
-    stats_query = (
-        Summary.select(
-            fn.COUNT(Summary.id).alias("total"),
-            fn.SUM(Case(None, [(Summary.is_read == False, 1)], 0)).alias("unread"),
-        )
-        .join(RequestModel)
-        .where(RequestModel.user_id == user["user_id"])
-        .first()
-    )
-
-    total_summaries = stats_query.total if stats_query else 0
-    unread_count = stats_query.unread if stats_query and stats_query.unread else 0
-
     return {
         "success": True,
         "data": {
@@ -128,7 +92,7 @@ async def get_summaries(
                 "has_more": (offset + limit) < total,
             },
             "stats": {
-                "total_summaries": total_summaries,
+                "total_summaries": total,
                 "unread_count": unread_count,
             },
         },
@@ -141,23 +105,13 @@ async def get_summary(
     user=Depends(get_current_user),
 ):
     """Get a single summary with full details."""
-    # Query with authorization check and eager loading (fixes N+1)
-    # Load Summary + Request in single query
-    summary = (
-        Summary.select(Summary, RequestModel)
-        .join(RequestModel)
-        .where((Summary.id == summary_id) & (RequestModel.user_id == user["user_id"]))
-        .first()
-    )
+    # Use service layer - it handles authorization and returns summary
+    summary = SummaryService.get_summary_by_id(user["user_id"], summary_id)
 
-    if not summary:
-        raise HTTPException(status_code=404, detail="Summary not found or access denied")
-
-    # Request is already loaded (no additional query)
+    # Request is already loaded (eager loading in service)
     request = summary.request
 
-    # Load crawl result and LLM calls in separate queries (still better than N queries)
-    # These are 1:1 and 1:N relationships, can't be eager loaded with Summary
+    # Load crawl result and LLM calls
     crawl_result = CrawlResult.select().where(CrawlResult.request == request.id).first()
     llm_calls = list(LLMCall.select().where(LLMCall.request == request.id))
 
@@ -221,28 +175,18 @@ async def update_summary(
     user=Depends(get_current_user),
 ):
     """Update summary metadata (e.g., mark as read)."""
-    # Query with authorization check
-    summary = (
-        Summary.select()
-        .join(RequestModel)
-        .where((Summary.id == summary_id) & (RequestModel.user_id == user["user_id"]))
-        .first()
+    # Use service layer
+    SummaryService.update_summary(
+        user_id=user["user_id"],
+        summary_id=summary_id,
+        is_read=update.is_read,
     )
-
-    if not summary:
-        raise HTTPException(status_code=404, detail="Summary not found or access denied")
-
-    # Apply updates
-    if update.is_read is not None:
-        summary.is_read = update.is_read
-
-    summary.save()
 
     return {
         "success": True,
         "data": {
-            "id": summary.id,
-            "is_read": summary.is_read,
+            "id": summary_id,
+            "is_read": update.is_read,
             "updated_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         },
     }
@@ -254,26 +198,13 @@ async def delete_summary(
     user=Depends(get_current_user),
 ):
     """Delete a summary (soft delete)."""
-    # Query with authorization check
-    summary = (
-        Summary.select()
-        .join(RequestModel)
-        .where((Summary.id == summary_id) & (RequestModel.user_id == user["user_id"]))
-        .first()
-    )
-
-    if not summary:
-        raise HTTPException(status_code=404, detail="Summary not found or access denied")
-
-    # TODO: Implement soft delete (add 'deleted_at' field to model)
-    # For now, just mark as read
-    summary.is_read = True
-    summary.save()
+    # Use service layer
+    SummaryService.delete_summary(user_id=user["user_id"], summary_id=summary_id)
 
     return {
         "success": True,
         "data": {
-            "id": summary.id,
+            "id": summary_id,
             "deleted_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         },
     }

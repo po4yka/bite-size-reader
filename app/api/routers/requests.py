@@ -9,6 +9,8 @@ from datetime import datetime, timezone
 from app.api.auth import get_current_user
 from app.api.background_processor import process_url_request
 from app.api.models.requests import SubmitURLRequest, SubmitForwardRequest
+from app.api.services import RequestService
+from app.api.exceptions import DuplicateResourceError
 from app.db.models import Request as RequestModel, Summary, CrawlResult, LLMCall
 from app.core.url_utils import normalize_url, compute_dedupe_hash
 from app.core.logging_utils import get_logger
@@ -33,53 +35,47 @@ async def submit_request(
     # Handle URL request
     if isinstance(request_data, SubmitURLRequest):
         input_url = str(request_data.input_url)
-        normalized = normalize_url(input_url)
-        dedupe_hash = compute_dedupe_hash(normalized)
 
-        # Check for duplicate
-        existing = RequestModel.select().where(RequestModel.dedupe_hash == dedupe_hash).first()
-
-        if existing:
-            summary = Summary.select().where(Summary.request == existing).first()
-
+        # Check for duplicate using service
+        duplicate_info = RequestService.check_duplicate_url(user["user_id"], input_url)
+        if duplicate_info:
             return {
                 "success": True,
                 "data": {
                     "is_duplicate": True,
-                    "existing_request_id": existing.id,
-                    "existing_summary_id": summary.id if summary else None,
+                    "existing_request_id": duplicate_info["existing_request_id"],
+                    "existing_summary_id": duplicate_info["existing_summary_id"],
                     "message": "This URL was already summarized",
-                    "summarized_at": existing.created_at.isoformat() + "Z",
+                    "summarized_at": duplicate_info["summarized_at"],
                 },
             }
 
-        # Create new request
-        correlation_id = f"api-{user['user_id']}-{int(datetime.now(timezone.utc).timestamp())}"
-
-        new_request = RequestModel.create(
-            type="url",
-            status="pending",
-            correlation_id=correlation_id,
-            user_id=user["user_id"],
-            input_url=input_url,
-            normalized_url=normalized,
-            dedupe_hash=dedupe_hash,
-            lang_detected=request_data.lang_preference,
-        )
+        # Create new request using service
+        try:
+            new_request = RequestService.create_url_request(
+                user_id=user["user_id"],
+                input_url=input_url,
+                lang_preference=request_data.lang_preference,
+            )
+        except DuplicateResourceError as e:
+            # Race condition - handle gracefully
+            return {
+                "success": True,
+                "data": {
+                    "is_duplicate": True,
+                    "existing_request_id": e.details.get("existing_id"),
+                    "message": e.message,
+                },
+            }
 
         # Schedule background processing
         background_tasks.add_task(process_url_request, new_request.id)
-
-        logger.info(
-            f"New URL request created and queued: {new_request.id}",
-            extra={"correlation_id": correlation_id},
-        )
 
         return {
             "success": True,
             "data": {
                 "request_id": new_request.id,
-                "correlation_id": correlation_id,
+                "correlation_id": new_request.correlation_id,
                 "type": "url",
                 "status": "pending",
                 "estimated_wait_seconds": 15,
@@ -90,32 +86,23 @@ async def submit_request(
 
     # Handle forward request
     else:
-        correlation_id = f"api-{user['user_id']}-{int(datetime.now(timezone.utc).timestamp())}"
-
-        new_request = RequestModel.create(
-            type="forward",
-            status="pending",
-            correlation_id=correlation_id,
+        # Create new forward request using service
+        new_request = RequestService.create_forward_request(
             user_id=user["user_id"],
             content_text=request_data.content_text,
-            fwd_from_chat_id=request_data.forward_metadata.from_chat_id,
-            fwd_from_msg_id=request_data.forward_metadata.from_message_id,
-            lang_detected=request_data.lang_preference,
+            from_chat_id=request_data.forward_metadata.from_chat_id,
+            from_message_id=request_data.forward_metadata.from_message_id,
+            lang_preference=request_data.lang_preference,
         )
 
         # Schedule background processing
         background_tasks.add_task(process_url_request, new_request.id)
 
-        logger.info(
-            f"New forward request created and queued: {new_request.id}",
-            extra={"correlation_id": correlation_id},
-        )
-
         return {
             "success": True,
             "data": {
                 "request_id": new_request.id,
-                "correlation_id": correlation_id,
+                "correlation_id": new_request.correlation_id,
                 "type": "forward",
                 "status": "pending",
                 "estimated_wait_seconds": 10,
@@ -131,20 +118,13 @@ async def get_request(
     user=Depends(get_current_user),
 ):
     """Get details about a specific request."""
-    # Query with authorization check
-    request = (
-        RequestModel.select()
-        .where((RequestModel.id == request_id) & (RequestModel.user_id == user["user_id"]))
-        .first()
-    )
+    # Use service layer to get request with authorization
+    result = RequestService.get_request_by_id(user["user_id"], request_id)
 
-    if not request:
-        raise HTTPException(status_code=404, detail="Request not found or access denied")
-
-    # Get related records
-    crawl_result = CrawlResult.select().where(CrawlResult.request == request).first()
-    llm_calls = list(LLMCall.select().where(LLMCall.request == request))
-    summary = Summary.select().where(Summary.request == request).first()
+    request = result["request"]
+    crawl_result = result["crawl_result"]
+    llm_calls = result["llm_calls"]
+    summary = result["summary"]
 
     return {
         "success": True,
@@ -198,44 +178,17 @@ async def get_request_status(
     user=Depends(get_current_user),
 ):
     """Poll for real-time processing status."""
-    # Query with authorization check
-    request = (
-        RequestModel.select()
-        .where((RequestModel.id == request_id) & (RequestModel.user_id == user["user_id"]))
-        .first()
-    )
-
-    if not request:
-        raise HTTPException(status_code=404, detail="Request not found or access denied")
-
-    # Determine stage based on status and related records
-    stage = None
-    progress = None
-
-    if request.status == "processing":
-        # Check which stage we're in
-        crawl_result = CrawlResult.select().where(CrawlResult.request == request).first()
-        llm_calls = LLMCall.select().where(LLMCall.request == request).count()
-        summary = Summary.select().where(Summary.request == request).first()
-
-        if not crawl_result:
-            stage = "content_extraction"
-            progress = {"current_step": 1, "total_steps": 4, "percentage": 25}
-        elif llm_calls == 0:
-            stage = "llm_summarization"
-            progress = {"current_step": 2, "total_steps": 4, "percentage": 50}
-        elif not summary:
-            stage = "validation"
-            progress = {"current_step": 3, "total_steps": 4, "percentage": 75}
+    # Use service layer to get status
+    status_info = RequestService.get_request_status(user["user_id"], request_id)
 
     return {
         "success": True,
         "data": {
-            "request_id": request.id,
-            "status": request.status,
-            "stage": stage,
-            "progress": progress,
-            "estimated_seconds_remaining": 8 if request.status == "processing" else None,
+            "request_id": status_info["request_id"],
+            "status": status_info["status"],
+            "stage": status_info["stage"],
+            "progress": status_info["progress"],
+            "estimated_seconds_remaining": status_info["estimated_seconds_remaining"],
             "updated_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         },
     }
@@ -248,49 +201,20 @@ async def retry_request(
     user=Depends(get_current_user),
 ):
     """Retry a failed request. Processes asynchronously in the background."""
-    # Query with authorization check
-    original_request = (
-        RequestModel.select()
-        .where((RequestModel.id == request_id) & (RequestModel.user_id == user["user_id"]))
-        .first()
-    )
-
-    if not original_request:
-        raise HTTPException(status_code=404, detail="Request not found or access denied")
-
-    if original_request.status != "error":
-        raise HTTPException(status_code=400, detail="Only failed requests can be retried")
-
-    # Create new request with retry correlation ID
-    correlation_id = f"{original_request.correlation_id}-retry-1"
-
-    new_request = RequestModel.create(
-        type=original_request.type,
-        status="pending",
-        correlation_id=correlation_id,
-        user_id=user["user_id"],
-        input_url=original_request.input_url,
-        normalized_url=original_request.normalized_url,
-        dedupe_hash=original_request.dedupe_hash,
-        content_text=original_request.content_text,
-        fwd_from_chat_id=original_request.fwd_from_chat_id,
-        fwd_from_msg_id=original_request.fwd_from_msg_id,
-        lang_detected=original_request.lang_detected,
-    )
+    # Use service layer to create retry request
+    try:
+        new_request = RequestService.retry_failed_request(user["user_id"], request_id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
     # Schedule background processing
     background_tasks.add_task(process_url_request, new_request.id)
-
-    logger.info(
-        f"Retry request created and queued: {new_request.id} (original: {request_id})",
-        extra={"correlation_id": correlation_id},
-    )
 
     return {
         "success": True,
         "data": {
             "new_request_id": new_request.id,
-            "correlation_id": correlation_id,
+            "correlation_id": new_request.correlation_id,
             "status": "pending",
             "created_at": new_request.created_at.isoformat() + "Z",
         },
