@@ -5,18 +5,15 @@ Usage:
     uvicorn app.api.main:app --reload --host 0.0.0.0 --port 8000
 """
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 from pydantic import ValidationError as PydanticValidationError
-import logging
 import peewee
 
 from app.config import Config
 from app.api.routers import summaries, requests, search, sync, auth, user
 from app.api.middleware import correlation_id_middleware, rate_limit_middleware
-from app.api.models.responses import ErrorResponse
 from app.api.exceptions import APIException
 from app.api.error_handlers import (
     api_exception_handler,
@@ -101,7 +98,7 @@ async def health_check():
         "success": True,
         "data": {
             "status": "healthy",
-            "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            "timestamp": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
         },
     }
 

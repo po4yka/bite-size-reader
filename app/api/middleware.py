@@ -4,10 +4,9 @@ FastAPI middleware for request processing.
 
 import time
 import uuid
-from typing import Callable
-from fastapi import Request, Response
+from collections.abc import Callable
+from fastapi import Request
 from fastapi.responses import JSONResponse
-from datetime import datetime
 
 from app.core.logging_utils import get_logger
 

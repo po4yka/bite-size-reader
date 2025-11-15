@@ -5,7 +5,7 @@ Authentication endpoints and utilities.
 from fastapi import APIRouter, HTTPException, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel, Field, ConfigDict
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, UTC
 import jwt
 import hashlib
 import hmac
@@ -193,23 +193,23 @@ def create_token(
         Encoded JWT token
     """
     if token_type == "access":
-        expire = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+        expire = datetime.now(UTC) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
         payload = {
             "user_id": user_id,
             "username": username,
             "client_id": client_id,
             "exp": expire,
             "type": "access",
-            "iat": datetime.now(timezone.utc),
+            "iat": datetime.now(UTC),
         }
     elif token_type == "refresh":
-        expire = datetime.now(timezone.utc) + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
+        expire = datetime.now(UTC) + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
         payload = {
             "user_id": user_id,
             "client_id": client_id,
             "exp": expire,
             "type": "refresh",
-            "iat": datetime.now(timezone.utc),
+            "iat": datetime.now(UTC),
         }
     else:
         raise ValueError(f"Invalid token type: {token_type}")
@@ -293,12 +293,11 @@ def validate_client_id(client_id: str | None) -> bool:
 def decode_token(token: str) -> dict:
     """Decode and validate JWT token."""
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        return payload
-    except jwt.ExpiredSignatureError:
-        raise HTTPException(status_code=401, detail="Token has expired")
-    except jwt.InvalidTokenError:
-        raise HTTPException(status_code=401, detail="Invalid token")
+        return jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+    except jwt.ExpiredSignatureError as err:
+        raise HTTPException(status_code=401, detail="Token has expired") from err
+    except jwt.InvalidTokenError as err:
+        raise HTTPException(status_code=401, detail="Invalid token") from err
 
 
 async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)) -> dict:
@@ -408,7 +407,7 @@ async def telegram_login(login_data: TelegramLoginRequest):
         raise
     except Exception as e:
         logger.error(f"Login failed for user {login_data.telegram_user_id}: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Authentication failed. Please try again.")
+        raise HTTPException(status_code=500, detail="Authentication failed. Please try again.") from e
 
 
 @router.post("/refresh")

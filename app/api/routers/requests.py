@@ -3,16 +3,13 @@ Request submission and status endpoints.
 """
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
-from typing import Union
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 
 from app.api.auth import get_current_user
 from app.api.background_processor import process_url_request
 from app.api.models.requests import SubmitURLRequest, SubmitForwardRequest
 from app.api.services import RequestService
 from app.api.exceptions import DuplicateResourceError
-from app.db.models import Request as RequestModel, Summary, CrawlResult, LLMCall
-from app.core.url_utils import normalize_url, compute_dedupe_hash
 from app.core.logging_utils import get_logger
 
 logger = get_logger(__name__)
@@ -21,7 +18,7 @@ router = APIRouter()
 
 @router.post("")
 async def submit_request(
-    request_data: Union[SubmitURLRequest, SubmitForwardRequest],
+    request_data: SubmitURLRequest | SubmitForwardRequest,
     background_tasks: BackgroundTasks,
     user=Depends(get_current_user),
 ):
@@ -85,31 +82,30 @@ async def submit_request(
         }
 
     # Handle forward request
-    else:
-        # Create new forward request using service
-        new_request = RequestService.create_forward_request(
-            user_id=user["user_id"],
-            content_text=request_data.content_text,
-            from_chat_id=request_data.forward_metadata.from_chat_id,
-            from_message_id=request_data.forward_metadata.from_message_id,
-            lang_preference=request_data.lang_preference,
-        )
+    # Create new forward request using service
+    new_request = RequestService.create_forward_request(
+        user_id=user["user_id"],
+        content_text=request_data.content_text,
+        from_chat_id=request_data.forward_metadata.from_chat_id,
+        from_message_id=request_data.forward_metadata.from_message_id,
+        lang_preference=request_data.lang_preference,
+    )
 
-        # Schedule background processing
-        background_tasks.add_task(process_url_request, new_request.id)
+    # Schedule background processing
+    background_tasks.add_task(process_url_request, new_request.id)
 
-        return {
-            "success": True,
-            "data": {
-                "request_id": new_request.id,
-                "correlation_id": new_request.correlation_id,
-                "type": "forward",
-                "status": "pending",
-                "estimated_wait_seconds": 10,
-                "created_at": new_request.created_at.isoformat() + "Z",
-                "is_duplicate": False,
-            },
-        }
+    return {
+        "success": True,
+        "data": {
+            "request_id": new_request.id,
+            "correlation_id": new_request.correlation_id,
+            "type": "forward",
+            "status": "pending",
+            "estimated_wait_seconds": 10,
+            "created_at": new_request.created_at.isoformat() + "Z",
+            "is_duplicate": False,
+        },
+    }
 
 
 @router.get("/{request_id}")
@@ -189,7 +185,7 @@ async def get_request_status(
             "stage": status_info["stage"],
             "progress": status_info["progress"],
             "estimated_seconds_remaining": status_info["estimated_seconds_remaining"],
-            "updated_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            "updated_at": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
         },
     }
 
@@ -205,7 +201,7 @@ async def retry_request(
     try:
         new_request = RequestService.retry_failed_request(user["user_id"], request_id)
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
 
     # Schedule background processing
     background_tasks.add_task(process_url_request, new_request.id)

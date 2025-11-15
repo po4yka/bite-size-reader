@@ -12,7 +12,6 @@ import pytest
 import hmac
 import hashlib
 import time
-from fastapi.testclient import TestClient
 from unittest.mock import patch, MagicMock
 
 # Note: These tests require the API to be importable
@@ -105,10 +104,8 @@ class TestCORSConfiguration:
 
         # Should only contain localhost or configured origins
         for origin in ALLOWED_ORIGINS:
-            assert (
-                origin.startswith("http://localhost")
-                or origin.startswith("http://127.0.0.1")
-                or origin.startswith("https://")
+            assert origin.startswith(
+                ("http://localhost", "http://127.0.0.1", "https://")
             ), f"Suspicious origin: {origin}"
 
 
@@ -128,7 +125,6 @@ class TestAuthorizationChecks:
     def test_cannot_access_other_users_summary(self, mock_user, other_user):
         """Test that users cannot access each other's summaries."""
         from app.api.routers.summaries import get_summary
-        from app.db.models import Summary, Request as RequestModel
         from fastapi import HTTPException
 
         # Create summary for user 123456789

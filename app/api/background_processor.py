@@ -8,15 +8,13 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import datetime, timezone
 from typing import Any
 
-from app.adapters.content.llm_summarizer import LLMSummarizer
 from app.adapters.content.url_processor import URLProcessor
 from app.adapters.external.firecrawl_parser import FirecrawlClient
 from app.adapters.external.response_formatter import ResponseFormatter
 from app.adapters.openrouter.openrouter_client import OpenRouterClient
-from app.config import AppConfig, load_config
+from app.config import load_config
 from app.core.logging_utils import get_logger
 from app.db.database import Database
 from app.db.models import Request as RequestModel, Summary
@@ -174,7 +172,6 @@ async def process_url_request(request_id: int, db_path: str | None = None) -> No
 
 async def _process_url_type(request: RequestModel, db: Database) -> None:
     """Process a URL-type request."""
-    from app.adapters.content.content_extractor import ContentExtractor
     from app.core.lang import choose_language
     from app.core.url_utils import normalize_url
 
@@ -252,7 +249,7 @@ async def _process_forward_type(request: RequestModel, db: Database) -> None:
 
     # Generate summary from forwarded content
     logger.info(
-        f"Generating summary for forwarded content",
+        "Generating summary for forwarded content",
         extra={"correlation_id": request.correlation_id, "content_length": len(request.content_text or "")},
     )
 

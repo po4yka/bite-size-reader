@@ -2,9 +2,8 @@
 Database synchronization endpoints for offline mobile support.
 """
 
-from fastapi import APIRouter, Depends, Query, HTTPException
-from typing import Optional
-from datetime import datetime, timezone
+from fastapi import APIRouter, Depends, Query
+from datetime import datetime, UTC
 import uuid
 
 from app.api.auth import get_current_user
@@ -18,7 +17,7 @@ router = APIRouter()
 
 @router.get("/full")
 async def initiate_full_sync(
-    since: Optional[str] = Query(None),
+    since: str | None = Query(None),
     chunk_size: int = Query(100, ge=1, le=500),
     user=Depends(get_current_user),
 ):
@@ -51,11 +50,11 @@ async def initiate_full_sync(
         "success": True,
         "data": {
             "sync_id": sync_id,
-            "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            "timestamp": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
             "total_items": total_items,
             "chunks": total_chunks,
             "download_urls": download_urls,
-            "expires_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),  # TODO: Add expiry logic
+            "expires_at": datetime.now(UTC).isoformat().replace("+00:00", "Z"),  # TODO: Add expiry logic
         },
     }
 
@@ -186,7 +185,7 @@ async def get_delta_sync(
                 "updated": [],
                 "deleted": [],
             },
-            "sync_timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            "sync_timestamp": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
             "has_more": len(created_items) >= limit,
         },
     }
@@ -242,6 +241,6 @@ async def upload_local_changes(
         "data": {
             "applied_changes": applied_changes,
             "conflicts": conflicts,
-            "sync_timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            "sync_timestamp": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
         },
     }

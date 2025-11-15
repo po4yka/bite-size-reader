@@ -1,7 +1,6 @@
 """Request service - business logic for request operations."""
 
-from typing import Optional
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 
 from app.db.models import Request as RequestModel, Summary, CrawlResult, LLMCall
 from app.core.url_utils import normalize_url, compute_dedupe_hash
@@ -15,7 +14,7 @@ class RequestService:
     """Service for request-related business logic."""
 
     @staticmethod
-    def check_duplicate_url(user_id: int, url: str) -> Optional[dict]:
+    def check_duplicate_url(user_id: int, url: str) -> dict | None:
         """
         Check if a URL has already been summarized by this user.
 
@@ -76,7 +75,7 @@ class RequestService:
             )
 
         # Create request
-        correlation_id = f"api-{user_id}-{int(datetime.now(timezone.utc).timestamp())}"
+        correlation_id = f"api-{user_id}-{int(datetime.now(UTC).timestamp())}"
 
         new_request = RequestModel.create(
             type="url",
@@ -117,7 +116,7 @@ class RequestService:
         Returns:
             Created RequestModel instance
         """
-        correlation_id = f"api-{user_id}-{int(datetime.now(timezone.utc).timestamp())}"
+        correlation_id = f"api-{user_id}-{int(datetime.now(UTC).timestamp())}"
 
         new_request = RequestModel.create(
             type="forward",

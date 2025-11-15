@@ -946,7 +946,7 @@ class Database:
             except Exception:
                 columns = set()
             if updated_at_field.column_name in columns:
-                update_values[updated_at_field] = dt.datetime.now(dt.timezone.utc)
+                update_values[updated_at_field] = dt.datetime.now(dt.UTC)
 
         UserInteraction.update(update_values).where(UserInteraction.id == interaction_id).execute()
 
@@ -1283,7 +1283,7 @@ class Database:
                 Summary.lang: lang,
                 Summary.json_payload: payload_value,
                 Summary.version: Summary.version + 1,
-                Summary.created_at: dt.datetime.now(dt.timezone.utc),
+                Summary.created_at: dt.datetime.now(dt.UTC),
             }
             if insights_value is not None:
                 update_map[Summary.insights_json] = insights_value
@@ -1347,7 +1347,7 @@ class Database:
                     SummaryEmbedding.model_version: model_version,
                     SummaryEmbedding.dimensions: dimensions,
                     SummaryEmbedding.language: language,
-                    SummaryEmbedding.created_at: dt.datetime.now(dt.timezone.utc),
+                    SummaryEmbedding.created_at: dt.datetime.now(dt.UTC),
                 }
             ).where(SummaryEmbedding.summary == summary_id).execute()
 

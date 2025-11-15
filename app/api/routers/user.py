@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends
 
 from app.api.auth import get_current_user
 from app.api.models.requests import UpdatePreferencesRequest
-from app.db.models import Summary, Request as RequestModel, User
+from app.db.models import Summary, User
 from app.core.logging_utils import get_logger
 
 logger = get_logger(__name__)
@@ -44,10 +44,10 @@ async def update_user_preferences(
         updated_fields.append("lang_preference")
     if preferences.notification_settings:
         updated_fields.extend(
-            [f"notification_settings.{k}" for k in preferences.notification_settings.keys()]
+            [f"notification_settings.{k}" for k in preferences.notification_settings]
         )
     if preferences.app_settings:
-        updated_fields.extend([f"app_settings.{k}" for k in preferences.app_settings.keys()])
+        updated_fields.extend([f"app_settings.{k}" for k in preferences.app_settings])
 
     return {
         "success": True,
@@ -63,8 +63,8 @@ async def get_user_stats(user=Depends(get_current_user)):
     """Get user statistics."""
     # Get summary counts
     total_summaries = Summary.select().count()
-    unread_count = Summary.select().where(Summary.is_read == False).count()
-    read_count = Summary.select().where(Summary.is_read == True).count()
+    unread_count = Summary.select().where(~Summary.is_read).count()
+    read_count = Summary.select().where(Summary.is_read).count()
 
     # Get reading time
     summaries = Summary.select()

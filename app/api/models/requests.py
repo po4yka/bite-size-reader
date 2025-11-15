@@ -2,7 +2,7 @@
 Pydantic models for API request validation.
 """
 
-from typing import Optional, Dict, Any, Literal
+from typing import Any, Literal
 from pydantic import BaseModel, Field, HttpUrl, field_validator
 
 
@@ -28,8 +28,8 @@ class ForwardMetadata(BaseModel):
 
     from_chat_id: int
     from_message_id: int
-    from_chat_title: Optional[str] = None
-    forwarded_at: Optional[str] = None
+    from_chat_title: str | None = None
+    forwarded_at: str | None = None
 
 
 class SubmitForwardRequest(BaseModel):
@@ -44,15 +44,15 @@ class SubmitForwardRequest(BaseModel):
 class UpdateSummaryRequest(BaseModel):
     """Request body for updating a summary."""
 
-    is_read: Optional[bool] = None
+    is_read: bool | None = None
 
 
 class UpdatePreferencesRequest(BaseModel):
     """Request body for updating user preferences."""
 
-    lang_preference: Optional[Literal["auto", "en", "ru"]] = None
-    notification_settings: Optional[Dict[str, Any]] = None
-    app_settings: Optional[Dict[str, Any]] = None
+    lang_preference: Literal["auto", "en", "ru"] | None = None
+    notification_settings: dict[str, Any] | None = None
+    app_settings: dict[str, Any] | None = None
 
 
 class SyncUploadChange(BaseModel):
@@ -60,7 +60,7 @@ class SyncUploadChange(BaseModel):
 
     summary_id: int
     action: Literal["update", "delete"]
-    fields: Optional[Dict[str, Any]] = None
+    fields: dict[str, Any] | None = None
     client_timestamp: str
 
 

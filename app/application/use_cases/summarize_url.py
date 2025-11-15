@@ -6,7 +6,7 @@ workflow from URL to final summary.
 
 import logging
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 from typing import Any
 
 from app.domain.events.request_events import RequestCompleted, RequestCreated, RequestFailed
@@ -168,7 +168,7 @@ class SummarizeUrlUseCase:
         request = await self._create_request(command)
         events.append(
             RequestCreated(
-                occurred_at=datetime.now(timezone.utc),
+                occurred_at=datetime.now(UTC),
                 aggregate_id=request.id,
                 request_id=request.id or 0,
                 user_id=request.user_id,
@@ -199,7 +199,7 @@ class SummarizeUrlUseCase:
             # 7. Generate events
             events.append(
                 SummaryCreated(
-                    occurred_at=datetime.now(timezone.utc),
+                    occurred_at=datetime.now(UTC),
                     aggregate_id=summary.id,
                     summary_id=summary.id or 0,
                     request_id=summary.request_id,
@@ -210,7 +210,7 @@ class SummarizeUrlUseCase:
 
             events.append(
                 RequestCompleted(
-                    occurred_at=datetime.now(timezone.utc),
+                    occurred_at=datetime.now(UTC),
                     aggregate_id=request.id,
                     request_id=request.id or 0,
                     summary_id=summary.id,
@@ -242,7 +242,7 @@ class SummarizeUrlUseCase:
             # Generate failure event
             events.append(
                 RequestFailed(
-                    occurred_at=datetime.now(timezone.utc),
+                    occurred_at=datetime.now(UTC),
                     aggregate_id=request.id,
                     request_id=request.id or 0,
                     error_message=str(e),

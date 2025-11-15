@@ -1,10 +1,9 @@
 """Summary service - business logic for summary operations."""
 
-from typing import Optional
 from peewee import fn, Case
 
 from app.db.models import Summary, Request as RequestModel
-from app.api.exceptions import ResourceNotFoundError, AuthorizationError
+from app.api.exceptions import ResourceNotFoundError
 from app.core.logging_utils import get_logger
 
 logger = get_logger(__name__)
@@ -18,10 +17,10 @@ class SummaryService:
         user_id: int,
         limit: int = 20,
         offset: int = 0,
-        is_read: Optional[bool] = None,
-        lang: Optional[str] = None,
-        start_date: Optional[str] = None,
-        end_date: Optional[str] = None,
+        is_read: bool | None = None,
+        lang: str | None = None,
+        start_date: str | None = None,
+        end_date: str | None = None,
         sort: str = "created_at_desc",
     ) -> tuple[list[Summary], int, int]:
         """
@@ -78,7 +77,7 @@ class SummaryService:
         stats_query = (
             Summary.select(
                 fn.COUNT(Summary.id).alias("total"),
-                fn.SUM(Case(None, [(Summary.is_read == False, 1)], 0)).alias("unread"),
+                fn.SUM(Case(None, [(~Summary.is_read, 1)], 0)).alias("unread"),
             )
             .join(RequestModel)
             .where(RequestModel.user_id == user_id)
@@ -118,7 +117,7 @@ class SummaryService:
         return summary
 
     @staticmethod
-    def update_summary(user_id: int, summary_id: int, is_read: Optional[bool] = None) -> Summary:
+    def update_summary(user_id: int, summary_id: int, is_read: bool | None = None) -> Summary:
         """
         Update a summary's properties.
 

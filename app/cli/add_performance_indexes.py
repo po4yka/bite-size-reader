@@ -105,7 +105,6 @@ def check_indexes(db: Database) -> None:
     ORDER BY tbl_name, name
     """
 
-    row = db.fetchone(check_sql)
     indexes_found = []
 
     # Fetch all index rows

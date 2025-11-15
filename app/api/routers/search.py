@@ -106,7 +106,7 @@ async def search_summaries(
 
     except Exception as e:
         logger.error(f"Search failed: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Search failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Search failed: {e!s}") from e
 
 
 @router.get("/topics/trending")

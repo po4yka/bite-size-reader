@@ -74,6 +74,8 @@ ignore = [
   "RUF009",  # function call in dataclass defaults - safe for Logger objects
   "N818",    # exception naming - DDD naming convention
   "ASYNC109", # async timeout parameter - trio-specific, not relevant
+  "B008",    # function call in argument defaults - standard FastAPI pattern
+  "PLW0603", # global statement - needed for asyncio semaphore initialization
 ]
 
 # Per-file ignores for test files
@@ -90,7 +92,11 @@ ignore = [
   "PT011",   # pytest.raises too broad - can be improved later
   "PT009",   # unittest assertions - can be migrated later
   "PT027",   # unittest-style assertRaises - using unittest.TestCase
+  "PT012",   # pytest.raises complex statements - acceptable in integration tests
   "DTZ005",  # datetime.now without tz - acceptable in tests
+  "N806",    # non-lowercase variable in function - mock objects use PascalCase
+  "F841",    # unused variable - mock setup
+  "SIM117",  # nested with statements - clearer in test setup
 ]
 "test_*.py" = [
   "EXE001",  # shebang present - test files in root

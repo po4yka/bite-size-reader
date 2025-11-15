@@ -4,16 +4,14 @@ Summary management endpoints.
 Provides CRUD operations for summaries.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Query
-from typing import Optional
-from datetime import datetime, timezone
+from fastapi import APIRouter, Depends, Query
+from datetime import datetime, UTC
 
 from app.api.auth import get_current_user
 from app.api.models.requests import UpdateSummaryRequest
-from app.api.models.responses import SuccessResponse, SummaryCompact, PaginationInfo
+from app.api.models.responses import SummaryCompact
 from app.api.services import SummaryService
-from app.api.exceptions import ResourceNotFoundError
-from app.db.models import Summary, Request as RequestModel, CrawlResult, LLMCall
+from app.db.models import CrawlResult, LLMCall
 from app.core.logging_utils import get_logger
 
 logger = get_logger(__name__)
@@ -24,10 +22,10 @@ router = APIRouter()
 async def get_summaries(
     limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0),
-    is_read: Optional[bool] = Query(None),
-    lang: Optional[str] = Query(None, pattern="^(en|ru|auto)$"),
-    start_date: Optional[str] = Query(None),
-    end_date: Optional[str] = Query(None),
+    is_read: bool | None = Query(None),
+    lang: str | None = Query(None, pattern="^(en|ru|auto)$"),
+    start_date: str | None = Query(None),
+    end_date: str | None = Query(None),
     sort: str = Query("created_at_desc", pattern="^(created_at_desc|created_at_asc)$"),
     user=Depends(get_current_user),
 ):
@@ -187,7 +185,7 @@ async def update_summary(
         "data": {
             "id": summary_id,
             "is_read": update.is_read,
-            "updated_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            "updated_at": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
         },
     }
 
@@ -205,6 +203,6 @@ async def delete_summary(
         "success": True,
         "data": {
             "id": summary_id,
-            "deleted_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            "deleted_at": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
         },
     }

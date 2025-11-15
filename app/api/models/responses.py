@@ -2,16 +2,16 @@
 Pydantic models for API responses.
 """
 
-from typing import Any, Optional, Dict, List
+from typing import Any
 from pydantic import BaseModel, Field
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 
 
 class MetaInfo(BaseModel):
     """Metadata for all API responses."""
 
     timestamp: str = Field(
-        default_factory=lambda: datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+        default_factory=lambda: datetime.now(UTC).isoformat().replace("+00:00", "Z")
     )
     version: str = "1.0"
 
@@ -21,10 +21,10 @@ class ErrorDetail(BaseModel):
 
     code: str
     message: str
-    details: Optional[Dict[str, Any]] = None
-    correlation_id: Optional[str] = None
+    details: dict[str, Any] | None = None
+    correlation_id: str | None = None
     timestamp: str = Field(
-        default_factory=lambda: datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+        default_factory=lambda: datetime.now(UTC).isoformat().replace("+00:00", "Z")
     )
 
 
@@ -32,7 +32,7 @@ class SuccessResponse(BaseModel):
     """Standard success response wrapper."""
 
     success: bool = True
-    data: Dict[str, Any]
+    data: dict[str, Any]
     meta: MetaInfo = Field(default_factory=MetaInfo)
 
 
@@ -64,7 +64,7 @@ class SummaryCompact(BaseModel):
     tldr: str
     summary_250: str
     reading_time_min: int
-    topic_tags: List[str]
+    topic_tags: list[str]
     is_read: bool
     lang: str
     created_at: str
@@ -75,9 +75,9 @@ class SummaryCompact(BaseModel):
 class SummaryListResponse(BaseModel):
     """Response for GET /summaries."""
 
-    summaries: List[SummaryCompact]
+    summaries: list[SummaryCompact]
     pagination: PaginationInfo
-    stats: Dict[str, int]
+    stats: dict[str, int]
 
 
 class RequestStatus(BaseModel):
@@ -85,11 +85,11 @@ class RequestStatus(BaseModel):
 
     request_id: int
     status: str
-    stage: Optional[str] = None
-    progress: Optional[Dict[str, Any]] = None
-    estimated_seconds_remaining: Optional[int] = None
-    error_message: Optional[str] = None
-    can_retry: Optional[bool] = None
+    stage: str | None = None
+    progress: dict[str, Any] | None = None
+    estimated_seconds_remaining: int | None = None
+    error_message: str | None = None
+    can_retry: bool | None = None
     updated_at: str
 
 
