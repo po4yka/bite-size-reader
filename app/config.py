@@ -646,3 +646,66 @@ def _deep_merge(base: Mapping[str, Any], updates: Mapping[str, Any]) -> dict[str
         else:
             result[key] = value
     return result
+
+
+class ConfigHelper:
+    """Helper class for accessing configuration values from environment variables."""
+
+    @staticmethod
+    def get(key: str, default: str | None = None) -> str:
+        """Get configuration value from environment variable."""
+        value = os.getenv(key)
+        if value is None:
+            if default is None:
+                raise ValueError(f"Configuration key '{key}' not found and no default provided")
+            return default
+        return value
+
+    @staticmethod
+    def get_allowed_user_ids() -> tuple[int, ...]:
+        """Get list of allowed Telegram user IDs."""
+        value = os.getenv("ALLOWED_USER_IDS", "")
+        return _parse_allowed_user_ids(value)
+
+    @staticmethod
+    def get_allowed_client_ids() -> tuple[str, ...]:
+        """
+        Get list of allowed client application IDs.
+
+        Client IDs are arbitrary strings that identify specific client applications
+        (e.g., "android-app-v1.0", "ios-app-v2.0"). Only clients with these IDs
+        can authenticate and receive access tokens.
+
+        Returns:
+            Tuple of allowed client ID strings (empty tuple allows all clients)
+        """
+        value = os.getenv("ALLOWED_CLIENT_IDS", "")
+        if value in (None, ""):
+            return ()  # Empty tuple = no client restriction (backward compatible)
+
+        # Parse comma-separated list
+        client_ids = []
+        for piece in value.split(","):
+            piece = piece.strip()
+            if not piece:
+                continue
+            # Validate client ID format (alphanumeric, hyphens, underscores, dots)
+            if not all(c.isalnum() or c in "-_." for c in piece):
+                logger.warning(
+                    f"Ignoring invalid client ID format: {piece}",
+                    extra={"client_id": piece},
+                )
+                continue
+            if len(piece) > 100:
+                logger.warning(
+                    f"Ignoring client ID that is too long: {piece}",
+                    extra={"client_id": piece, "length": len(piece)},
+                )
+                continue
+            client_ids.append(piece)
+
+        return tuple(client_ids)
+
+
+# Singleton instance for backward compatibility
+Config = ConfigHelper

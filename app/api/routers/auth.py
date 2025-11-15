@@ -51,6 +51,12 @@ class TelegramLoginRequest(BaseModel):
     first_name: str | None = None
     last_name: str | None = None
     photo_url: str | None = None
+    client_id: str = Field(
+        ...,
+        description="Client application ID (e.g., 'android-app-v1.0', 'ios-app-v2.0')",
+        min_length=1,
+        max_length=100,
+    )
 
 
 class RefreshTokenRequest(BaseModel):
@@ -171,7 +177,9 @@ def verify_telegram_auth(
     return True
 
 
-def create_token(user_id: int, token_type: str, username: str | None = None) -> str:
+def create_token(
+    user_id: int, token_type: str, username: str | None = None, client_id: str | None = None
+) -> str:
     """
     Create JWT token (access or refresh).
 
@@ -179,6 +187,7 @@ def create_token(user_id: int, token_type: str, username: str | None = None) -> 
         user_id: User ID to encode in token
         token_type: "access" or "refresh"
         username: Optional username to include
+        client_id: Optional client application ID to include
 
     Returns:
         Encoded JWT token
@@ -188,6 +197,7 @@ def create_token(user_id: int, token_type: str, username: str | None = None) -> 
         payload = {
             "user_id": user_id,
             "username": username,
+            "client_id": client_id,
             "exp": expire,
             "type": "access",
             "iat": datetime.now(timezone.utc),
@@ -196,6 +206,7 @@ def create_token(user_id: int, token_type: str, username: str | None = None) -> 
         expire = datetime.now(timezone.utc) + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
         payload = {
             "user_id": user_id,
+            "client_id": client_id,
             "exp": expire,
             "type": "refresh",
             "iat": datetime.now(timezone.utc),
@@ -206,14 +217,77 @@ def create_token(user_id: int, token_type: str, username: str | None = None) -> 
     return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
 
 
-def create_access_token(user_id: int, username: str | None = None) -> str:
+def create_access_token(
+    user_id: int, username: str | None = None, client_id: str | None = None
+) -> str:
     """Create JWT access token."""
-    return create_token(user_id, "access", username)
+    return create_token(user_id, "access", username, client_id)
 
 
-def create_refresh_token(user_id: int) -> str:
+def create_refresh_token(user_id: int, client_id: str | None = None) -> str:
     """Create JWT refresh token."""
-    return create_token(user_id, "refresh")
+    return create_token(user_id, "refresh", client_id=client_id)
+
+
+def validate_client_id(client_id: str | None) -> bool:
+    """
+    Validate client_id against allowlist.
+
+    Args:
+        client_id: Client application ID to validate
+
+    Returns:
+        True if valid
+
+    Raises:
+        HTTPException: If client_id is invalid or not allowed
+    """
+    if not client_id:
+        raise HTTPException(
+            status_code=401,
+            detail="Client ID is required. Please update your app to the latest version.",
+        )
+
+    # Validate format
+    if not all(c.isalnum() or c in "-_." for c in client_id):
+        logger.warning(
+            f"Invalid client ID format: {client_id}",
+            extra={"client_id": client_id},
+        )
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid client ID format.",
+        )
+
+    if len(client_id) > 100:
+        logger.warning(
+            f"Client ID too long: {client_id}",
+            extra={"client_id": client_id, "length": len(client_id)},
+        )
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid client ID format.",
+        )
+
+    # Check against allowlist
+    allowed_client_ids = Config.get_allowed_client_ids()
+
+    # If allowlist is empty, allow all clients (backward compatible)
+    if not allowed_client_ids:
+        return True
+
+    # Otherwise, client must be in allowlist
+    if client_id not in allowed_client_ids:
+        logger.warning(
+            f"Client ID not in allowlist: {client_id}",
+            extra={"client_id": client_id, "allowed_ids": list(allowed_client_ids)},
+        )
+        raise HTTPException(
+            status_code=403,
+            detail="Client application not authorized. Please contact administrator.",
+        )
+
+    return True
 
 
 def decode_token(token: str) -> dict:
@@ -248,9 +322,14 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
     if user_id not in allowed_ids:
         raise HTTPException(status_code=403, detail="User not authorized")
 
+    # Validate client_id from token
+    client_id = payload.get("client_id")
+    validate_client_id(client_id)
+
     return {
         "user_id": user_id,
         "username": payload.get("username"),
+        "client_id": client_id,
     }
 
 
@@ -265,9 +344,13 @@ async def telegram_login(login_data: TelegramLoginRequest):
     - id: Telegram user ID
     - hash: HMAC-SHA256 hash of auth data
     - auth_date: Unix timestamp of authentication
+    - client_id: Client application ID
     - Optional: username, first_name, last_name, photo_url
     """
     try:
+        # Validate client_id FIRST (before any other processing)
+        validate_client_id(login_data.client_id)
+
         # Verify Telegram auth (will raise HTTPException if invalid)
         verify_telegram_auth(
             user_id=login_data.telegram_user_id,
@@ -294,13 +377,20 @@ async def telegram_login(login_data: TelegramLoginRequest):
                 extra={"user_id": user.telegram_user_id},
             )
 
-        # Generate tokens
-        access_token = create_access_token(user.telegram_user_id, user.username)
-        refresh_token = create_refresh_token(user.telegram_user_id)
+        # Generate tokens with client_id
+        access_token = create_access_token(
+            user.telegram_user_id, user.username, login_data.client_id
+        )
+        refresh_token = create_refresh_token(user.telegram_user_id, login_data.client_id)
 
         logger.info(
-            f"User {user.telegram_user_id} logged in successfully",
-            extra={"user_id": user.telegram_user_id, "username": user.username, "created": created},
+            f"User {user.telegram_user_id} logged in successfully from client {login_data.client_id}",
+            extra={
+                "user_id": user.telegram_user_id,
+                "username": user.username,
+                "client_id": login_data.client_id,
+                "created": created,
+            },
         )
 
         return {
@@ -314,7 +404,7 @@ async def telegram_login(login_data: TelegramLoginRequest):
         }
 
     except HTTPException:
-        # Re-raise HTTP exceptions from verify_telegram_auth
+        # Re-raise HTTP exceptions from verify_telegram_auth or validate_client_id
         raise
     except Exception as e:
         logger.error(f"Login failed for user {login_data.telegram_user_id}: {e}", exc_info=True)
@@ -335,13 +425,17 @@ async def refresh_access_token(refresh_data: RefreshTokenRequest):
     if not user_id:
         raise HTTPException(status_code=401, detail="Invalid token payload")
 
+    # Validate client_id from refresh token
+    client_id = payload.get("client_id")
+    validate_client_id(client_id)
+
     # Get user
     user = User.select().where(User.telegram_user_id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    # Generate new access token
-    access_token = create_access_token(user.telegram_user_id, user.username)
+    # Generate new access token with same client_id
+    access_token = create_access_token(user.telegram_user_id, user.username, client_id)
 
     return {
         "success": True,
@@ -362,6 +456,7 @@ async def get_current_user_info(user=Depends(get_current_user)):
         "data": {
             "user_id": user["user_id"],
             "username": user.get("username"),
+            "client_id": user.get("client_id"),
             "is_owner": user_record.is_owner if user_record else False,
             "created_at": user_record.created_at.isoformat() + "Z" if user_record else None,
         },
