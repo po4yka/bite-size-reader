@@ -61,11 +61,8 @@ def test_phase2():
         # Step 3: Create test user
         print("\n[3] Creating test user...")
         from app.db.models import User
-        user = User.create(
-            telegram_user_id=123456789,
-            username='testuser',
-            is_owner=True
-        )
+
+        user = User.create(telegram_user_id=123456789, username="testuser", is_owner=True)
         print("✓ Test user created")
 
         # Step 4: Test CHECK constraint for URL requests
@@ -106,22 +103,24 @@ def test_phase2():
 
         # Valid URL request
         url_request = Request.create(
-            type='url',
-            status='ok',
-            correlation_id='test-valid-url',
+            type="url",
+            status="ok",
+            correlation_id="test-valid-url",
             user_id=user.telegram_user_id,
-            normalized_url='https://example.com'
+            normalized_url="https://example.com",
         )
+        assert url_request.id is not None
 
         # Valid forward request
         fwd_request = Request.create(
-            type='forward',
-            status='ok',
-            correlation_id='test-valid-forward',
+            type="forward",
+            status="ok",
+            correlation_id="test-valid-forward",
             user_id=user.telegram_user_id,
             fwd_from_chat_id=-100123456789,
-            fwd_from_msg_id=999
+            fwd_from_msg_id=999,
         )
+        assert fwd_request.id is not None
 
         print("✓ Valid requests accepted")
 
@@ -129,18 +128,15 @@ def test_phase2():
         print("\n[7] Testing CASCADE DELETE for LLMCall.request...")
 
         cascade_request = Request.create(
-            type='url',
-            status='ok',
-            correlation_id='test-cascade',
+            type="url",
+            status="ok",
+            correlation_id="test-cascade",
             user_id=user.telegram_user_id,
-            normalized_url='https://cascade.com'
+            normalized_url="https://cascade.com",
         )
 
         cascade_llm = LLMCall.create(
-            request=cascade_request,
-            provider='openrouter',
-            model='gpt-4',
-            status='ok'
+            request=cascade_request, provider="openrouter", model="gpt-4", status="ok"
         )
 
         llm_id = cascade_llm.id
@@ -175,6 +171,6 @@ if __name__ == "__main__":
     try:
         success = test_phase2()
         sys.exit(0 if success else 1)
-    except Exception as e:
+    except Exception:
         logger.exception("Test failed with exception")
         sys.exit(1)

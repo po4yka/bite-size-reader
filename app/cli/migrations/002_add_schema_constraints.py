@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import logging
 
-import peewee
 
 from app.db.database import Database
 

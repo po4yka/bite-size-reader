@@ -10,7 +10,7 @@ from typing import Any
 
 import peewee
 
-from app.db.models import CrawlResult, LLMCall, Request, Summary, TelegramMessage
+from app.db.models import LLMCall, Request, Summary
 
 logger = logging.getLogger(__name__)
 
@@ -143,11 +143,7 @@ class BatchOperations:
         if not summary_ids:
             return 0
 
-        rows = (
-            Summary.update({Summary.is_read: True})
-            .where(Summary.id.in_(summary_ids))
-            .execute()
-        )
+        rows = Summary.update({Summary.is_read: True}).where(Summary.id.in_(summary_ids)).execute()
 
         logger.info(
             "summaries_batch_marked_read",
@@ -202,11 +198,7 @@ class BatchOperations:
         if not request_ids:
             return []
 
-        requests = list(
-            Request.select()
-            .where(Request.id.in_(request_ids))
-            .order_by(Request.id)
-        )
+        requests = list(Request.select().where(Request.id.in_(request_ids)).order_by(Request.id))
 
         logger.debug(
             "requests_batch_fetched",
@@ -234,9 +226,7 @@ class BatchOperations:
             return []
 
         summaries = list(
-            Summary.select()
-            .where(Summary.request.in_(request_ids))
-            .order_by(Summary.request)
+            Summary.select().where(Summary.request.in_(request_ids)).order_by(Summary.request)
         )
 
         logger.debug(

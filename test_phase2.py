@@ -43,7 +43,7 @@ def test_phase2_migration():
 
         # Only apply Phase 1 (001_add_performance_indexes)
         pending = runner.get_pending_migrations()
-        phase1_migration = [m for m in pending if '001_' in m.name]
+        phase1_migration = [m for m in pending if "001_" in m.name]
         if phase1_migration:
             runner.run_migration(phase1_migration[0])
         print("✓ Base schema and Phase 1 completed (Phase 2 not yet applied)")
@@ -55,27 +55,21 @@ def test_phase2_migration():
         from app.db.models import User, Request, LLMCall
 
         # Create a valid user and request using ORM (handles defaults)
-        user = User.create(
-            telegram_user_id=123456789,
-            username='testuser',
-            is_owner=True
-        )
+        user = User.create(telegram_user_id=123456789, username="testuser", is_owner=True)
 
         request = Request.create(
-            type='url',
-            status='ok',
-            correlation_id='test-corr-1',
+            type="url",
+            status="ok",
+            correlation_id="test-corr-1",
             user_id=user.telegram_user_id,
-            normalized_url='https://example.com'
+            normalized_url="https://example.com",
         )
 
         # Insert a valid LLM call using ORM
         llm_call = LLMCall.create(
-            request=request,
-            provider='openrouter',
-            model='gpt-4',
-            status='ok'
+            request=request, provider="openrouter", model="gpt-4", status="ok"
         )
+        assert llm_call.id is not None
 
         # Insert an orphaned LLM call (NULL request_id) using raw SQL
         db._database.execute_sql("""
@@ -91,7 +85,7 @@ def test_phase2_migration():
         # Step 3: Apply Phase 2 migration (002_add_schema_constraints)
         print("\n[3] Applying Phase 2 migration...")
         pending = runner.get_pending_migrations()
-        phase2_migration = [m for m in pending if '002_' in m.name]
+        phase2_migration = [m for m in pending if "002_" in m.name]
         if not phase2_migration:
             print("⚠ No Phase 2 migration found!")
             return False
@@ -174,7 +168,9 @@ def test_phase2_migration():
             VALUES ('forward', 'ok', 'test-valid-forward', 123456789, -100123456789, 999, datetime('now'))
         """)
 
-        result = db.fetchone("SELECT COUNT(*) FROM requests WHERE correlation_id LIKE 'test-valid-%'")
+        result = db.fetchone(
+            "SELECT COUNT(*) FROM requests WHERE correlation_id LIKE 'test-valid-%'"
+        )
         valid_count = result[0]
 
         if valid_count == 2:
@@ -237,6 +233,6 @@ if __name__ == "__main__":
     try:
         success = test_phase2_migration()
         sys.exit(0 if success else 1)
-    except Exception as e:
+    except Exception:
         logger.exception("Test failed with exception")
         sys.exit(1)

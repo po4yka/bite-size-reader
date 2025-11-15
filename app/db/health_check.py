@@ -69,9 +69,7 @@ class DatabaseHealthCheck:
                 errors.append(error_msg)
 
         # Calculate overall score
-        healthy_checks = sum(
-            1 for check in checks.values() if check.get("healthy", False)
-        )
+        healthy_checks = sum(1 for check in checks.values() if check.get("healthy", False))
         total_checks = len(checks)
         overall_score = healthy_checks / total_checks if total_checks > 0 else 0.0
 
@@ -190,6 +188,7 @@ class DatabaseHealthCheck:
 
             # Get available disk space
             import shutil
+
             stat = shutil.disk_usage(db_file.parent)
             free_space_mb = stat.free / (1024 * 1024)
 
@@ -247,22 +246,14 @@ class DatabaseHealthCheck:
 
             # Check for orphaned LLM calls (should be impossible with NOT NULL + CASCADE)
             with self.database.connection_context():
-                orphaned_llm_count = (
-                    LLMCall.select()
-                    .where(LLMCall.request.is_null())
-                    .count()
-                )
+                orphaned_llm_count = LLMCall.select().where(LLMCall.request.is_null()).count()
 
             if orphaned_llm_count > 0:
                 issues.append(f"{orphaned_llm_count} orphaned LLM calls")
 
             # Check for summaries without requests (should be impossible)
             with self.database.connection_context():
-                orphaned_summary_count = (
-                    Summary.select()
-                    .where(Summary.request.is_null())
-                    .count()
-                )
+                orphaned_summary_count = Summary.select().where(Summary.request.is_null()).count()
 
             if orphaned_summary_count > 0:
                 issues.append(f"{orphaned_summary_count} orphaned summaries")
@@ -321,9 +312,7 @@ class DatabaseHealthCheck:
                 if self.db_path != ":memory:":
                     db_file = Path(self.db_path)
                     if db_file.exists():
-                        stats["db_size_mb"] = round(
-                            db_file.stat().st_size / (1024 * 1024), 2
-                        )
+                        stats["db_size_mb"] = round(db_file.stat().st_size / (1024 * 1024), 2)
 
         except Exception as e:
             logger.error("db_stats_failed", extra={"error": str(e)})

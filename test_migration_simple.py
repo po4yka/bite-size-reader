@@ -109,6 +109,6 @@ if __name__ == "__main__":
     try:
         success = test_migration()
         sys.exit(0 if success else 1)
-    except Exception as e:
+    except Exception:
         logger.exception("Test failed with exception")
         sys.exit(1)

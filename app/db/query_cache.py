@@ -8,7 +8,8 @@ from __future__ import annotations
 
 import logging
 from functools import lru_cache, wraps
-from typing import Any, Callable, TypeVar
+from typing import Any, TypeVar
+from collections.abc import Callable
 
 logger = logging.getLogger(__name__)
 
@@ -51,6 +52,7 @@ class QueryCache:
             def get_request_by_id(self, request_id: int):
                 ...
         """
+
         def decorator(func: F) -> F:
             key = cache_key or func.__name__
 
@@ -82,6 +84,7 @@ class QueryCache:
             wrapper.cache_info = cached_func.cache_info  # type: ignore
 
             return wrapper  # type: ignore
+
         return decorator
 
     def invalidate(self, cache_key: str) -> None:
@@ -128,9 +131,7 @@ class QueryCache:
         return {
             **self.stats,
             "caches": cache_info,
-            "total_cached_items": sum(
-                info["size"] for info in cache_info.values()
-            ),
+            "total_cached_items": sum(info["size"] for info in cache_info.values()),
         }
 
     def reset_stats(self) -> None:

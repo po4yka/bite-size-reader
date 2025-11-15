@@ -83,8 +83,7 @@ def test_migration_framework():
         if missing:
             logger.error(f"✗ Missing indexes: {missing}")
             return False
-        else:
-            logger.info(f"✓ All critical indexes created")
+        logger.info("✓ All critical indexes created")
 
     # Test 7: Verify foreign key constraints enabled
     logger.info("\n[Test 7] Verifying foreign key constraints...")
@@ -105,6 +104,6 @@ if __name__ == "__main__":
     try:
         success = test_migration_framework()
         sys.exit(0 if success else 1)
-    except Exception as e:
+    except Exception:
         logger.exception("Test failed with exception")
         sys.exit(1)

@@ -70,8 +70,7 @@ def main() -> int:
 
         except ImportError:
             logger.warning(
-                "Migration runner not available. "
-                "Install with: pip install -r requirements.txt"
+                "Migration runner not available. Install with: pip install -r requirements.txt"
             )
         except Exception as e:
             logger.warning(f"Versioned migrations failed: {e}")

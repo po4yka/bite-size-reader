@@ -152,9 +152,7 @@ def upgrade(db: Database) -> None:
             logger.error(f"✗ Failed to create index {index_name}: {e}")
             raise
 
-    logger.info(
-        f"Index migration complete: {created_count} created, {skipped_count} skipped"
-    )
+    logger.info(f"Index migration complete: {created_count} created, {skipped_count} skipped")
 
 
 def downgrade(db: Database) -> None:

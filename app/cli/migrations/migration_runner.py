@@ -26,8 +26,10 @@ from __future__ import annotations
 import datetime as dt
 import importlib
 import logging
+import sys
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
+from collections.abc import Callable
 
 import peewee
 
@@ -124,7 +126,7 @@ class MigrationRunner:
                 return False, "Missing downgrade() function"
 
             # Verify function signatures
-            upgrade_fn = getattr(module, "upgrade")
+            upgrade_fn = module.upgrade
             if not callable(upgrade_fn):
                 return False, "upgrade is not callable"
 
@@ -150,9 +152,7 @@ class MigrationRunner:
         # Validate migration file
         is_valid, error_msg = self.validate_migration_file(migration_path)
         if not is_valid:
-            raise MigrationError(
-                f"Migration {migration_name} failed validation: {error_msg}"
-            )
+            raise MigrationError(f"Migration {migration_name} failed validation: {error_msg}")
 
         if dry_run:
             logger.info(f"[DRY RUN] Would run migration: {migration_name}")
@@ -165,7 +165,7 @@ class MigrationRunner:
         module = importlib.import_module(module_name)
 
         # Get upgrade function
-        upgrade_fn: Callable[[Database], None] = getattr(module, "upgrade")
+        upgrade_fn: Callable[[Database], None] = module.upgrade
 
         # Run migration in transaction
         try:
@@ -183,9 +183,7 @@ class MigrationRunner:
 
         except Exception as e:
             logger.exception(f"✗ Migration {migration_name} failed")
-            raise MigrationError(
-                f"Migration {migration_name} failed: {e}"
-            ) from e
+            raise MigrationError(f"Migration {migration_name} failed: {e}") from e
 
     def run_pending(self, dry_run: bool = False) -> int:
         """Run all pending migrations in order.
@@ -206,8 +204,7 @@ class MigrationRunner:
             return 0
 
         logger.info(
-            f"Found {len(pending)} pending migration(s): "
-            f"{', '.join(p.stem for p in pending)}"
+            f"Found {len(pending)} pending migration(s): {', '.join(p.stem for p in pending)}"
         )
 
         if dry_run:
@@ -238,9 +235,7 @@ class MigrationRunner:
             )
 
             if not history:
-                raise MigrationError(
-                    f"Migration {migration_name} has not been applied"
-                )
+                raise MigrationError(f"Migration {migration_name} has not been applied")
 
         logger.info(f"Rolling back migration: {migration_name}")
 
@@ -248,16 +243,14 @@ class MigrationRunner:
         migration_path = migrations_dir / f"{migration_name}.py"
 
         if not migration_path.exists():
-            raise MigrationError(
-                f"Migration file not found: {migration_path}"
-            )
+            raise MigrationError(f"Migration file not found: {migration_path}")
 
         # Import migration module
         module_name = f"app.cli.migrations.{migration_name}"
         module = importlib.import_module(module_name)
 
         # Get downgrade function
-        downgrade_fn: Callable[[Database], None] = getattr(module, "downgrade")
+        downgrade_fn: Callable[[Database], None] = module.downgrade
 
         # Run rollback in transaction
         try:
@@ -274,9 +267,7 @@ class MigrationRunner:
 
         except Exception as e:
             logger.exception(f"✗ Rollback of {migration_name} failed")
-            raise MigrationError(
-                f"Rollback of {migration_name} failed: {e}"
-            ) from e
+            raise MigrationError(f"Rollback of {migration_name} failed: {e}") from e
 
     def get_migration_status(self) -> dict[str, Any]:
         """Get status of all migrations.
@@ -307,9 +298,7 @@ class MigrationRunner:
 
             if is_applied:
                 with self.db._database.connection_context():
-                    history = MigrationHistory.get(
-                        MigrationHistory.migration_name == name
-                    )
+                    history = MigrationHistory.get(MigrationHistory.migration_name == name)
                     migration_info["applied_at"] = history.applied_at.isoformat()
 
             status["migrations"].append(migration_info)
@@ -349,7 +338,7 @@ def main() -> int:
     try:
         if command == "status":
             status = runner.get_migration_status()
-            print(f"\nMigration Status:")
+            print("\nMigration Status:")
             print(f"  Total: {status['total']}")
             print(f"  Applied: {status['applied']}")
             print(f"  Pending: {status['pending']}")
@@ -360,7 +349,7 @@ def main() -> int:
                 print(f"  {status_icon} {m['name']}{applied_at}")
             return 0
 
-        elif command == "pending":
+        if command == "pending":
             pending = runner.get_pending_migrations()
             if not pending:
                 print("No pending migrations")
@@ -370,7 +359,7 @@ def main() -> int:
                     print(f"  - {p.stem}")
             return 0
 
-        elif command == "run":
+        if command == "run":
             dry_run = "--dry-run" in sys.argv
             count = runner.run_pending(dry_run=dry_run)
             if dry_run:
@@ -379,7 +368,7 @@ def main() -> int:
                 print(f"Applied {count} migration(s)")
             return 0
 
-        elif command == "rollback":
+        if command == "rollback":
             if len(sys.argv) < 3:
                 print("Error: rollback requires migration name")
                 return 1
@@ -388,9 +377,8 @@ def main() -> int:
             print(f"Rolled back migration: {migration_name}")
             return 0
 
-        else:
-            print(f"Unknown command: {command}")
-            return 1
+        print(f"Unknown command: {command}")
+        return 1
 
     except MigrationError as e:
         logger.error(f"Migration error: {e}")

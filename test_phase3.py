@@ -47,22 +47,18 @@ def test_phase3() -> bool:
 
         # Step 2: Create test data
         print("\n[2] Creating test data...")
-        from app.db.models import User, Request, LLMCall, Summary
+        from app.db.models import User, Request, LLMCall
 
-        user = User.create(
-            telegram_user_id=123456789,
-            username='testuser',
-            is_owner=True
-        )
+        user = User.create(telegram_user_id=123456789, username="testuser", is_owner=True)
 
         requests = []
         for i in range(5):
             request = Request.create(
-                type='url',
-                status='ok',
-                correlation_id=f'test-{i}',
+                type="url",
+                status="ok",
+                correlation_id=f"test-{i}",
                 user_id=user.telegram_user_id,
-                normalized_url=f'https://example.com/{i}'
+                normalized_url=f"https://example.com/{i}",
             )
             requests.append(request)
 
@@ -193,11 +189,11 @@ def test_phase3() -> bool:
 
         # Get database stats
         stats = health.get_database_stats()
-        print(f"\nDatabase Stats:")
+        print("\nDatabase Stats:")
         print(f"  Requests: {stats.get('requests', 0)}")
         print(f"  Summaries: {stats.get('summaries', 0)}")
         print(f"  LLM Calls: {stats.get('llm_calls', 0)}")
-        if 'db_size_mb' in stats:
+        if "db_size_mb" in stats:
             print(f"  DB Size: {stats['db_size_mb']} MB")
 
         # Step 6: Test Batch Delete (CASCADE should work)
@@ -205,19 +201,17 @@ def test_phase3() -> bool:
 
         # Create a request with related records
         test_request = Request.create(
-            type='url',
-            status='ok',
-            correlation_id='test-cascade-delete',
+            type="url",
+            status="ok",
+            correlation_id="test-cascade-delete",
             user_id=user.telegram_user_id,
-            normalized_url='https://cascade-test.com'
+            normalized_url="https://cascade-test.com",
         )
 
         test_llm_call = LLMCall.create(
-            request=test_request,
-            provider='openrouter',
-            model='gpt-4',
-            status='ok'
+            request=test_request, provider="openrouter", model="gpt-4", status="ok"
         )
+        assert test_llm_call.id is not None
 
         # Count LLM calls before delete
         llm_count_before = LLMCall.select().count()
@@ -231,7 +225,7 @@ def test_phase3() -> bool:
         if deleted == 1 and llm_count_after == llm_count_before - 1:
             print("✓ Batch delete with CASCADE works")
         else:
-            print(f"✗ Batch delete CASCADE failed")
+            print("✗ Batch delete CASCADE failed")
             print(f"  Deleted requests: {deleted}")
             print(f"  LLM calls before: {llm_count_before}, after: {llm_count_after}")
             return False
@@ -256,6 +250,6 @@ if __name__ == "__main__":
     try:
         success = test_phase3()
         sys.exit(0 if success else 1)
-    except Exception as e:
+    except Exception:
         logger.exception("Test failed with exception")
         sys.exit(1)
