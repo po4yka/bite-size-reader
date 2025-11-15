@@ -11,8 +11,8 @@ from pathlib import Path
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent))
 
-from app.db.database import Database
 from app.cli.migrations.migration_runner import MigrationRunner
+from app.db.database import Database
 
 logging.basicConfig(
     level=logging.INFO,
@@ -52,7 +52,7 @@ def test_phase2_migration():
         print("\n[2] Inserting test data...")
 
         # Import models
-        from app.db.models import User, Request, LLMCall
+        from app.db.models import LLMCall, Request, User
 
         # Create a valid user and request using ORM (handles defaults)
         user = User.create(telegram_user_id=123456789, username="testuser", is_owner=True)

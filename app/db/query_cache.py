@@ -7,9 +7,9 @@ cache invalidation on writes.
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from functools import lru_cache, wraps
 from typing import Any, TypeVar
-from collections.abc import Callable
 
 logger = logging.getLogger(__name__)
 

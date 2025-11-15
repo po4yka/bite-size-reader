@@ -27,9 +27,9 @@ import datetime as dt
 import importlib
 import logging
 import sys
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
-from collections.abc import Callable
 
 import peewee
 

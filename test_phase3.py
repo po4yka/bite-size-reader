@@ -11,11 +11,11 @@ from pathlib import Path
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent))
 
-from app.db.database import Database
-from app.db.query_cache import QueryCache
-from app.db.batch_operations import BatchOperations
-from app.db.health_check import DatabaseHealthCheck
 from app.cli.migrations.migration_runner import MigrationRunner
+from app.db.batch_operations import BatchOperations
+from app.db.database import Database
+from app.db.health_check import DatabaseHealthCheck
+from app.db.query_cache import QueryCache
 
 logging.basicConfig(
     level=logging.WARNING,  # Reduce noise
@@ -47,7 +47,7 @@ def test_phase3() -> bool:
 
         # Step 2: Create test data
         print("\n[2] Creating test data...")
-        from app.db.models import User, Request, LLMCall
+        from app.db.models import LLMCall, Request, User
 
         user = User.create(telegram_user_id=123456789, username="testuser", is_owner=True)
 

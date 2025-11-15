@@ -11,8 +11,8 @@ from pathlib import Path
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent))
 
-from app.db.database import Database
 from app.cli.migrations.migration_runner import MigrationRunner
+from app.db.database import Database
 
 logging.basicConfig(
     level=logging.WARNING,  # Reduce noise
@@ -99,7 +99,7 @@ def test_phase2():
 
         # Step 6: Verify valid requests still work
         print("\n[6] Testing valid requests...")
-        from app.db.models import Request, LLMCall
+        from app.db.models import LLMCall, Request
 
         # Valid URL request
         url_request = Request.create(
