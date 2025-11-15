@@ -96,8 +96,9 @@ def test_safe_update_user_interaction_updates_interaction(tmp_path) -> None:
     db = _make_db(tmp_path)
 
     # Create a request first (required for foreign key constraint)
-    request_id = db.insert_request(
-        type="url",
+    request_id = db.create_request(
+        type_="url",
+        status="ok",
         correlation_id="test-corr-id",
         user_id=7,
         chat_id=11,
@@ -144,8 +145,9 @@ def test_async_safe_update_user_interaction_updates_interaction(tmp_path) -> Non
     db = _make_db(tmp_path)
 
     # Create a request first (required for foreign key constraint)
-    request_id = db.insert_request(
-        type="url",
+    request_id = db.create_request(
+        type_="url",
+        status="ok",
         correlation_id="test-async-corr-id",
         user_id=13,
         chat_id=44,
