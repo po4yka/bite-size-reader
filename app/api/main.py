@@ -9,12 +9,21 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from datetime import datetime, timezone
+from pydantic import ValidationError as PydanticValidationError
 import logging
+import peewee
 
 from app.config import Config
 from app.api.routers import summaries, requests, search, sync, auth, user
 from app.api.middleware import correlation_id_middleware, rate_limit_middleware
 from app.api.models.responses import ErrorResponse
+from app.api.exceptions import APIException
+from app.api.error_handlers import (
+    api_exception_handler,
+    validation_exception_handler,
+    database_exception_handler,
+    global_exception_handler as global_error_handler,
+)
 from app.core.logging_utils import get_logger
 
 logger = get_logger(__name__)
@@ -97,25 +106,12 @@ async def health_check():
     }
 
 
-@app.exception_handler(Exception)
-async def global_exception_handler(request: Request, exc: Exception):
-    """Global exception handler."""
-    logger.error(f"Unhandled exception: {exc}", exc_info=True)
-
-    correlation_id = getattr(request.state, "correlation_id", None)
-
-    return JSONResponse(
-        status_code=500,
-        content={
-            "success": False,
-            "error": {
-                "code": "INTERNAL_ERROR",
-                "message": "An internal server error occurred",
-                "correlation_id": correlation_id,
-                "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
-            },
-        },
-    )
+# Register exception handlers
+app.add_exception_handler(APIException, api_exception_handler)
+app.add_exception_handler(PydanticValidationError, validation_exception_handler)
+app.add_exception_handler(peewee.DatabaseError, database_exception_handler)
+app.add_exception_handler(peewee.OperationalError, database_exception_handler)
+app.add_exception_handler(Exception, global_error_handler)
 
 
 if __name__ == "__main__":

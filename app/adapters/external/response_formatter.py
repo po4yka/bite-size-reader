@@ -9,7 +9,7 @@ import math
 import re
 import unicodedata
 from collections.abc import Awaitable, Callable, Sequence
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 from app.utils.retry_utils import retry_telegram_operation
@@ -1468,7 +1468,7 @@ class ResponseFormatter:
                 base = self._slugify("-".join(words))
         if not base:
             base = "summary"
-        timestamp = datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
+        timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
         return f"{base}-{timestamp}.json"
 
     def _format_bytes(self, size: int) -> str:

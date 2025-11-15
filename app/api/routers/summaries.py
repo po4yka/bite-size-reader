@@ -274,6 +274,6 @@ async def delete_summary(
         "success": True,
         "data": {
             "id": summary.id,
-            "deleted_at": datetime.utcnow().isoformat() + "Z",
+            "deleted_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         },
     }

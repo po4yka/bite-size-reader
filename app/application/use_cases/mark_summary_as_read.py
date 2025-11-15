@@ -9,7 +9,7 @@ This use case demonstrates the hexagonal architecture pattern by:
 
 import logging
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 
 from app.domain.events.summary_events import SummaryMarkedAsRead
 from app.domain.exceptions.domain_exceptions import (
@@ -134,7 +134,7 @@ class MarkSummaryAsReadUseCase:
 
         # 6. Create and return domain event
         event = SummaryMarkedAsRead(
-            occurred_at=datetime.utcnow(),
+            occurred_at=datetime.now(timezone.utc),
             aggregate_id=command.summary_id,
             summary_id=command.summary_id,
         )

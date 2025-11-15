@@ -4,13 +4,15 @@ Pydantic models for API responses.
 
 from typing import Any, Optional, Dict, List
 from pydantic import BaseModel, Field
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 class MetaInfo(BaseModel):
     """Metadata for all API responses."""
 
-    timestamp: str = Field(default_factory=lambda: datetime.utcnow().isoformat() + "Z")
+    timestamp: str = Field(
+        default_factory=lambda: datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    )
     version: str = "1.0"
 
 
@@ -21,7 +23,9 @@ class ErrorDetail(BaseModel):
     message: str
     details: Optional[Dict[str, Any]] = None
     correlation_id: Optional[str] = None
-    timestamp: str = Field(default_factory=lambda: datetime.utcnow().isoformat() + "Z")
+    timestamp: str = Field(
+        default_factory=lambda: datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    )
 
 
 class SuccessResponse(BaseModel):

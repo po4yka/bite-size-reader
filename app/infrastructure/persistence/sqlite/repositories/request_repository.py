@@ -3,6 +3,7 @@
 This adapter translates between domain Request models and database records.
 """
 
+from datetime import datetime, timezone
 from typing import Any
 
 from app.domain.models.request import Request, RequestStatus, RequestType
@@ -116,7 +117,7 @@ class SqliteRequestRepositoryAdapter:
             lang_detected=db_request.get("lang_detected"),
             content_text=db_request.get("content_text"),
             route_version=db_request.get("route_version", 1),
-            created_at=db_request.get("created_at", datetime.utcnow()),
+            created_at=db_request.get("created_at", datetime.now(timezone.utc)),
         )
 
     def from_domain_model(self, request: Request) -> dict[str, Any]:

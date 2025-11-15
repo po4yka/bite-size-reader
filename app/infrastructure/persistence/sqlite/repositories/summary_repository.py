@@ -3,6 +3,7 @@
 This adapter translates between domain Summary models and database records.
 """
 
+from datetime import datetime, timezone
 from typing import Any
 
 from app.domain.models.summary import Summary
@@ -107,7 +108,7 @@ class SqliteSummaryRepositoryAdapter:
             version=db_summary.get("version", 1),
             is_read=db_summary.get("is_read", False),
             insights=db_summary.get("insights_json"),
-            created_at=db_summary.get("created_at", datetime.utcnow()),
+            created_at=db_summary.get("created_at", datetime.now(timezone.utc)),
         )
 
     def from_domain_model(self, summary: Summary) -> dict[str, Any]:
