@@ -95,6 +95,15 @@ def test_message_router_logs_interaction(tmp_path) -> None:
 def test_safe_update_user_interaction_updates_interaction(tmp_path) -> None:
     db = _make_db(tmp_path)
 
+    # Create a request first (required for foreign key constraint)
+    request_id = db.insert_request(
+        type="url",
+        correlation_id="test-corr-id",
+        user_id=7,
+        chat_id=11,
+        normalized_url="https://example.com",
+    )
+
     interaction_id = db.insert_user_interaction(
         user_id=7,
         interaction_type="command",
@@ -113,7 +122,7 @@ def test_safe_update_user_interaction_updates_interaction(tmp_path) -> None:
         error_occurred=True,
         error_message="boom",
         processing_time_ms=1234,
-        request_id=88,
+        request_id=request_id,
     )
 
     row = db.fetchone(
@@ -128,11 +137,20 @@ def test_safe_update_user_interaction_updates_interaction(tmp_path) -> None:
     assert row["error_occurred"] == 1
     assert row["error_message"] == "boom"
     assert row["processing_time_ms"] == 1234
-    assert row["request_id"] == 88
+    assert row["request_id"] == request_id
 
 
 def test_async_safe_update_user_interaction_updates_interaction(tmp_path) -> None:
     db = _make_db(tmp_path)
+
+    # Create a request first (required for foreign key constraint)
+    request_id = db.insert_request(
+        type="url",
+        correlation_id="test-async-corr-id",
+        user_id=13,
+        chat_id=44,
+        normalized_url="https://example.org",
+    )
 
     interaction_id = db.insert_user_interaction(
         user_id=13,
@@ -152,7 +170,7 @@ def test_async_safe_update_user_interaction_updates_interaction(tmp_path) -> Non
             response_type="summary",
             error_occurred=False,
             error_message=None,
-            request_id=99,
+            request_id=request_id,
         )
     )
 
@@ -167,4 +185,4 @@ def test_async_safe_update_user_interaction_updates_interaction(tmp_path) -> Non
     assert row["response_type"] == "summary"
     assert row["error_occurred"] == 0
     assert row["error_message"] is None
-    assert row["request_id"] == 99
+    assert row["request_id"] == request_id
