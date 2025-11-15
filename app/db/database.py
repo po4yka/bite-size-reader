@@ -81,6 +81,7 @@ class Database:
             pragmas={
                 "journal_mode": "wal",
                 "synchronous": "normal",
+                "foreign_keys": 1,  # Enforce foreign key constraints
             },
             check_same_thread=False,  # Still needed for asyncio.to_thread() but protected by lock
         )

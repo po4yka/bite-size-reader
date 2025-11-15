@@ -68,9 +68,9 @@ class MigrationRunner:
         # Bind MigrationHistory to the database proxy
         MigrationHistory._meta.database = self.db._database
 
-        with self.db._database.connection_context():
-            self.db._database.create_tables([MigrationHistory], safe=True)
-            logger.debug("Migration history table ensured")
+        # Create table outside of transaction to ensure it persists
+        self.db._database.create_tables([MigrationHistory], safe=True)
+        logger.debug("Migration history table ensured")
 
     def get_applied_migrations(self) -> set[str]:
         """Get set of applied migration names.
@@ -78,8 +78,7 @@ class MigrationRunner:
         Returns:
             Set of migration names that have been applied
         """
-        with self.db._database.connection_context():
-            return {m.migration_name for m in MigrationHistory.select()}
+        return {m.migration_name for m in MigrationHistory.select()}
 
     def get_pending_migrations(self) -> list[Path]:
         """Get list of pending migration files in order.

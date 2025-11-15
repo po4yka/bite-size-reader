@@ -93,11 +93,11 @@ def upgrade(db: Database) -> None:
             ["provider", "model", "created_at"],
             "Speed up provider-specific queries",
         ),
-        # CrawlResult table indexes
+        # CrawlResult table indexes (no timestamp column)
         (
             "crawl_results",
             "idx_crawl_results_status",
-            ["status", "created_at"],
+            ["status"],
             "Speed up Firecrawl error monitoring",
         ),
         (
@@ -124,34 +124,33 @@ def upgrade(db: Database) -> None:
     created_count = 0
     skipped_count = 0
 
-    with db._database.connection_context():
-        for table, index_name, columns, description in indexes:
-            try:
-                # Check if table exists
-                if table not in db._database.get_tables():
-                    logger.warning(f"Table {table} does not exist, skipping index {index_name}")
-                    skipped_count += 1
-                    continue
+    for table, index_name, columns, description in indexes:
+        try:
+            # Check if table exists
+            if table not in db._database.get_tables():
+                logger.warning(f"Table {table} does not exist, skipping index {index_name}")
+                skipped_count += 1
+                continue
 
-                # Check if index already exists
-                existing_indexes = db._database.get_indexes(table)
-                if any(idx.name == index_name for idx in existing_indexes):
-                    logger.info(f"Index {index_name} already exists, skipping")
-                    skipped_count += 1
-                    continue
+            # Check if index already exists
+            existing_indexes = db._database.get_indexes(table)
+            if any(idx.name == index_name for idx in existing_indexes):
+                logger.info(f"Index {index_name} already exists, skipping")
+                skipped_count += 1
+                continue
 
-                # Create index
-                cols = ", ".join(columns)
-                sql = f"CREATE INDEX IF NOT EXISTS {index_name} ON {table}({cols})"
-                db._database.execute_sql(sql)
+            # Create index
+            cols = ", ".join(columns)
+            sql = f"CREATE INDEX IF NOT EXISTS {index_name} ON {table}({cols})"
+            db._database.execute_sql(sql)
 
-                logger.info(f"✓ Created index {index_name} on {table}({cols})")
-                logger.debug(f"  Purpose: {description}")
-                created_count += 1
+            logger.info(f"✓ Created index {index_name} on {table}({cols})")
+            logger.debug(f"  Purpose: {description}")
+            created_count += 1
 
-            except peewee.DatabaseError as e:
-                logger.error(f"✗ Failed to create index {index_name}: {e}")
-                raise
+        except peewee.DatabaseError as e:
+            logger.error(f"✗ Failed to create index {index_name}: {e}")
+            raise
 
     logger.info(
         f"Index migration complete: {created_count} created, {skipped_count} skipped"
@@ -180,13 +179,12 @@ def downgrade(db: Database) -> None:
 
     dropped_count = 0
 
-    with db._database.connection_context():
-        for index_name in indexes:
-            try:
-                db._database.execute_sql(f"DROP INDEX IF EXISTS {index_name}")
-                logger.info(f"✓ Dropped index {index_name}")
-                dropped_count += 1
-            except peewee.DatabaseError as e:
-                logger.warning(f"✗ Failed to drop index {index_name}: {e}")
+    for index_name in indexes:
+        try:
+            db._database.execute_sql(f"DROP INDEX IF EXISTS {index_name}")
+            logger.info(f"✓ Dropped index {index_name}")
+            dropped_count += 1
+        except peewee.DatabaseError as e:
+            logger.warning(f"✗ Failed to drop index {index_name}: {e}")
 
     logger.info(f"Index rollback complete: {dropped_count} dropped")
