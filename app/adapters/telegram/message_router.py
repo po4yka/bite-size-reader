@@ -340,7 +340,6 @@ class MessageRouter:
         start_time: float,
     ) -> None:
         """Route message to appropriate handler based on content."""
-        # Commands
         if text.startswith("/start"):
             await self.command_processor.handle_start_command(
                 message, uid, correlation_id, interaction_id, start_time

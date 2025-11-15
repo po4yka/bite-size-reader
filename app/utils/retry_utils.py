@@ -124,7 +124,6 @@ async def retry_with_backoff(
                 )
             return result, True
         except Exception as e:
-            # Check if this is the last attempt
             if attempt >= max_retries:
                 logger.warning(
                     "retry_exhausted",
@@ -136,7 +135,6 @@ async def retry_with_backoff(
                 )
                 return None, False
 
-            # Check if error is transient
             if not is_transient_error(e):
                 logger.debug(
                     "non_transient_error_no_retry",
@@ -148,7 +146,6 @@ async def retry_with_backoff(
                 )
                 return None, False
 
-            # Calculate delay for next attempt
             actual_delay = min(delay, max_delay)
 
             logger.debug(
@@ -162,7 +159,6 @@ async def retry_with_backoff(
                 },
             )
 
-            # Wait before retrying
             await asyncio.sleep(actual_delay)
 
             # Increase delay for next attempt (exponential backoff)
