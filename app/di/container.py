@@ -101,8 +101,6 @@ class Container:
         self._search_topics_use_case: SearchTopicsUseCase | None = None
         self._summarize_url_use_case: SummarizeUrlUseCase | None = None
 
-    # ==================== Infrastructure Layer ====================
-
     def event_bus(self) -> EventBus:
         """Get or create the event bus.
 
@@ -147,8 +145,6 @@ class Container:
             self._crawl_result_repo = SqliteCrawlResultRepositoryAdapter(self._database)
         return self._crawl_result_repo
 
-    # ==================== Domain Layer ====================
-
     def summary_validator(self) -> SummaryValidator:
         """Get or create the summary validator.
 
@@ -159,8 +155,6 @@ class Container:
         if self._summary_validator is None:
             self._summary_validator = SummaryValidator()
         return self._summary_validator
-
-    # ==================== Application Layer (Use Cases) ====================
 
     def get_unread_summaries_use_case(self) -> GetUnreadSummariesUseCase:
         """Get or create the GetUnreadSummariesUseCase.
@@ -237,8 +231,6 @@ class Container:
                 summary_validator=self.summary_validator(),
             )
         return self._summarize_url_use_case
-
-    # ==================== Helper Methods ====================
 
     def wire_event_handlers_auto(self) -> None:
         """Wire up event handlers to the event bus automatically.

@@ -63,7 +63,6 @@ class UserRateLimiter:
         async with self._lock:
             now = time.time()
 
-            # Check if user is in cooldown period
             if user_id in self._user_cooldowns:
                 cooldown_until = self._user_cooldowns[user_id]
                 if now < cooldown_until:
@@ -83,10 +82,8 @@ class UserRateLimiter:
                 # Cooldown expired, remove it
                 del self._user_cooldowns[user_id]
 
-            # Get user's request queue
             user_queue = self._user_requests[user_id]
 
-            # Remove old requests outside the window
             cutoff_time = now - self._config.window_seconds
             while user_queue and user_queue[0] < cutoff_time:
                 user_queue.popleft()
@@ -94,7 +91,6 @@ class UserRateLimiter:
             # Calculate current load (accounting for cost)
             current_load = len(user_queue) + cost
 
-            # Check rate limit
             if current_load > self._config.max_requests:
                 # Calculate when the oldest request will expire
                 if user_queue:
@@ -103,7 +99,6 @@ class UserRateLimiter:
                 else:
                     retry_after = self._config.window_seconds
 
-                # Apply cooldown
                 cooldown_duration = self._config.window_seconds * self._config.cooldown_multiplier
                 self._user_cooldowns[user_id] = now + cooldown_duration
 
@@ -127,7 +122,6 @@ class UserRateLimiter:
                     f"Cooldown active for {int(cooldown_duration)} seconds.",
                 )
 
-            # Check concurrent operations limit
             concurrent_count = self._user_concurrent.get(user_id, 0)
             if concurrent_count >= self._config.max_concurrent:
                 logger.warning(
@@ -223,7 +217,6 @@ class UserRateLimiter:
             now = time.time()
             user_queue = self._user_requests[user_id]
 
-            # Clean old requests
             cutoff_time = now - self._config.window_seconds
             while user_queue and user_queue[0] < cutoff_time:
                 user_queue.popleft()

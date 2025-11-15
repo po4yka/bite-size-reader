@@ -69,7 +69,6 @@ class ContentChunker:
             # Other generous defaults for known large-context families
             # No other families used in this deployment
 
-            # fallback
             return int(base_default)
         except Exception as exc:
             raise_if_cancelled(exc)

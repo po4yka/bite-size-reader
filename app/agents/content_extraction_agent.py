@@ -74,11 +74,9 @@ class ContentExtractionAgent(BaseAgent[ExtractionInput, ExtractionOutput]):
         self.log_info(f"Starting content extraction for URL: {input_data.url}")
 
         try:
-            # Normalize URL
             normalized_url = normalize_url(input_data.url)
             self.log_info(f"Normalized URL: {normalized_url}")
 
-            # Extract content using existing component
             # Note: The ContentExtractor.extract() method handles:
             # - Firecrawl API calls
             # - Database persistence
@@ -95,12 +93,10 @@ class ContentExtractionAgent(BaseAgent[ExtractionInput, ExtractionOutput]):
                     url=input_data.url,
                 )
 
-            # Validate extracted content
             validation_error = self._validate_content(result)
             if validation_error:
                 self.log_warning(f"Content validation warning: {validation_error}")
 
-            # Build output
             output = ExtractionOutput(
                 content_markdown=result.get("content_markdown", ""),
                 content_html=result.get("content_html"),
@@ -149,7 +145,6 @@ class ContentExtractionAgent(BaseAgent[ExtractionInput, ExtractionOutput]):
         # Compute dedupe hash to check for existing crawl
         dedupe_hash = url_hash_sha256(url)
 
-        # Check for existing request with this URL
         existing_req = await self.db.async_get_request_by_dedupe_hash(dedupe_hash)
         if not existing_req:
             # Fallback to sync method if async not available
@@ -158,7 +153,6 @@ class ContentExtractionAgent(BaseAgent[ExtractionInput, ExtractionOutput]):
         if existing_req:
             req_id = existing_req["id"]
 
-            # Get crawl result for this request
             crawl_result = await self.db.async_get_crawl_result_by_request(req_id)
             if not crawl_result:
                 # Fallback to sync method
@@ -166,7 +160,6 @@ class ContentExtractionAgent(BaseAgent[ExtractionInput, ExtractionOutput]):
 
             if crawl_result:
                 self.log_info(f"Found existing crawl result (ID: {crawl_result.get('id')})")
-                # Return existing crawl result
                 return {
                     "content_markdown": crawl_result.get("content_markdown", ""),
                     "content_html": crawl_result.get("content_html"),
@@ -222,11 +215,9 @@ class ContentExtractionAgent(BaseAgent[ExtractionInput, ExtractionOutput]):
         """
         content = result.get("content_markdown", "")
 
-        # Check minimum content length
         if len(content) < 100:
             return "Content too short (< 100 chars) - may be extraction failure"
 
-        # Check for error indicators in content
         error_indicators = [
             "access denied",
             "404 not found",

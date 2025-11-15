@@ -94,19 +94,16 @@ class SecureFileValidator:
             msg = f"Cannot resolve file path: {e}"
             raise FileValidationError(msg) from e
 
-        # Check if path is a symlink (security risk)
         if path.is_symlink():
             msg = f"Symbolic links are not allowed: {file_path}"
             raise FileValidationError(
                 msg,
             )
 
-        # Verify file exists and is a regular file
         if not resolved_path.is_file():
             msg = f"Path is not a regular file: {file_path}"
             raise FileValidationError(msg)
 
-        # Check if file is within allowed directories
         is_in_allowed_dir = False
         for allowed_dir in self._allowed_dirs:
             try:
@@ -134,7 +131,6 @@ class SecureFileValidator:
             )
             raise FileValidationError(msg)
 
-        # Check file size
         try:
             file_size = resolved_path.stat().st_size
             if file_size > self._max_file_size:
@@ -150,7 +146,6 @@ class SecureFileValidator:
             msg = f"Cannot read file size: {e}"
             raise FileValidationError(msg) from e
 
-        # Check file permissions (readable)
         if not os.access(resolved_path, os.R_OK):
             msg = f"File is not readable: {file_path}"
             raise FileValidationError(msg)

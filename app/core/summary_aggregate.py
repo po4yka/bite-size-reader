@@ -92,7 +92,6 @@ def aggregate_chunk_summaries(summaries: list[dict[str, Any]]) -> dict[str, Any]
             },
         }
 
-    # Collect
     s250_parts: list[str] = []
     s1000_parts: list[str] = []
     tldr_parts: list[str] = []
@@ -168,7 +167,6 @@ def aggregate_chunk_summaries(summaries: list[dict[str, Any]]) -> dict[str, Any]
         except Exception:
             continue
 
-    # Build final
     s250_joined = "; ".join(_dedupe_list(s250_parts))
     s1000_joined = "\n".join(_dedupe_list(s1000_parts))
     tldr_joined = "\n".join(_dedupe_list(tldr_parts))

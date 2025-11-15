@@ -284,7 +284,6 @@ class SummarizeUrlUseCase:
             input_message_id=command.input_message_id,
         )
 
-        # Persist
         # Note: In full implementation, we'd use from_domain_model
         # For now, direct call to repository
         request_id = await self._request_repo.async_create_request(
