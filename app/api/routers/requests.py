@@ -4,7 +4,7 @@ Request submission and status endpoints.
 
 from fastapi import APIRouter, Depends, HTTPException
 from typing import Union
-from datetime import datetime
+from datetime import datetime, timezone
 
 from app.api.auth import get_current_user
 from app.api.models.requests import SubmitURLRequest, SubmitForwardRequest
@@ -125,10 +125,15 @@ async def get_request(
     user=Depends(get_current_user),
 ):
     """Get details about a specific request."""
-    request = RequestModel.select().where(RequestModel.id == request_id).first()
+    # Query with authorization check
+    request = (
+        RequestModel.select()
+        .where((RequestModel.id == request_id) & (RequestModel.user_id == user["user_id"]))
+        .first()
+    )
 
     if not request:
-        raise HTTPException(status_code=404, detail="Request not found")
+        raise HTTPException(status_code=404, detail="Request not found or access denied")
 
     # Get related records
     crawl_result = CrawlResult.select().where(CrawlResult.request == request).first()
@@ -187,10 +192,15 @@ async def get_request_status(
     user=Depends(get_current_user),
 ):
     """Poll for real-time processing status."""
-    request = RequestModel.select().where(RequestModel.id == request_id).first()
+    # Query with authorization check
+    request = (
+        RequestModel.select()
+        .where((RequestModel.id == request_id) & (RequestModel.user_id == user["user_id"]))
+        .first()
+    )
 
     if not request:
-        raise HTTPException(status_code=404, detail="Request not found")
+        raise HTTPException(status_code=404, detail="Request not found or access denied")
 
     # Determine stage based on status and related records
     stage = None
@@ -220,7 +230,7 @@ async def get_request_status(
             "stage": stage,
             "progress": progress,
             "estimated_seconds_remaining": 8 if request.status == "processing" else None,
-            "updated_at": datetime.utcnow().isoformat() + "Z",
+            "updated_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         },
     }
 
@@ -231,10 +241,15 @@ async def retry_request(
     user=Depends(get_current_user),
 ):
     """Retry a failed request."""
-    original_request = RequestModel.select().where(RequestModel.id == request_id).first()
+    # Query with authorization check
+    original_request = (
+        RequestModel.select()
+        .where((RequestModel.id == request_id) & (RequestModel.user_id == user["user_id"]))
+        .first()
+    )
 
     if not original_request:
-        raise HTTPException(status_code=404, detail="Request not found")
+        raise HTTPException(status_code=404, detail="Request not found or access denied")
 
     if original_request.status != "error":
         raise HTTPException(status_code=400, detail="Only failed requests can be retried")

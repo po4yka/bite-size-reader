@@ -4,11 +4,12 @@ Authentication endpoints and utilities.
 
 from fastapi import APIRouter, HTTPException, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from pydantic import BaseModel
-from datetime import datetime, timedelta
+from pydantic import BaseModel, Field
+from datetime import datetime, timedelta, timezone
 import jwt
 import hashlib
 import hmac
+import time
 
 from app.config import Config
 from app.db.models import User
@@ -19,19 +20,38 @@ router = APIRouter()
 security = HTTPBearer()
 
 # JWT configuration
-SECRET_KEY = Config.get("JWT_SECRET_KEY", "your-secret-key-change-in-production")
+SECRET_KEY = Config.get("JWT_SECRET_KEY")
+if not SECRET_KEY or SECRET_KEY == "your-secret-key-change-in-production":
+    raise RuntimeError(
+        "JWT_SECRET_KEY environment variable must be set to a secure random value. "
+        "Generate one with: openssl rand -hex 32"
+    )
+
+if len(SECRET_KEY) < 32:
+    raise RuntimeError(
+        f"JWT_SECRET_KEY must be at least 32 characters long. Current length: {len(SECRET_KEY)}"
+    )
+
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60
 REFRESH_TOKEN_EXPIRE_DAYS = 30
+
+logger.info("JWT authentication initialized with secure secret")
 
 
 class TelegramLoginRequest(BaseModel):
     """Request body for Telegram login."""
 
-    telegram_user_id: int
-    auth_hash: str
-    timestamp: int
-    username: str = None
+    telegram_user_id: int = Field(..., alias="id")
+    auth_hash: str = Field(..., alias="hash")
+    auth_date: int
+    username: str | None = None
+    first_name: str | None = None
+    last_name: str | None = None
+    photo_url: str | None = None
+
+    class Config:
+        populate_by_name = True
 
 
 class RefreshTokenRequest(BaseModel):
@@ -40,41 +60,161 @@ class RefreshTokenRequest(BaseModel):
     refresh_token: str
 
 
-def verify_telegram_auth(user_id: int, auth_hash: str, timestamp: int) -> bool:
+def verify_telegram_auth(
+    user_id: int,
+    auth_hash: str,
+    auth_date: int,
+    username: str | None = None,
+    first_name: str | None = None,
+    last_name: str | None = None,
+    photo_url: str | None = None,
+) -> bool:
     """
     Verify Telegram authentication hash.
 
-    In production, this should verify against Telegram's auth data:
+    Implements the verification algorithm from:
     https://core.telegram.org/widgets/login#checking-authorization
+
+    Args:
+        user_id: Telegram user ID
+        auth_hash: Authentication hash from Telegram
+        auth_date: Timestamp when auth was created
+        username: Optional Telegram username
+        first_name: Optional first name
+        last_name: Optional last name
+        photo_url: Optional profile photo URL
+
+    Returns:
+        True if authentication is valid
+
+    Raises:
+        HTTPException: If authentication fails
     """
-    # TODO: Implement proper Telegram auth verification
-    # For now, just check if user is in whitelist
+    # Check timestamp freshness (15 minute window)
+    current_time = int(time.time())
+    age_seconds = current_time - auth_date
 
+    if age_seconds > 900:  # 15 minutes
+        logger.warning(
+            f"Telegram auth expired for user {user_id}. Age: {age_seconds}s",
+            extra={"user_id": user_id, "age_seconds": age_seconds},
+        )
+        raise HTTPException(
+            status_code=401,
+            detail=f"Authentication expired ({age_seconds} seconds old). Please log in again.",
+        )
+
+    if age_seconds < -60:  # Allow 1 minute clock skew
+        logger.warning(
+            f"Telegram auth timestamp in future for user {user_id}. Skew: {-age_seconds}s",
+            extra={"user_id": user_id, "skew_seconds": -age_seconds},
+        )
+        raise HTTPException(
+            status_code=401, detail="Authentication timestamp is in the future. Check device clock."
+        )
+
+    # Build data check string according to Telegram spec
+    data_check_arr = [f"auth_date={auth_date}", f"id={user_id}"]
+
+    if first_name:
+        data_check_arr.append(f"first_name={first_name}")
+    if last_name:
+        data_check_arr.append(f"last_name={last_name}")
+    if photo_url:
+        data_check_arr.append(f"photo_url={photo_url}")
+    if username:
+        data_check_arr.append(f"username={username}")
+
+    # Sort alphabetically (required by Telegram)
+    data_check_arr.sort()
+    data_check_string = "\n".join(data_check_arr)
+
+    # Get bot token
+    bot_token = Config.get("BOT_TOKEN")
+    if not bot_token:
+        logger.error("BOT_TOKEN not configured - cannot verify Telegram auth")
+        raise RuntimeError("BOT_TOKEN not configured")
+
+    # Compute secret key: SHA256(bot_token)
+    secret_key = hashlib.sha256(bot_token.encode()).digest()
+
+    # Compute HMAC-SHA256
+    computed_hash = hmac.new(secret_key, data_check_string.encode(), hashlib.sha256).hexdigest()
+
+    # Verify hash matches using constant-time comparison
+    if not hmac.compare_digest(computed_hash, auth_hash):
+        logger.warning(
+            f"Invalid Telegram auth hash for user {user_id}",
+            extra={"user_id": user_id, "username": username},
+        )
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid authentication hash. Please try logging in again.",
+        )
+
+    # Verify user is in whitelist
     allowed_ids = Config.get_allowed_user_ids()
-    return user_id in allowed_ids
+    if user_id not in allowed_ids:
+        logger.warning(
+            f"User {user_id} not in whitelist",
+            extra={"user_id": user_id, "username": username},
+        )
+        raise HTTPException(
+            status_code=403,
+            detail="User not authorized. Contact administrator to request access.",
+        )
+
+    logger.info(
+        f"Telegram auth verified for user {user_id}",
+        extra={"user_id": user_id, "username": username},
+    )
+
+    return True
 
 
-def create_access_token(user_id: int, username: str = None) -> str:
-    """Create JWT access token."""
-    expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    payload = {
-        "user_id": user_id,
-        "username": username,
-        "exp": expire,
-        "type": "access",
-    }
+def create_token(user_id: int, token_type: str, username: str | None = None) -> str:
+    """
+    Create JWT token (access or refresh).
+
+    Args:
+        user_id: User ID to encode in token
+        token_type: "access" or "refresh"
+        username: Optional username to include
+
+    Returns:
+        Encoded JWT token
+    """
+    if token_type == "access":
+        expire = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+        payload = {
+            "user_id": user_id,
+            "username": username,
+            "exp": expire,
+            "type": "access",
+            "iat": datetime.now(timezone.utc),
+        }
+    elif token_type == "refresh":
+        expire = datetime.now(timezone.utc) + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
+        payload = {
+            "user_id": user_id,
+            "exp": expire,
+            "type": "refresh",
+            "iat": datetime.now(timezone.utc),
+        }
+    else:
+        raise ValueError(f"Invalid token type: {token_type}")
+
     return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
+
+
+def create_access_token(user_id: int, username: str | None = None) -> str:
+    """Create JWT access token."""
+    return create_token(user_id, "access", username)
 
 
 def create_refresh_token(user_id: int) -> str:
     """Create JWT refresh token."""
-    expire = datetime.utcnow() + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
-    payload = {
-        "user_id": user_id,
-        "exp": expire,
-        "type": "refresh",
-    }
-    return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
+    return create_token(user_id, "refresh")
 
 
 def decode_token(token: str) -> dict:
@@ -120,41 +260,66 @@ async def telegram_login(login_data: TelegramLoginRequest):
     """
     Exchange Telegram authentication data for JWT tokens.
 
-    Verifies Telegram auth hash and returns access + refresh tokens.
+    Verifies Telegram auth hash using HMAC-SHA256 and returns access + refresh tokens.
+
+    The authentication data must come from Telegram Login Widget and include:
+    - id: Telegram user ID
+    - hash: HMAC-SHA256 hash of auth data
+    - auth_date: Unix timestamp of authentication
+    - Optional: username, first_name, last_name, photo_url
     """
-    # Verify Telegram auth
-    if not verify_telegram_auth(
-        login_data.telegram_user_id,
-        login_data.auth_hash,
-        login_data.timestamp,
-    ):
-        raise HTTPException(status_code=403, detail="Invalid Telegram authentication")
+    try:
+        # Verify Telegram auth (will raise HTTPException if invalid)
+        verify_telegram_auth(
+            user_id=login_data.telegram_user_id,
+            auth_hash=login_data.auth_hash,
+            auth_date=login_data.auth_date,
+            username=login_data.username,
+            first_name=login_data.first_name,
+            last_name=login_data.last_name,
+            photo_url=login_data.photo_url,
+        )
 
-    # Get or create user
-    user, created = User.get_or_create(
-        telegram_user_id=login_data.telegram_user_id,
-        defaults={"username": login_data.username, "is_owner": True},
-    )
+        # Get or create user
+        user, created = User.get_or_create(
+            telegram_user_id=login_data.telegram_user_id,
+            defaults={"username": login_data.username, "is_owner": True},
+        )
 
-    if not created and login_data.username and user.username != login_data.username:
-        user.username = login_data.username
-        user.save()
+        # Update username if changed
+        if not created and login_data.username and user.username != login_data.username:
+            user.username = login_data.username
+            user.save()
+            logger.info(
+                f"Updated username for user {user.telegram_user_id}: {user.username}",
+                extra={"user_id": user.telegram_user_id},
+            )
 
-    # Generate tokens
-    access_token = create_access_token(user.telegram_user_id, user.username)
-    refresh_token = create_refresh_token(user.telegram_user_id)
+        # Generate tokens
+        access_token = create_access_token(user.telegram_user_id, user.username)
+        refresh_token = create_refresh_token(user.telegram_user_id)
 
-    logger.info(f"User {user.telegram_user_id} logged in successfully")
+        logger.info(
+            f"User {user.telegram_user_id} logged in successfully",
+            extra={"user_id": user.telegram_user_id, "username": user.username, "created": created},
+        )
 
-    return {
-        "success": True,
-        "data": {
-            "access_token": access_token,
-            "refresh_token": refresh_token,
-            "expires_in": ACCESS_TOKEN_EXPIRE_MINUTES * 60,
-            "token_type": "Bearer",
-        },
-    }
+        return {
+            "success": True,
+            "data": {
+                "access_token": access_token,
+                "refresh_token": refresh_token,
+                "expires_in": ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+                "token_type": "Bearer",
+            },
+        }
+
+    except HTTPException:
+        # Re-raise HTTP exceptions from verify_telegram_auth
+        raise
+    except Exception as e:
+        logger.error(f"Login failed for user {login_data.telegram_user_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Authentication failed. Please try again.")
 
 
 @router.post("/refresh")

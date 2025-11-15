@@ -8,9 +8,10 @@ Usage:
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from datetime import datetime
+from datetime import datetime, timezone
 import logging
 
+from app.config import Config
 from app.api.routers import summaries, requests, search, sync, auth, user
 from app.api.middleware import correlation_id_middleware, rate_limit_middleware
 from app.api.models.responses import ErrorResponse
@@ -27,13 +28,34 @@ app = FastAPI(
     redoc_url="/redoc",
 )
 
-# CORS middleware
+# CORS configuration
+ALLOWED_ORIGINS = Config.get("ALLOWED_ORIGINS", "").split(",")
+# Clean up empty strings and whitespace
+ALLOWED_ORIGINS = [origin.strip() for origin in ALLOWED_ORIGINS if origin.strip()]
+
+# Default to localhost only if not configured (development mode)
+if not ALLOWED_ORIGINS:
+    logger.warning(
+        "ALLOWED_ORIGINS not configured - defaulting to localhost only. "
+        "Set ALLOWED_ORIGINS environment variable for production."
+    )
+    ALLOWED_ORIGINS = [
+        "http://localhost:3000",
+        "http://localhost:8080",
+        "http://127.0.0.1:3000",
+        "http://127.0.0.1:8080",
+    ]
+else:
+    logger.info(f"CORS allowed origins: {ALLOWED_ORIGINS}")
+
+# CORS middleware with specific origins
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Configure for production
+    allow_origins=ALLOWED_ORIGINS,  # Only specific origins
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],  # Explicit methods
+    allow_headers=["Authorization", "Content-Type", "X-Correlation-ID"],  # Specific headers
+    max_age=3600,  # Cache preflight for 1 hour
 )
 
 # Custom middleware
@@ -70,7 +92,7 @@ async def health_check():
         "success": True,
         "data": {
             "status": "healthy",
-            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         },
     }
 
@@ -90,7 +112,7 @@ async def global_exception_handler(request: Request, exc: Exception):
                 "code": "INTERNAL_ERROR",
                 "message": "An internal server error occurred",
                 "correlation_id": correlation_id,
-                "timestamp": datetime.utcnow().isoformat() + "Z",
+                "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
             },
         },
     )

@@ -6,7 +6,7 @@ Provides CRUD operations for summaries.
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from typing import Optional
-from datetime import datetime
+from datetime import datetime, timezone
 
 from app.api.auth import get_current_user
 from app.api.models.requests import UpdateSummaryRequest
@@ -41,8 +41,12 @@ async def get_summaries(
     - end_date: Filter by creation date (ISO 8601)
     - sort: Sort order (created_at_desc/created_at_asc)
     """
-    # Build query
-    query = Summary.select().join(RequestModel)
+    # Build query with user authorization filter
+    query = (
+        Summary.select()
+        .join(RequestModel)
+        .where(RequestModel.user_id == user["user_id"])  # Only user's summaries
+    )
 
     # Apply filters
     if is_read is not None:
@@ -95,9 +99,19 @@ async def get_summaries(
             ).dict()
         )
 
-    # Get stats
-    total_summaries = Summary.select().count()
-    unread_count = Summary.select().where(Summary.is_read == False).count()
+    # Get stats (only for current user)
+    total_summaries = (
+        Summary.select()
+        .join(RequestModel)
+        .where(RequestModel.user_id == user["user_id"])
+        .count()
+    )
+    unread_count = (
+        Summary.select()
+        .join(RequestModel)
+        .where((RequestModel.user_id == user["user_id"]) & (Summary.is_read == False))
+        .count()
+    )
 
     return {
         "success": True,
@@ -123,10 +137,16 @@ async def get_summary(
     user=Depends(get_current_user),
 ):
     """Get a single summary with full details."""
-    summary = Summary.select().where(Summary.id == summary_id).first()
+    # Query with authorization check
+    summary = (
+        Summary.select()
+        .join(RequestModel)
+        .where((Summary.id == summary_id) & (RequestModel.user_id == user["user_id"]))
+        .first()
+    )
 
     if not summary:
-        raise HTTPException(status_code=404, detail="Summary not found")
+        raise HTTPException(status_code=404, detail="Summary not found or access denied")
 
     request = summary.request
 
@@ -196,10 +216,16 @@ async def update_summary(
     user=Depends(get_current_user),
 ):
     """Update summary metadata (e.g., mark as read)."""
-    summary = Summary.select().where(Summary.id == summary_id).first()
+    # Query with authorization check
+    summary = (
+        Summary.select()
+        .join(RequestModel)
+        .where((Summary.id == summary_id) & (RequestModel.user_id == user["user_id"]))
+        .first()
+    )
 
     if not summary:
-        raise HTTPException(status_code=404, detail="Summary not found")
+        raise HTTPException(status_code=404, detail="Summary not found or access denied")
 
     # Apply updates
     if update.is_read is not None:
@@ -212,7 +238,7 @@ async def update_summary(
         "data": {
             "id": summary.id,
             "is_read": summary.is_read,
-            "updated_at": datetime.utcnow().isoformat() + "Z",
+            "updated_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         },
     }
 
@@ -223,10 +249,16 @@ async def delete_summary(
     user=Depends(get_current_user),
 ):
     """Delete a summary (soft delete)."""
-    summary = Summary.select().where(Summary.id == summary_id).first()
+    # Query with authorization check
+    summary = (
+        Summary.select()
+        .join(RequestModel)
+        .where((Summary.id == summary_id) & (RequestModel.user_id == user["user_id"]))
+        .first()
+    )
 
     if not summary:
-        raise HTTPException(status_code=404, detail="Summary not found")
+        raise HTTPException(status_code=404, detail="Summary not found or access denied")
 
     # TODO: Implement soft delete (add 'deleted_at' field to model)
     # For now, just mark as read
