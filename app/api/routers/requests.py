@@ -2,11 +2,12 @@
 Request submission and status endpoints.
 """
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from typing import Union
 from datetime import datetime, timezone
 
 from app.api.auth import get_current_user
+from app.api.background_processor import process_url_request
 from app.api.models.requests import SubmitURLRequest, SubmitForwardRequest
 from app.db.models import Request as RequestModel, Summary, CrawlResult, LLMCall
 from app.core.url_utils import normalize_url, compute_dedupe_hash
@@ -19,6 +20,7 @@ router = APIRouter()
 @router.post("")
 async def submit_request(
     request_data: Union[SubmitURLRequest, SubmitForwardRequest],
+    background_tasks: BackgroundTasks,
     user=Depends(get_current_user),
 ):
     """
@@ -26,6 +28,7 @@ async def submit_request(
 
     Returns request_id and correlation_id for status polling.
     Checks for duplicates and returns existing summary if found.
+    Processing happens asynchronously in the background.
     """
     # Handle URL request
     if isinstance(request_data, SubmitURLRequest):
@@ -51,7 +54,7 @@ async def submit_request(
             }
 
         # Create new request
-        correlation_id = f"api-{user['user_id']}-{int(datetime.utcnow().timestamp())}"
+        correlation_id = f"api-{user['user_id']}-{int(datetime.now(timezone.utc).timestamp())}"
 
         new_request = RequestModel.create(
             type="url",
@@ -64,10 +67,11 @@ async def submit_request(
             lang_detected=request_data.lang_preference,
         )
 
-        # TODO: Trigger async processing (Celery task or background job)
-        # For now, just return the request
+        # Schedule background processing
+        background_tasks.add_task(process_url_request, new_request.id)
+
         logger.info(
-            f"New URL request created: {new_request.id}",
+            f"New URL request created and queued: {new_request.id}",
             extra={"correlation_id": correlation_id},
         )
 
@@ -86,7 +90,7 @@ async def submit_request(
 
     # Handle forward request
     else:
-        correlation_id = f"api-{user['user_id']}-{int(datetime.utcnow().timestamp())}"
+        correlation_id = f"api-{user['user_id']}-{int(datetime.now(timezone.utc).timestamp())}"
 
         new_request = RequestModel.create(
             type="forward",
@@ -99,9 +103,11 @@ async def submit_request(
             lang_detected=request_data.lang_preference,
         )
 
-        # TODO: Trigger async processing
+        # Schedule background processing
+        background_tasks.add_task(process_url_request, new_request.id)
+
         logger.info(
-            f"New forward request created: {new_request.id}",
+            f"New forward request created and queued: {new_request.id}",
             extra={"correlation_id": correlation_id},
         )
 
@@ -238,9 +244,10 @@ async def get_request_status(
 @router.post("/{request_id}/retry")
 async def retry_request(
     request_id: int,
+    background_tasks: BackgroundTasks,
     user=Depends(get_current_user),
 ):
-    """Retry a failed request."""
+    """Retry a failed request. Processes asynchronously in the background."""
     # Query with authorization check
     original_request = (
         RequestModel.select()
@@ -271,9 +278,11 @@ async def retry_request(
         lang_detected=original_request.lang_detected,
     )
 
-    # TODO: Trigger async processing
+    # Schedule background processing
+    background_tasks.add_task(process_url_request, new_request.id)
+
     logger.info(
-        f"Retry request created: {new_request.id} (original: {request_id})",
+        f"Retry request created and queued: {new_request.id} (original: {request_id})",
         extra={"correlation_id": correlation_id},
     )
 
