@@ -37,15 +37,34 @@ async def search_summaries(
             .offset(offset)
         )
 
-        results = []
-        for idx, result in enumerate(search_query):
-            request = RequestModel.select().where(RequestModel.id == result.request_id).first()
+        # Execute query once and get request IDs
+        search_results = list(search_query)
+        request_ids = [result.request_id for result in search_results]
 
+        # Batch load all requests and summaries in 2 queries (fixes N+1)
+        # Query 1: Load all requests with user authorization
+        requests_query = (
+            RequestModel.select()
+            .where(
+                (RequestModel.id.in_(request_ids)) & (RequestModel.user_id == user["user_id"])
+            )
+        )
+        requests_map = {req.id: req for req in requests_query}
+
+        # Query 2: Load all summaries for authorized requests
+        summaries_query = Summary.select().where(Summary.request.in_(list(requests_map.keys())))
+        summaries_map = {summ.request.id: summ for summ in summaries_query}
+
+        results = []
+        for idx, result in enumerate(search_results):
+            # Get pre-loaded request (no additional query)
+            request = requests_map.get(result.request_id)
             if not request:
+                # User doesn't have access to this result, skip it
                 continue
 
-            summary = Summary.select().where(Summary.request == request).first()
-
+            # Get pre-loaded summary (no additional query)
+            summary = summaries_map.get(request.id)
             if not summary:
                 continue
 
@@ -128,9 +147,15 @@ async def get_related_summaries(
     if not tag.startswith("#"):
         tag = f"#{tag}"
 
-    # Query summaries with this tag
+    # Query summaries with this tag with user authorization
     # TODO: This requires a better query strategy (maybe FTS5 or JSON extraction)
-    summaries = Summary.select().join(RequestModel).limit(limit).offset(offset)
+    summaries = (
+        Summary.select()
+        .join(RequestModel)
+        .where(RequestModel.user_id == user["user_id"])  # Only user's summaries
+        .limit(limit)
+        .offset(offset)
+    )
 
     matching_summaries = []
     for summary in summaries:
@@ -174,8 +199,14 @@ async def check_duplicate(
     normalized = normalize_url(url)
     dedupe_hash = compute_dedupe_hash(normalized)
 
-    # Check for existing request
-    existing = RequestModel.select().where(RequestModel.dedupe_hash == dedupe_hash).first()
+    # Check for existing request with user authorization
+    existing = (
+        RequestModel.select()
+        .where(
+            (RequestModel.dedupe_hash == dedupe_hash) & (RequestModel.user_id == user["user_id"])
+        )
+        .first()
+    )
 
     if not existing:
         return {
@@ -187,8 +218,8 @@ async def check_duplicate(
             },
         }
 
-    # Found duplicate
-    summary = Summary.select().where(Summary.request == existing).first()
+    # Found duplicate - load summary in same query to avoid N+1
+    summary = Summary.select().where(Summary.request == existing.id).first()
 
     response_data = {
         "is_duplicate": True,

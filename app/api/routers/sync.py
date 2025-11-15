@@ -4,7 +4,7 @@ Database synchronization endpoints for offline mobile support.
 
 from fastapi import APIRouter, Depends, Query, HTTPException
 from typing import Optional
-from datetime import datetime
+from datetime import datetime, timezone
 import uuid
 
 from app.api.auth import get_current_user
@@ -27,8 +27,13 @@ async def initiate_full_sync(
 
     Returns sync session ID and chunk download URLs.
     """
-    # Build query
-    query = Summary.select().join(RequestModel).order_by(RequestModel.created_at.desc())
+    # Build query with user authorization filter
+    query = (
+        Summary.select()
+        .join(RequestModel)
+        .where(RequestModel.user_id == user["user_id"])
+        .order_by(RequestModel.created_at.desc())
+    )
 
     if since:
         query = query.where(Summary.created_at >= since)
@@ -46,11 +51,11 @@ async def initiate_full_sync(
         "success": True,
         "data": {
             "sync_id": sync_id,
-            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
             "total_items": total_items,
             "chunks": total_chunks,
             "download_urls": download_urls,
-            "expires_at": datetime.utcnow().isoformat() + "Z",  # TODO: Add expiry logic
+            "expires_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),  # TODO: Add expiry logic
         },
     }
 
@@ -68,19 +73,32 @@ async def download_sync_chunk(
     chunk_size = 100
     offset = (chunk_number - 1) * chunk_size
 
-    # Get summaries for this chunk
-    query = Summary.select().join(RequestModel).order_by(RequestModel.created_at.desc())
+    # Get summaries for this chunk with eager loading (fixes N+1)
+    # Use .select(Summary, RequestModel) to load both in single query
+    query = (
+        Summary.select(Summary, RequestModel)
+        .join(RequestModel)
+        .where(RequestModel.user_id == user["user_id"])  # Only user's summaries
+        .order_by(RequestModel.created_at.desc())
+    )
 
-    summaries = query.limit(chunk_size).offset(offset)
+    summaries = list(query.limit(chunk_size).offset(offset))
     total_chunks = (query.count() + chunk_size - 1) // chunk_size
+
+    # Batch load crawl results for all requests in this chunk (fixes N+1)
+    # Single query instead of N queries
+    request_ids = [summary.request.id for summary in summaries]
+    crawl_results_query = CrawlResult.select().where(CrawlResult.request.in_(request_ids))
+    crawl_results_map = {cr.request.id: cr for cr in crawl_results_query}
 
     items = []
     for summary in summaries:
+        # Request is already loaded (no additional query)
         request = summary.request
         json_payload = summary.json_payload or {}
 
-        # Get crawl result for source metadata
-        crawl_result = CrawlResult.select().where(CrawlResult.request == request).first()
+        # Get crawl result from pre-loaded map (no additional query)
+        crawl_result = crawl_results_map.get(request.id)
         metadata = crawl_result.metadata_json if crawl_result else {}
 
         items.append(
@@ -128,17 +146,20 @@ async def get_delta_sync(
     user=Depends(get_current_user),
 ):
     """Get incremental updates since last sync."""
-    # Get created summaries
+    # Get created summaries with eager loading (fixes N+1)
     created = (
-        Summary.select()
+        Summary.select(Summary, RequestModel)
         .join(RequestModel)
-        .where(Summary.created_at > since)
+        .where(
+            (Summary.created_at > since) & (RequestModel.user_id == user["user_id"])
+        )  # Only user's summaries
         .order_by(Summary.created_at.desc())
         .limit(limit)
     )
 
     created_items = []
     for summary in created:
+        # Request is already loaded (no additional query)
         json_payload = summary.json_payload or {}
         created_items.append(
             {
@@ -165,7 +186,7 @@ async def get_delta_sync(
                 "updated": [],
                 "deleted": [],
             },
-            "sync_timestamp": datetime.utcnow().isoformat() + "Z",
+            "sync_timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
             "has_more": len(created_items) >= limit,
         },
     }
@@ -181,11 +202,22 @@ async def upload_local_changes(
     conflicts = []
 
     for change in sync_data.changes:
-        summary = Summary.select().where(Summary.id == change.summary_id).first()
+        # Query with authorization check
+        summary = (
+            Summary.select()
+            .join(RequestModel)
+            .where(
+                (Summary.id == change.summary_id) & (RequestModel.user_id == user["user_id"])
+            )
+            .first()
+        )
 
         if not summary:
             conflicts.append(
-                {"summary_id": change.summary_id, "reason": "Summary not found"}
+                {
+                    "summary_id": change.summary_id,
+                    "reason": "Summary not found or access denied",
+                }
             )
             continue
 
@@ -210,6 +242,6 @@ async def upload_local_changes(
         "data": {
             "applied_changes": applied_changes,
             "conflicts": conflicts,
-            "sync_timestamp": datetime.utcnow().isoformat() + "Z",
+            "sync_timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         },
     }

@@ -60,6 +60,14 @@ class Request(BaseModel):
 
     class Meta:
         table_name = "requests"
+        indexes = (
+            # Single column indexes
+            (("user_id",), False),  # Heavily filtered in all API queries
+            (("status",), False),  # Filtered in status queries
+            (("created_at",), False),  # Used for sorting
+            # Composite index for common query pattern (user filtering + date sorting)
+            (("user_id", "created_at"), False),
+        )
 
 
 class TelegramMessage(BaseModel):
@@ -149,6 +157,11 @@ class Summary(BaseModel):
 
     class Meta:
         table_name = "summaries"
+        indexes = (
+            (("is_read",), False),  # Filtered in GET /summaries for unread count
+            (("lang",), False),  # Filtered in GET /summaries by language
+            (("created_at",), False),  # Filtered in delta sync
+        )
 
 
 class TopicSearchIndex(FTS5Model):

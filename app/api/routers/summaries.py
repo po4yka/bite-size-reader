@@ -41,9 +41,10 @@ async def get_summaries(
     - end_date: Filter by creation date (ISO 8601)
     - sort: Sort order (created_at_desc/created_at_asc)
     """
-    # Build query with user authorization filter
+    # Build query with user authorization filter and eager loading
+    # Use .select(Summary, RequestModel) to load both in single query (fixes N+1)
     query = (
-        Summary.select()
+        Summary.select(Summary, RequestModel)
         .join(RequestModel)
         .where(RequestModel.user_id == user["user_id"])  # Only user's summaries
     )
@@ -67,15 +68,16 @@ async def get_summaries(
     else:
         query = query.order_by(RequestModel.created_at.asc())
 
-    # Get total count
+    # Get total count before pagination
     total = query.count()
 
-    # Apply pagination
-    summaries = query.limit(limit).offset(offset)
+    # Apply pagination and execute query
+    summaries = list(query.limit(limit).offset(offset))
 
-    # Build response
+    # Build response (request is already loaded, no additional queries)
     summary_list = []
     for summary in summaries:
+        # Access request without triggering additional query (already eager loaded)
         request = summary.request
         json_payload = summary.json_payload or {}
         metadata = json_payload.get("metadata", {})
@@ -99,19 +101,21 @@ async def get_summaries(
             ).dict()
         )
 
-    # Get stats (only for current user)
-    total_summaries = (
-        Summary.select()
+    # Get stats (only for current user) - combine into single query using aggregation
+    from peewee import fn, Case
+
+    stats_query = (
+        Summary.select(
+            fn.COUNT(Summary.id).alias("total"),
+            fn.SUM(Case(None, [(Summary.is_read == False, 1)], 0)).alias("unread"),
+        )
         .join(RequestModel)
         .where(RequestModel.user_id == user["user_id"])
-        .count()
+        .first()
     )
-    unread_count = (
-        Summary.select()
-        .join(RequestModel)
-        .where((RequestModel.user_id == user["user_id"]) & (Summary.is_read == False))
-        .count()
-    )
+
+    total_summaries = stats_query.total if stats_query else 0
+    unread_count = stats_query.unread if stats_query and stats_query.unread else 0
 
     return {
         "success": True,
@@ -137,9 +141,10 @@ async def get_summary(
     user=Depends(get_current_user),
 ):
     """Get a single summary with full details."""
-    # Query with authorization check
+    # Query with authorization check and eager loading (fixes N+1)
+    # Load Summary + Request in single query
     summary = (
-        Summary.select()
+        Summary.select(Summary, RequestModel)
         .join(RequestModel)
         .where((Summary.id == summary_id) & (RequestModel.user_id == user["user_id"]))
         .first()
@@ -148,13 +153,13 @@ async def get_summary(
     if not summary:
         raise HTTPException(status_code=404, detail="Summary not found or access denied")
 
+    # Request is already loaded (no additional query)
     request = summary.request
 
-    # Get crawl result
-    crawl_result = CrawlResult.select().where(CrawlResult.request == request).first()
-
-    # Get LLM calls
-    llm_calls = list(LLMCall.select().where(LLMCall.request == request))
+    # Load crawl result and LLM calls in separate queries (still better than N queries)
+    # These are 1:1 and 1:N relationships, can't be eager loaded with Summary
+    crawl_result = CrawlResult.select().where(CrawlResult.request == request.id).first()
+    llm_calls = list(LLMCall.select().where(LLMCall.request == request.id))
 
     # Build source metadata
     source = {}
