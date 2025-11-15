@@ -6,7 +6,7 @@ the MarkSummaryAsReadUseCase.
 
 import logging
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, UTC
 
 from app.domain.events.summary_events import SummaryMarkedAsUnread
 from app.domain.exceptions.domain_exceptions import (
@@ -131,7 +131,7 @@ class MarkSummaryAsUnreadUseCase:
 
         # 6. Create and return domain event
         event = SummaryMarkedAsUnread(
-            occurred_at=datetime.utcnow(),
+            occurred_at=datetime.now(UTC),
             aggregate_id=command.summary_id,
             summary_id=command.summary_id,
         )

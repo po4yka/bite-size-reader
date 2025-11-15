@@ -38,7 +38,7 @@ class EventBus:
 
         # Publish events
         event = SummaryCreated(
-            occurred_at=datetime.utcnow(),
+            occurred_at=datetime.now(timezone.utc),
             summary_id=123,
             request_id=456,
             language="en",

@@ -1,0 +1,35 @@
+# Gitleaks configuration for Bite-Size Reader
+# https://github.com/gitleaks/gitleaks
+
+title = "Gitleaks configuration for Bite-Size Reader"
+
+# Extend default gitleaks config
+[extend]
+useDefault = true
+
+# Allowlist for false positives
+[allowlist]
+description = "Allowlist for documentation examples and known false positives"
+
+# Ignore example tokens in API documentation
+paths = [
+    '''docs/MOBILE_API_SPEC\.md''',
+    '''docs/MOBILE_API_IMPROVEMENTS\.md''',
+]
+
+# Ignore commits from documentation updates
+commits = []
+
+# Ignore specific regexes (example placeholders)
+regexes = [
+    '''eyJ[A-Za-z0-9-_]*\.eyJ[A-Za-z0-9-_]*\.''',  # JWT format in examples
+]
+
+# Stopwords - tokens that should never be considered secrets
+stopwords = [
+    "example",
+    "sample",
+    "test",
+    "demo",
+    "placeholder",
+]

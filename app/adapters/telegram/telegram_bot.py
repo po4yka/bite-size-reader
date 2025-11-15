@@ -7,7 +7,7 @@ import json
 import logging
 import os
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, UTC
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
@@ -379,11 +379,11 @@ class TelegramBot:
                             "db_backup_recovered",
                             extra={
                                 "consecutive_failures": consecutive_failures,
-                                "recovery_time": datetime.utcnow().isoformat(),
+                                "recovery_time": datetime.now(UTC).isoformat(),
                             },
                         )
                     consecutive_failures = 0
-                    last_success_time = datetime.utcnow()
+                    last_success_time = datetime.now(UTC)
                 except asyncio.CancelledError:
                     raise
                 except Exception as exc:
@@ -441,7 +441,7 @@ class TelegramBot:
 
         base_path = Path(db_path)
         suffix = base_path.suffix or ".db"
-        timestamp = datetime.utcnow().strftime("%Y%m%d-%H%M%S")
+        timestamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
         backup_file = backup_directory / f"{base_path.stem}-{timestamp}{suffix}"
 
         try:
@@ -566,7 +566,7 @@ class TelegramBot:
                     base = _slugify("-".join(words))
             if not base:
                 base = "summary"
-            ts = datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
+            ts = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
             filename = f"{base}-{ts}.json"
 
             if hasattr(message, "reply_document"):

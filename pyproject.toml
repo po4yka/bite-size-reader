@@ -74,9 +74,8 @@ ignore = [
   "RUF009",  # function call in dataclass defaults - safe for Logger objects
   "N818",    # exception naming - DDD naming convention
   "ASYNC109", # async timeout parameter - trio-specific, not relevant
-  "TC001",   # type-checking block - false positives for runtime-used imports
-  "TC002",   # type-checking block - false positives for runtime-used imports
-  "TC003",   # type-checking block - false positives for runtime-used imports
+  "B008",    # function call in argument defaults - standard FastAPI pattern
+  "PLW0603", # global statement - needed for asyncio semaphore initialization
 ]
 
 # Per-file ignores for test files
@@ -93,7 +92,11 @@ ignore = [
   "PT011",   # pytest.raises too broad - can be improved later
   "PT009",   # unittest assertions - can be migrated later
   "PT027",   # unittest-style assertRaises - using unittest.TestCase
+  "PT012",   # pytest.raises complex statements - acceptable in integration tests
   "DTZ005",  # datetime.now without tz - acceptable in tests
+  "N806",    # non-lowercase variable in function - mock objects use PascalCase
+  "F841",    # unused variable - mock setup
+  "SIM117",  # nested with statements - clearer in test setup
 ]
 "test_*.py" = [
   "EXE001",  # shebang present - test files in root
@@ -136,6 +139,11 @@ dependencies = [
   "sentence-transformers>=3.0.0",
   "orjson>=3.10.0",
   "uvloop>=0.22.1",
+  # Mobile API
+  "fastapi>=0.104.0",
+  "uvicorn[standard]>=0.24.0",
+  "pyjwt>=2.8.0",
+  "python-multipart>=0.0.6",
   # spaCy language models
   "en-core-web-sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl",
   "ru-core-news-sm @ https://github.com/explosion/spacy-models/releases/download/ru_core_news_sm-3.8.0/ru_core_news_sm-3.8.0-py3-none-any.whl",
