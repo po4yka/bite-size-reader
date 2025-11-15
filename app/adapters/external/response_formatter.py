@@ -654,7 +654,6 @@ class ResponseFormatter:
                 combined_lines.append("🔎 SEO Keywords: " + ", ".join(seo[:20]))
                 combined_lines.append("")
 
-            # Metadata
             metadata = summary_shaped.get("metadata") or {}
             if isinstance(metadata, dict):
                 meta_parts = []
@@ -1652,7 +1651,6 @@ class ResponseFormatter:
                 if len(quote_lines) > 1:
                     await self._send_long_text(message, "\n".join(quote_lines))
 
-            # Highlights
             highlights = [
                 str(h).strip() for h in (shaped.get("highlights") or []) if str(h).strip()
             ]

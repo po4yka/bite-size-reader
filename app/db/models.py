@@ -113,7 +113,9 @@ class CrawlResult(BaseModel):
 
 
 class LLMCall(BaseModel):
-    request = peewee.ForeignKeyField(Request, backref="llm_calls", null=True, on_delete="SET NULL")
+    request = peewee.ForeignKeyField(
+        Request, backref="llm_calls", null=False, on_delete="CASCADE"
+    )  # Phase 2: Made NOT NULL for data integrity
     provider = peewee.TextField(null=True)
     model = peewee.TextField(null=True)
     endpoint = peewee.TextField(null=True)

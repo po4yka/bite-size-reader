@@ -74,6 +74,9 @@ ignore = [
   "RUF009",  # function call in dataclass defaults - safe for Logger objects
   "N818",    # exception naming - DDD naming convention
   "ASYNC109", # async timeout parameter - trio-specific, not relevant
+  "TC001",   # type-checking block - false positives for runtime-used imports
+  "TC002",   # type-checking block - false positives for runtime-used imports
+  "TC003",   # type-checking block - false positives for runtime-used imports
 ]
 
 # Per-file ignores for test files

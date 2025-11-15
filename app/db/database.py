@@ -81,6 +81,7 @@ class Database:
             pragmas={
                 "journal_mode": "wal",
                 "synchronous": "normal",
+                "foreign_keys": 1,  # Enforce foreign key constraints
             },
             check_same_thread=False,  # Still needed for asyncio.to_thread() but protected by lock
         )
@@ -811,7 +812,8 @@ class Database:
             summary_id: The ID of the summary to mark as read.
 
         """
-        Summary.update({Summary.is_read: True}).where(Summary.id == summary_id).execute()
+        with self._database.connection_context():
+            Summary.update({Summary.is_read: True}).where(Summary.id == summary_id).execute()
 
     async def async_mark_summary_as_read(self, summary_id: int) -> None:
         """Async wrapper for :meth:`mark_summary_as_read_by_id`."""
@@ -828,7 +830,8 @@ class Database:
             summary_id: The ID of the summary to mark as unread.
 
         """
-        Summary.update({Summary.is_read: False}).where(Summary.id == summary_id).execute()
+        with self._database.connection_context():
+            Summary.update({Summary.is_read: False}).where(Summary.id == summary_id).execute()
 
     async def async_mark_summary_as_unread(self, summary_id: int) -> None:
         """Async wrapper for :meth:`mark_summary_as_unread_by_id`."""
@@ -948,7 +951,10 @@ class Database:
             if updated_at_field.column_name in columns:
                 update_values[updated_at_field] = dt.datetime.utcnow()
 
-        UserInteraction.update(update_values).where(UserInteraction.id == interaction_id).execute()
+        with self._database.connection_context():
+            UserInteraction.update(update_values).where(
+                UserInteraction.id == interaction_id
+            ).execute()
 
     async def async_update_user_interaction(
         self,
@@ -1049,7 +1055,8 @@ class Database:
             raise
 
     def update_request_status(self, request_id: int, status: str) -> None:
-        Request.update({Request.status: status}).where(Request.id == request_id).execute()
+        with self._database.connection_context():
+            Request.update({Request.status: status}).where(Request.id == request_id).execute()
 
     async def async_update_request_status(self, request_id: int, status: str) -> None:
         """Asynchronously update the request status."""
@@ -1061,12 +1068,14 @@ class Database:
         )
 
     def update_request_correlation_id(self, request_id: int, correlation_id: str) -> None:
-        Request.update({Request.correlation_id: correlation_id}).where(
-            Request.id == request_id
-        ).execute()
+        with self._database.connection_context():
+            Request.update({Request.correlation_id: correlation_id}).where(
+                Request.id == request_id
+            ).execute()
 
     def update_request_lang_detected(self, request_id: int, lang: str | None) -> None:
-        Request.update({Request.lang_detected: lang}).where(Request.id == request_id).execute()
+        with self._database.connection_context():
+            Request.update({Request.lang_detected: lang}).where(Request.id == request_id).execute()
 
     def insert_telegram_message(
         self,
@@ -1629,7 +1638,8 @@ class Database:
         return data
 
     def mark_summary_as_read(self, request_id: int) -> None:
-        Summary.update({Summary.is_read: True}).where(Summary.request == request_id).execute()
+        with self._database.connection_context():
+            Summary.update({Summary.is_read: True}).where(Summary.request == request_id).execute()
 
     def get_read_status(self, request_id: int) -> bool:
         summary = Summary.get_or_none(Summary.request == request_id)
@@ -1927,7 +1937,8 @@ class Database:
                         wrapped += 1
                     if reason == "blank":
                         blanks += 1
-                    model.update({field: normalized}).where(model.id == row_id).execute()
+                    with self._database.connection_context():
+                        model.update({field: normalized}).where(model.id == row_id).execute()
                     updates += 1
             except Exception as exc:
                 self._logger.exception(

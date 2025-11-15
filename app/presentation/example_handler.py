@@ -53,8 +53,6 @@ class ExampleCommandHandler:
         self._formatter = response_formatter
         self._event_bus = container.event_bus()
 
-    # ==================== Command Handlers ====================
-
     async def handle_unread_command(
         self,
         message: Any,  # Telegram Message object
@@ -212,9 +210,6 @@ class ExampleCommandHandler:
             await self._formatter.safe_reply(message, "❌ Search failed. Please try again.")
 
 
-# ==================== Integration Example ====================
-
-
 def integrate_with_existing_code(database: Any, topic_search_service: Any) -> None:
     """Example of how to integrate the new architecture with existing code.
 
@@ -238,23 +233,7 @@ def integrate_with_existing_code(database: Any, topic_search_service: Any) -> No
     # response_formatter = YourExistingResponseFormatter(...)
     # handler = ExampleCommandHandler(container, response_formatter)
 
-    # 4. Use in your existing routing
-    # In MessageRouter._route_message_content() or CommandProcessor:
-    #
-    # if text.startswith("/unread"):
-    #     await handler.handle_unread_command(message, uid, cid)
-    #     return
-    #
-    # if text.startswith("/read"):
-    #     summary_id = extract_summary_id(text)
-    #     await handler.handle_read_command(message, summary_id, uid)
-    #     return
-
-    # 5. You can still use old code alongside new code
-    # The container wraps the existing Database, so both approaches work together
-
-
-# ==================== Event Handler Example ====================
+    # 4. The container wraps the existing Database, so both old and new code work together
 
 
 def example_event_handlers(event_bus: EventBus) -> None:

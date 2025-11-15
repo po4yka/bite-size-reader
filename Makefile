@@ -1,4 +1,4 @@
-.PHONY: format lint type test all setup-dev venv pre-commit-install pre-commit-run check-lock
+.PHONY: format lint type test test-unit test-integration test-all all setup-dev venv pre-commit-install pre-commit-run check-lock
 
 format:
 	ruff format .
@@ -11,7 +11,19 @@ type:
 	mypy app tests
 
 test:
-	python -m unittest discover -s tests -p "test_*.py" -v
+	pytest tests/ -v
+
+test-unit:
+	pytest tests/ -m "not slow and not integration" -v -n auto
+
+test-integration:
+	pytest tests/ -m "integration" -v
+
+test-all:
+	pytest tests/ -v --cov=app --cov-report=term-missing
+
+test-fast:
+	pytest tests/ -m "not slow and not integration" -v -n auto -x
 
 all: format lint type test
 
