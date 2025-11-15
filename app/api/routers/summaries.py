@@ -23,10 +23,10 @@ async def get_summaries(
     limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0),
     is_read: Optional[bool] = Query(None),
-    lang: Optional[str] = Query(None, regex="^(en|ru|auto)$"),
+    lang: Optional[str] = Query(None, pattern="^(en|ru|auto)$"),
     start_date: Optional[str] = Query(None),
     end_date: Optional[str] = Query(None),
-    sort: str = Query("created_at_desc", regex="^(created_at_desc|created_at_asc)$"),
+    sort: str = Query("created_at_desc", pattern="^(created_at_desc|created_at_asc)$"),
     user=Depends(get_current_user),
 ):
     """

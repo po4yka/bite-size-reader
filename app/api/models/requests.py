@@ -2,21 +2,23 @@
 Pydantic models for API request validation.
 """
 
-from typing import Optional, Dict, Any
-from pydantic import BaseModel, Field, HttpUrl, validator
+from typing import Optional, Dict, Any, Literal
+from pydantic import BaseModel, Field, HttpUrl, field_validator
 
 
 class SubmitURLRequest(BaseModel):
     """Request body for submitting a URL."""
 
-    type: str = Field(default="url", const=True)
+    type: Literal["url"] = "url"
     input_url: HttpUrl
-    lang_preference: str = Field(default="auto", regex="^(auto|en|ru)$")
+    lang_preference: Literal["auto", "en", "ru"] = "auto"
 
-    @validator("input_url")
-    def validate_url(cls, v):
+    @field_validator("input_url")
+    @classmethod
+    def validate_url(cls, v: HttpUrl) -> HttpUrl:
         """Validate URL scheme."""
-        if not str(v).startswith(("http://", "https://")):
+        url_str = str(v)
+        if not url_str.startswith(("http://", "https://")):
             raise ValueError("URL must start with http:// or https://")
         return v
 
@@ -33,10 +35,10 @@ class ForwardMetadata(BaseModel):
 class SubmitForwardRequest(BaseModel):
     """Request body for submitting a forwarded message."""
 
-    type: str = Field(default="forward", const=True)
+    type: Literal["forward"] = "forward"
     content_text: str = Field(min_length=10, max_length=100000)
     forward_metadata: ForwardMetadata
-    lang_preference: str = Field(default="auto", regex="^(auto|en|ru)$")
+    lang_preference: Literal["auto", "en", "ru"] = "auto"
 
 
 class UpdateSummaryRequest(BaseModel):
@@ -48,7 +50,7 @@ class UpdateSummaryRequest(BaseModel):
 class UpdatePreferencesRequest(BaseModel):
     """Request body for updating user preferences."""
 
-    lang_preference: Optional[str] = Field(None, regex="^(auto|en|ru)$")
+    lang_preference: Optional[Literal["auto", "en", "ru"]] = None
     notification_settings: Optional[Dict[str, Any]] = None
     app_settings: Optional[Dict[str, Any]] = None
 
@@ -57,7 +59,7 @@ class SyncUploadChange(BaseModel):
     """Single change to upload during sync."""
 
     summary_id: int
-    action: str = Field(regex="^(update|delete)$")
+    action: Literal["update", "delete"]
     fields: Optional[Dict[str, Any]] = None
     client_timestamp: str
 

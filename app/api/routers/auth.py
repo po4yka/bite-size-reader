@@ -4,7 +4,7 @@ Authentication endpoints and utilities.
 
 from fastapi import APIRouter, HTTPException, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from datetime import datetime, timedelta, timezone
 import jwt
 import hashlib
@@ -42,6 +42,8 @@ logger.info("JWT authentication initialized with secure secret")
 class TelegramLoginRequest(BaseModel):
     """Request body for Telegram login."""
 
+    model_config = ConfigDict(populate_by_name=True)
+
     telegram_user_id: int = Field(..., alias="id")
     auth_hash: str = Field(..., alias="hash")
     auth_date: int
@@ -49,9 +51,6 @@ class TelegramLoginRequest(BaseModel):
     first_name: str | None = None
     last_name: str | None = None
     photo_url: str | None = None
-
-    class Config:
-        populate_by_name = True
 
 
 class RefreshTokenRequest(BaseModel):
