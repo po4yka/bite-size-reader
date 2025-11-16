@@ -46,8 +46,9 @@ async def rate_limit_middleware(request: Request, call_next: Callable):
     """
     Rate limiting middleware.
 
-    TODO: Replace with Redis-based rate limiter for production.
-    Current implementation is in-memory and not suitable for multi-process deployments.
+    Note: This is an in-memory rate limiter suitable for single-process deployments.
+    For production with multiple processes/replicas, use a Redis-based rate limiter
+    or a distributed rate limiting service (e.g., Kong, Envoy).
     """
     # Get user ID from auth (if authenticated)
     user_id = getattr(request.state, "user_id", None)

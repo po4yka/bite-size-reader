@@ -2064,7 +2064,9 @@ class Database:
         from app.db.models import VideoDownload
 
         download = VideoDownload.create(request_id=request_id, video_id=video_id, status=status)
-        self._logger.info("video_download_created", extra={"download_id": download.id, "video_id": video_id})
+        self._logger.info(
+            "video_download_created", extra={"download_id": download.id, "video_id": video_id}
+        )
         return download.id
 
     def get_video_download_by_request(self, request_id: int):
@@ -2102,7 +2104,9 @@ class Database:
             update_data["download_started_at"] = download_started_at
 
         VideoDownload.update(**update_data).where(VideoDownload.id == download_id).execute()
-        self._logger.debug("video_download_status_updated", extra={"download_id": download_id, "status": status})
+        self._logger.debug(
+            "video_download_status_updated", extra={"download_id": download_id, "status": status}
+        )
 
     def update_video_download(self, download_id: int, **kwargs) -> None:
         """Update video download with arbitrary fields."""

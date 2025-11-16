@@ -2,6 +2,9 @@
 Search and discovery endpoints.
 """
 
+from collections import Counter
+from datetime import UTC, datetime, timedelta
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.api.auth import get_current_user
@@ -110,25 +113,84 @@ async def get_trending_topics(
     user=Depends(get_current_user),
 ):
     """Get trending topic tags across recent summaries."""
-    # TODO: Implement actual trending calculation
-    # For now, return mock data
+    now = datetime.now(UTC)
+    current_period_start = now - timedelta(days=days)
+    previous_period_start = current_period_start - timedelta(days=days)
+
+    # Query summaries for current period
+    current_summaries = (
+        Summary.select()
+        .join(RequestModel)
+        .where(
+            (RequestModel.user_id == user["user_id"])
+            & (RequestModel.created_at >= current_period_start)
+        )
+    )
+
+    # Query summaries for previous period (for trend calculation)
+    previous_summaries = (
+        Summary.select()
+        .join(RequestModel)
+        .where(
+            (RequestModel.user_id == user["user_id"])
+            & (RequestModel.created_at >= previous_period_start)
+            & (RequestModel.created_at < current_period_start)
+        )
+    )
+
+    # Extract and count tags from current period
+    current_tags = Counter()
+    for summary in current_summaries:
+        json_payload = summary.json_payload or {}
+        topic_tags = json_payload.get("topic_tags", [])
+        for tag in topic_tags:
+            if tag:  # Skip empty tags
+                current_tags[tag.lower()] += 1
+
+    # Extract and count tags from previous period
+    previous_tags = Counter()
+    for summary in previous_summaries:
+        json_payload = summary.json_payload or {}
+        topic_tags = json_payload.get("topic_tags", [])
+        for tag in topic_tags:
+            if tag:
+                previous_tags[tag.lower()] += 1
+
+    # Calculate trends
+    trending_tags = []
+    for tag, count in current_tags.most_common(limit):
+        prev_count = previous_tags.get(tag, 0)
+
+        if prev_count > 0:
+            percentage_change = ((count - prev_count) / prev_count) * 100
+        else:
+            # New tag or no data in previous period
+            percentage_change = 100.0 if count > 0 else 0.0
+
+        # Determine trend direction
+        if percentage_change > 10:
+            trend = "up"
+        elif percentage_change < -10:
+            trend = "down"
+        else:
+            trend = "stable"
+
+        trending_tags.append(
+            {
+                "tag": tag,
+                "count": count,
+                "trend": trend,
+                "percentage_change": round(percentage_change, 1),
+            }
+        )
 
     return {
         "success": True,
         "data": {
-            "tags": [
-                {"tag": "#blockchain", "count": 42, "trend": "up", "percentage_change": 15.5},
-                {
-                    "tag": "#cryptocurrency",
-                    "count": 38,
-                    "trend": "stable",
-                    "percentage_change": 0.2,
-                },
-                {"tag": "#ai", "count": 35, "trend": "down", "percentage_change": -8.3},
-            ],
+            "tags": trending_tags,
             "time_range": {
-                "start": "2025-10-16T00:00:00Z",
-                "end": "2025-11-15T23:59:59Z",
+                "start": current_period_start.isoformat().replace("+00:00", "Z"),
+                "end": now.isoformat().replace("+00:00", "Z"),
             },
         },
     }
@@ -147,7 +209,11 @@ async def get_related_summaries(
         tag = f"#{tag}"
 
     # Query summaries with this tag with user authorization
-    # TODO: This requires a better query strategy (maybe FTS5 or JSON extraction)
+    # Note: This iterates through all summaries to check JSON payload.
+    # For better performance with large datasets, consider:
+    # - FTS5 index on topic_tags
+    # - JSON extraction in SQLite (JSON_EXTRACT with index)
+    # - Denormalized topic_tags table with foreign keys
     summaries = (
         Summary.select()
         .join(RequestModel)

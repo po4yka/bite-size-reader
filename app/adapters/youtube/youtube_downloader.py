@@ -111,15 +111,21 @@ class YouTubeDownloader:
             )
 
         # Create video download record
-        download_id = self.db.create_video_download(request_id=req_id, video_id=video_id, status="pending")
+        download_id = self.db.create_video_download(
+            request_id=req_id, video_id=video_id, status="pending"
+        )
 
         try:
             # Update status to downloading
-            self.db.update_video_download_status(download_id, "downloading", download_started_at=datetime.utcnow())
+            self.db.update_video_download_status(
+                download_id, "downloading", download_started_at=datetime.utcnow()
+            )
 
             # Notify user: starting download
             if not silent:
-                await self.response_formatter.send_youtube_download_notification(message, url, silent=silent)
+                await self.response_formatter.send_youtube_download_notification(
+                    message, url, silent=silent
+                )
 
             # Step 1: Extract transcript using youtube-transcript-api
             transcript_text, transcript_lang, auto_generated = await self._extract_transcript_api(
@@ -134,7 +140,13 @@ class YouTubeDownloader:
 
             # Download in thread pool (yt-dlp is sync)
             video_metadata = await asyncio.to_thread(
-                self._download_video_sync, url, ydl_opts, download_id, message, silent, correlation_id
+                self._download_video_sync,
+                url,
+                ydl_opts,
+                download_id,
+                message,
+                silent,
+                correlation_id,
             )
 
             # Detect language from transcript
@@ -204,7 +216,12 @@ class YouTubeDownloader:
             self._audit(
                 "ERROR",
                 "youtube_download_failed",
-                {"video_id": video_id, "request_id": req_id, "error": str(e), "cid": correlation_id},
+                {
+                    "video_id": video_id,
+                    "request_id": req_id,
+                    "error": str(e),
+                    "cid": correlation_id,
+                },
             )
 
             logger.error(
@@ -226,7 +243,9 @@ class YouTubeDownloader:
             preferred_langs = self.cfg.youtube.subtitle_languages
 
             # Try to get transcript in preferred language
-            transcript_list = await asyncio.to_thread(YouTubeTranscriptApi.list_transcripts, video_id)
+            transcript_list = await asyncio.to_thread(
+                YouTubeTranscriptApi.list_transcripts, video_id
+            )
 
             transcript = None
             auto_generated = False
@@ -257,7 +276,11 @@ class YouTubeDownloader:
                     auto_generated = True
                     logger.info(
                         "youtube_transcript_auto_found",
-                        extra={"video_id": video_id, "language": selected_lang, "cid": correlation_id},
+                        extra={
+                            "video_id": video_id,
+                            "language": selected_lang,
+                            "cid": correlation_id,
+                        },
                     )
                 except NoTranscriptFound:
                     logger.warning(
@@ -406,9 +429,7 @@ class YouTubeDownloader:
                         "❌ Video is not available. It may be private, deleted, or geo-blocked in your region."
                     ) from e
                 elif "private video" in error_msg:
-                    raise ValueError(
-                        "❌ This video is private and cannot be accessed."
-                    ) from e
+                    raise ValueError("❌ This video is private and cannot be accessed.") from e
                 elif "members-only" in error_msg or "join this channel" in error_msg:
                     raise ValueError(
                         "❌ This video is members-only content. YouTube Premium or channel membership required."
@@ -419,9 +440,7 @@ class YouTubeDownloader:
                         "Please try again after it starts."
                     ) from e
                 elif "copyright" in error_msg:
-                    raise ValueError(
-                        "❌ Video unavailable due to copyright restrictions."
-                    ) from e
+                    raise ValueError("❌ Video unavailable due to copyright restrictions.") from e
                 elif "geo" in error_msg or "not available in your country" in error_msg:
                     raise ValueError(
                         "❌ This video is geo-blocked and not available in your region."
@@ -482,17 +501,13 @@ class YouTubeDownloader:
                         "❌ Network connection error. Please check your internet connection and try again."
                     ) from e
                 else:
-                    raise ValueError(
-                        f"❌ Download failed: {str(e)[:200]}"
-                    ) from e
+                    raise ValueError(f"❌ Download failed: {str(e)[:200]}") from e
             except Exception as e:
                 logger.error(
                     "yt_dlp_download_failed",
                     extra={"url": url, "error": str(e), "cid": correlation_id},
                 )
-                raise ValueError(
-                    f"❌ Unexpected download error: {str(e)[:200]}"
-                ) from e
+                raise ValueError(f"❌ Unexpected download error: {str(e)[:200]}") from e
 
             # Get downloaded file paths
             video_file = ydl.prepare_filename(info)
