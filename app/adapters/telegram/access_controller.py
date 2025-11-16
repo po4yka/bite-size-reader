@@ -41,8 +41,11 @@ class AccessController:
         # Security tracking
         self._failed_attempts: dict[int, int] = {}
         self._last_attempt_time: dict[int, float] = {}
+        self._block_notified_until: dict[int, float] = {}
+        self._deny_notified_until: dict[int, float] = {}
         self.MAX_FAILED_ATTEMPTS = 3
         self.BLOCK_DURATION_SECONDS = 300  # 5 minutes
+        self.DENY_NOTIFICATION_COOLDOWN_SECONDS = 300
 
     async def check_access(
         self, uid: int, message: Any, correlation_id: str, interaction_id: int, start_time: float
@@ -50,8 +53,18 @@ class AccessController:
         """Check if user has access to the bot."""
         allowed_ids = self.cfg.telegram.allowed_user_ids
 
-        # Check if user is blocked due to too many failed attempts
         current_time = time.time()
+
+        if uid in allowed_ids:
+            # Reset failed attempts on successful access
+            self._failed_attempts.pop(uid, None)
+            self._last_attempt_time.pop(uid, None)
+            self._block_notified_until.pop(uid, None)
+            self._deny_notified_until.pop(uid, None)
+            logger.info("access_granted", extra={"uid": uid})
+            return True
+
+        # Check if user is blocked due to too many failed attempts (unauthorized users only)
         if uid in self._last_attempt_time:
             time_since_last_attempt = current_time - self._last_attempt_time[uid]
             if time_since_last_attempt < self.BLOCK_DURATION_SECONDS:
@@ -63,19 +76,8 @@ class AccessController:
                         "failed_attempts": self._failed_attempts.get(uid, 0),
                     },
                 )
-                with contextlib.suppress(Exception):
-                    await self.response_formatter.safe_reply(
-                        message,
-                        "❌ Access temporarily blocked due to too many failed attempts. Please try again later.",
-                    )
+                await self._maybe_notify_blocked(uid, message, current_time)
                 return False
-
-        if uid in allowed_ids:
-            # Reset failed attempts on successful access
-            self._failed_attempts.pop(uid, None)
-            self._last_attempt_time.pop(uid, None)
-            logger.info("access_granted", extra={"uid": uid})
-            return True
 
         # Track failed attempts
         self._failed_attempts[uid] = self._failed_attempts.get(uid, 0) + 1
@@ -102,22 +104,23 @@ class AccessController:
                     "block_duration_seconds": self.BLOCK_DURATION_SECONDS,
                 },
             )
-            with contextlib.suppress(Exception):
-                await self.response_formatter.safe_reply(
-                    message,
+            await self._maybe_notify_blocked(
+                uid,
+                message,
+                current_time,
+                force=True,
+                message_text=(
                     f"❌ Access blocked after {failed_count} failed attempts. "
-                    f"Try again in {self.BLOCK_DURATION_SECONDS // 60} minutes.",
-                )
+                    f"Try again in {self.BLOCK_DURATION_SECONDS // 60} minutes."
+                ),
+            )
             return False
 
         with contextlib.suppress(Exception):
             self._audit("WARN", "access_denied", {"uid": uid, "cid": correlation_id})
 
-        await self.response_formatter.safe_reply(
-            message,
-            f"❌ Access denied. User ID {uid} is not authorized to use this bot.",
-        )
-        logger.info("access_denied", extra={"uid": uid, "cid": correlation_id})
+        if await self._maybe_notify_denied(uid, message, current_time):
+            logger.info("access_denied", extra={"uid": uid, "cid": correlation_id})
 
         if interaction_id:
             await async_safe_update_user_interaction(
@@ -131,3 +134,37 @@ class AccessController:
                 logger_=logger,
             )
         return False
+
+    async def _maybe_notify_blocked(
+        self,
+        uid: int,
+        message: Any,
+        current_time: float,
+        *,
+        force: bool = False,
+        message_text: str | None = None,
+    ) -> None:
+        """Send block notification at most once per block window."""
+        deadline = self._block_notified_until.get(uid, 0.0)
+        if force or current_time >= deadline:
+            with contextlib.suppress(Exception):
+                await self.response_formatter.safe_reply(
+                    message,
+                    message_text
+                    or "❌ Access temporarily blocked due to too many failed attempts. Please try again later.",
+                )
+            self._block_notified_until[uid] = current_time + self.BLOCK_DURATION_SECONDS
+
+    async def _maybe_notify_denied(self, uid: int, message: Any, current_time: float) -> bool:
+        """Send access denied notification with cooldown."""
+        deadline = self._deny_notified_until.get(uid, 0.0)
+        if current_time < deadline:
+            return False
+
+        with contextlib.suppress(Exception):
+            await self.response_formatter.safe_reply(
+                message,
+                f"❌ Access denied. User ID {uid} is not authorized to use this bot.",
+            )
+        self._deny_notified_until[uid] = current_time + self.DENY_NOTIFICATION_COOLDOWN_SECONDS
+        return True

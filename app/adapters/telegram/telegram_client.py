@@ -17,7 +17,21 @@ if TYPE_CHECKING:
 
     from app.config import AppConfig
 else:
+    _pyrogram_bootstrap_loop: asyncio.AbstractEventLoop | None = None
+    _previous_loop: asyncio.AbstractEventLoop | None = None
     try:
+        # Pyrogram's sync adapter tries to grab a running loop at import time.
+        # Python 3.13+ raises when no loop exists, so we provision a temporary
+        # one to keep the import compatible inside containers.
+        try:
+            _previous_loop = asyncio.get_event_loop()
+        except RuntimeError:
+            pass
+
+        if _previous_loop is None or _previous_loop.is_closed():
+            _pyrogram_bootstrap_loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(_pyrogram_bootstrap_loop)
+
         # Runtime aliases that tests can monkeypatch
         from pyrogram import Client, filters
         from pyrogram.types import Message
@@ -28,6 +42,15 @@ else:
         filters = None
         Message = object
         PYROGRAM_AVAILABLE = False
+    finally:
+        if _pyrogram_bootstrap_loop is not None:
+            try:
+                if _previous_loop is not None and not _previous_loop.is_closed():
+                    asyncio.set_event_loop(_previous_loop)
+                else:
+                    asyncio.set_event_loop(None)
+            except Exception:
+                pass
 
 logger = logging.getLogger(__name__)
 

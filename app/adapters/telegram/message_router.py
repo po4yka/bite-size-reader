@@ -68,17 +68,20 @@ class MessageRouter:
         self._url_processor = url_handler.url_processor
 
         # Initialize security components
-        self._rate_limiter = UserRateLimiter(
-            RateLimitConfig(
-                max_requests=10,  # 10 requests per window
-                window_seconds=60,  # 60 second window
-                max_concurrent=3,  # Max 3 concurrent operations per user
-                cooldown_multiplier=2.0,  # 2x window cooldown after limit
-            )
+        self._rate_limiter_config = RateLimitConfig(
+            max_requests=10,  # 10 requests per window
+            window_seconds=60,  # 60 second window
+            max_concurrent=3,  # Max 3 concurrent operations per user
+            cooldown_multiplier=2.0,  # 2x window cooldown after limit
         )
+        self._rate_limiter = UserRateLimiter(self._rate_limiter_config)
         self._file_validator = SecureFileValidator(
             max_file_size=10 * 1024 * 1024  # 10 MB max file size
         )
+        self._rate_limit_notified_until: dict[int, float] = {}
+        self._rate_limit_notice_window = max(self._rate_limiter_config.window_seconds, 30)
+        self._recent_message_ids: dict[tuple[int, int], float] = {}
+        self._recent_message_ttl = 120
 
     async def route_message(self, message: Any) -> None:
         """Main message routing entry point."""
@@ -117,8 +120,28 @@ class MessageRouter:
                 return
 
             logger.info(f"Checking access for UID: {uid} (type: {type(uid)})")
+            if not await self.access_controller.check_access(
+                uid, message, correlation_id, 0, start_time
+            ):
+                return
+
             chat_id = telegram_message.chat.id if telegram_message.chat else None
             message_id = telegram_message.message_id
+            message_key = None
+            if message_id is not None:
+                message_key = (chat_id or 0, message_id)
+
+            if message_key and self._is_duplicate_message(message_key):
+                logger.info(
+                    "duplicate_message_skipped",
+                    extra={
+                        "uid": uid,
+                        "chat_id": chat_id,
+                        "message_id": message_id,
+                    },
+                )
+                return
+
             text = telegram_message.get_effective_text() or ""
 
             # Check for forwarded message using validated model
@@ -153,7 +176,7 @@ class MessageRouter:
             elif text:
                 interaction_type = "text"
 
-            # Log the initial user interaction
+            # Log the initial user interaction after access is confirmed
             interaction_id = self._log_user_interaction(
                 user_id=uid,
                 chat_id=chat_id,
@@ -171,11 +194,6 @@ class MessageRouter:
             )
 
             # Access control check
-            if not await self.access_controller.check_access(
-                uid, message, correlation_id, interaction_id, start_time
-            ):
-                return
-
             # Rate limiting check
             allowed, error_msg = await self._rate_limiter.check_and_record(
                 uid, operation=interaction_type
@@ -189,7 +207,8 @@ class MessageRouter:
                         "cid": correlation_id,
                     },
                 )
-                await self.response_formatter.safe_reply(message, error_msg)
+                if error_msg and self._should_notify_rate_limit(uid):
+                    await self.response_formatter.safe_reply(message, error_msg)
                 if interaction_id:
                     await async_safe_update_user_interaction(
                         self.db,
@@ -1152,3 +1171,33 @@ class MessageRouter:
                 },
             )
             return 0
+
+    def _should_notify_rate_limit(self, uid: int) -> bool:
+        """Determine if we should notify a user about rate limiting."""
+        now = time.time()
+        deadline = self._rate_limit_notified_until.get(uid, 0.0)
+        if now >= deadline:
+            self._rate_limit_notified_until[uid] = now + self._rate_limit_notice_window
+            return True
+        logger.debug(
+            "rate_limit_notice_suppressed",
+            extra={
+                "uid": uid,
+                "remaining_suppression": max(0.0, deadline - now),
+            },
+        )
+        return False
+
+    def _is_duplicate_message(self, message_key: tuple[int, int]) -> bool:
+        """Return True if we've processed this message recently."""
+        now = time.time()
+        last_seen = self._recent_message_ids.get(message_key)
+        if last_seen is not None and now - last_seen < self._recent_message_ttl:
+            return True
+        self._recent_message_ids[message_key] = now
+        if len(self._recent_message_ids) > 2000:
+            cutoff = now - self._recent_message_ttl
+            self._recent_message_ids = {
+                key: ts for key, ts in self._recent_message_ids.items() if ts >= cutoff
+            }
+        return False
