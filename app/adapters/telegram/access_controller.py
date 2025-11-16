@@ -64,26 +64,40 @@ class AccessController:
             logger.info("access_granted", extra={"uid": uid})
             return True
 
+        failed_count = self._failed_attempts.get(uid, 0)
+
         # Check if user is blocked due to too many failed attempts (unauthorized users only)
-        if uid in self._last_attempt_time:
-            time_since_last_attempt = current_time - self._last_attempt_time[uid]
+        if failed_count >= self.MAX_FAILED_ATTEMPTS:
+            last_attempt_time = self._last_attempt_time.get(uid)
+            time_since_last_attempt = (
+                current_time - last_attempt_time
+                if last_attempt_time is not None
+                else self.BLOCK_DURATION_SECONDS
+            )
+
             if time_since_last_attempt < self.BLOCK_DURATION_SECONDS:
                 logger.warning(
                     "access_blocked_rate_limited",
                     extra={
                         "uid": uid,
                         "time_remaining": self.BLOCK_DURATION_SECONDS - time_since_last_attempt,
-                        "failed_attempts": self._failed_attempts.get(uid, 0),
+                        "failed_attempts": failed_count,
                     },
                 )
                 await self._maybe_notify_blocked(uid, message, current_time)
                 return False
 
+            # Block window expired - reset counters so the user gets a fresh set of attempts
+            self._failed_attempts.pop(uid, None)
+            self._last_attempt_time.pop(uid, None)
+            self._block_notified_until.pop(uid, None)
+            failed_count = 0
+
         # Track failed attempts
-        self._failed_attempts[uid] = self._failed_attempts.get(uid, 0) + 1
+        failed_count += 1
+        self._failed_attempts[uid] = failed_count
         self._last_attempt_time[uid] = current_time
 
-        failed_count = self._failed_attempts[uid]
         logger.warning(
             "access_denied_list_mismatch",
             extra={
