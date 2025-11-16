@@ -45,9 +45,7 @@ async def api_exception_handler(request: Request, exc: APIException) -> Response
     )
 
 
-async def validation_exception_handler(
-    request: Request, exc: PydanticValidationError
-) -> Response:
+async def validation_exception_handler(request: Request, exc: PydanticValidationError) -> Response:
     """Handle Pydantic validation errors."""
     correlation_id = getattr(request.state, "correlation_id", None)
 
