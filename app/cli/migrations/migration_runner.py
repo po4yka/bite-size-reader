@@ -27,13 +27,15 @@ import datetime as dt
 import importlib
 import logging
 import sys
-from collections.abc import Callable
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import peewee
 
-from app.db.database import Database
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from app.db.database import Database
 
 logger = logging.getLogger(__name__)
 

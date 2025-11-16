@@ -6,9 +6,12 @@ This tests the fix for progress messages being sent as new messages instead of e
 import asyncio
 from unittest.mock import AsyncMock, Mock
 
+import pytest
+
 from app.adapters.external.response_formatter import ResponseFormatter
 
 
+@pytest.mark.asyncio
 async def test_progress_message_editing():
     """Test that progress messages use edit_message when message_id is provided."""
     # Create mock message

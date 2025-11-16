@@ -2,11 +2,11 @@
 Search and discovery endpoints.
 """
 
-from fastapi import APIRouter, Depends, Query, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.api.auth import get_current_user
-from app.db.models import TopicSearchIndex, Summary, Request as RequestModel
 from app.core.logging_utils import get_logger
+from app.db.models import Request as RequestModel, Summary, TopicSearchIndex
 
 logger = get_logger(__name__)
 router = APIRouter()
@@ -31,10 +31,7 @@ async def search_summaries(
     try:
         # FTS5 search query
         search_query = (
-            TopicSearchIndex.search(q)
-            .order_by(TopicSearchIndex.rank)
-            .limit(limit)
-            .offset(offset)
+            TopicSearchIndex.search(q).order_by(TopicSearchIndex.rank).limit(limit).offset(offset)
         )
 
         # Execute query once and get request IDs
@@ -43,11 +40,8 @@ async def search_summaries(
 
         # Batch load all requests and summaries in 2 queries (fixes N+1)
         # Query 1: Load all requests with user authorization
-        requests_query = (
-            RequestModel.select()
-            .where(
-                (RequestModel.id.in_(request_ids)) & (RequestModel.user_id == user["user_id"])
-            )
+        requests_query = RequestModel.select().where(
+            (RequestModel.id.in_(request_ids)) & (RequestModel.user_id == user["user_id"])
         )
         requests_map = {req.id: req for req in requests_query}
 
@@ -124,7 +118,12 @@ async def get_trending_topics(
         "data": {
             "tags": [
                 {"tag": "#blockchain", "count": 42, "trend": "up", "percentage_change": 15.5},
-                {"tag": "#cryptocurrency", "count": 38, "trend": "stable", "percentage_change": 0.2},
+                {
+                    "tag": "#cryptocurrency",
+                    "count": 38,
+                    "trend": "stable",
+                    "percentage_change": 0.2,
+                },
                 {"tag": "#ai", "count": 35, "trend": "down", "percentage_change": -8.3},
             ],
             "time_range": {
@@ -194,7 +193,7 @@ async def check_duplicate(
     user=Depends(get_current_user),
 ):
     """Check if a URL has already been summarized."""
-    from app.core.url_utils import normalize_url, compute_dedupe_hash
+    from app.core.url_utils import compute_dedupe_hash, normalize_url
 
     normalized = normalize_url(url)
     dedupe_hash = compute_dedupe_hash(normalized)

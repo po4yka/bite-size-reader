@@ -118,4 +118,4 @@ The agents wrap existing components (`ContentExtractor`, `LLMSummarizer`) while 
 
 ---
 
-For detailed implementation examples, see `examples/agent_pipeline_example.py`.
+For implementation details, refer to the agent source files and the integration tests in `tests/integration/`.

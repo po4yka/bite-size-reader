@@ -5,6 +5,8 @@ FastAPI middleware for request processing.
 import time
 import uuid
 from collections.abc import Callable
+from typing import Any
+
 from fastapi import Request
 from fastapi.responses import JSONResponse
 
@@ -13,7 +15,8 @@ from app.core.logging_utils import get_logger
 logger = get_logger(__name__)
 
 # Simple in-memory rate limiter (use Redis in production)
-_rate_limit_store = {}
+# Store structure: {ip_address: {"count": int, "window_start": int}}
+_rate_limit_store: dict[str, Any] = {}
 
 
 async def correlation_id_middleware(request: Request, call_next: Callable):
@@ -109,7 +112,9 @@ async def rate_limit_middleware(request: Request, call_next: Callable):
 def cleanup_rate_limit_store():
     """Remove expired rate limit entries."""
     current_minute = int(time.time() / 60)
-    expired_keys = [key for key in _rate_limit_store if int(key.split(":")[-1]) < current_minute - 5]
+    expired_keys = [
+        key for key in _rate_limit_store if int(key.split(":")[-1]) < current_minute - 5
+    ]
 
     for key in expired_keys:
         del _rate_limit_store[key]

@@ -1,11 +1,11 @@
 """Request service - business logic for request operations."""
 
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 
-from app.db.models import Request as RequestModel, Summary, CrawlResult, LLMCall
-from app.core.url_utils import normalize_url, compute_dedupe_hash
-from app.api.exceptions import ResourceNotFoundError, DuplicateResourceError
+from app.api.exceptions import DuplicateResourceError, ResourceNotFoundError
 from app.core.logging_utils import get_logger
+from app.core.url_utils import compute_dedupe_hash, normalize_url
+from app.db.models import CrawlResult, LLMCall, Request as RequestModel, Summary
 
 logger = get_logger(__name__)
 
@@ -30,9 +30,7 @@ class RequestService:
 
         existing = (
             RequestModel.select()
-            .where(
-                (RequestModel.dedupe_hash == dedupe_hash) & (RequestModel.user_id == user_id)
-            )
+            .where((RequestModel.dedupe_hash == dedupe_hash) & (RequestModel.user_id == user_id))
             .first()
         )
 
@@ -48,7 +46,9 @@ class RequestService:
         }
 
     @staticmethod
-    def create_url_request(user_id: int, input_url: str, lang_preference: str = "auto") -> RequestModel:
+    def create_url_request(
+        user_id: int, input_url: str, lang_preference: str = "auto"
+    ) -> RequestModel:
         """
         Create a new URL request.
 
@@ -90,7 +90,11 @@ class RequestService:
 
         logger.info(
             f"URL request created: {new_request.id}",
-            extra={"request_id": new_request.id, "user_id": user_id, "correlation_id": correlation_id},
+            extra={
+                "request_id": new_request.id,
+                "user_id": user_id,
+                "correlation_id": correlation_id,
+            },
         )
 
         return new_request
@@ -131,7 +135,11 @@ class RequestService:
 
         logger.info(
             f"Forward request created: {new_request.id}",
-            extra={"request_id": new_request.id, "user_id": user_id, "correlation_id": correlation_id},
+            extra={
+                "request_id": new_request.id,
+                "user_id": user_id,
+                "correlation_id": correlation_id,
+            },
         )
 
         return new_request
@@ -270,7 +278,11 @@ class RequestService:
 
         logger.info(
             f"Retry request created: {new_request.id} (original: {request_id})",
-            extra={"new_request_id": new_request.id, "original_request_id": request_id, "user_id": user_id},
+            extra={
+                "new_request_id": new_request.id,
+                "original_request_id": request_id,
+                "user_id": user_id,
+            },
         )
 
         return new_request

@@ -9,7 +9,7 @@ This use case demonstrates the hexagonal architecture pattern by:
 
 import logging
 from dataclasses import dataclass
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 
 from app.domain.events.summary_events import SummaryMarkedAsRead
 from app.domain.exceptions.domain_exceptions import (

@@ -9,11 +9,12 @@ import logging
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
-
-import peewee
+from typing import TYPE_CHECKING, Any
 
 from app.db.models import LLMCall, Request, Summary
+
+if TYPE_CHECKING:
+    import peewee
 
 logger = logging.getLogger(__name__)
 

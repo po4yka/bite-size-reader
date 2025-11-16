@@ -4,8 +4,9 @@ Provides consistent error responses across all endpoints with correlation ID tra
 """
 
 import logging
+
 from fastapi import Request, status
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from pydantic import ValidationError as PydanticValidationError
 
 from app.api.exceptions import APIException, ErrorCode
@@ -14,8 +15,12 @@ from app.config import load_config
 logger = logging.getLogger(__name__)
 
 
-async def api_exception_handler(request: Request, exc: APIException) -> JSONResponse:
+async def api_exception_handler(request: Request, exc: Exception) -> Response:
     """Handle custom API exceptions."""
+    # Type narrowing for FastAPI compatibility
+    if not isinstance(exc, APIException):
+        raise exc
+
     correlation_id = getattr(request.state, "correlation_id", None)
 
     # Log the error
@@ -44,10 +49,12 @@ async def api_exception_handler(request: Request, exc: APIException) -> JSONResp
     )
 
 
-async def validation_exception_handler(
-    request: Request, exc: PydanticValidationError
-) -> JSONResponse:
+async def validation_exception_handler(request: Request, exc: Exception) -> Response:
     """Handle Pydantic validation errors."""
+    # Type narrowing for FastAPI compatibility
+    if not isinstance(exc, PydanticValidationError):
+        raise exc
+
     correlation_id = getattr(request.state, "correlation_id", None)
 
     # Format validation errors
@@ -84,7 +91,7 @@ async def validation_exception_handler(
     )
 
 
-async def database_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+async def database_exception_handler(request: Request, exc: Exception) -> Response:
     """Handle database-related exceptions."""
     correlation_id = getattr(request.state, "correlation_id", None)
 
@@ -107,7 +114,7 @@ async def database_exception_handler(request: Request, exc: Exception) -> JSONRe
     )
 
 
-async def global_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+async def global_exception_handler(request: Request, exc: Exception) -> Response:
     """Catch-all handler for unexpected exceptions."""
     correlation_id = getattr(request.state, "correlation_id", None)
 
@@ -119,7 +126,7 @@ async def global_exception_handler(request: Request, exc: Exception) -> JSONResp
 
     # Don't leak error details in production
     config = load_config()
-    debug_mode = config.runtime.debug if hasattr(config, "runtime") else False
+    debug_mode = config.runtime.log_level == "DEBUG"
 
     message = str(exc) if debug_mode else "An internal server error occurred"
 

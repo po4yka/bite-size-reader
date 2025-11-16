@@ -5,9 +5,8 @@ import contextlib
 import io
 import json
 import logging
-import os
 from dataclasses import dataclass
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
@@ -103,8 +102,7 @@ class TelegramBot:
         )
 
         # Initialize semaphore for concurrency control
-        max_conc = int(os.getenv("MAX_CONCURRENT_CALLS", "4"))
-        self._ext_sem_size = max(1, max_conc)
+        self._ext_sem_size = max(1, self.cfg.runtime.max_concurrent_calls)
         self._ext_sem_obj: asyncio.Semaphore | None = None
 
         # Initialize modular components

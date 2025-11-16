@@ -11,8 +11,10 @@ Expected impact: Prevents orphaned LLM calls and invalid request records.
 from __future__ import annotations
 
 import logging
+from typing import TYPE_CHECKING
 
-from app.db.database import Database
+if TYPE_CHECKING:
+    from app.db.database import Database
 
 logger = logging.getLogger(__name__)
 

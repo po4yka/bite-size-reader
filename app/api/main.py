@@ -5,22 +5,23 @@ Usage:
     uvicorn app.api.main:app --reload --host 0.0.0.0 --port 8000
 """
 
+from datetime import UTC, datetime
+
+import peewee
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from datetime import datetime, UTC
 from pydantic import ValidationError as PydanticValidationError
-import peewee
 
-from app.config import Config
-from app.api.routers import summaries, requests, search, sync, auth, user
-from app.api.middleware import correlation_id_middleware, rate_limit_middleware
-from app.api.exceptions import APIException
 from app.api.error_handlers import (
     api_exception_handler,
-    validation_exception_handler,
     database_exception_handler,
     global_exception_handler as global_error_handler,
+    validation_exception_handler,
 )
+from app.api.exceptions import APIException
+from app.api.middleware import correlation_id_middleware, rate_limit_middleware
+from app.api.routers import auth, requests, search, summaries, sync, user
+from app.config import Config
 from app.core.logging_utils import get_logger
 
 logger = get_logger(__name__)
@@ -114,9 +115,10 @@ app.add_exception_handler(Exception, global_error_handler)
 if __name__ == "__main__":
     import uvicorn
 
+    # Development server - bind to all interfaces for Docker/container access
     uvicorn.run(
         "app.api.main:app",
-        host="0.0.0.0",
+        host="0.0.0.0",  # nosec B104 - intentional for development/Docker environments
         port=8000,
         reload=True,
         log_level="info",

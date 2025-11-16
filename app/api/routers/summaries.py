@@ -4,15 +4,16 @@ Summary management endpoints.
 Provides CRUD operations for summaries.
 """
 
+from datetime import UTC, datetime
+
 from fastapi import APIRouter, Depends, Query
-from datetime import datetime, UTC
 
 from app.api.auth import get_current_user
 from app.api.models.requests import UpdateSummaryRequest
 from app.api.models.responses import SummaryCompact
 from app.api.services import SummaryService
-from app.db.models import CrawlResult, LLMCall
 from app.core.logging_utils import get_logger
+from app.db.models import CrawlResult, LLMCall
 
 logger = get_logger(__name__)
 router = APIRouter()

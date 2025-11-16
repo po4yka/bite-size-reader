@@ -51,18 +51,24 @@ Telegram Message → MessageHandler → AccessController → MessageRouter
 
 1. **Telegram Layer** (`app/adapters/telegram/`)
    - `telegram_bot.py` — Main bot orchestration
+   - `telegram_client.py` — Telegram client wrapper
    - `message_handler.py` — Normalizes incoming updates
    - `access_controller.py` — Enforces owner whitelist
    - `message_router.py` — Routes to URL/forward/command processors
    - `message_persistence.py` — Persists all Telegram message snapshots
    - `command_processor.py` — Handles bot commands (/help, /summarize, /cancel)
+   - `commands.py` — Command definitions and descriptions
    - `url_handler.py` — Orchestrates URL processing flow
    - `forward_processor.py` — Handles forwarded message summarization
+   - `forward_content_processor.py` — Forward content extraction
+   - `forward_summarizer.py` — Forward message summarization
+   - `task_manager.py` — Task management for multi-link processing
 
 2. **Content Pipeline** (`app/adapters/content/`)
    - `content_extractor.py` — Firecrawl integration and YouTube routing
    - `content_chunker.py` — Splits large content for LLM processing
    - `llm_summarizer.py` — OpenRouter summarization
+   - `llm_response_workflow.py` — LLM response handling workflow
    - `url_processor.py` — Coordinates extraction → chunking → summarization
 
 3. **YouTube Adapter** (`app/adapters/youtube/`)
@@ -96,6 +102,54 @@ Telegram Message → MessageHandler → AccessController → MessageRouter
    - `summary.py` — Local CLI runner for testing summaries without Telegram
    - `migrate_db.py` — Database migrations
    - `search.py` — Search summaries by topics/entities
+   - `search_compare.py` — Compare search implementations
+   - `backfill_embeddings.py` — Backfill embeddings for existing summaries
+
+7. **Mobile API** (`app/api/`)
+   - `main.py` — FastAPI application entry point
+   - `middleware.py` — Request/response middleware (CORS, error handling)
+   - `error_handlers.py` — Global error handlers
+   - `exceptions.py` — Custom API exceptions
+   - `background_processor.py` — Background task processing
+   - **Routers** (`app/api/routers/`)
+     - `auth.py` — Telegram-based authentication, JWT tokens
+     - `summaries.py` — Summary retrieval endpoints
+     - `sync.py` — Mobile client sync endpoints
+   - **Models** (`app/api/models/`)
+     - Pydantic request/response models for API contracts
+   - **Services** (`app/api/services/`)
+     - Business logic for API operations
+
+8. **Multi-Agent Architecture** (`app/agents/`)
+   - `base_agent.py` — Base agent class with result pattern
+   - `validation_agent.py` — Summary validation with detailed errors
+   - `content_extraction_agent.py` — Content extraction with quality checks
+   - `summarization_agent.py` — Summarization with self-correction loop
+   - `orchestrator.py` — Agent pipeline orchestration
+
+9. **Search Services** (`app/services/`)
+   - `topic_search.py` — Topic-based search (local and service implementations)
+   - `topic_search_utils.py` — Search utilities and helpers
+   - `vector_search_service.py` — Vector similarity search
+   - `hybrid_search_service.py` — Hybrid search (keyword + vector)
+   - `query_expansion_service.py` — Query expansion for better search
+   - `reranking_service.py` — Search result reranking
+   - `embedding_service.py` — Text embedding generation
+   - `summary_embedding_generator.py` — Summary-specific embeddings
+   - `search_filters.py` — Search filtering utilities
+
+10. **Utilities** (`app/utils/`)
+    - `progress_tracker.py` — Progress tracking for multi-step operations
+    - `message_formatter.py` — Message formatting utilities
+    - `json_validation.py` — JSON validation helpers
+
+11. **Domain Layer** (`app/domain/`)
+    - Domain-driven design models and services
+    - Business logic separated from infrastructure
+
+12. **Infrastructure** (`app/infrastructure/`)
+    - Persistence layer implementations
+    - Event bus and messaging infrastructure
 
 ## Directory Structure
 
@@ -110,12 +164,18 @@ app/
 ├── cli/                # CLI tools (summary runner, search, migrations)
 ├── core/               # Shared utilities (URL, JSON, logging, lang)
 ├── db/                 # Database schema and models
+├── di/                 # Dependency injection
 ├── domain/             # Domain models and services (DDD patterns)
+├── handlers/           # Request handlers
 ├── infrastructure/     # Persistence and messaging infrastructure
 ├── models/             # Pydantic/dataclass models
 │   ├── llm/            # LLM config models
 │   └── telegram/       # Telegram entity models
-└── prompts/            # LLM system prompts (en/ru)
+├── presentation/       # Presentation layer
+├── prompts/            # LLM system prompts (en/ru)
+├── security/           # Security utilities
+├── services/           # Search and other domain services
+└── utils/              # Helper utilities (progress, formatting, validation)
 ```
 
 ## Summary JSON Contract
@@ -535,6 +595,10 @@ FIRECRAWL_API_KEY=...               # Firecrawl API key
 OPENROUTER_API_KEY=...              # OpenRouter API key
 OPENROUTER_MODEL=openai/gpt-4       # Default model
 
+# Mobile API (Optional - only if using Mobile API)
+JWT_SECRET_KEY=...                  # JWT secret for Mobile API auth (min 32 chars)
+ALLOWED_CLIENT_IDS=...              # Comma-separated client app IDs (empty = allow all)
+
 # Optional
 DB_PATH=/data/app.db                # SQLite database path
 LOG_LEVEL=INFO                      # Logging level (DEBUG, INFO, WARNING, ERROR)
@@ -562,7 +626,7 @@ YOUTUBE_CLEANUP_AFTER_DAYS=30       # Delete videos older than N days
 
 ---
 
-**Last Updated:** 2025-11-14
+**Last Updated:** 2025-11-16
 
 For questions about the codebase, always refer to:
 1. This file (CLAUDE.md) for AI assistant guidance

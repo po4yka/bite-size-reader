@@ -6,8 +6,8 @@ from fastapi import APIRouter, Depends
 
 from app.api.auth import get_current_user
 from app.api.models.requests import UpdatePreferencesRequest
-from app.db.models import Summary, User
 from app.core.logging_utils import get_logger
+from app.db.models import Summary, User
 
 logger = get_logger(__name__)
 router = APIRouter()

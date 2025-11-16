@@ -1,10 +1,10 @@
 """Summary service - business logic for summary operations."""
 
-from peewee import fn, Case
+from peewee import Case, fn
 
-from app.db.models import Summary, Request as RequestModel
 from app.api.exceptions import ResourceNotFoundError
 from app.core.logging_utils import get_logger
+from app.db.models import Request as RequestModel, Summary
 
 logger = get_logger(__name__)
 

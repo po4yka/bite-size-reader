@@ -2,14 +2,15 @@
 Database synchronization endpoints for offline mobile support.
 """
 
-from fastapi import APIRouter, Depends, Query
-from datetime import datetime, UTC
 import uuid
+from datetime import UTC, datetime
+
+from fastapi import APIRouter, Depends, Query
 
 from app.api.auth import get_current_user
 from app.api.models.requests import SyncUploadRequest
-from app.db.models import Summary, Request as RequestModel, CrawlResult
 from app.core.logging_utils import get_logger
+from app.db.models import CrawlResult, Request as RequestModel, Summary
 
 logger = get_logger(__name__)
 router = APIRouter()
@@ -44,7 +45,7 @@ async def initiate_full_sync(
     sync_id = f"sync-{uuid.uuid4().hex[:16]}"
 
     # Generate chunk URLs
-    download_urls = [f"/sync/full/{sync_id}/chunk/{i+1}" for i in range(total_chunks)]
+    download_urls = [f"/sync/full/{sync_id}/chunk/{i + 1}" for i in range(total_chunks)]
 
     return {
         "success": True,
@@ -54,7 +55,9 @@ async def initiate_full_sync(
             "total_items": total_items,
             "chunks": total_chunks,
             "download_urls": download_urls,
-            "expires_at": datetime.now(UTC).isoformat().replace("+00:00", "Z"),  # TODO: Add expiry logic
+            "expires_at": datetime.now(UTC)
+            .isoformat()
+            .replace("+00:00", "Z"),  # TODO: Add expiry logic
         },
     }
 
@@ -205,9 +208,7 @@ async def upload_local_changes(
         summary = (
             Summary.select()
             .join(RequestModel)
-            .where(
-                (Summary.id == change.summary_id) & (RequestModel.user_id == user["user_id"])
-            )
+            .where((Summary.id == change.summary_id) & (RequestModel.user_id == user["user_id"]))
             .first()
         )
 

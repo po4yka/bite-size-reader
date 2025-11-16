@@ -181,8 +181,8 @@ class TestDedupeReuse(unittest.IsolatedAsyncioTestCase):
             row2 = db.get_request_by_dedupe_hash(dedupe)
             assert row2["correlation_id"] == "cid2"
             assert (
-                fake_or.calls == 5
-            )  # First run: 1 for summary + 2 for insights. Second run: reuses summary but regenerates insights (+2)
+                fake_or.calls == 3
+            )  # First run: 3 LLM calls (summary generation). Second run: cached summary reused, no new LLM calls
 
     async def test_forward_cached_summary_reuse(self):
         with tempfile.TemporaryDirectory() as tmp:

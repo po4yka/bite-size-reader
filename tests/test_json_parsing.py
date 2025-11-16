@@ -51,6 +51,7 @@ class TestJsonParsing(unittest.TestCase):
         runtime_cfg.debug_payloads = False
         runtime_cfg.log_truncate_length = 100
         runtime_cfg.preferred_lang = "en"
+        runtime_cfg.max_concurrent_calls = 4
 
         self.cfg = AppConfig(telegram_cfg, firecrawl_cfg, openrouter_cfg, runtime_cfg)
         self.db = MagicMock(spec=Database)

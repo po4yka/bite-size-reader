@@ -3,7 +3,7 @@
 This adapter translates between domain Request models and database records.
 """
 
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 from typing import Any
 
 from app.domain.models.request import Request, RequestStatus, RequestType
