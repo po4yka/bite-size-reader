@@ -2,14 +2,15 @@
 Database synchronization endpoints for offline mobile support.
 """
 
-from fastapi import APIRouter, Depends, Query
-from datetime import datetime, UTC
 import uuid
+from datetime import UTC, datetime
+
+from fastapi import APIRouter, Depends, Query
 
 from app.api.auth import get_current_user
 from app.api.models.requests import SyncUploadRequest
-from app.db.models import Summary, Request as RequestModel, CrawlResult
 from app.core.logging_utils import get_logger
+from app.db.models import CrawlResult, Request as RequestModel, Summary
 
 logger = get_logger(__name__)
 router = APIRouter()

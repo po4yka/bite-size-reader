@@ -5,6 +5,7 @@ FastAPI middleware for request processing.
 import time
 import uuid
 from collections.abc import Callable
+
 from fastapi import Request
 from fastapi.responses import JSONResponse
 

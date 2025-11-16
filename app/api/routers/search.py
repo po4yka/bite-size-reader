@@ -2,11 +2,11 @@
 Search and discovery endpoints.
 """
 
-from fastapi import APIRouter, Depends, Query, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.api.auth import get_current_user
-from app.db.models import TopicSearchIndex, Summary, Request as RequestModel
 from app.core.logging_utils import get_logger
+from app.db.models import Request as RequestModel, Summary, TopicSearchIndex
 
 logger = get_logger(__name__)
 router = APIRouter()
@@ -193,7 +193,7 @@ async def check_duplicate(
     user=Depends(get_current_user),
 ):
     """Check if a URL has already been summarized."""
-    from app.core.url_utils import normalize_url, compute_dedupe_hash
+    from app.core.url_utils import compute_dedupe_hash, normalize_url
 
     normalized = normalize_url(url)
     dedupe_hash = compute_dedupe_hash(normalized)

@@ -8,11 +8,12 @@ Tests critical security fixes:
 4. JWT secret validation
 """
 
-import pytest
-import hmac
 import hashlib
+import hmac
 import time
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
+
+import pytest
 
 # Note: These tests require the API to be importable
 # Run with: pytest tests/test_api_security.py -v
@@ -124,8 +125,9 @@ class TestAuthorizationChecks:
 
     def test_cannot_access_other_users_summary(self, mock_user, other_user):
         """Test that users cannot access each other's summaries."""
-        from app.api.routers.summaries import get_summary
         from fastapi import HTTPException
+
+        from app.api.routers.summaries import get_summary
 
         # Create summary for user 123456789
         with patch("app.api.routers.summaries.Summary") as MockSummary:
@@ -147,8 +149,9 @@ class TestAuthorizationChecks:
 
     def test_cannot_access_other_users_request(self, mock_user, other_user):
         """Test that users cannot access each other's requests."""
-        from app.api.routers.requests import get_request
         from fastapi import HTTPException
+
+        from app.api.routers.requests import get_request
 
         with patch("app.api.routers.requests.RequestModel") as MockRequest:
             # Mock query that returns no results (authorization failed)
@@ -180,6 +183,7 @@ class TestJWTSecretValidation:
             with pytest.raises(RuntimeError) as exc_info:
                 # Re-import to trigger validation
                 import importlib
+
                 import app.api.routers.auth
 
                 importlib.reload(app.api.routers.auth)
@@ -193,6 +197,7 @@ class TestJWTSecretValidation:
 
             with pytest.raises(RuntimeError) as exc_info:
                 import importlib
+
                 import app.api.routers.auth
 
                 importlib.reload(app.api.routers.auth)

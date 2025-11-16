@@ -2,18 +2,19 @@
 Authentication endpoints and utilities.
 """
 
-from fastapi import APIRouter, HTTPException, Depends
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from pydantic import BaseModel, Field, ConfigDict
-from datetime import datetime, timedelta, UTC
-import jwt
 import hashlib
 import hmac
 import time
+from datetime import UTC, datetime, timedelta
+
+import jwt
+from fastapi import APIRouter, Depends, HTTPException
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.config import Config
-from app.db.models import User
 from app.core.logging_utils import get_logger
+from app.db.models import User
 
 logger = get_logger(__name__)
 router = APIRouter()

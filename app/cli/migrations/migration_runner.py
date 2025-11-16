@@ -28,14 +28,14 @@ import importlib
 import logging
 import sys
 from pathlib import Path
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import peewee
 
-
 if TYPE_CHECKING:
-    from app.db.database import Database
     from collections.abc import Callable
+
+    from app.db.database import Database
 
 logger = logging.getLogger(__name__)
 

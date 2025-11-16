@@ -3,7 +3,7 @@
 This adapter translates between domain Summary models and database records.
 """
 
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 from typing import Any
 
 from app.domain.models.summary import Summary

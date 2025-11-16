@@ -4,6 +4,7 @@ Provides consistent error responses across all endpoints with correlation ID tra
 """
 
 import logging
+
 from fastapi import Request, status
 from fastapi.responses import JSONResponse
 from pydantic import ValidationError as PydanticValidationError

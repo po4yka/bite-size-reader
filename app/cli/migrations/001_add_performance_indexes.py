@@ -13,10 +13,9 @@ Expected impact: 10-100x speedup on indexed queries.
 from __future__ import annotations
 
 import logging
+from typing import TYPE_CHECKING
 
 import peewee
-
-from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from app.db.database import Database
