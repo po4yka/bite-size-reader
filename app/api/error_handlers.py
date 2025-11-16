@@ -15,8 +15,12 @@ from app.config import load_config
 logger = logging.getLogger(__name__)
 
 
-async def api_exception_handler(request: Request, exc: APIException) -> Response:
+async def api_exception_handler(request: Request, exc: Exception) -> Response:
     """Handle custom API exceptions."""
+    # Type narrowing for FastAPI compatibility
+    if not isinstance(exc, APIException):
+        raise exc
+
     correlation_id = getattr(request.state, "correlation_id", None)
 
     # Log the error
@@ -45,8 +49,12 @@ async def api_exception_handler(request: Request, exc: APIException) -> Response
     )
 
 
-async def validation_exception_handler(request: Request, exc: PydanticValidationError) -> Response:
+async def validation_exception_handler(request: Request, exc: Exception) -> Response:
     """Handle Pydantic validation errors."""
+    # Type narrowing for FastAPI compatibility
+    if not isinstance(exc, PydanticValidationError):
+        raise exc
+
     correlation_id = getattr(request.state, "correlation_id", None)
 
     # Format validation errors
