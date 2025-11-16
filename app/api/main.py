@@ -115,9 +115,10 @@ app.add_exception_handler(Exception, global_error_handler)
 if __name__ == "__main__":
     import uvicorn
 
+    # Development server - bind to all interfaces for Docker/container access
     uvicorn.run(
         "app.api.main:app",
-        host="0.0.0.0",
+        host="0.0.0.0",  # nosec B104 - intentional for development/Docker environments
         port=8000,
         reload=True,
         log_level="info",
