@@ -1082,10 +1082,14 @@ class ContentExtractor:
 
         # Download video and extract transcript
         try:
-            req_id, transcript_text, content_source, detected_lang, video_metadata = (
-                await youtube_downloader.download_and_extract(
-                    message, url_text, correlation_id, interaction_id, silent
-                )
+            (
+                req_id,
+                transcript_text,
+                content_source,
+                detected_lang,
+                video_metadata,
+            ) = await youtube_downloader.download_and_extract(
+                message, url_text, correlation_id, interaction_id, silent
             )
 
             logger.info(

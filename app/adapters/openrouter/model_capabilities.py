@@ -72,10 +72,10 @@ class ModelCapabilities:
         """Get list of models known to support structured outputs reliably."""
         return [
             "deepseek/deepseek-v3-0324:free",  # Free, reliable, excellent performance
-            "deepseek/deepseek-r1:free",       # Free, strong reasoning
-            "qwen/qwen3-max",                  # Flagship model, comprehensive
-            "openai/gpt-4o",                   # Reliable paid option
-            "google/gemini-2.5-pro",           # Alternative paid option
+            "deepseek/deepseek-r1:free",  # Free, strong reasoning
+            "qwen/qwen3-max",  # Flagship model, comprehensive
+            "openai/gpt-4o",  # Reliable paid option
+            "google/gemini-2.5-pro",  # Alternative paid option
         ]
 
     def supports_structured_outputs(self, model: str) -> bool:

@@ -259,8 +259,13 @@ class OpenRouterConfig(BaseModel):
     api_key: str = Field(..., validation_alias="OPENROUTER_API_KEY")
     model: str = Field(default="qwen/qwen3-max", validation_alias="OPENROUTER_MODEL")
     fallback_models: tuple[str, ...] = Field(
-        default_factory=lambda: ("deepseek/deepseek-r1", "moonshotai/kimi-k2-thinking", "deepseek/deepseek-v3-0324", "openai/gpt-4o"),
-        validation_alias="OPENROUTER_FALLBACK_MODELS"
+        default_factory=lambda: (
+            "deepseek/deepseek-r1",
+            "moonshotai/kimi-k2-thinking",
+            "deepseek/deepseek-v3-0324",
+            "openai/gpt-4o",
+        ),
+        validation_alias="OPENROUTER_FALLBACK_MODELS",
     )
     http_referer: str | None = Field(default=None, validation_alias="OPENROUTER_HTTP_REFERER")
     x_title: str | None = Field(default=None, validation_alias="OPENROUTER_X_TITLE")
