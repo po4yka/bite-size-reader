@@ -101,6 +101,7 @@ def make_bot(tmp_path: str) -> ReadStatusBot:
             preferred_lang="en",
             debug_payloads=False,
         ),
+        youtube=YouTubeConfig(),
     )
     from app.adapters import telegram_bot as tbmod
 

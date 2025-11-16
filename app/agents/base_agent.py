@@ -5,13 +5,16 @@ from __future__ import annotations
 import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Generic, TypeVar
 
 logger = logging.getLogger(__name__)
 
+TOutput = TypeVar("TOutput")
+TInput = TypeVar("TInput")
+
 
 @dataclass
-class AgentResult[TOutput]:
+class AgentResult(Generic[TOutput]):  # noqa: UP046  # Python 3.11 compatibility
     """Result of an agent execution.
 
     Attributes:
@@ -37,7 +40,7 @@ class AgentResult[TOutput]:
         return cls(success=False, error=error, metadata=metadata)
 
 
-class BaseAgent[TInput, TOutput](ABC):
+class BaseAgent(ABC, Generic[TInput, TOutput]):  # noqa: UP046  # Python 3.11 compatibility
     """Base class for all agents in the multi-agent system.
 
     Each agent should:

@@ -72,6 +72,7 @@ def _bot_with_tmpdb(tmp_path):
             preferred_lang="en",
             debug_payloads=False,
         ),
+        youtube=YouTubeConfig(),
     )
     from app.adapters import telegram_bot as tbmod
 

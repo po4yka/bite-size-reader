@@ -76,6 +76,7 @@ class TestForwardMessagePersistence(unittest.IsolatedAsyncioTestCase):
                     preferred_lang="en",
                     debug_payloads=False,
                 ),
+                youtube=YouTubeConfig(),
             )
 
             formatter = MagicMock(spec=ResponseFormatter)

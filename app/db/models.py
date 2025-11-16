@@ -24,6 +24,7 @@ class User(BaseModel):
     telegram_user_id = peewee.BigIntegerField(primary_key=True)
     username = peewee.TextField(null=True)
     is_owner = peewee.BooleanField(default=False)
+    preferences_json = JSONField(null=True)  # User preferences (lang, notifications, app settings)
     created_at = peewee.DateTimeField(default=_dt.datetime.utcnow)
 
     class Meta:

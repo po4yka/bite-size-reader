@@ -40,6 +40,7 @@ def _make_config() -> AppConfig:
             preferred_lang="en",
             debug_payloads=False,
         ),
+        youtube=YouTubeConfig(),
     )
 
 

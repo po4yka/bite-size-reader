@@ -355,7 +355,7 @@ class YouTubeDownloader:
                 # Just join all text naturally
                 lines.append(text)
 
-        # Join with spaces and clean up
+        # Join with spaces and clean up, removing duplicate spaces
         transcript = " ".join(lines)
         # Remove duplicate spaces
         return " ".join(transcript.split())

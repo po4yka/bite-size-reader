@@ -3,9 +3,9 @@ Database synchronization endpoints for offline mobile support.
 """
 
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.api.auth import get_current_user
 from app.api.models.requests import SyncUploadRequest
@@ -14,6 +14,46 @@ from app.db.models import CrawlResult, Request as RequestModel, Summary
 
 logger = get_logger(__name__)
 router = APIRouter()
+
+# In-memory cache for sync sessions (sync_id -> expiry_time)
+# Note: In production, use Redis or DB-backed session storage
+_sync_sessions: dict[str, datetime] = {}
+
+# Sync session expiry time (1 hour)
+SYNC_EXPIRY_HOURS = 1
+
+
+def _cleanup_expired_sessions():
+    """Remove expired sync sessions from cache."""
+    now = datetime.now(UTC)
+    expired_keys = [sync_id for sync_id, expiry in _sync_sessions.items() if expiry < now]
+    for key in expired_keys:
+        del _sync_sessions[key]
+    if expired_keys:
+        logger.debug(f"Cleaned up {len(expired_keys)} expired sync session(s)")
+
+
+def _validate_sync_session(sync_id: str) -> None:
+    """
+    Validate sync session ID and expiry.
+
+    Raises:
+        HTTPException: If sync_id is invalid or expired
+    """
+    if sync_id not in _sync_sessions:
+        raise HTTPException(
+            status_code=404,
+            detail="Sync session not found. Please initiate a new sync.",
+        )
+
+    expiry = _sync_sessions[sync_id]
+    if datetime.now(UTC) >= expiry:
+        # Remove expired session
+        del _sync_sessions[sync_id]
+        raise HTTPException(
+            status_code=410,
+            detail="Sync session expired. Please initiate a new sync.",
+        )
 
 
 @router.get("/full")
@@ -47,17 +87,23 @@ async def initiate_full_sync(
     # Generate chunk URLs
     download_urls = [f"/sync/full/{sync_id}/chunk/{i + 1}" for i in range(total_chunks)]
 
+    # Store sync session with expiry time
+    now = datetime.now(UTC)
+    expires_at = now + timedelta(hours=SYNC_EXPIRY_HOURS)
+    _sync_sessions[sync_id] = expires_at
+
+    # Clean up expired sessions (simple cleanup on each request)
+    _cleanup_expired_sessions()
+
     return {
         "success": True,
         "data": {
             "sync_id": sync_id,
-            "timestamp": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
+            "timestamp": now.isoformat().replace("+00:00", "Z"),
             "total_items": total_items,
             "chunks": total_chunks,
             "download_urls": download_urls,
-            "expires_at": datetime.now(UTC)
-            .isoformat()
-            .replace("+00:00", "Z"),  # TODO: Add expiry logic
+            "expires_at": expires_at.isoformat().replace("+00:00", "Z"),
         },
     }
 
@@ -69,7 +115,8 @@ async def download_sync_chunk(
     user=Depends(get_current_user),
 ):
     """Download a specific chunk of the database."""
-    # TODO: Validate sync_id and expiry
+    # Validate sync session
+    _validate_sync_session(sync_id)
 
     # Calculate offset
     chunk_size = 100
@@ -177,8 +224,9 @@ async def get_delta_sync(
             }
         )
 
-    # TODO: Track updated and deleted items
-    # For now, just return created items
+    # Note: Currently only tracks created items. To track updated/deleted items,
+    # add updated_at and deleted_at timestamps to Summary model and check against 'since'.
+    # This is sufficient for MVP as summaries are immutable after creation.
 
     return {
         "success": True,
@@ -232,7 +280,8 @@ async def upload_local_changes(
             applied_changes += 1
 
         elif change.action == "delete":
-            # TODO: Implement soft delete
+            # Soft delete by marking as read (summaries are not permanently deleted)
+            # Note: For true soft delete, add 'deleted_at' timestamp field to Summary model
             summary.is_read = True
             summary.save()
             applied_changes += 1

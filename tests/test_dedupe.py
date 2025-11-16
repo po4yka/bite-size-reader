@@ -153,6 +153,7 @@ class TestDedupeReuse(unittest.IsolatedAsyncioTestCase):
                     preferred_lang="en",
                     debug_payloads=False,
                 ),
+                youtube=YouTubeConfig(),
             )
 
             # Avoid creating real Telegram client
@@ -239,6 +240,7 @@ class TestDedupeReuse(unittest.IsolatedAsyncioTestCase):
                     preferred_lang="en",
                     debug_payloads=False,
                 ),
+                youtube=YouTubeConfig(),
             )
 
             from app.adapters import telegram_bot as tbmod

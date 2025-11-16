@@ -444,15 +444,19 @@ class AgentOrchestrator:
 
                 try:
                     result = await self._execute_with_retry(pipeline_input)
+                    # Extract actual attempt count from pipeline output
+                    output = result.get("output")
+                    attempts = output.summarization_attempts if output else 1
                     return BatchPipelineOutput(
                         correlation_id=correlation_id,
                         url=url,
                         success=result["success"],
-                        output=result.get("output"),
-                        attempts=1,  # TODO: Track actual attempts
+                        output=output,
+                        attempts=attempts,
                     )
                 except Exception as e:
                     logger.error(f"[Batch] Failed to process {url}: {e}")
+                    # For failures, we don't know the exact attempts, use 1 as fallback
                     return BatchPipelineOutput(
                         correlation_id=correlation_id,
                         url=url,
