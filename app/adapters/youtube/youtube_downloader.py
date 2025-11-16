@@ -446,9 +446,7 @@ class YouTubeDownloader:
                         "❌ This video is geo-blocked and not available in your region."
                     ) from e
                 # Generic extraction error
-                raise ValueError(
-                    f"❌ Failed to extract video information: {str(e)[:200]}"
-                ) from e
+                raise ValueError(f"❌ Failed to extract video information: {str(e)[:200]}") from e
             except Exception as e:
                 logger.error(
                     "yt_dlp_extract_info_failed",

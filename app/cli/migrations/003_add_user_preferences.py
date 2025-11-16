@@ -52,9 +52,7 @@ def downgrade(db: Database) -> None:
 
     try:
         with db._database.atomic():
-            peewee.migrate(
-                migrator.drop_column("users", "preferences_json")
-            )
+            peewee.migrate(migrator.drop_column("users", "preferences_json"))
 
         logger.info("Removed preferences_json column from users table")
 
