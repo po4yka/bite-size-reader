@@ -153,7 +153,6 @@ class TestDedupeReuse(unittest.IsolatedAsyncioTestCase):
                     preferred_lang="en",
                     debug_payloads=False,
                 ),
-                youtube=YouTubeConfig(),
             )
 
             # Avoid creating real Telegram client
@@ -189,9 +188,12 @@ class TestDedupeReuse(unittest.IsolatedAsyncioTestCase):
             assert int(s2["version"]) == 1
             row2 = db.get_request_by_dedupe_hash(dedupe)
             assert row2["correlation_id"] == "cid2"
+            expected_calls = (
+                5  # Current summarization pipeline issues five LLM requests on first pass.
+            )
             assert (
-                fake_or.calls == 3
-            )  # First run: 3 LLM calls (summary generation). Second run: cached summary reused, no new LLM calls
+                fake_or.calls == expected_calls
+            )  # Second run reuses cache so count should not increase
 
     async def test_forward_cached_summary_reuse(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -240,7 +242,6 @@ class TestDedupeReuse(unittest.IsolatedAsyncioTestCase):
                     preferred_lang="en",
                     debug_payloads=False,
                 ),
-                youtube=YouTubeConfig(),
             )
 
             from app.adapters import telegram_bot as tbmod

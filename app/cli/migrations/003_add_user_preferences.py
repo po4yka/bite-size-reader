@@ -14,6 +14,7 @@ import logging
 from typing import TYPE_CHECKING
 
 import peewee
+from playhouse.migrate import SqliteMigrator, migrate
 
 if TYPE_CHECKING:
     from app.db.database import Database
@@ -23,12 +24,12 @@ logger = logging.getLogger(__name__)
 
 def upgrade(db: Database) -> None:
     """Add preferences_json field to users table."""
-    migrator = peewee.SqliteMigrator(db._database)
+    migrator = SqliteMigrator(db._database)
 
     try:
         # Add preferences_json column (nullable JSON field)
         with db._database.atomic():
-            peewee.migrate(
+            migrate(
                 migrator.add_column(
                     "users",
                     "preferences_json",
@@ -48,11 +49,11 @@ def upgrade(db: Database) -> None:
 
 def downgrade(db: Database) -> None:
     """Remove preferences_json field from users table."""
-    migrator = peewee.SqliteMigrator(db._database)
+    migrator = SqliteMigrator(db._database)
 
     try:
         with db._database.atomic():
-            peewee.migrate(migrator.drop_column("users", "preferences_json"))
+            migrate(migrator.drop_column("users", "preferences_json"))
 
         logger.info("Removed preferences_json column from users table")
 

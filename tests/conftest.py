@@ -3,10 +3,16 @@
 This module provides common fixtures for all tests.
 """
 
+import os
 from datetime import datetime
 from typing import Any
 
 import pytest
+
+# Provide sane defaults for integration/API tests that expect these env vars.
+os.environ.setdefault("JWT_SECRET_KEY", "test-secret-key-32-characters-long-123456")
+os.environ.setdefault("BOT_TOKEN", "test_token")
+os.environ.setdefault("ALLOWED_USER_IDS", "123456789")
 
 
 class MockSummaryRepository:

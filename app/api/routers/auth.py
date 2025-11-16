@@ -20,18 +20,32 @@ logger = get_logger(__name__)
 router = APIRouter()
 security = HTTPBearer()
 
-# JWT configuration
-SECRET_KEY = Config.get("JWT_SECRET_KEY")
-if not SECRET_KEY or SECRET_KEY == "your-secret-key-change-in-production":
-    raise RuntimeError(
-        "JWT_SECRET_KEY environment variable must be set to a secure random value. "
-        "Generate one with: openssl rand -hex 32"
-    )
 
-if len(SECRET_KEY) < 32:
-    raise RuntimeError(
-        f"JWT_SECRET_KEY must be at least 32 characters long. Current length: {len(SECRET_KEY)}"
-    )
+def _load_secret_key() -> str:
+    """Load and validate the JWT secret key."""
+    try:
+        secret = Config.get("JWT_SECRET_KEY", "").strip()
+    except ValueError as err:
+        raise RuntimeError(
+            "JWT_SECRET_KEY environment variable must be configured. "
+            "Generate one with: openssl rand -hex 32"
+        ) from err
+
+    if not secret or secret == "your-secret-key-change-in-production":
+        raise RuntimeError(
+            "JWT_SECRET_KEY environment variable must be set to a secure random value. "
+            "Generate one with: openssl rand -hex 32"
+        )
+
+    if len(secret) < 32:
+        raise RuntimeError(
+            f"JWT_SECRET_KEY must be at least 32 characters long. Current length: {len(secret)}"
+        )
+    return secret
+
+
+# JWT configuration
+SECRET_KEY = _load_secret_key()
 
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60
@@ -136,10 +150,21 @@ def verify_telegram_auth(
     data_check_string = "\n".join(data_check_arr)
 
     # Get bot token
-    bot_token = Config.get("BOT_TOKEN")
-    if not bot_token:
+    try:
+        bot_token = Config.get("BOT_TOKEN")
+    except ValueError as err:
         logger.error("BOT_TOKEN not configured - cannot verify Telegram auth")
-        raise RuntimeError("BOT_TOKEN not configured")
+        raise HTTPException(
+            status_code=500,
+            detail="Server misconfiguration: BOT_TOKEN is not set.",
+        ) from err
+
+    if not bot_token:
+        logger.error("BOT_TOKEN is empty - cannot verify Telegram auth")
+        raise HTTPException(
+            status_code=500,
+            detail="Server misconfiguration: BOT_TOKEN is empty.",
+        )
 
     # Compute secret key: SHA256(bot_token)
     secret_key = hashlib.sha256(bot_token.encode()).digest()

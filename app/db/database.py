@@ -1937,8 +1937,7 @@ class Database:
                         wrapped += 1
                     if reason == "blank":
                         blanks += 1
-                    with self._database.connection_context():
-                        model.update({field: normalized}).where(model.id == row_id).execute()
+                    model.update({field: normalized}).where(model.id == row_id).execute()
                     updates += 1
             except Exception as exc:
                 self._logger.exception(

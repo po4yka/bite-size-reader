@@ -7,7 +7,7 @@ import json
 import logging
 from datetime import datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -243,7 +243,7 @@ class YouTubeDownloader:
 
             # Try to get transcript in preferred language
             transcript_list = await asyncio.to_thread(
-                YouTubeTranscriptApi.list_transcripts,  # type: ignore[attr-defined]
+                cast("Any", YouTubeTranscriptApi).list_transcripts,
                 video_id,
             )
 

@@ -250,10 +250,8 @@ sentence-transformers==5.1.2
     # via bite-size-reader (pyproject.toml)
 setuptools==80.9.0
     # via
-    #   pymorphy3
     #   spacy
     #   thinc
-    #   torch
 six==1.17.0
     # via python-dateutil
 smart-open==7.5.0
@@ -304,12 +302,15 @@ typer-slim==0.20.0
     #   weasel
 typing-extensions==4.15.0
     # via
+    #   anyio
     #   fastapi
     #   huggingface-hub
     #   mypy
     #   pydantic
     #   pydantic-core
+    #   pytest-asyncio
     #   sentence-transformers
+    #   starlette
     #   torch
     #   typer-slim
     #   typing-inspection
