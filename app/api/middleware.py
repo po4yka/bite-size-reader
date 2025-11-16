@@ -5,6 +5,7 @@ FastAPI middleware for request processing.
 import time
 import uuid
 from collections.abc import Callable
+from typing import Any
 
 from fastapi import Request
 from fastapi.responses import JSONResponse
@@ -14,7 +15,8 @@ from app.core.logging_utils import get_logger
 logger = get_logger(__name__)
 
 # Simple in-memory rate limiter (use Redis in production)
-_rate_limit_store = {}
+# Store structure: {ip_address: {"count": int, "window_start": int}}
+_rate_limit_store: dict[str, Any] = {}
 
 
 async def correlation_id_middleware(request: Request, call_next: Callable):

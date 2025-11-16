@@ -209,6 +209,25 @@ def url_hash_sha256(normalized_url: str) -> str:
         raise ValueError(msg) from e
 
 
+def compute_dedupe_hash(url: str) -> str:
+    """Compute deduplication hash for a URL.
+
+    This function normalizes the URL and computes its SHA256 hash,
+    which is used for identifying duplicate URLs in the database.
+
+    Args:
+        url: URL to compute hash for (will be normalized first)
+
+    Returns:
+        SHA256 hash of the normalized URL
+
+    Raises:
+        ValueError: If URL is invalid
+    """
+    normalized = normalize_url(url)
+    return url_hash_sha256(normalized)
+
+
 def looks_like_url(text: str) -> bool:
     """Check if text contains what looks like a URL."""
     if not text or not isinstance(text, str):

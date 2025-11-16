@@ -359,6 +359,21 @@ def setup_json_logging(
         logging.getLogger(noisy_logger).setLevel(logging.INFO)
 
 
+def get_logger(name: str) -> logging.Logger:
+    """Get a logger instance by name.
+
+    This is a convenience wrapper around logging.getLogger() that provides
+    consistent logger initialization across the application.
+
+    Args:
+        name: Logger name, typically __name__ of the calling module
+
+    Returns:
+        Logger instance for the given name
+    """
+    return logging.getLogger(name)
+
+
 def generate_correlation_id() -> str:
     """Generate a short correlation ID for tracing errors across logs and user messages."""
     return uuid.uuid4().hex[:12]
@@ -399,6 +414,7 @@ def truncate_log_content(content: str | None, max_length: int = 1000) -> str | N
 __all__ = [
     "EnhancedJsonFormatter",
     "generate_correlation_id",
+    "get_logger",
     "setup_json_logging",
     "truncate_log_content",
 ]
