@@ -285,19 +285,34 @@ class YouTubeDownloader:
 
             return transcript_text, selected_lang, auto_generated
 
-        except (TranscriptsDisabled, VideoUnavailable) as e:
-            logger.error(
-                "youtube_transcript_unavailable",
+        except TranscriptsDisabled as e:
+            logger.warning(
+                "youtube_transcript_disabled",
                 extra={"video_id": video_id, "error": str(e), "cid": correlation_id},
             )
-            raise ValueError(f"Transcript unavailable: {e}") from e
+            # Don't fail the download - we can still process the video without transcript
+            # But log it clearly for the user
+            logger.info(
+                "youtube_continuing_without_transcript",
+                extra={"video_id": video_id, "cid": correlation_id},
+            )
+            return "", "en", False
+        except VideoUnavailable as e:
+            logger.error(
+                "youtube_transcript_video_unavailable",
+                extra={"video_id": video_id, "error": str(e), "cid": correlation_id},
+            )
+            raise ValueError(
+                "❌ Video is unavailable or does not exist. The video may have been deleted or made private."
+            ) from e
         except Exception as e:
             raise_if_cancelled(e)
-            logger.exception(
+            logger.warning(
                 "youtube_transcript_extraction_failed",
                 extra={"video_id": video_id, "error": str(e), "cid": correlation_id},
             )
-            # Don't fail the entire download if transcript fails
+            # Don't fail the entire download if transcript fails - continue without transcript
+            # This allows the video download to proceed even if transcript extraction fails
             return "", "en", False
 
     def _format_transcript(self, transcript_data: list[dict]) -> str:
@@ -373,12 +388,57 @@ class YouTubeDownloader:
             # Extract info without downloading first (to check size and get metadata)
             try:
                 info = ydl.extract_info(url, download=False)
+            except yt_dlp.utils.DownloadError as e:
+                error_msg = str(e).lower()
+                logger.error(
+                    "yt_dlp_extract_info_failed",
+                    extra={"url": url, "error": str(e), "cid": correlation_id},
+                )
+
+                # Categorize common errors with user-friendly messages
+                if "sign in to confirm your age" in error_msg or "age-restricted" in error_msg:
+                    raise ValueError(
+                        "❌ This video is age-restricted and cannot be downloaded. "
+                        "YouTube requires login/age verification for this content."
+                    ) from e
+                elif "video is not available" in error_msg or "video unavailable" in error_msg:
+                    raise ValueError(
+                        "❌ Video is not available. It may be private, deleted, or geo-blocked in your region."
+                    ) from e
+                elif "private video" in error_msg:
+                    raise ValueError(
+                        "❌ This video is private and cannot be accessed."
+                    ) from e
+                elif "members-only" in error_msg or "join this channel" in error_msg:
+                    raise ValueError(
+                        "❌ This video is members-only content. YouTube Premium or channel membership required."
+                    ) from e
+                elif "this live event will begin" in error_msg or "premieres in" in error_msg:
+                    raise ValueError(
+                        "❌ This video is a scheduled premiere or upcoming live stream. "
+                        "Please try again after it starts."
+                    ) from e
+                elif "copyright" in error_msg:
+                    raise ValueError(
+                        "❌ Video unavailable due to copyright restrictions."
+                    ) from e
+                elif "geo" in error_msg or "not available in your country" in error_msg:
+                    raise ValueError(
+                        "❌ This video is geo-blocked and not available in your region."
+                    ) from e
+                else:
+                    # Generic extraction error
+                    raise ValueError(
+                        f"❌ Failed to extract video information: {str(e)[:200]}"
+                    ) from e
             except Exception as e:
                 logger.error(
                     "yt_dlp_extract_info_failed",
                     extra={"url": url, "error": str(e), "cid": correlation_id},
                 )
-                raise
+                raise ValueError(
+                    f"❌ Unexpected error extracting video info: {str(e)[:200]}"
+                ) from e
 
             # Check file size
             filesize = info.get("filesize") or info.get("filesize_approx", 0)
@@ -386,19 +446,53 @@ class YouTubeDownloader:
 
             if filesize > max_size:
                 raise ValueError(
-                    f"Video too large: {filesize / 1024 / 1024:.1f}MB "
-                    f"(max: {self.cfg.youtube.max_video_size_mb}MB)"
+                    f"❌ Video too large: {filesize / 1024 / 1024:.1f}MB exceeds maximum allowed size "
+                    f"({self.cfg.youtube.max_video_size_mb}MB). Try a lower quality setting."
                 )
 
             # Download video
             try:
                 ydl.download([url])
+            except yt_dlp.utils.DownloadError as e:
+                error_msg = str(e).lower()
+                logger.error(
+                    "yt_dlp_download_failed",
+                    extra={"url": url, "error": str(e), "cid": correlation_id},
+                )
+
+                # Check for specific download errors
+                if "http error 429" in error_msg or "too many requests" in error_msg:
+                    raise ValueError(
+                        "❌ YouTube rate limit exceeded. Please try again in a few minutes."
+                    ) from e
+                elif "http error 403" in error_msg:
+                    raise ValueError(
+                        "❌ Access forbidden. Video may require authentication or is geo-blocked."
+                    ) from e
+                elif "http error 404" in error_msg:
+                    raise ValueError(
+                        "❌ Video not found. It may have been deleted or the URL is incorrect."
+                    ) from e
+                elif "timed out" in error_msg or "timeout" in error_msg:
+                    raise ValueError(
+                        "❌ Download timed out. Please try again or check your internet connection."
+                    ) from e
+                elif "connection" in error_msg:
+                    raise ValueError(
+                        "❌ Network connection error. Please check your internet connection and try again."
+                    ) from e
+                else:
+                    raise ValueError(
+                        f"❌ Download failed: {str(e)[:200]}"
+                    ) from e
             except Exception as e:
                 logger.error(
                     "yt_dlp_download_failed",
                     extra={"url": url, "error": str(e), "cid": correlation_id},
                 )
-                raise
+                raise ValueError(
+                    f"❌ Unexpected download error: {str(e)[:200]}"
+                ) from e
 
             # Get downloaded file paths
             video_file = ydl.prepare_filename(info)

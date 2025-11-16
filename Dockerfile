@@ -49,6 +49,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /app
 
 # Install only runtime dependencies (no build tools)
+# ffmpeg is required for yt-dlp video/audio merging
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
        sqlite3 \
@@ -56,6 +57,7 @@ RUN apt-get update \
        libxml2 \
        libxslt1.1 \
        zlib1g \
+       ffmpeg \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 

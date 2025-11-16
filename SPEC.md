@@ -3,10 +3,11 @@
 ## Summary
 
 Telegram service that accepts either:
-1) a **URL** -> parses it with **Firecrawl** to get clean Markdown/HTML/metadata -> summarizes via **OpenRouter** Chat Completions -> replies with a **strict JSON summary** -> persists *all* artifacts in SQLite.
-2) a **forwarded channel message** -> summarizes via **OpenRouter** -> replies with JSON summary -> persists *full Telegram message snapshot* and raw LLM call.
+1) a **web article URL** -> parses it with **Firecrawl** to get clean Markdown/HTML/metadata -> summarizes via **OpenRouter** Chat Completions -> replies with a **strict JSON summary** -> persists *all* artifacts in SQLite.
+2) a **YouTube video URL** -> downloads video (1080p) with **yt-dlp**, extracts transcript with **youtube-transcript-api** -> summarizes via **OpenRouter** -> replies with JSON summary -> persists *video metadata, file paths, and transcript* in SQLite.
+3) a **forwarded channel message** -> summarizes via **OpenRouter** -> replies with JSON summary -> persists *full Telegram message snapshot* and raw LLM call.
 
-Everything runs in one Docker container; code lives on GitHub. Access is restricted to the owner’s Telegram ID.
+Everything runs in one Docker container; code lives on GitHub. Access is restricted to the owner's Telegram ID.
 
 ## Goals & Non‑Goals
 
@@ -44,6 +45,15 @@ Everything runs in one Docker container; code lives on GitHub. Access is restric
   Message — https://docs.pyrogram.org/api/types/Message
 
 > Note: Pyrogram upstream is no longer maintained; this project uses the **PyroTGFork** mirror/documentation while keeping APIs compatible.
+
+- **yt-dlp** — YouTube video downloader (actively maintained fork of youtube-dl).
+  Documentation — https://github.com/yt-dlp/yt-dlp#readme
+  Supported sites — https://github.com/yt-dlp/yt-dlp/blob/master/supportedsites.md
+  Requires **ffmpeg** for merging video/audio streams
+
+- **youtube-transcript-api** — Python library to extract YouTube video transcripts.
+  Documentation — https://github.com/jdepoix/youtube-transcript-api
+  Supports manual and auto-generated transcripts in multiple languages
 
 ## User & Access Control
 
@@ -247,6 +257,38 @@ sequenceDiagram
   error_text
   ```
 
+- **video_downloads** *(YouTube video downloads with yt-dlp and youtube-transcript-api)*:
+  ```
+  id (PK)
+  request_id (FK, unique)
+  created_at
+  video_id                     -- YouTube video ID (11 chars)
+  status                       -- 'pending'|'downloading'|'completed'|'error'
+  video_file_path              -- path to downloaded MP4 file
+  subtitle_file_path           -- path to subtitle/caption VTT file
+  metadata_file_path           -- path to yt-dlp metadata JSON file
+  thumbnail_file_path          -- path to thumbnail image
+  title                        -- video title
+  channel                      -- channel name/uploader
+  channel_id                   -- YouTube channel ID
+  duration_sec                 -- video duration in seconds
+  upload_date                  -- upload date from YouTube (YYYYMMDD format)
+  view_count                   -- view count at download time
+  like_count                   -- like count at download time
+  resolution                   -- e.g. '1080p', '720p'
+  file_size_bytes              -- downloaded video file size
+  video_codec                  -- e.g. 'avc1', 'vp9'
+  audio_codec                  -- e.g. 'mp4a', 'opus'
+  format_id                    -- yt-dlp format ID used
+  transcript_text              -- full transcript text (from youtube-transcript-api)
+  transcript_source            -- 'youtube-transcript-api' or 'yt-dlp-subtitles'
+  subtitle_language            -- language code (e.g. 'en', 'ru')
+  auto_generated               -- boolean: transcript auto-generated (0/1)
+  download_started_at          -- timestamp when download started
+  download_completed_at        -- timestamp when download completed
+  error_text                   -- error message if status='error'
+  ```
+
 - **llm_calls** *(OpenRouter Chat Completions)*:
   ```
   id (PK)
@@ -432,6 +474,53 @@ classDiagram
 2) `ForwardProcessor` builds an LLM prompt from the snapshot (channel name/title + text/caption) and calls **OpenRouter** with the same structured output pipeline used for URLs.
 3) Persist the LLM payload, validated Summary JSON, and audit events; reply via `ResponseFormatter`.
 
+### YouTube video flow
+1) `ContentExtractor` detects YouTube URLs via `url_utils.is_youtube_url()` and routes to `YouTubeDownloader`.
+2) **YouTube URL patterns** supported (all major formats):
+   - Standard: `youtube.com/watch?v=VIDEO_ID` (handles query params in any order, e.g., `?feature=share&v=ID`)
+   - Short: `youtu.be/VIDEO_ID`
+   - Shorts: `youtube.com/shorts/VIDEO_ID`
+   - Live: `youtube.com/live/VIDEO_ID`
+   - Embed: `youtube.com/embed/VIDEO_ID` or `youtube-nocookie.com/embed/VIDEO_ID`
+   - Mobile: `m.youtube.com/watch?v=VIDEO_ID`
+   - Music: `music.youtube.com/watch?v=VIDEO_ID`
+   - Legacy: `youtube.com/v/VIDEO_ID`
+3) **Deduplication**: URL is normalized and hashed (`dedupe_hash`) just like regular URLs; existing `video_downloads` are reused if status is 'completed'.
+4) **Transcript extraction** (via **youtube-transcript-api**):
+   - Prefers manually created transcripts in configured languages (`YOUTUBE_SUBTITLE_LANGUAGES`)
+   - Falls back to auto-generated transcripts if no manual transcript available
+   - Continues download even if transcript unavailable (stores empty transcript)
+   - Transcript text is formatted for LLM processing (timestamps removed, text joined)
+5) **Video download** (via **yt-dlp**):
+   - Runs in thread pool (`asyncio.to_thread`) to avoid blocking async event loop
+   - Downloads best video up to configured quality (default 1080p) + best audio
+   - Merges video/audio streams using **ffmpeg** to single MP4 file
+   - Also downloads: subtitles (VTT), metadata (JSON), thumbnail (image)
+   - Storage organized by date: `/data/videos/YYYYMMDD/VIDEO_ID_title.mp4`
+   - Enforces size limits: per-video max (`YOUTUBE_MAX_VIDEO_SIZE_MB`) and total storage (`YOUTUBE_MAX_STORAGE_GB`)
+6) **Metadata extraction and persistence**:
+   - Creates `video_downloads` row with comprehensive metadata: title, channel, duration, views, likes, resolution, codecs, file paths
+   - Stores transcript text and source (`youtube-transcript-api` or `yt-dlp-subtitles`)
+   - Links to `requests` table via foreign key for correlation
+7) **Error handling** (user-friendly messages for common failures):
+   - Age-restricted videos: "Sign in to confirm your age" error
+   - Geo-blocked: "Not available in your country" error
+   - Private/deleted: "Video unavailable" error
+   - Members-only: YouTube Premium/channel membership required
+   - Scheduled premiere: "Live event will begin" error
+   - Rate limits: HTTP 429 "Too many requests" error
+   - Network errors: Timeout and connection failures
+   - Transcript disabled: Continues with empty transcript
+8) **User notifications**:
+   - Initial: "YouTube Video Detected - Downloading video in 1080p..."
+   - Completion: "Video Downloaded Successfully! Title, resolution, file size..."
+   - Then proceeds to LLM summarization
+9) **Summarization**: Transcript is passed to `LLMSummarizer` using the same pipeline as regular URLs; Summary JSON contract is validated and sent via `ResponseFormatter`.
+10) **Storage management**:
+    - Auto-cleanup enabled by default (`YOUTUBE_AUTO_CLEANUP_ENABLED`)
+    - Removes videos older than configured retention period (`YOUTUBE_CLEANUP_AFTER_DAYS`)
+    - Monitors storage usage and warns at 90% threshold
+
 ---
 
 ## URL normalization & deduplication
@@ -485,6 +574,15 @@ OPENROUTER_API_KEY=...
 OPENROUTER_MODEL=openai/gpt-5
 OPENROUTER_HTTP_REFERER=https://github.com/po4yka/bite-size-reader
 OPENROUTER_X_TITLE=Bite-Size Reader
+
+YOUTUBE_DOWNLOAD_ENABLED=true
+YOUTUBE_STORAGE_PATH=/data/videos
+YOUTUBE_MAX_VIDEO_SIZE_MB=500
+YOUTUBE_MAX_STORAGE_GB=100
+YOUTUBE_PREFERRED_QUALITY=1080p
+YOUTUBE_SUBTITLE_LANGUAGES=en,ru
+YOUTUBE_AUTO_CLEANUP_ENABLED=true
+YOUTUBE_CLEANUP_AFTER_DAYS=30
 ```
 
 DB & runtime:
@@ -500,7 +598,10 @@ REQUEST_TIMEOUT_SEC=60
 ## Dockerization
 
 - Single image (multi-stage): build -> `python:slim` runtime.
-- Mount volume for `/data/app.db`.
+- Runtime includes **ffmpeg** (required for yt-dlp video/audio merging).
+- Mount volumes:
+  - `/data/app.db` for database
+  - `/data/videos` for YouTube video downloads
 - Healthcheck: lightweight DB read and Telegram self-ping (optional).
 - Log to stdout; rotate in container runtime if needed.
 

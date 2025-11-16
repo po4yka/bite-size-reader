@@ -5,16 +5,20 @@ This document helps AI assistants (like Claude) understand and work effectively 
 ## Project Overview
 
 **Bite-Size Reader** is an async Telegram bot that:
-- Accepts URLs and summarizes them using Firecrawl (content extraction) + OpenRouter (LLM summarization)
+- Accepts web article URLs and summarizes them using Firecrawl (content extraction) + OpenRouter (LLM summarization)
+- Accepts YouTube video URLs, downloads them in 1080p, extracts transcripts, and generates summaries
 - Accepts forwarded channel posts and summarizes them directly
 - Returns structured JSON summaries with a strict contract
-- Stores all artifacts (Telegram messages, crawl results, LLM calls, summaries) in SQLite
+- Stores all artifacts (Telegram messages, crawl results, video downloads, LLM calls, summaries) in SQLite
 - Runs as a single Docker container with owner-only access control
 
 **Tech Stack:**
 - Python 3.13+
 - Pyrogram (async Telegram MTProto)
-- Firecrawl API (content extraction)
+- Firecrawl API (content extraction for web articles)
+- yt-dlp (YouTube video downloading)
+- youtube-transcript-api (YouTube transcript extraction)
+- ffmpeg (video/audio merging for yt-dlp)
 - OpenRouter API (OpenAI-compatible LLM completions)
 - SQLite (persistence with Peewee ORM)
 - httpx (async HTTP client)
@@ -56,12 +60,19 @@ Telegram Message → MessageHandler → AccessController → MessageRouter
    - `forward_processor.py` — Handles forwarded message summarization
 
 2. **Content Pipeline** (`app/adapters/content/`)
-   - `content_extractor.py` — Firecrawl integration
+   - `content_extractor.py` — Firecrawl integration and YouTube routing
    - `content_chunker.py` — Splits large content for LLM processing
    - `llm_summarizer.py` — OpenRouter summarization
    - `url_processor.py` — Coordinates extraction → chunking → summarization
 
-3. **External Services** (`app/adapters/openrouter/`, `app/adapters/external/`)
+3. **YouTube Adapter** (`app/adapters/youtube/`)
+   - `youtube_downloader.py` — yt-dlp video download and youtube-transcript-api integration
+   - Supports all major YouTube URL formats (watch, shorts, live, music, embed, mobile)
+   - Dual extraction: transcripts via API + video download in configurable quality (default 1080p)
+   - Storage management with configurable limits and auto-cleanup
+   - Comprehensive error handling for age-restricted, geo-blocked, and unavailable videos
+
+4. **External Services** (`app/adapters/openrouter/`, `app/adapters/external/`)
    - `openrouter_client.py` — HTTP client for OpenRouter API
    - `request_builder.py` — Builds OpenRouter payloads
    - `response_processor.py` — Parses and validates LLM responses
@@ -79,7 +90,7 @@ Telegram Message → MessageHandler → AccessController → MessageRouter
 5. **Database** (`app/db/`)
    - `database.py` — SQLite connection and schema
    - `models.py` — Peewee ORM models
-   - Schema: users, chats, requests, telegram_messages, crawl_results, llm_calls, summaries
+   - Schema: users, chats, requests, telegram_messages, crawl_results, video_downloads, llm_calls, summaries
 
 6. **CLI Tools** (`app/cli/`)
    - `summary.py` — Local CLI runner for testing summaries without Telegram
@@ -94,7 +105,8 @@ app/
 │   ├── content/        # URL processing pipeline
 │   ├── external/       # Firecrawl parser, response formatter
 │   ├── openrouter/     # OpenRouter client and helpers
-│   └── telegram/       # Telegram bot logic
+│   ├── telegram/       # Telegram bot logic
+│   └── youtube/        # YouTube video download and transcript extraction
 ├── cli/                # CLI tools (summary runner, search, migrations)
 ├── core/               # Shared utilities (URL, JSON, logging, lang)
 ├── db/                 # Database schema and models
@@ -249,6 +261,37 @@ GitHub Actions (`.github/workflows/ci.yml`) enforces:
 - Prompts in `app/prompts/en/` and `app/prompts/ru/`
 - Configurable preference: `PREFERRED_LANG=auto|en|ru`
 - Detection result stored in `requests.lang_detected`
+
+### YouTube Video Support
+
+- **URL Detection:** Automatically detects YouTube URLs via `app/core/url_utils.py`
+- **Supported Formats:** Standard watch, shorts, live, embed, mobile (m.youtube.com), YouTube Music, legacy /v/ URLs
+- **URL Pattern Handling:** Handles query parameters in any order (e.g., `?feature=share&v=ID`)
+- **Dual Extraction Strategy:**
+  1. Transcript extraction via `youtube-transcript-api` (prefers manual, falls back to auto-generated)
+  2. Video download via `yt-dlp` in configurable quality (default 1080p)
+- **Storage Management:**
+  - Videos organized by date: `/data/videos/YYYYMMDD/VIDEO_ID_title.mp4`
+  - Configurable limits: per-video size, total storage GB
+  - Auto-cleanup of old videos (configurable retention period)
+  - Deduplication via URL hash (won't re-download same video)
+- **Database Schema:**
+  - `video_downloads` table stores metadata, file paths, transcript
+  - Links to `requests` table via foreign key
+  - Tracks: title, channel, duration, views, likes, resolution, codecs, transcript source
+- **Error Handling:**
+  - Age-restricted videos: Clear message about login requirement
+  - Geo-blocked: Informs user about regional restrictions
+  - Private/deleted: Explains unavailability
+  - Rate limits: Suggests retry timing
+  - No transcript: Continues download without transcript
+- **ffmpeg Dependency:**
+  - Required for yt-dlp to merge video/audio streams
+  - Installed in Docker runtime stage
+  - Essential for best quality downloads
+- **Integration Point:**
+  - `content_extractor.py` routes YouTube URLs to `youtube_downloader.py`
+  - Rest of pipeline (LLM summarization, response formatting) remains unchanged
 
 ### Debugging Tips
 
@@ -505,6 +548,16 @@ DB_BACKUP_ENABLED=1                 # Enable DB backups (0|1)
 DB_BACKUP_INTERVAL_MINUTES=360      # Backup interval
 DB_BACKUP_RETENTION=14              # Backup retention days
 DB_BACKUP_DIR=/data/backups         # Backup directory
+
+# YouTube Video Download
+YOUTUBE_DOWNLOAD_ENABLED=true       # Enable/disable YouTube video download feature
+YOUTUBE_STORAGE_PATH=/data/videos   # Directory for downloaded videos
+YOUTUBE_MAX_VIDEO_SIZE_MB=500       # Maximum size per video (MB)
+YOUTUBE_MAX_STORAGE_GB=100          # Maximum total storage for all videos (GB)
+YOUTUBE_PREFERRED_QUALITY=1080p     # Video quality (1080p, 720p, 480p, etc.)
+YOUTUBE_SUBTITLE_LANGUAGES=en,ru    # Preferred subtitle/transcript languages
+YOUTUBE_AUTO_CLEANUP_ENABLED=true   # Enable automatic cleanup of old videos
+YOUTUBE_CLEANUP_AFTER_DAYS=30       # Delete videos older than N days
 ```
 
 ---
