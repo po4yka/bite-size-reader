@@ -9,12 +9,8 @@ DO NOT import this in production code - it's for documentation purposes only.
 import logging
 from typing import Any
 
-from app.application.use_cases.get_unread_summaries import (
-    GetUnreadSummariesQuery,
-)
-from app.application.use_cases.mark_summary_as_read import (
-    MarkSummaryAsReadCommand,
-)
+from app.application.use_cases.get_unread_summaries import GetUnreadSummariesQuery
+from app.application.use_cases.mark_summary_as_read import MarkSummaryAsReadCommand
 from app.application.use_cases.search_topics import SearchTopicsQuery
 from app.di.container import Container
 from app.domain.exceptions.domain_exceptions import InvalidStateTransitionError

@@ -64,6 +64,7 @@ def _bot_with_tmpdb(tmp_path):
             top_p=1.0,
             temperature=0.8,
         ),
+        youtube=YouTubeConfig(),
         runtime=RuntimeConfig(
             db_path=tmp_path,
             log_level="INFO",

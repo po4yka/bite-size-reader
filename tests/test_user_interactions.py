@@ -40,6 +40,7 @@ def _make_config() -> AppConfig:
             http_referer=None,
             x_title=None,
         ),
+        youtube=YouTubeConfig(),
         runtime=RuntimeConfig(
             db_path=":memory:",
             log_level="INFO",

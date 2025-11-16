@@ -93,6 +93,7 @@ def make_bot(tmp_path: str) -> ReadStatusBot:
             http_referer=None,
             x_title=None,
         ),
+        youtube=YouTubeConfig(),
         runtime=RuntimeConfig(
             db_path=tmp_path,
             log_level="INFO",

@@ -593,7 +593,9 @@ BOT_TOKEN=...                       # Telegram bot token
 ALLOWED_USER_IDS=123456789          # Comma-separated owner IDs
 FIRECRAWL_API_KEY=...               # Firecrawl API key
 OPENROUTER_API_KEY=...              # OpenRouter API key
-OPENROUTER_MODEL=openai/gpt-4       # Default model
+OPENROUTER_MODEL=qwen/qwen3-max  # Default model (flagship, most powerful)
+OPENROUTER_FALLBACK_MODELS=deepseek/deepseek-r1,moonshotai/kimi-k2-thinking,deepseek/deepseek-v3-0324,openai/gpt-4o  # Fallback models (paid tier)
+OPENROUTER_LONG_CONTEXT_MODEL=moonshotai/kimi-k2-thinking  # Long context model (256k context + reasoning)
 
 # Mobile API (Optional - only if using Mobile API)
 JWT_SECRET_KEY=...                  # JWT secret for Mobile API auth (min 32 chars)

@@ -145,6 +145,7 @@ class TestDedupeReuse(unittest.IsolatedAsyncioTestCase):
                     top_p=1.0,
                     temperature=0.8,
                 ),
+                youtube=YouTubeConfig(),
                 runtime=RuntimeConfig(
                     db_path=db_path,
                     log_level="INFO",
@@ -231,6 +232,7 @@ class TestDedupeReuse(unittest.IsolatedAsyncioTestCase):
                     top_p=1.0,
                     temperature=0.8,
                 ),
+                youtube=YouTubeConfig(),
                 runtime=RuntimeConfig(
                     db_path=db_path,
                     log_level="INFO",

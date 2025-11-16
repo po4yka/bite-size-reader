@@ -11,10 +11,7 @@ from typing import Any
 
 from app.domain.events.request_events import RequestCompleted, RequestCreated, RequestFailed
 from app.domain.events.summary_events import SummaryCreated
-from app.domain.exceptions.domain_exceptions import (
-    ContentFetchError,
-    SummaryGenerationError,
-)
+from app.domain.exceptions.domain_exceptions import ContentFetchError, SummaryGenerationError
 from app.domain.models.request import Request, RequestStatus, RequestType
 from app.domain.models.summary import Summary
 from app.domain.services.summary_validator import SummaryValidator

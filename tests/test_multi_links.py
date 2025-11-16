@@ -79,6 +79,7 @@ def make_bot(tmp_path: str) -> SpyBot:
             top_p=None,
             temperature=0.2,
         ),
+        youtube=YouTubeConfig(),
         runtime=RuntimeConfig(
             db_path=tmp_path,
             log_level="INFO",
