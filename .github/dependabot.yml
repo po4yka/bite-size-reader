@@ -24,12 +24,23 @@ updates:
         update-types:
           - "minor"
           - "patch"
+      # Separate group for security updates (higher priority)
+      python-security:
+        patterns:
+          - "*"
+        update-types:
+          - "security"
     # Ignore major updates for spaCy (needs careful testing)
     ignore:
       - dependency-name: "spacy"
         update-types: ["version-update:semver-major"]
       - dependency-name: "sentence-transformers"
         update-types: ["version-update:semver-major"]
+      - dependency-name: "pydantic"
+        update-types: ["version-update:semver-major"]
+    # Allow security updates even for major versions
+    allow:
+      - dependency-type: "all"
 
   # GitHub Actions
   - package-ecosystem: "github-actions"
@@ -37,6 +48,7 @@ updates:
     schedule:
       interval: "weekly"
       day: "monday"
+    open-pull-requests-limit: 3
     labels:
       - "dependencies"
       - "github-actions"
@@ -46,6 +58,9 @@ updates:
       github-actions:
         patterns:
           - "*"
+    # Allow both minor and major updates for actions
+    allow:
+      - dependency-type: "all"
 
   # Docker
   - package-ecosystem: "docker"
