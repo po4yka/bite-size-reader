@@ -5,7 +5,14 @@ from unittest.mock import AsyncMock, Mock
 import pytest
 
 from app.adapters.telegram.message_router import MessageRouter
-from app.config import AppConfig, FirecrawlConfig, OpenRouterConfig, RuntimeConfig, TelegramConfig
+from app.config import (
+    AppConfig,
+    FirecrawlConfig,
+    OpenRouterConfig,
+    RuntimeConfig,
+    TelegramConfig,
+    YouTubeConfig,
+)
 from app.db.database import Database
 
 
@@ -25,6 +32,7 @@ def _make_config() -> AppConfig:
             http_referer=None,
             x_title=None,
         ),
+        youtube=YouTubeConfig(),
         runtime=RuntimeConfig(
             db_path=":memory:",
             log_level="INFO",

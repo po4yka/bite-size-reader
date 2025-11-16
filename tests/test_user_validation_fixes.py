@@ -8,7 +8,14 @@ from unittest.mock import patch
 import pytest
 
 from app.adapters.telegram.telegram_bot import TelegramBot
-from app.config import AppConfig, FirecrawlConfig, OpenRouterConfig, RuntimeConfig, TelegramConfig
+from app.config import (
+    AppConfig,
+    FirecrawlConfig,
+    OpenRouterConfig,
+    RuntimeConfig,
+    TelegramConfig,
+    YouTubeConfig,
+)
 from app.db.database import Database
 from app.models.telegram.telegram_models import ChatType, TelegramMessage, TelegramUser
 
@@ -54,6 +61,7 @@ def make_bot(tmp_path: str, allowed_ids):
             top_p=None,
             temperature=0.2,
         ),
+        youtube=YouTubeConfig(),
         runtime=RuntimeConfig(
             db_path=tmp_path,
             log_level="INFO",

@@ -343,10 +343,7 @@ def is_youtube_url(url: str) -> bool:
 
     try:
         # Check against all YouTube patterns
-        for pattern in _YOUTUBE_PATTERNS:
-            if pattern.search(url):
-                return True
-        return False
+        return any(pattern.search(url) for pattern in _YOUTUBE_PATTERNS)
     except Exception as e:
         logger.exception("is_youtube_url_failed", extra={"error": str(e), "url": url[:100]})
         return False
@@ -378,12 +375,16 @@ def extract_youtube_video_id(url: str) -> str | None:
                 video_id = match.group(1)
                 # Validate video ID format (11 characters, alphanumeric + - and _)
                 if len(video_id) == 11 and re.match(r"^[a-zA-Z0-9_-]{11}$", video_id):
-                    logger.debug("extract_youtube_video_id", extra={"url": url[:100], "video_id": video_id})
+                    logger.debug(
+                        "extract_youtube_video_id", extra={"url": url[:100], "video_id": video_id}
+                    )
                     return video_id
 
         logger.debug("extract_youtube_video_id_not_found", extra={"url": url[:100]})
         return None
 
     except Exception as e:
-        logger.exception("extract_youtube_video_id_failed", extra={"error": str(e), "url": url[:100]})
+        logger.exception(
+            "extract_youtube_video_id_failed", extra={"error": str(e), "url": url[:100]}
+        )
         return None
