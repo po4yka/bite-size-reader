@@ -35,24 +35,47 @@ class ModelCapabilities:
 
         # Known models that support structured outputs (fallback list)
         self._known_structured_models = {
+            # OpenAI models
             "openai/gpt-4o",
             "openai/gpt-5",
             "openai/gpt-5-mini",
             "openai/gpt-5-nano",
+            # Google models
             "google/gemini-2.5-pro",
+            # DeepSeek models (JSON mode support)
+            "deepseek/deepseek-v3-0324:free",
+            "deepseek/deepseek-v3-0324",
+            "deepseek/deepseek-r1:free",
+            "deepseek/deepseek-r1",
+            # Moonshot AI (Kimi) models
+            "moonshotai/kimi-k2:free",
+            "moonshotai/kimi-k2",
+            "moonshotai/kimi-k2-thinking",
+            # Qwen models
+            "qwen/qwen3-max",
+            "qwen/qwen3-235b-a22b-instruct-2507",
+            "qwen/qwen3-next-80b-a3b-thinking",
+            "qwen/qwen3-coder-480b-a35b",
+            "qwen/qwen3-coder:free",
+            # MiniMax models
+            "minimax/minimax-m2",
+            "minimax/minimax-m2:free",
         }
 
     def is_reasoning_heavy_model(self, model: str) -> bool:
-        """Check if model is reasoning-heavy (like GPT-5 family)."""
+        """Check if model is reasoning-heavy (like GPT-5 family, DeepSeek R1, Kimi K2 Thinking)."""
         model_lower = model.lower()
-        reasoning_indicators = ["gpt-5", "o1", "reasoning"]
+        reasoning_indicators = ["gpt-5", "o1", "reasoning", "-r1", "thinking", "deepseek-r1"]
         return any(indicator in model_lower for indicator in reasoning_indicators)
 
     def get_safe_structured_fallbacks(self) -> list[str]:
         """Get list of models known to support structured outputs reliably."""
         return [
-            "openai/gpt-4o",
-            "google/gemini-2.5-pro",
+            "deepseek/deepseek-v3-0324:free",  # Free, reliable, excellent performance
+            "deepseek/deepseek-r1:free",       # Free, strong reasoning
+            "qwen/qwen3-max",                  # Flagship model, comprehensive
+            "openai/gpt-4o",                   # Reliable paid option
+            "google/gemini-2.5-pro",           # Alternative paid option
         ]
 
     def supports_structured_outputs(self, model: str) -> bool:

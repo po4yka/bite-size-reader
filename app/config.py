@@ -257,9 +257,10 @@ class OpenRouterConfig(BaseModel):
     model_config = ConfigDict(frozen=True, populate_by_name=True)
 
     api_key: str = Field(..., validation_alias="OPENROUTER_API_KEY")
-    model: str = Field(default="openai/gpt-5", validation_alias="OPENROUTER_MODEL")
+    model: str = Field(default="deepseek/deepseek-v3-0324:free", validation_alias="OPENROUTER_MODEL")
     fallback_models: tuple[str, ...] = Field(
-        default_factory=tuple, validation_alias="OPENROUTER_FALLBACK_MODELS"
+        default_factory=lambda: ("deepseek/deepseek-r1:free", "qwen/qwen3-max", "openai/gpt-4o"),
+        validation_alias="OPENROUTER_FALLBACK_MODELS"
     )
     http_referer: str | None = Field(default=None, validation_alias="OPENROUTER_HTTP_REFERER")
     x_title: str | None = Field(default=None, validation_alias="OPENROUTER_X_TITLE")
@@ -271,7 +272,7 @@ class OpenRouterConfig(BaseModel):
     )
     enable_stats: bool = Field(default=False, validation_alias="OPENROUTER_ENABLE_STATS")
     long_context_model: str | None = Field(
-        default=None, validation_alias="OPENROUTER_LONG_CONTEXT_MODEL"
+        default="moonshotai/kimi-k2:free", validation_alias="OPENROUTER_LONG_CONTEXT_MODEL"
     )
     enable_structured_outputs: bool = Field(
         default=True, validation_alias="OPENROUTER_ENABLE_STRUCTURED_OUTPUTS"
