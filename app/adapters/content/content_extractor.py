@@ -204,7 +204,21 @@ class ContentExtractor:
         silent: bool = False,
     ) -> tuple[int, str, str, str]:
         """Extract content from URL and return (req_id, content_text, content_source, detected_lang)."""
+        from app.core.url_utils import is_youtube_url
+
         norm = normalize_url(url_text)
+
+        # Check if YouTube URL and route accordingly
+        if is_youtube_url(norm):
+            logger.info(
+                "youtube_url_detected",
+                extra={"url": url_text, "normalized": norm, "cid": correlation_id},
+            )
+            return await self._extract_youtube_content(
+                message, url_text, norm, correlation_id, interaction_id, silent
+            )
+
+        # Regular web content flow
         dedupe = url_hash_sha256(norm)
 
         logger.info(
@@ -1033,3 +1047,63 @@ class ContentExtractor:
             forward_date_ts=forward_date_ts,
             telegram_raw_json=raw_json,
         )
+
+    async def _extract_youtube_content(
+        self,
+        message: Any,
+        url_text: str,
+        norm: str,
+        correlation_id: str | None,
+        interaction_id: int | None,
+        silent: bool = False,
+    ) -> tuple[int, str, str, str]:
+        """Extract YouTube video transcript and download video.
+
+        Returns:
+            (req_id, transcript_text, content_source, detected_lang)
+        """
+        from app.adapters.youtube.youtube_downloader import YouTubeDownloader
+
+        # Check if YouTube download is enabled
+        if not self.cfg.youtube.enabled:
+            logger.warning(
+                "youtube_download_disabled",
+                extra={"url": url_text, "cid": correlation_id},
+            )
+            raise ValueError("YouTube video download is disabled in configuration")
+
+        # Initialize YouTube downloader
+        youtube_downloader = YouTubeDownloader(
+            cfg=self.cfg,
+            db=self.db,
+            response_formatter=self.response_formatter,
+            audit_func=self._audit,
+        )
+
+        # Download video and extract transcript
+        try:
+            req_id, transcript_text, content_source, detected_lang, video_metadata = (
+                await youtube_downloader.download_and_extract(
+                    message, url_text, correlation_id, interaction_id, silent
+                )
+            )
+
+            logger.info(
+                "youtube_extraction_complete",
+                extra={
+                    "video_id": video_metadata.get("video_id"),
+                    "request_id": req_id,
+                    "transcript_length": len(transcript_text),
+                    "cid": correlation_id,
+                },
+            )
+
+            return req_id, transcript_text, content_source, detected_lang
+
+        except Exception as e:
+            raise_if_cancelled(e)
+            logger.exception(
+                "youtube_extraction_failed",
+                extra={"url": url_text, "error": str(e), "cid": correlation_id},
+            )
+            raise

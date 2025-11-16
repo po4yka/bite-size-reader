@@ -261,3 +261,80 @@ def extract_all_urls(text: str) -> list[str]:
     except Exception as e:
         logger.exception("extract_all_urls_failed", extra={"error": str(e)})
         return []
+
+
+# YouTube URL patterns
+_YOUTUBE_PATTERNS = [
+    re.compile(r"(?:https?://)?(?:www\.)?youtube\.com/watch\?v=([a-zA-Z0-9_-]{11})", re.IGNORECASE),
+    re.compile(r"(?:https?://)?(?:www\.)?youtu\.be/([a-zA-Z0-9_-]{11})", re.IGNORECASE),
+    re.compile(r"(?:https?://)?(?:www\.)?youtube\.com/embed/([a-zA-Z0-9_-]{11})", re.IGNORECASE),
+    re.compile(r"(?:https?://)?(?:www\.)?youtube\.com/v/([a-zA-Z0-9_-]{11})", re.IGNORECASE),
+    re.compile(r"(?:https?://)?(?:www\.)?youtube\.com/shorts/([a-zA-Z0-9_-]{11})", re.IGNORECASE),
+]
+
+
+def is_youtube_url(url: str) -> bool:
+    """Check if URL is a YouTube video.
+
+    Supports various YouTube URL formats:
+    - youtube.com/watch?v=VIDEO_ID
+    - youtu.be/VIDEO_ID
+    - youtube.com/embed/VIDEO_ID
+    - youtube.com/v/VIDEO_ID
+    - youtube.com/shorts/VIDEO_ID
+
+    Args:
+        url: URL string to check
+
+    Returns:
+        True if URL is a YouTube video URL, False otherwise
+    """
+    if not url or not isinstance(url, str):
+        return False
+
+    try:
+        # Check against all YouTube patterns
+        for pattern in _YOUTUBE_PATTERNS:
+            if pattern.search(url):
+                return True
+        return False
+    except Exception as e:
+        logger.exception("is_youtube_url_failed", extra={"error": str(e), "url": url[:100]})
+        return False
+
+
+def extract_youtube_video_id(url: str) -> str | None:
+    """Extract YouTube video ID from URL.
+
+    Args:
+        url: YouTube URL
+
+    Returns:
+        11-character video ID or None if not found
+
+    Examples:
+        >>> extract_youtube_video_id("https://www.youtube.com/watch?v=dQw4w9WgXcQ")
+        'dQw4w9WgXcQ'
+        >>> extract_youtube_video_id("https://youtu.be/dQw4w9WgXcQ")
+        'dQw4w9WgXcQ'
+    """
+    if not url or not isinstance(url, str):
+        return None
+
+    try:
+        # Try each pattern
+        for pattern in _YOUTUBE_PATTERNS:
+            match = pattern.search(url)
+            if match:
+                video_id = match.group(1)
+                # Validate video ID format (11 characters, alphanumeric + - and _)
+                if len(video_id) == 11 and re.match(r"^[a-zA-Z0-9_-]{11}$", video_id):
+                    logger.debug("extract_youtube_video_id", extra={"url": url[:100], "video_id": video_id})
+                    return video_id
+
+        logger.debug("extract_youtube_video_id_not_found", extra={"url": url[:100]})
+        return None
+
+    except Exception as e:
+        logger.exception("extract_youtube_video_id_failed", extra={"error": str(e), "url": url[:100]})
+        return None
