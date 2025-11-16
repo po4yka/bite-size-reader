@@ -343,10 +343,7 @@ def is_youtube_url(url: str) -> bool:
 
     try:
         # Check against all YouTube patterns
-        for pattern in _YOUTUBE_PATTERNS:
-            if pattern.search(url):
-                return True
-        return False
+        return any(pattern.search(url) for pattern in _YOUTUBE_PATTERNS)
     except Exception as e:
         logger.exception("is_youtube_url_failed", extra={"error": str(e), "url": url[:100]})
         return False

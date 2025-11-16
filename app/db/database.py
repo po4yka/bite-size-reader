@@ -2111,12 +2111,6 @@ class Database:
         VideoDownload.update(**kwargs).where(VideoDownload.id == download_id).execute()
         self._logger.debug("video_download_updated", extra={"download_id": download_id})
 
-    def update_request_lang_detected(self, request_id: int, lang: str) -> None:
-        """Update the detected language for a request."""
-        from app.db.models import Request
-
-        Request.update(lang_detected=lang).where(Request.id == request_id).execute()
-
     # ================================================================
 
     def _run_database_maintenance(self) -> None:
