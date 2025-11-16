@@ -2159,6 +2159,49 @@ class ResponseFormatter:
         except Exception:
             pass
 
+    async def send_youtube_download_notification(
+        self, message: Any, url: str, *, silent: bool = False
+    ) -> None:
+        """Notify user that YouTube video download is starting."""
+        if silent:
+            return
+
+        try:
+            await self.safe_reply(
+                message,
+                "🎥 **YouTube Video Detected**\n\n"
+                "📥 Downloading video in 1080p and extracting transcript...\n"
+                "⏱️ This may take a few minutes depending on video length.\n\n"
+                f"🔗 URL: {url[:60]}{'...' if len(url) > 60 else ''}",
+            )
+        except Exception:
+            pass
+
+    async def send_youtube_download_complete_notification(
+        self,
+        message: Any,
+        title: str,
+        resolution: str,
+        size_mb: float,
+        *,
+        silent: bool = False,
+    ) -> None:
+        """Notify user that video download is complete."""
+        if silent:
+            return
+
+        try:
+            await self.safe_reply(
+                message,
+                "✅ **Video Downloaded Successfully!**\n\n"
+                f"📹 Title: {title[:80]}{'...' if len(title) > 80 else ''}\n"
+                f"📺 Resolution: {resolution}\n"
+                f"💾 Size: {size_mb:.1f} MB\n\n"
+                "🤖 Generating summary from transcript...",
+            )
+        except Exception:
+            pass
+
     async def send_error_notification(
         self,
         message: Any,

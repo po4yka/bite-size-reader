@@ -1,6 +1,6 @@
 # Bite‑Size Reader
 
-Async Telegram bot that summarizes URLs via Firecrawl + OpenRouter or summarizes forwarded channel posts. Returns a strict JSON summary and stores artifacts in SQLite. See SPEC.md for full details.
+Async Telegram bot that summarizes web articles and YouTube videos. For articles, it uses Firecrawl + OpenRouter; for YouTube videos, it downloads the video (1080p) and extracts transcripts. Also supports summarizing forwarded channel posts. Returns a strict JSON summary and stores artifacts in SQLite. See SPEC.md for full details.
 
 ## Architecture overview
 
@@ -53,6 +53,14 @@ Environment
 - `API_ID`, `API_HASH`, `BOT_TOKEN`, `ALLOWED_USER_IDS`
 - `FIRECRAWL_API_KEY`
 - `OPENROUTER_API_KEY`, `OPENROUTER_MODEL`, `OPENROUTER_HTTP_REFERER`, `OPENROUTER_X_TITLE`
+- `YOUTUBE_DOWNLOAD_ENABLED=true` — Enable/disable YouTube video download feature
+- `YOUTUBE_STORAGE_PATH=/data/videos` — Directory for downloaded videos
+- `YOUTUBE_MAX_VIDEO_SIZE_MB=500` — Maximum size per video (MB)
+- `YOUTUBE_MAX_STORAGE_GB=100` — Maximum total storage for all videos (GB)
+- `YOUTUBE_PREFERRED_QUALITY=1080p` — Video quality (1080p, 720p, 480p, etc.)
+- `YOUTUBE_SUBTITLE_LANGUAGES=en,ru` — Preferred subtitle/transcript languages
+- `YOUTUBE_AUTO_CLEANUP_ENABLED=true` — Enable automatic cleanup of old videos
+- `YOUTUBE_CLEANUP_AFTER_DAYS=30` — Delete videos older than N days
 - `DB_PATH=/data/app.db`, `LOG_LEVEL=INFO`, `REQUEST_TIMEOUT_SEC=60`
 - `DB_BACKUP_ENABLED=1`, `DB_BACKUP_INTERVAL_MINUTES=360`, `DB_BACKUP_RETENTION=14`, `DB_BACKUP_DIR=/data/backups`
 - `PREFERRED_LANG=auto` (auto|en|ru)
@@ -62,6 +70,7 @@ Environment
 Repository layout
 - `app/core` — URL normalization, JSON contract, logging, language helpers
 - `app/adapters/content` — Firecrawl integration, content chunking, LLM summarization
+- `app/adapters/youtube` — YouTube video download and transcript extraction
 - `app/adapters/external` — response formatting helpers shared by adapters
 - `app/adapters/openrouter` — OpenRouter client, payload shaping, error handling
 - `app/adapters/telegram` — Telegram client, message routing, access control, persistence
@@ -72,6 +81,41 @@ Repository layout
 - `app/prompts` — LLM prompt templates
 - `bot.py` — entrypoint wiring config, DB, and Telegram bot
 - `SPEC.md` — full technical specification
+
+YouTube Video Support
+- The bot automatically detects YouTube URLs and processes them differently from regular web articles
+- **Supported URL formats:**
+  - Standard: `youtube.com/watch?v=VIDEO_ID`
+  - Short: `youtu.be/VIDEO_ID`
+  - Shorts: `youtube.com/shorts/VIDEO_ID`
+  - Live: `youtube.com/live/VIDEO_ID`
+  - Embed: `youtube.com/embed/VIDEO_ID` or `youtube-nocookie.com/embed/VIDEO_ID`
+  - Mobile: `m.youtube.com/watch?v=VIDEO_ID`
+  - Music: `music.youtube.com/watch?v=VIDEO_ID`
+  - Legacy: `youtube.com/v/VIDEO_ID`
+- **Processing workflow:**
+  1. Extract video ID from URL (handles query parameters in any order, e.g., `?feature=share&v=ID`)
+  2. Extract transcript using `youtube-transcript-api` (prefers manual transcripts, falls back to auto-generated)
+  3. Download video in configured quality (default 1080p) using `yt-dlp`
+  4. Download subtitles, metadata (JSON), and thumbnail
+  5. Generate summary from transcript using LLM
+  6. Store video metadata, file paths, and transcript in database
+- **Storage management:**
+  - Videos stored in `/data/videos` (configurable)
+  - Automatic cleanup of old videos (configurable retention period)
+  - Size limits enforced per-video and total storage
+  - Deduplication: same video URL won't be downloaded twice
+- **Requirements:**
+  - `ffmpeg` must be installed (included in Docker image)
+  - `yt-dlp` and `youtube-transcript-api` Python packages (in requirements.txt)
+- **User notifications:**
+  - Bot notifies when YouTube video is detected
+  - Shows download progress updates
+  - Confirms when download completes with title, resolution, and file size
+- **Database schema:**
+  - New `video_downloads` table stores all video metadata
+  - Links to `requests` table via foreign key for correlation
+  - Tracks video ID, file paths, title, channel, duration, views, likes, transcript
 
 Notes
 - Dependencies include Pyrogram; if using PyroTGFork, align installation accordingly.

@@ -2057,6 +2057,68 @@ class Database:
         if updated:
             self._logger.info("openrouter_payload_migrated", extra={"rows": updated})
 
+    # ==================== Video Download Methods ====================
+
+    def create_video_download(self, request_id: int, video_id: str, status: str = "pending") -> int:
+        """Create a new video download record."""
+        from app.db.models import VideoDownload
+
+        download = VideoDownload.create(request_id=request_id, video_id=video_id, status=status)
+        self._logger.info("video_download_created", extra={"download_id": download.id, "video_id": video_id})
+        return download.id
+
+    def get_video_download_by_request(self, request_id: int):
+        """Get video download by request ID."""
+        from app.db.models import VideoDownload
+
+        try:
+            return VideoDownload.get(VideoDownload.request_id == request_id)
+        except VideoDownload.DoesNotExist:
+            return None
+
+    def get_video_download_by_id(self, download_id: int):
+        """Get video download by ID."""
+        from app.db.models import VideoDownload
+
+        try:
+            return VideoDownload.get_by_id(download_id)
+        except VideoDownload.DoesNotExist:
+            return None
+
+    def update_video_download_status(
+        self,
+        download_id: int,
+        status: str,
+        error_text: str | None = None,
+        download_started_at=None,
+    ) -> None:
+        """Update video download status."""
+        from app.db.models import VideoDownload
+
+        update_data = {"status": status}
+        if error_text is not None:
+            update_data["error_text"] = error_text
+        if download_started_at is not None:
+            update_data["download_started_at"] = download_started_at
+
+        VideoDownload.update(**update_data).where(VideoDownload.id == download_id).execute()
+        self._logger.debug("video_download_status_updated", extra={"download_id": download_id, "status": status})
+
+    def update_video_download(self, download_id: int, **kwargs) -> None:
+        """Update video download with arbitrary fields."""
+        from app.db.models import VideoDownload
+
+        VideoDownload.update(**kwargs).where(VideoDownload.id == download_id).execute()
+        self._logger.debug("video_download_updated", extra={"download_id": download_id})
+
+    def update_request_lang_detected(self, request_id: int, lang: str) -> None:
+        """Update the detected language for a request."""
+        from app.db.models import Request
+
+        Request.update(lang_detected=lang).where(Request.id == request_id).execute()
+
+    # ================================================================
+
     def _run_database_maintenance(self) -> None:
         if self.path == ":memory":
             self._logger.debug("db_maintenance_skipped_in_memory")
