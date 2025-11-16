@@ -241,6 +241,58 @@ class SummaryEmbedding(BaseModel):
         indexes = ((("model_name", "model_version"), False),)
 
 
+class VideoDownload(BaseModel):
+    """YouTube video downloads with transcripts and metadata."""
+
+    request = peewee.ForeignKeyField(
+        Request, backref="video_download", unique=True, on_delete="CASCADE"
+    )
+    video_id = peewee.TextField()  # YouTube video ID
+    video_file_path = peewee.TextField(null=True)  # Path to downloaded video file
+    subtitle_file_path = peewee.TextField(null=True)  # Path to subtitle file (.vtt)
+    metadata_file_path = peewee.TextField(null=True)  # Path to metadata JSON file
+    thumbnail_file_path = peewee.TextField(null=True)  # Path to thumbnail image
+
+    # Video metadata
+    title = peewee.TextField(null=True)
+    channel = peewee.TextField(null=True)
+    channel_id = peewee.TextField(null=True)
+    duration_sec = peewee.IntegerField(null=True)
+    upload_date = peewee.TextField(null=True)  # YYYYMMDD format
+    view_count = peewee.BigIntegerField(null=True)
+    like_count = peewee.BigIntegerField(null=True)
+
+    # Download details
+    resolution = peewee.TextField(null=True)  # e.g., "1080p", "720p"
+    file_size_bytes = peewee.BigIntegerField(null=True)
+    video_codec = peewee.TextField(null=True)  # e.g., "avc1"
+    audio_codec = peewee.TextField(null=True)  # e.g., "mp4a"
+    format_id = peewee.TextField(null=True)  # yt-dlp format identifier
+
+    # Transcript details
+    subtitle_language = peewee.TextField(null=True)  # Language of extracted subtitles
+    auto_generated = peewee.BooleanField(null=True)  # Whether subtitles are auto-generated
+    transcript_text = peewee.TextField(null=True)  # Extracted transcript (cached)
+    transcript_source = peewee.TextField(null=True)  # "youtube-transcript-api" or "vtt"
+
+    # Timestamps
+    download_started_at = peewee.DateTimeField(null=True)
+    download_completed_at = peewee.DateTimeField(null=True)
+    created_at = peewee.DateTimeField(default=_dt.datetime.utcnow)
+
+    # Status tracking
+    status = peewee.TextField(default="pending")  # 'pending', 'downloading', 'completed', 'error'
+    error_text = peewee.TextField(null=True)
+
+    class Meta:
+        table_name = "video_downloads"
+        indexes = (
+            (("video_id",), False),
+            (("status",), False),
+            (("created_at",), False),
+        )
+
+
 ALL_MODELS: tuple[type[BaseModel], ...] = (
     User,
     Chat,
@@ -253,6 +305,7 @@ ALL_MODELS: tuple[type[BaseModel], ...] = (
     UserInteraction,
     AuditLog,
     SummaryEmbedding,
+    VideoDownload,
 )
 
 

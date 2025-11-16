@@ -139,6 +139,9 @@ dependencies = [
   "sentence-transformers>=3.0.0",
   "orjson>=3.10.0",
   "uvloop>=0.22.1",
+  # YouTube support
+  "yt-dlp>=2024.0.0",
+  "youtube-transcript-api>=0.6.0",
   # Mobile API
   "fastapi>=0.104.0",
   "uvicorn[standard]>=0.24.0",
