@@ -407,7 +407,9 @@ async def telegram_login(login_data: TelegramLoginRequest):
         raise
     except Exception as e:
         logger.error(f"Login failed for user {login_data.telegram_user_id}: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Authentication failed. Please try again.") from e
+        raise HTTPException(
+            status_code=500, detail="Authentication failed. Please try again."
+        ) from e
 
 
 @router.post("/refresh")

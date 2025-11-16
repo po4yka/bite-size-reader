@@ -44,7 +44,7 @@ async def initiate_full_sync(
     sync_id = f"sync-{uuid.uuid4().hex[:16]}"
 
     # Generate chunk URLs
-    download_urls = [f"/sync/full/{sync_id}/chunk/{i+1}" for i in range(total_chunks)]
+    download_urls = [f"/sync/full/{sync_id}/chunk/{i + 1}" for i in range(total_chunks)]
 
     return {
         "success": True,
@@ -54,7 +54,9 @@ async def initiate_full_sync(
             "total_items": total_items,
             "chunks": total_chunks,
             "download_urls": download_urls,
-            "expires_at": datetime.now(UTC).isoformat().replace("+00:00", "Z"),  # TODO: Add expiry logic
+            "expires_at": datetime.now(UTC)
+            .isoformat()
+            .replace("+00:00", "Z"),  # TODO: Add expiry logic
         },
     }
 
@@ -205,9 +207,7 @@ async def upload_local_changes(
         summary = (
             Summary.select()
             .join(RequestModel)
-            .where(
-                (Summary.id == change.summary_id) & (RequestModel.user_id == user["user_id"])
-            )
+            .where((Summary.id == change.summary_id) & (RequestModel.user_id == user["user_id"]))
             .first()
         )
 

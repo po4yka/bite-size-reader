@@ -109,7 +109,9 @@ async def rate_limit_middleware(request: Request, call_next: Callable):
 def cleanup_rate_limit_store():
     """Remove expired rate limit entries."""
     current_minute = int(time.time() / 60)
-    expired_keys = [key for key in _rate_limit_store if int(key.split(":")[-1]) < current_minute - 5]
+    expired_keys = [
+        key for key in _rate_limit_store if int(key.split(":")[-1]) < current_minute - 5
+    ]
 
     for key in expired_keys:
         del _rate_limit_store[key]

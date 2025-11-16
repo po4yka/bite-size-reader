@@ -104,9 +104,9 @@ class TestCORSConfiguration:
 
         # Should only contain localhost or configured origins
         for origin in ALLOWED_ORIGINS:
-            assert origin.startswith(
-                ("http://localhost", "http://127.0.0.1", "https://")
-            ), f"Suspicious origin: {origin}"
+            assert origin.startswith(("http://localhost", "http://127.0.0.1", "https://")), (
+                f"Suspicious origin: {origin}"
+            )
 
 
 class TestAuthorizationChecks:

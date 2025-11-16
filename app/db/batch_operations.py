@@ -6,11 +6,13 @@ Provides efficient bulk operations with transaction management.
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import Any, TYPE_CHECKING
 
-import peewee
 
 from app.db.models import LLMCall, Request, Summary
+
+if TYPE_CHECKING:
+    import peewee
 
 logger = logging.getLogger(__name__)
 

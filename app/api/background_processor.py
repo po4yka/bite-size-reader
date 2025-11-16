@@ -115,7 +115,9 @@ async def process_url_request(request_id: int, db_path: str | None = None) -> No
         # Load request
         request = RequestModel.get_by_id(request_id)
         if not request:
-            logger.error(f"Request {request_id} not found", extra={"correlation_id": correlation_id})
+            logger.error(
+                f"Request {request_id} not found", extra={"correlation_id": correlation_id}
+            )
             return
 
         # Check if already processed
@@ -130,7 +132,11 @@ async def process_url_request(request_id: int, db_path: str | None = None) -> No
         correlation_id = request.correlation_id or correlation_id
         logger.info(
             f"Starting background processing for request {request_id}",
-            extra={"correlation_id": correlation_id, "type": request.type, "url": request.input_url},
+            extra={
+                "correlation_id": correlation_id,
+                "type": request.type,
+                "url": request.input_url,
+            },
         )
 
         # Update status to processing
@@ -188,7 +194,9 @@ async def _process_url_type(request: RequestModel, db: Database) -> None:
         lang = choose_language(normalized_url, None, cfg.llm.preferred_lang)
 
     # Extract content
-    logger.info(f"Extracting content for {normalized_url}", extra={"correlation_id": request.correlation_id})
+    logger.info(
+        f"Extracting content for {normalized_url}", extra={"correlation_id": request.correlation_id}
+    )
 
     extraction_result = await url_processor.content_extractor.extract(
         url=normalized_url,
@@ -250,7 +258,10 @@ async def _process_forward_type(request: RequestModel, db: Database) -> None:
     # Generate summary from forwarded content
     logger.info(
         "Generating summary for forwarded content",
-        extra={"correlation_id": request.correlation_id, "content_length": len(request.content_text or "")},
+        extra={
+            "correlation_id": request.correlation_id,
+            "content_length": len(request.content_text or ""),
+        },
     )
 
     summary_result = await url_processor.llm_summarizer.summarize(

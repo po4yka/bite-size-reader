@@ -16,7 +16,10 @@ import logging
 
 import peewee
 
-from app.db.database import Database
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from app.db.database import Database
 
 logger = logging.getLogger(__name__)
 

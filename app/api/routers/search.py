@@ -31,10 +31,7 @@ async def search_summaries(
     try:
         # FTS5 search query
         search_query = (
-            TopicSearchIndex.search(q)
-            .order_by(TopicSearchIndex.rank)
-            .limit(limit)
-            .offset(offset)
+            TopicSearchIndex.search(q).order_by(TopicSearchIndex.rank).limit(limit).offset(offset)
         )
 
         # Execute query once and get request IDs
@@ -43,11 +40,8 @@ async def search_summaries(
 
         # Batch load all requests and summaries in 2 queries (fixes N+1)
         # Query 1: Load all requests with user authorization
-        requests_query = (
-            RequestModel.select()
-            .where(
-                (RequestModel.id.in_(request_ids)) & (RequestModel.user_id == user["user_id"])
-            )
+        requests_query = RequestModel.select().where(
+            (RequestModel.id.in_(request_ids)) & (RequestModel.user_id == user["user_id"])
         )
         requests_map = {req.id: req for req in requests_query}
 
@@ -124,7 +118,12 @@ async def get_trending_topics(
         "data": {
             "tags": [
                 {"tag": "#blockchain", "count": 42, "trend": "up", "percentage_change": 15.5},
-                {"tag": "#cryptocurrency", "count": 38, "trend": "stable", "percentage_change": 0.2},
+                {
+                    "tag": "#cryptocurrency",
+                    "count": 38,
+                    "trend": "stable",
+                    "percentage_change": 0.2,
+                },
                 {"tag": "#ai", "count": 35, "trend": "down", "percentage_change": -8.3},
             ],
             "time_range": {
