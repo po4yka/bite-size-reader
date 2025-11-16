@@ -276,10 +276,7 @@ async def run_summary_cli(args: argparse.Namespace) -> None:
     db.migrate()
 
     audit = _build_audit(db)
-    try:
-        max_concurrency = int(os.getenv("MAX_CONCURRENT_CALLS", "4"))
-    except ValueError:
-        max_concurrency = 4
+    max_concurrency = cfg.runtime.max_concurrent_calls
     sem_factory = _SemaphoreFactory(max_concurrency)
 
     response_formatter = ResponseFormatter()

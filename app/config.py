@@ -410,6 +410,10 @@ class RuntimeConfig(BaseModel):
     chunk_max_chars: int = Field(default=200000, validation_alias="CHUNK_MAX_CHARS")
     log_truncate_length: int = Field(default=1000, validation_alias="LOG_TRUNCATE_LENGTH")
     topic_search_max_results: int = Field(default=5, validation_alias="TOPIC_SEARCH_MAX_RESULTS")
+    max_concurrent_calls: int = Field(default=4, validation_alias="MAX_CONCURRENT_CALLS")
+    jwt_secret_key: str = Field(
+        default="", validation_alias=AliasChoices("JWT_SECRET_KEY", "JWT_SECRET")
+    )
     db_backup_enabled: bool = Field(default=True, validation_alias="DB_BACKUP_ENABLED")
     db_backup_interval_minutes: int = Field(
         default=360, validation_alias="DB_BACKUP_INTERVAL_MINUTES"
@@ -521,6 +525,34 @@ class RuntimeConfig(BaseModel):
             msg = "DB backup directory contains invalid characters"
             raise ValueError(msg)
         return trimmed
+
+    @field_validator("max_concurrent_calls", mode="before")
+    @classmethod
+    def _validate_max_concurrent_calls(cls, value: Any) -> int:
+        try:
+            parsed = int(str(value or 4))
+        except ValueError as exc:
+            msg = "Max concurrent calls must be a valid integer"
+            raise ValueError(msg) from exc
+        if parsed < 1 or parsed > 100:
+            msg = "Max concurrent calls must be between 1 and 100"
+            raise ValueError(msg)
+        return parsed
+
+    @field_validator("jwt_secret_key", mode="before")
+    @classmethod
+    def _validate_jwt_secret_key(cls, value: Any) -> str:
+        if value in (None, ""):
+            return ""
+        secret = str(value).strip()
+        if len(secret) < 32:
+            logger.warning(
+                "JWT secret key is shorter than 32 characters - this is insecure for production"
+            )
+        if len(secret) > 500:
+            msg = "JWT secret key appears to be too long"
+            raise ValueError(msg)
+        return secret
 
 
 @dataclass(frozen=True)
