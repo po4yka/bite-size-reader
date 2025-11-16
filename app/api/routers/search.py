@@ -139,7 +139,7 @@ async def get_trending_topics(
     )
 
     # Extract and count tags from current period
-    current_tags = Counter()
+    current_tags: Counter[str] = Counter()
     for summary in current_summaries:
         json_payload = summary.json_payload or {}
         topic_tags = json_payload.get("topic_tags", [])
@@ -148,7 +148,7 @@ async def get_trending_topics(
                 current_tags[tag.lower()] += 1
 
     # Extract and count tags from previous period
-    previous_tags = Counter()
+    previous_tags: Counter[str] = Counter()
     for summary in previous_summaries:
         json_payload = summary.json_payload or {}
         topic_tags = json_payload.get("topic_tags", [])

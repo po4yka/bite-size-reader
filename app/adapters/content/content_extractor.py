@@ -20,6 +20,7 @@ from app.adapters.external.firecrawl_parser import (
     FirecrawlResult,
 )
 from app.config import AppConfig
+from app.core.async_utils import raise_if_cancelled
 from app.core.html_utils import (
     clean_markdown_article_text,
     html_to_text,

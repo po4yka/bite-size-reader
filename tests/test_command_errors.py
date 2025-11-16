@@ -4,7 +4,14 @@ import unittest
 from unittest.mock import AsyncMock, patch
 
 from app.adapters.telegram.telegram_bot import TelegramBot
-from app.config import AppConfig, FirecrawlConfig, OpenRouterConfig, RuntimeConfig, TelegramConfig
+from app.config import (
+    AppConfig,
+    FirecrawlConfig,
+    OpenRouterConfig,
+    RuntimeConfig,
+    TelegramConfig,
+    YouTubeConfig,
+)
 from app.db.database import Database
 
 
@@ -57,6 +64,8 @@ def make_bot(tmp_path: str) -> BoomBot:
             preferred_lang="en",
             debug_payloads=False,
         ),
+
+        youtube=YouTubeConfig(),
     )
     from app.adapters import telegram_bot as tbmod
 

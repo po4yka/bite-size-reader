@@ -8,7 +8,7 @@ from unittest.mock import patch
 import pytest
 
 from app.adapters.telegram.telegram_bot import TelegramBot
-from app.config import AppConfig, FirecrawlConfig, OpenRouterConfig, RuntimeConfig, TelegramConfig
+from app.config import AppConfig, FirecrawlConfig, OpenRouterConfig, RuntimeConfig, TelegramConfig, YouTubeConfig
 from app.db.database import Database
 from app.models.telegram.telegram_models import ChatType, TelegramMessage, TelegramUser
 
@@ -61,6 +61,8 @@ def make_bot(tmp_path: str, allowed_ids):
             preferred_lang="en",
             debug_payloads=False,
         ),
+
+        youtube=YouTubeConfig(),
     )
     from app.adapters import telegram_bot as tbmod
 

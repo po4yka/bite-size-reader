@@ -53,7 +53,23 @@ class TestJsonParsing(unittest.TestCase):
         runtime_cfg.preferred_lang = "en"
         runtime_cfg.max_concurrent_calls = 4
 
-        self.cfg = AppConfig(telegram_cfg, firecrawl_cfg, openrouter_cfg, runtime_cfg)
+        youtube_cfg = MagicMock()
+        youtube_cfg.enabled = True
+        youtube_cfg.storage_path = "/tmp/videos"
+        youtube_cfg.max_video_size_mb = 500
+        youtube_cfg.max_storage_gb = 100
+        youtube_cfg.preferred_quality = "1080p"
+        youtube_cfg.subtitle_languages = ("en", "ru")
+        youtube_cfg.auto_cleanup_enabled = False
+        youtube_cfg.cleanup_after_days = 30
+
+        self.cfg = AppConfig(
+            telegram=telegram_cfg,
+            firecrawl=firecrawl_cfg,
+            openrouter=openrouter_cfg,
+            youtube=youtube_cfg,
+            runtime=runtime_cfg,
+        )
         self.db = MagicMock(spec=Database)
         self.db.async_get_request_by_dedupe_hash = AsyncMock(return_value=None)
         self.db.async_get_crawl_result_by_request = AsyncMock(return_value=None)

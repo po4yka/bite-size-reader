@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 from app.adapters.external.response_formatter import ResponseFormatter
 from app.adapters.telegram.forward_content_processor import ForwardContentProcessor
-from app.config import AppConfig, FirecrawlConfig, OpenRouterConfig, RuntimeConfig, TelegramConfig
+from app.config import AppConfig, FirecrawlConfig, OpenRouterConfig, RuntimeConfig, TelegramConfig, YouTubeConfig
 from app.db.database import Database
 
 
@@ -68,7 +68,9 @@ class TestForwardMessagePersistence(unittest.IsolatedAsyncioTestCase):
                     preferred_lang="en",
                     debug_payloads=False,
                 ),
-            )
+
+                youtube=YouTubeConfig(),
+    )
 
             formatter = MagicMock(spec=ResponseFormatter)
             formatter.send_forward_accepted_notification = AsyncMock()
