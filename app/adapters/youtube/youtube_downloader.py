@@ -14,11 +14,7 @@ if TYPE_CHECKING:
 
 import yt_dlp
 from youtube_transcript_api import YouTubeTranscriptApi
-from youtube_transcript_api._errors import (
-    NoTranscriptFound,
-    TranscriptsDisabled,
-    VideoUnavailable,
-)
+from youtube_transcript_api._errors import NoTranscriptFound, TranscriptsDisabled, VideoUnavailable
 
 from app.core.async_utils import raise_if_cancelled
 from app.core.lang import detect_language
@@ -247,7 +243,8 @@ class YouTubeDownloader:
 
             # Try to get transcript in preferred language
             transcript_list = await asyncio.to_thread(
-                YouTubeTranscriptApi.list_transcripts, video_id
+                YouTubeTranscriptApi.list_transcripts,  # type: ignore[attr-defined]
+                video_id,
             )
 
             transcript = None

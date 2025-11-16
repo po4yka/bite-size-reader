@@ -6,7 +6,14 @@ from typing import TYPE_CHECKING, cast
 from unittest.mock import Mock
 
 from app.adapters.telegram.message_router import MessageRouter
-from app.config import AppConfig, FirecrawlConfig, OpenRouterConfig, RuntimeConfig, TelegramConfig
+from app.config import (
+    AppConfig,
+    FirecrawlConfig,
+    OpenRouterConfig,
+    RuntimeConfig,
+    TelegramConfig,
+    YouTubeConfig,
+)
 from app.db.database import Database
 from app.db.user_interactions import (
     async_safe_update_user_interaction,
@@ -33,6 +40,7 @@ def _make_config() -> AppConfig:
             http_referer=None,
             x_title=None,
         ),
+        youtube=YouTubeConfig(),
         runtime=RuntimeConfig(
             db_path=":memory:",
             log_level="INFO",

@@ -15,16 +15,10 @@ from typing import TYPE_CHECKING, Any, Literal
 
 import httpx
 
-from app.adapters.external.firecrawl_parser import (
-    FirecrawlClient,
-    FirecrawlResult,
-)
+from app.adapters.external.firecrawl_parser import FirecrawlClient, FirecrawlResult
 from app.config import AppConfig
-from app.core.html_utils import (
-    clean_markdown_article_text,
-    html_to_text,
-    normalize_text,
-)
+from app.core.async_utils import raise_if_cancelled
+from app.core.html_utils import clean_markdown_article_text, html_to_text, normalize_text
 from app.core.lang import detect_language
 from app.core.url_utils import normalize_url, url_hash_sha256
 from app.db.database import Database

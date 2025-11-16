@@ -5,7 +5,14 @@ import unittest
 from unittest.mock import AsyncMock, patch
 
 from app.adapters.telegram.telegram_bot import TelegramBot
-from app.config import AppConfig, FirecrawlConfig, OpenRouterConfig, RuntimeConfig, TelegramConfig
+from app.config import (
+    AppConfig,
+    FirecrawlConfig,
+    OpenRouterConfig,
+    RuntimeConfig,
+    TelegramConfig,
+    YouTubeConfig,
+)
 from app.db.database import Database
 
 
@@ -57,6 +64,7 @@ def _bot_with_tmpdb(tmp_path):
             top_p=1.0,
             temperature=0.8,
         ),
+        youtube=YouTubeConfig(),
         runtime=RuntimeConfig(
             db_path=tmp_path,
             log_level="INFO",

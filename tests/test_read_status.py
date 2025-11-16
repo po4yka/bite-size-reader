@@ -6,7 +6,14 @@ from unittest.mock import AsyncMock, patch
 
 from app.adapters.telegram.command_processor import CommandProcessor
 from app.adapters.telegram.telegram_bot import TelegramBot
-from app.config import AppConfig, FirecrawlConfig, OpenRouterConfig, RuntimeConfig, TelegramConfig
+from app.config import (
+    AppConfig,
+    FirecrawlConfig,
+    OpenRouterConfig,
+    RuntimeConfig,
+    TelegramConfig,
+    YouTubeConfig,
+)
 from app.db.database import Database
 
 
@@ -86,6 +93,7 @@ def make_bot(tmp_path: str) -> ReadStatusBot:
             http_referer=None,
             x_title=None,
         ),
+        youtube=YouTubeConfig(),
         runtime=RuntimeConfig(
             db_path=tmp_path,
             log_level="INFO",
