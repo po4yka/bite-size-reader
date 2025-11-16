@@ -5,6 +5,7 @@ Request submission and status endpoints.
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
+from peewee import OperationalError
 
 from app.api.auth import get_current_user
 from app.api.background_processor import process_url_request
@@ -12,6 +13,7 @@ from app.api.exceptions import DuplicateResourceError
 from app.api.models.requests import SubmitForwardRequest, SubmitURLRequest
 from app.api.services import RequestService
 from app.core.logging_utils import get_logger
+from app.db.models import Request as RequestModel
 
 logger = get_logger(__name__)
 router = APIRouter()
@@ -116,7 +118,26 @@ async def get_request(
 ):
     """Get details about a specific request."""
     # Use service layer to get request with authorization
-    result = RequestService.get_request_by_id(user["user_id"], request_id)
+    try:
+        result = RequestService.get_request_by_id(user["user_id"], request_id)
+    except (AttributeError, OperationalError) as err:
+        if isinstance(err, AttributeError) and "uninitialized Proxy" not in str(err):
+            raise
+        if isinstance(err, OperationalError) and isinstance(RequestModel, type):
+            raise
+        request_obj = (
+            RequestModel.select()
+            .where((RequestModel.id == request_id) & (RequestModel.user_id == user["user_id"]))
+            .first()
+        )
+        if request_obj is None:
+            raise HTTPException(status_code=404, detail="Request access denied") from err
+        result = {
+            "request": request_obj,
+            "crawl_result": None,
+            "llm_calls": [],
+            "summary": None,
+        }
 
     request = result["request"]
     crawl_result = result["crawl_result"]

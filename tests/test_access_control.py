@@ -3,6 +3,7 @@ import tempfile
 import unittest
 from unittest.mock import AsyncMock, patch
 
+from app.adapters.telegram.access_controller import AccessController
 from app.adapters.telegram.telegram_bot import TelegramBot
 from app.config import (
     AppConfig,
@@ -35,10 +36,27 @@ class FakeMessage:
         self._replies.append(text)
 
 
-def make_bot(tmp_path: str, allowed_ids):
-    db = Database(tmp_path)
-    db.migrate()
-    cfg = AppConfig(
+class FakeTime:
+    def __init__(self, start: float = 0.0) -> None:
+        self.value = float(start)
+
+    def advance(self, seconds: float) -> None:
+        self.value += seconds
+
+    def __call__(self) -> float:
+        return self.value
+
+
+class DummyFormatter:
+    def __init__(self) -> None:
+        self.replies: list[str] = []
+
+    async def safe_reply(self, message, text, **_kwargs):
+        self.replies.append(text)
+
+
+def _make_config(tmp_path: str, allowed_ids) -> AppConfig:
+    return AppConfig(
         telegram=TelegramConfig(
             api_id=0, api_hash="", bot_token="", allowed_user_ids=tuple(allowed_ids)
         ),
@@ -62,6 +80,12 @@ def make_bot(tmp_path: str, allowed_ids):
             debug_payloads=False,
         ),
     )
+
+
+def make_bot(tmp_path: str, allowed_ids):
+    db = Database(tmp_path)
+    db.migrate()
+    cfg = _make_config(tmp_path, allowed_ids)
     from app.adapters import telegram_bot as tbmod
 
     tbmod.Client = object
@@ -87,6 +111,37 @@ class TestAccessControl(unittest.IsolatedAsyncioTestCase):
             msg = FakeMessage("/help", uid=7)
             await bot._on_message(msg)
             assert any("commands" in r.lower() for r in msg._replies)
+
+
+class TestAccessControllerBlockReset(unittest.IsolatedAsyncioTestCase):
+    async def test_failed_attempts_reset_after_block_window(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            db_path = os.path.join(tmp, "app.db")
+            cfg = _make_config(db_path, allowed_ids=[1])
+            db = Database(db_path)
+            db.migrate()
+            formatter = DummyFormatter()
+            controller = AccessController(cfg, db, formatter, lambda *args, **kwargs: None)
+            controller.BLOCK_DURATION_SECONDS = 10
+
+            uid = 999
+            message = FakeMessage("/help", uid=uid)
+            fake_time = FakeTime()
+
+            with patch("app.adapters.telegram.access_controller.time.time", fake_time):
+                for _ in range(controller.MAX_FAILED_ATTEMPTS):
+                    fake_time.advance(1)
+                    allowed = await controller.check_access(uid, message, "cid", 0, fake_time())
+                    assert allowed is False
+
+                assert controller._failed_attempts[uid] == controller.MAX_FAILED_ATTEMPTS
+                assert uid in controller._block_notified_until
+
+                fake_time.advance(controller.BLOCK_DURATION_SECONDS + 1)
+                allowed = await controller.check_access(uid, message, "cid", 0, fake_time())
+                assert allowed is False
+                assert controller._failed_attempts[uid] == 1
+                assert uid not in controller._block_notified_until
 
 
 if __name__ == "__main__":

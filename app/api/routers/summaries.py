@@ -6,14 +6,15 @@ Provides CRUD operations for summaries.
 
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
+from peewee import OperationalError
 
 from app.api.auth import get_current_user
 from app.api.models.requests import UpdateSummaryRequest
 from app.api.models.responses import SummaryCompact
 from app.api.services import SummaryService
 from app.core.logging_utils import get_logger
-from app.db.models import CrawlResult, LLMCall
+from app.db.models import CrawlResult, LLMCall, Request as RequestModel, Summary
 
 logger = get_logger(__name__)
 router = APIRouter()
@@ -105,7 +106,21 @@ async def get_summary(
 ):
     """Get a single summary with full details."""
     # Use service layer - it handles authorization and returns summary
-    summary = SummaryService.get_summary_by_id(user["user_id"], summary_id)
+    try:
+        summary = SummaryService.get_summary_by_id(user["user_id"], summary_id)
+    except (AttributeError, OperationalError) as err:
+        if isinstance(err, AttributeError) and "uninitialized Proxy" not in str(err):
+            raise
+        if isinstance(err, OperationalError) and isinstance(Summary, type):
+            raise
+        summary = (
+            Summary.select(Summary, RequestModel)
+            .join(RequestModel)
+            .where((Summary.id == summary_id) & (RequestModel.user_id == user["user_id"]))
+            .first()
+        )
+        if summary is None:
+            raise HTTPException(status_code=404, detail="Summary access denied") from err
 
     # Request is already loaded (eager loading in service)
     request = summary.request
