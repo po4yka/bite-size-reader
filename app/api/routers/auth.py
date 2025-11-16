@@ -24,12 +24,14 @@ security = HTTPBearer()
 def _load_secret_key() -> str:
     """Load and validate the JWT secret key."""
     try:
-        secret = Config.get("JWT_SECRET_KEY", "").strip()
+        raw_secret = Config.get("JWT_SECRET_KEY", "")
     except ValueError as err:
         raise RuntimeError(
             "JWT_SECRET_KEY environment variable must be configured. "
             "Generate one with: openssl rand -hex 32"
         ) from err
+
+    secret = (raw_secret or "").strip()
 
     if not secret or secret == "your-secret-key-change-in-production":
         raise RuntimeError(

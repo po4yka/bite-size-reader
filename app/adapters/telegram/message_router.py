@@ -80,7 +80,7 @@ class MessageRouter:
         )
         self._rate_limit_notified_until: dict[int, float] = {}
         self._rate_limit_notice_window = max(self._rate_limiter_config.window_seconds, 30)
-        self._recent_message_ids: dict[tuple[int, int], float] = {}
+        self._recent_message_ids: dict[tuple[int, int, int], tuple[float, str]] = {}
         self._recent_message_ttl = 120
 
     async def route_message(self, message: Any) -> None:
@@ -129,9 +129,11 @@ class MessageRouter:
             message_id = telegram_message.message_id
             message_key = None
             if message_id is not None:
-                message_key = (chat_id or 0, message_id)
+                message_key = (uid, chat_id or 0, message_id)
 
-            if message_key and self._is_duplicate_message(message_key):
+            text = telegram_message.get_effective_text() or ""
+            text_signature = text.strip() if isinstance(text, str) else ""
+            if message_key and self._is_duplicate_message(message_key, text_signature):
                 logger.info(
                     "duplicate_message_skipped",
                     extra={
@@ -141,8 +143,6 @@ class MessageRouter:
                     },
                 )
                 return
-
-            text = telegram_message.get_effective_text() or ""
 
             # Check for forwarded message using validated model
             has_forward = telegram_message.is_forwarded
@@ -1188,16 +1188,22 @@ class MessageRouter:
         )
         return False
 
-    def _is_duplicate_message(self, message_key: tuple[int, int]) -> bool:
+    def _is_duplicate_message(self, message_key: tuple[int, int, int], text_signature: str) -> bool:
         """Return True if we've processed this message recently."""
         now = time.time()
         last_seen = self._recent_message_ids.get(message_key)
-        if last_seen is not None and now - last_seen < self._recent_message_ttl:
+        if (
+            last_seen is not None
+            and now - last_seen[0] < self._recent_message_ttl
+            and last_seen[1] == text_signature
+        ):
             return True
-        self._recent_message_ids[message_key] = now
+        self._recent_message_ids[message_key] = (now, text_signature)
         if len(self._recent_message_ids) > 2000:
             cutoff = now - self._recent_message_ttl
             self._recent_message_ids = {
-                key: ts for key, ts in self._recent_message_ids.items() if ts >= cutoff
+                key: (ts, signature)
+                for key, (ts, signature) in self._recent_message_ids.items()
+                if ts >= cutoff
             }
         return False

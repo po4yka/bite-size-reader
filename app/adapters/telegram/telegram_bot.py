@@ -41,6 +41,30 @@ Client: Any = getattr(telegram_client_module, "Client", object)
 filters: Any = getattr(telegram_client_module, "filters", None)
 
 
+class _URLProcessorEntrypoint:
+    """Proxy that routes URL handling through the bot hook for tests."""
+
+    def __init__(self, bot: TelegramBot) -> None:
+        self._bot = bot
+
+    async def handle_url_flow(
+        self,
+        message: Any,
+        url_text: str,
+        *,
+        correlation_id: str | None = None,
+        interaction_id: int | None = None,
+        silent: bool = False,
+    ) -> None:
+        await self._bot._handle_url_flow(
+            message,
+            url_text,
+            correlation_id=correlation_id,
+            interaction_id=interaction_id,
+            silent=silent,
+        )
+
+
 @dataclass
 class TelegramBot:
     """Refactored Telegram bot using modular components."""
@@ -122,6 +146,11 @@ class TelegramBot:
             sem=self._sem,
         )
 
+        # Adapter ensures legacy hooks like ``_handle_url_flow`` and
+        # subclasses overriding it still observe URL processing
+        # requests, while defaulting to the real processor.
+        self._url_processor_entrypoint = _URLProcessorEntrypoint(self)
+
         self.forward_processor = ForwardProcessor(
             cfg=self.cfg,
             db=self.db,
@@ -194,7 +223,7 @@ class TelegramBot:
             cfg=self.cfg,
             db=self.db,
             response_formatter=self.response_formatter,
-            url_processor=self.url_processor,
+            url_processor=cast("URLProcessor", self._url_processor_entrypoint),
             forward_processor=self.forward_processor,
             topic_searcher=self.topic_searcher,
             local_searcher=self.local_searcher,
@@ -592,6 +621,7 @@ class TelegramBot:
         *,
         correlation_id: str | None = None,
         interaction_id: int | None = None,
+        silent: bool = False,
     ) -> None:
         """Adapter used by command/url handlers to process URL flows."""
         await self._handle_url_flow(
@@ -599,6 +629,7 @@ class TelegramBot:
             url_text,
             correlation_id=correlation_id,
             interaction_id=interaction_id,
+            silent=silent,
         )
 
     async def _handle_url_flow(
@@ -608,6 +639,7 @@ class TelegramBot:
         *,
         correlation_id: str | None = None,
         interaction_id: int | None = None,
+        silent: bool = False,
     ) -> None:
         """Process a URL message via the URL processor pipeline."""
         await self.url_processor.handle_url_flow(
@@ -615,6 +647,7 @@ class TelegramBot:
             url_text,
             correlation_id=correlation_id,
             interaction_id=interaction_id,
+            silent=silent,
         )
 
     async def _handle_forward_flow(
