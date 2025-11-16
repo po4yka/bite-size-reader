@@ -77,6 +77,10 @@ class URLHandler:
         async with self._state_lock:
             self._awaiting_url_users.discard(uid)
 
+        urls = await self._apply_url_security_checks(message, urls, uid)
+        if not urls:
+            return
+
         if len(urls) > 1:
             await self._request_multi_link_confirmation(
                 message, uid, urls, interaction_id, start_time
@@ -103,41 +107,9 @@ class URLHandler:
     ) -> None:
         """Handle direct URL message with security validation."""
         urls = extract_all_urls(text)
-
-        # Security check: limit batch size
-        if len(urls) > self.response_formatter.MAX_BATCH_URLS:
-            await self.response_formatter.safe_reply(
-                message,
-                f"❌ Too many URLs ({len(urls)}). Maximum allowed: {self.response_formatter.MAX_BATCH_URLS}.",
-            )
-            logger.warning(
-                "direct_url_batch_limit_exceeded",
-                extra={
-                    "url_count": len(urls),
-                    "max_allowed": self.response_formatter.MAX_BATCH_URLS,
-                    "uid": uid,
-                },
-            )
+        urls = await self._apply_url_security_checks(message, urls, uid)
+        if not urls:
             return
-
-        # Validate each URL for security
-        valid_urls = []
-        for url in urls:
-            is_valid, error_msg = self.response_formatter._validate_url(url)
-            if is_valid:
-                valid_urls.append(url)
-            else:
-                logger.warning(
-                    "invalid_direct_url", extra={"url": url, "error": error_msg, "uid": uid}
-                )
-
-        if not valid_urls:
-            await self.response_formatter.safe_reply(
-                message, "❌ No valid URLs found after security checks."
-            )
-            return
-
-        urls = valid_urls
 
         if len(urls) > 1:
             await self._request_multi_link_confirmation(
@@ -275,6 +247,44 @@ class URLHandler:
     def _is_negative(self, text: str) -> bool:
         """Check if text is a negative response."""
         return text in {"n", "no", "-", "cancel", "stop", "нет", "не"}
+
+    async def _apply_url_security_checks(
+        self, message: Any, urls: list[str], uid: int
+    ) -> list[str]:
+        """Apply shared security checks for URLs from Telegram messages."""
+        if not urls:
+            return []
+
+        if len(urls) > self.response_formatter.MAX_BATCH_URLS:
+            await self.response_formatter.safe_reply(
+                message,
+                f"❌ Too many URLs ({len(urls)}). Maximum allowed: {self.response_formatter.MAX_BATCH_URLS}.",
+            )
+            logger.warning(
+                "url_batch_limit_exceeded",
+                extra={
+                    "url_count": len(urls),
+                    "max_allowed": self.response_formatter.MAX_BATCH_URLS,
+                    "uid": uid,
+                },
+            )
+            return []
+
+        valid_urls = []
+        for url in urls:
+            is_valid, error_msg = self.response_formatter._validate_url(url)
+            if is_valid:
+                valid_urls.append(url)
+            else:
+                logger.warning(
+                    "invalid_url_submitted", extra={"url": url, "error": error_msg, "uid": uid}
+                )
+
+        if not valid_urls:
+            await self.response_formatter.safe_reply(
+                message, "❌ No valid URLs found after security checks."
+            )
+        return valid_urls
 
     async def _request_multi_link_confirmation(
         self,
