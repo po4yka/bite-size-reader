@@ -147,7 +147,11 @@ jobs:
         env:
           PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
         run: |
-          pytest tests/ \
+          pytest \
+            -p pytest_cov \
+            -p pytest_xdist \
+            -p pytest_rerunfailures \
+            tests/ \
             -m "not slow and not integration" \
             --cov=app \
             --cov-report=term-missing:skip-covered \
