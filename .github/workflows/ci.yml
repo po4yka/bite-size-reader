@@ -144,6 +144,8 @@ jobs:
           radon mi app --min B
 
       - name: Run unit tests with coverage
+        env:
+          PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
         run: |
           pytest tests/ \
             -m "not slow and not integration" \
@@ -322,23 +324,28 @@ jobs:
         if: ${{ github.event_name == 'pull_request' && (success() || failure()) }}
         run: |
           if [ ! -f ./results-workspace.sarif ]; then
-            cat <<'SARIF' > ./results-workspace.sarif
-            {
-              "version": "2.1.0",
-              "runs": [
-                {
-                  "tool": {
-                    "driver": {
-                      "name": "gitleaks",
-                      "informationUri": "https://github.com/gitleaks/gitleaks",
-                      "rules": []
+            python - <<'PY'
+            import json
+            from pathlib import Path
+
+            payload = {
+                "version": "2.1.0",
+                "runs": [
+                    {
+                        "tool": {
+                            "driver": {
+                                "name": "gitleaks",
+                                "informationUri": "https://github.com/gitleaks/gitleaks",
+                                "rules": [],
+                            }
+                        },
+                        "results": [],
                     }
-                  },
-                  "results": []
-                }
-              ]
+                ],
             }
-            SARIF
+
+            Path("results-workspace.sarif").write_text(json.dumps(payload, indent=2))
+            PY
             echo "Created empty SARIF report for workspace scan."
           fi
 
@@ -361,23 +368,28 @@ jobs:
         if: ${{ github.event_name != 'pull_request' && (success() || failure()) }}
         run: |
           if [ ! -f ./results-history.sarif ]; then
-            cat <<'SARIF' > ./results-history.sarif
-            {
-              "version": "2.1.0",
-              "runs": [
-                {
-                  "tool": {
-                    "driver": {
-                      "name": "gitleaks",
-                      "informationUri": "https://github.com/gitleaks/gitleaks",
-                      "rules": []
+            python - <<'PY'
+            import json
+            from pathlib import Path
+
+            payload = {
+                "version": "2.1.0",
+                "runs": [
+                    {
+                        "tool": {
+                            "driver": {
+                                "name": "gitleaks",
+                                "informationUri": "https://github.com/gitleaks/gitleaks",
+                                "rules": [],
+                            }
+                        },
+                        "results": [],
                     }
-                  },
-                  "results": []
-                }
-              ]
+                ],
             }
-            SARIF
+
+            Path("results-history.sarif").write_text(json.dumps(payload, indent=2))
+            PY
             echo "Created empty SARIF report for history scan."
           fi
 

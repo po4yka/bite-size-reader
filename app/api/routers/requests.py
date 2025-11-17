@@ -2,7 +2,7 @@
 Request submission and status endpoints.
 """
 
-from datetime import UTC, datetime
+from datetime import datetime
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from peewee import OperationalError
@@ -13,6 +13,7 @@ from app.api.exceptions import DuplicateResourceError
 from app.api.models.requests import SubmitForwardRequest, SubmitURLRequest
 from app.api.services import RequestService
 from app.core.logging_utils import get_logger
+from app.core.time_utils import UTC
 from app.db.models import Request as RequestModel
 
 logger = get_logger(__name__)

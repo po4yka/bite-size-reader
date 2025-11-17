@@ -2,11 +2,14 @@
 User preferences and statistics endpoints.
 """
 
+from datetime import datetime
+
 from fastapi import APIRouter, Depends
 
 from app.api.auth import get_current_user
 from app.api.models.requests import UpdatePreferencesRequest
 from app.core.logging_utils import get_logger
+from app.core.time_utils import UTC
 from app.db.models import Request as RequestModel, Summary, User
 
 logger = get_logger(__name__)
@@ -47,7 +50,6 @@ async def update_user_preferences(
     user=Depends(get_current_user),
 ):
     """Update user preferences."""
-    from datetime import UTC, datetime
 
     # Get or create user record
     user_record, _created = User.get_or_create(

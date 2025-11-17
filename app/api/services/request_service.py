@@ -1,9 +1,10 @@
 """Request service - business logic for request operations."""
 
-from datetime import UTC, datetime
+from datetime import datetime
 
 from app.api.exceptions import DuplicateResourceError, ResourceNotFoundError
 from app.core.logging_utils import get_logger
+from app.core.time_utils import UTC
 from app.core.url_utils import compute_dedupe_hash, normalize_url
 from app.db.models import CrawlResult, LLMCall, Request as RequestModel, Summary
 

@@ -2,10 +2,12 @@
 Pydantic models for API responses.
 """
 
-from datetime import UTC, datetime
+from datetime import datetime
 from typing import Any
 
 from pydantic import BaseModel, Field
+
+from app.core.time_utils import UTC
 
 
 class MetaInfo(BaseModel):

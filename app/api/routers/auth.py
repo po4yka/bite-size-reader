@@ -5,7 +5,7 @@ Authentication endpoints and utilities.
 import hashlib
 import hmac
 import time
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta
 
 import jwt
 from fastapi import APIRouter, Depends, HTTPException
@@ -14,6 +14,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from app.config import Config
 from app.core.logging_utils import get_logger
+from app.core.time_utils import UTC
 from app.db.models import User
 
 logger = get_logger(__name__)

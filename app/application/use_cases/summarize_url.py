@@ -6,9 +6,10 @@ workflow from URL to final summary.
 
 import logging
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import datetime
 from typing import Any
 
+from app.core.time_utils import UTC
 from app.domain.events.request_events import RequestCompleted, RequestCreated, RequestFailed
 from app.domain.events.summary_events import SummaryCreated
 from app.domain.exceptions.domain_exceptions import ContentFetchError, SummaryGenerationError

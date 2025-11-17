@@ -6,8 +6,9 @@ the MarkSummaryAsReadUseCase.
 
 import logging
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import datetime
 
+from app.core.time_utils import UTC
 from app.domain.events.summary_events import SummaryMarkedAsUnread
 from app.domain.exceptions.domain_exceptions import (
     InvalidStateTransitionError,

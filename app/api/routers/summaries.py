@@ -4,7 +4,7 @@ Summary management endpoints.
 Provides CRUD operations for summaries.
 """
 
-from datetime import UTC, datetime
+from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from peewee import OperationalError
@@ -14,6 +14,7 @@ from app.api.models.requests import UpdateSummaryRequest
 from app.api.models.responses import SummaryCompact
 from app.api.services import SummaryService
 from app.core.logging_utils import get_logger
+from app.core.time_utils import UTC
 from app.db.models import CrawlResult, LLMCall, Request as RequestModel, Summary
 
 logger = get_logger(__name__)

@@ -5,7 +5,7 @@ Usage:
     uvicorn app.api.main:app --reload --host 0.0.0.0 --port 8000
 """
 
-from datetime import UTC, datetime
+from datetime import datetime
 
 import peewee
 from fastapi import FastAPI
@@ -23,6 +23,7 @@ from app.api.middleware import correlation_id_middleware, rate_limit_middleware
 from app.api.routers import auth, requests, search, summaries, sync, user
 from app.config import Config
 from app.core.logging_utils import get_logger
+from app.core.time_utils import UTC
 
 logger = get_logger(__name__)
 

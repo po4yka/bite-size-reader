@@ -8,7 +8,7 @@ import sys
 import uuid
 from typing import Any
 
-UTC = getattr(dt, "UTC", dt.UTC)
+from app.core.time_utils import UTC
 
 try:  # Optional: modern logging via loguru
     from loguru import logger as loguru_logger

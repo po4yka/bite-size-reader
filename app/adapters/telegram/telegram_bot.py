@@ -6,7 +6,7 @@ import io
 import json
 import logging
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
@@ -19,6 +19,7 @@ from app.adapters.telegram.forward_processor import ForwardProcessor
 from app.adapters.telegram.message_handler import MessageHandler
 from app.adapters.telegram.telegram_client import TelegramClient
 from app.core.logging_utils import generate_correlation_id, setup_json_logging
+from app.core.time_utils import UTC
 from app.services.embedding_service import EmbeddingService
 from app.services.hybrid_search_service import HybridSearchService
 from app.services.query_expansion_service import QueryExpansionService
