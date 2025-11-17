@@ -51,12 +51,23 @@ class MockSummaryRepository:
         return self.summaries.get(request_id)
 
     async def async_get_unread_summaries(
-        self, uid: int, cid: int, limit: int = 10
+        self,
+        uid: int | None,
+        cid: int | None,
+        limit: int = 10,
+        topic: str | None = None,
     ) -> list[dict[str, Any]]:
         """Mock get unread summaries."""
         unread = [
             summary for summary in self.summaries.values() if not summary.get("is_read", False)
         ]
+        if topic:
+            topic_lower = topic.casefold()
+            unread = [
+                summary
+                for summary in unread
+                if topic_lower in str(summary["json_payload"]).casefold()
+            ]
         return unread[:limit]
 
     async def async_mark_summary_as_read(self, summary_id: int) -> None:

@@ -111,10 +111,14 @@ class SummaryRepositoryImpl:
         return await self._db.async_get_summary_by_request(request_id)
 
     async def async_get_unread_summaries(
-        self, uid: int, cid: int, limit: int = 10
+        self,
+        uid: int | None,
+        cid: int | None,
+        limit: int = 10,
+        topic: str | None = None,
     ) -> list[dict[str, Any]]:
         """Get unread summaries for a user."""
-        return await self._db.async_get_unread_summaries(uid, cid, limit)
+        return await self._db.async_get_unread_summaries(uid, cid, limit, topic)
 
     async def async_get_unread_summary_by_request_id(
         self, request_id: int

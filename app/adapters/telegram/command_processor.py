@@ -874,7 +874,12 @@ class CommandProcessor:
                     )
             else:
                 # Fallback to direct database access if container not available
-                unread_summaries = self.db.get_unread_summaries(limit=limit, topic=topic)
+                unread_summaries = self.db.get_unread_summaries(
+                    user_id=uid,
+                    chat_id=chat_id,
+                    limit=limit,
+                    topic=topic,
+                )
 
             if not unread_summaries:
                 if topic:
