@@ -149,7 +149,7 @@ jobs:
         run: |
           pytest \
             -p pytest_cov \
-            -p pytest_xdist \
+            -p xdist \
             -p pytest_rerunfailures \
             tests/ \
             -m "not slow and not integration" \
