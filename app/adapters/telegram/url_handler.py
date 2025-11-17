@@ -149,7 +149,6 @@ class URLHandler:
                         "multi_confirm_missing_state", extra={"uid": uid, "cid": correlation_id}
                     )
                     # Release lock before async operations
-                    pass
                 else:
                     # Validate URLs while holding lock
                     is_valid = isinstance(urls, list) and all(

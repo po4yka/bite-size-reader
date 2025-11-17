@@ -94,11 +94,8 @@ class CircuitBreaker:
             # Circuit still open, block request
             return False
 
-        if self.state == CircuitState.HALF_OPEN:
-            # Allow limited requests to test recovery
-            return True
-
-        return False
+        # Allow limited requests to test recovery in HALF_OPEN state
+        return self.state == CircuitState.HALF_OPEN
 
     def record_success(self) -> None:
         """Record a successful operation.

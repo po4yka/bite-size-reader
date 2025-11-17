@@ -244,9 +244,8 @@ class Database:
                         def _execute_in_transaction():
                             with self._database.atomic() as txn:
                                 try:
-                                    result = operation(*args, **kwargs)
                                     # Transaction commits automatically if no exception
-                                    return result
+                                    return operation(*args, **kwargs)
                                 except Exception:
                                     # Explicit rollback on any error
                                     txn.rollback()

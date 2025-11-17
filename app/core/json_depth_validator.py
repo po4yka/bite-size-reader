@@ -17,8 +17,6 @@ MAX_DICT_KEYS = 1_000  # Maximum dictionary keys
 class JSONValidationError(ValueError):
     """Raised when JSON validation fails."""
 
-    pass
-
 
 def calculate_json_depth(obj: Any, current_depth: int = 0, max_depth: int = 100) -> int:
     """Calculate the nesting depth of a JSON-like object.
@@ -45,7 +43,7 @@ def calculate_json_depth(obj: Any, current_depth: int = 0, max_depth: int = 100)
             (calculate_json_depth(v, current_depth + 1, max_depth) for v in obj.values()),
             default=current_depth,
         )
-    elif isinstance(obj, list):
+    if isinstance(obj, list):
         if not obj:
             return current_depth
         return max(

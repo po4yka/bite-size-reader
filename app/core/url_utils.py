@@ -391,11 +391,11 @@ def looks_like_url(text: str) -> bool:
 
     # Defense in depth: Limit text length to prevent regex DoS
     # This matches the MAX_TEXT_LENGTH in message_router.py
-    MAX_TEXT_LENGTH = 50 * 1024  # 50KB
-    if len(text) > MAX_TEXT_LENGTH:
+    max_text_length = 50 * 1024  # 50KB
+    if len(text) > max_text_length:
         logger.warning(
             "looks_like_url_text_too_long",
-            extra={"text_length": len(text), "max_allowed": MAX_TEXT_LENGTH},
+            extra={"text_length": len(text), "max_allowed": max_text_length},
         )
         return False
 
@@ -427,11 +427,11 @@ def extract_all_urls(text: str) -> list[str]:
 
     # Defense in depth: Limit text length to prevent regex DoS
     # This matches the MAX_TEXT_LENGTH in message_router.py
-    MAX_TEXT_LENGTH = 50 * 1024  # 50KB
-    if len(text) > MAX_TEXT_LENGTH:
+    max_text_length = 50 * 1024  # 50KB
+    if len(text) > max_text_length:
         logger.warning(
             "extract_all_urls_text_too_long",
-            extra={"text_length": len(text), "max_allowed": MAX_TEXT_LENGTH},
+            extra={"text_length": len(text), "max_allowed": max_text_length},
         )
         return []
 

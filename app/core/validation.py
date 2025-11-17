@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, Callable, TypeVar
+from typing import TYPE_CHECKING, Any, TypeVar
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 logger = logging.getLogger(__name__)
 
@@ -140,10 +143,11 @@ def safe_positive_int(
         Valid positive integer or None
 
     """
-    if max_value is not None:
-        validator = lambda x: 0 < x <= max_value
-    else:
-        validator = lambda x: x > 0
+
+    def validator(x: int) -> bool:
+        if max_value is not None:
+            return 0 < x <= max_value
+        return x > 0
 
     return safe_cast(
         raw_value,
@@ -177,9 +181,8 @@ def safe_string(
             return None
         raw_value = str(raw_value)
 
-    validator = lambda x: len(x) >= min_length and (
-        max_length is None or len(x) <= max_length
-    )
+    def validator(x: str) -> bool:
+        return len(x) >= min_length and (max_length is None or len(x) <= max_length)
 
     return safe_cast(
         raw_value,
