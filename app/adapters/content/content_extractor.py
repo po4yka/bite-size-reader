@@ -335,7 +335,11 @@ class ContentExtractor:
         self, message: Any, url_text: str, norm: str, dedupe: str, correlation_id: str | None
     ) -> int:
         """Create a new request in the database."""
-        from app.core.validation import safe_telegram_chat_id, safe_telegram_user_id, safe_message_id
+        from app.core.validation import (
+            safe_telegram_chat_id,
+            safe_telegram_user_id,
+            safe_message_id,
+        )
 
         chat_obj = getattr(message, "chat", None)
         chat_id_raw = getattr(chat_obj, "id", 0) if chat_obj is not None else None

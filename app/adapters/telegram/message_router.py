@@ -803,7 +803,11 @@ class MessageRouter:
                 # Possibly a URL without proper protocol
                 logger.warning(
                     "malformed_url_skipped",
-                    extra={"url_preview": line[:50], "reason": "invalid protocol", "line_num": line_num},
+                    extra={
+                        "url_preview": line[:50],
+                        "reason": "invalid protocol",
+                        "line_num": line_num,
+                    },
                 )
                 skipped_count += 1
 
@@ -895,7 +899,9 @@ class MessageRouter:
                         try:
                             # Process URL with timeout
                             result = await asyncio.wait_for(
-                                self._process_url_silently(message, url, per_link_cid, interaction_id),
+                                self._process_url_silently(
+                                    message, url, per_link_cid, interaction_id
+                                ),
                                 timeout=600,  # 10 minute timeout per URL
                             )
 
@@ -947,7 +953,9 @@ class MessageRouter:
                             await asyncio.sleep(wait_time)
 
                         except asyncio.TimeoutError:
-                            error_msg = f"Timeout after 10 minutes (attempt {attempt}/{max_retries})"
+                            error_msg = (
+                                f"Timeout after 10 minutes (attempt {attempt}/{max_retries})"
+                            )
                             logger.error(
                                 "url_processing_timeout",
                                 extra={"url": url, "cid": per_link_cid, "attempt": attempt},
@@ -1096,10 +1104,14 @@ class MessageRouter:
                             elif "circuit breaker" in error_msg.lower():
                                 error_type = "circuit_breaker"
                                 retry_recommended = True
-                            elif "network" in error_msg.lower() or "connection" in error_msg.lower():
+                            elif (
+                                "network" in error_msg.lower() or "connection" in error_msg.lower()
+                            ):
                                 error_type = "network"
                                 retry_recommended = True
-                            elif "validation" in error_msg.lower() or "invalid" in error_msg.lower():
+                            elif (
+                                "validation" in error_msg.lower() or "invalid" in error_msg.lower()
+                            ):
                                 error_type = "validation"
                                 retry_recommended = False
 
@@ -1252,7 +1264,9 @@ class MessageRouter:
             # Show first 3 failed URLs with details
             error_summary_parts.append("\n\n**Failed URLs (first 3):**")
             for i, failed_url in enumerate(failed_urls[:3], 1):
-                url_display = failed_url.url if len(failed_url.url) <= 60 else f"{failed_url.url[:57]}..."
+                url_display = (
+                    failed_url.url if len(failed_url.url) <= 60 else f"{failed_url.url[:57]}..."
+                )
                 error_display = (
                     failed_url.error_message
                     if len(failed_url.error_message) <= 100
@@ -1364,7 +1378,12 @@ class MessageRouter:
             raise_if_cancelled(e)
             logger.error(
                 "url_processing_failed",
-                extra={"url": url, "cid": correlation_id, "error": str(e), "error_type": type(e).__name__},
+                extra={
+                    "url": url,
+                    "cid": correlation_id,
+                    "error": str(e),
+                    "error_type": type(e).__name__,
+                },
             )
             return URLProcessingResult.generic_error_result(url, e)
 
