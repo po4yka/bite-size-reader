@@ -189,7 +189,7 @@ class TestDedupeReuse(unittest.IsolatedAsyncioTestCase):
             row2 = db.get_request_by_dedupe_hash(dedupe)
             assert row2["correlation_id"] == "cid2"
             expected_calls = (
-                5  # Current summarization pipeline issues five LLM requests on first pass.
+                3  # Current summarization pipeline issues three LLM requests on first pass.
             )
             assert (
                 fake_or.calls == expected_calls
