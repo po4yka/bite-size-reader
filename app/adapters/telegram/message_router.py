@@ -11,6 +11,8 @@ import time
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
+import httpx
+
 from app.adapters.telegram.task_manager import UserTaskManager
 from app.config import AppConfig
 from app.core.logging_utils import generate_correlation_id
@@ -765,9 +767,20 @@ class MessageRouter:
         )  # Allow up to 1/3 failures before reducing concurrency
 
         async def process_single_url(
-            url: str, progress_tracker: ProgressTracker
+            url: str, progress_tracker: ProgressTracker, max_retries: int = 3
         ) -> tuple[str, bool, str]:
-            """Process a single URL and return (url, success, error_message)."""
+            """Process a single URL with retry logic and return (url, success, error_message).
+
+            Args:
+                url: URL to process
+                progress_tracker: Progress tracker for batch updates
+                max_retries: Maximum number of retry attempts (default: 3)
+
+            Returns:
+                Tuple of (url, success, error_message)
+            """
+            from app.models.batch_processing import URLProcessingResult
+
             async with semaphore:
                 per_link_cid = generate_correlation_id()
                 logger.info(
@@ -775,49 +788,113 @@ class MessageRouter:
                     extra={"url": url, "cid": per_link_cid},
                 )
 
+                final_result: tuple[str, bool, str] | None = None
+
                 try:
-                    # Add timeout protection for individual URL processing
-                    success = await asyncio.wait_for(
-                        self._process_url_silently(message, url, per_link_cid, interaction_id),
-                        timeout=600,  # 10 minute timeout per URL
-                    )
+                    # Retry logic with exponential backoff
+                    for attempt in range(1, max_retries + 1):
+                        try:
+                            # Process URL with timeout
+                            result = await asyncio.wait_for(
+                                self._process_url_silently(message, url, per_link_cid, interaction_id),
+                                timeout=600,  # 10 minute timeout per URL
+                            )
 
-                    # Update progress after completion (success or failure)
-                    await progress_tracker.increment_and_update()
+                            # Check if successful
+                            if result.success:
+                                logger.debug(
+                                    "process_single_url_success",
+                                    extra={
+                                        "url": url,
+                                        "cid": per_link_cid,
+                                        "attempt": attempt,
+                                        "processing_time_ms": result.processing_time_ms,
+                                    },
+                                )
+                                final_result = (url, True, "")
+                                return final_result
 
-                    if success:
-                        logger.debug(
-                            "process_single_url_success",
-                            extra={"url": url, "cid": per_link_cid, "result": "success"},
-                        )
-                        return url, True, ""
-                    else:
-                        logger.debug(
-                            "process_single_url_failure",
-                            extra={"url": url, "cid": per_link_cid, "result": "failed"},
-                        )
-                        return url, False, "URL processing failed"
-                except asyncio.TimeoutError:
-                    error_msg = "Timeout processing URL after 10 minutes"
-                    logger.error(
-                        "url_processing_timeout",
-                        extra={"url": url, "cid": per_link_cid, "error": error_msg},
-                    )
-                    # Update progress even on timeout
-                    await progress_tracker.increment_and_update()
-                    return url, False, error_msg
+                            # Check if retry is possible
+                            if not result.retry_possible or attempt >= max_retries:
+                                logger.debug(
+                                    "process_single_url_failure_final",
+                                    extra={
+                                        "url": url,
+                                        "cid": per_link_cid,
+                                        "attempt": attempt,
+                                        "error_type": result.error_type,
+                                        "retry_possible": result.retry_possible,
+                                    },
+                                )
+                                error_msg = result.error_message or "URL processing failed"
+                                final_result = (url, False, error_msg)
+                                return final_result
+
+                            # Retry is possible - wait with exponential backoff
+                            wait_time = 2 ** (attempt - 1)  # 1s, 2s, 4s
+                            logger.info(
+                                "retrying_url_processing",
+                                extra={
+                                    "url": url,
+                                    "cid": per_link_cid,
+                                    "attempt": attempt,
+                                    "max_retries": max_retries,
+                                    "wait_time": wait_time,
+                                    "error_type": result.error_type,
+                                },
+                            )
+                            await asyncio.sleep(wait_time)
+
+                        except asyncio.TimeoutError:
+                            error_msg = f"Timeout after 10 minutes (attempt {attempt}/{max_retries})"
+                            logger.error(
+                                "url_processing_timeout",
+                                extra={"url": url, "cid": per_link_cid, "attempt": attempt},
+                            )
+
+                            # Retry timeouts if we have attempts left
+                            if attempt < max_retries:
+                                wait_time = 2 ** (attempt - 1)
+                                logger.info(
+                                    "retrying_after_timeout",
+                                    extra={"url": url, "wait_time": wait_time},
+                                )
+                                await asyncio.sleep(wait_time)
+                                continue
+                            else:
+                                final_result = (url, False, error_msg)
+                                return final_result
+
+                        except Exception as e:
+                            error_msg = f"{type(e).__name__}: {str(e)}"
+                            logger.error(
+                                "url_processing_exception",
+                                extra={
+                                    "url": url,
+                                    "cid": per_link_cid,
+                                    "attempt": attempt,
+                                    "error_type": type(e).__name__,
+                                },
+                            )
+
+                            # Don't retry unexpected exceptions
+                            final_result = (url, False, error_msg)
+                            return final_result
+
+                    # Should not reach here, but handle it
+                    error_msg = f"Processing failed after {max_retries} attempts"
+                    final_result = (url, False, error_msg)
+                    return final_result
+
                 except asyncio.CancelledError:
-                    # Re-raise cancellation to stop all processing
+                    # Don't update progress on cancellation, just re-raise
                     raise
-                except Exception as e:
-                    error_msg = str(e)
-                    logger.error(
-                        "url_processing_failed",
-                        extra={"url": url, "cid": per_link_cid, "error": error_msg},
-                    )
-                    # Update progress even on failure
-                    await progress_tracker.increment_and_update()
-                    return url, False, error_msg
+
+                finally:
+                    # CRITICAL FIX: Single progress update in finally block
+                    # This guarantees exactly-once semantics and prevents race conditions
+                    if final_result is not None:  # Only update if processing completed
+                        await progress_tracker.increment_and_update()
 
         # Process URLs in parallel with controlled concurrency and memory optimization
         # For very large batches (>30 URLs), process in chunks to manage memory
@@ -1056,12 +1133,19 @@ class MessageRouter:
         url: str,
         correlation_id: str,
         interaction_id: int,
-    ) -> bool:
+    ) -> URLProcessingResult:
         """Process a single URL without sending Telegram responses.
 
         Returns:
-            bool: True if processing succeeded, False if it failed
+            URLProcessingResult: Detailed result with error context
         """
+        from app.core.async_utils import raise_if_cancelled
+        from app.models.batch_processing import URLProcessingResult
+
+        import time
+
+        start_time = time.time()
+
         try:
             # Call the URL processor's handle_url_flow method with silent=True
             await self._url_processor.handle_url_flow(
@@ -1071,13 +1155,40 @@ class MessageRouter:
                 interaction_id=interaction_id,
                 silent=True,
             )
-            return True
-        except Exception as e:
+            processing_time = (time.time() - start_time) * 1000  # Convert to ms
+            return URLProcessingResult.success_result(url, processing_time_ms=processing_time)
+
+        except asyncio.TimeoutError as e:
+            raise_if_cancelled(e)
             logger.error(
-                "url_processing_failed",
+                "url_processing_timeout",
                 extra={"url": url, "cid": correlation_id, "error": str(e)},
             )
-            return False
+            return URLProcessingResult.timeout_result(url, timeout_sec=600)
+
+        except (httpx.NetworkError, httpx.ConnectError, httpx.TimeoutException) as e:
+            raise_if_cancelled(e)
+            logger.error(
+                "url_processing_network_error",
+                extra={"url": url, "cid": correlation_id, "error": str(e)},
+            )
+            return URLProcessingResult.network_error_result(url, e)
+
+        except ValueError as e:
+            raise_if_cancelled(e)
+            logger.error(
+                "url_processing_validation_error",
+                extra={"url": url, "cid": correlation_id, "error": str(e)},
+            )
+            return URLProcessingResult.validation_error_result(url, e)
+
+        except Exception as e:
+            raise_if_cancelled(e)
+            logger.error(
+                "url_processing_failed",
+                extra={"url": url, "cid": correlation_id, "error": str(e), "error_type": type(e).__name__},
+            )
+            return URLProcessingResult.generic_error_result(url, e)
 
     async def _send_progress_update(
         self, message: Any, current: int, total: int, message_id: int | None = None
