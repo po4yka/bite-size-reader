@@ -250,36 +250,86 @@ class ContentExtractor:
     async def _handle_request_dedupe_or_create(
         self, message: Any, url_text: str, norm: str, dedupe: str, correlation_id: str | None
     ) -> int:
-        """Handle request deduplication or creation."""
+        """Handle request deduplication or creation with race condition protection.
+
+        This method implements proper handling for concurrent requests with the same URL.
+        Uses optimistic concurrency: try to create, fall back to fetch on collision.
+
+        Returns:
+            Request ID (either existing or newly created)
+        """
         self._upsert_sender_metadata(message)
 
-        existing_req = await self.db.async_get_request_by_dedupe_hash(dedupe)
-        if not isinstance(existing_req, Mapping):
-            getter = getattr(self.db, "get_request_by_dedupe_hash", None)
-            existing_req = getter(dedupe) if callable(getter) else None
+        # Optimistic approach: Try to create first, handle collision if it occurs
+        # This is more efficient than always checking first (avoids extra DB query)
+        try:
+            # Attempt to create new request
+            req_id = self._create_new_request(message, url_text, norm, dedupe, correlation_id)
 
-        if isinstance(existing_req, Mapping):
-            existing_req = dict(existing_req)
-
-        if existing_req:
-            req_id = int(existing_req["id"])  # reuse existing request
+            # If we get here, creation succeeded (new URL)
             self._audit(
                 "INFO",
-                "url_dedupe_hit",
+                "url_request_created",
                 {"request_id": req_id, "hash": dedupe, "url": url_text, "cid": correlation_id},
             )
-            if correlation_id:
-                try:
-                    self.db.update_request_correlation_id(req_id, correlation_id)
-                except Exception as e:  # noqa: BLE001
-                    raise_if_cancelled(e)
-                    logger.error(
-                        "persist_cid_error", extra={"error": str(e), "cid": correlation_id}
-                    )
             return req_id
-        else:
-            # Create new request
-            return self._create_new_request(message, url_text, norm, dedupe, correlation_id)
+
+        except Exception as create_error:
+            # If creation failed due to race condition, fetch the existing request
+            # This handles the case where another thread created the request between
+            # our check and insert
+            logger.debug(
+                "url_request_creation_failed_fetching_existing",
+                extra={
+                    "error": str(create_error),
+                    "error_type": type(create_error).__name__,
+                    "cid": correlation_id,
+                },
+            )
+
+            # Fetch existing request by dedupe hash
+            existing_req = await self.db.async_get_request_by_dedupe_hash(dedupe)
+            if not isinstance(existing_req, Mapping):
+                getter = getattr(self.db, "get_request_by_dedupe_hash", None)
+                existing_req = getter(dedupe) if callable(getter) else None
+
+            if isinstance(existing_req, Mapping):
+                existing_req = dict(existing_req)
+
+            if existing_req:
+                req_id = int(existing_req["id"])
+                self._audit(
+                    "INFO",
+                    "url_dedupe_hit_after_race",
+                    {
+                        "request_id": req_id,
+                        "hash": dedupe,
+                        "url": url_text,
+                        "cid": correlation_id,
+                    },
+                )
+
+                # Update correlation ID for the existing request
+                if correlation_id:
+                    try:
+                        self.db.update_request_correlation_id(req_id, correlation_id)
+                    except Exception as e:  # noqa: BLE001
+                        logger.error(
+                            "persist_cid_error", extra={"error": str(e), "cid": correlation_id}
+                        )
+                return req_id
+
+            # If we still can't find existing request, something is wrong
+            # Re-raise the original error
+            logger.error(
+                "url_request_race_condition_unresolved",
+                extra={
+                    "error": str(create_error),
+                    "dedupe_hash": dedupe,
+                    "cid": correlation_id,
+                },
+            )
+            raise create_error
 
     def _create_new_request(
         self, message: Any, url_text: str, norm: str, dedupe: str, correlation_id: str | None

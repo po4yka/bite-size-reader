@@ -3,7 +3,7 @@ from __future__ import annotations
 import hashlib
 import logging
 import re
-from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
+from urllib.parse import parse_qsl, quote, unquote, urlencode, urlparse, urlunparse
 
 logger = logging.getLogger(__name__)
 
@@ -168,11 +168,28 @@ def normalize_url(url: str) -> str:
         netloc = p.netloc.lower()
         path = p.path or "/"
 
+        # Normalize path encoding to prevent false duplicates
+        # Decode path first (handles %20, %2F, etc.)
+        # Then re-encode consistently using quote()
+        # This ensures "hello%20world" and "hello world" both become "hello%20world"
+        try:
+            # Decode existing encoding
+            decoded_path = unquote(path)
+            # Re-encode consistently (safe chars: unreserved + /@:)
+            # Don't encode / to preserve path structure
+            path = quote(decoded_path, safe="/@:")
+        except Exception as e:
+            # If path encoding fails, use as-is and log warning
+            logger.warning(
+                "path_encoding_normalization_failed",
+                extra={"path": path[:100], "error": str(e)},
+            )
+
         # Remove redundant trailing slash except for root
         if path.endswith("/") and path != "/":
             path = path.rstrip("/")
 
-        # Filter and sort query params
+        # Filter and sort query params (urlencode handles encoding consistently)
         query_pairs = [
             (k, v)
             for k, v in parse_qsl(p.query, keep_blank_values=True)
@@ -191,18 +208,54 @@ def normalize_url(url: str) -> str:
 
 
 def url_hash_sha256(normalized_url: str) -> str:
-    """Generate SHA256 hash of normalized URL."""
+    """Generate SHA256 hash of normalized URL.
+
+    Args:
+        normalized_url: Normalized URL string to hash
+
+    Returns:
+        Lowercase hexadecimal SHA256 hash (exactly 64 characters)
+
+    Raises:
+        ValueError: If normalized_url is empty, invalid, or too long
+
+    Note:
+        - Always returns a valid 64-character hexadecimal string
+        - Uses UTF-8 encoding
+        - Result is suitable for database dedupe_hash field (unique constraint)
+        - Validates hash format before returning (defensive programming)
+    """
     if not normalized_url or not isinstance(normalized_url, str):
         msg = "Normalized URL is required"
         raise ValueError(msg)
+
+    # Additional validation: ensure URL is not just whitespace
+    if not normalized_url.strip():
+        msg = "Normalized URL cannot be whitespace-only"
+        raise ValueError(msg)
+
     if len(normalized_url) > 2048:
         msg = "Normalized URL too long"
         raise ValueError(msg)
 
     try:
         h = hashlib.sha256(normalized_url.encode("utf-8")).hexdigest()
+
+        # Validate hash format (defensive check)
+        # SHA256 hash should always be 64 lowercase hex characters
+        if len(h) != 64:
+            msg = f"Generated hash has invalid length: {len(h)} (expected 64)"
+            raise ValueError(msg)
+
+        if not all(c in "0123456789abcdef" for c in h):
+            msg = "Generated hash contains non-hexadecimal characters"
+            raise ValueError(msg)
+
         logger.debug("url_hash", extra={"normalized": normalized_url[:100], "sha256": h})
         return h
+    except ValueError:
+        # Re-raise our validation errors
+        raise
     except Exception as e:
         logger.exception("url_hash_failed", extra={"error": str(e)})
         msg = f"URL hashing failed: {e}"
