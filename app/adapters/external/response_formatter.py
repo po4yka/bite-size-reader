@@ -126,20 +126,87 @@ class ResponseFormatter:
         if not re.match(url_pattern, url):
             return False, "Invalid URL format"
 
-        # Block suspicious URLs
-        suspicious_domains = [
-            "localhost",
-            "127.0.0.1",
-            "0.0.0.0",  # nosec B104 - This is a security check, not network binding
+        # Block suspicious URLs - comprehensive SSRF protection
+        # Import ipaddress for IP range validation
+        import ipaddress
+        from urllib.parse import urlparse
+
+        # Block dangerous schemes
+        dangerous_schemes = [
             "file://",
             "ftp://",
             "javascript:",
             "data:",
+            "mailto:",
+            "tel:",
         ]
+        url_lower = url.lower()
+        for scheme in dangerous_schemes:
+            if scheme in url_lower:
+                return False, f"Dangerous scheme: {scheme}"
 
-        for domain in suspicious_domains:
-            if domain in url.lower():
-                return False, f"Suspicious domain: {domain}"
+        # Parse URL to extract hostname
+        try:
+            parsed = urlparse(url)
+            hostname = parsed.hostname or parsed.netloc
+
+            if not hostname:
+                return False, "Missing hostname"
+
+            hostname_lower = hostname.lower()
+
+            # Block localhost variants
+            if hostname_lower in ("localhost", "localhost.localdomain"):
+                return False, "Localhost access not allowed"
+
+            # Try to parse as IP address and check if private/reserved
+            try:
+                ip = ipaddress.ip_address(hostname)
+
+                # Block all private IP ranges (RFC 1918: 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16)
+                # Also blocks RFC 4193 IPv6 private (fc00::/7)
+                if ip.is_private:
+                    return False, f"Private IP address not allowed: {ip}"
+
+                # Block loopback (127.0.0.0/8, ::1)
+                if ip.is_loopback:
+                    return False, f"Loopback address not allowed: {ip}"
+
+                # Block link-local (169.254.0.0/16, fe80::/10)
+                if ip.is_link_local:
+                    return False, f"Link-local address not allowed: {ip}"
+
+                # Block multicast (224.0.0.0/4, ff00::/8)
+                if ip.is_multicast:
+                    return False, f"Multicast address not allowed: {ip}"
+
+                # Block reserved IPs
+                if ip.is_reserved:
+                    return False, f"Reserved IP address not allowed: {ip}"
+
+                # Block unspecified (0.0.0.0, ::)
+                if ip.is_unspecified:
+                    return False, f"Unspecified address not allowed: {ip}"
+
+            except ValueError:
+                # Not a valid IP address - likely a domain name
+                # Check for suspicious domain patterns
+                suspicious_patterns = [
+                    ".local",
+                    ".internal",
+                    ".lan",
+                    ".corp",
+                    ".test",
+                    ".example",
+                    ".invalid",
+                ]
+                for pattern in suspicious_patterns:
+                    if hostname_lower.endswith(pattern):
+                        return False, f"Suspicious domain pattern: {pattern}"
+
+        except Exception as e:
+            # If URL parsing fails, reject it
+            return False, f"URL parsing failed: {str(e)}"
 
         return True, ""
 
