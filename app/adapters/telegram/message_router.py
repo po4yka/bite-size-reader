@@ -27,6 +27,7 @@ from app.utils.message_formatter import (
     format_completion_message,
     format_progress_message,
 )
+from app.utils.circuit_breaker import CircuitBreaker
 from app.utils.progress_tracker import ProgressTracker
 
 if TYPE_CHECKING:
@@ -761,10 +762,14 @@ class MessageRouter:
         # Semaphore should allow at least as many concurrent URLs as batch size
         semaphore = asyncio.Semaphore(min(20, total))  # Max 20 concurrent URLs
 
-        # Circuit breaker: if too many failures in a chunk, reduce concurrency
-        max_concurrent_failures = min(
-            10, total // 3
-        )  # Allow up to 1/3 failures before reducing concurrency
+        # Circuit breaker: stop processing if too many failures indicate service issues
+        # Threshold: Allow up to 1/3 failures before opening circuit
+        failure_threshold = min(10, max(3, total // 3))
+        circuit_breaker = CircuitBreaker(
+            failure_threshold=failure_threshold,
+            timeout=60.0,  # Wait 60s before testing recovery
+            success_threshold=3,  # Need 3 successes to close circuit
+        )
 
         async def process_single_url(
             url: str, progress_tracker: ProgressTracker, max_retries: int = 3
@@ -782,6 +787,24 @@ class MessageRouter:
             from app.models.batch_processing import URLProcessingResult
 
             async with semaphore:
+                # Check circuit breaker before processing
+                if not circuit_breaker.can_proceed():
+                    error_msg = "Circuit breaker open - service unavailable"
+                    logger.warning(
+                        "circuit_breaker_blocked_request",
+                        extra={
+                            "url": url,
+                            "breaker_stats": circuit_breaker.get_stats(),
+                        },
+                    )
+                    final_result = (url, False, error_msg)
+                    # Don't increment progress here - will be done in finally block
+                    try:
+                        return final_result
+                    finally:
+                        if final_result is not None:
+                            await progress_tracker.increment_and_update()
+
                 per_link_cid = generate_correlation_id()
                 logger.info(
                     "processing_url_from_file",
@@ -811,6 +834,7 @@ class MessageRouter:
                                         "processing_time_ms": result.processing_time_ms,
                                     },
                                 )
+                                circuit_breaker.record_success()  # Record success for circuit breaker
                                 final_result = (url, True, "")
                                 return final_result
 
@@ -826,6 +850,7 @@ class MessageRouter:
                                         "retry_possible": result.retry_possible,
                                     },
                                 )
+                                circuit_breaker.record_failure()  # Record failure for circuit breaker
                                 error_msg = result.error_message or "URL processing failed"
                                 final_result = (url, False, error_msg)
                                 return final_result
@@ -862,6 +887,7 @@ class MessageRouter:
                                 await asyncio.sleep(wait_time)
                                 continue
                             else:
+                                circuit_breaker.record_failure()  # Record timeout as failure
                                 final_result = (url, False, error_msg)
                                 return final_result
 
@@ -878,11 +904,13 @@ class MessageRouter:
                             )
 
                             # Don't retry unexpected exceptions
+                            circuit_breaker.record_failure()  # Record exception as failure
                             final_result = (url, False, error_msg)
                             return final_result
 
                     # Should not reach here, but handle it
                     error_msg = f"Processing failed after {max_retries} attempts"
+                    circuit_breaker.record_failure()  # Record exhausted retries as failure
                     final_result = (url, False, error_msg)
                     return final_result
 
