@@ -322,7 +322,23 @@ jobs:
         if: ${{ github.event_name == 'pull_request' && (success() || failure()) }}
         run: |
           if [ ! -f ./results-workspace.sarif ]; then
-            echo '{"version":"2.1.0","runs":[]}' > ./results-workspace.sarif
+            cat <<'SARIF' > ./results-workspace.sarif
+            {
+              "version": "2.1.0",
+              "runs": [
+                {
+                  "tool": {
+                    "driver": {
+                      "name": "gitleaks",
+                      "informationUri": "https://github.com/gitleaks/gitleaks",
+                      "rules": []
+                    }
+                  },
+                  "results": []
+                }
+              ]
+            }
+            SARIF
             echo "Created empty SARIF report for workspace scan."
           fi
 
@@ -345,7 +361,23 @@ jobs:
         if: ${{ github.event_name != 'pull_request' && (success() || failure()) }}
         run: |
           if [ ! -f ./results-history.sarif ]; then
-            echo '{"version":"2.1.0","runs":[]}' > ./results-history.sarif
+            cat <<'SARIF' > ./results-history.sarif
+            {
+              "version": "2.1.0",
+              "runs": [
+                {
+                  "tool": {
+                    "driver": {
+                      "name": "gitleaks",
+                      "informationUri": "https://github.com/gitleaks/gitleaks",
+                      "rules": []
+                    }
+                  },
+                  "results": []
+                }
+              ]
+            }
+            SARIF
             echo "Created empty SARIF report for history scan."
           fi
 
