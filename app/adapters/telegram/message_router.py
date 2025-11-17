@@ -22,12 +22,12 @@ from app.db.user_interactions import async_safe_update_user_interaction
 from app.models.telegram.telegram_models import TelegramMessage
 from app.security.file_validation import FileValidationError, SecureFileValidator
 from app.security.rate_limiter import RateLimitConfig, UserRateLimiter
+from app.utils.circuit_breaker import CircuitBreaker
 from app.utils.message_formatter import (
     create_progress_bar,
     format_completion_message,
     format_progress_message,
 )
-from app.utils.circuit_breaker import CircuitBreaker
 from app.utils.progress_tracker import ProgressTracker
 
 if TYPE_CHECKING:
@@ -36,6 +36,7 @@ if TYPE_CHECKING:
     from app.adapters.telegram.command_processor import CommandProcessor
     from app.adapters.telegram.forward_processor import ForwardProcessor
     from app.adapters.telegram.url_handler import URLHandler
+    from app.models.batch_processing import URLProcessingResult
 
 logger = logging.getLogger(__name__)
 
@@ -877,13 +878,12 @@ class MessageRouter:
                             "breaker_stats": circuit_breaker.get_stats(),
                         },
                     )
-                    final_result = (url, False, error_msg)
+                    breaker_result: tuple[str, bool, str] = (url, False, error_msg)
                     # Don't increment progress here - will be done in finally block
                     try:
-                        return final_result
+                        return breaker_result
                     finally:
-                        if final_result is not None:
-                            await progress_tracker.increment_and_update()
+                        await progress_tracker.increment_and_update()
 
                 per_link_cid = generate_correlation_id()
                 logger.info(
@@ -1199,6 +1199,8 @@ class MessageRouter:
                 )
 
         if isinstance(batch_result, Exception):
+            from app.models.batch_processing import FailedURLDetail
+
             logger.error(
                 "batch_processing_failed",
                 extra={"error": str(batch_result), "cid": correlation_id},
@@ -1207,12 +1209,22 @@ class MessageRouter:
             successful = 0
             failed = total
             completed = total
-            failed_urls = [f"Batch processing failed: {str(batch_result)}"]
+            failed_urls: list[FailedURLDetail] = [
+                FailedURLDetail(
+                    url="batch",
+                    error_type=type(batch_result).__name__,
+                    error_message=f"Batch processing failed: {str(batch_result)}",
+                    retry_recommended=False,
+                    attempts=1,
+                )
+            ]
         elif isinstance(batch_result, tuple) and len(batch_result) == 3:
             # Unpack the results from process_batches()
             successful, failed, failed_urls = batch_result
             completed = successful + failed
         else:
+            from app.models.batch_processing import FailedURLDetail
+
             # Unexpected result type
             logger.error(
                 "unexpected_batch_result_type",
@@ -1221,7 +1233,15 @@ class MessageRouter:
             successful = 0
             failed = total
             completed = total
-            failed_urls = [f"Unexpected batch result type: {type(batch_result).__name__}"]
+            failed_urls = [
+                FailedURLDetail(
+                    url="batch",
+                    error_type="unexpected_result",
+                    error_message=f"Unexpected batch result type: {type(batch_result).__name__}",
+                    retry_recommended=False,
+                    attempts=1,
+                )
+            ]
 
         # Final progress update to ensure 100% completion is shown
         try:
@@ -1257,8 +1277,8 @@ class MessageRouter:
 
             # Build error summary
             error_summary_parts = ["\n\n**Failure Breakdown:**"]
-            for error_type, urls in error_breakdown.items():
-                retry_note = " (retry recommended)" if urls[0].retry_recommended else ""
+            for error_type, urls in error_breakdown.items():  # type: ignore[assignment]
+                retry_note = " (retry recommended)" if urls[0].retry_recommended else ""  # type: ignore[attr-defined]
                 error_summary_parts.append(f"\n• **{error_type}**: {len(urls)} URL(s){retry_note}")
 
             # Show first 3 failed URLs with details
@@ -1331,10 +1351,10 @@ class MessageRouter:
         Returns:
             URLProcessingResult: Detailed result with error context
         """
+        import time
+
         from app.core.async_utils import raise_if_cancelled
         from app.models.batch_processing import URLProcessingResult
-
-        import time
 
         start_time = time.time()
 

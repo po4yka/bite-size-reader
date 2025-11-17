@@ -37,7 +37,7 @@ def safe_cast(
         if value is None:
             return default
 
-        casted = target_type(value)
+        casted = target_type(value)  # type: ignore[call-arg]
 
         if validator and not validator(casted):
             logger.warning(

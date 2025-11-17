@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import time
 from enum import Enum
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -170,7 +171,7 @@ class CircuitBreaker:
         self.opened_at = None
         self.last_failure_time = None
 
-    def get_stats(self) -> dict[str, any]:
+    def get_stats(self) -> dict[str, Any]:
         """Get current circuit breaker statistics.
 
         Returns:

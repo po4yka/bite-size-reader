@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import re
@@ -336,9 +337,9 @@ class ContentExtractor:
     ) -> int:
         """Create a new request in the database."""
         from app.core.validation import (
+            safe_message_id,
             safe_telegram_chat_id,
             safe_telegram_user_id,
-            safe_message_id,
         )
 
         chat_obj = getattr(message, "chat", None)
