@@ -314,11 +314,21 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          args: detect --source . --no-git --redact --verbose --report-format sarif --report-path results-workspace.sarif
+          args: >-
+            detect --config .gitleaks.toml --source . --no-git --redact --verbose
+            --report-format sarif --report-path ./results-workspace.sarif
+
+      - name: Ensure Gitleaks SARIF exists (workspace)
+        if: ${{ github.event_name == 'pull_request' && (success() || failure()) }}
+        run: |
+          if [ ! -f ./results-workspace.sarif ]; then
+            echo '{"version":"2.1.0","runs":[]}' > ./results-workspace.sarif
+            echo "Created empty SARIF report for workspace scan."
+          fi
 
       - name: Upload Gitleaks SARIF (workspace)
         if: ${{ github.event_name == 'pull_request' && (success() || failure()) }}
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: results-workspace.sarif
           category: gitleaks-workspace
@@ -329,11 +339,11 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          args: detect --redact --verbose --report-format sarif --report-path results-history.sarif
+          args: detect --config .gitleaks.toml --redact --verbose --report-format sarif --report-path results-history.sarif
 
       - name: Upload Gitleaks SARIF (history)
         if: ${{ github.event_name != 'pull_request' && (success() || failure()) }}
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: results-history.sarif
           category: gitleaks-history
