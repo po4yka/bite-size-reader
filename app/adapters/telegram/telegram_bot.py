@@ -198,27 +198,28 @@ class TelegramBot:
             reranking=self.reranking_service,
         )
 
-        # Initialize hexagonal architecture DI container before MessageHandler
-        from app.di.container import Container
+        self._container = None
+        if getattr(self.cfg.runtime, "enable_hex_container", False):
+            from app.di.container import Container
 
-        self._container = Container(
-            database=self.db,
-            topic_search_service=self.local_searcher,
-            content_fetcher=self._firecrawl,
-            llm_client=self._openrouter,
-            analytics_service=None,  # No analytics service yet
-        )
-        # Wire event handlers automatically
-        self._container.wire_event_handlers_auto()
+            self._container = Container(
+                database=self.db,
+                topic_search_service=self.local_searcher,
+                content_fetcher=self._firecrawl,
+                llm_client=self._openrouter,
+                analytics_service=None,  # No analytics service yet
+            )
+            # Wire event handlers automatically
+            self._container.wire_event_handlers_auto()
 
-        logger.info(
-            "hexagonal_architecture_initialized",
-            extra={
-                "event_bus_handlers": self._container.event_bus().get_handler_count(
-                    type("DomainEvent", (), {})  # Base event type
-                ),
-            },
-        )
+            logger.info(
+                "hexagonal_architecture_initialized",
+                extra={
+                    "event_bus_handlers": self._container.event_bus().get_handler_count(
+                        type("DomainEvent", (), {})  # Base event type
+                    ),
+                },
+            )
 
         self.message_handler = MessageHandler(
             cfg=self.cfg,

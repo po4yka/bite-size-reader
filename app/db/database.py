@@ -1488,9 +1488,13 @@ class Database:
         )
 
         if user_id is not None:
-            base_query = base_query.where(Request.user_id == user_id)
+            base_query = base_query.where(
+                (Request.user_id == user_id) | (Request.user_id.is_null(True))
+            )
         if chat_id is not None:
-            base_query = base_query.where(Request.chat_id == chat_id)
+            base_query = base_query.where(
+                (Request.chat_id == chat_id) | (Request.chat_id.is_null(True))
+            )
 
         fetch_limit: int | None = limit
         if topic_query:

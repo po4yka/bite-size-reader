@@ -504,6 +504,7 @@ class RuntimeConfig(BaseModel):
     )
     db_backup_retention: int = Field(default=14, validation_alias="DB_BACKUP_RETENTION")
     db_backup_dir: str | None = Field(default=None, validation_alias="DB_BACKUP_DIR")
+    enable_hex_container: bool = Field(default=False, validation_alias="ENABLE_HEX_CONTAINER")
 
     @field_validator("log_level", mode="before")
     @classmethod

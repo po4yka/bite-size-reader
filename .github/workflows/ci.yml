@@ -107,7 +107,7 @@ jobs:
         run: uv pip sync --system requirements.txt requirements-dev.txt
 
       - name: Install additional test/coverage tools
-        run: uv pip install --system pytest-cov pytest-xdist pytest-rerunfailures coverage[toml]
+        run: uv pip install --system pytest-cov pytest-xdist pytest-rerunfailures pytest-asyncio coverage[toml]
 
       - name: Remove Pydantic for no-pydantic matrix case
         if: ${{ matrix.pydantic == false }}
@@ -151,6 +151,7 @@ jobs:
             -p pytest_cov \
             -p xdist \
             -p pytest_rerunfailures \
+            -p pytest_asyncio \
             tests/ \
             -m "not slow and not integration" \
             --cov=app \
@@ -393,7 +394,7 @@ jobs:
         run: uv pip sync --system requirements.txt requirements-dev.txt
 
       - name: Install test tools
-        run: uv pip install --system pytest pytest-timeout pytest-xdist pytest-rerunfailures
+        run: uv pip install --system pytest pytest-timeout pytest-xdist pytest-rerunfailures pytest-asyncio
 
       - name: Run integration tests
         id: integration_tests
