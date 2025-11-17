@@ -316,7 +316,15 @@ jobs:
         with:
           args: >-
             detect --config .gitleaks.toml --source . --no-git --redact --verbose
-            --report-format sarif --report-path results-workspace.sarif
+            --report-format sarif --report-path ./results-workspace.sarif
+
+      - name: Ensure Gitleaks SARIF exists (workspace)
+        if: ${{ github.event_name == 'pull_request' && (success() || failure()) }}
+        run: |
+          if [ ! -f ./results-workspace.sarif ]; then
+            echo '{"version":"2.1.0","runs":[]}' > ./results-workspace.sarif
+            echo "Created empty SARIF report for workspace scan."
+          fi
 
       - name: Upload Gitleaks SARIF (workspace)
         if: ${{ github.event_name == 'pull_request' && (success() || failure()) }}
