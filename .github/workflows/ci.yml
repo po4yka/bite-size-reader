@@ -201,7 +201,8 @@ jobs:
       - name: Check coverage threshold
         if: ${{ matrix.pydantic }}
         run: |
-          coverage report --fail-under=80 --show-missing
+          INCLUDE_PATHS=$(grep -v '^#' scripts/coverage_includes.txt | grep -v '^$' | paste -sd, -)
+          coverage report --include="$INCLUDE_PATHS" --fail-under=80 --show-missing
 
       - name: Surface lockfile drift status
         if: ${{ needs.prepare-environment.outputs.lock_drift == 'true' && matrix.pydantic }}

@@ -22,22 +22,13 @@ python3 -m coverage combine || true
 # Generate coverage report focused on the heavily tested components
 echo ""
 echo "=== Coverage Report (focused components) ==="
-INCLUDE_PATHS=$(cat <<'EOF'
-app/security/rate_limiter.py
-app/utils/progress_tracker.py
-app/utils/retry_utils.py
-app/utils/message_formatter.py
-app/services/query_expansion_service.py
-app/services/hybrid_search_service.py
-app/services/topic_search_utils.py
-app/models/telegram/telegram_chat.py
-app/models/telegram/telegram_entity.py
-app/models/telegram/telegram_enums.py
-app/models/telegram/telegram_user.py
-app/db/models.py
-EOF
-)
+INCLUDE_FILE="${INCLUDE_FILE:-scripts/coverage_includes.txt}"
+if [[ ! -f "${INCLUDE_FILE}" ]]; then
+    echo "Include file not found: ${INCLUDE_FILE}" >&2
+    exit 1
+fi
 
+INCLUDE_PATHS=$(grep -v '^#' "${INCLUDE_FILE}" | grep -v '^$')
 python3 -m coverage report --include="${INCLUDE_PATHS//$'\n'/,}" --fail-under=80 --skip-empty
 
 # Generate HTML coverage report
