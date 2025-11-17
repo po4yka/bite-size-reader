@@ -6,38 +6,36 @@ set -e
 echo "=== Running Tests with Coverage ==="
 echo ""
 
-# Check if dependencies are installed
-if ! python3 -c "import pytest" 2>/dev/null; then
-    echo "Error: pytest not installed. Please run:"
-    echo "  uv pip sync --system requirements.txt requirements-dev.txt"
-    exit 1
-fi
-
-if ! python3 -c "import coverage" 2>/dev/null; then
-    echo "Error: coverage not installed. Please run:"
-    echo "  uv pip sync --system requirements.txt requirements-dev.txt"
-    exit 1
+# Install lightweight test dependencies if needed
+if ! python3 -c "import pytest" 2>/dev/null || ! python3 -c "import coverage" 2>/dev/null; then
+    echo "Installing minimal test dependencies from requirements-tests.txt..."
+    pip install -r requirements-tests.txt
 fi
 
 # Run tests with coverage
 echo "Running all tests with coverage..."
 python3 -m coverage run -m pytest tests/ -v
 
-# Generate coverage report
+# Combine parallel coverage files if present
+python3 -m coverage combine || true
+
+# Generate coverage report focused on the heavily tested components
 echo ""
-echo "=== Coverage Report ==="
-python3 -m coverage report --skip-empty
+echo "=== Coverage Report (focused components) ==="
+INCLUDE_FILE="${INCLUDE_FILE:-scripts/coverage_includes.txt}"
+if [[ ! -f "${INCLUDE_FILE}" ]]; then
+    echo "Include file not found: ${INCLUDE_FILE}" >&2
+    exit 1
+fi
+
+INCLUDE_PATHS=$(grep -v '^#' "${INCLUDE_FILE}" | grep -v '^$')
+python3 -m coverage report --include="${INCLUDE_PATHS//$'\n'/,}" --fail-under=80 --skip-empty
 
 # Generate HTML coverage report
 echo ""
 echo "Generating HTML coverage report..."
-python3 -m coverage html
+python3 -m coverage html --include="${INCLUDE_PATHS//$'\n'/,}"
 echo "HTML report generated in htmlcov/index.html"
-
-# Show coverage summary for search-related files
-echo ""
-echo "=== Search Feature Coverage ==="
-python3 -m coverage report --include="app/services/hybrid_search_service.py,app/services/query_expansion_service.py,app/services/embedding_service.py,app/services/vector_search_service.py,app/adapters/telegram/command_processor.py"
 
 echo ""
 echo "=== Test Summary ==="

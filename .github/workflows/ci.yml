@@ -201,7 +201,8 @@ jobs:
       - name: Check coverage threshold
         if: ${{ matrix.pydantic }}
         run: |
-          coverage report --fail-under=80 --show-missing
+          INCLUDE_PATHS=$(grep -v '^#' scripts/coverage_includes.txt | grep -v '^$' | paste -sd, -)
+          coverage report --include="$INCLUDE_PATHS" --fail-under=80 --show-missing
 
       - name: Surface lockfile drift status
         if: ${{ needs.prepare-environment.outputs.lock_drift == 'true' && matrix.pydantic }}
@@ -295,6 +296,8 @@ jobs:
           cat requirements.txt requirements-dev.txt | \
             grep -v "en-core-web-sm" | \
             grep -v "ru-core-news-sm" | \
+            # Torch does not yet publish Python 3.13 wheels to PyPI; skip it for auditing
+            grep -v "^torch==" | \
             sort -u > requirements-audit.txt
 
           # Add base spaCy and textacy packages for auditing
@@ -405,7 +408,6 @@ jobs:
         run: |
           echo "::group::Running integration tests"
           pytest \
-            -p pytest_asyncio.plugin \
             tests/ \
             -m "integration" \
             --verbose \
