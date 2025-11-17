@@ -294,8 +294,17 @@ class MessageRouter:
             logger.exception("handler_error", extra={"cid": correlation_id})
             try:
                 self._audit("ERROR", "unhandled_error", {"cid": correlation_id, "error": str(e)})
-            except Exception:
-                pass
+            except Exception as audit_error:
+                # Log audit failure but don't fail the error handling
+                logger.error(
+                    "audit_logging_failed",
+                    extra={
+                        "cid": correlation_id,
+                        "original_error": str(e),
+                        "audit_error": str(audit_error),
+                        "audit_error_type": type(audit_error).__name__,
+                    },
+                )
             await self.response_formatter.safe_reply(
                 message,
                 f"An unexpected error occurred. Error ID: {correlation_id}. Please try again.",
@@ -638,15 +647,47 @@ class MessageRouter:
                 message, "An error occurred while processing the file."
             )
         finally:
-            # Clean up downloaded file
+            # Clean up downloaded file with retry logic
             if file_path:
-                try:
-                    self._file_validator.cleanup_file(file_path)
-                except Exception as e:
-                    logger.debug(
-                        "file_cleanup_error",
-                        extra={"error": str(e), "file_path": file_path, "cid": correlation_id},
-                    )
+                cleanup_attempts = 0
+                max_cleanup_attempts = 3
+                cleanup_success = False
+
+                while cleanup_attempts < max_cleanup_attempts and not cleanup_success:
+                    try:
+                        self._file_validator.cleanup_file(file_path)
+                        cleanup_success = True
+                    except PermissionError as e:
+                        cleanup_attempts += 1
+                        if cleanup_attempts >= max_cleanup_attempts:
+                            logger.error(
+                                "file_cleanup_permission_denied",
+                                extra={
+                                    "error": str(e),
+                                    "file_path": file_path,
+                                    "cid": correlation_id,
+                                    "attempts": cleanup_attempts,
+                                },
+                            )
+                        else:
+                            # Wait and retry for permission errors
+                            await asyncio.sleep(0.1 * cleanup_attempts)
+                    except FileNotFoundError:
+                        # File already deleted, this is fine
+                        cleanup_success = True
+                    except Exception as e:
+                        cleanup_attempts += 1
+                        logger.error(
+                            "file_cleanup_unexpected_error",
+                            extra={
+                                "error": str(e),
+                                "file_path": file_path,
+                                "cid": correlation_id,
+                                "error_type": type(e).__name__,
+                                "attempts": cleanup_attempts,
+                            },
+                        )
+                        break  # Don't retry unexpected errors
 
     async def _download_file(self, message: Any) -> str | None:
         """Download document file to temporary location."""

@@ -147,11 +147,13 @@ class ContentExtractor:
                     )
 
                     return content_text, content_source, metadata
-            except Exception:
+            except Exception as e:
+                raise_if_cancelled(e)
+                # Salvage attempt failed, continue to error handling
                 pass
 
             error_msg = crawl.error_text or "Firecrawl extraction failed"
-            raise ValueError(f"Extraction failed: {error_msg}")
+            raise ValueError(f"Extraction failed: {error_msg}") from None
 
         # Process successful crawl
         if crawl.content_markdown and crawl.content_markdown.strip():
@@ -240,6 +242,7 @@ class ContentExtractor:
         try:
             self.db.update_request_lang_detected(req_id, detected)
         except Exception as e:  # noqa: BLE001
+            raise_if_cancelled(e)
             logger.error("persist_lang_detected_error", extra={"error": str(e)})
 
         return req_id, content_text, content_source, detected
@@ -269,6 +272,7 @@ class ContentExtractor:
                 try:
                     self.db.update_request_correlation_id(req_id, correlation_id)
                 except Exception as e:  # noqa: BLE001
+                    raise_if_cancelled(e)
                     logger.error(
                         "persist_cid_error", extra={"error": str(e), "cid": correlation_id}
                     )
@@ -281,16 +285,18 @@ class ContentExtractor:
         self, message: Any, url_text: str, norm: str, dedupe: str, correlation_id: str | None
     ) -> int:
         """Create a new request in the database."""
+        from app.core.validation import safe_telegram_chat_id, safe_telegram_user_id, safe_message_id
+
         chat_obj = getattr(message, "chat", None)
         chat_id_raw = getattr(chat_obj, "id", 0) if chat_obj is not None else None
-        chat_id = int(chat_id_raw) if chat_id_raw is not None else None
+        chat_id = safe_telegram_chat_id(chat_id_raw, field_name="chat_id")
 
         from_user_obj = getattr(message, "from_user", None)
         user_id_raw = getattr(from_user_obj, "id", 0) if from_user_obj is not None else None
-        user_id = int(user_id_raw) if user_id_raw is not None else None
+        user_id = safe_telegram_user_id(user_id_raw, field_name="user_id")
 
         msg_id_raw = getattr(message, "id", getattr(message, "message_id", 0))
-        input_message_id = int(msg_id_raw) if msg_id_raw is not None else None
+        input_message_id = safe_message_id(msg_id_raw, field_name="message_id")
 
         req_id = self.db.create_request(
             type_="url",
@@ -310,21 +316,18 @@ class ContentExtractor:
         try:
             self._persist_message_snapshot(req_id, message)
         except Exception as e:  # noqa: BLE001
+            raise_if_cancelled(e)
             logger.error("snapshot_error", extra={"error": str(e), "cid": correlation_id})
 
         return req_id
 
     def _upsert_sender_metadata(self, message: Any) -> None:
         """Persist sender user/chat metadata for the interaction."""
-
-        def _coerce_int(value: Any) -> int | None:
-            try:
-                return int(value) if value is not None else None
-            except (TypeError, ValueError):
-                return None
+        from app.core.validation import safe_telegram_chat_id, safe_telegram_user_id
 
         chat_obj = getattr(message, "chat", None)
-        chat_id = _coerce_int(getattr(chat_obj, "id", None) if chat_obj is not None else None)
+        chat_id_raw = getattr(chat_obj, "id", None) if chat_obj is not None else None
+        chat_id = safe_telegram_chat_id(chat_id_raw, field_name="chat_id")
         if chat_id is not None:
             chat_type = getattr(chat_obj, "type", None)
             chat_title = getattr(chat_obj, "title", None)
@@ -343,9 +346,8 @@ class ContentExtractor:
                 )
 
         from_user_obj = getattr(message, "from_user", None)
-        user_id = _coerce_int(
-            getattr(from_user_obj, "id", None) if from_user_obj is not None else None
-        )
+        user_id_raw = getattr(from_user_obj, "id", None) if from_user_obj is not None else None
+        user_id = safe_telegram_user_id(user_id_raw, field_name="user_id")
         if user_id is not None:
             username = getattr(from_user_obj, "username", None)
             try:
