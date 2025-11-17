@@ -808,19 +808,34 @@ class ContentExtractor:
             "Accept-Language": "ru,en-US;q=0.9,en;q=0.8",
         }
         timeout = max(5, int(getattr(self.cfg.runtime, "request_timeout_sec", 30)))
+        overall_timeout = timeout + 5  # Add buffer for connection setup/teardown
+
         try:
-            async with httpx.AsyncClient(follow_redirects=True, timeout=timeout) as client:
-                resp = await client.get(url, headers=headers)
-                ctype = resp.headers.get("content-type", "").lower()
-                if resp.status_code != 200 or "text/html" not in ctype:
-                    return None
-                html = resp.text or ""
-                # Validate that extracted text is sufficiently long to be useful
-                text_preview = html_to_text(html)
-                if len(text_preview) < 400:
-                    return None
-                return html
-        except Exception:
+            # Wrap entire operation in timeout to prevent indefinite hangs
+            async with asyncio.timeout(overall_timeout):
+                async with httpx.AsyncClient(follow_redirects=True, timeout=timeout) as client:
+                    resp = await client.get(url, headers=headers)
+                    ctype = resp.headers.get("content-type", "").lower()
+                    if resp.status_code != 200 or "text/html" not in ctype:
+                        return None
+                    html = resp.text or ""
+                    # Validate that extracted text is sufficiently long to be useful
+                    text_preview = html_to_text(html)
+                    if len(text_preview) < 400:
+                        return None
+                    return html
+        except TimeoutError:
+            logger.warning(
+                "direct_html_salvage_timeout",
+                extra={"url": url, "timeout": overall_timeout},
+            )
+            return None
+        except Exception as e:
+            raise_if_cancelled(e)
+            logger.debug(
+                "direct_html_salvage_failed",
+                extra={"url": url, "error": str(e), "error_type": type(e).__name__},
+            )
             return None
 
     async def _process_successful_crawl(

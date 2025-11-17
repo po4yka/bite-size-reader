@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import threading
 import time
 import weakref
 from contextlib import asynccontextmanager
@@ -51,23 +52,26 @@ class OpenRouterClient:
 
     # Async lock for client pool access (created lazily per event loop)
     _client_pool_lock: asyncio.Lock | None = None
+    # Thread lock to protect async lock initialization (fixes race condition)
+    _lock_init_lock = threading.Lock()
 
     @classmethod
     def _get_pool_lock(cls) -> asyncio.Lock:
         """Get or create the async lock for client pool access.
 
-        Creates lock lazily on first access. Safe for asyncio since
-        we're always called from async context within a single event loop.
+        Thread-safe initialization using double-checked locking pattern.
+        Prevents race condition where multiple threads could create different locks.
         """
-        # Fast path: lock already exists
+        # Fast path: lock already exists (no thread lock needed for read)
         if cls._client_pool_lock is not None:
             return cls._client_pool_lock
 
-        # Slow path: create the lock
-        # This is safe in asyncio because we're single-threaded within an event loop
-        # No threading.Lock needed - async context handles serialization
-        cls._client_pool_lock = asyncio.Lock()
-        return cls._client_pool_lock
+        # Slow path: create the lock with thread-safe initialization
+        with cls._lock_init_lock:
+            # Double-check: another thread may have initialized while we waited
+            if cls._client_pool_lock is None:
+                cls._client_pool_lock = asyncio.Lock()
+            return cls._client_pool_lock
 
     def __init__(
         self,
