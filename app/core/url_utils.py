@@ -64,6 +64,14 @@ _DANGEROUS_SCHEMES: frozenset[str] = frozenset(
 def _validate_url_input(url: str) -> None:
     """Validate URL input for security.
 
+    Comprehensive validation including:
+    - Length limits (RFC 2616)
+    - Dangerous content patterns
+    - Scheme validation (only http/https)
+    - SSRF protection (private IPs, loopback, link-local, etc.)
+    - Suspicious domain patterns
+    - Control characters and null bytes
+
     Args:
         url: URL string to validate
 
@@ -101,6 +109,90 @@ def _validate_url_input(url: str) -> None:
     if any(ord(char) < 32 and char not in ("\t", "\n", "\r") for char in url):
         msg = "URL contains control characters"
         raise ValueError(msg)
+
+    # SSRF Protection: Validate hostname and IP addresses
+    # Import here to avoid circular dependencies
+    import ipaddress
+
+    try:
+        # Parse URL to extract hostname for IP validation
+        parsed = urlparse(url if "://" in url else f"http://{url}")
+        hostname = parsed.hostname or parsed.netloc
+
+        if hostname:
+            hostname_lower = hostname.lower()
+
+            # Block localhost variants (additional to loopback IP check)
+            if hostname_lower in ("localhost", "localhost.localdomain"):
+                msg = "Localhost access not allowed"
+                raise ValueError(msg)
+
+            # Try to parse as IP address
+            ip_obj = None
+            try:
+                ip_obj = ipaddress.ip_address(hostname)
+            except ValueError:
+                # Not a valid IP address - will check domain patterns below
+                pass
+
+            if ip_obj is not None:
+                # Valid IP address - check if it's blocked
+                # Block all private IP ranges (RFC 1918: 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16)
+                # Also blocks RFC 4193 IPv6 private (fc00::/7)
+                if ip_obj.is_private:
+                    msg = f"Private IP address not allowed: {ip_obj}"
+                    raise ValueError(msg)
+
+                # Block loopback (127.0.0.0/8, ::1)
+                if ip_obj.is_loopback:
+                    msg = f"Loopback address not allowed: {ip_obj}"
+                    raise ValueError(msg)
+
+                # Block link-local (169.254.0.0/16, fe80::/10)
+                if ip_obj.is_link_local:
+                    msg = f"Link-local address not allowed: {ip_obj}"
+                    raise ValueError(msg)
+
+                # Block multicast (224.0.0.0/4, ff00::/8)
+                if ip_obj.is_multicast:
+                    msg = f"Multicast address not allowed: {ip_obj}"
+                    raise ValueError(msg)
+
+                # Block reserved IPs
+                if ip_obj.is_reserved:
+                    msg = f"Reserved IP address not allowed: {ip_obj}"
+                    raise ValueError(msg)
+
+                # Block unspecified (0.0.0.0, ::)
+                if ip_obj.is_unspecified:
+                    msg = f"Unspecified address not allowed: {ip_obj}"
+                    raise ValueError(msg)
+            else:
+                # Not a valid IP - check for suspicious domain patterns (internal networks)
+                suspicious_patterns = (
+                    ".local",
+                    ".internal",
+                    ".lan",
+                    ".corp",
+                    ".test",
+                    ".example",
+                    ".invalid",
+                )
+                for pattern in suspicious_patterns:
+                    if hostname_lower.endswith(pattern):
+                        msg = f"Suspicious domain pattern: {pattern}"
+                        raise ValueError(msg)
+
+    except ValueError:
+        # Re-raise our validation errors
+        raise
+    except Exception as e:
+        # If URL parsing fails for other reasons, log but allow it
+        # (will be caught by urlparse in normalize_url)
+        logger.debug(
+            "url_validation_parse_warning",
+            extra={"url": url[:100], "error": str(e)},
+        )
 
 
 def normalize_url(url: str) -> str:

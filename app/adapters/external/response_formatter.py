@@ -114,101 +114,29 @@ class ResponseFormatter:
         return True, ""
 
     def _validate_url(self, url: str) -> tuple[bool, str]:
-        """Validate URL for security."""
-        if not url or len(url) > self.MAX_URL_LENGTH:
-            return False, f"URL too long (max {self.MAX_URL_LENGTH} chars)"
+        """Validate URL for security using consolidated validation from url_utils.
 
-        # Basic URL validation
-        import re
+        This method wraps the comprehensive _validate_url_input() function from
+        app/core/url_utils.py, which provides:
+        - Length limits (RFC 2616)
+        - Dangerous content patterns
+        - Scheme validation (only http/https)
+        - SSRF protection (private IPs, loopback, link-local, etc.)
+        - Suspicious domain patterns
+        - Control characters and null bytes
 
-        # More permissive URL pattern that allows common URL characters
-        url_pattern = r"^https?://[^\s<>\"{}|\\^`]*$"
-        if not re.match(url_pattern, url):
-            return False, "Invalid URL format"
+        Returns:
+            tuple[bool, str]: (is_valid, error_message)
+        """
+        from app.core.url_utils import _validate_url_input
 
-        # Block suspicious URLs - comprehensive SSRF protection
-        # Import ipaddress for IP range validation
-        import ipaddress
-        from urllib.parse import urlparse
-
-        # Block dangerous schemes
-        dangerous_schemes = [
-            "file://",
-            "ftp://",
-            "javascript:",
-            "data:",
-            "mailto:",
-            "tel:",
-        ]
-        url_lower = url.lower()
-        for scheme in dangerous_schemes:
-            if scheme in url_lower:
-                return False, f"Dangerous scheme: {scheme}"
-
-        # Parse URL to extract hostname
         try:
-            parsed = urlparse(url)
-            hostname = parsed.hostname or parsed.netloc
-
-            if not hostname:
-                return False, "Missing hostname"
-
-            hostname_lower = hostname.lower()
-
-            # Block localhost variants
-            if hostname_lower in ("localhost", "localhost.localdomain"):
-                return False, "Localhost access not allowed"
-
-            # Try to parse as IP address and check if private/reserved
-            try:
-                ip = ipaddress.ip_address(hostname)
-
-                # Block all private IP ranges (RFC 1918: 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16)
-                # Also blocks RFC 4193 IPv6 private (fc00::/7)
-                if ip.is_private:
-                    return False, f"Private IP address not allowed: {ip}"
-
-                # Block loopback (127.0.0.0/8, ::1)
-                if ip.is_loopback:
-                    return False, f"Loopback address not allowed: {ip}"
-
-                # Block link-local (169.254.0.0/16, fe80::/10)
-                if ip.is_link_local:
-                    return False, f"Link-local address not allowed: {ip}"
-
-                # Block multicast (224.0.0.0/4, ff00::/8)
-                if ip.is_multicast:
-                    return False, f"Multicast address not allowed: {ip}"
-
-                # Block reserved IPs
-                if ip.is_reserved:
-                    return False, f"Reserved IP address not allowed: {ip}"
-
-                # Block unspecified (0.0.0.0, ::)
-                if ip.is_unspecified:
-                    return False, f"Unspecified address not allowed: {ip}"
-
-            except ValueError:
-                # Not a valid IP address - likely a domain name
-                # Check for suspicious domain patterns
-                suspicious_patterns = [
-                    ".local",
-                    ".internal",
-                    ".lan",
-                    ".corp",
-                    ".test",
-                    ".example",
-                    ".invalid",
-                ]
-                for pattern in suspicious_patterns:
-                    if hostname_lower.endswith(pattern):
-                        return False, f"Suspicious domain pattern: {pattern}"
-
-        except Exception as e:
-            # If URL parsing fails, reject it
-            return False, f"URL parsing failed: {str(e)}"
-
-        return True, ""
+            # Use consolidated validation from url_utils
+            _validate_url_input(url)
+            return True, ""
+        except ValueError as e:
+            # Validation failed - return error message
+            return False, str(e)
 
     async def _check_rate_limit(self) -> bool:
         """Ensure replies respect the minimum delay between Telegram messages."""
