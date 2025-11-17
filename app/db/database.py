@@ -1467,9 +1467,14 @@ class Database:
         return all(term in combined for term in terms)
 
     def get_unread_summaries(
-        self, *, limit: int = 10, topic: str | None = None
+        self,
+        *,
+        user_id: int | None = None,
+        chat_id: int | None = None,
+        limit: int = 10,
+        topic: str | None = None,
     ) -> list[dict[str, Any]]:
-        """Return unread summary rows optionally filtered by topic text."""
+        """Return unread summary rows filtered by owner/chat/topic constraints."""
         if limit <= 0:
             return []
 
@@ -1480,6 +1485,11 @@ class Database:
             .where(~Summary.is_read)
             .order_by(Summary.created_at.asc())
         )
+
+        if user_id is not None:
+            base_query = base_query.where(Request.user_id == user_id)
+        if chat_id is not None:
+            base_query = base_query.where(Request.chat_id == chat_id)
 
         fetch_limit: int | None = limit
         if topic_query:
@@ -1520,13 +1530,17 @@ class Database:
         return results
 
     async def async_get_unread_summaries(
-        self, uid: int, cid: int, limit: int = 10, topic: str | None = None
+        self,
+        uid: int | None,
+        cid: int | None,
+        limit: int = 10,
+        topic: str | None = None,
     ) -> list[dict[str, Any]]:
         """Async wrapper for :meth:`get_unread_summaries`.
 
         Args:
-            uid: User ID (unused but kept for compatibility).
-            cid: Chat ID (unused but kept for compatibility).
+            uid: Optional user ID filter.
+            cid: Optional chat ID filter.
             limit: Maximum number of summaries to return.
             topic: Optional topic filter for searching summaries.
 
@@ -1536,6 +1550,8 @@ class Database:
         """
         return await self._safe_db_operation(
             self.get_unread_summaries,
+            user_id=uid,
+            chat_id=cid,
             limit=limit,
             topic=topic,
             operation_name="get_unread_summaries",

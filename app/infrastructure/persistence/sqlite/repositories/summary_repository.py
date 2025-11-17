@@ -52,7 +52,11 @@ class SqliteSummaryRepositoryAdapter:
         return await self._db.async_get_summary_by_id(summary_id)
 
     async def async_get_unread_summaries(
-        self, uid: int, cid: int, limit: int = 10, topic: str | None = None
+        self,
+        uid: int | None,
+        cid: int | None,
+        limit: int = 10,
+        topic: str | None = None,
     ) -> list[dict[str, Any]]:
         """Get unread summaries for a user.
 

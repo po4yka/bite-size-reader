@@ -314,6 +314,52 @@ class TestReadStatusDatabase(unittest.TestCase):
             "https://example2.com",
         ]
 
+    def test_get_unread_summaries_filters_by_user_and_chat(self):
+        """Unread summaries respect user and chat scoping."""
+        rid_target = self.db.create_request(
+            type_="url",
+            status="pending",
+            input_url="https://visible.com",
+            correlation_id=None,
+            chat_id=111,
+            user_id=555,
+            route_version=1,
+        )
+        rid_other_user = self.db.create_request(
+            type_="url",
+            status="pending",
+            input_url="https://other-user.com",
+            correlation_id=None,
+            chat_id=111,
+            user_id=777,
+            route_version=1,
+        )
+        rid_other_chat = self.db.create_request(
+            type_="url",
+            status="pending",
+            input_url="https://other-chat.com",
+            correlation_id=None,
+            chat_id=222,
+            user_id=555,
+            route_version=1,
+        )
+
+        for rid in (rid_target, rid_other_user, rid_other_chat):
+            self.db.insert_summary(
+                request_id=rid,
+                lang="en",
+                json_payload={"title": "Scoped Article"},
+                is_read=False,
+            )
+
+        unread_scoped = self.db.get_unread_summaries(
+            user_id=555,
+            chat_id=111,
+            limit=10,
+        )
+        assert len(unread_scoped) == 1
+        assert unread_scoped[0]["input_url"] == "https://visible.com"
+
     def test_get_unread_summaries_topic_filter(self):
         """Unread summaries can be filtered by a topic query."""
         payloads = (
