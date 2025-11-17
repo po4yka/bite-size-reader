@@ -151,7 +151,7 @@ jobs:
             -p pytest_cov \
             -p xdist \
             -p pytest_rerunfailures \
-            -p pytest_asyncio \
+            -p pytest_asyncio.plugin \
             tests/ \
             -m "not slow and not integration" \
             --cov=app \
@@ -400,7 +400,9 @@ jobs:
         id: integration_tests
         run: |
           echo "::group::Running integration tests"
-          pytest tests/ \
+          pytest \
+            -p pytest_asyncio.plugin \
+            tests/ \
             -m "integration" \
             --verbose \
             --maxfail=5 \
