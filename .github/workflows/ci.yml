@@ -295,6 +295,8 @@ jobs:
           cat requirements.txt requirements-dev.txt | \
             grep -v "en-core-web-sm" | \
             grep -v "ru-core-news-sm" | \
+            # Torch does not yet publish Python 3.13 wheels to PyPI; skip it for auditing
+            grep -v "^torch==" | \
             sort -u > requirements-audit.txt
 
           # Add base spaCy and textacy packages for auditing
