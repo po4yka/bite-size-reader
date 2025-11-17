@@ -6,6 +6,27 @@ from dataclasses import dataclass
 
 
 @dataclass
+class FailedURLDetail:
+    """Detailed information about a failed URL in batch processing.
+
+    This provides rich error context for user feedback and debugging.
+
+    Attributes:
+        url: The URL that failed
+        error_type: Type of error (e.g., "timeout", "network", "validation", "circuit_breaker")
+        error_message: Human-readable error message
+        retry_recommended: Whether user should retry this URL
+        attempts: Number of attempts made before failure
+    """
+
+    url: str
+    error_type: str
+    error_message: str
+    retry_recommended: bool = False
+    attempts: int = 1
+
+
+@dataclass
 class URLProcessingResult:
     """Result of processing a single URL with detailed error context.
 

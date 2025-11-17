@@ -949,9 +949,11 @@ class MessageRouter:
 
         async def process_batches():
             """Process URL batches with progress tracking."""
+            from app.models.batch_processing import FailedURLDetail
+
             batch_successful = 0
             batch_failed = 0
-            batch_failed_urls = []
+            batch_failed_urls: list[FailedURLDetail] = []
 
             for batch_start in range(0, total, batch_size):
                 batch_end = min(batch_start + batch_size, total)
@@ -995,7 +997,13 @@ class MessageRouter:
                             extra={"error": str(result), "cid": correlation_id},
                         )
                         batch_failed_urls.append(
-                            f"Unknown URL (task exception: {type(result).__name__})"
+                            FailedURLDetail(
+                                url="Unknown URL",
+                                error_type=type(result).__name__,
+                                error_message=str(result),
+                                retry_recommended=False,
+                                attempts=1,
+                            )
                         )
                     elif isinstance(result, tuple) and len(result) == 3:
                         url, success, error_msg = result
@@ -1003,7 +1011,31 @@ class MessageRouter:
                             batch_successful += 1
                         else:
                             batch_failed += 1
-                            batch_failed_urls.append(url)
+                            # Classify error type from error message
+                            error_type = "unknown"
+                            retry_recommended = False
+                            if "timeout" in error_msg.lower():
+                                error_type = "timeout"
+                                retry_recommended = True
+                            elif "circuit breaker" in error_msg.lower():
+                                error_type = "circuit_breaker"
+                                retry_recommended = True
+                            elif "network" in error_msg.lower() or "connection" in error_msg.lower():
+                                error_type = "network"
+                                retry_recommended = True
+                            elif "validation" in error_msg.lower() or "invalid" in error_msg.lower():
+                                error_type = "validation"
+                                retry_recommended = False
+
+                            batch_failed_urls.append(
+                                FailedURLDetail(
+                                    url=url,
+                                    error_type=error_type,
+                                    error_message=error_msg,
+                                    retry_recommended=retry_recommended,
+                                    attempts=3,  # Assume max retries
+                                )
+                            )
                             if error_msg:
                                 logger.debug(
                                     "url_processing_failed_detail",
@@ -1016,7 +1048,15 @@ class MessageRouter:
                             batch_successful += 1
                         else:
                             batch_failed += 1
-                            batch_failed_urls.append(url)
+                            batch_failed_urls.append(
+                                FailedURLDetail(
+                                    url=url,
+                                    error_type="unknown",
+                                    error_message="No error details (legacy format)",
+                                    retry_recommended=True,
+                                    attempts=1,
+                                )
+                            )
                             logger.warning(
                                 "legacy_result_format", extra={"url": url, "cid": correlation_id}
                             )
@@ -1032,7 +1072,13 @@ class MessageRouter:
                             },
                         )
                         batch_failed_urls.append(
-                            f"Unknown URL (unexpected result type: {type(result).__name__})"
+                            FailedURLDetail(
+                                url="Unknown URL",
+                                error_type="unexpected_result",
+                                error_message=f"Unexpected result type: {type(result).__name__}",
+                                retry_recommended=False,
+                                attempts=1,
+                            )
                         )
 
             # Small delay between batches to prevent overwhelming external APIs
@@ -1042,8 +1088,10 @@ class MessageRouter:
             return batch_successful, batch_failed, batch_failed_urls
 
         # Run batch processing and progress updates concurrently
+        from app.models.batch_processing import FailedURLDetail
+
         progress_task = asyncio.create_task(progress_tracker.process_update_queue())
-        batch_result: tuple[int, int, list[str]] | Exception
+        batch_result: tuple[int, int, list[FailedURLDetail]] | Exception
         try:
             batch_result = await process_batches()
         except asyncio.CancelledError:
@@ -1111,6 +1159,32 @@ class MessageRouter:
             context="links",
             show_stats=True,
         )
+
+        # Add error breakdown if there are failures with details
+        if failed_urls and isinstance(failed_urls[0], FailedURLDetail):
+            # Group errors by type
+            error_breakdown: dict[str, list[FailedURLDetail]] = {}
+            for failed_url in failed_urls:
+                error_breakdown.setdefault(failed_url.error_type, []).append(failed_url)
+
+            # Build error summary
+            error_summary_parts = ["\n\n**Failure Breakdown:**"]
+            for error_type, urls in error_breakdown.items():
+                retry_note = " (retry recommended)" if urls[0].retry_recommended else ""
+                error_summary_parts.append(f"\n• **{error_type}**: {len(urls)} URL(s){retry_note}")
+
+            # Show first 3 failed URLs with details
+            error_summary_parts.append("\n\n**Failed URLs (first 3):**")
+            for i, failed_url in enumerate(failed_urls[:3], 1):
+                url_display = failed_url.url if len(failed_url.url) <= 60 else f"{failed_url.url[:57]}..."
+                error_display = (
+                    failed_url.error_message
+                    if len(failed_url.error_message) <= 100
+                    else f"{failed_url.error_message[:97]}..."
+                )
+                error_summary_parts.append(f"\n{i}. {url_display}\n   Error: {error_display}")
+
+            completion_message += "".join(error_summary_parts)
 
         await self.response_formatter.safe_reply(message, completion_message)
 
