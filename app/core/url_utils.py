@@ -229,10 +229,29 @@ def compute_dedupe_hash(url: str) -> str:
 
 
 def looks_like_url(text: str) -> bool:
-    """Check if text contains what looks like a URL."""
+    """Check if text contains what looks like a URL.
+
+    Args:
+        text: Text to check for URL patterns
+
+    Returns:
+        True if text appears to contain a URL, False otherwise
+
+    Note:
+        Text length is limited to 50KB to prevent regex DoS attacks.
+        Longer text should be rejected at the message routing level.
+    """
     if not text or not isinstance(text, str):
         return False
-    if len(text) > 10000:  # Prevent processing of extremely long text
+
+    # Defense in depth: Limit text length to prevent regex DoS
+    # This matches the MAX_TEXT_LENGTH in message_router.py
+    MAX_TEXT_LENGTH = 50 * 1024  # 50KB
+    if len(text) > MAX_TEXT_LENGTH:
+        logger.warning(
+            "looks_like_url_text_too_long",
+            extra={"text_length": len(text), "max_allowed": MAX_TEXT_LENGTH},
+        )
         return False
 
     try:
@@ -245,10 +264,30 @@ def looks_like_url(text: str) -> bool:
 
 
 def extract_all_urls(text: str) -> list[str]:
-    """Extract all URLs from text with optimized performance."""
+    """Extract all URLs from text with optimized performance.
+
+    Args:
+        text: Text to extract URLs from
+
+    Returns:
+        List of validated URLs found in text
+
+    Note:
+        Text length is limited to 50KB to prevent regex DoS attacks.
+        Longer text should be rejected at the message routing level.
+        URLs are validated and deduplicated before being returned.
+    """
     if not text or not isinstance(text, str):
         return []
-    if len(text) > 10000:  # Prevent processing of extremely long text
+
+    # Defense in depth: Limit text length to prevent regex DoS
+    # This matches the MAX_TEXT_LENGTH in message_router.py
+    MAX_TEXT_LENGTH = 50 * 1024  # 50KB
+    if len(text) > MAX_TEXT_LENGTH:
+        logger.warning(
+            "extract_all_urls_text_too_long",
+            extra={"text_length": len(text), "max_allowed": MAX_TEXT_LENGTH},
+        )
         return []
 
     try:

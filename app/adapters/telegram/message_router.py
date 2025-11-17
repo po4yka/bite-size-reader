@@ -135,6 +135,28 @@ class MessageRouter:
                 message_key = (uid, chat_id or 0, message_id)
 
             text = telegram_message.get_effective_text() or ""
+
+            # CRITICAL: Validate text length to prevent memory exhaustion and regex DoS
+            # Limit to 50KB for text processing (prevents regex DoS and memory issues)
+            MAX_TEXT_LENGTH = 50 * 1024  # 50KB
+            if len(text) > MAX_TEXT_LENGTH:
+                logger.warning(
+                    "text_length_exceeded",
+                    extra={
+                        "uid": uid,
+                        "chat_id": chat_id,
+                        "text_length": len(text),
+                        "max_allowed": MAX_TEXT_LENGTH,
+                    },
+                )
+                await self.response_formatter.safe_reply(
+                    message,
+                    f"❌ Message too long ({len(text):,} characters). "
+                    f"Maximum allowed: {MAX_TEXT_LENGTH:,} characters. "
+                    "Please split into smaller messages or use a file upload.",
+                )
+                return
+
             text_signature = text.strip() if isinstance(text, str) else ""
             if message_key and self._is_duplicate_message(message_key, text_signature):
                 logger.info(
@@ -715,32 +737,84 @@ class MessageRouter:
             file_path: Path to text file containing URLs
 
         Returns:
-            List of URLs found in file
+            List of validated URLs found in file
 
         Raises:
             FileValidationError: If file validation fails
+
+        Security:
+            All URLs are validated using normalize_url() which:
+            - Checks for dangerous schemes (javascript:, file:, data:, etc.)
+            - Validates URL structure and hostname
+            - Blocks localhost, 127.0.0.1, and other suspicious domains
+            - Prevents SSRF attacks
         """
+        from app.core.url_utils import normalize_url
+
         # Use secure file validator to read file
         lines = self._file_validator.safe_read_text_file(file_path)
 
-        # Extract URLs from lines
+        # Extract and validate URLs from lines
         urls = []
-        for line in lines:
+        skipped_count = 0
+        for line_num, line in enumerate(lines, 1):
             line = line.strip()
-            # Basic URL validation - starts with http/https
-            if line and (line.startswith("http://") or line.startswith("https://")):
-                # Additional validation: check for suspicious patterns
-                if " " not in line and "\t" not in line:  # No spaces/tabs in URL
-                    urls.append(line)
-                else:
+
+            # Skip empty lines and comments
+            if not line or line.startswith("#"):
+                continue
+
+            # Basic format check - starts with http/https
+            if line.startswith("http://") or line.startswith("https://"):
+                # Check for suspicious patterns (whitespace in URL)
+                if " " in line or "\t" in line:
                     logger.warning(
                         "suspicious_url_skipped",
-                        extra={"url_preview": line[:50], "reason": "contains whitespace"},
+                        extra={
+                            "url_preview": line[:50],
+                            "reason": "contains whitespace",
+                            "line_num": line_num,
+                        },
                     )
+                    skipped_count += 1
+                    continue
+
+                # CRITICAL: Validate URL for security (prevents SSRF)
+                try:
+                    # normalize_url() performs comprehensive security validation:
+                    # - Blocks dangerous schemes (javascript:, file:, data:, etc.)
+                    # - Validates URL structure
+                    # - Checks for malicious patterns
+                    normalized = normalize_url(line)
+                    urls.append(normalized)
+                except ValueError as e:
+                    # URL failed security validation
+                    logger.warning(
+                        "invalid_url_in_file",
+                        extra={
+                            "url_preview": line[:50],
+                            "error": str(e),
+                            "line_num": line_num,
+                            "file_path": file_path,
+                        },
+                    )
+                    skipped_count += 1
+            elif line.startswith(("http", "www")):
+                # Possibly a URL without proper protocol
+                logger.warning(
+                    "malformed_url_skipped",
+                    extra={"url_preview": line[:50], "reason": "invalid protocol", "line_num": line_num},
+                )
+                skipped_count += 1
 
         logger.info(
             "file_parsed_successfully",
-            extra={"file_path": file_path, "urls_found": len(urls), "lines_read": len(lines)},
+            extra={
+                "file_path": file_path,
+                "urls_found": len(urls),
+                "urls_skipped": skipped_count,
+                "lines_read": len(lines),
+            },
         )
 
         return urls
@@ -758,9 +832,11 @@ class MessageRouter:
         total = len(urls)
 
         # Use semaphore to limit concurrent processing (prevent overwhelming external APIs)
-        # Note: Combined with batch processing, this limits both memory usage and API load
-        # Semaphore should allow at least as many concurrent URLs as batch size
-        semaphore = asyncio.Semaphore(min(20, total))  # Max 20 concurrent URLs
+        # CRITICAL: Limit concurrent tasks to prevent memory exhaustion
+        # Each task can use 10-50MB (content + LLM API calls)
+        # 5 concurrent × 50MB = 250MB max (safe for 2GB servers)
+        # Previous value of 20 could cause 1GB+ spikes and OOM kills
+        semaphore = asyncio.Semaphore(min(5, total))  # Max 5 concurrent URLs
 
         # Circuit breaker: stop processing if too many failures indicate service issues
         # Threshold: Allow up to 1/3 failures before opening circuit
