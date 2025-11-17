@@ -4,12 +4,10 @@ import logging
 import os
 from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, TypeVar
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from typing import Self
-else:  # pragma: no cover - runtime fallback for Python < 3.11
-    Self = TypeVar("Self", bound="Settings")
 
 from pydantic import (
     AliasChoices,

@@ -7,12 +7,10 @@ import time
 import weakref
 from contextlib import asynccontextmanager
 from importlib.util import find_spec
-from typing import TYPE_CHECKING, Any, TypeVar
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from typing import Self
-else:  # pragma: no cover - runtime fallback for Python < 3.11
-    Self = TypeVar("Self", bound="OpenRouterClient")
 
 import httpx
 
