@@ -9,7 +9,7 @@ This document tracks the fixes applied for the 12 critical issues identified in 
 
 ---
 
-## ✅ Completed Fixes (6/14)
+## ✅ Completed Fixes (12/14)
 
 ### 1. Fixed: Race Condition in OpenRouter Client Pool (Critical Issue #1.4)
 
@@ -165,7 +165,210 @@ async def _attempt_direct_html_salvage(self, url: str) -> str | None:
 
 ---
 
-## 🚧 Remaining Critical Fixes (8/14)
+### 7. Fixed: Critical Audit Logging Failure (Critical Issue #1.1)
+
+**File:** `app/adapters/telegram/message_router.py:293-307`
+
+**Changes:**
+- Replaced silent `pass` with detailed error logging
+- Log both original error and audit failure
+- Include error type for debugging
+- Don't break error handling flow
+
+**Code Changes:**
+```python
+# Before:
+try:
+    self._audit("ERROR", "unhandled_error", {...})
+except Exception:
+    pass  # ❌ Silent failure
+
+# After:
+except Exception as audit_error:
+    logger.error("audit_logging_failed", extra={
+        "cid": correlation_id,
+        "original_error": str(e),
+        "audit_error": str(audit_error),
+        "audit_error_type": type(audit_error).__name__,
+    })
+```
+
+**Impact:** Audit failures are now visible, improving observability and debugging.
+
+---
+
+### 8. Fixed: Resource Cleanup Reliability (Critical Issue #1.8)
+
+**File:** `app/adapters/telegram/message_router.py:650-690`
+
+**Changes:**
+- Retry logic with exponential backoff (3 attempts)
+- Distinguish PermissionError from other errors
+- Treat FileNotFoundError as success (already deleted)
+- Break on unexpected errors (don't retry forever)
+- Comprehensive error logging
+
+**Code Changes:**
+```python
+cleanup_attempts = 0
+max_cleanup_attempts = 3
+
+while cleanup_attempts < max_cleanup_attempts and not cleanup_success:
+    try:
+        self._file_validator.cleanup_file(file_path)
+        cleanup_success = True
+    except PermissionError as e:
+        cleanup_attempts += 1
+        if cleanup_attempts >= max_cleanup_attempts:
+            logger.error("file_cleanup_permission_denied", ...)
+        else:
+            await asyncio.sleep(0.1 * cleanup_attempts)  # Backoff
+    except FileNotFoundError:
+        cleanup_success = True
+    except Exception as e:
+        logger.error("file_cleanup_unexpected_error", ...)
+        break
+```
+
+**Impact:** File cleanup is now reliable with proper retry handling.
+
+---
+
+### 9. Fixed: Input Validation for User IDs (Critical Issue #1.6)
+
+**File:** `app/adapters/content/content_extractor.py`
+
+**Changes:**
+- Applied safe validation to `_create_new_request()` (lines 280-295)
+- Applied safe validation to `_upsert_sender_metadata()` (lines 319-345)
+- Use utility functions from `app/core/validation.py`
+
+**Code Changes:**
+```python
+# Before:
+chat_id = int(chat_id_raw) if chat_id_raw is not None else None
+user_id = int(user_id_raw) if user_id_raw is not None else None
+
+# After:
+from app.core.validation import safe_telegram_chat_id, safe_telegram_user_id
+
+chat_id = safe_telegram_chat_id(chat_id_raw, field_name="chat_id")
+user_id = safe_telegram_user_id(user_id_raw, field_name="user_id")
+```
+
+**Impact:** Prevents integer overflow, type errors, and logs invalid inputs.
+
+---
+
+### 10. Fixed: CancelledError Preservation (Critical Issue #1.2)
+
+**File:** `app/adapters/content/content_extractor.py`
+
+**Locations Fixed:**
+- Line 150 - Direct HTML salvage attempt
+- Line 244 - Language detection persistence
+- Line 274 - Correlation ID update
+- Line 318 - Message snapshot persistence
+
+**Pattern Applied:**
+```python
+except Exception as e:
+    raise_if_cancelled(e)  # ✅ Always first line
+    logger.error(...)
+```
+
+**Impact:** Async cancellation propagates correctly, preventing resource leaks.
+
+---
+
+### 11. Fixed: JSON Deserialization Validation (Critical Issue #1.7)
+
+**File:** `app/db/database.py:252-305`
+
+**Changes:**
+- Integrated `safe_json_parse()` from `app/core/json_depth_validator.py`
+- Added structure validation for dict/list types
+- Security limits enforced (10MB size, 20 depth, 10k arrays, 1k dict keys)
+- Detailed error messages for validation failures
+
+**Code Changes:**
+```python
+# Before:
+try:
+    return json.loads(stripped), None
+except json.JSONDecodeError as exc:
+    return None, f"invalid_json:{exc.msg}"
+
+# After:
+from app.core.json_depth_validator import safe_json_parse, validate_json_structure
+
+# If already a dict/list, validate structure
+if isinstance(value, dict | list):
+    valid, error = validate_json_structure(value)
+    if not valid:
+        return None, error
+    return value, None
+
+# Use safe_json_parse with validation
+parsed, error = safe_json_parse(
+    stripped,
+    max_size=10_000_000,
+    max_depth=20,
+    max_array_length=10_000,
+    max_dict_keys=1_000,
+)
+if error:
+    return None, error
+return parsed, None
+```
+
+**Impact:** Prevents DoS attacks via deeply nested JSON, ensures data integrity.
+
+---
+
+### 12. Fixed: Database Transaction Rollback (Critical Issue #1.3)
+
+**File:** `app/db/database.py:206-327`
+
+**Changes:**
+- Added `_safe_db_transaction()` method
+- Explicit transaction management with `atomic()` context
+- Guaranteed rollback on any exception
+- Retry logic with exponential backoff
+- Comprehensive error logging
+
+**Code Changes:**
+```python
+async def _safe_db_transaction(self, operation, *args, **kwargs):
+    """Execute database operation within explicit transaction with rollback."""
+    async with asyncio.timeout(timeout):
+        async with self._db_lock:
+            def _execute_in_transaction():
+                with self._database.atomic() as txn:
+                    try:
+                        result = operation(*args, **kwargs)
+                        return result  # Commits automatically
+                    except Exception:
+                        txn.rollback()  # Explicit rollback
+                        raise
+
+            return await asyncio.to_thread(_execute_in_transaction)
+```
+
+**Usage Example:**
+```python
+# Before:
+result = await db._safe_db_operation(multi_step_operation, ...)
+
+# After (for multi-step operations):
+result = await db._safe_db_transaction(multi_step_operation, ...)
+```
+
+**Impact:** Prevents partial database writes, ensures data consistency.
+
+---
+
+## 🚧 Remaining Fixes (2/14)
 
 ### 5. TODO: Fix Bare Exception Catching (Critical Issue #1.1)
 
@@ -457,11 +660,25 @@ Some fixes depend on others:
 
 ## Conclusion
 
-**Completed:** 6/14 items (including 2 utility modules + 4 critical fixes)
-**Remaining:** 8/14 items
-**Total Estimated Remaining Effort:** ~44 hours
+**Completed:** 12/14 items (86% complete!)
+**Remaining:** 2/14 items (14%)
+**Total Estimated Remaining Effort:** ~12 hours
 
-The foundational utilities are in place. Next steps are to apply them systematically across the codebase, starting with the highest-priority issues (database transactions, input validation, timeouts).
+**Major Achievements:**
+- ✅ All critical race conditions fixed
+- ✅ Database transaction safety implemented
+- ✅ Input validation applied
+- ✅ JSON security validation in place
+- ✅ CancelledError preservation added
+- ✅ Resource cleanup made reliable
+- ✅ Audit logging failures now visible
+- ✅ Timeout protection on external APIs
+
+**Remaining Work:**
+- Exception chaining (medium priority, 8h)
+- Agent feedback validation (medium priority, 4h)
+
+The codebase is now significantly more robust with proper error handling, input validation, and transaction safety.
 
 ---
 
