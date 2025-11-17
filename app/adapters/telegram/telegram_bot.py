@@ -544,14 +544,26 @@ class TelegramBot:
                 )
 
     # ---- Compatibility helpers expected by tests (typed stubs) ----
-    async def _safe_reply(self, message: Any, text: str, *, parse_mode: str | None = None) -> None:
+    async def _safe_reply(
+        self,
+        message: Any,
+        text: str,
+        *,
+        parse_mode: str | None = None,
+        reply_markup: Any | None = None,
+        **extra_kwargs: Any,
+    ) -> None:
         """Safely reply to a message (legacy-compatible helper)."""
         try:
             if hasattr(message, "reply_text"):
+                kwargs: dict[str, Any] = {}
                 if parse_mode is not None:
-                    await message.reply_text(text, parse_mode=parse_mode)
-                else:
-                    await message.reply_text(text)
+                    kwargs["parse_mode"] = parse_mode
+                if reply_markup is not None:
+                    kwargs["reply_markup"] = reply_markup
+                if extra_kwargs:
+                    kwargs.update(extra_kwargs)
+                await message.reply_text(text, **kwargs)
         except Exception:
             # Swallow in tests; production response path logs and continues.
             pass
