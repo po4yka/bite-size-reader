@@ -250,8 +250,10 @@ sentence-transformers==5.1.2
     # via bite-size-reader (pyproject.toml)
 setuptools==80.9.0
     # via
+    #   pymorphy3
     #   spacy
     #   thinc
+    #   torch
 six==1.17.0
     # via python-dateutil
 smart-open==7.5.0
@@ -284,7 +286,7 @@ tld==0.13.1
     # via courlan
 tokenizers==0.22.1
     # via transformers
-torch==2.9.1
+torch==2.9.1+cpu
     # via sentence-transformers
 tqdm==4.67.1
     # via

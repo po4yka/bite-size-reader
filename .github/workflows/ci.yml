@@ -20,6 +20,10 @@ permissions:
   pull-requests: write
   checks: write
 
+env:
+  UV_EXTRA_INDEX_URL: "https://download.pytorch.org/whl/cpu"
+  UV_INDEX_STRATEGY: "unsafe-best-match"
+
 jobs:
   prepare-environment:
     name: Prepare dependencies
