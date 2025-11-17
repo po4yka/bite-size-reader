@@ -408,7 +408,6 @@ jobs:
         run: |
           echo "::group::Running integration tests"
           pytest \
-            -p pytest_asyncio.plugin \
             tests/ \
             -m "integration" \
             --verbose \
