@@ -122,7 +122,7 @@ class ContentExtractor:
                 "pure_extraction_low_value",
                 extra={"cid": correlation_id, "reason": quality_issue.reason},
             )
-            raise ValueError(error_msg)
+            raise ValueError(error_msg) from None
 
         # Validate crawl success
         has_markdown = bool(crawl.content_markdown and crawl.content_markdown.strip())
@@ -667,7 +667,7 @@ class ContentExtractor:
                 silent,
             )
             failure_reason = crawl.error_text or "Firecrawl extraction failed"
-            raise ValueError(f"Firecrawl extraction failed: {failure_reason}")
+            raise ValueError(f"Firecrawl extraction failed: {failure_reason}") from None
 
         # Process successful crawl
         return await self._process_successful_crawl(message, crawl, correlation_id, silent)

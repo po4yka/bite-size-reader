@@ -441,7 +441,7 @@ class LLMSummarizer:
                     "error": error_msg,
                 },
             )
-            raise ValueError(f"LLM returned error status: {error_msg}")
+            raise ValueError(f"LLM returned error status: {error_msg}") from None
 
         # Parse the response
         summary = self._parse_summary_from_llm_result(llm_result)
@@ -450,7 +450,7 @@ class LLMSummarizer:
                 "summarize_pure_parse_failed",
                 extra={"cid": correlation_id},
             )
-            raise ValueError("Failed to parse valid summary from LLM response")
+            raise ValueError("Failed to parse valid summary from LLM response") from None
 
         logger.info(
             "summarize_pure_success",

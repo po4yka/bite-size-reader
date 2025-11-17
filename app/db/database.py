@@ -201,7 +201,7 @@ class Database:
         if last_error:
             raise last_error
         msg = f"Database operation {operation_name} failed after {DB_MAX_RETRIES} retries"
-        raise RuntimeError(msg)
+        raise RuntimeError(msg) from last_error
 
     async def _safe_db_transaction(
         self,
@@ -324,7 +324,7 @@ class Database:
         if last_error:
             raise last_error
         msg = f"Database transaction {operation_name} failed after {DB_MAX_RETRIES} retries"
-        raise RuntimeError(msg)
+        raise RuntimeError(msg) from last_error
 
     @contextlib.contextmanager
     def connect(self) -> Iterator[sqlite3.Connection]:
