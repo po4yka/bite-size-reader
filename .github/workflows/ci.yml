@@ -314,7 +314,9 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          args: detect --config .gitleaks.toml --source . --no-git --redact --verbose --report-format sarif --report-path results-workspace.sarif
+          args: >-
+            detect --config .gitleaks.toml --source . --no-git --redact --verbose
+            --report-format sarif --report-path results-workspace.sarif
 
       - name: Upload Gitleaks SARIF (workspace)
         if: ${{ github.event_name == 'pull_request' && (success() || failure()) }}
