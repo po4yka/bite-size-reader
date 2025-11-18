@@ -175,7 +175,6 @@ def _validate_url_input(url: str) -> None:
                     ".lan",
                     ".corp",
                     ".test",
-                    ".example",
                     ".invalid",
                 )
                 for pattern in suspicious_patterns:
@@ -442,22 +441,17 @@ def extract_all_urls(text: str) -> list[str]:
         if not urls:
             return []
 
-        # Validate and filter URLs with early exit optimization
+        # Deduplicate URLs (validation happens later in security checks)
         valid_urls = []
-        seen = set()  # Combine deduplication with validation
+        seen = set()
 
         for url in urls:
             # Skip if already seen (deduplication)
             if url in seen:
                 continue
 
-            try:
-                _validate_url_input(url)
-                valid_urls.append(url)
-                seen.add(url)
-            except ValueError:
-                # Skip invalid URLs silently for performance
-                continue
+            valid_urls.append(url)
+            seen.add(url)
 
         logger.debug("extract_all_urls", extra={"count": len(valid_urls), "input_len": len(text)})
         return valid_urls
