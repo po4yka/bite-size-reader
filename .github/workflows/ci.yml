@@ -416,7 +416,17 @@ jobs:
             --strict-markers \
             --timeout=60 \
             --reruns=2 \
-            --reruns-delay=2
+            --reruns-delay=2 || EXIT_CODE=$?
+
+          # Exit code 5 means no tests collected (no integration tests marked)
+          # This is acceptable - treat as success
+          if [ "${EXIT_CODE:-0}" -eq 5 ]; then
+            echo "::notice::No integration tests found (all tests deselected)"
+            exit 0
+          elif [ "${EXIT_CODE:-0}" -ne 0 ]; then
+            echo "::error::Integration tests failed with exit code ${EXIT_CODE}"
+            exit ${EXIT_CODE}
+          fi
           echo "::endgroup::"
 
       - name: Report integration test status
