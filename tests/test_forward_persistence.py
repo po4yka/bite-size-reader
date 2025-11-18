@@ -60,7 +60,7 @@ class TestForwardMessagePersistence(unittest.IsolatedAsyncioTestCase):
                 firecrawl=FirecrawlConfig(api_key="fc-dummy-key"),
                 openrouter=OpenRouterConfig(
                     api_key="or-dummy-key",
-                    model="openai/gpt-4o-mini",
+                    model="deepseek/deepseek-v3-0324",
                     fallback_models=(),
                     http_referer=None,
                     x_title=None,

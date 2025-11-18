@@ -126,7 +126,7 @@ class FirecrawlClient:
             raise ValueError(msg)
 
         # Security: Validate timeout
-        if not isinstance(timeout_sec, (int, float)) or timeout_sec <= 0:
+        if not isinstance(timeout_sec, int | float) or timeout_sec <= 0:
             msg = "Timeout must be positive"
             raise ValueError(msg)
         if timeout_sec > 300:  # 5 minutes max
@@ -138,7 +138,7 @@ class FirecrawlClient:
             msg = "Max retries must be between 0 and 10"
             raise ValueError(msg)
         # Allow zero to disable waits in tests; only negative is invalid
-        if not isinstance(backoff_base, (int, float)) or backoff_base < 0:
+        if not isinstance(backoff_base, int | float) or backoff_base < 0:
             msg = "Backoff base must be non-negative"
             raise ValueError(msg)
 
@@ -154,7 +154,7 @@ class FirecrawlClient:
             msg = "Max keepalive connections must be between 1 and 50"
             raise ValueError(msg)
         if (
-            not isinstance(keepalive_expiry, (int, float))
+            not isinstance(keepalive_expiry, int | float)
             or keepalive_expiry < 1.0
             or keepalive_expiry > 300.0
         ):

@@ -190,7 +190,7 @@ class TelegramClient:
 async def idle() -> None:
     """Simple idle loop to keep the client running."""
     try:
-        while True:  # noqa: ASYNC110
+        while True:
             await asyncio.sleep(3600)
     except asyncio.CancelledError:  # pragma: no cover
         return

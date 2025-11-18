@@ -129,7 +129,7 @@ class CommandRegistry:
             prefix_list = list(prefixes)
 
         # Wrap plain functions in SimpleCommand
-        if not isinstance(handler, (SimpleCommand, ConditionalCommand)):
+        if not isinstance(handler, SimpleCommand | ConditionalCommand):
             if callable(handler):
                 handler = SimpleCommand(handler)
 

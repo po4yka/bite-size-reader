@@ -266,7 +266,6 @@ class OpenRouterConfig(BaseModel):
             "deepseek/deepseek-r1",
             "moonshotai/kimi-k2-thinking",
             "deepseek/deepseek-v3-0324",
-            "openai/gpt-4o",
         ),
         validation_alias="OPENROUTER_FALLBACK_MODELS",
     )

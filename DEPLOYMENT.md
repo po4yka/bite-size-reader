@@ -21,7 +21,7 @@ This guide explains how to prepare environments, configure secrets, and run the 
 ## OpenRouter Setup
 - Sign up: https://openrouter.ai/
 - Create an API key and set `OPENROUTER_API_KEY`.
-- Choose a model (e.g., `openai/gpt-4o`) and set `OPENROUTER_MODEL`.
+- Choose a model (e.g., `qwen/qwen3-max`) and set `OPENROUTER_MODEL`.
 - Optional attribution: `OPENROUTER_HTTP_REFERER`, `OPENROUTER_X_TITLE`.
 
 ## Firecrawl Setup
@@ -39,7 +39,7 @@ Copy `.env.example` to `.env` and fill the values:
 
 - OpenRouter
   - `OPENROUTER_API_KEY` — API key
-  - `OPENROUTER_MODEL` — model id (e.g., `openai/gpt-4o`)
+  - `OPENROUTER_MODEL` — model id (e.g., `qwen/qwen3-max`)
   - `OPENROUTER_HTTP_REFERER` — optional
   - `OPENROUTER_X_TITLE` — optional
 

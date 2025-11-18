@@ -143,7 +143,7 @@ class ValidationAgent(BaseAgent[ValidationInput, ValidationOutput]):
                             errors.append(f"key_stats[{idx}] missing 'label' field")
                         if "value" not in stat:
                             errors.append(f"key_stats[{idx}] missing 'value' field")
-                        elif not isinstance(stat["value"], (int, float)):
+                        elif not isinstance(stat["value"], int | float):
                             errors.append(
                                 f"key_stats[{idx}].value must be numeric, "
                                 f"got {type(stat['value']).__name__}"
@@ -157,7 +157,7 @@ class ValidationAgent(BaseAgent[ValidationInput, ValidationOutput]):
                 else:
                     if "score" not in readability:
                         errors.append("readability.score is required")
-                    elif not isinstance(readability["score"], (int, float)):
+                    elif not isinstance(readability["score"], int | float):
                         errors.append("readability.score must be numeric")
 
                     if "level" not in readability:

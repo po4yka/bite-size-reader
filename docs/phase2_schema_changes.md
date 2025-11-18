@@ -172,7 +172,7 @@ url_request = Request.create(
 llm_call = LLMCall.create(
     request=url_request,  # Required! Cannot be None
     provider='openrouter',
-    model='gpt-4',
+    model='qwen/qwen3-max',
     status='ok'
 )
 
@@ -204,7 +204,7 @@ Request.create(
 LLMCall.create(
     request=None,  # Not allowed!
     provider='openrouter',
-    model='gpt-4'
+    model='qwen/qwen3-max'
 )
 # Error: NOT NULL constraint failed: llm_calls.request_id
 

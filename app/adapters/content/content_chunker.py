@@ -56,13 +56,7 @@ class ContentChunker:
                 return int(tokens * 4 * 0.75)
 
             # Explicit capacities (user-provided):
-            # - GPT-5: 400,000 tokens
-            # - GPT-4o: 128,000 tokens
             # - Gemini 2.5 Pro: 1,000,000 tokens
-            if "gpt-5" in name:
-                return max(base_default, tok(400_000))  # ≈ 1,200,000 chars
-            if "gpt-4o" in name:
-                return max(base_default, tok(128_000))  # ≈ 384,000 chars
             if "gemini-2.5" in name or "2.5-pro" in name or "gemini-2-5" in name:
                 return max(base_default, tok(1_000_000))  # ≈ 3,000,000 chars
 

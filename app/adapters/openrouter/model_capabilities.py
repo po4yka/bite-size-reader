@@ -35,11 +35,6 @@ class ModelCapabilities:
 
         # Known models that support structured outputs (fallback list)
         self._known_structured_models = {
-            # OpenAI models
-            "openai/gpt-4o",
-            "openai/gpt-5",
-            "openai/gpt-5-mini",
-            "openai/gpt-5-nano",
             # Google models
             "google/gemini-2.5-pro",
             # DeepSeek models (JSON mode support)
@@ -63,9 +58,9 @@ class ModelCapabilities:
         }
 
     def is_reasoning_heavy_model(self, model: str) -> bool:
-        """Check if model is reasoning-heavy (like GPT-5 family, DeepSeek R1, Kimi K2 Thinking)."""
+        """Check if model is reasoning-heavy (like DeepSeek R1, Kimi K2 Thinking)."""
         model_lower = model.lower()
-        reasoning_indicators = ["gpt-5", "o1", "reasoning", "-r1", "thinking", "deepseek-r1"]
+        reasoning_indicators = ["o1", "reasoning", "-r1", "thinking", "deepseek-r1"]
         return any(indicator in model_lower for indicator in reasoning_indicators)
 
     def get_safe_structured_fallbacks(self) -> list[str]:
@@ -74,7 +69,6 @@ class ModelCapabilities:
             "deepseek/deepseek-v3-0324:free",  # Free, reliable, excellent performance
             "deepseek/deepseek-r1:free",  # Free, strong reasoning
             "qwen/qwen3-max",  # Flagship model, comprehensive
-            "openai/gpt-4o",  # Reliable paid option
             "google/gemini-2.5-pro",  # Alternative paid option
         ]
 

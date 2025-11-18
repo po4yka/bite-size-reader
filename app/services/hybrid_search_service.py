@@ -13,7 +13,7 @@ if TYPE_CHECKING:
     from app.services.reranking_service import RerankingService
     from app.services.search_filters import SearchFilters
     from app.services.topic_search import LocalTopicSearchService
-    from app.services.vector_search_service import VectorSearchService
+    from app.services.vector_search_service import VectorSearchResult, VectorSearchService
 
 logger = logging.getLogger(__name__)
 
@@ -158,7 +158,7 @@ class HybridSearchService:
     def _combine_results(
         self,
         fts_results: list[TopicArticle],
-        vector_results: list,
+        vector_results: list[VectorSearchResult],
     ) -> list[dict]:
         """Combine and normalize scores from both search methods.
 
@@ -178,11 +178,12 @@ class HybridSearchService:
             fts_scores[result.url] = score
 
         # Vector scores are already normalized (0-1 cosine similarity)
-        vector_scores = {}
-        vector_data = {}
-        for result in vector_results:
-            vector_scores[result.url] = result.similarity_score
-            vector_data[result.url] = result
+        vector_scores: dict[str, float] = {}
+        vector_data: dict[str, VectorSearchResult] = {}
+        for vector_result in vector_results:
+            if vector_result.url:
+                vector_scores[vector_result.url] = vector_result.similarity_score
+                vector_data[vector_result.url] = vector_result
 
         # Combine all URLs from both sources
         all_urls = set(fts_scores.keys()) | set(vector_scores.keys())

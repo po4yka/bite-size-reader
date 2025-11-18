@@ -70,7 +70,7 @@ def test_phase2_migration():
 
         # Insert a valid LLM call using ORM
         llm_call = LLMCall.create(
-            request=request, provider="openrouter", model="gpt-4", status="ok"
+            request=request, provider="openrouter", model="qwen/qwen3-max", status="ok"
         )
         assert llm_call.id is not None
 
@@ -80,7 +80,7 @@ def test_phase2_migration():
         try:
             db._database.execute_sql("""
                 INSERT INTO llm_calls (request_id, provider, model, status)
-                VALUES (NULL, 'openrouter', 'gpt-4', 'orphaned')
+                VALUES (NULL, 'openrouter', 'qwen/qwen3-max', 'orphaned')
             """)
             orphan_inserted = True
         except peewee.IntegrityError:
@@ -125,7 +125,7 @@ def test_phase2_migration():
         try:
             db._database.execute_sql("""
                 INSERT INTO llm_calls (request_id, provider, model, status)
-                VALUES (NULL, 'openrouter', 'gpt-4', 'should-fail')
+                VALUES (NULL, 'openrouter', 'qwen/qwen3-max', 'should-fail')
             """)
             print("✗ NOT NULL constraint NOT enforced (insert succeeded when it should fail)")
             pytest.fail("NOT NULL constraint not enforced on llm_calls.request_id")
@@ -210,7 +210,7 @@ def test_phase2_migration():
 
         db._database.execute_sql(f"""
             INSERT INTO llm_calls (request_id, provider, model, status)
-            VALUES ({cascade_request_id}, 'openrouter', 'gpt-4', 'ok')
+            VALUES ({cascade_request_id}, 'openrouter', 'qwen/qwen3-max', 'ok')
         """)
 
         # Count LLM calls before delete

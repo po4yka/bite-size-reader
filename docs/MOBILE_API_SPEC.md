@@ -293,7 +293,7 @@ Retrieve a single summary with full details.
       "http_status": 200
     },
     "processing": {
-      "model": "openai/gpt-4",
+      "model": "qwen/qwen3-max",
       "tokens_used": 2800,
       "cost_usd": 0.045,
       "latency_ms": 5740,
@@ -444,7 +444,7 @@ Get details about a specific request.
     "llm_calls": [
       {
         "id": 1,
-        "model": "openai/gpt-4",
+        "model": "qwen/qwen3-max",
         "status": "success",
         "tokens_prompt": 2500,
         "tokens_completion": 300,

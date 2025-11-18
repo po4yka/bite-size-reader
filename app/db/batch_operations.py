@@ -44,7 +44,7 @@ class BatchOperations:
             ...     {
             ...         "request_id": 1,
             ...         "provider": "openrouter",
-            ...         "model": "gpt-4",
+            ...         "model": "qwen/qwen3-max",
             ...         "status": "ok"
             ...     },
             ...     ...

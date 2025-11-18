@@ -14,7 +14,7 @@ TInput = TypeVar("TInput")
 
 
 @dataclass
-class AgentResult(Generic[TOutput]):  # noqa: UP046  # Python 3.11 compatibility
+class AgentResult(Generic[TOutput]):
     """Result of an agent execution.
 
     Attributes:
@@ -40,7 +40,7 @@ class AgentResult(Generic[TOutput]):  # noqa: UP046  # Python 3.11 compatibility
         return cls(success=False, error=error, metadata=metadata)
 
 
-class BaseAgent(ABC, Generic[TInput, TOutput]):  # noqa: UP046  # Python 3.11 compatibility
+class BaseAgent(ABC, Generic[TInput, TOutput]):
     """Base class for all agents in the multi-agent system.
 
     Each agent should:

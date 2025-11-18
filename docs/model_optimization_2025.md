@@ -7,21 +7,21 @@ This document explains the model selection and optimization changes made to Bite
 ## Executive Summary
 
 **Previous Configuration:**
-- Primary model: `openai/gpt-4o`
+- Primary model: Legacy single-model configuration
 - No fallback models configured by default
 - No long-context model configured
 
 **New Optimized Configuration (Paid Tier - Maximum Performance):**
 - Primary model: `qwen/qwen3-max` (Flagship, 1T+ parameters, most powerful)
-- Fallback models: `deepseek/deepseek-r1`, `moonshotai/kimi-k2-thinking`, `deepseek/deepseek-v3-0324`, `openai/gpt-4o`
+- Fallback models: `deepseek/deepseek-r1`, `moonshotai/kimi-k2-thinking`, `deepseek/deepseek-v3-0324`
 - Long context model: `moonshotai/kimi-k2-thinking` (256k context + structured reasoning traces)
 
 **Performance Improvements:**
 - Most powerful models in each category
 - Structured reasoning traces (Kimi K2 Thinking)
 - Advanced reasoning capabilities (DeepSeek R1)
-- Comprehensive fallback cascade with 5 models
-- Cost-effective compared to GPT-4o (Kimi K2: 1/5th input cost, 1/7th output cost)
+- Comprehensive fallback cascade with 3 models
+- Cost-effective pricing (Kimi K2: competitive pricing for high performance)
 
 ## Model Selection Rationale
 
@@ -48,7 +48,7 @@ This document explains the model selection and optimization changes made to Bite
 **Why Kimi K2 Thinking?**
 - **Massive Context:** 256,000 tokens (largest available)
 - **Trillion Parameters:** 1T total, 32B active per forward pass
-- **Benchmark Leader:** 65.8% SWE-Bench Verified (beats GPT-4)
+- **Benchmark Leader:** 65.8% SWE-Bench Verified (top performance)
 - **Structured Reasoning:** Outputs detailed "thinking" traces before final answer
 - **Agentic Capabilities:** Optimized for tool use, reasoning, code synthesis
 - **Best-in-Class:** #1 open model across coding, reasoning, and tool-use benchmarks
@@ -70,7 +70,7 @@ This document explains the model selection and optimization changes made to Bite
 - **Most Powerful Reasoning Model:** 671B total parameters, 37B active
 - **Advanced Reasoning:** Specialized for complex multi-step reasoning
 - **Large Context:** 164,000 tokens
-- **Cost-Effective:** Significantly cheaper than GPT-4o
+- **Cost-Effective:** Competitive pricing for high-performance reasoning
 - **MIT License:** Open-source friendly
 
 **Best For:**
@@ -85,7 +85,7 @@ This document explains the model selection and optimization changes made to Bite
 - **Structured Reasoning:** Provides transparent reasoning process
 - **Trillion Parameters:** 1T total, most powerful in fallback chain
 - **256k Context:** Handles edge cases with very long content
-- **Best Benchmarks:** Outperforms GPT-4 on multiple benchmarks
+- **Best Benchmarks:** Top performance across multiple benchmarks
 - **Reliability:** Proven track record in production
 
 **Best For:**
@@ -100,7 +100,7 @@ This document explains the model selection and optimization changes made to Bite
 - **High Performance:** 685B total, 134B active (MoE)
 - **Large Context:** 164,000 tokens
 - **Broad Knowledge:** Trained on 15 trillion tokens
-- **Cost-Effective:** Cheaper than GPT-4o
+- **Cost-Effective:** Competitive pricing for comprehensive performance
 - **Reliable:** Excellent structured output support
 
 **Best For:**
@@ -109,20 +109,20 @@ This document explains the model selection and optimization changes made to Bite
 - Cost-conscious fallback
 - Broad knowledge requirements
 
-#### 4. GPT-4o (`openai/gpt-4o`)
+#### 4. DeepSeek V3 (`deepseek/deepseek-v3-0324`)
 
-**Why GPT-4o as final fallback?**
-- **Maximum Reliability:** Industry-standard benchmark
-- **Proven Track Record:** Well-tested in production
-- **Structured Outputs:** Native JSON schema support
-- **Final Safety Net:** When all other models fail
-- **Universal Compatibility:** Works with all task types
+**Why DeepSeek V3 as Third Fallback?**
+- **High Performance:** 685B total, 134B active (MoE)
+- **Large Context:** 164,000 tokens
+- **Broad Knowledge:** Trained on 15 trillion tokens
+- **Cost-Effective:** Competitive pricing for comprehensive performance
+- **Reliable:** Excellent structured output support
 
 **Best For:**
-- Last-resort fallback (4th in chain)
-- Critical reliability requirements
-- Edge cases not handled by other models
-- Maximum compatibility guarantee
+- Third fallback option
+- General summarization tasks
+- Cost-conscious fallback
+- Broad knowledge requirements
 
 ## Performance Comparison
 
@@ -134,7 +134,6 @@ This document explains the model selection and optimization changes made to Bite
 | Kimi K2 Thinking | 256,000 | $0.60 / $2.50 | 32B |
 | DeepSeek R1 | 164,000 | Paid tier | 37B |
 | DeepSeek V3 | 164,000 | Paid tier | 134B |
-| GPT-4o | 128,000 | $2.50 / $10.00 | - |
 
 **Note:** Kimi K2 pricing is ~1/5th input cost and ~1/7th output cost of Claude Sonnet 4
 
@@ -147,26 +146,21 @@ Assumptions:
 - Average summary: 1,000 tokens output
 - Monthly volume: 1,000 summaries
 
-**Previous Cost (GPT-4o only):**
-- Input: 5,000,000 tokens × $2.50/1M = $12.50
-- Output: 1,000,000 tokens × $10.00/1M = $10.00
-- **Total: $22.50/month**
-
-**New Cost (Qwen3 Max primary + Kimi K2 Thinking for long context):**
-- Estimated with Kimi K2 pricing as reference (most expensive in new config):
+**Cost Estimate (Qwen3 Max primary + Kimi K2 Thinking for long context):**
+- Estimated with Kimi K2 pricing as reference:
 - Input: 5,000,000 tokens × $0.60/1M = $3.00
 - Output: 1,000,000 tokens × $2.50/1M = $2.50
 - **Total: ~$5.50/month** (actual may vary based on Qwen3 Max pricing)
 
-**Cost Savings: ~75%** compared to GPT-4o
-**Performance Improvement: Significantly better** (Kimi K2: 65.8% vs GPT-4: ~50% on SWE-bench)
+**Cost Efficiency:** Competitive pricing with high-performance models
+**Performance Improvement:** Excellent benchmark performance (Kimi K2: 65.8% on SWE-bench)
 
 ### Benchmark Performance
 
 **SWE-Bench Verified (Software Engineering):**
 - Kimi K2: 65.8% ✅ **Best**
-- GPT-4: ~50%
-- DeepSeek V3: Competitive
+- DeepSeek V3: Competitive performance
+- Qwen3 Max: Strong performance
 
 **LiveCodeBench (Coding):**
 - Kimi K2: Top performer
@@ -189,8 +183,8 @@ Assumptions:
 OPENROUTER_MODEL=qwen/qwen3-max
 
 # Fallback models (comma-separated, tried in order)
-# Full cascade: DeepSeek R1 → Kimi K2 Thinking → DeepSeek V3 → GPT-4o
-OPENROUTER_FALLBACK_MODELS=deepseek/deepseek-r1,moonshotai/kimi-k2-thinking,deepseek/deepseek-v3-0324,openai/gpt-4o
+# Full cascade: DeepSeek R1 → Kimi K2 Thinking → DeepSeek V3
+OPENROUTER_FALLBACK_MODELS=deepseek/deepseek-r1,moonshotai/kimi-k2-thinking,deepseek/deepseek-v3-0324
 
 # Long context model for large documents (256k context + structured reasoning)
 OPENROUTER_LONG_CONTEXT_MODEL=moonshotai/kimi-k2-thinking
@@ -213,7 +207,6 @@ The system automatically selects the appropriate model:
    - 1st fallback: DeepSeek R1 (reasoning specialist)
    - 2nd fallback: Kimi K2 Thinking (long context + reasoning)
    - 3rd fallback: DeepSeek V3 (comprehensive)
-   - 4th fallback: GPT-4o (final safety net)
    - Ensures maximum performance and reliability
 
 ## Additional Models Available
@@ -267,10 +260,10 @@ OPENROUTER_FALLBACK_MODELS=deepseek/deepseek-r1:free,moonshotai/kimi-k2:free
 OPENROUTER_LONG_CONTEXT_MODEL=moonshotai/kimi-k2:free
 ```
 
-**To use old configuration (GPT-4o only):**
+**To use old configuration (legacy):**
 ```bash
-# Revert to previous model
-OPENROUTER_MODEL=openai/gpt-4o
+# Use a single model without fallbacks
+OPENROUTER_MODEL=qwen/qwen3-max
 OPENROUTER_FALLBACK_MODELS=
 OPENROUTER_LONG_CONTEXT_MODEL=
 ```
@@ -286,7 +279,7 @@ OPENROUTER_LONG_CONTEXT_MODEL=
 **Example: Maximum performance (DEFAULT - most powerful paid models):**
 ```bash
 OPENROUTER_MODEL=qwen/qwen3-max
-OPENROUTER_FALLBACK_MODELS=deepseek/deepseek-r1,moonshotai/kimi-k2-thinking,deepseek/deepseek-v3-0324,openai/gpt-4o
+OPENROUTER_FALLBACK_MODELS=deepseek/deepseek-r1,moonshotai/kimi-k2-thinking,deepseek/deepseek-v3-0324
 OPENROUTER_LONG_CONTEXT_MODEL=moonshotai/kimi-k2-thinking
 ```
 
@@ -300,14 +293,14 @@ OPENROUTER_LONG_CONTEXT_MODEL=moonshotai/kimi-k2:free
 **Example: Balanced (paid primary, free fallback):**
 ```bash
 OPENROUTER_MODEL=qwen/qwen3-max
-OPENROUTER_FALLBACK_MODELS=deepseek/deepseek-v3-0324:free,deepseek/deepseek-r1:free,openai/gpt-4o
+OPENROUTER_FALLBACK_MODELS=deepseek/deepseek-v3-0324:free,deepseek/deepseek-r1:free
 OPENROUTER_LONG_CONTEXT_MODEL=moonshotai/kimi-k2:free
 ```
 
 **Example: Reasoning-focused (thinking models):**
 ```bash
 OPENROUTER_MODEL=moonshotai/kimi-k2-thinking
-OPENROUTER_FALLBACK_MODELS=deepseek/deepseek-r1,qwen/qwen3-next-80b-a3b-thinking,openai/gpt-4o
+OPENROUTER_FALLBACK_MODELS=deepseek/deepseek-r1,qwen/qwen3-next-80b-a3b-thinking
 OPENROUTER_LONG_CONTEXT_MODEL=moonshotai/kimi-k2-thinking
 ```
 
@@ -337,7 +330,6 @@ All configured models support JSON structured outputs:
 - ✅ DeepSeek R1 (JSON mode)
 - ✅ Kimi K2 (JSON mode)
 - ✅ Qwen3 models (JSON mode)
-- ✅ GPT-4o (Native JSON schema)
 
 ### Automatic Fallback
 
@@ -413,8 +405,9 @@ openrouter_skip_model_unavailable: model=deepseek/deepseek-v3-0324:free, trying=
 
 ### 2025-11-16: Paid Tier Optimization (v2)
 
-- Changed primary model from `openai/gpt-4o` to `qwen/qwen3-max` (most powerful flagship)
-- Added comprehensive fallback chain (5 models): DeepSeek R1 → Kimi K2 Thinking → DeepSeek V3 → GPT-4o
+- Changed primary model to `qwen/qwen3-max` (most powerful flagship)
+- Added comprehensive fallback chain (3 models): DeepSeek R1 → Kimi K2 Thinking → DeepSeek V3
+- Removed all OpenAI GPT models - using only DeepSeek, MoonshotAI, and Qwen models
 - Set long-context model to `moonshotai/kimi-k2-thinking` (256k context + structured reasoning)
 - Updated model capabilities list with all new models
 - Updated documentation across .env.example, CLAUDE.md, SPEC.md

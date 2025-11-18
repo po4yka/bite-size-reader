@@ -46,7 +46,7 @@ class _FakeAsyncClient:
                 {
                     "data": [
                         {
-                            "id": "openai/gpt-5",
+                            "id": "qwen/qwen3-max",
                             "object": "model",
                             "supported_parameters": {"structured_outputs": True},
                         },
@@ -93,7 +93,7 @@ class TestAdaptersIntegration(unittest.IsolatedAsyncioTestCase):
         original = or_httpx.AsyncClient
         try:
             payload = {
-                "model": "openai/gpt-5",
+                "model": "qwen/qwen3-max",
                 "choices": [{"message": {"content": json.dumps({"summary_250": "ok"})}}],
                 "usage": {"prompt_tokens": 10, "completion_tokens": 20},
             }
@@ -106,7 +106,7 @@ class TestAdaptersIntegration(unittest.IsolatedAsyncioTestCase):
 
             client = OpenRouterClient(
                 api_key="sk-test-key-123456789",
-                model="openai/gpt-5",
+                model="qwen/qwen3-max",
                 timeout_sec=5,
                 provider_order=None,
                 enable_stats=False,

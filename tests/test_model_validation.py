@@ -9,9 +9,9 @@ class TestModelValidation(unittest.TestCase):
         from app.config import validate_model_name
 
         valid_models = [
-            "openai/gpt-4o-mini",
-            "openai/gpt-5",
-            "google/gemini-2.5-pro",
+            "deepseek/deepseek-v3-0324",
+            "qwen/qwen3-max",
+            "moonshotai/kimi-k2-thinking",
         ]
 
         for model in valid_models:
@@ -45,14 +45,14 @@ class TestModelValidation(unittest.TestCase):
             os.environ["FIRECRAWL_API_KEY"] = "fc_" + "b" * 20
             os.environ["OPENROUTER_API_KEY"] = "or_" + "c" * 20
             os.environ["ALLOWED_USER_IDS"] = "123456789"
-            os.environ["OPENROUTER_MODEL"] = "openai/gpt-5"
+            os.environ["OPENROUTER_MODEL"] = "qwen/qwen3-max"
             os.environ["OPENROUTER_FALLBACK_MODELS"] = (
                 "fallback/model,google/gemini-2.5-pro, invalid|name"
             )
 
             cfg = load_config()
 
-            assert cfg.openrouter.model == "openai/gpt-5"
+            assert cfg.openrouter.model == "qwen/qwen3-max"
             assert cfg.openrouter.fallback_models == ("fallback/model", "google/gemini-2.5-pro")
         finally:
             os.environ.clear()
@@ -108,7 +108,6 @@ class TestModelValidation(unittest.TestCase):
                 "deepseek/deepseek-r1",
                 "moonshotai/kimi-k2-thinking",
                 "deepseek/deepseek-v3-0324",
-                "openai/gpt-4o",
             )
             # New default primary model (most powerful flagship)
             assert cfg.openrouter.model == "qwen/qwen3-max"

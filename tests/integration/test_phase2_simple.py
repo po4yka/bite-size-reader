@@ -47,7 +47,7 @@ def test_phase2():
         try:
             db._database.execute_sql("""
                 INSERT INTO llm_calls (request_id, provider, model, status)
-                VALUES (NULL, 'openrouter', 'gpt-4', 'should-fail')
+                VALUES (NULL, 'openrouter', 'qwen/qwen3-max', 'should-fail')
             """)
             print("✗ NOT NULL constraint NOT enforced")
             return False
@@ -136,7 +136,7 @@ def test_phase2():
         )
 
         cascade_llm = LLMCall.create(
-            request=cascade_request, provider="openrouter", model="gpt-4", status="ok"
+            request=cascade_request, provider="openrouter", model="qwen/qwen3-max", status="ok"
         )
 
         llm_id = cascade_llm.id

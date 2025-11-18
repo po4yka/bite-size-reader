@@ -7,4 +7,6 @@ corresponding modules from the structured subpackages.
 
 # Re-export telegram bot module at package level for compatibility with tests
 # that import ``app.adapters.telegram_bot``.
-from .telegram import telegram_bot as telegram_bot
+from .telegram import telegram_bot
+
+__all__ = ["telegram_bot"]

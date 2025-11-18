@@ -17,7 +17,7 @@ class TestOpenRouterCompliance(unittest.TestCase):
         """Set up test fixtures."""
         self.client = OpenRouterClient(
             api_key="sk-or-test-key",
-            model="openai/gpt-4o-mini",
+            model="deepseek/deepseek-v3-0324",
             fallback_models=["google/gemini-2.5-pro"],
             http_referer="https://github.com/test-repo",
             x_title="Test Bot",
@@ -95,7 +95,7 @@ class TestOpenRouterCompliance(unittest.TestCase):
                 # Verify request body structure
                 call_args = mock_client.return_value.post.call_args
                 body = call_args[1]["json"]
-                assert body["model"] == "openai/gpt-4o-mini"
+                assert body["model"] == "deepseek/deepseek-v3-0324"
                 assert body["messages"] == messages
                 assert body["temperature"] == 0.7
                 assert body["max_tokens"] == 100
@@ -274,7 +274,7 @@ class TestOpenRouterCompliance(unittest.TestCase):
                 mock_response.json.return_value = {
                     "choices": [{"message": {"content": "Test response"}}],
                     "usage": {"prompt_tokens": 10, "completion_tokens": 5},
-                    "model": "openai/gpt-4o-mini",
+                    "model": "deepseek/deepseek-v3-0324",
                 }
                 mock_client.return_value.post = AsyncMock(return_value=mock_response)
 
@@ -284,7 +284,7 @@ class TestOpenRouterCompliance(unittest.TestCase):
                 assert result.response_text == "Test response"
                 assert result.tokens_prompt == 10
                 assert result.tokens_completion == 5
-                assert result.model == "openai/gpt-4o-mini"
+                assert result.model == "deepseek/deepseek-v3-0324"
                 assert result.endpoint == "/api/v1/chat/completions"
 
         asyncio.run(_test())
@@ -298,7 +298,7 @@ class TestOpenRouterCompliance(unittest.TestCase):
                 mock_response.status_code = 200
                 mock_response.json.return_value = {
                     "id": "test-response",
-                    "model": "openai/gpt-5",
+                    "model": "qwen/qwen3-max",
                     "usage": {
                         "prompt_tokens": 10,
                         "completion_tokens": 5,
@@ -373,7 +373,7 @@ class TestOpenRouterCompliance(unittest.TestCase):
                 mock_response.status_code = 200
                 mock_response.json.return_value = {
                     "data": [
-                        {"id": "openai/gpt-4o-mini", "name": "GPT-4o Mini"},
+                        {"id": "deepseek/deepseek-v3-0324", "name": "DeepSeek V3"},
                         {"id": "google/gemini-2.5-pro", "name": "Gemini 2.5 Pro"},
                     ]
                 }

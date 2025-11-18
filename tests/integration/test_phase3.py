@@ -112,7 +112,7 @@ def test_phase3() -> bool:
             {
                 "request_id": requests[i].id,
                 "provider": "openrouter",
-                "model": "gpt-4",
+                "model": "qwen/qwen3-max",
                 "status": "ok",
                 "latency_ms": 1000 + i * 100,
             }
@@ -209,7 +209,7 @@ def test_phase3() -> bool:
         )
 
         test_llm_call = LLMCall.create(
-            request=test_request, provider="openrouter", model="gpt-4", status="ok"
+            request=test_request, provider="openrouter", model="qwen/qwen3-max", status="ok"
         )
         assert test_llm_call.id is not None
 

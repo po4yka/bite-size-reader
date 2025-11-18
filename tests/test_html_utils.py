@@ -4,7 +4,7 @@ from app.core import html_utils
 
 
 @pytest.fixture(autouse=True)
-def disable_optional_dependencies(monkeypatch):
+def _disable_optional_dependencies(monkeypatch):
     """Force html_utils helpers to exercise their lightweight fallbacks."""
     monkeypatch.setattr(html_utils, "_HAS_TRAFILATURA", False)
     monkeypatch.setattr(html_utils, "trafilatura", None)

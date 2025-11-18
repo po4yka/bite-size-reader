@@ -67,8 +67,8 @@ batch = BatchOperations(db._database)
 
 # Insert multiple LLM calls in one transaction
 llm_calls = [
-    {"request_id": 1, "provider": "openrouter", "model": "gpt-4", "status": "ok"},
-    {"request_id": 2, "provider": "openrouter", "model": "gpt-4", "status": "ok"},
+    {"request_id": 1, "provider": "openrouter", "model": "qwen/qwen3-max", "status": "ok"},
+    {"request_id": 2, "provider": "openrouter", "model": "qwen/qwen3-max", "status": "ok"},
 ]
 call_ids = batch.insert_llm_calls_batch(llm_calls)
 

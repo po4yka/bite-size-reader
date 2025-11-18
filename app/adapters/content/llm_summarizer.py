@@ -503,21 +503,8 @@ class LLMSummarizer:
 
         approx_input_tokens = max(1, len(content_text) // 3)
 
-        model_name = self.cfg.openrouter.model.lower()
-        if "gpt-5" in model_name:
-            dynamic_budget = max(12288, min(32768, approx_input_tokens + 8192))
-            if configured is not None and configured < 20000:
-                logger.info(
-                    "gpt5_max_tokens_override",
-                    extra={
-                        "model": self.cfg.openrouter.model,
-                        "original_configured": configured,
-                        "new_budget": dynamic_budget,
-                    },
-                )
-                configured = None
-        else:
-            dynamic_budget = max(8192, min(24576, approx_input_tokens + 4096))
+        # Model-specific token budget adjustments can be added here if needed
+        dynamic_budget = max(8192, min(24576, approx_input_tokens + 4096))
 
         if configured is None:
             logger.debug(
