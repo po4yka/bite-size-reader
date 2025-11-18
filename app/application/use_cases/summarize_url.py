@@ -7,8 +7,10 @@ workflow from URL to final summary.
 import logging
 from dataclasses import dataclass
 from datetime import datetime
+from pathlib import Path
 from typing import Any
 
+from app.core.lang import LANG_EN, detect_language
 from app.core.time_utils import UTC
 from app.domain.events.request_events import RequestCompleted, RequestCreated, RequestFailed
 from app.domain.events.summary_events import SummaryCreated
@@ -25,8 +27,12 @@ from app.infrastructure.persistence.sqlite.repositories.request_repository impor
 from app.infrastructure.persistence.sqlite.repositories.summary_repository import (
     SqliteSummaryRepositoryAdapter,
 )
+from app.protocols import ContentFetcher, SummaryGenerator
 
 logger = logging.getLogger(__name__)
+
+# Path to prompt files
+_PROMPT_DIR = Path(__file__).resolve().parents[2] / "prompts"
 
 
 @dataclass
@@ -84,15 +90,26 @@ class SummarizeUrlUseCase:
 
     Example:
         ```python
+        # Initialize repositories
+        request_repo = SqliteRequestRepositoryAdapter(database)
+        summary_repo = SqliteSummaryRepositoryAdapter(database)
+        crawl_result_repo = SqliteCrawlResultRepositoryAdapter(database)
+
+        # Initialize services (ContentExtractor and LLMSummarizer implement the protocols)
+        content_extractor = ContentExtractor(cfg, db, firecrawl, response_formatter, audit_func, sem)
+        llm_summarizer = LLMSummarizer(cfg, db, openrouter_client, response_formatter, audit_func)
+
+        # Create use case
         use_case = SummarizeUrlUseCase(
-            request_repo=request_repo,
-            summary_repo=summary_repo,
-            crawl_result_repo=crawl_result_repo,
-            content_fetcher=content_fetcher,  # External service
-            llm_client=llm_client,            # External service
+            request_repository=request_repo,
+            summary_repository=summary_repo,
+            crawl_result_repository=crawl_result_repo,
+            content_fetcher=content_extractor,  # Implements ContentFetcher protocol
+            llm_client=llm_summarizer,          # Implements SummaryGenerator protocol
             summary_validator=SummaryValidator(),
         )
 
+        # Execute the use case
         command = SummarizeUrlCommand(
             url="https://example.com/article",
             user_id=123,
@@ -114,8 +131,8 @@ class SummarizeUrlUseCase:
         request_repository: SqliteRequestRepositoryAdapter,
         summary_repository: SqliteSummaryRepositoryAdapter,
         crawl_result_repository: SqliteCrawlResultRepositoryAdapter,
-        content_fetcher: Any,  # IContentFetcher protocol (external service)
-        llm_client: Any,  # ILLMClient protocol (external service)
+        content_fetcher: ContentFetcher,
+        llm_client: SummaryGenerator,
         summary_validator: SummaryValidator,
     ) -> None:
         """Initialize the use case.
@@ -317,26 +334,50 @@ class SummarizeUrlUseCase:
         await self._request_repo.async_update_request_status(request.id or 0, request.status.value)
 
         try:
-            # Call external service (this would be the actual implementation)
-            # For now, this is a placeholder showing the pattern
-            # content = await self._content_fetcher.fetch(command.url)
+            # Call content fetcher service to extract content
+            (
+                content_text,
+                content_source,
+                metadata,
+            ) = await self._content_fetcher.extract_content_pure(
+                url=command.url,
+                correlation_id=command.correlation_id,
+            )
 
-            # In real implementation, this would return structured content
-            # For now, return placeholder
-            content = {
-                "text": "Content placeholder",
-                "markdown": "# Markdown placeholder",
-                "metadata": {},
-            }
+            # Detect language from content if not specified
+            detected_lang = detect_language(content_text)
+            if detected_lang:
+                await self._request_repo.async_update_request_lang_detected(
+                    request.id or 0, detected_lang
+                )
 
             # Persist crawl result
-            markdown_value = content.get("markdown")
-            metadata_value = content.get("metadata")
+            # Store the original markdown/html in the database
+            markdown_content = metadata.get("markdown") or content_text
             await self._crawl_result_repo.async_insert_crawl_result(
                 request_id=request.id or 0,
                 success=True,
-                markdown=markdown_value if isinstance(markdown_value, str) else None,
-                metadata_json=metadata_value if isinstance(metadata_value, dict) else None,
+                markdown=markdown_content if isinstance(markdown_content, str) else None,
+                metadata_json=metadata if isinstance(metadata, dict) else None,
+            )
+
+            # Return structured content for next step
+            content = {
+                "text": content_text,
+                "source": content_source,
+                "metadata": metadata,
+                "detected_lang": detected_lang,
+            }
+
+            logger.info(
+                "content_fetched",
+                extra={
+                    "request_id": request.id,
+                    "content_length": len(content_text),
+                    "source": content_source,
+                    "detected_lang": detected_lang,
+                    "cid": command.correlation_id,
+                },
             )
 
             return request, content
@@ -379,30 +420,41 @@ class SummarizeUrlUseCase:
         await self._request_repo.async_update_request_status(request.id or 0, request.status.value)
 
         try:
-            # Call LLM service (this would be the actual implementation)
-            # For now, this is a placeholder showing the pattern
-            # llm_response = await self._llm_client.chat(messages=[...])
+            # Determine language for summary
+            # Priority: command.language > detected_lang > default
+            detected_lang = content.get("detected_lang", LANG_EN)
+            summary_lang = command.language or detected_lang or LANG_EN
 
-            # In real implementation, this would return structured summary
-            # For now, return placeholder
-            summary_content = {
-                "tldr": "This is a summary placeholder",
-                "summary_250": "Brief summary placeholder",
-                "summary_1000": "Detailed summary placeholder",
-                "key_ideas": ["Key idea 1", "Key idea 2"],
-                "topic_tags": ["tag1", "tag2"],
-                "entities": [],
-                "seo_keywords": ["keyword1", "keyword2"],
-                "estimated_reading_time_min": 5,
-            }
+            # Load system prompt for the chosen language
+            system_prompt = self._load_system_prompt(summary_lang)
+
+            # Call LLM service to generate summary
+            summary_content = await self._llm_client.summarize_content_pure(
+                content_text=content["text"],
+                chosen_lang=summary_lang,
+                system_prompt=system_prompt,
+                correlation_id=command.correlation_id,
+                feedback_instructions=None,
+            )
 
             # Create summary domain model
             summary = Summary(
                 request_id=request.id or 0,
                 content=summary_content,
-                language=command.language or "en",
+                language=summary_lang,
                 version=1,
                 is_read=False,
+            )
+
+            logger.info(
+                "summary_generated",
+                extra={
+                    "request_id": request.id,
+                    "language": summary_lang,
+                    "has_key_ideas": bool(summary_content.get("key_ideas")),
+                    "has_topic_tags": bool(summary_content.get("topic_tags")),
+                    "cid": command.correlation_id,
+                },
             )
 
             return request, summary
@@ -413,6 +465,28 @@ class SummarizeUrlUseCase:
                 msg,
                 details={"request_id": request.id, "error": str(e)},
             ) from e
+
+    def _load_system_prompt(self, lang: str) -> str:
+        """Load system prompt for the given language.
+
+        Args:
+            lang: Language code ('en' or 'ru').
+
+        Returns:
+            System prompt text.
+
+        """
+        fname = "summary_system_ru.txt" if lang == "ru" else "summary_system_en.txt"
+        path = _PROMPT_DIR / fname
+        try:
+            return path.read_text(encoding="utf-8").strip()
+        except Exception as e:
+            logger.warning(
+                "failed_to_load_system_prompt",
+                extra={"path": str(path), "error": str(e)},
+            )
+            # Fallback to a basic prompt
+            return "You are a precise assistant that returns only a strict JSON object matching the provided schema."
 
     async def _persist_summary(self, summary: Summary) -> None:
         """Persist summary to database.
