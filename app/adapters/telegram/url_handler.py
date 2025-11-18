@@ -138,12 +138,43 @@ class URLHandler:
         normalized = self._normalize_response(text)
 
         if self._is_affirmative(normalized):
+            # CRITICAL: Keep lock held during state validation to prevent race conditions
+            # This prevents concurrent modifications between retrieval and validation
             async with self._state_lock:
                 urls = self._pending_multi_links.get(uid)
+
+                # Validate state while holding lock (prevents race condition)
+                if not urls:
+                    logger.warning(
+                        "multi_confirm_missing_state", extra={"uid": uid, "cid": correlation_id}
+                    )
+                    # Release lock before async operations
+                else:
+                    # Validate URLs while holding lock
+                    is_valid = isinstance(urls, list) and all(
+                        isinstance(url, str) and url.strip() for url in urls
+                    )
+
+                    if not is_valid:
+                        logger.warning(
+                            "multi_confirm_invalid_state",
+                            extra={
+                                "uid": uid,
+                                "cid": correlation_id,
+                                "type": type(urls).__name__,
+                                "count": len(urls) if isinstance(urls, list) else None,
+                            },
+                        )
+                        # Drop corrupted state while holding lock
+                        self._pending_multi_links.pop(uid, None)
+                        urls = None  # Mark as invalid
+                    else:
+                        # State is valid; remove it before processing to prevent double handling
+                        # Pop while still holding lock for atomic operation
+                        self._pending_multi_links.pop(uid, None)
+
+            # Now handle results outside lock (async operations)
             if not urls:
-                logger.warning(
-                    "multi_confirm_missing_state", extra={"uid": uid, "cid": correlation_id}
-                )
                 await self.response_formatter.safe_reply(
                     message,
                     "ℹ️ No pending multi-link request to confirm. Please send the links again.",
@@ -161,21 +192,8 @@ class URLHandler:
                     )
                 return
 
-            if not isinstance(urls, list) or any(
-                not isinstance(url, str) or not url.strip() for url in urls
-            ):
-                logger.warning(
-                    "multi_confirm_invalid_state",
-                    extra={
-                        "uid": uid,
-                        "cid": correlation_id,
-                        "type": type(urls).__name__,
-                        "count": len(urls) if isinstance(urls, list) else None,
-                    },
-                )
-                # Drop the corrupted state to avoid repeated failures
-                async with self._state_lock:
-                    self._pending_multi_links.pop(uid, None)
+            # Check if URLs were marked invalid during validation
+            if not isinstance(urls, list):
                 await self.response_formatter.safe_reply(
                     message,
                     "❌ Pending multi-link request is invalid. Please send the links again.",
@@ -192,10 +210,6 @@ class URLHandler:
                         logger_=logger,
                     )
                 return
-
-            # State is valid; remove it before processing to prevent double handling
-            async with self._state_lock:
-                self._pending_multi_links.pop(uid, None)
             await self.response_formatter.safe_reply(
                 message, f"🚀 Processing {len(urls)} links in parallel..."
             )

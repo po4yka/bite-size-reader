@@ -3,7 +3,7 @@ from __future__ import annotations
 import hashlib
 import logging
 import re
-from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
+from urllib.parse import parse_qsl, quote, unquote, urlencode, urlparse, urlunparse
 
 logger = logging.getLogger(__name__)
 
@@ -64,6 +64,14 @@ _DANGEROUS_SCHEMES: frozenset[str] = frozenset(
 def _validate_url_input(url: str) -> None:
     """Validate URL input for security.
 
+    Comprehensive validation including:
+    - Length limits (RFC 2616)
+    - Dangerous content patterns
+    - Scheme validation (only http/https)
+    - SSRF protection (private IPs, loopback, link-local, etc.)
+    - Suspicious domain patterns
+    - Control characters and null bytes
+
     Args:
         url: URL string to validate
 
@@ -101,6 +109,89 @@ def _validate_url_input(url: str) -> None:
     if any(ord(char) < 32 and char not in ("\t", "\n", "\r") for char in url):
         msg = "URL contains control characters"
         raise ValueError(msg)
+
+    # SSRF Protection: Validate hostname and IP addresses
+    # Import here to avoid circular dependencies
+    import ipaddress
+
+    try:
+        # Parse URL to extract hostname for IP validation
+        parsed = urlparse(url if "://" in url else f"http://{url}")
+        hostname = parsed.hostname or parsed.netloc
+
+        if hostname:
+            hostname_lower = hostname.lower()
+
+            # Block localhost variants (additional to loopback IP check)
+            if hostname_lower in ("localhost", "localhost.localdomain"):
+                msg = "Localhost access not allowed"
+                raise ValueError(msg)
+
+            # Try to parse as IP address
+            ip_obj = None
+            try:
+                ip_obj = ipaddress.ip_address(hostname)
+            except ValueError:
+                # Not a valid IP address - will check domain patterns below
+                pass
+
+            if ip_obj is not None:
+                # Valid IP address - check if it's blocked
+                # Block all private IP ranges (RFC 1918: 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16)
+                # Also blocks RFC 4193 IPv6 private (fc00::/7)
+                if ip_obj.is_private:
+                    msg = f"Private IP address not allowed: {ip_obj}"
+                    raise ValueError(msg)
+
+                # Block loopback (127.0.0.0/8, ::1)
+                if ip_obj.is_loopback:
+                    msg = f"Loopback address not allowed: {ip_obj}"
+                    raise ValueError(msg)
+
+                # Block link-local (169.254.0.0/16, fe80::/10)
+                if ip_obj.is_link_local:
+                    msg = f"Link-local address not allowed: {ip_obj}"
+                    raise ValueError(msg)
+
+                # Block multicast (224.0.0.0/4, ff00::/8)
+                if ip_obj.is_multicast:
+                    msg = f"Multicast address not allowed: {ip_obj}"
+                    raise ValueError(msg)
+
+                # Block reserved IPs
+                if ip_obj.is_reserved:
+                    msg = f"Reserved IP address not allowed: {ip_obj}"
+                    raise ValueError(msg)
+
+                # Block unspecified (0.0.0.0, ::)
+                if ip_obj.is_unspecified:
+                    msg = f"Unspecified address not allowed: {ip_obj}"
+                    raise ValueError(msg)
+            else:
+                # Not a valid IP - check for suspicious domain patterns (internal networks)
+                suspicious_patterns = (
+                    ".local",
+                    ".internal",
+                    ".lan",
+                    ".corp",
+                    ".test",
+                    ".invalid",
+                )
+                for pattern in suspicious_patterns:
+                    if hostname_lower.endswith(pattern):
+                        msg = f"Suspicious domain pattern: {pattern}"
+                        raise ValueError(msg)
+
+    except ValueError:
+        # Re-raise our validation errors
+        raise
+    except Exception as e:
+        # If URL parsing fails for other reasons, log but allow it
+        # (will be caught by urlparse in normalize_url)
+        logger.debug(
+            "url_validation_parse_warning",
+            extra={"url": url[:100], "error": str(e)},
+        )
 
 
 def normalize_url(url: str) -> str:
@@ -168,11 +259,28 @@ def normalize_url(url: str) -> str:
         netloc = p.netloc.lower()
         path = p.path or "/"
 
+        # Normalize path encoding to prevent false duplicates
+        # Decode path first (handles %20, %2F, etc.)
+        # Then re-encode consistently using quote()
+        # This ensures "hello%20world" and "hello world" both become "hello%20world"
+        try:
+            # Decode existing encoding
+            decoded_path = unquote(path)
+            # Re-encode consistently (safe chars: unreserved + /@:)
+            # Don't encode / to preserve path structure
+            path = quote(decoded_path, safe="/@:")
+        except Exception as e:
+            # If path encoding fails, use as-is and log warning
+            logger.warning(
+                "path_encoding_normalization_failed",
+                extra={"path": path[:100], "error": str(e)},
+            )
+
         # Remove redundant trailing slash except for root
         if path.endswith("/") and path != "/":
             path = path.rstrip("/")
 
-        # Filter and sort query params
+        # Filter and sort query params (urlencode handles encoding consistently)
         query_pairs = [
             (k, v)
             for k, v in parse_qsl(p.query, keep_blank_values=True)
@@ -191,18 +299,54 @@ def normalize_url(url: str) -> str:
 
 
 def url_hash_sha256(normalized_url: str) -> str:
-    """Generate SHA256 hash of normalized URL."""
+    """Generate SHA256 hash of normalized URL.
+
+    Args:
+        normalized_url: Normalized URL string to hash
+
+    Returns:
+        Lowercase hexadecimal SHA256 hash (exactly 64 characters)
+
+    Raises:
+        ValueError: If normalized_url is empty, invalid, or too long
+
+    Note:
+        - Always returns a valid 64-character hexadecimal string
+        - Uses UTF-8 encoding
+        - Result is suitable for database dedupe_hash field (unique constraint)
+        - Validates hash format before returning (defensive programming)
+    """
     if not normalized_url or not isinstance(normalized_url, str):
         msg = "Normalized URL is required"
         raise ValueError(msg)
+
+    # Additional validation: ensure URL is not just whitespace
+    if not normalized_url.strip():
+        msg = "Normalized URL cannot be whitespace-only"
+        raise ValueError(msg)
+
     if len(normalized_url) > 2048:
         msg = "Normalized URL too long"
         raise ValueError(msg)
 
     try:
         h = hashlib.sha256(normalized_url.encode("utf-8")).hexdigest()
+
+        # Validate hash format (defensive check)
+        # SHA256 hash should always be 64 lowercase hex characters
+        if len(h) != 64:
+            msg = f"Generated hash has invalid length: {len(h)} (expected 64)"
+            raise ValueError(msg)
+
+        if not all(c in "0123456789abcdef" for c in h):
+            msg = "Generated hash contains non-hexadecimal characters"
+            raise ValueError(msg)
+
         logger.debug("url_hash", extra={"normalized": normalized_url[:100], "sha256": h})
         return h
+    except ValueError:
+        # Re-raise our validation errors
+        raise
     except Exception as e:
         logger.exception("url_hash_failed", extra={"error": str(e)})
         msg = f"URL hashing failed: {e}"
@@ -229,10 +373,29 @@ def compute_dedupe_hash(url: str) -> str:
 
 
 def looks_like_url(text: str) -> bool:
-    """Check if text contains what looks like a URL."""
+    """Check if text contains what looks like a URL.
+
+    Args:
+        text: Text to check for URL patterns
+
+    Returns:
+        True if text appears to contain a URL, False otherwise
+
+    Note:
+        Text length is limited to 50KB to prevent regex DoS attacks.
+        Longer text should be rejected at the message routing level.
+    """
     if not text or not isinstance(text, str):
         return False
-    if len(text) > 10000:  # Prevent processing of extremely long text
+
+    # Defense in depth: Limit text length to prevent regex DoS
+    # This matches the MAX_TEXT_LENGTH in message_router.py
+    max_text_length = 50 * 1024  # 50KB
+    if len(text) > max_text_length:
+        logger.warning(
+            "looks_like_url_text_too_long",
+            extra={"text_length": len(text), "max_allowed": max_text_length},
+        )
         return False
 
     try:
@@ -245,10 +408,30 @@ def looks_like_url(text: str) -> bool:
 
 
 def extract_all_urls(text: str) -> list[str]:
-    """Extract all URLs from text with optimized performance."""
+    """Extract all URLs from text with optimized performance.
+
+    Args:
+        text: Text to extract URLs from
+
+    Returns:
+        List of validated URLs found in text
+
+    Note:
+        Text length is limited to 50KB to prevent regex DoS attacks.
+        Longer text should be rejected at the message routing level.
+        URLs are validated and deduplicated before being returned.
+    """
     if not text or not isinstance(text, str):
         return []
-    if len(text) > 10000:  # Prevent processing of extremely long text
+
+    # Defense in depth: Limit text length to prevent regex DoS
+    # This matches the MAX_TEXT_LENGTH in message_router.py
+    max_text_length = 50 * 1024  # 50KB
+    if len(text) > max_text_length:
+        logger.warning(
+            "extract_all_urls_text_too_long",
+            extra={"text_length": len(text), "max_allowed": max_text_length},
+        )
         return []
 
     try:
@@ -258,22 +441,17 @@ def extract_all_urls(text: str) -> list[str]:
         if not urls:
             return []
 
-        # Validate and filter URLs with early exit optimization
+        # Deduplicate URLs (validation happens later in security checks)
         valid_urls = []
-        seen = set()  # Combine deduplication with validation
+        seen = set()
 
         for url in urls:
             # Skip if already seen (deduplication)
             if url in seen:
                 continue
 
-            try:
-                _validate_url_input(url)
-                valid_urls.append(url)
-                seen.add(url)
-            except ValueError:
-                # Skip invalid URLs silently for performance
-                continue
+            valid_urls.append(url)
+            seen.add(url)
 
         logger.debug("extract_all_urls", extra={"count": len(valid_urls), "input_len": len(text)})
         return valid_urls

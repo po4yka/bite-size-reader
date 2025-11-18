@@ -114,34 +114,29 @@ class ResponseFormatter:
         return True, ""
 
     def _validate_url(self, url: str) -> tuple[bool, str]:
-        """Validate URL for security."""
-        if not url or len(url) > self.MAX_URL_LENGTH:
-            return False, f"URL too long (max {self.MAX_URL_LENGTH} chars)"
+        """Validate URL for security using consolidated validation from url_utils.
 
-        # Basic URL validation
-        import re
+        This method wraps the comprehensive _validate_url_input() function from
+        app/core/url_utils.py, which provides:
+        - Length limits (RFC 2616)
+        - Dangerous content patterns
+        - Scheme validation (only http/https)
+        - SSRF protection (private IPs, loopback, link-local, etc.)
+        - Suspicious domain patterns
+        - Control characters and null bytes
 
-        # More permissive URL pattern that allows common URL characters
-        url_pattern = r"^https?://[^\s<>\"{}|\\^`]*$"
-        if not re.match(url_pattern, url):
-            return False, "Invalid URL format"
+        Returns:
+            tuple[bool, str]: (is_valid, error_message)
+        """
+        from app.core.url_utils import _validate_url_input
 
-        # Block suspicious URLs
-        suspicious_domains = [
-            "localhost",
-            "127.0.0.1",
-            "0.0.0.0",  # nosec B104 - This is a security check, not network binding
-            "file://",
-            "ftp://",
-            "javascript:",
-            "data:",
-        ]
-
-        for domain in suspicious_domains:
-            if domain in url.lower():
-                return False, f"Suspicious domain: {domain}"
-
-        return True, ""
+        try:
+            # Use consolidated validation from url_utils
+            _validate_url_input(url)
+            return True, ""
+        except ValueError as e:
+            # Validation failed - return error message
+            return False, str(e)
 
     async def _check_rate_limit(self) -> bool:
         """Ensure replies respect the minimum delay between Telegram messages."""

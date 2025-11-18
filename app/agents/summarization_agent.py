@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 import logging
 from dataclasses import dataclass
 from pathlib import Path
@@ -81,6 +83,7 @@ class SummarizationAgent(BaseAgent[SummarizationInput, SummarizationOutput]):
 
         corrections_applied: list[str] = []
         last_error = None
+        response_hashes: list[str] = []  # Track response hashes to detect ignored feedback
 
         for attempt in range(1, input_data.max_retries + 1):
             self.log_info(f"Summarization attempt {attempt}/{input_data.max_retries}")
@@ -98,6 +101,36 @@ class SummarizationAgent(BaseAgent[SummarizationInput, SummarizationOutput]):
                 if not summary_result:
                     last_error = "LLM returned no result"
                     continue
+
+                # Calculate response hash to detect if LLM ignores feedback
+                response_hash = self._calculate_response_hash(summary_result)
+
+                # Check if this is a duplicate response (LLM ignored feedback)
+                if response_hash in response_hashes:
+                    self.log_warning(
+                        f"Attempt {attempt}: LLM returned identical response to previous attempt. "
+                        f"Feedback may be ignored. Hash: {response_hash[:16]}"
+                    )
+                    corrections_applied.append(
+                        f"Attempt {attempt}: Duplicate response detected - LLM ignored feedback"
+                    )
+                    # Continue to validation anyway in case it was valid the first time
+
+                response_hashes.append(response_hash)
+
+                # If we have 3+ identical responses, abort early
+                if response_hashes.count(response_hash) >= 3:
+                    error_msg = (
+                        f"LLM repeatedly returned identical response ({response_hashes.count(response_hash)} times). "
+                        "Aborting as feedback is being ignored."
+                    )
+                    self.log_error(error_msg)
+                    return AgentResult.error_result(
+                        error_msg,
+                        attempts=attempt,
+                        corrections_attempted=corrections_applied,
+                        feedback_ignored=True,
+                    )
 
                 # Validate the summary
                 validation_result = await self.validator_agent.execute(
@@ -252,3 +285,21 @@ class SummarizationAgent(BaseAgent[SummarizationInput, SummarizationOutput]):
         prompt += "\nPlease generate a new summary that addresses ALL of these issues.\n"
 
         return prompt
+
+    def _calculate_response_hash(self, response: dict[str, Any]) -> str:
+        """Calculate a hash of the response to detect duplicates.
+
+        Args:
+            response: The LLM response dictionary
+
+        Returns:
+            SHA256 hash of the normalized response
+        """
+        try:
+            # Normalize response by sorting keys for consistent hashing
+            normalized = json.dumps(response, sort_keys=True, ensure_ascii=False)
+            return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
+        except Exception as e:
+            self.log_warning(f"Failed to calculate response hash: {e}")
+            # Return a random hash on error to avoid false positives
+            return hashlib.sha256(str(id(response)).encode()).hexdigest()

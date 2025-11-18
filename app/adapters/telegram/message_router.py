@@ -11,6 +11,8 @@ import time
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
+import httpx
+
 from app.adapters.telegram.task_manager import UserTaskManager
 from app.config import AppConfig
 from app.core.logging_utils import generate_correlation_id
@@ -20,6 +22,7 @@ from app.db.user_interactions import async_safe_update_user_interaction
 from app.models.telegram.telegram_models import TelegramMessage
 from app.security.file_validation import FileValidationError, SecureFileValidator
 from app.security.rate_limiter import RateLimitConfig, UserRateLimiter
+from app.utils.circuit_breaker import CircuitBreaker
 from app.utils.message_formatter import (
     create_progress_bar,
     format_completion_message,
@@ -33,6 +36,7 @@ if TYPE_CHECKING:
     from app.adapters.telegram.command_processor import CommandProcessor
     from app.adapters.telegram.forward_processor import ForwardProcessor
     from app.adapters.telegram.url_handler import URLHandler
+    from app.models.batch_processing import URLProcessingResult
 
 logger = logging.getLogger(__name__)
 
@@ -132,6 +136,28 @@ class MessageRouter:
                 message_key = (uid, chat_id or 0, message_id)
 
             text = telegram_message.get_effective_text() or ""
+
+            # CRITICAL: Validate text length to prevent memory exhaustion and regex DoS
+            # Limit to 50KB for text processing (prevents regex DoS and memory issues)
+            MAX_TEXT_LENGTH = 50 * 1024  # 50KB
+            if len(text) > MAX_TEXT_LENGTH:
+                logger.warning(
+                    "text_length_exceeded",
+                    extra={
+                        "uid": uid,
+                        "chat_id": chat_id,
+                        "text_length": len(text),
+                        "max_allowed": MAX_TEXT_LENGTH,
+                    },
+                )
+                await self.response_formatter.safe_reply(
+                    message,
+                    f"❌ Message too long ({len(text):,} characters). "
+                    f"Maximum allowed: {MAX_TEXT_LENGTH:,} characters. "
+                    "Please split into smaller messages or use a file upload.",
+                )
+                return
+
             text_signature = text.strip() if isinstance(text, str) else ""
             if message_key and self._is_duplicate_message(message_key, text_signature):
                 logger.info(
@@ -294,8 +320,17 @@ class MessageRouter:
             logger.exception("handler_error", extra={"cid": correlation_id})
             try:
                 self._audit("ERROR", "unhandled_error", {"cid": correlation_id, "error": str(e)})
-            except Exception:
-                pass
+            except Exception as audit_error:
+                # Log audit failure but don't fail the error handling
+                logger.error(
+                    "audit_logging_failed",
+                    extra={
+                        "cid": correlation_id,
+                        "original_error": str(e),
+                        "audit_error": str(audit_error),
+                        "audit_error_type": type(audit_error).__name__,
+                    },
+                )
             await self.response_formatter.safe_reply(
                 message,
                 f"An unexpected error occurred. Error ID: {correlation_id}. Please try again.",
@@ -638,15 +673,47 @@ class MessageRouter:
                 message, "An error occurred while processing the file."
             )
         finally:
-            # Clean up downloaded file
+            # Clean up downloaded file with retry logic
             if file_path:
-                try:
-                    self._file_validator.cleanup_file(file_path)
-                except Exception as e:
-                    logger.debug(
-                        "file_cleanup_error",
-                        extra={"error": str(e), "file_path": file_path, "cid": correlation_id},
-                    )
+                cleanup_attempts = 0
+                max_cleanup_attempts = 3
+                cleanup_success = False
+
+                while cleanup_attempts < max_cleanup_attempts and not cleanup_success:
+                    try:
+                        self._file_validator.cleanup_file(file_path)
+                        cleanup_success = True
+                    except PermissionError as e:
+                        cleanup_attempts += 1
+                        if cleanup_attempts >= max_cleanup_attempts:
+                            logger.error(
+                                "file_cleanup_permission_denied",
+                                extra={
+                                    "error": str(e),
+                                    "file_path": file_path,
+                                    "cid": correlation_id,
+                                    "attempts": cleanup_attempts,
+                                },
+                            )
+                        else:
+                            # Wait and retry for permission errors
+                            await asyncio.sleep(0.1 * cleanup_attempts)
+                    except FileNotFoundError:
+                        # File already deleted, this is fine
+                        cleanup_success = True
+                    except Exception as e:
+                        cleanup_attempts += 1
+                        logger.error(
+                            "file_cleanup_unexpected_error",
+                            extra={
+                                "error": str(e),
+                                "file_path": file_path,
+                                "cid": correlation_id,
+                                "error_type": type(e).__name__,
+                                "attempts": cleanup_attempts,
+                            },
+                        )
+                        break  # Don't retry unexpected errors
 
     async def _download_file(self, message: Any) -> str | None:
         """Download document file to temporary location."""
@@ -671,32 +738,88 @@ class MessageRouter:
             file_path: Path to text file containing URLs
 
         Returns:
-            List of URLs found in file
+            List of validated URLs found in file
 
         Raises:
             FileValidationError: If file validation fails
+
+        Security:
+            All URLs are validated using normalize_url() which:
+            - Checks for dangerous schemes (javascript:, file:, data:, etc.)
+            - Validates URL structure and hostname
+            - Blocks localhost, 127.0.0.1, and other suspicious domains
+            - Prevents SSRF attacks
         """
+        from app.core.url_utils import normalize_url
+
         # Use secure file validator to read file
         lines = self._file_validator.safe_read_text_file(file_path)
 
-        # Extract URLs from lines
+        # Extract and validate URLs from lines
         urls = []
-        for line in lines:
+        skipped_count = 0
+        for line_num, line in enumerate(lines, 1):
             line = line.strip()
-            # Basic URL validation - starts with http/https
-            if line and (line.startswith("http://") or line.startswith("https://")):
-                # Additional validation: check for suspicious patterns
-                if " " not in line and "\t" not in line:  # No spaces/tabs in URL
-                    urls.append(line)
-                else:
+
+            # Skip empty lines and comments
+            if not line or line.startswith("#"):
+                continue
+
+            # Basic format check - starts with http/https
+            if line.startswith("http://") or line.startswith("https://"):
+                # Check for suspicious patterns (whitespace in URL)
+                if " " in line or "\t" in line:
                     logger.warning(
                         "suspicious_url_skipped",
-                        extra={"url_preview": line[:50], "reason": "contains whitespace"},
+                        extra={
+                            "url_preview": line[:50],
+                            "reason": "contains whitespace",
+                            "line_num": line_num,
+                        },
                     )
+                    skipped_count += 1
+                    continue
+
+                # CRITICAL: Validate URL for security (prevents SSRF)
+                try:
+                    # normalize_url() performs comprehensive security validation:
+                    # - Blocks dangerous schemes (javascript:, file:, data:, etc.)
+                    # - Validates URL structure
+                    # - Checks for malicious patterns
+                    normalized = normalize_url(line)
+                    urls.append(normalized)
+                except ValueError as e:
+                    # URL failed security validation
+                    logger.warning(
+                        "invalid_url_in_file",
+                        extra={
+                            "url_preview": line[:50],
+                            "error": str(e),
+                            "line_num": line_num,
+                            "file_path": file_path,
+                        },
+                    )
+                    skipped_count += 1
+            elif line.startswith(("http", "www")):
+                # Possibly a URL without proper protocol
+                logger.warning(
+                    "malformed_url_skipped",
+                    extra={
+                        "url_preview": line[:50],
+                        "reason": "invalid protocol",
+                        "line_num": line_num,
+                    },
+                )
+                skipped_count += 1
 
         logger.info(
             "file_parsed_successfully",
-            extra={"file_path": file_path, "urls_found": len(urls), "lines_read": len(lines)},
+            extra={
+                "file_path": file_path,
+                "urls_found": len(urls),
+                "urls_skipped": skipped_count,
+                "lines_read": len(lines),
+            },
         )
 
         return urls
@@ -714,69 +837,176 @@ class MessageRouter:
         total = len(urls)
 
         # Use semaphore to limit concurrent processing (prevent overwhelming external APIs)
-        # Note: Combined with batch processing, this limits both memory usage and API load
-        # Semaphore should allow at least as many concurrent URLs as batch size
-        semaphore = asyncio.Semaphore(min(20, total))  # Max 20 concurrent URLs
+        # CRITICAL: Limit concurrent tasks to prevent memory exhaustion
+        # Each task can use 10-50MB (content + LLM API calls)
+        # 5 concurrent × 50MB = 250MB max (safe for 2GB servers)
+        # Previous value of 20 could cause 1GB+ spikes and OOM kills
+        semaphore = asyncio.Semaphore(min(5, total))  # Max 5 concurrent URLs
 
-        # Circuit breaker: if too many failures in a chunk, reduce concurrency
-        max_concurrent_failures = min(
-            10, total // 3
-        )  # Allow up to 1/3 failures before reducing concurrency
+        # Circuit breaker: stop processing if too many failures indicate service issues
+        # Threshold: Allow up to 1/3 failures before opening circuit
+        failure_threshold = min(10, max(3, total // 3))
+        circuit_breaker = CircuitBreaker(
+            failure_threshold=failure_threshold,
+            timeout=60.0,  # Wait 60s before testing recovery
+            success_threshold=3,  # Need 3 successes to close circuit
+        )
 
         async def process_single_url(
-            url: str, progress_tracker: ProgressTracker
+            url: str, progress_tracker: ProgressTracker, max_retries: int = 3
         ) -> tuple[str, bool, str]:
-            """Process a single URL and return (url, success, error_message)."""
+            """Process a single URL with retry logic and return (url, success, error_message).
+
+            Args:
+                url: URL to process
+                progress_tracker: Progress tracker for batch updates
+                max_retries: Maximum number of retry attempts (default: 3)
+
+            Returns:
+                Tuple of (url, success, error_message)
+            """
+            from app.models.batch_processing import URLProcessingResult
+
             async with semaphore:
+                # Check circuit breaker before processing
+                if not circuit_breaker.can_proceed():
+                    error_msg = "Circuit breaker open - service unavailable"
+                    logger.warning(
+                        "circuit_breaker_blocked_request",
+                        extra={
+                            "url": url,
+                            "breaker_stats": circuit_breaker.get_stats(),
+                        },
+                    )
+                    breaker_result: tuple[str, bool, str] = (url, False, error_msg)
+                    # Don't increment progress here - will be done in finally block
+                    try:
+                        return breaker_result
+                    finally:
+                        await progress_tracker.increment_and_update()
+
                 per_link_cid = generate_correlation_id()
                 logger.info(
                     "processing_url_from_file",
                     extra={"url": url, "cid": per_link_cid},
                 )
 
+                final_result: tuple[str, bool, str] | None = None
+
                 try:
-                    # Add timeout protection for individual URL processing
-                    success = await asyncio.wait_for(
-                        self._process_url_silently(message, url, per_link_cid, interaction_id),
-                        timeout=600,  # 10 minute timeout per URL
-                    )
+                    # Retry logic with exponential backoff
+                    for attempt in range(1, max_retries + 1):
+                        try:
+                            # Process URL with timeout
+                            result = await asyncio.wait_for(
+                                self._process_url_silently(
+                                    message, url, per_link_cid, interaction_id
+                                ),
+                                timeout=600,  # 10 minute timeout per URL
+                            )
 
-                    # Update progress after completion (success or failure)
-                    await progress_tracker.increment_and_update()
+                            # Check if successful
+                            if result.success:
+                                logger.debug(
+                                    "process_single_url_success",
+                                    extra={
+                                        "url": url,
+                                        "cid": per_link_cid,
+                                        "attempt": attempt,
+                                        "processing_time_ms": result.processing_time_ms,
+                                    },
+                                )
+                                circuit_breaker.record_success()  # Record success for circuit breaker
+                                final_result = (url, True, "")
+                                return final_result
 
-                    if success:
-                        logger.debug(
-                            "process_single_url_success",
-                            extra={"url": url, "cid": per_link_cid, "result": "success"},
-                        )
-                        return url, True, ""
-                    else:
-                        logger.debug(
-                            "process_single_url_failure",
-                            extra={"url": url, "cid": per_link_cid, "result": "failed"},
-                        )
-                        return url, False, "URL processing failed"
-                except asyncio.TimeoutError:
-                    error_msg = "Timeout processing URL after 10 minutes"
-                    logger.error(
-                        "url_processing_timeout",
-                        extra={"url": url, "cid": per_link_cid, "error": error_msg},
-                    )
-                    # Update progress even on timeout
-                    await progress_tracker.increment_and_update()
-                    return url, False, error_msg
+                            # Check if retry is possible
+                            if not result.retry_possible or attempt >= max_retries:
+                                logger.debug(
+                                    "process_single_url_failure_final",
+                                    extra={
+                                        "url": url,
+                                        "cid": per_link_cid,
+                                        "attempt": attempt,
+                                        "error_type": result.error_type,
+                                        "retry_possible": result.retry_possible,
+                                    },
+                                )
+                                circuit_breaker.record_failure()  # Record failure for circuit breaker
+                                error_msg = result.error_message or "URL processing failed"
+                                final_result = (url, False, error_msg)
+                                return final_result
+
+                            # Retry is possible - wait with exponential backoff
+                            wait_time = 2 ** (attempt - 1)  # 1s, 2s, 4s
+                            logger.info(
+                                "retrying_url_processing",
+                                extra={
+                                    "url": url,
+                                    "cid": per_link_cid,
+                                    "attempt": attempt,
+                                    "max_retries": max_retries,
+                                    "wait_time": wait_time,
+                                    "error_type": result.error_type,
+                                },
+                            )
+                            await asyncio.sleep(wait_time)
+
+                        except asyncio.TimeoutError:
+                            error_msg = (
+                                f"Timeout after 10 minutes (attempt {attempt}/{max_retries})"
+                            )
+                            logger.error(
+                                "url_processing_timeout",
+                                extra={"url": url, "cid": per_link_cid, "attempt": attempt},
+                            )
+
+                            # Retry timeouts if we have attempts left
+                            if attempt < max_retries:
+                                wait_time = 2 ** (attempt - 1)
+                                logger.info(
+                                    "retrying_after_timeout",
+                                    extra={"url": url, "wait_time": wait_time},
+                                )
+                                await asyncio.sleep(wait_time)
+                                continue
+                            else:
+                                circuit_breaker.record_failure()  # Record timeout as failure
+                                final_result = (url, False, error_msg)
+                                return final_result
+
+                        except Exception as e:
+                            error_msg = f"{type(e).__name__}: {str(e)}"
+                            logger.error(
+                                "url_processing_exception",
+                                extra={
+                                    "url": url,
+                                    "cid": per_link_cid,
+                                    "attempt": attempt,
+                                    "error_type": type(e).__name__,
+                                },
+                            )
+
+                            # Don't retry unexpected exceptions
+                            circuit_breaker.record_failure()  # Record exception as failure
+                            final_result = (url, False, error_msg)
+                            return final_result
+
+                    # Should not reach here, but handle it
+                    error_msg = f"Processing failed after {max_retries} attempts"
+                    circuit_breaker.record_failure()  # Record exhausted retries as failure
+                    final_result = (url, False, error_msg)
+                    return final_result
+
                 except asyncio.CancelledError:
-                    # Re-raise cancellation to stop all processing
+                    # Don't update progress on cancellation, just re-raise
                     raise
-                except Exception as e:
-                    error_msg = str(e)
-                    logger.error(
-                        "url_processing_failed",
-                        extra={"url": url, "cid": per_link_cid, "error": error_msg},
-                    )
-                    # Update progress even on failure
-                    await progress_tracker.increment_and_update()
-                    return url, False, error_msg
+
+                finally:
+                    # CRITICAL FIX: Single progress update in finally block
+                    # This guarantees exactly-once semantics and prevents race conditions
+                    if final_result is not None:  # Only update if processing completed
+                        await progress_tracker.increment_and_update()
 
         # Process URLs in parallel with controlled concurrency and memory optimization
         # For very large batches (>30 URLs), process in chunks to manage memory
@@ -803,9 +1033,11 @@ class MessageRouter:
 
         async def process_batches():
             """Process URL batches with progress tracking."""
+            from app.models.batch_processing import FailedURLDetail
+
             batch_successful = 0
             batch_failed = 0
-            batch_failed_urls = []
+            batch_failed_urls: list[FailedURLDetail] = []
 
             for batch_start in range(0, total, batch_size):
                 batch_end = min(batch_start + batch_size, total)
@@ -849,7 +1081,13 @@ class MessageRouter:
                             extra={"error": str(result), "cid": correlation_id},
                         )
                         batch_failed_urls.append(
-                            f"Unknown URL (task exception: {type(result).__name__})"
+                            FailedURLDetail(
+                                url="Unknown URL",
+                                error_type=type(result).__name__,
+                                error_message=str(result),
+                                retry_recommended=False,
+                                attempts=1,
+                            )
                         )
                     elif isinstance(result, tuple) and len(result) == 3:
                         url, success, error_msg = result
@@ -857,7 +1095,35 @@ class MessageRouter:
                             batch_successful += 1
                         else:
                             batch_failed += 1
-                            batch_failed_urls.append(url)
+                            # Classify error type from error message
+                            error_type = "unknown"
+                            retry_recommended = False
+                            if "timeout" in error_msg.lower():
+                                error_type = "timeout"
+                                retry_recommended = True
+                            elif "circuit breaker" in error_msg.lower():
+                                error_type = "circuit_breaker"
+                                retry_recommended = True
+                            elif (
+                                "network" in error_msg.lower() or "connection" in error_msg.lower()
+                            ):
+                                error_type = "network"
+                                retry_recommended = True
+                            elif (
+                                "validation" in error_msg.lower() or "invalid" in error_msg.lower()
+                            ):
+                                error_type = "validation"
+                                retry_recommended = False
+
+                            batch_failed_urls.append(
+                                FailedURLDetail(
+                                    url=url,
+                                    error_type=error_type,
+                                    error_message=error_msg,
+                                    retry_recommended=retry_recommended,
+                                    attempts=3,  # Assume max retries
+                                )
+                            )
                             if error_msg:
                                 logger.debug(
                                     "url_processing_failed_detail",
@@ -870,7 +1136,15 @@ class MessageRouter:
                             batch_successful += 1
                         else:
                             batch_failed += 1
-                            batch_failed_urls.append(url)
+                            batch_failed_urls.append(
+                                FailedURLDetail(
+                                    url=url,
+                                    error_type="unknown",
+                                    error_message="No error details (legacy format)",
+                                    retry_recommended=True,
+                                    attempts=1,
+                                )
+                            )
                             logger.warning(
                                 "legacy_result_format", extra={"url": url, "cid": correlation_id}
                             )
@@ -886,7 +1160,13 @@ class MessageRouter:
                             },
                         )
                         batch_failed_urls.append(
-                            f"Unknown URL (unexpected result type: {type(result).__name__})"
+                            FailedURLDetail(
+                                url="Unknown URL",
+                                error_type="unexpected_result",
+                                error_message=f"Unexpected result type: {type(result).__name__}",
+                                retry_recommended=False,
+                                attempts=1,
+                            )
                         )
 
             # Small delay between batches to prevent overwhelming external APIs
@@ -896,8 +1176,10 @@ class MessageRouter:
             return batch_successful, batch_failed, batch_failed_urls
 
         # Run batch processing and progress updates concurrently
+        from app.models.batch_processing import FailedURLDetail
+
         progress_task = asyncio.create_task(progress_tracker.process_update_queue())
-        batch_result: tuple[int, int, list[str]] | Exception
+        batch_result: tuple[int, int, list[FailedURLDetail]] | Exception
         try:
             batch_result = await process_batches()
         except asyncio.CancelledError:
@@ -917,6 +1199,8 @@ class MessageRouter:
                 )
 
         if isinstance(batch_result, Exception):
+            from app.models.batch_processing import FailedURLDetail
+
             logger.error(
                 "batch_processing_failed",
                 extra={"error": str(batch_result), "cid": correlation_id},
@@ -925,12 +1209,22 @@ class MessageRouter:
             successful = 0
             failed = total
             completed = total
-            failed_urls = [f"Batch processing failed: {str(batch_result)}"]
+            failed_urls: list[FailedURLDetail] = [
+                FailedURLDetail(
+                    url="batch",
+                    error_type=type(batch_result).__name__,
+                    error_message=f"Batch processing failed: {str(batch_result)}",
+                    retry_recommended=False,
+                    attempts=1,
+                )
+            ]
         elif isinstance(batch_result, tuple) and len(batch_result) == 3:
             # Unpack the results from process_batches()
             successful, failed, failed_urls = batch_result
             completed = successful + failed
         else:
+            from app.models.batch_processing import FailedURLDetail
+
             # Unexpected result type
             logger.error(
                 "unexpected_batch_result_type",
@@ -939,7 +1233,15 @@ class MessageRouter:
             successful = 0
             failed = total
             completed = total
-            failed_urls = [f"Unexpected batch result type: {type(batch_result).__name__}"]
+            failed_urls = [
+                FailedURLDetail(
+                    url="batch",
+                    error_type="unexpected_result",
+                    error_message=f"Unexpected batch result type: {type(batch_result).__name__}",
+                    retry_recommended=False,
+                    attempts=1,
+                )
+            ]
 
         # Final progress update to ensure 100% completion is shown
         try:
@@ -965,6 +1267,34 @@ class MessageRouter:
             context="links",
             show_stats=True,
         )
+
+        # Add error breakdown if there are failures with details
+        if failed_urls and isinstance(failed_urls[0], FailedURLDetail):
+            # Group errors by type
+            error_breakdown: dict[str, list[FailedURLDetail]] = {}
+            for failed_url in failed_urls:
+                error_breakdown.setdefault(failed_url.error_type, []).append(failed_url)
+
+            # Build error summary
+            error_summary_parts = ["\n\n**Failure Breakdown:**"]
+            for error_type, urls in error_breakdown.items():  # type: ignore[assignment]
+                retry_note = " (retry recommended)" if urls[0].retry_recommended else ""  # type: ignore[attr-defined]
+                error_summary_parts.append(f"\n• **{error_type}**: {len(urls)} URL(s){retry_note}")
+
+            # Show first 3 failed URLs with details
+            error_summary_parts.append("\n\n**Failed URLs (first 3):**")
+            for i, failed_url in enumerate(failed_urls[:3], 1):
+                url_display = (
+                    failed_url.url if len(failed_url.url) <= 60 else f"{failed_url.url[:57]}..."
+                )
+                error_display = (
+                    failed_url.error_message
+                    if len(failed_url.error_message) <= 100
+                    else f"{failed_url.error_message[:97]}..."
+                )
+                error_summary_parts.append(f"\n{i}. {url_display}\n   Error: {error_display}")
+
+            completion_message += "".join(error_summary_parts)
 
         await self.response_formatter.safe_reply(message, completion_message)
 
@@ -1015,12 +1345,19 @@ class MessageRouter:
         url: str,
         correlation_id: str,
         interaction_id: int,
-    ) -> bool:
+    ) -> URLProcessingResult:
         """Process a single URL without sending Telegram responses.
 
         Returns:
-            bool: True if processing succeeded, False if it failed
+            URLProcessingResult: Detailed result with error context
         """
+        import time
+
+        from app.core.async_utils import raise_if_cancelled
+        from app.models.batch_processing import URLProcessingResult
+
+        start_time = time.time()
+
         try:
             # Call the URL processor's handle_url_flow method with silent=True
             await self._url_processor.handle_url_flow(
@@ -1030,13 +1367,45 @@ class MessageRouter:
                 interaction_id=interaction_id,
                 silent=True,
             )
-            return True
-        except Exception as e:
+            processing_time = (time.time() - start_time) * 1000  # Convert to ms
+            return URLProcessingResult.success_result(url, processing_time_ms=processing_time)
+
+        except asyncio.TimeoutError as e:
+            raise_if_cancelled(e)
             logger.error(
-                "url_processing_failed",
+                "url_processing_timeout",
                 extra={"url": url, "cid": correlation_id, "error": str(e)},
             )
-            return False
+            return URLProcessingResult.timeout_result(url, timeout_sec=600)
+
+        except (httpx.NetworkError, httpx.ConnectError, httpx.TimeoutException) as e:
+            raise_if_cancelled(e)
+            logger.error(
+                "url_processing_network_error",
+                extra={"url": url, "cid": correlation_id, "error": str(e)},
+            )
+            return URLProcessingResult.network_error_result(url, e)
+
+        except ValueError as e:
+            raise_if_cancelled(e)
+            logger.error(
+                "url_processing_validation_error",
+                extra={"url": url, "cid": correlation_id, "error": str(e)},
+            )
+            return URLProcessingResult.validation_error_result(url, e)
+
+        except Exception as e:
+            raise_if_cancelled(e)
+            logger.error(
+                "url_processing_failed",
+                extra={
+                    "url": url,
+                    "cid": correlation_id,
+                    "error": str(e),
+                    "error_type": type(e).__name__,
+                },
+            )
+            return URLProcessingResult.generic_error_result(url, e)
 
     async def _send_progress_update(
         self, message: Any, current: int, total: int, message_id: int | None = None

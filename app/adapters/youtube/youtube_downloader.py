@@ -265,8 +265,20 @@ class YouTubeDownloader:
                         break
                     except NoTranscriptFound:
                         continue
-            except Exception:
-                pass
+            except (TranscriptsDisabled, VideoUnavailable):
+                # Re-raise these to be handled by outer try-except
+                raise
+            except Exception as e:
+                # Log unexpected errors but continue to auto-generated fallback
+                logger.warning(
+                    "youtube_transcript_manual_search_error",
+                    extra={
+                        "video_id": video_id,
+                        "error": str(e),
+                        "error_type": type(e).__name__,
+                        "cid": correlation_id,
+                    },
+                )
 
             # Fallback to auto-generated if no manual transcript found
             if not transcript:

@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import re
@@ -122,7 +123,7 @@ class ContentExtractor:
                 "pure_extraction_low_value",
                 extra={"cid": correlation_id, "reason": quality_issue.reason},
             )
-            raise ValueError(error_msg)
+            raise ValueError(error_msg) from None
 
         # Validate crawl success
         has_markdown = bool(crawl.content_markdown and crawl.content_markdown.strip())
@@ -147,11 +148,13 @@ class ContentExtractor:
                     )
 
                     return content_text, content_source, metadata
-            except Exception:
+            except Exception as e:
+                raise_if_cancelled(e)
+                # Salvage attempt failed, continue to error handling
                 pass
 
             error_msg = crawl.error_text or "Firecrawl extraction failed"
-            raise ValueError(f"Extraction failed: {error_msg}")
+            raise ValueError(f"Extraction failed: {error_msg}") from None
 
         # Process successful crawl
         if crawl.content_markdown and crawl.content_markdown.strip():
@@ -240,6 +243,7 @@ class ContentExtractor:
         try:
             self.db.update_request_lang_detected(req_id, detected)
         except Exception as e:  # noqa: BLE001
+            raise_if_cancelled(e)
             logger.error("persist_lang_detected_error", extra={"error": str(e)})
 
         return req_id, content_text, content_source, detected
@@ -247,50 +251,107 @@ class ContentExtractor:
     async def _handle_request_dedupe_or_create(
         self, message: Any, url_text: str, norm: str, dedupe: str, correlation_id: str | None
     ) -> int:
-        """Handle request deduplication or creation."""
+        """Handle request deduplication or creation with race condition protection.
+
+        This method implements proper handling for concurrent requests with the same URL.
+        Uses optimistic concurrency: try to create, fall back to fetch on collision.
+
+        Returns:
+            Request ID (either existing or newly created)
+        """
         self._upsert_sender_metadata(message)
 
-        existing_req = await self.db.async_get_request_by_dedupe_hash(dedupe)
-        if not isinstance(existing_req, Mapping):
-            getter = getattr(self.db, "get_request_by_dedupe_hash", None)
-            existing_req = getter(dedupe) if callable(getter) else None
+        # Optimistic approach: Try to create first, handle collision if it occurs
+        # This is more efficient than always checking first (avoids extra DB query)
+        try:
+            # Attempt to create new request
+            req_id = self._create_new_request(message, url_text, norm, dedupe, correlation_id)
 
-        if isinstance(existing_req, Mapping):
-            existing_req = dict(existing_req)
-
-        if existing_req:
-            req_id = int(existing_req["id"])  # reuse existing request
+            # If we get here, creation succeeded (new URL)
             self._audit(
                 "INFO",
-                "url_dedupe_hit",
+                "url_request_created",
                 {"request_id": req_id, "hash": dedupe, "url": url_text, "cid": correlation_id},
             )
-            if correlation_id:
-                try:
-                    self.db.update_request_correlation_id(req_id, correlation_id)
-                except Exception as e:  # noqa: BLE001
-                    logger.error(
-                        "persist_cid_error", extra={"error": str(e), "cid": correlation_id}
-                    )
             return req_id
-        else:
-            # Create new request
-            return self._create_new_request(message, url_text, norm, dedupe, correlation_id)
+
+        except Exception as create_error:
+            # If creation failed due to race condition, fetch the existing request
+            # This handles the case where another thread created the request between
+            # our check and insert
+            logger.debug(
+                "url_request_creation_failed_fetching_existing",
+                extra={
+                    "error": str(create_error),
+                    "error_type": type(create_error).__name__,
+                    "cid": correlation_id,
+                },
+            )
+
+            # Fetch existing request by dedupe hash
+            existing_req = await self.db.async_get_request_by_dedupe_hash(dedupe)
+            if not isinstance(existing_req, Mapping):
+                getter = getattr(self.db, "get_request_by_dedupe_hash", None)
+                existing_req = getter(dedupe) if callable(getter) else None
+
+            if isinstance(existing_req, Mapping):
+                existing_req = dict(existing_req)
+
+            if existing_req:
+                req_id = int(existing_req["id"])
+                self._audit(
+                    "INFO",
+                    "url_dedupe_hit_after_race",
+                    {
+                        "request_id": req_id,
+                        "hash": dedupe,
+                        "url": url_text,
+                        "cid": correlation_id,
+                    },
+                )
+
+                # Update correlation ID for the existing request
+                if correlation_id:
+                    try:
+                        self.db.update_request_correlation_id(req_id, correlation_id)
+                    except Exception as e:  # noqa: BLE001
+                        logger.error(
+                            "persist_cid_error", extra={"error": str(e), "cid": correlation_id}
+                        )
+                return req_id
+
+            # If we still can't find existing request, something is wrong
+            # Re-raise the original error
+            logger.error(
+                "url_request_race_condition_unresolved",
+                extra={
+                    "error": str(create_error),
+                    "dedupe_hash": dedupe,
+                    "cid": correlation_id,
+                },
+            )
+            raise create_error
 
     def _create_new_request(
         self, message: Any, url_text: str, norm: str, dedupe: str, correlation_id: str | None
     ) -> int:
         """Create a new request in the database."""
+        from app.core.validation import (
+            safe_message_id,
+            safe_telegram_chat_id,
+            safe_telegram_user_id,
+        )
+
         chat_obj = getattr(message, "chat", None)
         chat_id_raw = getattr(chat_obj, "id", 0) if chat_obj is not None else None
-        chat_id = int(chat_id_raw) if chat_id_raw is not None else None
+        chat_id = safe_telegram_chat_id(chat_id_raw, field_name="chat_id")
 
         from_user_obj = getattr(message, "from_user", None)
         user_id_raw = getattr(from_user_obj, "id", 0) if from_user_obj is not None else None
-        user_id = int(user_id_raw) if user_id_raw is not None else None
+        user_id = safe_telegram_user_id(user_id_raw, field_name="user_id")
 
         msg_id_raw = getattr(message, "id", getattr(message, "message_id", 0))
-        input_message_id = int(msg_id_raw) if msg_id_raw is not None else None
+        input_message_id = safe_message_id(msg_id_raw, field_name="message_id")
 
         req_id = self.db.create_request(
             type_="url",
@@ -310,21 +371,18 @@ class ContentExtractor:
         try:
             self._persist_message_snapshot(req_id, message)
         except Exception as e:  # noqa: BLE001
+            raise_if_cancelled(e)
             logger.error("snapshot_error", extra={"error": str(e), "cid": correlation_id})
 
         return req_id
 
     def _upsert_sender_metadata(self, message: Any) -> None:
         """Persist sender user/chat metadata for the interaction."""
-
-        def _coerce_int(value: Any) -> int | None:
-            try:
-                return int(value) if value is not None else None
-            except (TypeError, ValueError):
-                return None
+        from app.core.validation import safe_telegram_chat_id, safe_telegram_user_id
 
         chat_obj = getattr(message, "chat", None)
-        chat_id = _coerce_int(getattr(chat_obj, "id", None) if chat_obj is not None else None)
+        chat_id_raw = getattr(chat_obj, "id", None) if chat_obj is not None else None
+        chat_id = safe_telegram_chat_id(chat_id_raw, field_name="chat_id")
         if chat_id is not None:
             chat_type = getattr(chat_obj, "type", None)
             chat_title = getattr(chat_obj, "title", None)
@@ -343,9 +401,8 @@ class ContentExtractor:
                 )
 
         from_user_obj = getattr(message, "from_user", None)
-        user_id = _coerce_int(
-            getattr(from_user_obj, "id", None) if from_user_obj is not None else None
-        )
+        user_id_raw = getattr(from_user_obj, "id", None) if from_user_obj is not None else None
+        user_id = safe_telegram_user_id(user_id_raw, field_name="user_id")
         if user_id is not None:
             username = getattr(from_user_obj, "username", None)
             try:
@@ -665,7 +722,7 @@ class ContentExtractor:
                 silent,
             )
             failure_reason = crawl.error_text or "Firecrawl extraction failed"
-            raise ValueError(f"Firecrawl extraction failed: {failure_reason}")
+            raise ValueError(f"Firecrawl extraction failed: {failure_reason}") from None
 
         # Process successful crawl
         return await self._process_successful_crawl(message, crawl, correlation_id, silent)
@@ -808,19 +865,34 @@ class ContentExtractor:
             "Accept-Language": "ru,en-US;q=0.9,en;q=0.8",
         }
         timeout = max(5, int(getattr(self.cfg.runtime, "request_timeout_sec", 30)))
+        overall_timeout = timeout + 5  # Add buffer for connection setup/teardown
+
         try:
-            async with httpx.AsyncClient(follow_redirects=True, timeout=timeout) as client:
-                resp = await client.get(url, headers=headers)
-                ctype = resp.headers.get("content-type", "").lower()
-                if resp.status_code != 200 or "text/html" not in ctype:
-                    return None
-                html = resp.text or ""
-                # Validate that extracted text is sufficiently long to be useful
-                text_preview = html_to_text(html)
-                if len(text_preview) < 400:
-                    return None
-                return html
-        except Exception:
+            # Wrap entire operation in timeout to prevent indefinite hangs
+            async with asyncio.timeout(overall_timeout):
+                async with httpx.AsyncClient(follow_redirects=True, timeout=timeout) as client:
+                    resp = await client.get(url, headers=headers)
+                    ctype = resp.headers.get("content-type", "").lower()
+                    if resp.status_code != 200 or "text/html" not in ctype:
+                        return None
+                    html = resp.text or ""
+                    # Validate that extracted text is sufficiently long to be useful
+                    text_preview = html_to_text(html)
+                    if len(text_preview) < 400:
+                        return None
+                    return html
+        except TimeoutError:
+            logger.warning(
+                "direct_html_salvage_timeout",
+                extra={"url": url, "timeout": overall_timeout},
+            )
+            return None
+        except Exception as e:
+            raise_if_cancelled(e)
+            logger.debug(
+                "direct_html_salvage_failed",
+                extra={"url": url, "error": str(e), "error_type": type(e).__name__},
+            )
             return None
 
     async def _process_successful_crawl(

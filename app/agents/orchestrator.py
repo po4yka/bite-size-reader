@@ -226,7 +226,7 @@ class AgentOrchestrator:
                 f"[Orchestrator] Extraction failed: {extraction_result.error}",
                 extra={"correlation_id": correlation_id},
             )
-            raise Exception(f"Content extraction failed: {extraction_result.error}")
+            raise Exception(f"Content extraction failed: {extraction_result.error}") from None
 
         extracted_output = extraction_result.output
         self.logger.info(
@@ -255,7 +255,7 @@ class AgentOrchestrator:
                 f"[Orchestrator] Summarization failed: {summarization_result.error}",
                 extra={"correlation_id": correlation_id},
             )
-            raise Exception(f"Summarization failed: {summarization_result.error}")
+            raise Exception(f"Summarization failed: {summarization_result.error}") from None
 
         summary_output = summarization_result.output
         self.logger.info(
@@ -527,7 +527,7 @@ class AgentOrchestrator:
         # All attempts exhausted
         error_msg = f"Pipeline failed after {retry_config.max_attempts} attempts: {last_error}"
         logger.error(error_msg, extra={"correlation_id": input_data.correlation_id})
-        raise Exception(error_msg)
+        raise Exception(error_msg) from None
 
     def _calculate_retry_delay(
         self, attempt: int, strategy: RetryStrategy, config: RetryConfig

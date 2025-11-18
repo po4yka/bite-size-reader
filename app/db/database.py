@@ -201,7 +201,129 @@ class Database:
         if last_error:
             raise last_error
         msg = f"Database operation {operation_name} failed after {DB_MAX_RETRIES} retries"
-        raise RuntimeError(msg)
+        raise RuntimeError(msg) from last_error
+
+    async def _safe_db_transaction(
+        self,
+        operation: Any,
+        *args: Any,
+        timeout: float = DB_OPERATION_TIMEOUT,
+        operation_name: str = "database_transaction",
+        **kwargs: Any,
+    ) -> Any:
+        """Execute database operation within an explicit transaction with rollback.
+
+        This method wraps database operations in an atomic transaction, ensuring
+        that all changes are either committed together or rolled back on error.
+
+        Args:
+            operation: The database operation to execute
+            *args: Positional arguments for the operation
+            timeout: Timeout in seconds (default: DB_OPERATION_TIMEOUT)
+            operation_name: Name for logging purposes
+            **kwargs: Keyword arguments for the operation
+
+        Returns:
+            Result of the operation
+
+        Raises:
+            asyncio.TimeoutError: If operation times out
+            peewee.OperationalError: If database is locked or busy after retries
+            peewee.IntegrityError: If constraint violation occurs
+            Exception: Other database errors
+
+        """
+        retries = 0
+        last_error = None
+
+        while retries <= DB_MAX_RETRIES:
+            try:
+                async with asyncio.timeout(timeout):
+                    async with self._db_lock:
+                        # Execute operation within explicit transaction
+                        def _execute_in_transaction():
+                            with self._database.atomic() as txn:
+                                try:
+                                    # Transaction commits automatically if no exception
+                                    return operation(*args, **kwargs)
+                                except Exception:
+                                    # Explicit rollback on any error
+                                    txn.rollback()
+                                    raise
+
+                        return await asyncio.to_thread(_execute_in_transaction)
+
+            except TimeoutError:
+                self._logger.exception(
+                    "db_transaction_timeout",
+                    extra={
+                        "operation": operation_name,
+                        "timeout": timeout,
+                        "retries": retries,
+                    },
+                )
+                raise
+
+            except peewee.OperationalError as e:
+                last_error = e
+                error_msg = str(e).lower()
+
+                if "locked" in error_msg or "busy" in error_msg:
+                    if retries < DB_MAX_RETRIES:
+                        retries += 1
+                        wait_time = 0.1 * (2**retries)  # Exponential backoff
+                        self._logger.warning(
+                            "db_transaction_locked_retrying",
+                            extra={
+                                "operation": operation_name,
+                                "retry": retries,
+                                "max_retries": DB_MAX_RETRIES,
+                                "wait_time": wait_time,
+                                "error": str(e),
+                            },
+                        )
+                        await asyncio.sleep(wait_time)
+                        continue
+
+                self._logger.exception(
+                    "db_transaction_operational_error",
+                    extra={
+                        "operation": operation_name,
+                        "retries": retries,
+                        "error": str(e),
+                    },
+                )
+                raise
+
+            except peewee.IntegrityError as e:
+                # Constraint violations should not be retried
+                self._logger.exception(
+                    "db_transaction_integrity_error",
+                    extra={
+                        "operation": operation_name,
+                        "error": str(e),
+                    },
+                )
+                raise
+
+            except Exception as e:
+                # Unexpected error
+                self._logger.exception(
+                    "db_transaction_unexpected_error",
+                    extra={
+                        "operation": operation_name,
+                        "retries": retries,
+                        "error": str(e),
+                        "error_type": type(e).__name__,
+                    },
+                )
+                raise
+
+        # Should not reach here, but handle it anyway
+        if last_error:
+            raise last_error
+        msg = f"Database transaction {operation_name} failed after {DB_MAX_RETRIES} retries"
+        raise RuntimeError(msg) from last_error
 
     @contextlib.contextmanager
     def connect(self) -> Iterator[sqlite3.Connection]:
@@ -251,6 +373,16 @@ class Database:
 
     @staticmethod
     def _decode_json_field(value: Any) -> tuple[Any | None, str | None]:
+        """Decode JSON field with security validation.
+
+        Args:
+            value: The value to decode (string, bytes, dict, list, etc.)
+
+        Returns:
+            Tuple of (decoded_value, error_message)
+        """
+        from app.core.json_depth_validator import safe_json_parse, validate_json_structure
+
         if value is None:
             return None, None
         if isinstance(value, memoryview):
@@ -260,20 +392,38 @@ class Database:
                 value = value.decode("utf-8")
             except Exception:
                 return None, "decode_error"
+
+        # If already a dict/list, validate structure
         if isinstance(value, dict | list):
+            valid, error = validate_json_structure(value)
+            if not valid:
+                return None, error
             return value, None
+
         if isinstance(value, str):
             stripped = value.strip()
             if not stripped:
                 return None, None
-            try:
-                return json.loads(stripped), None
-            except json.JSONDecodeError as exc:
-                return None, f"invalid_json:{exc.msg}"
+
+            # Use safe_json_parse with validation
+            parsed, error = safe_json_parse(
+                stripped,
+                max_size=10_000_000,  # 10 MB
+                max_depth=20,
+                max_array_length=10_000,
+                max_dict_keys=1_000,
+            )
+            if error:
+                return None, error
+            return parsed, None
+
+        # For other types, validate after conversion
         try:
             json.dumps(value)
         except (TypeError, ValueError):
             return None, "unsupported_type"
+
+        # If it's a valid JSON-serializable value, return it
         return value, None
 
     @staticmethod
