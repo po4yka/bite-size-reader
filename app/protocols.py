@@ -325,3 +325,60 @@ class RateLimiter(Protocol):
 
         """
         ...
+
+
+class ContentFetcher(Protocol):
+    """Protocol for content extraction from URLs."""
+
+    async def extract_content_pure(
+        self,
+        url: str,
+        correlation_id: str | None = None,
+    ) -> tuple[str, str, dict[str, Any]]:
+        """Extract content from a URL without message dependencies.
+
+        Args:
+            url: URL to extract content from.
+            correlation_id: Optional correlation ID for tracing.
+
+        Returns:
+            Tuple of (content_text, content_source, metadata) where:
+            - content_text: Extracted and cleaned content
+            - content_source: Source of content ("markdown", "html", or "none")
+            - metadata: Dictionary with extraction metadata
+
+        Raises:
+            ValueError: If extraction fails.
+
+        """
+        ...
+
+
+class SummaryGenerator(Protocol):
+    """Protocol for LLM-based summary generation."""
+
+    async def summarize_content_pure(
+        self,
+        content_text: str,
+        chosen_lang: str,
+        system_prompt: str,
+        correlation_id: str | None = None,
+        feedback_instructions: str | None = None,
+    ) -> dict[str, Any]:
+        """Generate a summary from content without message dependencies.
+
+        Args:
+            content_text: The content to summarize.
+            chosen_lang: Target language for the summary.
+            system_prompt: System prompt for the LLM.
+            correlation_id: Optional correlation ID for tracing.
+            feedback_instructions: Optional feedback from previous validation attempts.
+
+        Returns:
+            Dictionary containing the structured summary.
+
+        Raises:
+            ValueError: If summarization fails.
+
+        """
+        ...
