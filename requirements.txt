@@ -246,7 +246,7 @@ sympy==1.14.0
     # via torch
 tgcrypto==1.2.5
     # via bite-size-reader (pyproject.toml)
-thinc==9.1.1
+thinc==8.3.10
     # via spacy
 threadpoolctl==3.6.0
     # via scikit-learn
@@ -254,7 +254,7 @@ tld==0.13.1
     # via courlan
 tokenizers==0.22.1
     # via transformers
-torch==2.9.1
+torch==2.9.1+cpu
     # via sentence-transformers
 tqdm==4.67.1
     # via
