@@ -160,51 +160,58 @@ class TestMessageEntity(unittest.TestCase):
 class TestTelegramMessage(unittest.TestCase):
     """Test TelegramMessage model."""
 
+    class SimpleMockMessage:
+        """Simple mock message class for testing (Mock objects don't work well with Pydantic)."""
+
+        def __init__(self):
+            self.id = 12345
+            self.date = datetime.now()
+            self.text = "Hello world"
+            self.caption = None
+            self.entities = []
+            self.caption_entities = []
+            self.photo = None
+            self.video = None
+            self.audio = None
+            self.document = None
+            self.sticker = None
+            self.voice = None
+            self.video_note = None
+            self.animation = None
+            self.contact = None
+            self.location = None
+            self.venue = None
+            self.poll = None
+            self.dice = None
+            self.game = None
+            self.invoice = None
+            self.successful_payment = None
+            self.story = None
+            self.from_user = None
+            self.chat = None
+            self.forward_from = None
+            self.forward_from_chat = None
+            self.forward_from_message_id = None
+            self.forward_signature = None
+            self.forward_sender_name = None
+            self.forward_date = None
+            self.reply_to_message = None
+            self.edit_date = None
+            self.media_group_id = None
+            self.author_signature = None
+            self.via_bot = None
+            self.has_protected_content = None
+            self.connected_website = None
+            self.reply_markup = None
+            self.views = None
+            self.via_bot_user_id = None
+            self.effect_id = None
+            self.link_preview_options = None
+            self.show_caption_above_media = None
+
     def setUp(self):
         """Set up test fixtures."""
-        self.mock_message = Mock()
-        self.mock_message.id = 12345
-        self.mock_message.date = datetime.now()
-        self.mock_message.text = "Hello world"
-        self.mock_message.caption = None
-        self.mock_message.entities = []
-        self.mock_message.caption_entities = []
-        self.mock_message.photo = None
-        self.mock_message.video = None
-        self.mock_message.audio = None
-        self.mock_message.document = None
-        self.mock_message.sticker = None
-        self.mock_message.voice = None
-        self.mock_message.video_note = None
-        self.mock_message.animation = None
-        self.mock_message.contact = None
-        self.mock_message.location = None
-        self.mock_message.venue = None
-        self.mock_message.poll = None
-        self.mock_message.dice = None
-        self.mock_message.game = None
-        self.mock_message.invoice = None
-        self.mock_message.successful_payment = None
-        self.mock_message.story = None
-        self.mock_message.forward_from = None
-        self.mock_message.forward_from_chat = None
-        self.mock_message.forward_from_message_id = None
-        self.mock_message.forward_signature = None
-        self.mock_message.forward_sender_name = None
-        self.mock_message.forward_date = None
-        self.mock_message.reply_to_message = None
-        self.mock_message.edit_date = None
-        self.mock_message.media_group_id = None
-        self.mock_message.author_signature = None
-        self.mock_message.via_bot = None
-        self.mock_message.has_protected_content = None
-        self.mock_message.connected_website = None
-        self.mock_message.reply_markup = None
-        self.mock_message.views = None
-        self.mock_message.via_bot_user_id = None
-        self.mock_message.effect_id = None
-        self.mock_message.link_preview_options = None
-        self.mock_message.show_caption_above_media = None
+        self.mock_message = self.SimpleMockMessage()
 
     def test_from_pyrogram_message_basic(self):
         """Test creating TelegramMessage from basic Pyrogram message."""
@@ -288,10 +295,18 @@ class TestTelegramMessage(unittest.TestCase):
 
     def test_from_pyrogram_message_with_photo(self):
         """Test creating TelegramMessage with photo media."""
-        # Mock photo
-        mock_photo = [Mock(), Mock()]
-        mock_photo[0].__dict__ = {"file_id": "photo1", "width": 100, "height": 100}
-        mock_photo[1].__dict__ = {"file_id": "photo2", "width": 200, "height": 200}
+
+        # Use simple classes instead of Mock for proper __dict__ behavior
+        class MockPhotoSize:
+            def __init__(self, file_id: str, width: int, height: int):
+                self.file_id = file_id
+                self.width = width
+                self.height = height
+
+        mock_photo = [
+            MockPhotoSize("photo1", 100, 100),
+            MockPhotoSize("photo2", 200, 200),
+        ]
         self.mock_message.photo = mock_photo
 
         message = TelegramMessage.from_pyrogram_message(self.mock_message)
@@ -303,19 +318,16 @@ class TestTelegramMessage(unittest.TestCase):
 
     def test_from_pyrogram_message_with_entities(self):
         """Test creating TelegramMessage with entities."""
-        # Mock entities
-        mock_entity1 = Mock()
-        mock_entity1.__dict__ = {
-            "type": "url",
-            "offset": 0,
-            "length": 10,
-        }
-        mock_entity2 = Mock()
-        mock_entity2.__dict__ = {
-            "type": "bold",
-            "offset": 10,
-            "length": 5,
-        }
+
+        # Use simple classes instead of Mock for proper __dict__ behavior
+        class MockEntity:
+            def __init__(self, entity_type: str, offset: int, length: int):
+                self.type = entity_type
+                self.offset = offset
+                self.length = length
+
+        mock_entity1 = MockEntity("url", 0, 10)
+        mock_entity2 = MockEntity("bold", 10, 5)
         self.mock_message.entities = [mock_entity1, mock_entity2]
 
         message = TelegramMessage.from_pyrogram_message(self.mock_message)

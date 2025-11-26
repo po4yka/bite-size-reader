@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import logging
 import os
-from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
@@ -19,6 +18,7 @@ from pydantic import (
     field_validator,
     model_validator,
 )
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 def validate_model_name(model: str) -> str:
@@ -181,6 +181,7 @@ class FirecrawlConfig(BaseModel):
     credit_critical_threshold: int = Field(
         default=100, validation_alias="FIRECRAWL_CREDIT_CRITICAL_THRESHOLD"
     )
+    max_response_size_mb: int = Field(default=50, validation_alias="FIRECRAWL_MAX_RESPONSE_SIZE_MB")
 
     @field_validator("api_key", mode="before")
     @classmethod
@@ -193,6 +194,7 @@ class FirecrawlConfig(BaseModel):
         "retry_max_attempts",
         "credit_warning_threshold",
         "credit_critical_threshold",
+        "max_response_size_mb",
         mode="before",
     )
     @classmethod
@@ -215,6 +217,7 @@ class FirecrawlConfig(BaseModel):
             "retry_max_attempts": (0, 10),
             "credit_warning_threshold": (1, 10000),
             "credit_critical_threshold": (1, 1000),
+            "max_response_size_mb": (1, 1024),
         }
         min_val, max_val = limits[info.field_name]
         if parsed < min_val or parsed > max_val:
@@ -290,6 +293,9 @@ class OpenRouterConfig(BaseModel):
     require_parameters: bool = Field(default=True, validation_alias="OPENROUTER_REQUIRE_PARAMETERS")
     auto_fallback_structured: bool = Field(
         default=True, validation_alias="OPENROUTER_AUTO_FALLBACK_STRUCTURED"
+    )
+    max_response_size_mb: int = Field(
+        default=10, validation_alias="OPENROUTER_MAX_RESPONSE_SIZE_MB"
     )
 
     @field_validator("api_key", mode="before")
@@ -404,6 +410,21 @@ class OpenRouterConfig(BaseModel):
             parsed.append(slug)
         return tuple(parsed)
 
+    @field_validator("max_response_size_mb", mode="before")
+    @classmethod
+    def _validate_max_response_size_mb(cls, value: Any) -> int:
+        if value in (None, ""):
+            return 10
+        try:
+            size_mb = int(str(value))
+        except ValueError as exc:
+            msg = "Max response size must be a valid integer"
+            raise ValueError(msg) from exc
+        if size_mb < 1 or size_mb > 100:
+            msg = "Max response size must be between 1 and 100 MB"
+            raise ValueError(msg)
+        return size_mb
+
 
 class YouTubeConfig(BaseModel):
     """YouTube video download and storage configuration."""
@@ -478,6 +499,175 @@ class YouTubeConfig(BaseModel):
         except ValueError as exc:
             msg = f"{info.field_name.replace('_', ' ')} must be a valid integer"
             raise ValueError(msg) from exc
+
+
+class TelegramLimitsConfig(BaseModel):
+    """Telegram message and URL limits configuration."""
+
+    model_config = ConfigDict(frozen=True, populate_by_name=True)
+
+    max_message_chars: int = Field(
+        default=3500,
+        validation_alias="TELEGRAM_MAX_MESSAGE_CHARS",
+        description="Maximum characters per Telegram message (Telegram limit ~4096, keep safety margin)",
+    )
+    max_url_length: int = Field(
+        default=2048,
+        validation_alias="TELEGRAM_MAX_URL_LENGTH",
+        description="Maximum URL length (RFC 2616 limit)",
+    )
+    max_batch_urls: int = Field(
+        default=200,
+        validation_alias="TELEGRAM_MAX_BATCH_URLS",
+        description="Maximum number of URLs in a batch operation",
+    )
+    min_message_interval_ms: int = Field(
+        default=100,
+        validation_alias="TELEGRAM_MIN_MESSAGE_INTERVAL_MS",
+        description="Minimum interval between messages in milliseconds (rate limiting)",
+    )
+
+    @field_validator("max_message_chars", "max_url_length", "max_batch_urls", mode="before")
+    @classmethod
+    def _validate_positive_int(cls, value: Any, info: ValidationInfo) -> int:
+        if value in (None, ""):
+            default = cls.model_fields[info.field_name].default
+            return int(default)
+        try:
+            parsed = int(str(value))
+        except ValueError as exc:
+            msg = f"{info.field_name.replace('_', ' ')} must be a valid integer"
+            raise ValueError(msg) from exc
+        if parsed <= 0:
+            msg = f"{info.field_name.replace('_', ' ').capitalize()} must be positive"
+            raise ValueError(msg)
+        return parsed
+
+    @field_validator("min_message_interval_ms", mode="before")
+    @classmethod
+    def _validate_message_interval(cls, value: Any) -> int:
+        if value in (None, ""):
+            return 100
+        try:
+            parsed = int(str(value))
+        except ValueError as exc:
+            msg = "Message interval must be a valid integer"
+            raise ValueError(msg) from exc
+        if parsed < 0:
+            msg = "Message interval must be non-negative"
+            raise ValueError(msg)
+        if parsed > 10000:
+            msg = "Message interval must be 10000ms or less"
+            raise ValueError(msg)
+        return parsed
+
+
+class DatabaseConfig(BaseModel):
+    """Database operation limits and timeouts configuration."""
+
+    model_config = ConfigDict(frozen=True, populate_by_name=True)
+
+    operation_timeout: float = Field(
+        default=30.0,
+        validation_alias="DB_OPERATION_TIMEOUT",
+        description="Database operation timeout in seconds",
+    )
+    max_retries: int = Field(
+        default=3,
+        validation_alias="DB_MAX_RETRIES",
+        description="Maximum retries for transient database errors",
+    )
+    json_max_size: int = Field(
+        default=10_000_000,
+        validation_alias="DB_JSON_MAX_SIZE",
+        description="Maximum JSON payload size in bytes (10MB)",
+    )
+    json_max_depth: int = Field(
+        default=20,
+        validation_alias="DB_JSON_MAX_DEPTH",
+        description="Maximum JSON nesting depth",
+    )
+    json_max_array_length: int = Field(
+        default=10_000,
+        validation_alias="DB_JSON_MAX_ARRAY_LENGTH",
+        description="Maximum JSON array length",
+    )
+    json_max_dict_keys: int = Field(
+        default=1_000,
+        validation_alias="DB_JSON_MAX_DICT_KEYS",
+        description="Maximum JSON dictionary keys",
+    )
+
+    @field_validator("operation_timeout", mode="before")
+    @classmethod
+    def _validate_timeout(cls, value: Any) -> float:
+        if value in (None, ""):
+            return 30.0
+        try:
+            parsed = float(str(value))
+        except ValueError as exc:
+            msg = "Database operation timeout must be a valid number"
+            raise ValueError(msg) from exc
+        if parsed <= 0:
+            msg = "Database operation timeout must be positive"
+            raise ValueError(msg)
+        if parsed > 3600:
+            msg = "Database operation timeout must be 3600 seconds or less"
+            raise ValueError(msg)
+        return parsed
+
+    @field_validator(
+        "max_retries",
+        "json_max_size",
+        "json_max_depth",
+        "json_max_array_length",
+        "json_max_dict_keys",
+        mode="before",
+    )
+    @classmethod
+    def _validate_positive_int(cls, value: Any, info: ValidationInfo) -> int:
+        if value in (None, ""):
+            default = cls.model_fields[info.field_name].default
+            return int(default)
+        try:
+            parsed = int(str(value))
+        except ValueError as exc:
+            msg = f"{info.field_name.replace('_', ' ')} must be a valid integer"
+            raise ValueError(msg) from exc
+        if parsed <= 0:
+            msg = f"{info.field_name.replace('_', ' ').capitalize()} must be positive"
+            raise ValueError(msg)
+        return parsed
+
+
+class ContentLimitsConfig(BaseModel):
+    """Content processing limits configuration."""
+
+    model_config = ConfigDict(frozen=True, populate_by_name=True)
+
+    max_text_length_kb: int = Field(
+        default=50,
+        validation_alias="MAX_TEXT_LENGTH_KB",
+        description="Maximum text length in kilobytes (for URL extraction, regex DoS prevention)",
+    )
+
+    @field_validator("max_text_length_kb", mode="before")
+    @classmethod
+    def _validate_text_length(cls, value: Any) -> int:
+        if value in (None, ""):
+            return 50
+        try:
+            parsed = int(str(value))
+        except ValueError as exc:
+            msg = "Max text length must be a valid integer"
+            raise ValueError(msg) from exc
+        if parsed <= 0:
+            msg = "Max text length must be positive"
+            raise ValueError(msg)
+        if parsed > 1024:
+            msg = "Max text length must be 1024 KB or less"
+            raise ValueError(msg)
+        return parsed
 
 
 class RuntimeConfig(BaseModel):
@@ -646,40 +836,81 @@ class AppConfig:
     openrouter: OpenRouterConfig
     youtube: YouTubeConfig
     runtime: RuntimeConfig
+    telegram_limits: TelegramLimitsConfig
+    database: DatabaseConfig
+    content_limits: ContentLimitsConfig
 
 
-class Settings(BaseModel):
-    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+class Settings(BaseSettings):
+    """Application settings loaded automatically from environment variables.
+
+    Uses pydantic-settings for automatic environment variable loading.
+    Nested models are populated by matching validation_alias on each field.
+    """
+
+    model_config = SettingsConfigDict(
+        extra="ignore",
+        populate_by_name=True,
+        env_file=".env",
+        env_file_encoding="utf-8",
+        case_sensitive=True,
+    )
 
     allow_stub_telegram: bool = Field(default=False, exclude=True)
-    telegram: TelegramConfig
-    firecrawl: FirecrawlConfig
-    openrouter: OpenRouterConfig
+    telegram: TelegramConfig = Field(default_factory=TelegramConfig)
+    firecrawl: FirecrawlConfig = Field(default_factory=FirecrawlConfig)
+    openrouter: OpenRouterConfig = Field(default_factory=OpenRouterConfig)
     youtube: YouTubeConfig = Field(default_factory=YouTubeConfig)
     runtime: RuntimeConfig = Field(default_factory=RuntimeConfig)
+    telegram_limits: TelegramLimitsConfig = Field(default_factory=TelegramLimitsConfig)
+    database: DatabaseConfig = Field(default_factory=DatabaseConfig)
+    content_limits: ContentLimitsConfig = Field(default_factory=ContentLimitsConfig)
 
+    @model_validator(mode="before")
     @classmethod
-    def _load_flattened_environment(cls, env: Mapping[str, str]) -> dict[str, Any]:
-        data: dict[str, Any] = {}
-        for field_name, field in cls.model_fields.items():
-            if field_name == "allow_stub_telegram":
+    def _build_nested_from_env(cls, data: dict[str, Any]) -> dict[str, Any]:
+        """Build nested config objects from flat environment variables.
+
+        pydantic-settings passes constructor args as data, but environment variables
+        need to be read from os.environ separately for proper nested model population.
+        This validator merges both sources, with constructor args taking precedence.
+        """
+        if not isinstance(data, dict):
+            return data
+
+        result = dict(data)
+
+        # Merge os.environ with constructor data (constructor takes precedence)
+        env_data: dict[str, Any] = dict(os.environ)
+        merged_source = {**env_data, **data}
+
+        for field_name, field_info in cls.model_fields.items():
+            if field_name in ("allow_stub_telegram",):
                 continue
-            annotation = field.annotation
+
+            annotation = field_info.annotation
             if not isinstance(annotation, type) or not issubclass(annotation, BaseModel):
                 continue
 
-            nested_values: dict[str, Any] = {}
+            nested_data: dict[str, Any] = {}
             nested_model: type[BaseModel] = annotation
-            for nested_name, nested_field in nested_model.model_fields.items():
-                value = cls._resolve_env_value(env, nested_field)
-                if value is not None:
-                    nested_values[nested_name] = value
-            if nested_values:
-                data[field_name] = nested_values
-        return data
+
+            for nested_field_name, nested_field in nested_model.model_fields.items():
+                env_value = cls._resolve_env_value(merged_source, nested_field)
+                if env_value is not None:
+                    nested_data[nested_field_name] = env_value
+
+            if nested_data:
+                if field_name in result and isinstance(result[field_name], dict):
+                    result[field_name] = {**nested_data, **result[field_name]}
+                else:
+                    result[field_name] = nested_data
+
+        return result
 
     @staticmethod
-    def _resolve_env_value(env: Mapping[str, str], field: Any) -> Any | None:
+    def _resolve_env_value(data: dict[str, Any], field: Any) -> Any | None:
+        """Resolve environment variable value for a field using its aliases."""
         aliases: list[str] = []
         alias = field.validation_alias
         if isinstance(alias, AliasChoices):
@@ -692,8 +923,8 @@ class Settings(BaseModel):
             aliases.append(field.alias)
 
         for name in aliases:
-            if name in env:
-                return env[name]
+            if name in data:
+                return data[name]
         return None
 
     @model_validator(mode="after")
@@ -713,6 +944,9 @@ class Settings(BaseModel):
             openrouter=self.openrouter,
             youtube=self.youtube,
             runtime=self.runtime,
+            telegram_limits=self.telegram_limits,
+            database=self.database,
+            content_limits=self.content_limits,
         )
 
 
@@ -720,7 +954,23 @@ logger = logging.getLogger(__name__)
 
 
 def load_config(*, allow_stub_telegram: bool = False) -> AppConfig:
-    overrides: dict[str, Any] = {}
+    """Load application configuration from environment variables.
+
+    Uses pydantic-settings to automatically load from:
+    1. Environment variables
+    2. .env file (if present)
+
+    Args:
+        allow_stub_telegram: If True, use stub Telegram credentials when not provided.
+                           Useful for testing and CLI tools that don't need real credentials.
+
+    Returns:
+        Immutable AppConfig instance with all configuration sections.
+
+    Raises:
+        RuntimeError: If configuration validation fails.
+    """
+    overrides: dict[str, Any] = {"allow_stub_telegram": allow_stub_telegram}
     using_stub_telegram = False
 
     if allow_stub_telegram:
@@ -738,10 +988,9 @@ def load_config(*, allow_stub_telegram: bool = False) -> AppConfig:
             overrides["telegram"] = telegram_overrides
 
     try:
-        env_data = Settings._load_flattened_environment(os.environ)
-        merged: dict[str, Any] = _deep_merge(env_data, overrides)
-        merged["allow_stub_telegram"] = allow_stub_telegram
-        settings = Settings(**merged)
+        # pydantic-settings automatically loads from environment variables and .env file
+        # We pass overrides for stub telegram credentials when needed
+        settings = Settings(**overrides)
     except (ValidationError, RuntimeError) as exc:  # pragma: no cover - defensive
         msg = f"Configuration validation failed: {exc}"
         raise RuntimeError(msg) from exc
@@ -752,19 +1001,6 @@ def load_config(*, allow_stub_telegram: bool = False) -> AppConfig:
         )
 
     return settings.as_app_config()
-
-
-def _deep_merge(base: Mapping[str, Any], updates: Mapping[str, Any]) -> dict[str, Any]:
-    if not updates:
-        return dict(base)
-
-    result: dict[str, Any] = dict(base.items())
-    for key, value in updates.items():
-        if key in result and isinstance(result[key], Mapping) and isinstance(value, Mapping):
-            result[key] = _deep_merge(result[key], value)
-        else:
-            result[key] = value
-    return result
 
 
 class ConfigHelper:

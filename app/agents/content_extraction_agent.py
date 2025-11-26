@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
+
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.agents.base_agent import AgentResult, BaseAgent
 from app.core.url_utils import normalize_url, url_hash_sha256
@@ -13,22 +14,22 @@ if TYPE_CHECKING:
     from app.db.database import Database
 
 
-@dataclass
-class ExtractionInput:
+class ExtractionInput(BaseModel):
     """Input for content extraction."""
+
+    model_config = ConfigDict(frozen=True)
 
     url: str
     correlation_id: str
     force_refresh: bool = False
 
 
-@dataclass
-class ExtractionOutput:
+class ExtractionOutput(BaseModel):
     """Output from content extraction."""
 
     content_markdown: str
-    content_html: str | None
-    metadata: dict[str, Any]
+    content_html: str | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
     normalized_url: str
     crawl_result_id: int | None = None
 

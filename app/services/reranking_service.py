@@ -91,7 +91,7 @@ class RerankingService:
         # Score all pairs
         try:
             scores = await self._score_pairs(pairs)
-        except Exception:
+        except (RuntimeError, ValueError, OSError):
             logger.exception(
                 "reranking_failed",
                 extra={"query": query[:100], "num_results": num_to_rerank},

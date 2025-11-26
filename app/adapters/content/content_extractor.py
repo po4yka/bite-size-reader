@@ -11,10 +11,10 @@ import logging
 import re
 from collections import Counter
 from collections.abc import Callable, Mapping
-from dataclasses import asdict, dataclass
 from typing import TYPE_CHECKING, Any, Literal
 
 import httpx
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.adapters.external.firecrawl_parser import FirecrawlClient, FirecrawlResult
 from app.config import AppConfig
@@ -41,21 +41,23 @@ LowValueReason = Literal[
 ]
 
 
-@dataclass(slots=True)
-class LowValueContentMetrics:
+class LowValueContentMetrics(BaseModel):
     """Simple container describing crawl content quality metrics."""
 
-    char_length: int
-    word_count: int
-    unique_word_count: int
-    top_word: str | None
-    top_ratio: float
-    overlay_ratio: float
+    model_config = ConfigDict(frozen=True)
+
+    char_length: int = Field(ge=0)
+    word_count: int = Field(ge=0)
+    unique_word_count: int = Field(ge=0)
+    top_word: str | None = None
+    top_ratio: float = Field(ge=0.0, le=1.0)
+    overlay_ratio: float = Field(ge=0.0, le=1.0)
 
 
-@dataclass(slots=True)
-class LowValueContentIssue:
+class LowValueContentIssue(BaseModel):
     """Metadata about low-value crawl content returned by Firecrawl."""
+
+    model_config = ConfigDict(frozen=True)
 
     reason: LowValueReason
     metrics: LowValueContentMetrics
@@ -476,7 +478,7 @@ class ContentExtractor:
         try:
             if getattr(self.cfg.runtime, "enable_textacy", False):
                 content_text = normalize_text(content_text)
-        except Exception:
+        except (AttributeError, RuntimeError):
             pass
 
         self._audit("INFO", "reuse_crawl_result", {"request_id": None, "cid": correlation_id})
@@ -485,7 +487,7 @@ class ContentExtractor:
         if isinstance(options_obj, str):
             try:
                 options_obj = json.loads(options_obj)
-            except Exception:
+            except (json.JSONDecodeError, ValueError):
                 options_obj = None
 
         correlation_from_raw = existing_crawl.get("correlation_id")
@@ -496,7 +498,7 @@ class ContentExtractor:
             elif isinstance(raw_payload, str):
                 try:
                     parsed_raw = json.loads(raw_payload)
-                except Exception:
+                except (json.JSONDecodeError, ValueError):
                     parsed_raw = None
                 if isinstance(parsed_raw, dict):
                     correlation_from_raw = parsed_raw.get("cid")
@@ -568,7 +570,7 @@ class ContentExtractor:
                         audit_payload["top_word"] = metrics.top_word
                         audit_payload["top_ratio"] = round(metrics.top_ratio, 3)
                     self._audit("WARNING", "firecrawl_low_value_content", audit_payload)
-                except Exception:
+                except (RuntimeError, ValueError, TypeError):
                     pass
 
             logger.warning(
@@ -576,7 +578,7 @@ class ContentExtractor:
                 extra={
                     "cid": correlation_id,
                     "reason": reason_label,
-                    **asdict(metrics),
+                    **metrics.model_dump(),
                     "preview": quality_issue.preview,
                 },
             )
@@ -636,7 +638,7 @@ class ContentExtractor:
             # Attempt a direct HTML fetch salvage before failing
             try:
                 salvage_html = await self._attempt_direct_html_salvage(url_text)
-            except Exception:
+            except (OSError, TimeoutError, RuntimeError):
                 salvage_html = None
 
             if salvage_html:
@@ -842,7 +844,7 @@ class ContentExtractor:
                 "firecrawl_error",
                 {"request_id": req_id, "cid": correlation_id, "error": crawl.error_text},
             )
-        except Exception:
+        except (RuntimeError, ValueError, TypeError):
             pass
 
         # Update interaction with error
@@ -957,7 +959,7 @@ class ContentExtractor:
         try:
             if getattr(self.cfg.runtime, "enable_textacy", False):
                 content_text = normalize_text(content_text)
-        except Exception:
+        except (AttributeError, RuntimeError):
             pass
 
         return content_text, content_source
@@ -994,10 +996,10 @@ class ContentExtractor:
                         ts_val = getattr(val, "timestamp")
                         if callable(ts_val):
                             return int(ts_val())
-                    except Exception:
+                    except (AttributeError, TypeError, ValueError):
                         pass
                 return int(val)  # may raise if not int-like
-            except Exception:
+            except (TypeError, ValueError, AttributeError):
                 return None
 
         date_ts = _to_epoch(
@@ -1016,12 +1018,12 @@ class ContentExtractor:
                         # Check if the result is actually serializable (not a MagicMock)
                         if isinstance(entity_dict, dict):
                             return entity_dict
-                    except Exception:
+                    except (AttributeError, TypeError, RuntimeError):
                         pass
                 return getattr(e, "__dict__", {})
 
             entities_json = [_ent_to_dict(e) for e in entities_obj]
-        except Exception:
+        except (AttributeError, TypeError, ValueError):
             entities_json = None
 
         media_type = None
@@ -1064,7 +1066,7 @@ class ContentExtractor:
                 fid = getattr(getattr(message, "sticker"), "file_id", None)
                 if fid:
                     media_file_ids.append(fid)
-        except Exception:
+        except (AttributeError, TypeError):
             pass
 
         # Filter out non-string values (like MagicMock objects) from media_file_ids
@@ -1094,7 +1096,7 @@ class ContentExtractor:
                     raw_json = None
             else:
                 raw_json = None
-        except Exception:
+        except (AttributeError, TypeError, RuntimeError):
             raw_json = None
 
         self.db.insert_telegram_message(

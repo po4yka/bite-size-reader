@@ -5,8 +5,9 @@ from __future__ import annotations
 import asyncio
 import logging
 import re
-from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
+
+from pydantic import BaseModel, ConfigDict
 
 from app.db.models import Request, Summary
 from app.services.topic_search_utils import (
@@ -27,9 +28,10 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-@dataclass(slots=True)
-class TopicArticle:
+class TopicArticle(BaseModel):
     """Lightweight representation of a discovered article."""
+
+    model_config = ConfigDict(frozen=True)
 
     title: str
     url: str
@@ -70,7 +72,7 @@ class TopicSearchService:
 
         try:
             result = await self._firecrawl.search(query, limit=self._max_results)
-        except Exception:
+        except (OSError, TimeoutError, RuntimeError):
             logger.exception(
                 "topic_search_request_failed", extra={"cid": correlation_id, "topic": query}
             )
@@ -91,7 +93,7 @@ class TopicSearchService:
                             "error": message,
                         },
                     )
-                except Exception:  # pragma: no cover - defensive audit
+                except (RuntimeError, ValueError, TypeError):  # pragma: no cover - defensive audit
                     pass
             raise RuntimeError(message)
 
@@ -109,7 +111,7 @@ class TopicSearchService:
                         "total_results": result.total_results,
                     },
                 )
-            except Exception:  # pragma: no cover - defensive audit
+            except (RuntimeError, ValueError, TypeError):  # pragma: no cover - defensive audit
                 pass
 
         return articles
@@ -180,7 +182,7 @@ class LocalTopicSearchService:
 
         try:
             articles = await asyncio.to_thread(self._search_sync, query)
-        except Exception:
+        except (RuntimeError, ValueError, OSError):
             logger.exception(
                 "local_topic_search_failed", extra={"cid": correlation_id, "topic": query}
             )
@@ -197,7 +199,7 @@ class LocalTopicSearchService:
                         "results": len(articles),
                     },
                 )
-            except Exception:  # pragma: no cover - defensive audit
+            except (RuntimeError, ValueError, TypeError):  # pragma: no cover - defensive audit
                 pass
 
         return articles
@@ -383,9 +385,9 @@ class LocalTopicSearchService:
         if hasattr(row, "keys"):
             try:
                 return row[key]
-            except Exception:  # pragma: no cover - defensive fallback
+            except (KeyError, TypeError, IndexError):  # pragma: no cover - defensive fallback
                 pass
         try:
             return row[index]
-        except Exception:  # pragma: no cover - defensive fallback
+        except (KeyError, TypeError, IndexError):  # pragma: no cover - defensive fallback
             return None

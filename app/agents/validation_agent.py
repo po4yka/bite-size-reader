@@ -2,27 +2,26 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import Any
+
+from pydantic import BaseModel, Field
 
 from app.agents.base_agent import AgentResult, BaseAgent
 from app.core.summary_contract import validate_and_shape_summary
 
 
-@dataclass
-class ValidationInput:
+class ValidationInput(BaseModel):
     """Input for validation."""
 
     summary_json: dict[str, Any]
 
 
-@dataclass
-class ValidationOutput:
+class ValidationOutput(BaseModel):
     """Output from validation."""
 
     summary_json: dict[str, Any]
-    validation_warnings: list[str]
-    corrections_applied: list[str]
+    validation_warnings: list[str] = Field(default_factory=list)
+    corrections_applied: list[str] = Field(default_factory=list)
 
 
 class ValidationAgent(BaseAgent[ValidationInput, ValidationOutput]):

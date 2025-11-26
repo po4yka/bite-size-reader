@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import logging
 import re
-from dataclasses import dataclass
+
+from pydantic import BaseModel, ConfigDict, Field
 
 logger = logging.getLogger(__name__)
 
@@ -35,13 +36,14 @@ SYNONYM_MAP = {
 }
 
 
-@dataclass(slots=True)
-class ExpandedQuery:
+class ExpandedQuery(BaseModel):
     """Expanded query with original and additional terms."""
 
+    model_config = ConfigDict(frozen=True)
+
     original: str
-    expanded_terms: list[str]
-    weight_map: dict[str, float]  # Term to weight mapping
+    expanded_terms: list[str] = Field(default_factory=list)
+    weight_map: dict[str, float] = Field(default_factory=dict)  # Term to weight mapping
 
 
 class QueryExpansionService:

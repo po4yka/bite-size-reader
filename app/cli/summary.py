@@ -272,14 +272,22 @@ async def run_summary_cli(args: argparse.Namespace) -> None:
 
     setup_json_logging(cfg.runtime.log_level)
 
-    db = Database(cfg.runtime.db_path)
+    db = Database(
+        path=cfg.runtime.db_path,
+        operation_timeout=cfg.database.operation_timeout,
+        max_retries=cfg.database.max_retries,
+        json_max_size=cfg.database.json_max_size,
+        json_max_depth=cfg.database.json_max_depth,
+        json_max_array_length=cfg.database.json_max_array_length,
+        json_max_dict_keys=cfg.database.json_max_dict_keys,
+    )
     db.migrate()
 
     audit = _build_audit(db)
     max_concurrency = cfg.runtime.max_concurrent_calls
     sem_factory = _SemaphoreFactory(max_concurrency)
 
-    response_formatter = ResponseFormatter()
+    response_formatter = ResponseFormatter(telegram_limits=cfg.telegram_limits)
 
     firecrawl = FirecrawlClient(
         api_key=cfg.firecrawl.api_key,

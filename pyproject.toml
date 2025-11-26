@@ -131,22 +131,23 @@ dependencies = [
   "pyrogram>=2.0.106",
   "tgcrypto>=1.2.5",
   "pydantic>=2.12.4",
+  "pydantic-settings>=2.12.0",
   "peewee>=3.18.3",
   "trafilatura>=2.0.0",
-  "spacy>=3.8.8,<4",
-  "json_repair>=0.52.4",
+  "spacy>=3.8.11,<4",
+  "json_repair>=0.54.2",
   "scikit-learn>=1.7.2",
-  "sentence-transformers>=3.0.0",
-  "orjson>=3.10.0",
+  "sentence-transformers>=5.1.2",
+  "orjson>=3.11.4",
   "uvloop>=0.22.1",
   # YouTube support
-  "yt-dlp>=2024.0.0",
-  "youtube-transcript-api>=0.6.0",
+  "yt-dlp>=2025.11.12",
+  "youtube-transcript-api>=1.2.3",
   # Mobile API
-  "fastapi>=0.104.0",
-  "uvicorn[standard]>=0.24.0",
-  "pyjwt>=2.8.0",
-  "python-multipart>=0.0.6",
+  "fastapi>=0.122.0",
+  "uvicorn[standard]>=0.38.0",
+  "pyjwt>=2.10.1",
+  "python-multipart>=0.0.20",
   # spaCy language models
   "en-core-web-sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl",
   "ru-core-news-sm @ https://github.com/explosion/spacy-models/releases/download/ru_core_news_sm-3.8.0/ru_core_news_sm-3.8.0-py3-none-any.whl",
@@ -155,21 +156,21 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
   "isort>=7.0.0",
-  "pytest>=9.0.0",
+  "pytest>=9.0.1",
   "pytest-asyncio>=1.3.0",
-  "ruff>=0.14.4",
+  "ruff>=0.14.6",
   "mypy>=1.18.2",
-  "pre-commit>=4.4.0",
+  "pre-commit>=4.5.0",
 ]
 
 [dependency-groups]
 dev = [
     "isort>=7.0.0",
     "mypy>=1.18.2",
-    "pre-commit>=4.4.0",
-    "pytest>=9.0.0",
+    "pre-commit>=4.5.0",
+    "pytest>=9.0.1",
     "pytest-asyncio>=1.3.0",
-    "ruff>=0.14.4",
+    "ruff>=0.14.6",
 ]
 
 [tool.pytest.ini_options]

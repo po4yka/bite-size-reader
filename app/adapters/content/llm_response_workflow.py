@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
+
+from pydantic import BaseModel, ConfigDict
 
 from app.core.json_utils import extract_json
 from app.core.summary_contract import validate_and_shape_summary
@@ -18,58 +19,63 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-@dataclass(slots=True)
-class LLMRequestConfig:
+class LLMRequestConfig(BaseModel):
     """Configuration for a single LLM attempt."""
+
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
     messages: list[dict[str, Any]]
     response_format: dict[str, Any]
-    max_tokens: int | None
-    temperature: float | None
-    top_p: float | None
+    max_tokens: int | None = None
+    temperature: float | None = None
+    top_p: float | None = None
     model_override: str | None = None
     silent: bool = False
 
 
-@dataclass(slots=True)
-class LLMRepairContext:
+class LLMRepairContext(BaseModel):
     """Context required to attempt JSON repair prompts."""
+
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
     base_messages: list[dict[str, Any]]
     repair_response_format: dict[str, Any]
-    repair_max_tokens: int | None
+    repair_max_tokens: int | None = None
     default_prompt: str
     missing_fields_prompt: str | None = None
 
 
-@dataclass(slots=True)
-class LLMWorkflowNotifications:
+class LLMWorkflowNotifications(BaseModel):
     """Notification callbacks invoked during workflow progression."""
 
-    completion: Callable[[Any, LLMRequestConfig], Awaitable[None]] | None = None
-    llm_error: Callable[[Any, str | None], Awaitable[None]] | None = None
-    repair_failure: Callable[[], Awaitable[None]] | None = None
-    parsing_failure: Callable[[], Awaitable[None]] | None = None
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    completion: Any | None = None  # Callable[[Any, LLMRequestConfig], Awaitable[None]]
+    llm_error: Any | None = None  # Callable[[Any, str | None], Awaitable[None]]
+    repair_failure: Any | None = None  # Callable[[], Awaitable[None]]
+    parsing_failure: Any | None = None  # Callable[[], Awaitable[None]]
 
 
-@dataclass(slots=True)
-class LLMInteractionConfig:
+class LLMInteractionConfig(BaseModel):
     """Settings for updating user interactions."""
 
-    interaction_id: int | None
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    interaction_id: int | None = None
     success_kwargs: dict[str, Any] | None = None
-    llm_error_builder: Callable[[Any, str | None], dict[str, Any]] | None = None
+    llm_error_builder: Any | None = None  # Callable[[Any, str | None], dict[str, Any]]
     repair_failure_kwargs: dict[str, Any] | None = None
     parsing_failure_kwargs: dict[str, Any] | None = None
 
 
-@dataclass(slots=True)
-class LLMSummaryPersistenceSettings:
+class LLMSummaryPersistenceSettings(BaseModel):
     """Configuration for persisting summary results."""
+
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
     lang: str
     is_read: bool = True
-    insights_getter: Callable[[dict[str, Any]], dict[str, Any] | None] | None = None
+    insights_getter: Any | None = None  # Callable[[dict[str, Any]], dict[str, Any] | None]
 
 
 class LLMResponseWorkflow:
@@ -204,7 +210,7 @@ class LLMResponseWorkflow:
                     },
                 }
             return {"type": "json_object"}
-        except Exception:
+        except (AttributeError, ValueError, RuntimeError):
             return {"type": "json_object"}
 
     async def persist_llm_call(self, llm: Any, req_id: int, correlation_id: str | None) -> None:

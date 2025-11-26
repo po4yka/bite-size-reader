@@ -5,9 +5,10 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
-from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
+
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.agents.base_agent import AgentResult, BaseAgent
 
@@ -18,25 +19,25 @@ logger = logging.getLogger(__name__)
 _PROMPT_DIR = Path(__file__).parent.parent / "prompts"
 
 
-@dataclass
-class SummarizationInput:
+class SummarizationInput(BaseModel):
     """Input for summarization."""
 
+    model_config = ConfigDict(frozen=True)
+
     content: str
-    metadata: dict[str, Any]
+    metadata: dict[str, Any] = Field(default_factory=dict)
     correlation_id: str
     language: str = "en"
-    max_retries: int = 3
+    max_retries: int = Field(default=3, ge=1, le=10)
 
 
-@dataclass
-class SummarizationOutput:
+class SummarizationOutput(BaseModel):
     """Output from summarization."""
 
     summary_json: dict[str, Any]
-    llm_call_id: int | None
-    attempts: int
-    corrections_applied: list[str]
+    llm_call_id: int | None = None
+    attempts: int = Field(ge=1)
+    corrections_applied: list[str] = Field(default_factory=list)
 
 
 class SummarizationAgent(BaseAgent[SummarizationInput, SummarizationOutput]):

@@ -27,6 +27,7 @@ class ResponseFormatter:
         safe_reply_func: Callable[[Any, str], Awaitable[None]] | None = None,
         reply_json_func: Callable[[Any, dict], Awaitable[None]] | None = None,
         telegram_client: Any = None,
+        telegram_limits: Any = None,
     ) -> None:
         # Optional callbacks allow the TelegramBot compatibility layer to
         # intercept replies during unit tests without duplicating formatter
@@ -36,14 +37,19 @@ class ResponseFormatter:
         self._reply_json_func = reply_json_func
         self._telegram_client = telegram_client
 
-        # Telegram silently rejects messages above ~4096 characters.
-        # Keep a safety margin to avoid hitting the hard limit.
-        self.MAX_MESSAGE_CHARS = 3500
+        # Load limits from config (with backward-compatible defaults)
+        if telegram_limits is not None:
+            self.MAX_MESSAGE_CHARS = telegram_limits.max_message_chars
+            self.MAX_URL_LENGTH = telegram_limits.max_url_length
+            self.MAX_BATCH_URLS = telegram_limits.max_batch_urls
+            self.MIN_MESSAGE_INTERVAL_MS = telegram_limits.min_message_interval_ms
+        else:
+            # Fallback defaults for backward compatibility
+            self.MAX_MESSAGE_CHARS = 3500
+            self.MAX_URL_LENGTH = 2048
+            self.MAX_BATCH_URLS = 200
+            self.MIN_MESSAGE_INTERVAL_MS = 100
 
-        # Security limits
-        self.MAX_URL_LENGTH = 2048
-        self.MAX_BATCH_URLS = 200
-        self.MIN_MESSAGE_INTERVAL_MS = 100  # Rate limiting
         self._last_message_time: float = 0.0
 
         # Error notification deduplication

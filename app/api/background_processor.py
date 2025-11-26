@@ -56,7 +56,15 @@ async def _get_url_processor() -> URLProcessor:
 
     # Initialize components
     cfg = load_config()
-    db = Database(cfg.runtime.db_path)
+    db = Database(
+        path=cfg.runtime.db_path,
+        operation_timeout=cfg.database.operation_timeout,
+        max_retries=cfg.database.max_retries,
+        json_max_size=cfg.database.json_max_size,
+        json_max_depth=cfg.database.json_max_depth,
+        json_max_array_length=cfg.database.json_max_array_length,
+        json_max_dict_keys=cfg.database.json_max_dict_keys,
+    )
 
     firecrawl = FirecrawlClient(
         api_key=cfg.credentials.firecrawl_api_key,
@@ -71,7 +79,7 @@ async def _get_url_processor() -> URLProcessor:
         x_title=cfg.llm.openrouter_x_title,
     )
 
-    response_formatter = ResponseFormatter()
+    response_formatter = ResponseFormatter(telegram_limits=cfg.telegram_limits)
 
     # Create URL processor
     url_processor = URLProcessor(
@@ -109,7 +117,16 @@ async def process_url_request(request_id: int, db_path: str | None = None) -> No
     """
     # Get database instance
     if db_path:
-        db = Database(db_path)
+        cfg = load_config()
+        db = Database(
+            path=db_path,
+            operation_timeout=cfg.database.operation_timeout,
+            max_retries=cfg.database.max_retries,
+            json_max_size=cfg.database.json_max_size,
+            json_max_depth=cfg.database.json_max_depth,
+            json_max_array_length=cfg.database.json_max_array_length,
+            json_max_dict_keys=cfg.database.json_max_dict_keys,
+        )
     else:
         await _get_url_processor()  # Initialize if needed
         db = _processor_instances["db"]

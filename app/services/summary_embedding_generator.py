@@ -111,7 +111,7 @@ class SummaryEmbeddingGenerator:
             )
             return True
 
-        except Exception:
+        except (RuntimeError, ValueError, OSError, TypeError):
             logger.exception(
                 "embedding_generation_failed",
                 extra={"summary_id": summary_id, "language": language},

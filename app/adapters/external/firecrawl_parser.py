@@ -5,13 +5,13 @@ import contextlib
 import json
 import logging
 import time
-from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 import httpx
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.core.async_utils import raise_if_cancelled
+from app.core.http_utils import ResponseSizeError, validate_response_size
 from app.core.logging_utils import truncate_log_content
 
 if TYPE_CHECKING:
@@ -72,9 +72,10 @@ class FirecrawlResult(BaseModel):
     )
 
 
-@dataclass(slots=True)
-class FirecrawlSearchItem:
+class FirecrawlSearchItem(BaseModel):
     """Normalized representation of a Firecrawl `/v1/search` result item."""
+
+    model_config = ConfigDict(frozen=True)
 
     title: str
     url: str
@@ -83,13 +84,12 @@ class FirecrawlSearchItem:
     published_at: str | None = None
 
 
-@dataclass(slots=True)
-class FirecrawlSearchResult:
+class FirecrawlSearchResult(BaseModel):
     """Result container for Firecrawl search queries."""
 
     status: str
     http_status: int | None = None
-    results: list[FirecrawlSearchItem] = field(default_factory=list)
+    results: list[FirecrawlSearchItem] = Field(default_factory=list)
     total_results: int | None = None
     latency_ms: int | None = None
     error_text: str | None = None
@@ -115,6 +115,8 @@ class FirecrawlClient:
         # Credit monitoring
         credit_warning_threshold: int = 1000,
         credit_critical_threshold: int = 100,
+        # Response size limits
+        max_response_size_mb: int = 50,
     ) -> None:
         # Security: Validate API key presence and format
         if not api_key or not isinstance(api_key, str):
@@ -175,6 +177,15 @@ class FirecrawlClient:
             msg = "Credit critical threshold must be between 1 and 1000"
             raise ValueError(msg)
 
+        # Validate max_response_size_mb
+        if (
+            not isinstance(max_response_size_mb, int)
+            or max_response_size_mb < 1
+            or max_response_size_mb > 1024
+        ):
+            msg = "Max response size must be between 1 and 1024 MB"
+            raise ValueError(msg)
+
         self._api_key = api_key
         self._timeout = int(timeout_sec)
         self._base_url = "https://api.firecrawl.dev/v1/scrape"
@@ -191,6 +202,7 @@ class FirecrawlClient:
         self._keepalive_expiry = float(keepalive_expiry)
         self._credit_warning_threshold = int(credit_warning_threshold)
         self._credit_critical_threshold = int(credit_critical_threshold)
+        self._max_response_size_bytes = int(max_response_size_mb) * 1024 * 1024
 
         # Create httpx connection pool
         self._limits = httpx.Limits(
@@ -250,6 +262,34 @@ class FirecrawlClient:
         try:
             resp = await self._client.post(
                 "https://api.firecrawl.dev/v1/search", headers=headers, json=body
+            )
+
+            # Validate response size before parsing
+            await validate_response_size(resp, self._max_response_size_bytes, "Firecrawl Search")
+        except ResponseSizeError as exc:
+            latency = int((time.perf_counter() - started) * 1000)
+            error_text = str(exc)
+            self._logger.error(
+                "firecrawl_search_response_too_large",
+                extra={
+                    "error": error_text,
+                    "query": trimmed_query,
+                    "max_size_mb": self._max_response_size_bytes / (1024 * 1024),
+                },
+            )
+            if self._audit:
+                with contextlib.suppress(Exception):
+                    self._audit(
+                        "ERROR",
+                        "firecrawl_search_response_too_large",
+                        {"error": error_text, "query": trimmed_query},
+                    )
+            return FirecrawlSearchResult(
+                status="error",
+                results=[],
+                latency_ms=latency,
+                error_text=f"Response too large: {error_text}",
+                http_status=None,
             )
         except httpx.HTTPError as exc:
             latency = int((time.perf_counter() - started) * 1000)
@@ -542,6 +582,48 @@ class FirecrawlClient:
                 if self._debug_payloads:
                     self._logger.debug("firecrawl_request_payload", extra={"json": json_body})
                 resp = await self._client.post(self._base_url, headers=headers, json=json_body)
+
+                # Validate response size before parsing
+                try:
+                    await validate_response_size(resp, self._max_response_size_bytes, "Firecrawl")
+                except ResponseSizeError as size_exc:
+                    latency = int((time.perf_counter() - started) * 1000)
+                    last_error = str(size_exc)
+                    last_latency = latency
+                    self._logger.error(
+                        "firecrawl_response_too_large",
+                        extra={
+                            "error": last_error,
+                            "url": url,
+                            "max_size_mb": self._max_response_size_bytes / (1024 * 1024),
+                        },
+                    )
+                    if attempt < self._max_retries:
+                        await asyncio_sleep_backoff(self._backoff_base, attempt)
+                        continue
+                    return FirecrawlResult(
+                        status="error",
+                        http_status=resp.status_code,
+                        content_markdown=None,
+                        content_html=None,
+                        structured_json=None,
+                        metadata_json=None,
+                        links_json=None,
+                        response_success=None,
+                        response_error_code=None,
+                        response_error_message=None,
+                        response_details=None,
+                        latency_ms=latency,
+                        error_text=f"Response too large: {last_error}",
+                        source_url=url,
+                        endpoint="/v1/scrape",
+                        options_json={
+                            "formats": ["markdown", "html"],
+                            "mobile": cur_mobile,
+                            **({"parsers": ["pdf"]} if cur_pdf else {}),
+                        },
+                    )
+
                 latency = int((time.perf_counter() - started) * 1000)
                 try:
                     data = resp.json()

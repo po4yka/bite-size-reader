@@ -10,27 +10,14 @@ from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
-from app.adapters.content.url_processor import URLProcessor
-from app.adapters.external.firecrawl_parser import FirecrawlClient
-from app.adapters.external.response_formatter import ResponseFormatter
-from app.adapters.openrouter.openrouter_client import OpenRouterClient
 from app.adapters.telegram import telegram_client as telegram_client_module
-from app.adapters.telegram.forward_processor import ForwardProcessor
-from app.adapters.telegram.message_handler import MessageHandler
-from app.adapters.telegram.telegram_client import TelegramClient
 from app.core.logging_utils import generate_correlation_id, setup_json_logging
 from app.core.time_utils import UTC
-from app.services.embedding_service import EmbeddingService
-from app.services.hybrid_search_service import HybridSearchService
-from app.services.query_expansion_service import QueryExpansionService
-from app.services.topic_search import LocalTopicSearchService, TopicSearchService
-from app.services.vector_search_service import VectorSearchService
 
 if TYPE_CHECKING:
+    from app.adapters.content.url_processor import URLProcessor
     from app.config import AppConfig
     from app.db.database import Database
-
-DEFAULT_TOPIC_SEARCH_MAX_RESULTS = 5
 
 logger = logging.getLogger(__name__)
 
@@ -74,7 +61,7 @@ class TelegramBot:
     db: Database
 
     def __post_init__(self) -> None:
-        """Initialize bot components."""
+        """Initialize bot components using factory pattern."""
         setup_json_logging(self.cfg.runtime.log_level)
         logger.info(
             "bot_init",
@@ -91,162 +78,64 @@ class TelegramBot:
         if Client is object:
             telegram_client_module.PYROGRAM_AVAILABLE = False
 
-        # Initialize external clients
-        self._firecrawl = FirecrawlClient(
-            api_key=self.cfg.firecrawl.api_key,
-            timeout_sec=self.cfg.runtime.request_timeout_sec,
-            audit=self._audit,
-            debug_payloads=self.cfg.runtime.debug_payloads,
-            log_truncate_length=self.cfg.runtime.log_truncate_length,
-            # Connection pooling configuration
-            max_connections=self.cfg.firecrawl.max_connections,
-            max_keepalive_connections=self.cfg.firecrawl.max_keepalive_connections,
-            keepalive_expiry=self.cfg.firecrawl.keepalive_expiry,
-            credit_warning_threshold=self.cfg.firecrawl.credit_warning_threshold,
-            credit_critical_threshold=self.cfg.firecrawl.credit_critical_threshold,
-        )
-
-        # Enhanced OpenRouter client with structured output support
-        self._openrouter = OpenRouterClient(
-            api_key=self.cfg.openrouter.api_key,
-            model=self.cfg.openrouter.model,
-            fallback_models=list(self.cfg.openrouter.fallback_models),
-            http_referer=self.cfg.openrouter.http_referer,
-            x_title=self.cfg.openrouter.x_title,
-            timeout_sec=self.cfg.runtime.request_timeout_sec,
-            audit=self._audit,
-            debug_payloads=self.cfg.runtime.debug_payloads,
-            provider_order=list(self.cfg.openrouter.provider_order),
-            enable_stats=self.cfg.openrouter.enable_stats,
-            log_truncate_length=self.cfg.runtime.log_truncate_length,
-            # Structured output configuration
-            enable_structured_outputs=self.cfg.openrouter.enable_structured_outputs,
-            structured_output_mode=self.cfg.openrouter.structured_output_mode,
-            require_parameters=self.cfg.openrouter.require_parameters,
-            auto_fallback_structured=self.cfg.openrouter.auto_fallback_structured,
-        )
-
         # Initialize semaphore for concurrency control
         self._ext_sem_size = max(1, self.cfg.runtime.max_concurrent_calls)
         self._ext_sem_obj: asyncio.Semaphore | None = None
 
-        # Initialize modular components
-        self.response_formatter = ResponseFormatter(
-            safe_reply_func=self._safe_reply,
-            reply_json_func=self._reply_json,
-            # telegram_client will be set later after initialization
-        )
+        # Create external clients using factory
+        from app.adapters.telegram.bot_factory import BotFactory
 
-        self.url_processor = URLProcessor(
+        clients = BotFactory.create_external_clients(
+            cfg=self.cfg,
+            audit_func=self._audit,
+        )
+        self._firecrawl = clients.firecrawl
+        self._openrouter = clients.openrouter
+
+        # Create all bot components using factory
+        components = BotFactory.create_components(
             cfg=self.cfg,
             db=self.db,
-            firecrawl=self._firecrawl,
-            openrouter=self._openrouter,
-            response_formatter=self.response_formatter,
+            clients=clients,
             audit_func=self._audit,
-            sem=self._sem,
+            safe_reply_func=self._safe_reply,
+            reply_json_func=self._reply_json,
+            sem_func=self._sem,
         )
+
+        # Assign components to instance attributes
+        self.telegram_client = components.telegram_client
+        self.response_formatter = components.response_formatter
+        self.url_processor = components.url_processor
+        self.forward_processor = components.forward_processor
+        self.message_handler = components.message_handler
+        self.topic_searcher = components.topic_searcher
+        self.local_searcher = components.local_searcher
+        self.embedding_service = components.embedding_service
+        self.vector_search_service = components.vector_search_service
+        self.query_expansion_service = components.query_expansion_service
+        self.hybrid_search_service = components.hybrid_search_service
+        self._container = components.container
 
         # Adapter ensures legacy hooks like ``_handle_url_flow`` and
         # subclasses overriding it still observe URL processing
         # requests, while defaulting to the real processor.
         self._url_processor_entrypoint = _URLProcessorEntrypoint(self)
 
-        self.forward_processor = ForwardProcessor(
-            cfg=self.cfg,
-            db=self.db,
-            openrouter=self._openrouter,
-            response_formatter=self.response_formatter,
-            audit_func=self._audit,
-            sem=self._sem,
-        )
-
-        topic_search_max_results = self._get_topic_search_limit()
-
-        self.topic_searcher = TopicSearchService(
-            firecrawl=self._firecrawl,
-            max_results=topic_search_max_results,
-            audit_func=self._audit,
-        )
-        self.local_searcher = LocalTopicSearchService(
-            db=self.db,
-            max_results=topic_search_max_results,
-            audit_func=self._audit,
-        )
-
-        # Initialize hybrid search services (embedding, vector, hybrid)
-        self.embedding_service = EmbeddingService()
-        self.vector_search_service = VectorSearchService(
-            db=self.db,
-            embedding_service=self.embedding_service,
-            max_results=topic_search_max_results,
-            min_similarity=0.3,
-        )
-        self.query_expansion_service = QueryExpansionService(
-            max_expansions=5,
-            use_synonyms=True,
-        )
-        # Re-ranking is optional and slower, so disabled by default
-        self.reranking_service = None
-        self.hybrid_search_service = HybridSearchService(
-            fts_service=self.local_searcher,
-            vector_service=self.vector_search_service,
-            fts_weight=0.4,
-            vector_weight=0.6,
-            max_results=topic_search_max_results,
-            query_expansion=self.query_expansion_service,
-            reranking=self.reranking_service,
-        )
-
-        self._container = None
-        if getattr(self.cfg.runtime, "enable_hex_container", False):
-            from app.di.container import Container
-
-            self._container = Container(
-                database=self.db,
-                topic_search_service=self.local_searcher,
-                content_fetcher=self._firecrawl,
-                llm_client=self._openrouter,
-                analytics_service=None,  # No analytics service yet
-            )
-            # Wire event handlers automatically
-            self._container.wire_event_handlers_auto()
-
-            logger.info(
-                "hexagonal_architecture_initialized",
-                extra={
-                    "event_bus_handlers": self._container.event_bus().get_handler_count(
-                        type("DomainEvent", (), {})  # Base event type
-                    ),
-                },
-            )
-
-        self.message_handler = MessageHandler(
-            cfg=self.cfg,
-            db=self.db,
-            response_formatter=self.response_formatter,
-            url_processor=cast("URLProcessor", self._url_processor_entrypoint),
-            forward_processor=self.forward_processor,
-            topic_searcher=self.topic_searcher,
-            local_searcher=self.local_searcher,
-            container=self._container,
-            hybrid_search=self.hybrid_search_service,
-        )
-
         # Route URL handling via the bot instance so legacy tests overriding
         # ``_handle_url_flow`` keep working.
         self.message_handler.command_processor.url_processor = cast("URLProcessor", self)
         self.message_handler.url_handler.url_processor = cast("URLProcessor", self)
 
+        # Update message handler to use entrypoint
+        self.message_handler.url_processor = cast("URLProcessor", self._url_processor_entrypoint)
+
         # Expose in-memory state containers for unit tests
         self._awaiting_url_users = self.message_handler.url_handler._awaiting_url_users
         self._pending_multi_links = self.message_handler.url_handler._pending_multi_links
 
-        self.telegram_client = TelegramClient(cfg=self.cfg)
+        # Sync dependencies (in case they were updated)
         self._sync_client_dependencies()
-
-        # Set telegram client on response formatter for message editing
-        self.response_formatter._telegram_client = self.telegram_client
 
     def _sem(self) -> asyncio.Semaphore:
         """Lazy-create a semaphore when an event loop is running.
@@ -316,36 +205,6 @@ class TelegramBot:
             forward_summarizer = getattr(self.forward_processor, "summarizer", None)
             if forward_summarizer is not None:
                 forward_summarizer.openrouter = openrouter
-
-    def _get_topic_search_limit(self) -> int:
-        """Return a sanitized topic search limit from runtime config."""
-        runtime = getattr(self.cfg, "runtime", None)
-        raw_value = getattr(runtime, "topic_search_max_results", DEFAULT_TOPIC_SEARCH_MAX_RESULTS)
-
-        try:
-            limit = int(raw_value)
-        except (TypeError, ValueError):
-            logger.warning(
-                "topic_search_limit_invalid",
-                extra={"value": raw_value},
-            )
-            return DEFAULT_TOPIC_SEARCH_MAX_RESULTS
-
-        if limit <= 0:
-            logger.warning(
-                "topic_search_limit_non_positive",
-                extra={"value": limit},
-            )
-            return DEFAULT_TOPIC_SEARCH_MAX_RESULTS
-
-        if limit > 10:
-            logger.warning(
-                "topic_search_limit_too_large",
-                extra={"value": limit},
-            )
-            return 10
-
-        return limit
 
     def _get_backup_settings(self) -> tuple[bool, int, int, str | None]:
         """Return sanitized backup configuration values."""

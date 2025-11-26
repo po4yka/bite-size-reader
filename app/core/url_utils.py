@@ -372,17 +372,18 @@ def compute_dedupe_hash(url: str) -> str:
     return url_hash_sha256(normalized)
 
 
-def looks_like_url(text: str) -> bool:
+def looks_like_url(text: str, max_text_length_kb: int = 50) -> bool:
     """Check if text contains what looks like a URL.
 
     Args:
         text: Text to check for URL patterns
+        max_text_length_kb: Maximum text length in kilobytes (default: 50)
 
     Returns:
         True if text appears to contain a URL, False otherwise
 
     Note:
-        Text length is limited to 50KB to prevent regex DoS attacks.
+        Text length is limited to prevent regex DoS attacks.
         Longer text should be rejected at the message routing level.
     """
     if not text or not isinstance(text, str):
@@ -390,7 +391,7 @@ def looks_like_url(text: str) -> bool:
 
     # Defense in depth: Limit text length to prevent regex DoS
     # This matches the MAX_TEXT_LENGTH in message_router.py
-    max_text_length = 50 * 1024  # 50KB
+    max_text_length = max_text_length_kb * 1024
     if len(text) > max_text_length:
         logger.warning(
             "looks_like_url_text_too_long",
@@ -407,17 +408,18 @@ def looks_like_url(text: str) -> bool:
         return False
 
 
-def extract_all_urls(text: str) -> list[str]:
+def extract_all_urls(text: str, max_text_length_kb: int = 50) -> list[str]:
     """Extract all URLs from text with optimized performance.
 
     Args:
         text: Text to extract URLs from
+        max_text_length_kb: Maximum text length in kilobytes (default: 50)
 
     Returns:
         List of validated URLs found in text
 
     Note:
-        Text length is limited to 50KB to prevent regex DoS attacks.
+        Text length is limited to prevent regex DoS attacks.
         Longer text should be rejected at the message routing level.
         URLs are validated and deduplicated before being returned.
     """
@@ -426,7 +428,7 @@ def extract_all_urls(text: str) -> list[str]:
 
     # Defense in depth: Limit text length to prevent regex DoS
     # This matches the MAX_TEXT_LENGTH in message_router.py
-    max_text_length = 50 * 1024  # 50KB
+    max_text_length = max_text_length_kb * 1024
     if len(text) > max_text_length:
         logger.warning(
             "extract_all_urls_text_too_long",

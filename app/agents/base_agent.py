@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import logging
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
 from typing import Any, Generic, TypeVar
+
+from pydantic import BaseModel, ConfigDict, Field
 
 logger = logging.getLogger(__name__)
 
@@ -13,8 +14,7 @@ TOutput = TypeVar("TOutput")
 TInput = TypeVar("TInput")
 
 
-@dataclass
-class AgentResult(Generic[TOutput]):
+class AgentResult(BaseModel, Generic[TOutput]):
     """Result of an agent execution.
 
     Attributes:
@@ -24,10 +24,12 @@ class AgentResult(Generic[TOutput]):
         metadata: Additional context and metrics
     """
 
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
     success: bool
     output: TOutput | None = None
     error: str | None = None
-    metadata: dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = Field(default_factory=dict)
 
     @classmethod
     def success_result(cls, output: TOutput, **metadata: Any) -> AgentResult[TOutput]:

@@ -27,6 +27,7 @@ from app.adapters.openrouter.payload_logger import PayloadLogger
 from app.adapters.openrouter.request_builder import RequestBuilder
 from app.adapters.openrouter.response_processor import ResponseProcessor
 from app.core.async_utils import raise_if_cancelled
+from app.core.http_utils import ResponseSizeError, validate_response_size
 from app.models.llm.llm_models import ChatRequest, LLMCallResult
 
 if TYPE_CHECKING:
@@ -98,6 +99,8 @@ class OpenRouterClient:
         max_connections: int = 20,
         max_keepalive_connections: int = 10,
         keepalive_expiry: float = 30.0,
+        # Response size limits
+        max_response_size_mb: int = 10,
     ) -> None:
         # Validate core parameters
         self._validate_init_params(
@@ -110,6 +113,7 @@ class OpenRouterClient:
             max_retries,
             backoff_base,
             structured_output_mode,
+            max_response_size_mb,
         )
 
         # Store configuration
@@ -120,6 +124,7 @@ class OpenRouterClient:
         self._base_url = "https://openrouter.ai/api/v1"
         self._enable_structured_outputs = enable_structured_outputs
         self._closed = False
+        self._max_response_size_bytes = int(max_response_size_mb) * 1024 * 1024
 
         # Optional pricing overrides (USD per 1k tokens) for local cost estimation
         try:
@@ -329,6 +334,7 @@ class OpenRouterClient:
         max_retries: int,
         backoff_base: float,
         structured_output_mode: str,
+        max_response_size_mb: int,
     ) -> None:
         """Validate initialization parameters with specific error types."""
         # Security: Validate API key presence
@@ -422,6 +428,18 @@ class OpenRouterClient:
             raise ConfigurationError(
                 msg,
                 context={"parameter": "structured_output_mode", "value": structured_output_mode},
+            )
+
+        # Validate max_response_size_mb
+        if (
+            not isinstance(max_response_size_mb, int)
+            or max_response_size_mb < 1
+            or max_response_size_mb > 100
+        ):
+            msg = f"Max response size must be between 1 and 100 MB (got {max_response_size_mb})"
+            raise ConfigurationError(
+                msg,
+                context={"parameter": "max_response_size_mb", "value": max_response_size_mb},
             )
 
     def _validate_fallback_models(
@@ -841,6 +859,18 @@ class OpenRouterClient:
                 headers=headers,
                 json=body,
             )
+
+            # Validate response size before parsing
+            try:
+                await validate_response_size(resp, self._max_response_size_bytes, "OpenRouter")
+            except ResponseSizeError as size_exc:
+                latency = int((time.perf_counter() - started) * 1000)
+                return {
+                    "success": False,
+                    "error_text": f"Response too large: {size_exc}",
+                    "latency": latency,
+                    "should_try_next_model": True,
+                }
 
             latency = int((time.perf_counter() - started) * 1000)
 

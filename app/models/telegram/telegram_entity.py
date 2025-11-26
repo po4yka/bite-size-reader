@@ -2,52 +2,46 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import Any
+
+from pydantic import BaseModel, Field, field_validator
 
 from app.models.telegram.telegram_enums import MessageEntityType
 from app.models.telegram.telegram_user import TelegramUser
 
 
-@dataclass
-class MessageEntity:
+class MessageEntity(BaseModel):
     """Telegram MessageEntity object."""
 
-    type: MessageEntityType
-    offset: int
-    length: int
+    type: MessageEntityType = MessageEntityType.MENTION
+    offset: int = Field(default=0, ge=0)
+    length: int = Field(default=0, ge=0)
     url: str | None = None
     user: TelegramUser | None = None
     language: str | None = None
     custom_emoji_id: str | None = None
 
+    @field_validator("type", mode="before")
+    @classmethod
+    def _validate_type(cls, value: Any) -> MessageEntityType:
+        """Handle entity type conversion robustly."""
+        if isinstance(value, MessageEntityType):
+            return value
+
+        try:
+            # Handle both string values and enum objects
+            if hasattr(value, "value"):
+                value = value.value
+            elif hasattr(value, "name"):
+                value = value.name.lower()
+
+            # Convert to our enum
+            return MessageEntityType(str(value).lower())
+        except (ValueError, AttributeError):
+            # Fallback to mention if type is unknown
+            return MessageEntityType.MENTION
+
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> MessageEntity:
         """Create MessageEntity from dictionary."""
-        # Handle entity type conversion more robustly
-        entity_type_str = data.get("type", "mention")
-        try:
-            # Handle both string values and enum objects
-            if hasattr(entity_type_str, "value"):
-                entity_type_str = entity_type_str.value
-            elif hasattr(entity_type_str, "name"):
-                entity_type_str = entity_type_str.name.lower()
-
-            # Convert to our enum
-            entity_type = MessageEntityType(entity_type_str.lower())
-        except (ValueError, AttributeError):
-            # Fallback to mention if type is unknown
-            entity_type = MessageEntityType.MENTION
-
-        user_data = data.get("user")
-        user = TelegramUser.from_dict(user_data) if user_data else None
-
-        return cls(
-            type=entity_type,
-            offset=data.get("offset", 0),
-            length=data.get("length", 0),
-            url=data.get("url"),
-            user=user,
-            language=data.get("language"),
-            custom_emoji_id=data.get("custom_emoji_id"),
-        )
+        return cls.model_validate(data)

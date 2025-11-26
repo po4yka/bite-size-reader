@@ -52,7 +52,7 @@ class SecureFileValidator:
         try:
             temp_dir = Path(tempfile.gettempdir()).resolve()
             allowed.append(temp_dir)
-        except Exception as e:
+        except (OSError, ValueError, RuntimeError) as e:
             logger.warning("failed_to_resolve_temp_dir", extra={"error": str(e)})
 
         # Pyrogram download directory (if exists)
@@ -60,7 +60,7 @@ class SecureFileValidator:
             pyrogram_temp = Path.home() / "Downloads" / "pyrogram"
             if pyrogram_temp.exists():
                 allowed.append(pyrogram_temp.resolve())
-        except Exception:
+        except (OSError, ValueError, RuntimeError):
             pass
 
         return allowed
@@ -120,7 +120,7 @@ class SecureFileValidator:
                         break
                     except ValueError:
                         continue
-            except Exception:
+            except (OSError, AttributeError, TypeError):
                 continue
 
         if not is_in_allowed_dir:

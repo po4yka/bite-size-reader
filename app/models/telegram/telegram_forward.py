@@ -2,17 +2,15 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
+from datetime import datetime
+from typing import Any
+
+from pydantic import BaseModel
 
 from app.models.telegram.telegram_chat import TelegramChat
 
-if TYPE_CHECKING:
-    from datetime import datetime
 
-
-@dataclass
-class ForwardInfo:
+class ForwardInfo(BaseModel):
     """Telegram forward information."""
 
     from_chat: TelegramChat | None = None
@@ -24,13 +22,4 @@ class ForwardInfo:
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> ForwardInfo:
         """Create ForwardInfo from dictionary."""
-        from_chat_data = data.get("from_chat")
-        from_chat = TelegramChat.from_dict(from_chat_data) if from_chat_data else None
-
-        return cls(
-            from_chat=from_chat,
-            from_message_id=data.get("from_message_id"),
-            signature=data.get("signature"),
-            sender_name=data.get("sender_name"),
-            date=data.get("date"),
-        )
+        return cls.model_validate(data)

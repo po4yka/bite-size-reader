@@ -33,6 +33,7 @@ from app.db.models import (
     database_proxy,
     model_to_dict,
 )
+from app.db.rw_lock import AsyncRWLock
 from app.services.topic_search_utils import (
     TopicSearchDocument,
     build_topic_search_document,
@@ -42,12 +43,21 @@ from app.services.topic_search_utils import (
 
 JSONValue = Mapping[str, Any] | Sequence[Any] | str | None
 
-# Database operation timeout in seconds
+# Default database operation timeout in seconds
 # Prevents indefinite hangs on lock acquisition or slow operations
+# Can be overridden via DB_OPERATION_TIMEOUT environment variable
 DB_OPERATION_TIMEOUT = 30.0
 
-# Maximum retries for transient database errors
+# Default maximum retries for transient database errors
+# Can be overridden via DB_MAX_RETRIES environment variable
 DB_MAX_RETRIES = 3
+
+# Default JSON validation limits
+# Can be overridden via DB_JSON_* environment variables
+DB_JSON_MAX_SIZE = 10_000_000  # 10MB
+DB_JSON_MAX_DEPTH = 20
+DB_JSON_MAX_ARRAY_LENGTH = 10_000
+DB_JSON_MAX_DICT_KEYS = 1_000
 
 
 class TopicSearchIndexRebuiltError(RuntimeError):
@@ -72,7 +82,15 @@ class Database:
     _database: peewee.SqliteDatabase = field(init=False)
     _topic_search_index_reset_in_progress: bool = field(default=False, init=False)
     _topic_search_index_delete_warned: bool = field(default=False, init=False)
-    _db_lock: asyncio.Lock = field(init=False)
+    _rw_lock: AsyncRWLock = field(init=False)
+
+    # Configuration values (can be set via database_config parameter or use module defaults)
+    operation_timeout: float = field(default=DB_OPERATION_TIMEOUT)
+    max_retries: int = field(default=DB_MAX_RETRIES)
+    json_max_size: int = field(default=DB_JSON_MAX_SIZE)
+    json_max_depth: int = field(default=DB_JSON_MAX_DEPTH)
+    json_max_array_length: int = field(default=DB_JSON_MAX_ARRAY_LENGTH)
+    json_max_dict_keys: int = field(default=DB_JSON_MAX_DICT_KEYS)
 
     def __post_init__(self) -> None:
         if self.path != ":memory":
@@ -87,16 +105,17 @@ class Database:
             check_same_thread=False,  # Still needed for asyncio.to_thread() but protected by lock
         )
         database_proxy.initialize(self._database)
-        # Initialize lock for thread-safe database access
-        # This serializes all database operations to prevent race conditions
-        self._db_lock = asyncio.Lock()
+        # Initialize read-write lock for thread-safe database access
+        # This allows multiple concurrent readers OR one exclusive writer
+        self._rw_lock = AsyncRWLock()
 
     async def _safe_db_operation(
         self,
         operation: Any,
         *args: Any,
-        timeout: float = DB_OPERATION_TIMEOUT,
+        timeout: float | None = None,
         operation_name: str = "database_operation",
+        read_only: bool = False,
         **kwargs: Any,
     ) -> Any:
         """Execute database operation with timeout and retry protection.
@@ -104,8 +123,9 @@ class Database:
         Args:
             operation: The database operation to execute
             *args: Positional arguments for the operation
-            timeout: Timeout in seconds (default: DB_OPERATION_TIMEOUT)
+            timeout: Timeout in seconds (default: self.operation_timeout)
             operation_name: Name for logging purposes
+            read_only: Whether this is a read-only operation (allows concurrent reads)
             **kwargs: Keyword arguments for the operation
 
         Returns:
@@ -118,14 +138,21 @@ class Database:
             Exception: Other database errors
 
         """
+        if timeout is None:
+            timeout = self.operation_timeout
+
         retries = 0
         last_error = None
 
-        while retries <= DB_MAX_RETRIES:
+        while retries <= self.max_retries:
             try:
                 # Acquire lock with timeout to prevent indefinite hangs
                 async with asyncio.timeout(timeout):
-                    async with self._db_lock:
+                    # Use read lock for read-only operations, write lock otherwise
+                    lock_context = (
+                        self._rw_lock.read_lock() if read_only else self._rw_lock.write_lock()
+                    )
+                    async with lock_context:
                         # Execute operation in thread pool
                         return await asyncio.to_thread(operation, *args, **kwargs)
 
@@ -146,7 +173,7 @@ class Database:
                 error_msg = str(e).lower()
 
                 if "locked" in error_msg or "busy" in error_msg:
-                    if retries < DB_MAX_RETRIES:
+                    if retries < self.max_retries:
                         retries += 1
                         wait_time = 0.1 * (2**retries)  # Exponential backoff
                         self._logger.warning(
@@ -154,7 +181,7 @@ class Database:
                             extra={
                                 "operation": operation_name,
                                 "retry": retries,
-                                "max_retries": DB_MAX_RETRIES,
+                                "max_retries": self.max_retries,
                                 "wait_time": wait_time,
                                 "error": str(e),
                             },
@@ -200,14 +227,14 @@ class Database:
         # Should not reach here, but handle it anyway
         if last_error:
             raise last_error
-        msg = f"Database operation {operation_name} failed after {DB_MAX_RETRIES} retries"
+        msg = f"Database operation {operation_name} failed after {self.max_retries} retries"
         raise RuntimeError(msg) from last_error
 
     async def _safe_db_transaction(
         self,
         operation: Any,
         *args: Any,
-        timeout: float = DB_OPERATION_TIMEOUT,
+        timeout: float | None = None,
         operation_name: str = "database_transaction",
         **kwargs: Any,
     ) -> Any:
@@ -219,7 +246,7 @@ class Database:
         Args:
             operation: The database operation to execute
             *args: Positional arguments for the operation
-            timeout: Timeout in seconds (default: DB_OPERATION_TIMEOUT)
+            timeout: Timeout in seconds (default: self.operation_timeout)
             operation_name: Name for logging purposes
             **kwargs: Keyword arguments for the operation
 
@@ -233,21 +260,25 @@ class Database:
             Exception: Other database errors
 
         """
+        if timeout is None:
+            timeout = self.operation_timeout
+
         retries = 0
         last_error = None
 
-        while retries <= DB_MAX_RETRIES:
+        while retries <= self.max_retries:
             try:
                 async with asyncio.timeout(timeout):
-                    async with self._db_lock:
+                    # Transactions always require write lock
+                    async with self._rw_lock.write_lock():
                         # Execute operation within explicit transaction
                         def _execute_in_transaction():
                             with self._database.atomic() as txn:
                                 try:
                                     # Transaction commits automatically if no exception
                                     return operation(*args, **kwargs)
-                                except Exception:
-                                    # Explicit rollback on any error
+                                except BaseException:
+                                    # Explicit rollback on any error (catches all exceptions including system exits)
                                     txn.rollback()
                                     raise
 
@@ -269,7 +300,7 @@ class Database:
                 error_msg = str(e).lower()
 
                 if "locked" in error_msg or "busy" in error_msg:
-                    if retries < DB_MAX_RETRIES:
+                    if retries < self.max_retries:
                         retries += 1
                         wait_time = 0.1 * (2**retries)  # Exponential backoff
                         self._logger.warning(
@@ -277,7 +308,7 @@ class Database:
                             extra={
                                 "operation": operation_name,
                                 "retry": retries,
-                                "max_retries": DB_MAX_RETRIES,
+                                "max_retries": self.max_retries,
                                 "wait_time": wait_time,
                                 "error": str(e),
                             },
@@ -322,7 +353,7 @@ class Database:
         # Should not reach here, but handle it anyway
         if last_error:
             raise last_error
-        msg = f"Database transaction {operation_name} failed after {DB_MAX_RETRIES} retries"
+        msg = f"Database transaction {operation_name} failed after {self.max_retries} retries"
         raise RuntimeError(msg) from last_error
 
     @contextlib.contextmanager
@@ -350,7 +381,7 @@ class Database:
         if isinstance(value, bytes | bytearray):
             try:
                 value = value.decode("utf-8")
-            except Exception:
+            except (UnicodeDecodeError, AttributeError):
                 value = value.decode("utf-8", errors="replace")
         if isinstance(value, str):
             stripped = value.strip()
@@ -371,8 +402,7 @@ class Database:
                 return None
             return coerced
 
-    @staticmethod
-    def _decode_json_field(value: Any) -> tuple[Any | None, str | None]:
+    def _decode_json_field(self, value: Any) -> tuple[Any | None, str | None]:
         """Decode JSON field with security validation.
 
         Args:
@@ -390,7 +420,7 @@ class Database:
         if isinstance(value, bytes | bytearray):
             try:
                 value = value.decode("utf-8")
-            except Exception:
+            except (UnicodeDecodeError, AttributeError):
                 return None, "decode_error"
 
         # If already a dict/list, validate structure
@@ -408,10 +438,10 @@ class Database:
             # Use safe_json_parse with validation
             parsed, error = safe_json_parse(
                 stripped,
-                max_size=10_000_000,  # 10 MB
-                max_depth=20,
-                max_array_length=10_000,
-                max_dict_keys=1_000,
+                max_size=self.json_max_size,
+                max_depth=self.json_max_depth,
+                max_array_length=self.json_max_array_length,
+                max_dict_keys=self.json_max_dict_keys,
             )
             if error:
                 return None, error
@@ -435,7 +465,7 @@ class Database:
         if isinstance(value, bytes | bytearray):
             try:
                 value = value.decode("utf-8")
-            except Exception:
+            except (UnicodeDecodeError, AttributeError):
                 value = value.decode("utf-8", errors="replace")
         if isinstance(value, dict | list):
             return value, False, None
@@ -636,7 +666,7 @@ class Database:
             if parent:
                 return f".../{parent}/{p.name}"
             return p.name
-        except Exception:
+        except (OSError, ValueError, AttributeError):
             return "..."
 
     @staticmethod
@@ -888,6 +918,7 @@ class Database:
             self.get_request_by_dedupe_hash,
             dedupe_hash,
             operation_name="get_request_by_dedupe_hash",
+            read_only=True,
         )
 
     def get_request_by_id(self, request_id: int) -> dict[str, Any] | None:
@@ -900,6 +931,7 @@ class Database:
             self.get_request_by_id,
             request_id,
             operation_name="get_request_by_id",
+            read_only=True,
         )
 
     def get_crawl_result_by_request(self, request_id: int) -> dict[str, Any] | None:
@@ -915,6 +947,7 @@ class Database:
             self.get_crawl_result_by_request,
             request_id,
             operation_name="get_crawl_result_by_request",
+            read_only=True,
         )
 
     def get_summary_by_request(self, request_id: int) -> dict[str, Any] | None:
@@ -930,6 +963,7 @@ class Database:
             self.get_summary_by_request,
             request_id,
             operation_name="get_summary_by_request",
+            read_only=True,
         )
 
     def get_summary_by_id(self, summary_id: int) -> dict[str, Any] | None:
@@ -954,6 +988,7 @@ class Database:
             self.get_summary_by_id,
             summary_id,
             operation_name="get_summary_by_id",
+            read_only=True,
         )
 
     def mark_summary_as_read_by_id(self, summary_id: int) -> None:
@@ -1097,7 +1132,7 @@ class Database:
                     column.name
                     for column in self._database.get_columns(UserInteraction._meta.table_name)
                 }
-            except Exception:
+            except (peewee.DatabaseError, AttributeError):
                 columns = set()
             if updated_at_field.column_name in columns:
                 update_values[updated_at_field] = dt.datetime.now(UTC)
@@ -1557,6 +1592,7 @@ class Database:
             self.get_summary_embedding,
             summary_id=summary_id,
             operation_name="get_summary_embedding",
+            read_only=True,
         )
 
     @staticmethod
@@ -1710,6 +1746,7 @@ class Database:
             limit=limit,
             topic=topic,
             operation_name="get_unread_summaries",
+            read_only=True,
         )
 
     @staticmethod
@@ -1767,15 +1804,15 @@ class Database:
             elif hasattr(row, "keys"):
                 try:
                     value = row["rowid"]
-                except Exception:
+                except (KeyError, TypeError, IndexError):
                     try:
                         value = row["request_id"]
-                    except Exception:
+                    except (KeyError, TypeError, IndexError):
                         value = None
             if value is None:
                 try:
                     value = row[0]
-                except Exception:
+                except (KeyError, TypeError, IndexError):
                     value = None
             if value is None:
                 continue

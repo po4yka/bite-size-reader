@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
+
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.core.lang import detect_language
 
@@ -17,13 +18,14 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-@dataclass(slots=True)
-class VectorSearchResult:
+class VectorSearchResult(BaseModel):
     """Result from vector similarity search."""
+
+    model_config = ConfigDict(frozen=True)
 
     request_id: int
     summary_id: int
-    similarity_score: float  # 0.0 to 1.0 (higher = more similar)
+    similarity_score: float = Field(ge=0.0, le=1.0)  # 0.0 to 1.0 (higher = more similar)
     url: str | None
     title: str | None
     snippet: str | None
@@ -91,7 +93,7 @@ class VectorSearchService:
             query_embedding = await self._embedding_service.generate_embedding(
                 query.strip(), language=query_language
             )
-        except Exception:
+        except (RuntimeError, ValueError, OSError):
             logger.exception(
                 "query_embedding_generation_failed",
                 extra={"cid": correlation_id, "query": query[:100], "language": query_language},
@@ -206,7 +208,7 @@ class VectorSearchService:
                                 "published_at": published_at,
                             }
                         )
-                    except Exception:
+                    except (ValueError, KeyError, AttributeError, TypeError):
                         logger.exception(
                             "failed_to_process_embedding_row",
                             extra={"summary_id": row.summary.id},
@@ -256,7 +258,7 @@ class VectorSearchService:
                         published_at=candidate.get("published_at"),
                     )
                 )
-            except Exception:
+            except (ValueError, TypeError, KeyError):
                 logger.exception(
                     "similarity_computation_failed",
                     extra={"summary_id": candidate.get("summary_id")},

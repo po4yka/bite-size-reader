@@ -5,13 +5,14 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-from dataclasses import asdict, dataclass
 from enum import Enum
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
+
+from pydantic import BaseModel, ConfigDict, Field
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
-    from pathlib import Path
 
     from app.agents.content_extraction_agent import ContentExtractionAgent
     from app.agents.summarization_agent import SummarizationAgent
@@ -41,69 +42,69 @@ class RetryStrategy(str, Enum):
     LINEAR = "linear"
 
 
-@dataclass
-class RetryConfig:
+class RetryConfig(BaseModel):
     """Configuration for retry behavior."""
 
+    model_config = ConfigDict(frozen=True)
+
     strategy: RetryStrategy = RetryStrategy.EXPONENTIAL
-    max_attempts: int = 3
-    initial_delay_ms: int = 1000
-    max_delay_ms: int = 30000
-    backoff_multiplier: float = 2.0
+    max_attempts: int = Field(default=3, ge=1, le=10)
+    initial_delay_ms: int = Field(default=1000, ge=0)
+    max_delay_ms: int = Field(default=30000, ge=0)
+    backoff_multiplier: float = Field(default=2.0, ge=1.0)
 
 
-@dataclass
-class PipelineProgress:
+class PipelineProgress(BaseModel):
     """Progress update for streaming pipeline."""
+
+    model_config = ConfigDict(frozen=True)
 
     correlation_id: str
     stage: PipelineStage
-    progress_percent: float
+    progress_percent: float = Field(ge=0, le=100)
     message: str
     metadata: dict[str, Any] | None = None
 
 
-@dataclass
-class PipelineInput:
+class PipelineInput(BaseModel):
     """Input for the complete summarization pipeline."""
+
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
     url: str
     correlation_id: str
     language: str = "en"
     force_refresh: bool = False
-    max_summary_retries: int = 3
+    max_summary_retries: int = Field(default=3, ge=1)
     retry_config: RetryConfig | None = None
     enable_state_persistence: bool = False
     state_dir: Path | None = None
 
 
-@dataclass
-class BatchPipelineInput:
+class BatchPipelineInput(BaseModel):
     """Input for batch processing multiple URLs."""
 
     urls: list[str]
     base_correlation_id: str
     language: str = "en"
     force_refresh: bool = False
-    max_summary_retries: int = 3
-    max_concurrent: int = 3
+    max_summary_retries: int = Field(default=3, ge=1)
+    max_concurrent: int = Field(default=3, ge=1, le=100)
     retry_config: RetryConfig | None = None
 
 
-@dataclass
-class PipelineOutput:
+class PipelineOutput(BaseModel):
     """Output from the complete summarization pipeline."""
 
     summary_json: dict[str, Any]
     normalized_url: str
-    content_length: int
+    content_length: int = Field(ge=0)
     extraction_metadata: dict[str, Any]
-    summarization_attempts: int
-    validation_warnings: list[str]
+    summarization_attempts: int = Field(ge=1)
+    validation_warnings: list[str] = Field(default_factory=list)
 
 
-@dataclass
-class BatchPipelineOutput:
+class BatchPipelineOutput(BaseModel):
     """Output from batch pipeline processing."""
 
     correlation_id: str
@@ -111,12 +112,13 @@ class BatchPipelineOutput:
     success: bool
     output: PipelineOutput | None = None
     error: str | None = None
-    attempts: int = 1
+    attempts: int = Field(default=1, ge=1)
 
 
-@dataclass
-class PipelineState:
+class PipelineState(BaseModel):
     """Saved state for pipeline resumption."""
+
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
     correlation_id: str
     url: str
@@ -124,27 +126,16 @@ class PipelineState:
     stage: PipelineStage
     extraction_output: dict[str, Any] | None = None
     summarization_output: dict[str, Any] | None = None
-    attempts: int = 1
+    attempts: int = Field(default=1, ge=1)
     errors: list[str] | None = None
-
-    def to_dict(self) -> dict[str, Any]:
-        """Convert to dictionary for serialization."""
-        return asdict(self)
-
-    @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> PipelineState:
-        """Create from dictionary."""
-        # Convert stage string to enum
-        if "stage" in data and isinstance(data["stage"], str):
-            data["stage"] = PipelineStage(data["stage"])
-        return cls(**data)
 
     def save(self, state_dir: Path) -> None:
         """Save state to file."""
         state_dir.mkdir(parents=True, exist_ok=True)
         state_file = state_dir / f"{self.correlation_id}.json"
         with state_file.open("w") as f:
-            json.dump(self.to_dict(), f, indent=2, default=str)
+            # Use Pydantic's model_dump for serialization
+            f.write(self.model_dump_json(indent=2))
         logger.info(f"Saved pipeline state to {state_file}")
 
     @classmethod
@@ -156,7 +147,8 @@ class PipelineState:
         with state_file.open() as f:
             data = json.load(f)
         logger.info(f"Loaded pipeline state from {state_file}")
-        return cls.from_dict(data)
+        # Use Pydantic's model_validate for deserialization
+        return cls.model_validate(data)
 
 
 class AgentOrchestrator:

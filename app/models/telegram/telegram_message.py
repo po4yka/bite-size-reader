@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from typing import Any
+
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.models.telegram.telegram_chat import TelegramChat
 from app.models.telegram.telegram_entity import MessageEntity
@@ -16,18 +17,19 @@ from app.models.telegram.telegram_user import TelegramUser
 logger = logging.getLogger(__name__)
 
 
-@dataclass
-class TelegramMessage:
+class TelegramMessage(BaseModel):
     """Comprehensive Telegram Message model."""
+
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
     message_id: int
     from_user: TelegramUser | None = None
     date: datetime | None = None
     chat: TelegramChat | None = None
     text: str | None = None
-    entities: list[MessageEntity] = field(default_factory=list)
+    entities: list[MessageEntity] = Field(default_factory=list)
     caption: str | None = None
-    caption_entities: list[MessageEntity] = field(default_factory=list)
+    caption_entities: list[MessageEntity] = Field(default_factory=list)
 
     # Media fields
     photo: list[dict[str, Any]] | None = None
@@ -492,21 +494,8 @@ class TelegramMessage:
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for serialization."""
-        result = {}
-        for field_name, field_value in self.__dict__.items():
-            if isinstance(field_value, Enum):
-                result[field_name] = field_value.value
-            elif isinstance(field_value, datetime):
-                result[field_name] = field_value.isoformat()
-            elif isinstance(field_value, TelegramUser | TelegramChat):
-                result[field_name] = field_value.__dict__
-            elif isinstance(field_value, list):
-                result[field_name] = [
-                    item.__dict__ if hasattr(item, "__dict__") else item for item in field_value
-                ]
-            else:
-                result[field_name] = field_value
-        return result
+        # Use Pydantic's model_dump with custom serialization
+        return self.model_dump(mode="json")
 
     def get_media_info(self) -> dict[str, Any] | list[dict[str, Any]] | None:
         """Get media information based on media type."""
