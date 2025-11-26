@@ -33,20 +33,7 @@ services:
           cpus: '0.25'
 
     healthcheck:
-      test: |
-        CMD-SHELL "
-        timeout 10s uv run python -c '
-        import os, sqlite3, sys
-        try:
-            db_path = os.getenv(\"DB_PATH\", \"/data/app.db\")
-            conn = sqlite3.connect(db_path, timeout=5)
-            conn.execute(\"SELECT 1\").fetchone()
-            conn.close()
-            print(\"Health check passed\")
-        except Exception as e:
-            print(f\"Health check failed: {e}\")
-            sys.exit(1)
-        ' 2>&1"
+      test: ["CMD", "python", "-c", "import sqlite3, os; conn = sqlite3.connect(os.getenv('DB_PATH', '/data/app.db'), timeout=5); conn.execute('SELECT 1').fetchone(); conn.close()"]
       interval: 30s
       timeout: 10s
       retries: 5
