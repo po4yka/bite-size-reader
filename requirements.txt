@@ -83,7 +83,7 @@ httptools==0.7.1
     # via uvicorn
 httpx==0.28.1
     # via bite-size-reader (pyproject.toml)
-huggingface-hub==1.1.5
+huggingface-hub==0.36.0
     # via
     #   sentence-transformers
     #   tokenizers
@@ -254,7 +254,7 @@ tld==0.13.1
     # via courlan
 tokenizers==0.22.1
     # via transformers
-torch==2.9.1
+torch==2.9.1+cpu
     # via sentence-transformers
 tqdm==4.67.1
     # via
