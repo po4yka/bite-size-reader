@@ -2,6 +2,14 @@
 
 Async Telegram bot that summarizes web articles and YouTube videos. For articles, it uses Firecrawl + OpenRouter; for YouTube videos, it downloads the video (1080p) and extracts transcripts. Also supports summarizing forwarded channel posts. Returns a strict JSON summary and stores artifacts in SQLite. See SPEC.md for full details.
 
+## Tech stack
+- **Async Telegram bot** powered by [Pyrogram](https://docs.pyrogram.org/) with `tgcrypto` for encryption acceleration and `uvloop` for faster event loops.
+- **Content extraction + NLP** built on `trafilatura` for HTML parsing, `spaCy` (English + Russian models) for language detection, `sentence-transformers` + `scikit-learn` for embeddings and clustering, and `json_repair` to harden LLM JSON outputs.
+- **LLM + web summarization** orchestrated through `httpx` (HTTP/2) clients calling Firecrawl for scraping and OpenRouter for model completions, with optional structured output retries.
+- **Persistence** handled via the Peewee ORM targeting SQLite, with audit-friendly correlation IDs on all requests.
+- **YouTube pipeline** using `yt-dlp` for downloads, `youtube-transcript-api` for transcripts, and `ffmpeg` tooling in the container image to extract media artifacts.
+- **API surface** exposing an optional FastAPI server (run by Uvicorn) plus a CLI entrypoint for local summaries.
+
 ## Architecture overview
 
 ```mermaid
