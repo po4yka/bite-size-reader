@@ -26,6 +26,18 @@ class SummaryEmbeddingGenerator:
         self._embedding_service = embedding_service or EmbeddingService()
         self._model_version = model_version
 
+    @property
+    def db(self) -> Database:
+        """Expose the underlying database instance."""
+
+        return self._db
+
+    @property
+    def embedding_service(self) -> EmbeddingService:
+        """Expose the embedding service in use."""
+
+        return self._embedding_service
+
     async def generate_embedding_for_summary(
         self,
         summary_id: int,
