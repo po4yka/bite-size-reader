@@ -61,6 +61,7 @@ class Container:
         webhook_client: Any | None = None,
         webhook_url: str | None = None,
         vector_store: Any | None = None,
+        embedding_generator: Any | None = None,
     ) -> None:
         """Initialize the container.
 
@@ -88,6 +89,7 @@ class Container:
         self._webhook_client = webhook_client
         self._webhook_url = webhook_url
         self._vector_store = vector_store
+        self._embedding_generator = embedding_generator
 
         # Lazy-initialized components
         self._event_bus: EventBus | None = None
@@ -266,4 +268,6 @@ class Container:
             cache_service=self._cache_service,
             webhook_client=self._webhook_client,
             webhook_url=self._webhook_url,
+            embedding_generator=self._embedding_generator,
+            vector_store=self._vector_store,
         )

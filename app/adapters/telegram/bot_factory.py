@@ -15,6 +15,7 @@ from app.infrastructure.vector.chroma_store import ChromaVectorStore
 from app.services.embedding_service import EmbeddingService
 from app.services.hybrid_search_service import HybridSearchService
 from app.services.query_expansion_service import QueryExpansionService
+from app.services.summary_embedding_generator import SummaryEmbeddingGenerator
 from app.services.topic_search import LocalTopicSearchService, TopicSearchService
 from app.services.vector_search_service import VectorSearchService
 
@@ -173,6 +174,7 @@ class BotFactory:
             max_results=topic_search_max_results,
             min_similarity=0.3,
         )
+        embedding_generator = SummaryEmbeddingGenerator(db=db, embedding_service=embedding_service)
         query_expansion_service = QueryExpansionService(
             max_expansions=5,
             use_synonyms=True,
@@ -201,6 +203,7 @@ class BotFactory:
                 llm_client=clients.openrouter,
                 analytics_service=None,  # No analytics service yet
                 vector_store=vector_store,
+                embedding_generator=embedding_generator,
             )
             # Wire event handlers automatically
             container.wire_event_handlers_auto()

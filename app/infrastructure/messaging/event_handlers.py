@@ -9,6 +9,7 @@ from typing import Any
 
 from app.domain.events.request_events import RequestCompleted, RequestFailed
 from app.domain.events.summary_events import SummaryCreated, SummaryMarkedAsRead
+from app.services.note_text_builder import build_note_text
 
 logger = logging.getLogger(__name__)
 
@@ -20,14 +21,16 @@ class EmbeddingGenerationEventHandler:
     generates embeddings for semantic search.
     """
 
-    def __init__(self, embedding_generator: Any) -> None:
+    def __init__(self, embedding_generator: Any, vector_store: Any | None = None) -> None:
         """Initialize the handler.
 
         Args:
             embedding_generator: SummaryEmbeddingGenerator instance.
+            vector_store: Optional ChromaVectorStore for syncing embeddings.
 
         """
         self._generator = embedding_generator
+        self._vector_store = vector_store
 
     async def on_summary_created(self, event: SummaryCreated) -> None:
         """Generate embedding when a new summary is created.
@@ -70,6 +73,8 @@ class EmbeddingGenerationEventHandler:
                     },
                 )
 
+            await self._sync_vector_store(event.request_id)
+
         except Exception as e:
             # Log error but don't fail - embedding generation is not critical
             logger.exception(
@@ -80,6 +85,145 @@ class EmbeddingGenerationEventHandler:
                     "error": str(e),
                 },
             )
+
+    async def _sync_vector_store(self, request_id: int) -> None:
+        """Sync the latest embedding to the vector store if configured."""
+
+        if not self._vector_store:
+            return
+
+        db = getattr(self._generator, "db", None)
+        embedding_service = getattr(self._generator, "embedding_service", None)
+
+        if db is None or embedding_service is None:
+            logger.warning(
+                "vector_store_sync_unavailable",
+                extra={"request_id": request_id, "reason": "missing_dependencies"},
+            )
+            return
+
+        summary = await db.async_get_summary_by_request(request_id)
+        if not summary:
+            logger.info(
+                "vector_store_delete_missing_summary",
+                extra={"request_id": request_id},
+            )
+            self._vector_store.delete_by_request_id(request_id)
+            return
+
+        payload = summary.get("json_payload")
+        summary_id = summary.get("id")
+
+        if not payload or not summary_id:
+            logger.info(
+                "vector_store_delete_empty_payload",
+                extra={"request_id": request_id, "summary_id": summary_id},
+            )
+            self._vector_store.delete_by_request_id(request_id)
+            return
+
+        embedding_row = await db.async_get_summary_embedding(summary_id)
+        if not embedding_row:
+            logger.warning(
+                "vector_store_missing_embedding",
+                extra={"request_id": request_id, "summary_id": summary_id},
+            )
+            self._vector_store.delete_by_request_id(request_id)
+            return
+
+        note_text = build_note_text(
+            payload,
+            request_id=request_id,
+            summary_id=summary_id,
+            language=self._determine_language(summary),
+            user_note=self._extract_user_note(payload),
+        )
+
+        if not note_text.text:
+            logger.info(
+                "vector_store_delete_empty_note",
+                extra={"request_id": request_id, "summary_id": summary_id},
+            )
+            self._vector_store.delete_by_request_id(request_id)
+            return
+
+        embedding = embedding_service.deserialize_embedding(embedding_row["embedding_blob"])
+        vector = embedding.tolist() if hasattr(embedding, "tolist") else list(embedding)
+
+        metadata = {
+            **note_text.metadata,
+            **self._build_metadata_from_payload(payload, summary),
+            "text": note_text.text,
+        }
+
+        self._vector_store.upsert_notes([vector], [metadata])
+
+        logger.info(
+            "vector_store_synced",
+            extra={
+                "request_id": request_id,
+                "summary_id": summary_id,
+                "metadata_keys": sorted(metadata.keys()),
+            },
+        )
+
+    @staticmethod
+    def _build_metadata_from_payload(payload: Any, summary: dict[str, Any]) -> dict[str, Any]:
+        metadata = payload.get("metadata", {}) if isinstance(payload, dict) else {}
+        request_data = summary.get("request") if isinstance(summary, dict) else {}
+
+        url = (
+            metadata.get("canonical_url")
+            or metadata.get("url")
+            or (request_data or {}).get("normalized_url")
+            or (request_data or {}).get("input_url")
+        )
+
+        title = metadata.get("title") or (
+            payload.get("title") if isinstance(payload, dict) else None
+        )
+        source = metadata.get("domain") or metadata.get("source")
+        published_at = metadata.get("published_at") or metadata.get("published")
+
+        clean_metadata = {
+            "url": url,
+            "title": title,
+            "source": source,
+            "published_at": published_at,
+        }
+
+        return {k: v for k, v in clean_metadata.items() if v is not None}
+
+    @staticmethod
+    def _determine_language(summary: dict[str, Any]) -> str | None:
+        if not summary:
+            return None
+
+        language = summary.get("lang") or summary.get("language")
+        if language:
+            return language
+
+        request_data = summary.get("request") or {}
+        if isinstance(request_data, dict):
+            return request_data.get("lang_detected")
+        return None
+
+    @staticmethod
+    def _extract_user_note(payload: Any) -> str | None:
+        if not isinstance(payload, dict):
+            return None
+
+        metadata = payload.get("metadata", {}) if isinstance(payload, dict) else {}
+
+        for key in ("user_note", "note", "notes"):
+            value = payload.get(key)
+            if value:
+                return str(value)
+
+            meta_value = metadata.get(key)
+            if meta_value:
+                return str(meta_value)
+        return None
 
 
 class SearchIndexEventHandler:
@@ -800,6 +944,7 @@ def wire_event_handlers(
     webhook_client: Any | None = None,
     webhook_url: str | None = None,
     embedding_generator: Any | None = None,
+    vector_store: Any | None = None,
 ) -> None:
     """Wire up all event handlers to the event bus.
 
@@ -816,6 +961,7 @@ def wire_event_handlers(
         webhook_client: Optional HTTP client for sending webhooks.
         webhook_url: Optional webhook URL to send events to.
         embedding_generator: Optional SummaryEmbeddingGenerator for vector embeddings.
+        vector_store: Optional ChromaVectorStore for note embeddings.
 
     Example:
         ```python
@@ -847,7 +993,9 @@ def wire_event_handlers(
     cache_handler = CacheInvalidationEventHandler(cache_service)
     webhook_handler = WebhookEventHandler(webhook_client, webhook_url)
     embedding_handler = (
-        EmbeddingGenerationEventHandler(embedding_generator) if embedding_generator else None
+        EmbeddingGenerationEventHandler(embedding_generator, vector_store)
+        if embedding_generator
+        else None
     )
 
     # Wire up summary events
