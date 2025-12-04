@@ -115,6 +115,7 @@ class TelegramBot:
         self.vector_search_service = components.vector_search_service
         self.query_expansion_service = components.query_expansion_service
         self.hybrid_search_service = components.hybrid_search_service
+        self.vector_store = components.vector_store
         self._container = components.container
 
         # Adapter ensures legacy hooks like ``_handle_url_flow`` and
@@ -128,7 +129,7 @@ class TelegramBot:
         self.message_handler.url_handler.url_processor = cast("URLProcessor", self)
 
         # Update message handler to use entrypoint
-        self.message_handler.url_processor = cast("URLProcessor", self._url_processor_entrypoint)
+        self.message_handler.url_processor = cast("URLProcessor", self._url_processor_entrypoint)  # type: ignore[attr-defined]
 
         # Expose in-memory state containers for unit tests
         self._awaiting_url_users = self.message_handler.url_handler._awaiting_url_users

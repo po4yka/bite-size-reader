@@ -670,6 +670,69 @@ class ContentLimitsConfig(BaseModel):
         return parsed
 
 
+class ChromaConfig(BaseModel):
+    """Vector store configuration for Chroma."""
+
+    model_config = ConfigDict(frozen=True, populate_by_name=True)
+
+    host: str = Field(
+        default="http://localhost:8000",
+        validation_alias="CHROMA_HOST",
+        description="Chroma HTTP endpoint (scheme + host)",
+    )
+    auth_token: str | None = Field(
+        default=None,
+        validation_alias="CHROMA_AUTH_TOKEN",
+        description="Optional bearer token for secured Chroma deployments",
+    )
+    environment: str = Field(
+        default="dev",
+        validation_alias=AliasChoices("CHROMA_ENV", "APP_ENV", "ENVIRONMENT"),
+        description="Environment label used for namespacing collections",
+    )
+    user_scope: str = Field(
+        default="public",
+        validation_alias="CHROMA_USER_SCOPE",
+        description="User or tenant scope used for namespacing collections",
+    )
+
+    @field_validator("host", mode="before")
+    @classmethod
+    def _validate_host(cls, value: Any) -> str:
+        host = str(value or "").strip()
+        if not host:
+            msg = "Chroma host is required"
+            raise ValueError(msg)
+        if len(host) > 200:
+            msg = "Chroma host value appears to be too long"
+            raise ValueError(msg)
+        if "\x00" in host:
+            msg = "Chroma host contains invalid characters"
+            raise ValueError(msg)
+        return host
+
+    @field_validator("auth_token", mode="before")
+    @classmethod
+    def _validate_auth_token(cls, value: Any) -> str | None:
+        if value in (None, ""):
+            return None
+        token = str(value).strip()
+        if len(token) > 500:
+            msg = "Chroma auth token appears to be too long"
+            raise ValueError(msg)
+        return token
+
+    @field_validator("environment", "user_scope", mode="before")
+    @classmethod
+    def _sanitize_names(cls, value: Any, info: ValidationInfo) -> str:
+        raw = str(value or "").strip() or cls.model_fields[info.field_name].default
+        cleaned = "".join(ch for ch in raw if ch.isalnum() or ch in {"-", "_"})
+        if not cleaned:
+            msg = f"{info.field_name.replace('_', ' ').capitalize()} cannot be empty"
+            raise ValueError(msg)
+        return cleaned.lower()
+
+
 class RuntimeConfig(BaseModel):
     model_config = ConfigDict(frozen=True, populate_by_name=True)
 
@@ -839,6 +902,7 @@ class AppConfig:
     telegram_limits: TelegramLimitsConfig
     database: DatabaseConfig
     content_limits: ContentLimitsConfig
+    vector_store: ChromaConfig
 
 
 class Settings(BaseSettings):
@@ -865,6 +929,7 @@ class Settings(BaseSettings):
     telegram_limits: TelegramLimitsConfig = Field(default_factory=TelegramLimitsConfig)
     database: DatabaseConfig = Field(default_factory=DatabaseConfig)
     content_limits: ContentLimitsConfig = Field(default_factory=ContentLimitsConfig)
+    vector_store: ChromaConfig = Field(default_factory=ChromaConfig)
 
     @model_validator(mode="before")
     @classmethod
@@ -947,6 +1012,7 @@ class Settings(BaseSettings):
             telegram_limits=self.telegram_limits,
             database=self.database,
             content_limits=self.content_limits,
+            vector_store=self.vector_store,
         )
 
 

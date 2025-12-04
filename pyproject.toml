@@ -138,6 +138,7 @@ dependencies = [
   "json_repair>=0.54.2",
   "scikit-learn>=1.7.2",
   "sentence-transformers>=5.1.2",
+  "chromadb>=0.6.3",
   "orjson>=3.11.4",
   "uvloop>=0.22.1",
   # YouTube support
