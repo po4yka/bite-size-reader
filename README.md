@@ -66,6 +66,7 @@ Environment
 - `PREFERRED_LANG=auto` (auto|en|ru)
 - `DEBUG_PAYLOADS=0` — when `1`, logs request/response payload previews for Firecrawl/OpenRouter (with Authorization redacted)
  - `MAX_CONCURRENT_CALLS=4` — caps simultaneous Firecrawl/OpenRouter calls
+- Semantic search uses the Chroma vector backend; ensure `CHROMA_HOST`, `CHROMA_AUTH_TOKEN` (if required), and related settings point to a reachable Chroma deployment.
 
 Repository layout
 - `app/core` — URL normalization, JSON contract, logging, language helpers
