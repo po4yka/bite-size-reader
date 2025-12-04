@@ -117,7 +117,7 @@ httpx==0.28.1
     # via
     #   bite-size-reader (pyproject.toml)
     #   chromadb
-huggingface-hub==0.36.0
+huggingface-hub==1.1.7
     # via
     #   sentence-transformers
     #   tokenizers
