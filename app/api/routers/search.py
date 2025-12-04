@@ -1,19 +1,43 @@
-"""
-Search and discovery endpoints.
-"""
+"""Search and discovery endpoints."""
 
 from collections import Counter
 from datetime import datetime, timedelta
+from functools import lru_cache
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.api.auth import get_current_user
+from app.config import ChromaConfig
 from app.core.logging_utils import get_logger
 from app.core.time_utils import UTC
 from app.db.models import Request as RequestModel, Summary, TopicSearchIndex
+from app.infrastructure.vector.chroma_store import ChromaVectorStore
+from app.services.chroma_vector_search_service import ChromaVectorSearchService
+from app.services.embedding_service import EmbeddingService
 
 logger = get_logger(__name__)
 router = APIRouter()
+
+
+@lru_cache(maxsize=1)
+def _chroma_search_service() -> ChromaVectorSearchService:
+    config = ChromaConfig()
+    embedding_service = EmbeddingService()
+    vector_store = ChromaVectorStore(
+        host=config.host,
+        auth_token=config.auth_token,
+        environment=config.environment,
+        user_scope=config.user_scope,
+    )
+    return ChromaVectorSearchService(
+        vector_store=vector_store,
+        embedding_service=embedding_service,
+        default_top_k=100,
+    )
+
+
+def get_chroma_search_service() -> ChromaVectorSearchService:
+    return _chroma_search_service()
 
 
 @router.get("/search")
@@ -105,6 +129,93 @@ async def search_summaries(
     except Exception as e:
         logger.error(f"Search failed: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Search failed: {e!s}") from e
+
+
+@router.get("/search/semantic")
+async def semantic_search_summaries(
+    q: str = Query(..., min_length=2, max_length=200),
+    limit: int = Query(20, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    language: str | None = Query(None, min_length=2, max_length=10),
+    tags: list[str] | None = Query(None),
+    user_scope: str | None = Query(None, min_length=1, max_length=50),
+    user=Depends(get_current_user),
+    chroma_service: ChromaVectorSearchService = Depends(get_chroma_search_service),
+):
+    """Semantic search across summaries using Chroma embeddings."""
+
+    try:
+        search_results = await chroma_service.search(
+            q,
+            language=language,
+            tags=tags,
+            user_scope=user_scope,
+            limit=limit,
+            offset=offset,
+        )
+
+        request_ids = [result.request_id for result in search_results.results]
+
+        requests_query = RequestModel.select().where(
+            (RequestModel.id.in_(request_ids)) & (RequestModel.user_id == user["user_id"])
+        )
+        requests_map = {req.id: req for req in requests_query}
+
+        summaries_query = Summary.select().where(Summary.request.in_(list(requests_map.keys())))
+        summaries_map = {summ.request.id: summ for summ in summaries_query}
+
+        results: list[dict[str, object]] = []
+
+        for result in search_results.results:
+            request = requests_map.get(result.request_id)
+            if not request:
+                continue
+
+            summary = summaries_map.get(request.id)
+            if not summary:
+                continue
+
+            json_payload = summary.json_payload or {}
+            metadata = json_payload.get("metadata", {})
+
+            snippet = result.snippet or json_payload.get("summary_250") or json_payload.get("tldr")
+
+            results.append(
+                {
+                    "request_id": request.id,
+                    "summary_id": summary.id,
+                    "url": result.url or request.input_url or request.normalized_url,
+                    "title": result.title or metadata.get("title", "Untitled"),
+                    "domain": metadata.get("domain") or metadata.get("source", ""),
+                    "snippet": snippet,
+                    "tldr": json_payload.get("tldr", ""),
+                    "published_at": metadata.get("published_at") or metadata.get("published"),
+                    "created_at": request.created_at.isoformat() + "Z",
+                    "relevance_score": result.similarity_score,
+                    "topic_tags": json_payload.get("topic_tags") or result.tags,
+                    "is_read": summary.is_read,
+                }
+            )
+
+        estimated_total = offset + len(results) + (1 if search_results.has_more else 0)
+
+        return {
+            "success": True,
+            "data": {
+                "results": results,
+                "pagination": {
+                    "total": estimated_total,
+                    "limit": limit,
+                    "offset": offset,
+                    "has_more": search_results.has_more,
+                },
+                "query": q,
+            },
+        }
+
+    except Exception as e:
+        logger.error(f"Semantic search failed: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Semantic search failed: {e!s}") from e
 
 
 @router.get("/topics/trending")
