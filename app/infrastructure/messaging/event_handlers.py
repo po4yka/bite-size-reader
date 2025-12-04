@@ -122,15 +122,6 @@ class EmbeddingGenerationEventHandler:
             self._vector_store.delete_by_request_id(request_id)
             return
 
-        embedding_row = await db.async_get_summary_embedding(summary_id)
-        if not embedding_row:
-            logger.warning(
-                "vector_store_missing_embedding",
-                extra={"request_id": request_id, "summary_id": summary_id},
-            )
-            self._vector_store.delete_by_request_id(request_id)
-            return
-
         note_text = build_note_text(
             payload,
             request_id=request_id,
@@ -147,7 +138,9 @@ class EmbeddingGenerationEventHandler:
             self._vector_store.delete_by_request_id(request_id)
             return
 
-        embedding = embedding_service.deserialize_embedding(embedding_row["embedding_blob"])
+        embedding = await embedding_service.generate_embedding(
+            note_text.text, language=note_text.metadata.get("language")
+        )
         vector = embedding.tolist() if hasattr(embedding, "tolist") else list(embedding)
 
         metadata = {
