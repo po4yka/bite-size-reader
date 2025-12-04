@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import Callable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
@@ -12,6 +11,7 @@ from app.adapters.openrouter.openrouter_client import OpenRouterClient
 from app.adapters.telegram.forward_processor import ForwardProcessor
 from app.adapters.telegram.message_handler import MessageHandler
 from app.adapters.telegram.telegram_client import TelegramClient
+from app.infrastructure.vector.chroma_store import ChromaVectorStore
 from app.services.embedding_service import EmbeddingService
 from app.services.hybrid_search_service import HybridSearchService
 from app.services.query_expansion_service import QueryExpansionService
@@ -20,6 +20,7 @@ from app.services.vector_search_service import VectorSearchService
 
 if TYPE_CHECKING:
     import asyncio
+    from collections.abc import Callable
 
     from app.adapters.telegram.telegram_bot import TelegramBot
     from app.config import AppConfig
@@ -53,6 +54,7 @@ class BotComponents:
     vector_search_service: VectorSearchService
     query_expansion_service: QueryExpansionService
     hybrid_search_service: HybridSearchService
+    vector_store: ChromaVectorStore
     container: Any | None = None
 
 
@@ -142,6 +144,14 @@ class BotFactory:
         # Determine topic search limit
         topic_search_max_results = BotFactory._get_topic_search_limit(cfg)
 
+        # Initialize vector store
+        vector_store = ChromaVectorStore(
+            host=cfg.vector_store.host,
+            auth_token=cfg.vector_store.auth_token,
+            environment=cfg.vector_store.environment,
+            user_scope=cfg.vector_store.user_scope,
+        )
+
         # Create search services
         topic_searcher = TopicSearchService(
             firecrawl=clients.firecrawl,
@@ -190,6 +200,7 @@ class BotFactory:
                 content_fetcher=clients.firecrawl,
                 llm_client=clients.openrouter,
                 analytics_service=None,  # No analytics service yet
+                vector_store=vector_store,
             )
             # Wire event handlers automatically
             container.wire_event_handlers_auto()
@@ -234,6 +245,7 @@ class BotFactory:
             vector_search_service=vector_search_service,
             query_expansion_service=query_expansion_service,
             hybrid_search_service=hybrid_search_service,
+            vector_store=vector_store,
             container=container,
         )
 

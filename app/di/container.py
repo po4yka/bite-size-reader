@@ -60,6 +60,7 @@ class Container:
         cache_service: Any | None = None,
         webhook_client: Any | None = None,
         webhook_url: str | None = None,
+        vector_store: Any | None = None,
     ) -> None:
         """Initialize the container.
 
@@ -86,6 +87,7 @@ class Container:
         self._cache_service = cache_service
         self._webhook_client = webhook_client
         self._webhook_url = webhook_url
+        self._vector_store = vector_store
 
         # Lazy-initialized components
         self._event_bus: EventBus | None = None
@@ -111,6 +113,11 @@ class Container:
         if self._event_bus is None:
             self._event_bus = EventBus()
         return self._event_bus
+
+    def vector_store(self) -> Any | None:
+        """Get the configured vector store if available."""
+
+        return self._vector_store
 
     def summary_repository(self) -> SqliteSummaryRepositoryAdapter:
         """Get or create the summary repository.
