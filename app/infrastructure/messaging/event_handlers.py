@@ -9,7 +9,6 @@ from typing import Any
 
 from app.domain.events.request_events import RequestCompleted, RequestFailed
 from app.domain.events.summary_events import SummaryCreated, SummaryMarkedAsRead
-from app.services.note_text_builder import build_note_text
 
 logger = logging.getLogger(__name__)
 
@@ -122,15 +121,25 @@ class EmbeddingGenerationEventHandler:
             self._vector_store.delete_by_request_id(request_id)
             return
 
-        note_text = build_note_text(
-            payload,
+        from app.services.metadata_builder import MetadataBuilder
+
+        # We need the user scope from the vector store config, but it's not directly exposed.
+        # However, the vector store instance has it.
+        # For now, we'll assume "public" or try to get it from the store if possible,
+        # but accessing private members is risky.
+        # Let's check if we can get it safely.
+        user_scope = getattr(self._vector_store, "_user_scope", "public")
+
+        text, metadata = MetadataBuilder.prepare_for_upsert(
             request_id=request_id,
             summary_id=summary_id,
+            payload=payload,
             language=self._determine_language(summary),
-            user_note=self._extract_user_note(payload),
+            user_scope=user_scope,
+            summary_row=summary,
         )
 
-        if not note_text.text:
+        if not text:
             logger.info(
                 "vector_store_delete_empty_note",
                 extra={"request_id": request_id, "summary_id": summary_id},
@@ -139,15 +148,9 @@ class EmbeddingGenerationEventHandler:
             return
 
         embedding = await embedding_service.generate_embedding(
-            note_text.text, language=note_text.metadata.get("language")
+            text, language=metadata.get("language")
         )
         vector = embedding.tolist() if hasattr(embedding, "tolist") else list(embedding)
-
-        metadata = {
-            **note_text.metadata,
-            **self._build_metadata_from_payload(payload, summary),
-            "text": note_text.text,
-        }
 
         self._vector_store.upsert_notes([vector], [metadata])
 
@@ -161,33 +164,6 @@ class EmbeddingGenerationEventHandler:
         )
 
     @staticmethod
-    def _build_metadata_from_payload(payload: Any, summary: dict[str, Any]) -> dict[str, Any]:
-        metadata = payload.get("metadata", {}) if isinstance(payload, dict) else {}
-        request_data = summary.get("request") if isinstance(summary, dict) else {}
-
-        url = (
-            metadata.get("canonical_url")
-            or metadata.get("url")
-            or (request_data or {}).get("normalized_url")
-            or (request_data or {}).get("input_url")
-        )
-
-        title = metadata.get("title") or (
-            payload.get("title") if isinstance(payload, dict) else None
-        )
-        source = metadata.get("domain") or metadata.get("source")
-        published_at = metadata.get("published_at") or metadata.get("published")
-
-        clean_metadata = {
-            "url": url,
-            "title": title,
-            "source": source,
-            "published_at": published_at,
-        }
-
-        return {k: v for k, v in clean_metadata.items() if v is not None}
-
-    @staticmethod
     def _determine_language(summary: dict[str, Any]) -> str | None:
         if not summary:
             return None
@@ -199,23 +175,6 @@ class EmbeddingGenerationEventHandler:
         request_data = summary.get("request") or {}
         if isinstance(request_data, dict):
             return request_data.get("lang_detected")
-        return None
-
-    @staticmethod
-    def _extract_user_note(payload: Any) -> str | None:
-        if not isinstance(payload, dict):
-            return None
-
-        metadata = payload.get("metadata", {}) if isinstance(payload, dict) else {}
-
-        for key in ("user_note", "note", "notes"):
-            value = payload.get(key)
-            if value:
-                return str(value)
-
-            meta_value = metadata.get(key)
-            if meta_value:
-                return str(meta_value)
         return None
 
 

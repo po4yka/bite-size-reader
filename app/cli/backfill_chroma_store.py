@@ -13,7 +13,6 @@ from app.db.database import Database
 from app.db.models import Summary
 from app.infrastructure.vector.chroma_store import ChromaVectorStore
 from app.services.embedding_service import EmbeddingService
-from app.services.note_text_builder import build_note_text
 from app.services.summary_embedding_generator import SummaryEmbeddingGenerator
 
 logging.basicConfig(
@@ -21,47 +20,6 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
 logger = logging.getLogger(__name__)
-
-
-def _extract_user_note(payload: dict[str, Any] | None) -> str | None:
-    payload = payload or {}
-    metadata = payload.get("metadata", {}) if isinstance(payload, dict) else {}
-
-    for key in ("user_note", "note", "notes"):
-        value = payload.get(key)
-        if value:
-            return str(value)
-
-        meta_value = metadata.get(key)
-        if meta_value:
-            return str(meta_value)
-    return None
-
-
-def _build_metadata(payload: dict[str, Any] | None, summary_row: dict[str, Any]) -> dict[str, Any]:
-    payload = payload or {}
-    metadata = payload.get("metadata", {}) if isinstance(payload, dict) else {}
-    request_data = summary_row.get("request") if isinstance(summary_row, dict) else {}
-
-    url = (
-        metadata.get("canonical_url")
-        or metadata.get("url")
-        or (request_data or {}).get("normalized_url")
-        or (request_data or {}).get("input_url")
-    )
-
-    title = metadata.get("title") or payload.get("title")
-    source = metadata.get("domain") or metadata.get("source")
-    published_at = metadata.get("published_at") or metadata.get("published")
-
-    clean_metadata = {
-        "url": url,
-        "title": title,
-        "source": source,
-        "published_at": published_at,
-    }
-
-    return {k: v for k, v in clean_metadata.items() if v is not None}
 
 
 def _fetch_summaries(db: Database, limit: int | None) -> list[dict[str, Any]]:
@@ -153,6 +111,8 @@ async def backfill_chroma_store(
     deleted = 0
     skipped = 0
 
+    from app.services.metadata_builder import MetadataBuilder
+
     for idx, summary in enumerate(summaries, 1):
         summary_id = summary["id"]
         request_id = summary["request_id"]
@@ -194,15 +154,16 @@ async def backfill_chroma_store(
             skipped += 1
             continue
 
-        note_text = build_note_text(
-            payload,
+        text, metadata = MetadataBuilder.prepare_for_upsert(
             request_id=request_id,
             summary_id=summary_id,
+            payload=payload,
             language=language,
-            user_note=_extract_user_note(payload),
+            user_scope=chroma_cfg.user_scope,
+            summary_row=summary,
         )
 
-        if not note_text.text:
+        if not text:
             logger.info(
                 "Deleting vector due to empty note text",
                 extra={"request_id": request_id, "summary_id": summary_id},
@@ -213,12 +174,6 @@ async def backfill_chroma_store(
 
         embedding = embedding_service.deserialize_embedding(existing["embedding_blob"])
         vector = embedding.tolist() if hasattr(embedding, "tolist") else list(embedding)
-
-        metadata = {
-            **note_text.metadata,
-            **_build_metadata(payload, summary),
-            "text": note_text.text,
-        }
 
         pending_vectors.append(vector)
         pending_metadata.append(metadata)

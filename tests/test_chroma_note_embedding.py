@@ -3,7 +3,7 @@ import types
 from unittest.mock import AsyncMock, MagicMock
 
 from app.infrastructure.messaging.event_handlers import EmbeddingGenerationEventHandler
-from app.services.note_text_builder import build_note_text
+from app.services.metadata_builder import MetadataBuilder
 
 
 def test_sync_vector_store_embeds_note_text_and_user_notes():
@@ -32,24 +32,26 @@ def test_sync_vector_store_embeds_note_text_and_user_notes():
     generator = types.SimpleNamespace(db=db, embedding_service=embedding_service)
 
     vector_store = MagicMock()
+    vector_store._user_scope = "public"
     handler = EmbeddingGenerationEventHandler(generator, vector_store)
 
-    expected_note_text = build_note_text(
-        payload,
+    expected_text, _ = MetadataBuilder.prepare_for_upsert(
         request_id=request_id,
         summary_id=summary_id,
+        payload=payload,
         language="en",
-        user_note="My personal note about this summary.",
-    ).text
+        user_scope="public",
+        summary_row=summary,
+    )
 
     asyncio.run(handler._sync_vector_store(request_id))
 
-    embedding_service.generate_embedding.assert_awaited_once_with(expected_note_text, language="en")
+    embedding_service.generate_embedding.assert_awaited_once_with(expected_text, language="en")
 
     vector_store.upsert_notes.assert_called_once()
     vectors, metadatas = vector_store.upsert_notes.call_args.args
 
     assert vectors == [[0.1, 0.2, 0.3]]
-    assert metadatas[0]["text"] == expected_note_text
+    assert metadatas[0]["text"] == expected_text
     assert metadatas[0]["request_id"] == request_id
     assert metadatas[0]["summary_id"] == summary_id

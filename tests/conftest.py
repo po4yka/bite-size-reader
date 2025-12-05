@@ -171,7 +171,9 @@ def mock_chroma_client():
     # Avoid importing the real chromadb package (pydantic v1 dependency) during tests.
     chroma_stub = MagicMock()
     chroma_stub.HttpClient = MagicMock()
+    chroma_stub.errors.ChromaError = Exception
     sys.modules["chromadb"] = chroma_stub
+    sys.modules["chromadb.errors"] = chroma_stub.errors
 
     with patch("app.infrastructure.vector.chroma_store.chromadb.HttpClient") as mock_client:
         mock_instance = MagicMock()

@@ -6,6 +6,7 @@ import asyncio
 import logging
 from typing import TYPE_CHECKING, Any
 
+from chromadb.errors import ChromaError
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.core.lang import detect_language
@@ -102,8 +103,11 @@ class ChromaVectorSearchService:
                 filters,
                 fetch_limit,
             )
-        except Exception:
+        except ChromaError:
             logger.exception("chroma_search_query_failed")
+            return ChromaVectorSearchResults(results=[], has_more=False)
+        except Exception:
+            logger.exception("chroma_search_unexpected_error")
             return ChromaVectorSearchResults(results=[], has_more=False)
 
         metadatas = raw.get("metadatas") or []
@@ -150,6 +154,23 @@ class ChromaVectorSearchService:
             results=results[offset : offset + requested_limit],
             has_more=has_more,
         )
+
+    async def find_duplicates(
+        self,
+        text: str,
+        *,
+        threshold: float = 0.95,
+        language: str | None = None,
+        user_scope: str | None = None,
+    ) -> list[ChromaVectorSearchResult]:
+        """Find content that is highly similar to the input text."""
+        results = await self.search(
+            text,
+            language=language,
+            user_scope=user_scope,
+            limit=5,
+        )
+        return [r for r in results.results if r.similarity_score >= threshold]
 
     @staticmethod
     def _compute_similarity(distances: list[float], idx: int) -> float:

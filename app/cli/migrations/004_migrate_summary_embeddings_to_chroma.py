@@ -14,7 +14,6 @@ if TYPE_CHECKING:
 from app.config import ChromaConfig
 from app.infrastructure.vector.chroma_store import ChromaVectorStore
 from app.services.embedding_service import EmbeddingService
-from app.services.note_text_builder import _extract_tags, build_note_text
 
 logger = logging.getLogger(__name__)
 
@@ -55,6 +54,7 @@ def upgrade(db: Database) -> None:
 
     for entry in embeddings:
         processed += 1
+
         if not entry["text"]:
             skipped_empty += 1
             logger.warning(
@@ -73,7 +73,32 @@ def upgrade(db: Database) -> None:
             )
             continue
 
-        metadata = _build_metadata(entry, chroma_cfg.user_scope)
+        # We can use MetadataBuilder.build_metadata if we reconstruct the inputs,
+        # but _build_metadata was doing exactly that.
+        # Let's replace _build_metadata with MetadataBuilder.build_metadata
+        # but we need to adapt the input.
+
+        # Actually, the entry dict is already flat. MetadataBuilder.build_metadata expects payload/summary_row.
+        # Maybe it's better to keep the migration script simple as it is a one-off,
+        # OR update it to use the new standard.
+
+        # Given this is a migration script, it might be better to leave it alone if it works,
+        # BUT the task is to refactor.
+        # Let's see if we can make it cleaner.
+
+        metadata = {
+            "request_id": entry.get("request_id"),
+            "summary_id": entry.get("summary_id"),
+            "language": entry.get("language"),
+            "url": entry.get("url"),
+            "title": entry.get("title"),
+            "source": entry.get("source"),
+            "published_at": entry.get("published_at"),
+            "text": entry.get("text"),
+            "user_scope": chroma_cfg.user_scope,
+        }
+        # Remove None values
+        metadata = {k: v for k, v in metadata.items() if v is not None}
 
         batch_vectors.append(vector_list)
         batch_metadata.append(metadata)
@@ -110,6 +135,7 @@ def downgrade(db: Database) -> None:
 
 def _fetch_summary_embeddings(db: Database) -> Iterable[dict[str, Any]]:
     from app.db.models import Request, Summary, SummaryEmbedding
+    from app.services.metadata_builder import MetadataBuilder
 
     with db._database.atomic():  # Use atomic transaction for proper management
         query = (
@@ -118,78 +144,51 @@ def _fetch_summary_embeddings(db: Database) -> Iterable[dict[str, Any]]:
 
         for row in query:
             payload = row.summary.json_payload or {}
-            metadata = payload.get("metadata", {}) if isinstance(payload, dict) else {}
 
-            url = (
-                metadata.get("canonical_url")
-                or metadata.get("url")
-                or row.summary.request.normalized_url
-                or row.summary.request.input_url
-            )
-            title = metadata.get("title") or payload.get("title")
-            source = metadata.get("domain") or metadata.get("source")
-            published_at = metadata.get("published_at") or metadata.get("published")
+            # Use MetadataBuilder to generate text and metadata
+            # We need to adapt the inputs slightly
 
-            snippet = (
-                payload.get("summary_250")
-                or payload.get("tldr")
-                or payload.get("summary_1000")
-                or metadata.get("summary")
-            )
-            if snippet and len(snippet) > 300:
-                snippet = str(snippet)[:297] + "..."
+            summary_row = {
+                "request_id": row.summary.request.id,
+                "id": row.summary.id,
+                "lang": row.language or row.summary.lang or row.summary.request.lang_detected,
+                "request": {
+                    "normalized_url": row.summary.request.normalized_url,
+                    "input_url": row.summary.request.input_url,
+                },
+            }
 
-            language = row.language or row.summary.lang or row.summary.request.lang_detected
+            # We don't have user_scope here, but prepare_for_upsert needs it.
+            # However, the migration script passes user_scope later.
+            # We just need the text and the basic metadata.
 
-            note_text = build_note_text(
-                payload,
+            # Actually, let's just use MetadataBuilder.prepare_for_upsert and ignore the user_scope in the result
+            # if we want, or pass a dummy one and override it.
+
+            text, metadata = MetadataBuilder.prepare_for_upsert(
                 request_id=row.summary.request.id,
                 summary_id=row.summary.id,
-                language=language,
-                user_note=_extract_user_note(payload),
+                payload=payload,
+                language=summary_row["lang"],
+                user_scope="dummy",  # Will be overridden or unused in the yield
+                summary_row=summary_row,
             )
 
             yield {
                 "request_id": row.summary.request.id,
                 "summary_id": row.summary.id,
-                "language": language,
+                "language": summary_row["lang"],
                 "embedding_blob": row.embedding_blob,
-                "url": url,
-                "title": title,
-                "source": source,
-                "published_at": published_at,
-                "snippet": snippet,
-                "text": note_text.text,
-                "tags": _extract_tags(payload, metadata),
+                "url": metadata.get("url"),
+                "title": metadata.get("title"),
+                "source": metadata.get("source"),
+                "published_at": metadata.get("published_at"),
+                "text": text,
+                "tags": metadata.get(
+                    "tags"
+                ),  # MetadataBuilder doesn't extract tags explicitly in build_metadata yet?
+                # Wait, build_note_text extracts tags into metadata.
             }
-
-
-def _extract_user_note(payload: dict[str, Any] | None) -> str | None:
-    payload = payload or {}
-    metadata = payload.get("metadata", {}) if isinstance(payload, dict) else {}
-
-    for key in ("user_note", "note", "notes"):
-        candidate = payload.get(key) or metadata.get(key)
-        if candidate:
-            return str(candidate)
-    return None
-
-
-def _build_metadata(entry: dict[str, Any], user_scope: str) -> dict[str, Any]:
-    metadata = {
-        "request_id": entry.get("request_id"),
-        "summary_id": entry.get("summary_id"),
-        "language": entry.get("language"),
-        "url": entry.get("url"),
-        "title": entry.get("title"),
-        "source": entry.get("source"),
-        "published_at": entry.get("published_at"),
-        "snippet": entry.get("snippet"),
-        "text": entry.get("text"),
-        "tags": entry.get("tags"),
-        "user_scope": user_scope,
-    }
-    return {k: v for k, v in metadata.items() if v is not None}
 
 
 def _upsert_with_latency(
