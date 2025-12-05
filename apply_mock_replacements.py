@@ -193,14 +193,14 @@ replacements.append(
                 mock_response.json.return_value = {
                     "choices": [{"message": {"content": "Test response"}}],
                     "usage": {"prompt_tokens": 10, "completion_tokens": 5},
-                    "model": "deepseek/deepseek-v3-0324",
+                    "model": "deepseek/deepseek-v3.2",
                 }""",
         """                mock_response = FakeResponse(
                     status_code=200,
                     json_data={
                         "choices": [{"message": {"content": "Test response"}}],
                         "usage": {"prompt_tokens": 10, "completion_tokens": 5},
-                        "model": "deepseek/deepseek-v3-0324",
+                        "model": "deepseek/deepseek-v3.2",
                     }
                 )""",
     )
@@ -268,7 +268,7 @@ replacements.append(
                 mock_response.status_code = 200
                 mock_response.json.return_value = {
                     "data": [
-                        {"id": "deepseek/deepseek-v3-0324", "name": "DeepSeek V3"},
+                        {"id": "deepseek/deepseek-v3.2", "name": "DeepSeek V3"},
                         {"id": "google/gemini-2.5-pro", "name": "Gemini 2.5 Pro"},
                     ]
                 }
@@ -277,7 +277,7 @@ replacements.append(
                     status_code=200,
                     json_data={
                         "data": [
-                            {"id": "deepseek/deepseek-v3-0324", "name": "DeepSeek V3"},
+                            {"id": "deepseek/deepseek-v3.2", "name": "DeepSeek V3"},
                             {"id": "google/gemini-2.5-pro", "name": "Gemini 2.5 Pro"},
                         ]
                     }

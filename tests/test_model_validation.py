@@ -9,7 +9,7 @@ class TestModelValidation(unittest.TestCase):
         from app.config import validate_model_name
 
         valid_models = [
-            "deepseek/deepseek-v3-0324",
+            "deepseek/deepseek-v3.2",
             "qwen/qwen3-max",
             "moonshotai/kimi-k2-thinking",
         ]

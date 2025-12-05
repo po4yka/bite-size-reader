@@ -54,7 +54,7 @@ def make_bot(tmp_path: str, allowed_ids):
         firecrawl=FirecrawlConfig(api_key="fc-dummy-key"),
         openrouter=OpenRouterConfig(
             api_key="or-dummy-key",
-            model="deepseek/deepseek-v3-0324",
+            model="deepseek/deepseek-v3.2",
             fallback_models=(),
             http_referer=None,
             x_title=None,
@@ -107,7 +107,7 @@ class TestContentTruncation(unittest.IsolatedAsyncioTestCase):
             mock_llm_result = Mock()
             mock_llm_result.status = "ok"
             mock_llm_result.response_text = '{"title": "Test", "summary": "Test summary"}'
-            mock_llm_result.model = "deepseek/deepseek-v3-0324"
+            mock_llm_result.model = "deepseek/deepseek-v3.2"
             mock_llm_result.endpoint = "https://openrouter.ai/api/v1/chat/completions"
             mock_llm_result.request_headers = {}
             mock_llm_result.request_messages = []
@@ -144,7 +144,7 @@ class TestContentTruncation(unittest.IsolatedAsyncioTestCase):
             mock_llm_result = Mock()
             mock_llm_result.status = "ok"
             mock_llm_result.response_text = '{"title": "Test", "summary": "Test summary"}'
-            mock_llm_result.model = "deepseek/deepseek-v3-0324"
+            mock_llm_result.model = "deepseek/deepseek-v3.2"
             mock_llm_result.endpoint = "https://openrouter.ai/api/v1/chat/completions"
             mock_llm_result.request_headers = {}
             mock_llm_result.request_messages = []
@@ -186,7 +186,7 @@ class TestContentTruncation(unittest.IsolatedAsyncioTestCase):
             mock_llm_result = Mock()
             mock_llm_result.status = "ok"
             mock_llm_result.response_text = '{"title": "Test", "summary": "Test summary"}'
-            mock_llm_result.model = "deepseek/deepseek-v3-0324"
+            mock_llm_result.model = "deepseek/deepseek-v3.2"
             mock_llm_result.endpoint = "https://openrouter.ai/api/v1/chat/completions"
             mock_llm_result.request_headers = {}
             mock_llm_result.request_messages = []
@@ -229,7 +229,7 @@ class TestContentTruncation(unittest.IsolatedAsyncioTestCase):
             mock_llm_result = Mock()
             mock_llm_result.status = "ok"
             mock_llm_result.response_text = '{"title": "Test", "summary": "Test summary"}'
-            mock_llm_result.model = "deepseek/deepseek-v3-0324"
+            mock_llm_result.model = "deepseek/deepseek-v3.2"
             mock_llm_result.endpoint = "https://openrouter.ai/api/v1/chat/completions"
             mock_llm_result.request_headers = {}
             mock_llm_result.request_messages = []
@@ -272,7 +272,7 @@ class TestContentTruncation(unittest.IsolatedAsyncioTestCase):
             mock_llm_result = Mock()
             mock_llm_result.status = "ok"
             mock_llm_result.response_text = '{"title": "Test", "summary": "Test summary"}'
-            mock_llm_result.model = "deepseek/deepseek-v3-0324"
+            mock_llm_result.model = "deepseek/deepseek-v3.2"
             mock_llm_result.endpoint = "https://openrouter.ai/api/v1/chat/completions"
             mock_llm_result.request_headers = {}
             mock_llm_result.request_messages = []

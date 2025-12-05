@@ -13,7 +13,7 @@ This document explains the model selection and optimization changes made to Bite
 
 **New Optimized Configuration (Paid Tier - Maximum Performance):**
 - Primary model: `qwen/qwen3-max` (Flagship, 1T+ parameters, most powerful)
-- Fallback models: `deepseek/deepseek-r1`, `moonshotai/kimi-k2-thinking`, `deepseek/deepseek-v3-0324`
+- Fallback models: `deepseek/deepseek-r1`, `moonshotai/kimi-k2-thinking`, `deepseek/deepseek-v3.2`
 - Long context model: `moonshotai/kimi-k2-thinking` (256k context + structured reasoning traces)
 
 **Performance Improvements:**
@@ -94,7 +94,7 @@ This document explains the model selection and optimization changes made to Bite
 - Tasks requiring reasoning transparency
 - Complex multi-step problems
 
-#### 3. DeepSeek V3 (`deepseek/deepseek-v3-0324`)
+#### 3. DeepSeek V3 (`deepseek/deepseek-v3.2`)
 
 **Why DeepSeek V3 as Third Fallback?**
 - **High Performance:** 685B total, 134B active (MoE)
@@ -109,7 +109,7 @@ This document explains the model selection and optimization changes made to Bite
 - Cost-conscious fallback
 - Broad knowledge requirements
 
-#### 4. DeepSeek V3 (`deepseek/deepseek-v3-0324`)
+#### 4. DeepSeek V3 (`deepseek/deepseek-v3.2`)
 
 **Why DeepSeek V3 as Third Fallback?**
 - **High Performance:** 685B total, 134B active (MoE)
@@ -184,7 +184,7 @@ OPENROUTER_MODEL=qwen/qwen3-max
 
 # Fallback models (comma-separated, tried in order)
 # Full cascade: DeepSeek R1 → Kimi K2 Thinking → DeepSeek V3
-OPENROUTER_FALLBACK_MODELS=deepseek/deepseek-r1,moonshotai/kimi-k2-thinking,deepseek/deepseek-v3-0324
+OPENROUTER_FALLBACK_MODELS=deepseek/deepseek-r1,moonshotai/kimi-k2-thinking,deepseek/deepseek-v3.2
 
 # Long context model for large documents (256k context + structured reasoning)
 OPENROUTER_LONG_CONTEXT_MODEL=moonshotai/kimi-k2-thinking
@@ -255,7 +255,7 @@ The system automatically selects the appropriate model:
 **To use free tier configuration (cost savings):**
 ```bash
 # Use free tier models instead
-OPENROUTER_MODEL=deepseek/deepseek-v3-0324:free
+OPENROUTER_MODEL=deepseek/deepseek-v3.2:free
 OPENROUTER_FALLBACK_MODELS=deepseek/deepseek-r1:free,moonshotai/kimi-k2:free
 OPENROUTER_LONG_CONTEXT_MODEL=moonshotai/kimi-k2:free
 ```
@@ -279,13 +279,13 @@ OPENROUTER_LONG_CONTEXT_MODEL=
 **Example: Maximum performance (DEFAULT - most powerful paid models):**
 ```bash
 OPENROUTER_MODEL=qwen/qwen3-max
-OPENROUTER_FALLBACK_MODELS=deepseek/deepseek-r1,moonshotai/kimi-k2-thinking,deepseek/deepseek-v3-0324
+OPENROUTER_FALLBACK_MODELS=deepseek/deepseek-r1,moonshotai/kimi-k2-thinking,deepseek/deepseek-v3.2
 OPENROUTER_LONG_CONTEXT_MODEL=moonshotai/kimi-k2-thinking
 ```
 
 **Example: Maximum cost savings (all free models):**
 ```bash
-OPENROUTER_MODEL=deepseek/deepseek-v3-0324:free
+OPENROUTER_MODEL=deepseek/deepseek-v3.2:free
 OPENROUTER_FALLBACK_MODELS=deepseek/deepseek-r1:free,moonshotai/kimi-k2:free
 OPENROUTER_LONG_CONTEXT_MODEL=moonshotai/kimi-k2:free
 ```
@@ -293,7 +293,7 @@ OPENROUTER_LONG_CONTEXT_MODEL=moonshotai/kimi-k2:free
 **Example: Balanced (paid primary, free fallback):**
 ```bash
 OPENROUTER_MODEL=qwen/qwen3-max
-OPENROUTER_FALLBACK_MODELS=deepseek/deepseek-v3-0324:free,deepseek/deepseek-r1:free
+OPENROUTER_FALLBACK_MODELS=deepseek/deepseek-v3.2:free,deepseek/deepseek-r1:free
 OPENROUTER_LONG_CONTEXT_MODEL=moonshotai/kimi-k2:free
 ```
 
@@ -352,15 +352,15 @@ LOG_LEVEL=DEBUG
 
 Look for log entries:
 ```
-openrouter_request_started: model=deepseek/deepseek-v3-0324:free
-openrouter_response_ok: model=deepseek/deepseek-v3-0324:free, tokens_used=1234
+openrouter_request_started: model=deepseek/deepseek-v3.2:free
+openrouter_response_ok: model=deepseek/deepseek-v3.2:free, tokens_used=1234
 ```
 
 ### Fallback Events
 
 Monitor fallback usage:
 ```
-openrouter_skip_model_unavailable: model=deepseek/deepseek-v3-0324:free, trying=deepseek/deepseek-r1:free
+openrouter_skip_model_unavailable: model=deepseek/deepseek-v3.2:free, trying=deepseek/deepseek-r1:free
 ```
 
 ## Future Optimizations

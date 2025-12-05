@@ -268,7 +268,7 @@ class OpenRouterConfig(BaseModel):
         default_factory=lambda: (
             "deepseek/deepseek-r1",
             "moonshotai/kimi-k2-thinking",
-            "deepseek/deepseek-v3-0324",
+            "deepseek/deepseek-v3.2",
         ),
         validation_alias="OPENROUTER_FALLBACK_MODELS",
     )

@@ -317,7 +317,7 @@ class TestOpenRouterCompliance(unittest.TestCase):
                     json_data={
                         "choices": [{"message": {"content": "Test response"}}],
                         "usage": {"prompt_tokens": 10, "completion_tokens": 5},
-                        "model": "deepseek/deepseek-v3-0324",
+                        "model": "deepseek/deepseek-v3.2",
                     },
                 )
                 mock_client.return_value.post = AsyncMock(return_value=mock_response)
@@ -328,7 +328,7 @@ class TestOpenRouterCompliance(unittest.TestCase):
                 assert result.response_text == "Test response"
                 assert result.tokens_prompt == 10
                 assert result.tokens_completion == 5
-                assert result.model == "deepseek/deepseek-v3-0324"
+                assert result.model == "deepseek/deepseek-v3.2"
                 assert result.endpoint == "/api/v1/chat/completions"
 
         asyncio.run(_test())
@@ -418,7 +418,7 @@ class TestOpenRouterCompliance(unittest.TestCase):
                     status_code=200,
                     json_data={
                         "data": [
-                            {"id": "deepseek/deepseek-v3-0324", "name": "DeepSeek V3"},
+                            {"id": "deepseek/deepseek-v3.2", "name": "DeepSeek V3"},
                             {"id": "google/gemini-2.5-pro", "name": "Gemini 2.5 Pro"},
                         ]
                     },

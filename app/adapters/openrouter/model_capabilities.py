@@ -39,8 +39,8 @@ class ModelCapabilities:
             # Google models
             "google/gemini-2.5-pro",
             # DeepSeek models (JSON mode support)
-            "deepseek/deepseek-v3-0324:free",
-            "deepseek/deepseek-v3-0324",
+            "deepseek/deepseek-v3.2:free",
+            "deepseek/deepseek-v3.2",
             "deepseek/deepseek-r1:free",
             "deepseek/deepseek-r1",
             # Moonshot AI (Kimi) models
@@ -67,7 +67,7 @@ class ModelCapabilities:
     def get_safe_structured_fallbacks(self) -> list[str]:
         """Get list of models known to support structured outputs reliably."""
         return [
-            "deepseek/deepseek-v3-0324:free",  # Free, reliable, excellent performance
+            "deepseek/deepseek-v3.2:free",  # Free, reliable, excellent performance
             "deepseek/deepseek-r1:free",  # Free, strong reasoning
             "qwen/qwen3-max",  # Flagship model, comprehensive
             "google/gemini-2.5-pro",  # Alternative paid option

@@ -572,7 +572,7 @@ FIRECRAWL_API_KEY=...
 
 OPENROUTER_API_KEY=...
 OPENROUTER_MODEL=qwen/qwen3-max
-OPENROUTER_FALLBACK_MODELS=deepseek/deepseek-r1,moonshotai/kimi-k2-thinking,deepseek/deepseek-v3-0324
+OPENROUTER_FALLBACK_MODELS=deepseek/deepseek-r1,moonshotai/kimi-k2-thinking,deepseek/deepseek-v3.2
 OPENROUTER_LONG_CONTEXT_MODEL=moonshotai/kimi-k2-thinking
 OPENROUTER_HTTP_REFERER=https://github.com/po4yka/bite-size-reader
 OPENROUTER_X_TITLE=Bite-Size Reader
