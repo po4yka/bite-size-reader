@@ -18,6 +18,7 @@ services:
     environment:
       - TEXTACY_ENABLED=1
       - DB_PATH=/data/app.db
+      - CHROMA_HOST=http://chroma:8000
       - PYTHONUNBUFFERED=1
       - PYTHONDONTWRITEBYTECODE=1
 
@@ -49,3 +50,20 @@ services:
       - no-new-privileges:true
 
     stop_grace_period: 30s
+
+  chroma:
+    image: chromadb/chroma:latest
+    container_name: bsr-chroma
+    volumes:
+      - ./chroma_data:/chroma/chroma
+    ports:
+      - "8000:8000"
+    environment:
+      - IS_PERSISTENT=TRUE
+      - COMPONENT=server
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/heartbeat"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
