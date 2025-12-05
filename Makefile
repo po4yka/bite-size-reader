@@ -72,31 +72,31 @@ docker-build-no-cache:
 	DOCKER_BUILDKIT=1 docker build --no-cache --tag bsr:latest --progress=plain .
 
 docker-run:
-	docker-compose up -d
+	docker compose up -d
 
 docker-stop:
-	docker-compose down
+	docker compose down
 
 docker-restart: docker-stop docker-run
 
 docker-logs:
-	docker-compose logs -f bsr
+	docker compose logs -f bsr
 
 docker-logs-tail:
-	docker-compose logs --tail=100 -f bsr
+	docker compose logs --tail=100 -f bsr
 
 docker-shell:
-	docker-compose exec bsr sh
+	docker compose exec bsr sh
 
 docker-shell-root:
-	docker-compose exec -u root bsr sh
+	docker compose exec -u root bsr sh
 
 docker-test:
 	DOCKER_BUILDKIT=1 docker build --target builder --tag bsr:test .
 	docker run --rm bsr:test uv run pytest
 
 docker-clean:
-	docker-compose down -v
+	docker compose down -v
 	docker rmi bsr:latest bsr:test 2>/dev/null || true
 	docker builder prune -f
 
@@ -112,6 +112,6 @@ docker-deploy: docker-build docker-stop docker-run
 	@echo "Check logs with: make docker-logs"
 
 docker-health:
-	@docker-compose ps
+	@docker compose ps
 	@echo ""
 	@docker inspect --format='{{json .State.Health}}' bsr-bot 2>/dev/null | python -m json.tool || echo "Container not running or no health check configured"
