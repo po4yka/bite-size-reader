@@ -16,9 +16,8 @@ class TestDatabaseRWLockIntegration(unittest.IsolatedAsyncioTestCase):
         from app.db.database import Database
 
         # Create temporary database
-        self.temp_db = tempfile.NamedTemporaryFile(delete=False, suffix=".db")
-        self.temp_db.close()
-        self.db_path = self.temp_db.name
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".db") as temp_db:
+            self.db_path = temp_db.name
 
         self.db = Database(path=self.db_path)
         self.db.migrate()
@@ -111,10 +110,7 @@ class TestDatabaseRWLockIntegration(unittest.IsolatedAsyncioTestCase):
 
         # Update all requests concurrently
         await asyncio.gather(
-            *[
-                self.db.async_update_request_status(req_id, "completed")
-                for req_id in request_ids
-            ]
+            *[self.db.async_update_request_status(req_id, "completed") for req_id in request_ids]
         )
 
         # Verify all requests were updated
