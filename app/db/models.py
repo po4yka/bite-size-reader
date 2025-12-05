@@ -156,6 +156,8 @@ class Summary(BaseModel):
     insights_json = JSONField(null=True)
     version = peewee.IntegerField(default=1)
     is_read = peewee.BooleanField(default=False)
+    is_deleted = peewee.BooleanField(default=False)
+    deleted_at = peewee.DateTimeField(null=True)
     created_at = peewee.DateTimeField(default=_dt.datetime.utcnow)
 
     class Meta:

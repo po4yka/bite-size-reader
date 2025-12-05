@@ -53,6 +53,9 @@ class SummaryService:
         if is_read is not None:
             query = query.where(Summary.is_read == is_read)
 
+        # Exclude deleted summaries
+        query = query.where(Summary.is_deleted == False)  # noqa: E712
+
         if lang:
             query = query.where(Summary.lang == lang)
 
@@ -80,7 +83,7 @@ class SummaryService:
                 fn.SUM(Case(None, [(~Summary.is_read, 1)], 0)).alias("unread"),
             )
             .join(RequestModel)
-            .where(RequestModel.user_id == user_id)
+            .where((RequestModel.user_id == user_id) & (Summary.is_deleted == False))  # noqa: E712
             .first()
         )
 
@@ -107,7 +110,11 @@ class SummaryService:
         summary = (
             Summary.select(Summary, RequestModel)
             .join(RequestModel)
-            .where((Summary.id == summary_id) & (RequestModel.user_id == user_id))
+            .where(
+                (Summary.id == summary_id)
+                & (RequestModel.user_id == user_id)
+                & (Summary.is_deleted == False)  # noqa: E712
+            )
             .first()
         )
 
@@ -136,7 +143,11 @@ class SummaryService:
         summary = (
             Summary.select()
             .join(RequestModel)
-            .where((Summary.id == summary_id) & (RequestModel.user_id == user_id))
+            .where(
+                (Summary.id == summary_id)
+                & (RequestModel.user_id == user_id)
+                & (Summary.is_deleted == False)  # noqa: E712
+            )
             .first()
         )
 
@@ -172,18 +183,27 @@ class SummaryService:
         summary = (
             Summary.select()
             .join(RequestModel)
-            .where((Summary.id == summary_id) & (RequestModel.user_id == user_id))
+            .where(
+                (Summary.id == summary_id)
+                & (RequestModel.user_id == user_id)
+                & (Summary.is_deleted == False)  # noqa: E712
+            )
             .first()
         )
 
         if not summary:
             raise ResourceNotFoundError("Summary", summary_id)
 
-        # Soft delete - mark as read
-        summary.is_read = True
+        # Soft delete
+        from datetime import datetime
+
+        from app.core.time_utils import UTC
+
+        summary.is_deleted = True
+        summary.deleted_at = datetime.now(UTC)
         summary.save()
 
         logger.info(
-            f"Summary {summary_id} deleted by user {user_id}",
+            f"Summary {summary_id} soft-deleted by user {user_id}",
             extra={"summary_id": summary_id, "user_id": user_id},
         )

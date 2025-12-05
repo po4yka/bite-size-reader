@@ -430,6 +430,9 @@ classDiagram
     lang: str
     json_payload: text
     version: int
+    is_read: bool
+    is_deleted: bool
+    deleted_at: datetime?
     created_at: datetime
   }
 
@@ -643,6 +646,29 @@ REQUEST_TIMEOUT_SEC=60
 README.md
 SPEC.md
 ```
+
+## Mobile API (app/api)
+
+The project includes a RESTful API built with FastAPI to support mobile clients (iOS/Android).
+
+### Authentication
+- **Method**: JWT (JSON Web Tokens).
+- **Login**: `/v1/auth/telegram-login` accepts Telegram Login Widget data, verifies HMAC-SHA256, and returns access/refresh tokens.
+- **Client ID**: All requests must include a valid `client_id`.
+
+### Endpoints
+- `POST /v1/auth/telegram-login`: Exchange Telegram auth for JWT.
+- `POST /v1/auth/refresh`: Refresh access token.
+- `GET /v1/summaries`: List summaries (pagination, filtering by lang/read status).
+- `GET /v1/summaries/{id}`: Get full summary details.
+- `PATCH /v1/summaries/{id}`: Update summary (e.g. mark as read).
+- `DELETE /v1/summaries/{id}`: Soft delete summary.
+- `POST /v1/requests`: Submit new URL or forward for processing.
+- `GET /v1/requests/{id}/status`: Poll processing status.
+
+### Data Model Additions for API
+- **User**: `preferences_json` for client-side settings.
+- **Summary**: `is_read`, `is_deleted`, `deleted_at` for state management.
 
 ## Future work
 
