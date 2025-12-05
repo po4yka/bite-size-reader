@@ -31,6 +31,7 @@ class ModelCapabilities:
 
         # Cache capabilities: which models support structured outputs
         self._structured_supported_models: set[str] | None = None
+        self._structured_models: set[str] | None = None
         self._capabilities_last_load: float = 0.0
 
         # Known models that support structured outputs (fallback list)
@@ -90,62 +91,31 @@ class ModelCapabilities:
         ):
             return
 
-        headers = {
-            "Authorization": f"Bearer {self._api_key}",
-            "Content-Type": "application/json",
-            "HTTP-Referer": self._http_referer or "https://github.com/your-repo",
-            "X-Title": self._x_title or "Bite-Size Reader Bot",
-        }
-
         try:
-            limits = httpx.Limits(max_keepalive_connections=5, max_connections=10)
-            async with httpx.AsyncClient(timeout=self._timeout, limits=limits) as client:
-                resp = await client.get(
-                    f"{self._base_url}/models?supported_parameters=structured_outputs",
-                    headers=headers,
+            models = await self._fetch_structured_models()
+            if models:
+                self._structured_supported_models = models
+                self._structured_models = models
+                self._logger.debug(
+                    "structured_outputs_capabilities_loaded",
+                    extra={"models_count": len(models)},
                 )
-                resp.raise_for_status()
-                payload = resp.json()
+            # Keep existing cache or use known models as fallback
+            elif self._structured_supported_models is None:
+                self._structured_supported_models = self._known_structured_models.copy()
+                self._structured_models = self._structured_supported_models
+                self._logger.warning(
+                    "using_fallback_structured_models",
+                    extra={"models_count": len(self._structured_supported_models)},
+                )
 
-                models: set[str] = set()
-                data_array = []
-
-                if isinstance(payload, dict):
-                    if isinstance(payload.get("data"), list):
-                        data_array = payload.get("data", [])
-                    elif isinstance(payload.get("models"), list):
-                        data_array = payload.get("models", [])
-
-                for item in data_array:
-                    try:
-                        if isinstance(item, dict):
-                            model_id = item.get("id") or item.get("name") or item.get("model")
-                            if isinstance(model_id, str) and model_id:
-                                models.add(model_id)
-                    except Exception:
-                        continue
-
-                if models:
-                    self._structured_supported_models = models
-                    self._logger.debug(
-                        "structured_outputs_capabilities_loaded",
-                        extra={"models_count": len(models)},
-                    )
-                # Keep existing cache or use known models as fallback
-                elif self._structured_supported_models is None:
-                    self._structured_supported_models = self._known_structured_models.copy()
-                    self._logger.warning(
-                        "using_fallback_structured_models",
-                        extra={"models_count": len(self._structured_supported_models)},
-                    )
-
-                self._capabilities_last_load = now
-
+            self._capabilities_last_load = now
         except Exception as e:
             self._capabilities_last_load = now
             # Use known models as fallback
             if self._structured_supported_models is None:
                 self._structured_supported_models = self._known_structured_models.copy()
+            self._structured_models = self._structured_supported_models
 
             self._logger.warning(
                 "openrouter_capabilities_probe_failed",
@@ -175,6 +145,44 @@ class ModelCapabilities:
         """Get set of models that support structured outputs."""
         await self.ensure_structured_supported_models()
         return self._structured_supported_models or set()
+
+    async def _fetch_structured_models(self) -> set[str]:
+        """Retrieve structured-capable models from OpenRouter."""
+        headers = {
+            "Authorization": f"Bearer {self._api_key}",
+            "Content-Type": "application/json",
+            "HTTP-Referer": self._http_referer or "https://github.com/your-repo",
+            "X-Title": self._x_title or "Bite-Size Reader Bot",
+        }
+
+        limits = httpx.Limits(max_keepalive_connections=5, max_connections=10)
+        async with httpx.AsyncClient(timeout=self._timeout, limits=limits) as client:
+            resp = await client.get(
+                f"{self._base_url}/models?supported_parameters=structured_outputs",
+                headers=headers,
+            )
+            resp.raise_for_status()
+            payload = resp.json()
+
+        models: set[str] = set()
+        data_array = []
+
+        if isinstance(payload, dict):
+            if isinstance(payload.get("data"), list):
+                data_array = payload.get("data", [])
+            elif isinstance(payload.get("models"), list):
+                data_array = payload.get("models", [])
+
+        for item in data_array:
+            try:
+                if isinstance(item, dict):
+                    model_id = item.get("id") or item.get("name") or item.get("model")
+                    if isinstance(model_id, str) and model_id:
+                        models.add(model_id)
+            except Exception:
+                continue
+
+        return models
 
     def build_model_fallback_list(
         self,

@@ -8,6 +8,7 @@ import logging
 import re
 import sqlite3
 from collections.abc import Iterable, Iterator, Mapping, Sequence
+from contextlib import AbstractAsyncContextManager
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -147,14 +148,15 @@ class Database:
         while retries <= self.max_retries:
             try:
                 # Acquire lock with timeout to prevent indefinite hangs
-                async with asyncio.timeout(timeout):
-                    # Use read lock for read-only operations, write lock otherwise
-                    lock_context = (
-                        self._rw_lock.read_lock() if read_only else self._rw_lock.write_lock()
-                    )
-                    async with lock_context:
-                        # Execute operation in thread pool
+                lock_context: AbstractAsyncContextManager[Any] = (
+                    self._rw_lock.read_lock() if read_only else self._rw_lock.write_lock()
+                )
+
+                async def _run_with_lock(context: AbstractAsyncContextManager[Any]) -> Any:
+                    async with context:
                         return await asyncio.to_thread(operation, *args, **kwargs)
+
+                return await asyncio.wait_for(_run_with_lock(lock_context), timeout=timeout)
 
             except TimeoutError:
                 self._logger.exception(
@@ -268,8 +270,8 @@ class Database:
 
         while retries <= self.max_retries:
             try:
-                async with asyncio.timeout(timeout):
-                    # Transactions always require write lock
+                # Transactions always require write lock
+                async def _run_transaction() -> Any:
                     async with self._rw_lock.write_lock():
                         # Execute operation within explicit transaction
                         def _execute_in_transaction():
@@ -283,6 +285,8 @@ class Database:
                                     raise
 
                         return await asyncio.to_thread(_execute_in_transaction)
+
+                return await asyncio.wait_for(_run_transaction(), timeout=timeout)
 
             except TimeoutError:
                 self._logger.exception(

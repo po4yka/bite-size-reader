@@ -4,14 +4,17 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from collections.abc import Iterable  # noqa: TC003
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.core.lang import detect_language
-from app.infrastructure.vector.chroma_store import ChromaVectorStore  # noqa: TC001
-from app.services.embedding_service import EmbeddingService  # noqa: TC001
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable
+
+    from app.infrastructure.vector.chroma_store import ChromaVectorStore
+    from app.services.embedding_service import EmbeddingService
 
 logger = logging.getLogger(__name__)
 
@@ -174,7 +177,7 @@ class ChromaVectorSearchService:
             return []
         if isinstance(tags, str):
             return [tags]
-        if isinstance(tags, (list, tuple, set)):
+        if isinstance(tags, list | tuple | set):
             clean: list[str] = []
             for tag in tags:
                 text = str(tag).strip()

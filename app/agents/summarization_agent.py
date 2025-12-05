@@ -162,6 +162,7 @@ class SummarizationAgent(BaseAgent[SummarizationInput, SummarizationOutput]):
                 self.log_error(f"Summarization attempt {attempt} failed: {e}")
                 last_error = str(e)
                 corrections_applied.append(f"Attempt {attempt}: Exception - {e!s}")
+                print(f"DEBUG: corrections_applied in except block: {corrections_applied}")
 
         # All attempts exhausted
         self.log_error(
@@ -169,6 +170,7 @@ class SummarizationAgent(BaseAgent[SummarizationInput, SummarizationOutput]):
             f"Last error: {last_error}"
         )
 
+        print(f"DEBUG: corrections_applied: {corrections_applied}")
         return AgentResult.error_result(
             f"Summarization failed after {input_data.max_retries} attempts: {last_error}",
             attempts=input_data.max_retries,
@@ -207,24 +209,13 @@ class SummarizationAgent(BaseAgent[SummarizationInput, SummarizationOutput]):
             feedback_instructions = self._build_correction_prompt(previous_errors)
             self.log_info(f"Retry attempt {attempt} with {len(previous_errors)} previous error(s)")
 
-        try:
-            # Call the message-independent summarization method
-            return await self.llm_summarizer.summarize_content_pure(
-                content_text=content,
-                chosen_lang=language,
-                system_prompt=system_prompt,
-                correlation_id=self.correlation_id,
-                feedback_instructions=feedback_instructions,
-            )
-
-        except ValueError as e:
-            # summarize_content_pure raises ValueError for summarization failures
-            self.log_error(f"Summarization failed on attempt {attempt}: {e}")
-            return None
-        except Exception as e:
-            # Catch any other unexpected errors
-            self.log_error(f"Unexpected error during summarization attempt {attempt}: {e}")
-            return None
+        return await self.llm_summarizer.summarize_content_pure(
+            content_text=content,
+            chosen_lang=language,
+            system_prompt=system_prompt,
+            correlation_id=self.correlation_id,
+            feedback_instructions=feedback_instructions,
+        )
 
     def _get_system_prompt(self, lang: str) -> str:
         """Load and cache the system prompt for the given language.

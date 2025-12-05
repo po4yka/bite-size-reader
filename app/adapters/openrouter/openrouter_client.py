@@ -454,7 +454,7 @@ class OpenRouterClient:
         return validated_fallbacks
 
     @asynccontextmanager
-    async def _request_context(self) -> AsyncGenerator[httpx.AsyncClient]:
+    async def _request_context(self) -> AsyncGenerator[httpx.AsyncClient]:  # type: ignore[type-arg, unused-ignore]
         """Context manager for request handling with proper error handling."""
         if self._closed:
             msg = "Cannot use client after it has been closed"
@@ -1187,7 +1187,7 @@ class OpenRouterClient:
 
         # Non-retryable errors
         if self.error_handler.is_non_retryable_error(status_code):
-            self.error_handler.log_error(attempt, model, status_code, error_message, request_id)
+            error_message = self._get_error_message(status_code, data)
             return {
                 "success": False,
                 "error_result": self.error_handler.build_error_result(

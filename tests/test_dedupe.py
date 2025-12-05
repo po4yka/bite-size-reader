@@ -9,10 +9,14 @@ from app.adapters.openrouter.openrouter_client import LLMCallResult
 from app.adapters.telegram.telegram_bot import TelegramBot
 from app.config import (
     AppConfig,
+    ChromaConfig,
+    ContentLimitsConfig,
+    DatabaseConfig,
     FirecrawlConfig,
     OpenRouterConfig,
     RuntimeConfig,
     TelegramConfig,
+    TelegramLimitsConfig,
     YouTubeConfig,
 )
 from app.core.url_utils import normalize_url, url_hash_sha256
@@ -153,6 +157,10 @@ class TestDedupeReuse(unittest.IsolatedAsyncioTestCase):
                     preferred_lang="en",
                     debug_payloads=False,
                 ),
+                telegram_limits=TelegramLimitsConfig(),
+                database=DatabaseConfig(),
+                content_limits=ContentLimitsConfig(),
+                vector_store=ChromaConfig(),
             )
 
             # Avoid creating real Telegram client
@@ -162,10 +170,10 @@ class TestDedupeReuse(unittest.IsolatedAsyncioTestCase):
             tbmod.filters = None
 
             # Mock the OpenRouter client to avoid API key validation
-            with patch("app.adapters.telegram.telegram_bot.OpenRouterClient") as mock_openrouter:
+            with patch("app.adapters.telegram.bot_factory.OpenRouterClient") as mock_openrouter:
                 mock_openrouter.return_value = AsyncMock()
                 bot = TelegramBot(cfg=cfg, db=db)
-            # Replace external clients with fakes
+
             bot_any = cast("Any", bot)
             bot_any._firecrawl = FakeFirecrawl()
             fake_or = FakeOpenRouter()
@@ -239,6 +247,10 @@ class TestDedupeReuse(unittest.IsolatedAsyncioTestCase):
                     preferred_lang="en",
                     debug_payloads=False,
                 ),
+                telegram_limits=TelegramLimitsConfig(),
+                database=DatabaseConfig(),
+                content_limits=ContentLimitsConfig(),
+                vector_store=ChromaConfig(),
             )
 
             from app.adapters import telegram_bot as tbmod
@@ -247,7 +259,7 @@ class TestDedupeReuse(unittest.IsolatedAsyncioTestCase):
             tbmod.filters = None
 
             # Mock the OpenRouter client to avoid API key validation
-            with patch("app.adapters.telegram.telegram_bot.OpenRouterClient") as mock_openrouter:
+            with patch("app.adapters.telegram.bot_factory.OpenRouterClient") as mock_openrouter:
                 mock_openrouter.return_value = AsyncMock()
                 bot = TelegramBot(cfg=cfg, db=db)
 

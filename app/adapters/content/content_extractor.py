@@ -871,7 +871,7 @@ class ContentExtractor:
 
         try:
             # Wrap entire operation in timeout to prevent indefinite hangs
-            async with asyncio.timeout(overall_timeout):
+            async def _fetch_html() -> str | None:
                 async with httpx.AsyncClient(follow_redirects=True, timeout=timeout) as client:
                     resp = await client.get(url, headers=headers)
                     ctype = resp.headers.get("content-type", "").lower()
@@ -883,6 +883,8 @@ class ContentExtractor:
                     if len(text_preview) < 400:
                         return None
                     return html
+
+            return await asyncio.wait_for(_fetch_html(), timeout=overall_timeout)
         except TimeoutError:
             logger.warning(
                 "direct_html_salvage_timeout",

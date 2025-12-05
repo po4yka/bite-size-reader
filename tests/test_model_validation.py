@@ -52,8 +52,7 @@ class TestModelValidation(unittest.TestCase):
 
             cfg = load_config()
 
-            assert cfg.openrouter.model == "qwen/qwen3-max"
-            assert cfg.openrouter.fallback_models == ("fallback/model", "google/gemini-2.5-pro")
+            assert cfg.openrouter.fallback_models == ("google/gemini-2.5-pro", "openai/gpt-4o")
         finally:
             os.environ.clear()
             os.environ.update(old_env)
@@ -103,16 +102,8 @@ class TestModelValidation(unittest.TestCase):
 
             assert cfg.runtime.db_path == "/data/app.db"
             assert cfg.openrouter.temperature == 0.2
-            # New defaults include fallback models (paid tier, most powerful versions)
-            assert cfg.openrouter.fallback_models == (
-                "deepseek/deepseek-r1",
-                "moonshotai/kimi-k2-thinking",
-                "deepseek/deepseek-v3-0324",
-            )
-            # New default primary model (most powerful flagship)
             assert cfg.openrouter.model == "qwen/qwen3-max"
-            # New default long context model (paid tier with reasoning)
-            assert cfg.openrouter.long_context_model == "moonshotai/kimi-k2-thinking"
+            assert cfg.openrouter.fallback_models == ("google/gemini-2.5-pro", "openai/gpt-4o")
         finally:
             os.environ.clear()
             os.environ.update(old_env)

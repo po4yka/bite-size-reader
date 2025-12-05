@@ -179,11 +179,13 @@ class TestContentExtractionAgent(unittest.IsolatedAsyncioTestCase):
         self.assertIsNotNone(error)
         self.assertIn("too short", error.lower())
 
-        # Test error indicators
+        # Test error indicators (priority over short content)
         result = {"content_markdown": "Access Denied - forbidden"}
         error = self.agent._validate_content(result)
         self.assertIsNotNone(error)
-        self.assertIn("forbidden", error.lower())
+        self.assertIn("access denied", error.lower())  # check for the new prioritized message
+        self.assertNotIn("forbidden", error.lower())  # ensure "forbidden" is not the primary match
+        self.assertIn("error page", error.lower())  # ensure general error page indicator is present
 
         # Test valid content
         result = {"content_markdown": "Valid content " * 50}

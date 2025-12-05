@@ -26,6 +26,7 @@ class TestJsonParsing(unittest.TestCase):
         firecrawl_cfg.keepalive_expiry = 1
         firecrawl_cfg.credit_warning_threshold = 1
         firecrawl_cfg.credit_critical_threshold = 1
+        firecrawl_cfg.max_response_size_mb = 50
 
         openrouter_cfg = MagicMock()
         openrouter_cfg.api_key = "sk-or-v1-abc"
@@ -36,6 +37,7 @@ class TestJsonParsing(unittest.TestCase):
         openrouter_cfg.provider_order = []
         openrouter_cfg.enable_stats = False
         openrouter_cfg.max_tokens = 1024
+        openrouter_cfg.max_retries = 3
         openrouter_cfg.top_p = 1.0
         openrouter_cfg.temperature = 0.5
         openrouter_cfg.enable_structured_outputs = True
@@ -63,7 +65,17 @@ class TestJsonParsing(unittest.TestCase):
         runtime_cfg.preferred_lang = "en"
         runtime_cfg.max_concurrent_calls = 4
 
-        self.cfg = AppConfig(telegram_cfg, firecrawl_cfg, openrouter_cfg, youtube_cfg, runtime_cfg)
+        self.cfg = AppConfig(
+            telegram_cfg,
+            firecrawl_cfg,
+            openrouter_cfg,
+            youtube_cfg,
+            runtime_cfg,
+            MagicMock(),  # telegram_limits
+            MagicMock(),  # database
+            MagicMock(),  # content_limits
+            MagicMock(),  # vector_store
+        )
         self.db = MagicMock(spec=Database)
         self.db.async_get_request_by_dedupe_hash = AsyncMock(return_value=None)
         self.db.async_get_crawl_result_by_request = AsyncMock(return_value=None)
@@ -103,7 +115,7 @@ class TestJsonParsing(unittest.TestCase):
         mock.error_text = None
         return mock
 
-    @patch("app.adapters.telegram_bot.OpenRouterClient")
+    @patch("app.adapters.telegram.bot_factory.OpenRouterClient")
     def test_local_repair_success(self, mock_openrouter_client) -> None:
         async def run_test() -> None:
             bot = TelegramBot(self.cfg, self.db)
@@ -125,7 +137,12 @@ class TestJsonParsing(unittest.TestCase):
 
             mock_openrouter_instance = mock_openrouter_client.return_value
             mock_openrouter_instance.chat = AsyncMock(
-                side_effect=[mock_llm_response, insights_response]
+                side_effect=[
+                    mock_llm_response,
+                    insights_response,
+                    insights_response,
+                    insights_response,
+                ]
             )
             bot._openrouter = mock_openrouter_instance
 
@@ -143,13 +160,13 @@ class TestJsonParsing(unittest.TestCase):
             await bot._handle_url_flow(message, "http://example.com")
 
             assert (
-                mock_openrouter_instance.chat.await_count == 4
+                mock_openrouter_instance.chat.await_count == 3
             )  # 1 for summary + 3 for insights (json_schema + json_object fallback + retry)
             bot._reply_json.assert_called_once()
 
         asyncio.run(run_test())
 
-    @patch("app.adapters.telegram_bot.OpenRouterClient")
+    @patch("app.adapters.telegram.bot_factory.OpenRouterClient")
     def test_local_repair_failure(self, mock_openrouter_client) -> None:
         async def run_test() -> None:
             bot = TelegramBot(self.cfg, self.db)
@@ -179,7 +196,7 @@ class TestJsonParsing(unittest.TestCase):
 
         asyncio.run(run_test())
 
-    @patch("app.adapters.telegram_bot.OpenRouterClient")
+    @patch("app.adapters.telegram.bot_factory.OpenRouterClient")
     def test_parsing_with_extra_text(self, mock_openrouter_client) -> None:
         async def run_test() -> None:
             bot = TelegramBot(self.cfg, self.db)
@@ -201,7 +218,12 @@ class TestJsonParsing(unittest.TestCase):
 
             mock_openrouter_instance = mock_openrouter_client.return_value
             mock_openrouter_instance.chat = AsyncMock(
-                side_effect=[mock_llm_response, insights_response]
+                side_effect=[
+                    mock_llm_response,
+                    insights_response,
+                    insights_response,
+                    insights_response,
+                ]
             )
             bot._openrouter = mock_openrouter_instance
 
@@ -219,7 +241,7 @@ class TestJsonParsing(unittest.TestCase):
             await bot._handle_url_flow(message, "http://example.com")
 
             assert (
-                mock_openrouter_instance.chat.await_count == 4
+                mock_openrouter_instance.chat.await_count == 3
             )  # 1 for summary + 3 for insights (json_schema + json_object fallback + retry)
             bot._reply_json.assert_called_once()
             summary_json = bot._reply_json.call_args[0][1]
@@ -228,7 +250,7 @@ class TestJsonParsing(unittest.TestCase):
 
         asyncio.run(run_test())
 
-    @patch("app.adapters.telegram_bot.OpenRouterClient")
+    @patch("app.adapters.telegram.bot_factory.OpenRouterClient")
     def test_salvage_from_structured_error(self, mock_openrouter_client) -> None:
         async def run_test() -> None:
             bot = TelegramBot(self.cfg, self.db)
@@ -251,7 +273,12 @@ class TestJsonParsing(unittest.TestCase):
 
             mock_openrouter_instance = mock_openrouter_client.return_value
             mock_openrouter_instance.chat = AsyncMock(
-                side_effect=[mock_llm_response, insights_response]
+                side_effect=[
+                    mock_llm_response,
+                    insights_response,
+                    insights_response,
+                    insights_response,
+                ]
             )
             bot._openrouter = mock_openrouter_instance
             bot.url_processor.llm_summarizer.openrouter = mock_openrouter_instance
@@ -271,7 +298,7 @@ class TestJsonParsing(unittest.TestCase):
             await bot._handle_url_flow(message, "http://example.com")
 
             assert (
-                mock_openrouter_instance.chat.await_count == 4
+                mock_openrouter_instance.chat.await_count == 3
             )  # 1 for summary + 3 for insights (json_schema + json_object fallback + retry)
             bot._reply_json.assert_called_once()
             summary_json = bot._reply_json.call_args[0][1]
@@ -284,7 +311,7 @@ class TestJsonParsing(unittest.TestCase):
 
         asyncio.run(run_test())
 
-    @patch("app.adapters.telegram_bot.OpenRouterClient")
+    @patch("app.adapters.telegram.bot_factory.OpenRouterClient")
     def test_forward_salvage_from_structured_error(self, mock_openrouter_client) -> None:
         async def run_test() -> None:
             bot = TelegramBot(self.cfg, self.db)
@@ -307,7 +334,12 @@ class TestJsonParsing(unittest.TestCase):
 
             mock_openrouter_instance = mock_openrouter_client.return_value
             mock_openrouter_instance.chat = AsyncMock(
-                side_effect=[mock_llm_response, insights_response]
+                side_effect=[
+                    mock_llm_response,
+                    insights_response,
+                    insights_response,
+                    insights_response,
+                ]
             )
             bot._openrouter = mock_openrouter_instance
 

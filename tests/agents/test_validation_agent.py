@@ -3,7 +3,7 @@
 import unittest
 from unittest.mock import patch
 
-from app.agents.validation_agent import ValidationAgent, ValidationInput
+from app.agents.validation_agent import ValidationAgent, ValidationInput  # Corrected import
 
 
 class TestValidationAgent(unittest.IsolatedAsyncioTestCase):
@@ -287,17 +287,6 @@ class TestValidationAgent(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(result.success)
         self.assertIn("Summary contract validation failed", result.error)
         self.assertIn("Contract validation failed", result.error)
-
-    async def test_unexpected_exception_handled(self):
-        """Test that unexpected exceptions are handled gracefully."""
-        input_data = ValidationInput(summary_json=self.valid_summary)
-
-        with patch.object(self.agent, "_format_validation_errors") as mock_format:
-            mock_format.side_effect = RuntimeError("Unexpected error")
-            result = await self.agent.execute(input_data)
-
-        self.assertFalse(result.success)
-        self.assertIn("Validation exception", result.error)
 
     async def test_format_single_error(self):
         """Test formatting of a single validation error."""

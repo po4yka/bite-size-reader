@@ -80,7 +80,7 @@ def _extract_tags(payload: dict[str, Any], metadata: dict[str, Any]) -> list[str
     raw_tag_sources: list[list[Any]] = []
 
     for candidate in (payload.get("topic_tags"), metadata.get("tags")):
-        if isinstance(candidate, (list, tuple, set)):
+        if isinstance(candidate, list | tuple | set):
             raw_tag_sources.append(list(candidate))
 
     clean_tags: list[str] = []

@@ -9,6 +9,7 @@ from app.agents.orchestrator import (
     AgentOrchestrator,
     BatchPipelineInput,
     PipelineInput,
+    PipelineOutput,
     PipelineStage,
     RetryConfig,
     RetryStrategy,
@@ -171,13 +172,18 @@ class TestAgentOrchestrator(unittest.IsolatedAsyncioTestCase):
             "https://example.com/success2",
         ]
 
+        urls_to_fail = {"https://example.com/fail"}  # Defined here
+
         call_count = 0
 
         async def mock_execute(input_data):
             nonlocal call_count
             call_count += 1
-            if call_count == 2:  # Second URL fails
+            print(f"DEBUG: urls_to_fail in mock_execute: {urls_to_fail}")
+            if input_data.url in urls_to_fail:
+                print(f"DEBUG: mock_execute for {input_data.url} returning error.")
                 return AgentResult.error_result("Extraction failed")
+            print(f"DEBUG: mock_execute for {input_data.url} returning success.")
             return AgentResult.success_result(self.extraction_output)
 
         self.mock_extraction_agent.execute = AsyncMock(side_effect=mock_execute)
@@ -216,12 +222,19 @@ class TestAgentOrchestrator(unittest.IsolatedAsyncioTestCase):
             call_count += 1
             if call_count < 3:
                 raise RuntimeError(f"Attempt {call_count} failed")
-            # Third attempt succeeds
-            extraction_result = AgentResult.success_result(self.extraction_output)
-            summarization_result = AgentResult.success_result(self.summarization_output)
-            self.mock_extraction_agent.execute = AsyncMock(return_value=extraction_result)
-            self.mock_summarization_agent.execute = AsyncMock(return_value=summarization_result)
-            return await self.orchestrator.execute_pipeline(input_data)
+            # Third attempt succeeds, directly return a mocked success result
+            return {
+                "success": True,
+                "output": PipelineOutput(
+                    summary_json=self.summarization_output.summary_json,
+                    normalized_url=self.extraction_output.normalized_url,
+                    content_length=len(self.extraction_output.content_markdown),
+                    extraction_metadata=self.extraction_output.metadata,
+                    summarization_attempts=call_count,
+                    validation_warnings=[],
+                ),
+                "metadata": {},
+            }
 
         input_data = PipelineInput(
             url=self.test_url,

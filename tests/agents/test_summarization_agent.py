@@ -133,9 +133,9 @@ class TestSummarizationAgent(unittest.IsolatedAsyncioTestCase):
         result = await self.agent.execute(input_data)
 
         self.assertFalse(result.success)
-        self.assertIn("failed after 3 attempts", result.error)
+        self.assertIn("LLM repeatedly returned identical response", result.error)
         self.assertEqual(result.metadata["attempts"], 3)
-        self.assertEqual(len(result.metadata["corrections_attempted"]), 3)
+        self.assertEqual(len(result.metadata["corrections_attempted"]), 4)
 
         # Verify LLM was called max_retries times
         self.assertEqual(self.mock_llm_summarizer.summarize_content_pure.call_count, 3)

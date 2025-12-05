@@ -2,7 +2,6 @@
 
 import unittest
 from datetime import datetime
-from unittest.mock import Mock
 
 from app.models.telegram.telegram_models import (
     ChatType,
@@ -414,7 +413,7 @@ class TestTelegramMessage(unittest.TestCase):
             text="Hello world",
         )
 
-        errors = message.validate()
+        errors = message.validate_message()
         assert len(errors) == 0
 
     def test_validate_missing_message_id(self):
@@ -424,7 +423,7 @@ class TestTelegramMessage(unittest.TestCase):
             text="Hello world",
         )
 
-        errors = message.validate()
+        errors = message.validate_message()
         assert "Message ID is required" in errors
 
     def test_validate_missing_content(self):
@@ -433,7 +432,7 @@ class TestTelegramMessage(unittest.TestCase):
             message_id=12345,
         )
 
-        errors = message.validate()
+        errors = message.validate_message()
         assert "Message must have text, caption, or media content" in errors
 
     def test_validate_entity_bounds(self):
@@ -450,7 +449,7 @@ class TestTelegramMessage(unittest.TestCase):
             ],
         )
 
-        errors = message.validate()
+        errors = message.validate_message()
         assert "Entity extends beyond text length" in errors
 
     def test_get_effective_text(self):

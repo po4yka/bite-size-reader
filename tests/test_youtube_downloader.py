@@ -1,9 +1,7 @@
 import sys
 import unittest
-from datetime import datetime
 from pathlib import Path
-from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock, call, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 sys.modules.setdefault("pydantic", MagicMock())
 sys.modules.setdefault("pydantic_settings", MagicMock())
@@ -11,12 +9,33 @@ sys.modules.setdefault("peewee", MagicMock())
 sys.modules.setdefault("playhouse", MagicMock())
 sys.modules.setdefault("playhouse.sqlite_ext", MagicMock())
 
+try:
+    from youtube_transcript_api import YouTubeTranscriptApi
+    from youtube_transcript_api._errors import (
+        NoTranscriptFound,
+        TranscriptsDisabled,
+        VideoUnavailable,
+    )
+except ModuleNotFoundError:
+    # Provide lightweight stand-ins when the optional dependency isn't installed.
+    class NoTranscriptFound(Exception):  # type: ignore[no-redef]
+        pass
+
+    class TranscriptsDisabled(Exception):  # type: ignore[no-redef]
+        pass
+
+    class VideoUnavailable(Exception):  # type: ignore[no-redef]
+        pass
+
+    YouTubeTranscriptApi = MagicMock()
+    sys.modules["youtube_transcript_api"] = MagicMock(YouTubeTranscriptApi=YouTubeTranscriptApi)
+    sys.modules["youtube_transcript_api._errors"] = MagicMock(
+        NoTranscriptFound=NoTranscriptFound,
+        TranscriptsDisabled=TranscriptsDisabled,
+        VideoUnavailable=VideoUnavailable,
+    )
+
 import yt_dlp  # noqa: E402
-from youtube_transcript_api._errors import (  # noqa: E402
-    NoTranscriptFound,
-    TranscriptsDisabled,
-    VideoUnavailable,
-)
 
 from app.adapters.youtube.youtube_downloader import YouTubeDownloader  # noqa: E402
 
@@ -412,8 +431,8 @@ class TestVideoDownload(TestYouTubeDownloader):
                                 req_id,
                                 transcript,
                                 source,
-                                lang,
-                                metadata,
+                                _lang,
+                                _metadata,
                             ) = await self.downloader.download_and_extract(
                                 message, "https://www.youtube.com/watch?v=test_video", "cid"
                             )

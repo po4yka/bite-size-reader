@@ -100,7 +100,7 @@ class MessageRouter:
             telegram_message = TelegramMessage.from_pyrogram_message(message)
 
             # Validate message and log any issues
-            validation_errors = telegram_message.validate()
+            validation_errors = telegram_message.validate_message()
             if validation_errors:
                 logger.warning(
                     "message_validation_errors",

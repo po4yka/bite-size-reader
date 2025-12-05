@@ -7,10 +7,14 @@ from unittest.mock import AsyncMock, patch
 from app.adapters.telegram.telegram_bot import TelegramBot
 from app.config import (
     AppConfig,
+    ChromaConfig,
+    ContentLimitsConfig,
+    DatabaseConfig,
     FirecrawlConfig,
     OpenRouterConfig,
     RuntimeConfig,
     TelegramConfig,
+    TelegramLimitsConfig,
     YouTubeConfig,
 )
 from app.db.database import Database
@@ -72,6 +76,10 @@ def _bot_with_tmpdb(tmp_path):
             preferred_lang="en",
             debug_payloads=False,
         ),
+        telegram_limits=TelegramLimitsConfig(),
+        database=DatabaseConfig(),
+        content_limits=ContentLimitsConfig(),
+        vector_store=ChromaConfig(),
     )
     from app.adapters import telegram_bot as tbmod
 
@@ -79,7 +87,7 @@ def _bot_with_tmpdb(tmp_path):
     tbmod.filters = None
 
     # Mock the OpenRouter client to avoid API key validation
-    with patch("app.adapters.telegram.telegram_bot.OpenRouterClient") as mock_openrouter:
+    with patch("app.adapters.telegram.bot_factory.OpenRouterClient") as mock_openrouter:
         mock_openrouter.return_value = AsyncMock()
         bot = TelegramBot(cfg=cfg, db=db)
     return bot, db

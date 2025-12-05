@@ -7,10 +7,14 @@ from app.adapters.telegram.access_controller import AccessController
 from app.adapters.telegram.telegram_bot import TelegramBot
 from app.config import (
     AppConfig,
+    ChromaConfig,
+    ContentLimitsConfig,
+    DatabaseConfig,
     FirecrawlConfig,
     OpenRouterConfig,
     RuntimeConfig,
     TelegramConfig,
+    TelegramLimitsConfig,
     YouTubeConfig,
 )
 from app.db.database import Database
@@ -79,6 +83,10 @@ def _make_config(tmp_path: str, allowed_ids) -> AppConfig:
             preferred_lang="en",
             debug_payloads=False,
         ),
+        telegram_limits=TelegramLimitsConfig(),
+        database=DatabaseConfig(),
+        content_limits=ContentLimitsConfig(),
+        vector_store=ChromaConfig(),
     )
 
 
@@ -92,7 +100,7 @@ def make_bot(tmp_path: str, allowed_ids):
     tbmod.filters = None
 
     # Mock the OpenRouter client to avoid API key validation
-    with patch("app.adapters.telegram.telegram_bot.OpenRouterClient") as mock_openrouter:
+    with patch("app.adapters.telegram.bot_factory.OpenRouterClient") as mock_openrouter:
         mock_openrouter.return_value = AsyncMock()
         return TelegramBot(cfg=cfg, db=db)
 

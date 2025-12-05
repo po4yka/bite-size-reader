@@ -111,7 +111,7 @@ def downgrade(db: Database) -> None:
 def _fetch_summary_embeddings(db: Database) -> Iterable[dict[str, Any]]:
     from app.db.models import Request, Summary, SummaryEmbedding
 
-    with db._database.connection_context():
+    with db._database.atomic():  # Use atomic transaction for proper management
         query = (
             SummaryEmbedding.select(SummaryEmbedding, Summary, Request).join(Summary).join(Request)
         )

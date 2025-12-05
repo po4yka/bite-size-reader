@@ -216,9 +216,6 @@ class ContentExtractionAgent(BaseAgent[ExtractionInput, ExtractionOutput]):
         """
         content = result.get("content_markdown", "")
 
-        if len(content) < 100:
-            return "Content too short (< 100 chars) - may be extraction failure"
-
         error_indicators = [
             "access denied",
             "404 not found",
@@ -231,5 +228,8 @@ class ContentExtractionAgent(BaseAgent[ExtractionInput, ExtractionOutput]):
         for indicator in error_indicators:
             if indicator in content_lower and len(content) < 500:
                 return f"Content may contain error page ('{indicator}' detected)"
+
+        if len(content) < 100:
+            return "Content too short (< 100 chars) - may be extraction failure"
 
         return None

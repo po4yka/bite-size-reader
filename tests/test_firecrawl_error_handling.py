@@ -22,6 +22,7 @@ class _Resp:
     def __init__(self, status_code, data):
         self.status_code = status_code
         self._data = data
+        self.headers = {}
 
     def json(self):
         return self._data

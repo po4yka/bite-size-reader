@@ -3,8 +3,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime
-from enum import Enum
+from datetime import datetime  # noqa: TC003
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -547,7 +546,7 @@ class TelegramMessage(BaseModel):
 
         return urls
 
-    def validate(self) -> list[str]:
+    def validate_message(self) -> list[str]:
         """Validate message data and return list of validation errors."""
         errors = []
 

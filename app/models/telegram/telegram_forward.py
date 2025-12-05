@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
-from datetime import datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel
 
-from app.models.telegram.telegram_chat import TelegramChat
+if TYPE_CHECKING:
+    from datetime import datetime
+
+    from app.models.telegram.telegram_chat import TelegramChat
 
 
 class ForwardInfo(BaseModel):

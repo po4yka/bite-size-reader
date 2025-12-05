@@ -8,10 +8,14 @@ from app.adapters.external.response_formatter import ResponseFormatter
 from app.adapters.telegram.forward_content_processor import ForwardContentProcessor
 from app.config import (
     AppConfig,
+    ChromaConfig,
+    ContentLimitsConfig,
+    DatabaseConfig,
     FirecrawlConfig,
     OpenRouterConfig,
     RuntimeConfig,
     TelegramConfig,
+    TelegramLimitsConfig,
     YouTubeConfig,
 )
 from app.db.database import Database
@@ -76,6 +80,10 @@ class TestForwardMessagePersistence(unittest.IsolatedAsyncioTestCase):
                     preferred_lang="en",
                     debug_payloads=False,
                 ),
+                telegram_limits=TelegramLimitsConfig(),
+                database=DatabaseConfig(),
+                content_limits=ContentLimitsConfig(),
+                vector_store=ChromaConfig(),
             )
 
             formatter = MagicMock(spec=ResponseFormatter)

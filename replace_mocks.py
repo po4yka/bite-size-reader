@@ -41,22 +41,9 @@ class TestOpenRouterCompliance(unittest.TestCase):
 
     def setUp(self) -> None:
         """Set up test fixtures."""
-        from app.adapters.openrouter.model_capabilities import ModelCapabilities
-
-        ModelCapabilities._structured_models = None  # Ensure cache is empty for fresh mock
-
-        # Patch _fetch_structured_models to control reported structured-output capable models
-        self.patcher_fetch_structured_models = patch(
-            "app.adapters.openrouter.model_capabilities.ModelCapabilities._fetch_structured_models",
-            new_callable=AsyncMock,
-        )
-        self.mock_fetch_structured_models = self.patcher_fetch_structured_models.start()
-        self.mock_fetch_structured_models.return_value = {"qwen/qwen3-max"}
-        self.addCleanup(self.patcher_fetch_structured_models.stop)
-
         self.client = OpenRouterClient(
             api_key="sk-or-test-key",
-            model="qwen/qwen3-max",
+            model="deepseek/deepseek-v3-0324",
             fallback_models=["google/gemini-2.5-pro"],
             http_referer="https://github.com/test-repo",
             x_title="Test Bot",
@@ -137,7 +124,7 @@ class TestOpenRouterCompliance(unittest.TestCase):
                 # Verify request body structure
                 call_args = mock_client.return_value.post.call_args
                 body = call_args[1]["json"]
-                assert body["model"] == "qwen/qwen3-max"
+                assert body["model"] == "deepseek/deepseek-v3-0324"
                 assert body["messages"] == messages
                 assert body["temperature"] == 0.7
                 assert body["max_tokens"] == 100

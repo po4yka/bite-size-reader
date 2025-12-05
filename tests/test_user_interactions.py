@@ -8,10 +8,14 @@ from unittest.mock import Mock
 from app.adapters.telegram.message_router import MessageRouter
 from app.config import (
     AppConfig,
+    ChromaConfig,
+    ContentLimitsConfig,
+    DatabaseConfig,
     FirecrawlConfig,
     OpenRouterConfig,
     RuntimeConfig,
     TelegramConfig,
+    TelegramLimitsConfig,
     YouTubeConfig,
 )
 from app.db.database import Database
@@ -48,6 +52,10 @@ def _make_config() -> AppConfig:
             preferred_lang="en",
             debug_payloads=False,
         ),
+        telegram_limits=TelegramLimitsConfig(),
+        database=DatabaseConfig(),
+        content_limits=ContentLimitsConfig(),
+        vector_store=ChromaConfig(),
     )
 
 

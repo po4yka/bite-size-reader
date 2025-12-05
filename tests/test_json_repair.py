@@ -23,6 +23,7 @@ class TestJsonRepair(unittest.TestCase):
         firecrawl_cfg.keepalive_expiry = 1
         firecrawl_cfg.credit_warning_threshold = 1
         firecrawl_cfg.credit_critical_threshold = 1
+        firecrawl_cfg.max_response_size_mb = 50
 
         openrouter_cfg = MagicMock()
         openrouter_cfg.api_key = "sk-or-v1-abc"
@@ -33,6 +34,7 @@ class TestJsonRepair(unittest.TestCase):
         openrouter_cfg.provider_order = []
         openrouter_cfg.enable_stats = False
         openrouter_cfg.max_tokens = 4096
+        openrouter_cfg.max_retries = 3
         openrouter_cfg.temperature = 0.7
         openrouter_cfg.top_p = 1.0
         openrouter_cfg.enable_structured_outputs = True
@@ -60,10 +62,20 @@ class TestJsonRepair(unittest.TestCase):
         runtime_cfg.preferred_lang = "en"
         runtime_cfg.max_concurrent_calls = 4
 
-        self.cfg = AppConfig(telegram_cfg, firecrawl_cfg, openrouter_cfg, youtube_cfg, runtime_cfg)
+        self.cfg = AppConfig(
+            telegram_cfg,
+            firecrawl_cfg,
+            openrouter_cfg,
+            youtube_cfg,
+            runtime_cfg,
+            MagicMock(),  # telegram_limits
+            MagicMock(),  # database
+            MagicMock(),  # content_limits
+            MagicMock(),  # vector_store
+        )
         self.db = MagicMock(spec=Database)
 
-    @patch("app.adapters.telegram_bot.OpenRouterClient")
+    @patch("app.adapters.telegram.bot_factory.OpenRouterClient")
     def test_json_repair_success(self, mock_openrouter_client):
         async def run_test():
             self.bot = TelegramBot(self.cfg, self.db)
@@ -115,7 +127,7 @@ class TestJsonRepair(unittest.TestCase):
 
         asyncio.run(run_test())
 
-    @patch("app.adapters.telegram_bot.OpenRouterClient")
+    @patch("app.adapters.telegram.bot_factory.OpenRouterClient")
     def test_json_repair_failure(self, mock_openrouter_client):
         async def run_test():
             self.bot = TelegramBot(self.cfg, self.db)
@@ -164,7 +176,7 @@ class TestJsonRepair(unittest.TestCase):
 
         asyncio.run(run_test())
 
-    @patch("app.adapters.telegram_bot.OpenRouterClient")
+    @patch("app.adapters.telegram.bot_factory.OpenRouterClient")
     def test_json_repair_with_extra_text(self, mock_openrouter_client):
         async def run_test():
             self.bot = TelegramBot(self.cfg, self.db)
@@ -195,7 +207,7 @@ class TestJsonRepair(unittest.TestCase):
 
         asyncio.run(run_test())
 
-    @patch("app.adapters.telegram_bot.OpenRouterClient")
+    @patch("app.adapters.telegram.bot_factory.OpenRouterClient")
     def test_json_repair_sends_original_content(self, mock_openrouter_client):
         async def run_test():
             self.bot = TelegramBot(self.cfg, self.db)
@@ -213,6 +225,8 @@ class TestJsonRepair(unittest.TestCase):
             mock_openrouter_instance.chat = AsyncMock(
                 side_effect=[
                     mock_llm_response_initial,
+                    mock_llm_response_repair,
+                    mock_llm_response_repair,
                     mock_llm_response_repair,
                     mock_llm_response_repair,
                 ]
@@ -235,7 +249,7 @@ class TestJsonRepair(unittest.TestCase):
             # With local JSON repair, the broken JSON is fixed locally and no LLM repair call is made
             # The test should verify that the summary was processed successfully despite broken JSON
             assert (
-                mock_openrouter_instance.chat.call_count == 4
+                mock_openrouter_instance.chat.call_count == 3
             )  # 1 for summary + 3 for insights (with fallbacks/retry)
 
             # Verify that the summary was processed successfully with local JSON repair
@@ -247,7 +261,7 @@ class TestJsonRepair(unittest.TestCase):
 
         asyncio.run(run_test())
 
-    @patch("app.adapters.telegram_bot.OpenRouterClient")
+    @patch("app.adapters.telegram.bot_factory.OpenRouterClient")
     def test_local_json_repair_library_used(self, mock_openrouter_client):
         async def run_test():
             self.bot = TelegramBot(self.cfg, self.db)

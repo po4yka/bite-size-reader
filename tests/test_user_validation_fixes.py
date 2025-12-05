@@ -10,10 +10,14 @@ import pytest
 from app.adapters.telegram.telegram_bot import TelegramBot
 from app.config import (
     AppConfig,
+    ChromaConfig,
+    ContentLimitsConfig,
+    DatabaseConfig,
     FirecrawlConfig,
     OpenRouterConfig,
     RuntimeConfig,
     TelegramConfig,
+    TelegramLimitsConfig,
     YouTubeConfig,
 )
 from app.db.database import Database
@@ -69,6 +73,10 @@ def make_bot(tmp_path: str, allowed_ids):
             preferred_lang="en",
             debug_payloads=False,
         ),
+        telegram_limits=TelegramLimitsConfig(),
+        database=DatabaseConfig(),
+        content_limits=ContentLimitsConfig(),
+        vector_store=ChromaConfig(),
     )
     from app.adapters import telegram_bot as tbmod
 

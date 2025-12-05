@@ -7,7 +7,7 @@ from typing import Any
 from pydantic import BaseModel, Field, field_validator
 
 from app.models.telegram.telegram_enums import MessageEntityType
-from app.models.telegram.telegram_user import TelegramUser
+from app.models.telegram.telegram_user import TelegramUser  # noqa: TC001
 
 
 class MessageEntity(BaseModel):

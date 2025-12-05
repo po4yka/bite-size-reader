@@ -921,9 +921,9 @@ class Settings(BaseSettings):
     )
 
     allow_stub_telegram: bool = Field(default=False, exclude=True)
-    telegram: TelegramConfig = Field(default_factory=TelegramConfig)
-    firecrawl: FirecrawlConfig = Field(default_factory=FirecrawlConfig)
-    openrouter: OpenRouterConfig = Field(default_factory=OpenRouterConfig)
+    telegram: TelegramConfig
+    firecrawl: FirecrawlConfig
+    openrouter: OpenRouterConfig
     youtube: YouTubeConfig = Field(default_factory=YouTubeConfig)
     runtime: RuntimeConfig = Field(default_factory=RuntimeConfig)
     telegram_limits: TelegramLimitsConfig = Field(default_factory=TelegramLimitsConfig)
