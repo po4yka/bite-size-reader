@@ -33,7 +33,7 @@ jobs:
       lock_drift: ${{ steps.lockcheck.outputs.drift }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -67,7 +67,7 @@ jobs:
           fi
 
       - name: Upload compiled requirements
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v4
         with:
           name: compiled-requirements
           path: |
@@ -82,13 +82,12 @@ jobs:
     strategy:
       matrix:
         python-version: ["3.13"]
-        pydantic: [true, false]
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
       - name: Download compiled requirements
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v4
         with:
           name: compiled-requirements
           path: .
@@ -112,21 +111,6 @@ jobs:
 
       - name: Install additional test/coverage tools
         run: uv pip install --system pytest-cov pytest-xdist pytest-rerunfailures pytest-asyncio coverage[toml]
-
-      - name: Remove Pydantic for no-pydantic matrix case
-        if: ${{ matrix.pydantic == false }}
-        run: |
-          uv pip uninstall --system -y pydantic || true
-
-      - name: Verify Pydantic availability
-        run: |
-          python - <<'PY'
-          try:
-              import pydantic  # type: ignore
-              print("Pydantic: present")
-          except Exception:
-              print("Pydantic: absent")
-          PY
 
       - name: Lint (ruff) - comprehensive
         run: ruff check .
@@ -163,7 +147,7 @@ jobs:
             --cov-report=xml \
             --cov-report=html \
             --cov-config=pyproject.toml \
-            --junit-xml=junit-${{ matrix.python-version }}-pydantic-${{ matrix.pydantic }}.xml \
+            --junit-xml=junit-${{ matrix.python-version }}.xml \
             --verbose \
             --maxfail=10 \
             --tb=short \
@@ -174,9 +158,9 @@ jobs:
 
       - name: Upload test results
         if: always()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v4
         with:
-          name: test-results-${{ matrix.python-version }}-pydantic-${{ matrix.pydantic }}
+          name: test-results-${{ matrix.python-version }}
           path: |
             junit-*.xml
             htmlcov/
@@ -190,7 +174,6 @@ jobs:
           paths: "junit-*.xml"
 
       - name: Upload coverage reports
-        if: ${{ matrix.pydantic }}
         uses: codecov/codecov-action@v5
         with:
           file: ./coverage.xml
@@ -199,13 +182,12 @@ jobs:
           fail_ci_if_error: false
 
       - name: Check coverage threshold
-        if: ${{ matrix.pydantic }}
         run: |
           INCLUDE_PATHS=$(grep -v '^#' scripts/coverage_includes.txt | grep -v '^$' | paste -sd, -)
           coverage report --include="$INCLUDE_PATHS" --fail-under=80 --show-missing
 
       - name: Surface lockfile drift status
-        if: ${{ needs.prepare-environment.outputs.lock_drift == 'true' && matrix.pydantic }}
+        if: ${{ needs.prepare-environment.outputs.lock_drift == 'true' }}
         run: echo "::warning::Lockfiles are out of date. Run 'make lock-uv' locally or trigger 'Update Lockfiles' workflow."
 
   docker-image:
@@ -214,7 +196,7 @@ jobs:
     timeout-minutes: 45
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -260,10 +242,10 @@ jobs:
       security-events: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
       - name: Download compiled requirements
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v4
         with:
           name: compiled-requirements
           path: .
@@ -318,7 +300,7 @@ jobs:
       security-events: write
     steps:
       - name: Checkout (full history)
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
@@ -378,10 +360,10 @@ jobs:
     if: github.event_name == 'push' || github.event.pull_request.draft == false
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
       - name: Download compiled requirements
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v4
         with:
           name: compiled-requirements
           path: .
