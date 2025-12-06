@@ -65,7 +65,7 @@ services:
     container_name: bsr-chroma
     init: true
     volumes:
-      - ./chroma_data:/chroma/chroma
+      - ./chroma_data:/data
     ports:
       - "8000:8000"
     environment:
@@ -73,8 +73,16 @@ services:
       - COMPONENT=server
       - CHROMA_HOST=0.0.0.0
       - CHROMA_PORT=8000
+      - PERSIST_DIRECTORY=/data
       - CHROMA_TELEMETRY_ENABLED=false
+      - ANONYMIZED_TELEMETRY=FALSE
+      - CHROMA_SERVER_LOG_LEVEL=INFO
+      - CHROMA_SERVER_WORKERS=1
     restart: unless-stopped
+    ulimits:
+      nofile:
+        soft: 1048576
+        hard: 1048576
     deploy:
       resources:
         limits:
@@ -84,7 +92,13 @@ services:
           memory: 512M
           cpus: '0.25'
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/heartbeat"]
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request, sys; urllib.request.urlopen('http://localhost:8000/api/v1/heartbeat').read();",
+        ]
       interval: 30s
       timeout: 10s
       retries: 3
