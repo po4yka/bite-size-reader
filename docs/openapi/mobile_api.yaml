@@ -1,0 +1,1167 @@
+openapi: 3.1.0
+info:
+  title: Bite-Size Reader Mobile API
+  description: RESTful API for Android/iOS mobile clients
+  version: 1.0.0
+paths:
+  /v1/auth/telegram-login:
+    post:
+      tags:
+      - Authentication
+      summary: Telegram Login
+      description: 'Exchange Telegram authentication data for JWT tokens.
+
+
+        Verifies Telegram auth hash using HMAC-SHA256 and returns access + refresh
+        tokens.
+
+
+        The authentication data must come from Telegram Login Widget and include:
+
+        - id: Telegram user ID
+
+        - hash: HMAC-SHA256 hash of auth data
+
+        - auth_date: Unix timestamp of authentication
+
+        - client_id: Client application ID
+
+        - Optional: username, first_name, last_name, photo_url'
+      operationId: telegram_login_v1_auth_telegram_login_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TelegramLoginRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/auth/refresh:
+    post:
+      tags:
+      - Authentication
+      summary: Refresh Access Token
+      description: Refresh an expired access token using a refresh token.
+      operationId: refresh_access_token_v1_auth_refresh_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RefreshTokenRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/auth/me:
+    get:
+      tags:
+      - Authentication
+      summary: Get Current User Info
+      description: Get current authenticated user information.
+      operationId: get_current_user_info_v1_auth_me_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+      security:
+      - HTTPBearer: []
+  /v1/summaries:
+    get:
+      tags:
+      - Summaries
+      summary: Get Summaries
+      description: 'Get paginated list of summaries.
+
+
+        Query Parameters:
+
+        - limit: Items per page (1-100, default 20)
+
+        - offset: Pagination offset (default 0)
+
+        - is_read: Filter by read status (optional)
+
+        - lang: Filter by language (en/ru/auto)
+
+        - start_date: Filter by creation date (ISO 8601)
+
+        - end_date: Filter by creation date (ISO 8601)
+
+        - sort: Sort order (created_at_desc/created_at_asc)'
+      operationId: get_summaries_v1_summaries_get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 100
+          minimum: 1
+          default: 20
+          title: Limit
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+          default: 0
+          title: Offset
+      - name: is_read
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          title: Is Read
+      - name: lang
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            pattern: ^(en|ru|auto)$
+          - type: 'null'
+          title: Lang
+      - name: start_date
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Start Date
+      - name: end_date
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: End Date
+      - name: sort
+        in: query
+        required: false
+        schema:
+          type: string
+          pattern: ^(created_at_desc|created_at_asc)$
+          default: created_at_desc
+          title: Sort
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/summaries/{summary_id}:
+    get:
+      tags:
+      - Summaries
+      summary: Get Summary
+      description: Get a single summary with full details.
+      operationId: get_summary_v1_summaries__summary_id__get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: summary_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Summary Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    patch:
+      tags:
+      - Summaries
+      summary: Update Summary
+      description: Update summary metadata (e.g., mark as read).
+      operationId: update_summary_v1_summaries__summary_id__patch
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: summary_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Summary Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateSummaryRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    delete:
+      tags:
+      - Summaries
+      summary: Delete Summary
+      description: Delete a summary (soft delete).
+      operationId: delete_summary_v1_summaries__summary_id__delete
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: summary_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Summary Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/requests:
+    post:
+      tags:
+      - Requests
+      summary: Submit Request
+      description: 'Submit a new URL or forwarded message for processing.
+
+
+        Returns request_id and correlation_id for status polling.
+
+        Checks for duplicates and returns existing summary if found.
+
+        Processing happens asynchronously in the background.'
+      operationId: submit_request_v1_requests_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              anyOf:
+              - $ref: '#/components/schemas/SubmitURLRequest'
+              - $ref: '#/components/schemas/SubmitForwardRequest'
+              title: Request Data
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      security:
+      - HTTPBearer: []
+  /v1/requests/{request_id}:
+    get:
+      tags:
+      - Requests
+      summary: Get Request
+      description: Get details about a specific request.
+      operationId: get_request_v1_requests__request_id__get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: request_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Request Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/requests/{request_id}/status:
+    get:
+      tags:
+      - Requests
+      summary: Get Request Status
+      description: Poll for real-time processing status.
+      operationId: get_request_status_v1_requests__request_id__status_get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: request_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Request Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/requests/{request_id}/retry:
+    post:
+      tags:
+      - Requests
+      summary: Retry Request
+      description: Retry a failed request. Processes asynchronously in the background.
+      operationId: retry_request_v1_requests__request_id__retry_post
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: request_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Request Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/search:
+    get:
+      tags:
+      - Search
+      summary: Search Summaries
+      description: 'Full-text search across all summaries using FTS5.
+
+
+        Search Syntax:
+
+        - Wildcard: bitcoin*
+
+        - Phrase: "artificial intelligence"
+
+        - Boolean: blockchain AND crypto
+
+        - Exclusion: crypto NOT bitcoin'
+      operationId: search_summaries_v1_search_get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: q
+        in: query
+        required: true
+        schema:
+          type: string
+          minLength: 2
+          maxLength: 200
+          title: Q
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 100
+          minimum: 1
+          default: 20
+          title: Limit
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+          default: 0
+          title: Offset
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/search/semantic:
+    get:
+      tags:
+      - Search
+      summary: Semantic Search Summaries
+      description: Semantic search across summaries using Chroma embeddings.
+      operationId: semantic_search_summaries_v1_search_semantic_get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: q
+        in: query
+        required: true
+        schema:
+          type: string
+          minLength: 2
+          maxLength: 200
+          title: Q
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 100
+          minimum: 1
+          default: 20
+          title: Limit
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+          default: 0
+          title: Offset
+      - name: language
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            minLength: 2
+            maxLength: 10
+          - type: 'null'
+          title: Language
+      - name: tags
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: array
+            items:
+              type: string
+          - type: 'null'
+          title: Tags
+      - name: user_scope
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            minLength: 1
+            maxLength: 50
+          - type: 'null'
+          title: User Scope
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/topics/trending:
+    get:
+      tags:
+      - Search
+      summary: Get Trending Topics
+      description: Get trending topic tags across recent summaries.
+      operationId: get_trending_topics_v1_topics_trending_get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 100
+          minimum: 1
+          default: 20
+          title: Limit
+      - name: days
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 365
+          minimum: 1
+          default: 30
+          title: Days
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/topics/related:
+    get:
+      tags:
+      - Search
+      summary: Get Related Summaries
+      description: Get summaries related to a specific topic tag.
+      operationId: get_related_summaries_v1_topics_related_get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: tag
+        in: query
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          title: Tag
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 100
+          minimum: 1
+          default: 20
+          title: Limit
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+          default: 0
+          title: Offset
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/urls/check-duplicate:
+    get:
+      tags:
+      - Search
+      summary: Check Duplicate
+      description: Check if a URL has already been summarized.
+      operationId: check_duplicate_v1_urls_check_duplicate_get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: url
+        in: query
+        required: true
+        schema:
+          type: string
+          minLength: 10
+          title: Url
+      - name: include_summary
+        in: query
+        required: false
+        schema:
+          type: boolean
+          default: false
+          title: Include Summary
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/sync/sessions:
+    post:
+      tags:
+      - Sync
+      summary: Create Sync Session
+      description: Create or resume a sync session.
+      operationId: create_sync_session_v1_sync_sessions_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              anyOf:
+              - $ref: '#/components/schemas/SyncSessionRequest'
+              - type: 'null'
+              title: Body
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                type: object
+                title: Response Create Sync Session V1 Sync Sessions Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      security:
+      - HTTPBearer: []
+  /v1/sync/full:
+    get:
+      tags:
+      - Sync
+      summary: Full Sync
+      description: Fetch full sync data in bounded chunks.
+      operationId: full_sync_v1_sync_full_get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: session_id
+        in: query
+        required: true
+        schema:
+          type: string
+          description: Sync session identifier
+          title: Session Id
+        description: Sync session identifier
+      - name: limit
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: integer
+            maximum: 500
+            minimum: 1
+          - type: 'null'
+          title: Limit
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Full Sync V1 Sync Full Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/sync/delta:
+    get:
+      tags:
+      - Sync
+      summary: Delta Sync
+      description: Fetch delta sync (created/updated/deleted) since a cursor.
+      operationId: delta_sync_v1_sync_delta_get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: session_id
+        in: query
+        required: true
+        schema:
+          type: string
+          description: Sync session identifier
+          title: Session Id
+        description: Sync session identifier
+      - name: since
+        in: query
+        required: true
+        schema:
+          type: integer
+          minimum: 0
+          description: Last seen server_version cursor
+          title: Since
+        description: Last seen server_version cursor
+      - name: limit
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: integer
+            maximum: 500
+            minimum: 1
+          - type: 'null'
+          title: Limit
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Delta Sync V1 Sync Delta Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/sync/apply:
+    post:
+      tags:
+      - Sync
+      summary: Apply Changes
+      description: Apply client-side changes with conflict detection.
+      operationId: apply_changes_v1_sync_apply_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SyncApplyRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                type: object
+                title: Response Apply Changes V1 Sync Apply Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      security:
+      - HTTPBearer: []
+  /v1/user/preferences:
+    get:
+      tags:
+      - User
+      summary: Get User Preferences
+      description: Get user preferences.
+      operationId: get_user_preferences_v1_user_preferences_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+      security:
+      - HTTPBearer: []
+    patch:
+      tags:
+      - User
+      summary: Update User Preferences
+      description: Update user preferences.
+      operationId: update_user_preferences_v1_user_preferences_patch
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdatePreferencesRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      security:
+      - HTTPBearer: []
+  /v1/user/stats:
+    get:
+      tags:
+      - User
+      summary: Get User Stats
+      description: Get user statistics.
+      operationId: get_user_stats_v1_user_stats_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+      security:
+      - HTTPBearer: []
+  /:
+    get:
+      summary: Root
+      description: API root endpoint.
+      operationId: root__get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+  /health:
+    get:
+      summary: Health Check
+      description: Health check endpoint.
+      operationId: health_check_health_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+components:
+  schemas:
+    ForwardMetadata:
+      properties:
+        from_chat_id:
+          type: integer
+          title: From Chat Id
+        from_message_id:
+          type: integer
+          title: From Message Id
+        from_chat_title:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: From Chat Title
+        forwarded_at:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Forwarded At
+      type: object
+      required:
+      - from_chat_id
+      - from_message_id
+      title: ForwardMetadata
+      description: Metadata for forwarded message.
+    HTTPValidationError:
+      properties:
+        detail:
+          items:
+            $ref: '#/components/schemas/ValidationError'
+          type: array
+          title: Detail
+      type: object
+      title: HTTPValidationError
+    RefreshTokenRequest:
+      properties:
+        refresh_token:
+          type: string
+          title: Refresh Token
+      type: object
+      required:
+      - refresh_token
+      title: RefreshTokenRequest
+      description: Request body for token refresh.
+    SubmitForwardRequest:
+      properties:
+        type:
+          type: string
+          const: forward
+          title: Type
+          default: forward
+        content_text:
+          type: string
+          maxLength: 100000
+          minLength: 10
+          title: Content Text
+        forward_metadata:
+          $ref: '#/components/schemas/ForwardMetadata'
+        lang_preference:
+          type: string
+          enum:
+          - auto
+          - en
+          - ru
+          title: Lang Preference
+          default: auto
+      type: object
+      required:
+      - content_text
+      - forward_metadata
+      title: SubmitForwardRequest
+      description: Request body for submitting a forwarded message.
+    SubmitURLRequest:
+      properties:
+        type:
+          type: string
+          const: url
+          title: Type
+          default: url
+        input_url:
+          type: string
+          maxLength: 2083
+          minLength: 1
+          format: uri
+          title: Input Url
+        lang_preference:
+          type: string
+          enum:
+          - auto
+          - en
+          - ru
+          title: Lang Preference
+          default: auto
+      type: object
+      required:
+      - input_url
+      title: SubmitURLRequest
+      description: Request body for submitting a URL.
+    SyncApplyItem:
+      properties:
+        entity_type:
+          type: string
+          enum:
+          - summary
+          - request
+          - preference
+          - stat
+          - crawl_result
+          - llm_call
+          title: Entity Type
+        id:
+          anyOf:
+          - type: integer
+          - type: string
+          title: Id
+          description: Server-side identifier for the entity
+        action:
+          type: string
+          enum:
+          - update
+          - delete
+          title: Action
+        last_seen_version:
+          type: integer
+          minimum: 0.0
+          title: Last Seen Version
+        payload:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Payload
+        client_timestamp:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Client Timestamp
+          description: Client-side ISO timestamp
+      type: object
+      required:
+      - entity_type
+      - id
+      - action
+      - last_seen_version
+      title: SyncApplyItem
+      description: Single change to upload during sync.
+    SyncApplyRequest:
+      properties:
+        session_id:
+          type: string
+          title: Session Id
+        changes:
+          items:
+            $ref: '#/components/schemas/SyncApplyItem'
+          type: array
+          title: Changes
+      type: object
+      required:
+      - session_id
+      - changes
+      title: SyncApplyRequest
+      description: Request body for applying local changes.
+    SyncSessionRequest:
+      properties:
+        limit:
+          anyOf:
+          - type: integer
+            maximum: 500.0
+            minimum: 1.0
+          - type: 'null'
+          title: Limit
+      type: object
+      title: SyncSessionRequest
+      description: Session creation options.
+    TelegramLoginRequest:
+      properties:
+        id:
+          type: integer
+          title: Id
+        hash:
+          type: string
+          title: Hash
+        auth_date:
+          type: integer
+          title: Auth Date
+        username:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Username
+        first_name:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: First Name
+        last_name:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Last Name
+        photo_url:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Photo Url
+        client_id:
+          type: string
+          maxLength: 100
+          minLength: 1
+          title: Client Id
+          description: Client application ID (e.g., 'android-app-v1.0', 'ios-app-v2.0')
+      type: object
+      required:
+      - id
+      - hash
+      - auth_date
+      - client_id
+      title: TelegramLoginRequest
+      description: Request body for Telegram login.
+    UpdatePreferencesRequest:
+      properties:
+        lang_preference:
+          anyOf:
+          - type: string
+            enum:
+            - auto
+            - en
+            - ru
+          - type: 'null'
+          title: Lang Preference
+        notification_settings:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Notification Settings
+        app_settings:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: App Settings
+      type: object
+      title: UpdatePreferencesRequest
+      description: Request body for updating user preferences.
+    UpdateSummaryRequest:
+      properties:
+        is_read:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          title: Is Read
+      type: object
+      title: UpdateSummaryRequest
+      description: Request body for updating a summary.
+    ValidationError:
+      properties:
+        loc:
+          items:
+            anyOf:
+            - type: string
+            - type: integer
+          type: array
+          title: Location
+        msg:
+          type: string
+          title: Message
+        type:
+          type: string
+          title: Error Type
+      type: object
+      required:
+      - loc
+      - msg
+      - type
+      title: ValidationError
+  securitySchemes:
+    HTTPBearer:
+      type: http
+      scheme: bearer
