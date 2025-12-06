@@ -92,13 +92,7 @@ services:
           memory: 512M
           cpus: '0.25'
     healthcheck:
-      test:
-        [
-          "CMD",
-          "python",
-          "-c",
-          "import urllib.request, sys; urllib.request.urlopen('http://localhost:8000/api/v1/heartbeat').read();",
-        ]
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/api/v1/heartbeat"]
       interval: 30s
       timeout: 10s
       retries: 3
