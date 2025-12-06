@@ -205,36 +205,54 @@ class SearchResultsData(BaseModel):
 class SyncSessionInfo(BaseModel):
     """Sync session metadata."""
 
-    sync_id: str
-    timestamp: str
-    total_items: int
-    chunks: int
-    download_urls: list[str]
+    session_id: str
     expires_at: str
+    chunk_limit: int
+    created_at: str
 
 
-class SyncChunkData(BaseModel):
-    """Chunk download payload."""
+class SyncRecord(BaseModel):
+    """Single sync record (created/updated) or tombstone (deleted)."""
 
-    sync_id: str
-    chunk_number: int
-    total_chunks: int
-    items: list[dict[str, Any]]
+    entity_type: str
+    id: int | str
+    server_version: int
+    updated_at: str
+    deleted_at: str | None = None
+    data: dict[str, Any] | None = None
 
 
-class SyncDeltaData(BaseModel):
-    """Delta sync payload."""
+class SyncPage(BaseModel):
+    """Sync page containing created/updated/deleted entries."""
 
-    changes: dict[str, list[dict[str, Any]]]
-    sync_timestamp: str
+    session_id: str
+    created: list[SyncRecord]
+    updated: list[SyncRecord]
+    deleted: list[SyncRecord]
     has_more: bool
+    next_since: int | None
+    limit: int
 
 
-class SyncUploadResult(BaseModel):
+class SyncApplyItemResult(BaseModel):
+    """Result for a single applied change."""
+
+    entity_type: str
+    id: int | str
+    status: str  # applied | conflict | invalid
+    server_version: int | None = None
+    server_snapshot: dict[str, Any] | None = None
+    error_code: str | None = None
+
+
+class SyncApplyResult(BaseModel):
     """Upload local changes result."""
 
-    applied_changes: int
-    conflicts: list[dict[str, Any]]
+    session_id: str
+    results: list[SyncApplyItemResult]
+    applied: int
+    conflicts: int
+    invalid: int
     sync_timestamp: str
 
 

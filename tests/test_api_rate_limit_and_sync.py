@@ -1,5 +1,4 @@
 import json
-from datetime import datetime, timedelta
 
 import fakeredis.aioredis
 import pytest
@@ -7,9 +6,8 @@ from starlette.requests import Request
 from starlette.responses import Response
 
 from app.api import middleware
-from app.api.routers import sync as sync_router
+from app.api.services.sync_service import SyncService
 from app.config import ApiLimitsConfig, RedisConfig, SyncConfig
-from app.core.time_utils import UTC
 from app.infrastructure.redis import redis_key
 
 
@@ -25,7 +23,7 @@ class DummyCfg:
             requests_limit=limit,
             search_limit=limit,
         )
-        self.sync = SyncConfig(expiry_hours=1, default_chunk_size=100)
+        self.sync = SyncConfig(expiry_hours=1, default_limit=100, min_limit=1, max_limit=500)
 
 
 @pytest.mark.asyncio
@@ -125,23 +123,19 @@ async def test_rate_limit_backend_required_returns_503(monkeypatch):
 async def test_sync_session_stored_in_redis(monkeypatch):
     redis_client = fakeredis.aioredis.FakeRedis(decode_responses=True)
     cfg = DummyCfg(limit=1, window_seconds=1)
-    sync_router._cfg = cfg
-    sync_router._redis_warning_logged = False
-    sync_router._sync_sessions.clear()
+    svc = SyncService(cfg)
 
     async def fake_get_redis(_: DummyCfg):
         return redis_client
 
-    monkeypatch.setattr(sync_router, "get_redis", fake_get_redis)
+    monkeypatch.setattr("app.api.services.sync_service.get_redis", fake_get_redis)
 
-    sync_id = "sync-test"
-    expires_at = datetime.now(UTC) + timedelta(hours=cfg.sync.expiry_hours)
-    await sync_router._store_sync_session(sync_id, 50, expires_at, cfg)
+    session = await svc.start_session(user_id=1, client_id="client", limit=50)
 
-    chunk_size = await sync_router._validate_sync_session(sync_id, cfg)
-    assert chunk_size == 50
-
-    ttl = await redis_client.ttl(redis_key(cfg.redis.prefix, "sync", "session", sync_id))
+    key = redis_key(cfg.redis.prefix, "sync", "session", session.session_id)
+    ttl = await redis_client.ttl(key)
     assert ttl > 0
+    stored = await redis_client.get(key)
+    assert stored is not None
 
     await redis_client.flushall()

@@ -15,9 +15,32 @@ database_proxy: peewee.Database = peewee.DatabaseProxy()
 class BaseModel(peewee.Model):
     """Base Peewee model bound to the lazily initialised database proxy."""
 
+    def save(self, *args: Any, **kwargs: Any) -> int:
+        """Ensure updated_at/server_version fields stay monotonic on every save."""
+        now = _dt.datetime.utcnow()
+
+        if hasattr(self, "updated_at"):
+            self.updated_at = now
+
+        if hasattr(self, "server_version"):
+            current = getattr(self, "server_version", 0) or 0
+            next_version = int(now.timestamp() * 1000)
+            if next_version <= current:
+                next_version = current + 1
+            self.server_version = next_version
+            if hasattr(self, "version"):
+                self.version = next_version
+
+        return super().save(*args, **kwargs)
+
     class Meta:
         database = database_proxy
         legacy_table_names = False
+
+
+def _next_server_version() -> int:
+    """Monotonic-ish server version seed based on current UTC timestamp (ms)."""
+    return int(_dt.datetime.utcnow().timestamp() * 1000)
 
 
 class User(BaseModel):
@@ -25,6 +48,8 @@ class User(BaseModel):
     username = peewee.TextField(null=True)
     is_owner = peewee.BooleanField(default=False)
     preferences_json = JSONField(null=True)  # User preferences (lang, notifications, app settings)
+    server_version = peewee.BigIntegerField(default=_next_server_version)
+    updated_at = peewee.DateTimeField(default=_dt.datetime.utcnow)
     created_at = peewee.DateTimeField(default=_dt.datetime.utcnow)
 
     class Meta:
@@ -36,6 +61,8 @@ class Chat(BaseModel):
     type = peewee.TextField()
     title = peewee.TextField(null=True)
     username = peewee.TextField(null=True)
+    server_version = peewee.BigIntegerField(default=_next_server_version)
+    updated_at = peewee.DateTimeField(default=_dt.datetime.utcnow)
     created_at = peewee.DateTimeField(default=_dt.datetime.utcnow)
 
     class Meta:
@@ -44,6 +71,7 @@ class Chat(BaseModel):
 
 class Request(BaseModel):
     created_at = peewee.DateTimeField(default=_dt.datetime.utcnow)
+    updated_at = peewee.DateTimeField(default=_dt.datetime.utcnow)
     type = peewee.TextField()
     status = peewee.TextField(default="pending")
     correlation_id = peewee.TextField(null=True)
@@ -58,6 +86,9 @@ class Request(BaseModel):
     lang_detected = peewee.TextField(null=True)
     content_text = peewee.TextField(null=True)
     route_version = peewee.IntegerField(default=1)
+    server_version = peewee.BigIntegerField(default=_next_server_version)
+    is_deleted = peewee.BooleanField(default=False)
+    deleted_at = peewee.DateTimeField(null=True)
 
     class Meta:
         table_name = "requests"
@@ -97,6 +128,7 @@ class CrawlResult(BaseModel):
     request = peewee.ForeignKeyField(
         Request, backref="crawl_result", unique=True, on_delete="CASCADE"
     )
+    updated_at = peewee.DateTimeField(default=_dt.datetime.utcnow)
     source_url = peewee.TextField(null=True)
     endpoint = peewee.TextField(null=True)
     http_status = peewee.IntegerField(null=True)
@@ -116,6 +148,9 @@ class CrawlResult(BaseModel):
     raw_response_json = JSONField(null=True)
     latency_ms = peewee.IntegerField(null=True)
     error_text = peewee.TextField(null=True)
+    server_version = peewee.BigIntegerField(default=_next_server_version)
+    is_deleted = peewee.BooleanField(default=False)
+    deleted_at = peewee.DateTimeField(null=True)
 
     class Meta:
         table_name = "crawl_results"
@@ -125,6 +160,7 @@ class LLMCall(BaseModel):
     request = peewee.ForeignKeyField(
         Request, backref="llm_calls", null=False, on_delete="CASCADE"
     )  # Phase 2: Made NOT NULL for data integrity
+    updated_at = peewee.DateTimeField(default=_dt.datetime.utcnow)
     provider = peewee.TextField(null=True)
     model = peewee.TextField(null=True)
     endpoint = peewee.TextField(null=True)
@@ -144,6 +180,9 @@ class LLMCall(BaseModel):
     structured_output_mode = peewee.TextField(null=True)
     error_context_json = JSONField(null=True)
     created_at = peewee.DateTimeField(default=_dt.datetime.utcnow)
+    server_version = peewee.BigIntegerField(default=_next_server_version)
+    is_deleted = peewee.BooleanField(default=False)
+    deleted_at = peewee.DateTimeField(null=True)
 
     class Meta:
         table_name = "llm_calls"
@@ -155,9 +194,11 @@ class Summary(BaseModel):
     json_payload = JSONField(null=True)
     insights_json = JSONField(null=True)
     version = peewee.IntegerField(default=1)
+    server_version = peewee.BigIntegerField(default=_next_server_version)
     is_read = peewee.BooleanField(default=False)
     is_deleted = peewee.BooleanField(default=False)
     deleted_at = peewee.DateTimeField(null=True)
+    updated_at = peewee.DateTimeField(default=_dt.datetime.utcnow)
     created_at = peewee.DateTimeField(default=_dt.datetime.utcnow)
 
     class Meta:

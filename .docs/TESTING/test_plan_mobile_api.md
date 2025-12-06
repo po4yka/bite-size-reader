@@ -20,13 +20,15 @@
 - TC3 Requests: submit URL → duplicate detection; submit forward; retry failed request validation; background status transitions.
 - TC4 Summaries: list filters (is_read/lang/date/sort); get summary includes source/processing; patch read flag; delete sets is_deleted.
 - TC5 Search: FTS and semantic require auth; pagination; relevance fields; topic-related path handles tags normalization.
-- TC6 Sync Full: initiate session, download chunks with user scoping, expiry handling via Redis TTL, chunk size config; session payload uses standard envelope; expired session returns 410.
-- TC7 Sync Delta: created/updated/deleted sets; has_more logic; since timestamp parsing; conflict handling when uploading changes.
-- TC8 Preferences/Stats: merge semantics, validation of notification/app settings shapes, stats computed only for user’s data.
-- TC9 Responses: all routers return `success` wrapper with meta; schemas validate (auth tokens, request submit/status, summaries, search, sync, preferences/stats).
-- TC10 Processor: per-request locking prevents double processing; retry/backoff triggers on transient failures (mocked exceptions) and surfaces status `error` on exhaustion.
-- TC11 Error Handling: APIException paths return standardized error codes and correlation_id; global handler hides internals in non-debug.
-- TC12 Search Performance: Chroma dependency is singleton per process, shutdown closes embedding/vector clients; trending topics caches per user/params with TTL, bounds DB scan size, and invalidates cache on summary writes.
+- TC6 Sync Full (v2): start session via `/v1/sync/sessions`, enforce user/client binding, retrieve full dataset in chunks ordered by server_version with `has_more`/`next_since`; chunk limit obeys min/max and server downsizing; envelope includes meta.pagination; expired/missing session returns 410.
+- TC7 Sync Delta (v2): provide `since` cursor, receive created/updated/tombstone deleted sets ordered by server_version; tombstones include deleted_at/version; `next_since` advances to max version; idempotent repeat with same cursor returns empty/has_more=false.
+- TC8 Sync Apply (v2 uploads): upload allowed fields only (e.g., summary.is_read, client_note); valid last_seen_version applies and bumps server_version/etag; stale last_seen_version returns conflict with server snapshot; invalid fields or cross-user IDs rejected with validation error envelope.
+- TC9 Chunk/ETag semantics: large payloads trigger server downsizing to stay under target size; optional If-None-Match/etag returns 304-equivalent behavior where supported; has_more remains accurate after downsizing.
+- TC10 Preferences/Stats: merge semantics, validation of notification/app settings shapes, stats computed only for user’s data.
+- TC11 Responses: all routers return `success` wrapper with meta; schemas validate (auth tokens, request submit/status, summaries, search, sync, preferences/stats).
+- TC12 Processor: per-request locking prevents double processing; retry/backoff triggers on transient failures (mocked exceptions) and surfaces status `error` on exhaustion.
+- TC13 Error Handling: APIException paths return standardized error codes and correlation_id; global handler hides internals in non-debug.
+- TC14 Search Performance: Chroma dependency is singleton per process, shutdown closes embedding/vector clients; trending topics caches per user/params with TTL, bounds DB scan size, and invalidates cache on summary writes.
 
 ## Non-Functional
 - Concurrency: background processing semaphore behavior and idempotency.

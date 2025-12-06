@@ -719,7 +719,10 @@ class SyncConfig(BaseModel):
     model_config = ConfigDict(frozen=True, populate_by_name=True)
 
     expiry_hours: int = Field(default=1, validation_alias="SYNC_EXPIRY_HOURS")
-    default_chunk_size: int = Field(default=100, validation_alias="SYNC_DEFAULT_CHUNK_SIZE")
+    default_limit: int = Field(default=200, validation_alias="SYNC_DEFAULT_LIMIT")
+    min_limit: int = Field(default=1, validation_alias="SYNC_MIN_LIMIT")
+    max_limit: int = Field(default=500, validation_alias="SYNC_MAX_LIMIT")
+    target_payload_kb: int = Field(default=512, validation_alias="SYNC_TARGET_PAYLOAD_KB")
 
     @field_validator("expiry_hours", mode="before")
     @classmethod
@@ -731,19 +734,53 @@ class SyncConfig(BaseModel):
             raise ValueError(msg) from exc
         if parsed <= 0 or parsed > 168:
             msg = "Sync expiry hours must be between 1 and 168"
+        return parsed
+
+    @field_validator("default_limit", mode="before")
+    @classmethod
+    def _validate_default_limit(cls, value: Any) -> int:
+        try:
+            parsed = int(str(value if value not in (None, "") else 200))
+        except ValueError as exc:
+            msg = "Sync default limit must be a valid integer"
+            raise ValueError(msg) from exc
+        if parsed < 1 or parsed > 500:
+            msg = "Sync default limit must be between 1 and 500"
             raise ValueError(msg)
         return parsed
 
-    @field_validator("default_chunk_size", mode="before")
+    @field_validator("min_limit", "max_limit", mode="before")
     @classmethod
-    def _validate_chunk_size(cls, value: Any) -> int:
+    def _validate_limits(cls, value: Any, info: ValidationInfo) -> int:
+        defaults = {"min_limit": 1, "max_limit": 500}
         try:
-            parsed = int(str(value if value not in (None, "") else 100))
+            parsed = int(str(value if value not in (None, "") else defaults[info.field_name]))
         except ValueError as exc:
-            msg = "Sync default chunk size must be a valid integer"
+            msg = f"{info.field_name.replace('_', ' ')} must be a valid integer"
             raise ValueError(msg) from exc
-        if parsed < 1 or parsed > 500:
-            msg = "Sync default chunk size must be between 1 and 500"
+        if parsed <= 0 or parsed > 1000:
+            msg = f"{info.field_name.replace('_', ' ').capitalize()} must be between 1 and 1000"
+            raise ValueError(msg)
+        return parsed
+
+    @model_validator(mode="after")
+    def _validate_ranges(self) -> SyncConfig:
+        if self.min_limit > self.max_limit:
+            raise ValueError("sync min_limit cannot exceed max_limit")
+        if self.default_limit < self.min_limit or self.default_limit > self.max_limit:
+            raise ValueError("sync default_limit must be within min_limit and max_limit")
+        return self
+
+    @field_validator("target_payload_kb", mode="before")
+    @classmethod
+    def _validate_target_payload(cls, value: Any) -> int:
+        try:
+            parsed = int(str(value if value not in (None, "") else 512))
+        except ValueError as exc:
+            msg = "Sync target payload size must be a valid integer"
+            raise ValueError(msg) from exc
+        if parsed < 64 or parsed > 4096:
+            msg = "Sync target payload size must be between 64 and 4096 KB"
             raise ValueError(msg)
         return parsed
 

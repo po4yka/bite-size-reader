@@ -56,18 +56,25 @@ class UpdatePreferencesRequest(BaseModel):
     app_settings: dict[str, Any] | None = None
 
 
-class SyncUploadChange(BaseModel):
+class SyncSessionRequest(BaseModel):
+    """Session creation options."""
+
+    limit: int | None = Field(default=None, ge=1, le=500)
+
+
+class SyncApplyItem(BaseModel):
     """Single change to upload during sync."""
 
-    summary_id: int
+    entity_type: Literal["summary", "request", "preference", "stat", "crawl_result", "llm_call"]
+    id: int | str = Field(description="Server-side identifier for the entity")
     action: Literal["update", "delete"]
-    fields: dict[str, Any] | None = None
-    client_timestamp: str
+    last_seen_version: int = Field(ge=0)
+    payload: dict[str, Any] | None = None
+    client_timestamp: str | None = Field(default=None, description="Client-side ISO timestamp")
 
 
-class SyncUploadRequest(BaseModel):
-    """Request body for uploading local changes."""
+class SyncApplyRequest(BaseModel):
+    """Request body for applying local changes."""
 
-    changes: list[SyncUploadChange]
-    device_id: str
-    last_sync: str
+    session_id: str
+    changes: list[SyncApplyItem]
