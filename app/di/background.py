@@ -1,0 +1,115 @@
+from __future__ import annotations
+
+import asyncio
+import logging
+from collections.abc import Callable
+from typing import Any
+
+from app.adapters.content.url_processor import URLProcessor
+from app.adapters.external.firecrawl_parser import FirecrawlClient
+from app.adapters.external.response_formatter import ResponseFormatter
+from app.adapters.openrouter.openrouter_client import OpenRouterClient
+from app.api.background_processor import BackgroundProcessor
+from app.config import AppConfig, load_config
+from app.core.logging_utils import get_logger
+from app.db.database import Database
+from app.infrastructure.redis import get_redis
+
+logger = get_logger(__name__)
+
+
+async def build_background_processor(
+    cfg: AppConfig | None = None,
+    *,
+    db: Database | None = None,
+    firecrawl: FirecrawlClient | None = None,
+    openrouter: OpenRouterClient | None = None,
+    response_formatter: ResponseFormatter | None = None,
+    redis_client: Any | None = None,
+    semaphore: asyncio.Semaphore | None = None,
+    audit_func: Callable[[str, str, dict], None] | None = None,
+) -> BackgroundProcessor:
+    """Construct a BackgroundProcessor with modern DI-friendly wiring."""
+
+    cfg = cfg or load_config()
+
+    if db is None:
+        db = Database(
+            path=cfg.runtime.db_path,
+            operation_timeout=cfg.database.operation_timeout,
+            max_retries=cfg.database.max_retries,
+            json_max_size=cfg.database.json_max_size,
+            json_max_depth=cfg.database.json_max_depth,
+            json_max_array_length=cfg.database.json_max_array_length,
+            json_max_dict_keys=cfg.database.json_max_dict_keys,
+        )
+
+    if firecrawl is None:
+        firecrawl = FirecrawlClient(
+            api_key=cfg.firecrawl.api_key,
+            timeout_sec=cfg.runtime.request_timeout_sec,
+            max_retries=cfg.firecrawl.retry_max_attempts,
+            backoff_base=cfg.firecrawl.retry_initial_delay,
+            debug_payloads=cfg.runtime.debug_payloads,
+            max_connections=cfg.firecrawl.max_connections,
+            max_keepalive_connections=cfg.firecrawl.max_keepalive_connections,
+            keepalive_expiry=cfg.firecrawl.keepalive_expiry,
+            credit_warning_threshold=cfg.firecrawl.credit_warning_threshold,
+            credit_critical_threshold=cfg.firecrawl.credit_critical_threshold,
+            max_response_size_mb=cfg.firecrawl.max_response_size_mb,
+        )
+
+    if openrouter is None:
+        openrouter = OpenRouterClient(
+            api_key=cfg.openrouter.api_key,
+            model=cfg.openrouter.model,
+            fallback_models=list(cfg.openrouter.fallback_models),
+            http_referer=cfg.openrouter.http_referer,
+            x_title=cfg.openrouter.x_title,
+            timeout_sec=cfg.runtime.request_timeout_sec,
+            debug_payloads=cfg.runtime.debug_payloads,
+            provider_order=list(cfg.openrouter.provider_order),
+            enable_stats=cfg.openrouter.enable_stats,
+            enable_structured_outputs=cfg.openrouter.enable_structured_outputs,
+            structured_output_mode=cfg.openrouter.structured_output_mode,
+            require_parameters=cfg.openrouter.require_parameters,
+            auto_fallback_structured=cfg.openrouter.auto_fallback_structured,
+            max_response_size_mb=cfg.openrouter.max_response_size_mb,
+        )
+
+    if response_formatter is None:
+        response_formatter = ResponseFormatter(telegram_limits=cfg.telegram_limits)
+
+    if semaphore is None:
+        limit = max(1, min(100, cfg.runtime.max_concurrent_calls))
+        semaphore = asyncio.Semaphore(limit)
+
+    if redis_client is None:
+        redis_client = await get_redis(cfg)
+
+    if audit_func is None:
+        audit_func = _default_audit
+
+    url_processor = URLProcessor(
+        cfg=cfg,
+        db=db,
+        firecrawl=firecrawl,
+        openrouter=openrouter,
+        response_formatter=response_formatter,
+        audit_func=audit_func,
+        sem=lambda: semaphore,
+    )
+
+    return BackgroundProcessor(
+        cfg=cfg,
+        db=db,
+        url_processor=url_processor,
+        redis=redis_client,
+        semaphore=semaphore,
+        audit_func=audit_func,
+    )
+
+
+def _default_audit(level: str, event: str, details: dict) -> None:
+    log_level = logging.INFO if level == "info" else logging.ERROR
+    logger.log(log_level, event, extra=details)

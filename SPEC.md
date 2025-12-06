@@ -685,6 +685,13 @@ The project includes a RESTful API built with FastAPI to support mobile clients 
 - **Sync sessions**: stored in Redis with TTL; `SYNC_EXPIRY_HOURS` (default 1h) and `SYNC_DEFAULT_CHUNK_SIZE` (default 100, bounded 1..500). Fallback to in-process cache when Redis is disabled/unavailable (logs warning).
 - **Headers/behavior**: `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset`; 429 includes `Retry-After` and JSON error with `retry_after`. If Redis is required but unavailable, middleware returns 503 with code `RATE_LIMIT_BACKEND_UNAVAILABLE`.
 
+### Background processing (requests -> summaries)
+- **Wiring**: `app/di/background.py` builds `BackgroundProcessor` with `AppConfig`, shared DB, Firecrawl/OpenRouter clients, and Redis (via `app.infrastructure.redis.get_redis`). Called from `process_url_request` in `app/api/background_processor.py`.
+- **Idempotent lock**: Redis key `bsr:bg:req:{id}` (`REDIS_PREFIX` applied), `NX` with TTL `BACKGROUND_LOCK_TTL_MS` (default 300000 ms). Config: `BACKGROUND_REDIS_LOCK_ENABLED` (default true), `BACKGROUND_REDIS_LOCK_REQUIRED` (default false), `BACKGROUND_LOCK_SKIP_ON_HELD` (default true). Fallback to local lock if Redis unavailable (warning logged) or disabled.
+- **Retries**: exponential backoff with jitter for extraction and LLM (`BACKGROUND_RETRY_ATTEMPTS` default 3, `BACKGROUND_RETRY_BASE_DELAY_MS` 500, `BACKGROUND_RETRY_MAX_DELAY_MS` 5000, `BACKGROUND_RETRY_JITTER_RATIO` 0.2).
+- **Errors**: structured log extras `{error_type, error_code, error_stage, correlation_id}`; request status set to `error` on failure. Unknown request types raise validation StageError.
+- **Behavior**: skip processing when lock is held; no duplicate summaries when one already exists for the request; status transitions `pending` -> `processing` -> `success`/`error`.
+
 ## Future work
 
 - Optional: store Firecrawl screenshots (object storage) and page text embeddings.
