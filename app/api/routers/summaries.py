@@ -9,7 +9,6 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, Query
 from peewee import OperationalError
 
-from app.api.auth import get_current_user
 from app.api.models.requests import UpdateSummaryRequest
 from app.api.models.responses import (
     SummaryCompact,
@@ -17,6 +16,7 @@ from app.api.models.responses import (
     SummaryListResponse,
     success_response,
 )
+from app.api.routers.auth import get_current_user
 from app.api.services import SummaryService
 from app.core.logging_utils import get_logger
 from app.core.time_utils import UTC

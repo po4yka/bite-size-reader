@@ -146,7 +146,7 @@ def verify_telegram_auth(
 ```python
 # tests/test_telegram_auth.py
 import pytest
-from app.api.auth import verify_telegram_auth
+from app.api.routers.auth import verify_telegram_auth
 
 def test_verify_telegram_auth_valid():
     # Use test data from Telegram Login Widget docs

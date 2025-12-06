@@ -3,14 +3,14 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime  # noqa: TC003
+from datetime import datetime
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.models.telegram.telegram_chat import TelegramChat
 from app.models.telegram.telegram_entity import MessageEntity
-from app.models.telegram.telegram_enums import MediaType
+from app.models.telegram.telegram_enums import MediaType, MessageEntityType
 from app.models.telegram.telegram_user import TelegramUser
 
 logger = logging.getLogger(__name__)
@@ -530,8 +530,6 @@ class TelegramMessage(BaseModel):
 
         if not self.text:
             return urls
-
-        from app.core.telegram_enums import MessageEntityType
 
         for entity in self.entities:
             if entity.type in [MessageEntityType.URL, MessageEntityType.TEXT_LINK]:

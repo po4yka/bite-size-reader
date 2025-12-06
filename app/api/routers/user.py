@@ -6,7 +6,6 @@ from datetime import datetime
 
 from fastapi import APIRouter, Depends
 
-from app.api.auth import get_current_user
 from app.api.models.requests import UpdatePreferencesRequest
 from app.api.models.responses import (
     PreferencesData,
@@ -14,6 +13,7 @@ from app.api.models.responses import (
     UserStatsData,
     success_response,
 )
+from app.api.routers.auth import get_current_user
 from app.core.logging_utils import get_logger
 from app.core.time_utils import UTC
 from app.db.models import Request as RequestModel, Summary, User

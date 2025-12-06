@@ -2,9 +2,9 @@
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from app.api.auth import get_current_user
 from app.api.dependencies.search_resources import get_chroma_search_service
 from app.api.models.responses import SearchResult, SearchResultsData, success_response
+from app.api.routers.auth import get_current_user
 from app.core.logging_utils import get_logger
 from app.db.models import Request as RequestModel, Summary, TopicSearchIndex
 from app.services.chroma_vector_search_service import ChromaVectorSearchService

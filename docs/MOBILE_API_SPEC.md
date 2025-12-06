@@ -1245,7 +1245,7 @@ Use Android WorkManager to:
 
 ```python
 from fastapi import APIRouter, Depends, HTTPException
-from app.api.auth import get_current_user
+from app.api.routers.auth import get_current_user
 from app.db.models import Summary, Request
 
 router = APIRouter(prefix="/summaries", tags=["summaries"])

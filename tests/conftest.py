@@ -70,6 +70,7 @@ status = types.SimpleNamespace(
 class _StubFastAPI:
     def __init__(self, *args, **kwargs):
         self.user_middleware = []
+        self.version = "0.0.0-stub"
 
     def add_middleware(self, middleware_class, *args, **kwargs):
         class _Entry:
@@ -95,6 +96,12 @@ class _StubFastAPI:
         return None
 
     def get(self, *args, **kwargs):
+        def decorator(fn):
+            return fn
+
+        return decorator
+
+    def on_event(self, *args, **kwargs):
         def decorator(fn):
             return fn
 

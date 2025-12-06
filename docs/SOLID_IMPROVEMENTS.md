@@ -26,19 +26,22 @@ class MyService:
         self._repo = summary_repo
 ```
 
-### Repository Implementations (`app/repositories.py`)
+### Repository Implementations (`app/infrastructure/persistence/sqlite/repositories/`)
 
-Focused wrappers around `Database`:
+SQLite adapters that wrap the shared `Database` class:
 
-- `RequestRepositoryImpl`, `SummaryRepositoryImpl`, `CrawlResultRepositoryImpl`
-- `UserInteractionRepositoryImpl`, `LLMCallRepositoryImpl`
+- `request_repository.py` (`SqliteRequestRepositoryAdapter`)
+- `summary_repository.py` (`SqliteSummaryRepositoryAdapter`)
+- `crawl_result_repository.py` (`SqliteCrawlResultRepositoryAdapter`)
 
 ```python
 from app.db.database import Database
-from app.repositories import SummaryRepositoryImpl
+from app.infrastructure.persistence.sqlite.repositories.summary_repository import (
+    SqliteSummaryRepositoryAdapter,
+)
 
 db = Database(db_path="app.db")
-summary_repo = SummaryRepositoryImpl(db)  # Wrap database in focused interface
+summary_repo = SqliteSummaryRepositoryAdapter(db)  # Wrap database in focused interface
 ```
 
 ### DI Container (`app/di/container.py`)
@@ -76,7 +79,6 @@ def my_function(summary_repo: SummaryRepository):
 ```
 app/
 ├── protocols.py         # Protocol definitions (interfaces)
-├── repositories.py      # Repository implementations
 ├── di/
 │   └── container.py     # Dependency injection container
 ├── domain/              # Business logic (uses protocols)
@@ -108,4 +110,4 @@ async def test_my_service():
 
 ---
 
-For implementation details, see `app/protocols.py` and `app/repositories.py`.
+For implementation details, see `app/protocols.py` and `app/infrastructure/persistence/sqlite/repositories/`.

@@ -6,13 +6,17 @@ import pytest
 
 from app.adapters.telegram.message_router import MessageRouter
 from app.config import (
+    ApiLimitsConfig,
     AppConfig,
+    BackgroundProcessorConfig,
     ChromaConfig,
     ContentLimitsConfig,
     DatabaseConfig,
     FirecrawlConfig,
     OpenRouterConfig,
+    RedisConfig,
     RuntimeConfig,
+    SyncConfig,
     TelegramConfig,
     TelegramLimitsConfig,
     YouTubeConfig,
@@ -48,6 +52,10 @@ def _make_config() -> AppConfig:
         database=DatabaseConfig(),
         content_limits=ContentLimitsConfig(),
         vector_store=ChromaConfig(),
+        redis=RedisConfig(),
+        api_limits=ApiLimitsConfig(),
+        sync=SyncConfig(),
+        background=BackgroundProcessorConfig(),
     )
 
 

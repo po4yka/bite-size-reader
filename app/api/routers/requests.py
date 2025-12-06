@@ -7,7 +7,6 @@ from datetime import datetime
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from peewee import OperationalError
 
-from app.api.auth import get_current_user
 from app.api.background_processor import process_url_request
 from app.api.exceptions import DuplicateResourceError
 from app.api.models.requests import SubmitForwardRequest, SubmitURLRequest
@@ -18,6 +17,7 @@ from app.api.models.responses import (
     SubmitRequestResponse,
     success_response,
 )
+from app.api.routers.auth import get_current_user
 from app.api.services import RequestService
 from app.core.logging_utils import get_logger
 from app.core.time_utils import UTC

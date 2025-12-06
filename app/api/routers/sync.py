@@ -2,9 +2,9 @@
 
 from fastapi import APIRouter, Depends, Query
 
-from app.api.auth import get_current_user
 from app.api.models.requests import SyncApplyRequest, SyncSessionRequest
 from app.api.models.responses import SyncApplyResult, SyncPage, success_response
+from app.api.routers.auth import get_current_user
 from app.api.services.sync_service import SyncService
 from app.config import AppConfig, load_config
 from app.core.logging_utils import get_logger

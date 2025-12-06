@@ -1178,25 +1178,6 @@ class MessageRouter:
                                     "url_processing_failed_detail",
                                     extra={"url": url, "error": error_msg, "cid": correlation_id},
                                 )
-                    elif isinstance(result, tuple) and len(result) == 2:
-                        # Backward compatibility with old format
-                        url, success = result
-                        if success:
-                            batch_successful += 1
-                        else:
-                            batch_failed += 1
-                            batch_failed_urls.append(
-                                FailedURLDetail(
-                                    url=url,
-                                    error_type="unknown",
-                                    error_message="No error details (legacy format)",
-                                    retry_recommended=True,
-                                    attempts=1,
-                                )
-                            )
-                            logger.warning(
-                                "legacy_result_format", extra={"url": url, "cid": correlation_id}
-                            )
                     else:
                         # Unexpected result type - this is a programming error
                         batch_failed += 1
@@ -1212,7 +1193,10 @@ class MessageRouter:
                             FailedURLDetail(
                                 url="Unknown URL",
                                 error_type="unexpected_result",
-                                error_message=f"Unexpected result type: {type(result).__name__}",
+                                error_message=(
+                                    "Unsupported result shape; legacy tuple formats are no longer accepted."
+                                    f" Got: {type(result).__name__}"
+                                ),
                                 retry_recommended=False,
                                 attempts=1,
                             )
