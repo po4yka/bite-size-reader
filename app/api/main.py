@@ -8,7 +8,7 @@ Usage:
 from datetime import datetime
 
 import peewee
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import ValidationError as PydanticValidationError
 
@@ -21,6 +21,7 @@ from app.api.error_handlers import (
 )
 from app.api.exceptions import APIException
 from app.api.middleware import correlation_id_middleware, rate_limit_middleware
+from app.api.models.responses import success_response
 from app.api.routers import auth, requests, search, summaries, sync, user
 from app.config import Config
 from app.core.logging_utils import get_logger
@@ -82,29 +83,29 @@ app.include_router(user.router, prefix="/v1/user", tags=["User"])
 
 
 @app.get("/")
-async def root():
+async def root(request: Request):
     """API root endpoint."""
-    return {
-        "success": True,
-        "data": {
+    return success_response(
+        {
             "service": "Bite-Size Reader Mobile API",
-            "version": "1.0.0",
+            "version": app.version,
             "docs": "/docs",
             "health": "/health",
         },
-    }
+        correlation_id=getattr(request.state, "correlation_id", None),
+    )
 
 
 @app.get("/health")
-async def health_check():
+async def health_check(request: Request):
     """Health check endpoint."""
-    return {
-        "success": True,
-        "data": {
+    return success_response(
+        {
             "status": "healthy",
             "timestamp": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
         },
-    }
+        correlation_id=getattr(request.state, "correlation_id", None),
+    )
 
 
 # Register exception handlers

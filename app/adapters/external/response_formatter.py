@@ -12,6 +12,7 @@ from collections.abc import Awaitable, Callable, Sequence
 from datetime import datetime, timezone
 from typing import Any
 
+from app.api.models.responses import success_response
 from app.utils.retry_utils import retry_telegram_operation
 
 logger = logging.getLogger(__name__)
@@ -1055,13 +1056,22 @@ class ResponseFormatter:
 
         await self.reply_json(message, forward_shaped)
 
-    async def reply_json(self, message: Any, obj: dict) -> None:
+    async def reply_json(
+        self, message: Any, obj: dict, *, correlation_id: str | None = None, success: bool = True
+    ) -> None:
         """Reply with JSON object, using file upload for large content."""
+        if success and isinstance(obj, dict) and obj.get("success") in (True, False):
+            payload = obj
+        elif success:
+            payload = success_response(obj, correlation_id=correlation_id)
+        else:
+            payload = obj
+
         if self._reply_json_func is not None:
-            await self._reply_json_func(message, obj)
+            await self._reply_json_func(message, payload)
             return
 
-        pretty = json.dumps(obj, ensure_ascii=False, indent=2)
+        pretty = json.dumps(payload, ensure_ascii=False, indent=2)
         # Prefer sending as a document always to avoid size limits
         try:
             bio = io.BytesIO(pretty.encode("utf-8"))

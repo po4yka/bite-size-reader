@@ -92,7 +92,9 @@ class TestResponseFormatter(unittest.IsolatedAsyncioTestCase):
             text for text, _ in recorded_replies if text.startswith("⭐ Key Highlights")
         ]
         assert highlight_texts
-        assert recorded_json[0] == article
+        payload = recorded_json[0]
+        assert payload["success"] is True
+        assert payload["data"] == article
 
     async def test_edit_message_returns_true_on_success(self) -> None:
         """Test that edit_message returns True when edit succeeds."""
@@ -193,6 +195,22 @@ class TestResponseFormatter(unittest.IsolatedAsyncioTestCase):
         result = await formatter.edit_message(chat_id=12345, message_id=67890, text=unsafe_text)
 
         assert result is False
+
+    async def test_reply_json_wraps_success_envelope(self) -> None:
+        recorded_json: list[dict] = []
+
+        async def record_json(_: DummyMessage, payload: dict) -> None:
+            recorded_json.append(payload)
+
+        formatter = ResponseFormatter(reply_json_func=record_json)
+
+        await formatter.reply_json(DummyMessage(), {"foo": "bar"}, correlation_id="cid-123")
+
+        assert recorded_json, "reply_json should forward payload to callback"
+        payload = recorded_json[0]
+        assert payload["success"] is True
+        assert payload["data"] == {"foo": "bar"}
+        assert payload["meta"]["correlation_id"] == "cid-123"
 
 
 if __name__ == "__main__":

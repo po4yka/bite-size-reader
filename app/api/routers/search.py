@@ -104,17 +104,20 @@ async def search_summaries(
             for item in results
         ]
 
+        pagination = {
+            "total": total,
+            "limit": limit,
+            "offset": offset,
+            "has_more": (offset + limit) < total,
+        }
+
         return success_response(
             SearchResultsData(
                 results=result_models,
-                pagination={
-                    "total": total,
-                    "limit": limit,
-                    "offset": offset,
-                    "has_more": (offset + limit) < total,
-                },
+                pagination=pagination,
                 query=q,
-            )
+            ),
+            pagination=pagination,
         )
 
     except Exception as e:
@@ -208,17 +211,20 @@ async def semantic_search_summaries(
             for item in results
         ]
 
+        pagination = {
+            "total": estimated_total,
+            "limit": limit,
+            "offset": offset,
+            "has_more": search_results.has_more,
+        }
+
         return success_response(
             SearchResultsData(
                 results=result_models,
-                pagination={
-                    "total": estimated_total,
-                    "limit": limit,
-                    "offset": offset,
-                    "has_more": search_results.has_more,
-                },
+                pagination=pagination,
                 query=q,
-            )
+            ),
+            pagination=pagination,
         )
 
     except Exception as e:
@@ -234,7 +240,13 @@ async def get_trending_topics(
 ):
     """Get trending topic tags across recent summaries."""
     payload = await get_trending_payload(user["user_id"], limit=limit, days=days)
-    return success_response(payload)
+    pagination = {
+        "total": payload.get("total", limit),
+        "limit": limit,
+        "offset": 0,
+        "has_more": False,
+    }
+    return success_response(payload, pagination=pagination)
 
 
 @router.get("/topics/related")
@@ -279,16 +291,19 @@ async def get_related_summaries(
                 }
             )
 
+    pagination = {
+        "total": len(matching_summaries),
+        "limit": limit,
+        "offset": offset,
+        "has_more": len(matching_summaries) >= limit,
+    }
     return success_response(
         {
             "tag": tag,
             "summaries": matching_summaries,
-            "pagination": {
-                "total": len(matching_summaries),
-                "limit": limit,
-                "offset": offset,
-            },
-        }
+            "pagination": pagination,
+        },
+        pagination=pagination,
     )
 
 

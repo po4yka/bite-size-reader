@@ -87,17 +87,20 @@ async def get_summaries(
             )
         )
 
+    pagination = {
+        "total": total,
+        "limit": limit,
+        "offset": offset,
+        "has_more": (offset + limit) < total,
+    }
+
     return success_response(
         SummaryListResponse(
             summaries=summary_list,
-            pagination={
-                "total": total,
-                "limit": limit,
-                "offset": offset,
-                "has_more": (offset + limit) < total,
-            },
+            pagination=pagination,
             stats={"total_summaries": total, "unread_count": unread_count},
-        )
+        ),
+        pagination=pagination,
     )
 
 

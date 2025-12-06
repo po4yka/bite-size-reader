@@ -7,6 +7,8 @@ from collections.abc import Callable
 from fastapi import Request
 from fastapi.responses import JSONResponse
 
+from app.api.context import correlation_id_ctx
+from app.api.models.responses import ErrorDetail, error_response
 from app.config import AppConfig, load_config
 from app.core.logging_utils import get_logger
 from app.infrastructure.redis import get_redis, redis_key
@@ -29,16 +31,16 @@ async def correlation_id_middleware(request: Request, call_next: Callable):
     if not correlation_id:
         correlation_id = f"api-{uuid.uuid4().hex[:16]}"
 
-    # Store in request state for access in handlers
+    # Store in request state and context for access in handlers/helpers
     request.state.correlation_id = correlation_id
+    token = correlation_id_ctx.set(correlation_id)
 
-    # Process request
-    response = await call_next(request)
-
-    # Add correlation ID to response headers
-    response.headers["X-Correlation-ID"] = correlation_id
-
-    return response
+    try:
+        response = await call_next(request)
+        response.headers["X-Correlation-ID"] = correlation_id
+        return response
+    finally:
+        correlation_id_ctx.reset(token)
 
 
 def _get_cfg() -> AppConfig:
@@ -86,16 +88,14 @@ async def rate_limit_middleware(request: Request, call_next: Callable):
             _redis_warning_logged = True
 
         if cfg.redis.required:
+            detail = ErrorDetail(
+                code="RATE_LIMIT_BACKEND_UNAVAILABLE",
+                message="Rate limit backend unavailable. Please try again later.",
+                correlation_id=correlation_id,
+            )
             return JSONResponse(
                 status_code=503,
-                content={
-                    "success": False,
-                    "error": {
-                        "code": "RATE_LIMIT_BACKEND_UNAVAILABLE",
-                        "message": "Rate limit backend unavailable. Please try again later.",
-                        "correlation_id": correlation_id,
-                    },
-                },
+                content=error_response(detail, correlation_id=correlation_id),
             )
 
         response = await call_next(request)
@@ -128,17 +128,15 @@ async def rate_limit_middleware(request: Request, call_next: Callable):
                 "correlation_id": correlation_id,
             },
         )
+        detail = ErrorDetail(
+            code="RATE_LIMIT_EXCEEDED",
+            message=f"Rate limit exceeded. Try again in {retry_after} seconds.",
+            details={"retry_after": retry_after},
+            correlation_id=correlation_id,
+        )
         return JSONResponse(
             status_code=429,
-            content={
-                "success": False,
-                "error": {
-                    "code": "RATE_LIMIT_EXCEEDED",
-                    "message": f"Rate limit exceeded. Try again in {retry_after} seconds.",
-                    "retry_after": retry_after,
-                    "correlation_id": correlation_id,
-                },
-            },
+            content=error_response(detail, correlation_id=correlation_id),
             headers={
                 "X-RateLimit-Limit": str(bucket_limit),
                 "X-RateLimit-Remaining": "0",

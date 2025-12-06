@@ -10,6 +10,7 @@ from fastapi.responses import JSONResponse, Response
 from pydantic import ValidationError as PydanticValidationError
 
 from app.api.exceptions import APIException, ErrorCode
+from app.api.models.responses import ErrorDetail, error_response
 from app.config import load_config
 
 logger = logging.getLogger(__name__)
@@ -35,17 +36,15 @@ async def api_exception_handler(request: Request, exc: Exception) -> Response:
         },
     )
 
+    detail = ErrorDetail(
+        code=exc.error_code.value,
+        message=exc.message,
+        details=exc.details,
+        correlation_id=correlation_id,
+    )
+
     return JSONResponse(
-        status_code=exc.status_code,
-        content={
-            "success": False,
-            "error": {
-                "code": exc.error_code.value,
-                "message": exc.message,
-                "details": exc.details,
-                "correlation_id": correlation_id,
-            },
-        },
+        status_code=exc.status_code, content=error_response(detail, correlation_id=correlation_id)
     )
 
 
@@ -77,17 +76,16 @@ async def validation_exception_handler(request: Request, exc: Exception) -> Resp
         },
     )
 
+    detail = ErrorDetail(
+        code=ErrorCode.VALIDATION_ERROR.value,
+        message="Request validation failed",
+        details={"fields": formatted_errors},
+        correlation_id=correlation_id,
+    )
+
     return JSONResponse(
         status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-        content={
-            "success": False,
-            "error": {
-                "code": ErrorCode.VALIDATION_ERROR.value,
-                "message": "Request validation failed",
-                "details": {"fields": formatted_errors},
-                "correlation_id": correlation_id,
-            },
-        },
+        content=error_response(detail, correlation_id=correlation_id),
     )
 
 
@@ -101,16 +99,15 @@ async def database_exception_handler(request: Request, exc: Exception) -> Respon
         extra={"correlation_id": correlation_id, "path": request.url.path},
     )
 
+    detail = ErrorDetail(
+        code=ErrorCode.DATABASE_ERROR.value,
+        message="Database temporarily unavailable",
+        correlation_id=correlation_id,
+    )
+
     return JSONResponse(
         status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-        content={
-            "success": False,
-            "error": {
-                "code": ErrorCode.DATABASE_ERROR.value,
-                "message": "Database temporarily unavailable",
-                "correlation_id": correlation_id,
-            },
-        },
+        content=error_response(detail, correlation_id=correlation_id),
     )
 
 
@@ -130,14 +127,13 @@ async def global_exception_handler(request: Request, exc: Exception) -> Response
 
     message = str(exc) if debug_mode else "An internal server error occurred"
 
+    detail = ErrorDetail(
+        code=ErrorCode.INTERNAL_ERROR.value,
+        message=message,
+        correlation_id=correlation_id,
+    )
+
     return JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        content={
-            "success": False,
-            "error": {
-                "code": ErrorCode.INTERNAL_ERROR.value,
-                "message": message,
-                "correlation_id": correlation_id,
-            },
-        },
+        content=error_response(detail, correlation_id=correlation_id),
     )

@@ -2,21 +2,32 @@
 Pydantic models for API responses.
 """
 
+from __future__ import annotations
+
+import os
 from datetime import datetime
 from typing import Any
 
 from pydantic import BaseModel, Field
 
+from app.api.context import correlation_id_ctx
 from app.core.time_utils import UTC
+
+APP_VERSION = os.getenv("APP_VERSION", "1.0.0")
+APP_BUILD: str | None = os.getenv("APP_BUILD") or None
 
 
 class MetaInfo(BaseModel):
     """Metadata for all API responses."""
 
+    correlation_id: str | None = None
     timestamp: str = Field(
         default_factory=lambda: datetime.now(UTC).isoformat().replace("+00:00", "Z")
     )
-    version: str = "1.0"
+    version: str = APP_VERSION
+    build: str | None = APP_BUILD
+    pagination: PaginationInfo | None = None
+    debug: dict[str, Any] | None = None
 
 
 class ErrorDetail(BaseModel):
@@ -259,12 +270,77 @@ class UserStatsData(BaseModel):
     last_summary_at: str | None
 
 
-def success_response(data: BaseModel | dict[str, Any]) -> dict[str, Any]:
+def _coerce_pagination(pagination: BaseModel | dict[str, Any] | None) -> PaginationInfo | None:
+    if pagination is None:
+        return None
+    if isinstance(pagination, PaginationInfo):
+        return pagination
+    if isinstance(pagination, BaseModel):
+        return PaginationInfo.model_validate(pagination.model_dump())
+    return PaginationInfo.model_validate(pagination)
+
+
+def build_meta(
+    *,
+    correlation_id: str | None = None,
+    pagination: BaseModel | dict[str, Any] | None = None,
+    debug: dict[str, Any] | None = None,
+    version: str | None = None,
+    build: str | None = None,
+) -> MetaInfo:
+    """Construct meta with sensible defaults and context-aware correlation ID."""
+    corr = correlation_id or correlation_id_ctx.get()
+    pagination_model = _coerce_pagination(pagination)
+    meta_kwargs: dict[str, Any] = {
+        "correlation_id": corr,
+        "pagination": pagination_model,
+        "version": version or APP_VERSION,
+        "build": build or APP_BUILD,
+    }
+    if debug:
+        meta_kwargs["debug"] = debug
+    return MetaInfo(**meta_kwargs)
+
+
+def success_response(
+    data: BaseModel | dict[str, Any],
+    *,
+    correlation_id: str | None = None,
+    pagination: BaseModel | dict[str, Any] | None = None,
+    debug: dict[str, Any] | None = None,
+    version: str | None = None,
+    build: str | None = None,
+) -> dict[str, Any]:
     """Helper to build a standardized success response."""
     payload = data.model_dump() if isinstance(data, BaseModel) else data
-    return SuccessResponse(data=payload).model_dump()
+    meta = build_meta(
+        correlation_id=correlation_id,
+        pagination=pagination,
+        debug=debug,
+        version=version,
+        build=build,
+    )
+    return SuccessResponse(data=payload, meta=meta).model_dump()
 
 
-def error_response(detail: ErrorDetail) -> dict[str, Any]:
+def _ensure_error_detail(detail: ErrorDetail, correlation_id: str | None) -> ErrorDetail:
+    if detail.correlation_id or not correlation_id:
+        return detail
+    detail_payload = detail.model_dump()
+    detail_payload["correlation_id"] = correlation_id
+    return ErrorDetail(**detail_payload)
+
+
+def error_response(
+    detail: ErrorDetail,
+    *,
+    correlation_id: str | None = None,
+    debug: dict[str, Any] | None = None,
+    version: str | None = None,
+    build: str | None = None,
+) -> dict[str, Any]:
     """Helper to build a standardized error response."""
-    return ErrorResponse(error=detail).model_dump()
+    corr = correlation_id or correlation_id_ctx.get()
+    normalized_detail = _ensure_error_detail(detail, corr)
+    meta = build_meta(correlation_id=corr, debug=debug, version=version, build=build)
+    return ErrorResponse(error=normalized_detail, meta=meta).model_dump()

@@ -156,6 +156,13 @@ async def initiate_full_sync(
     expires_at = now + timedelta(hours=cfg.sync.expiry_hours)
     await _store_sync_session(sync_id, chunk_size, expires_at, cfg)
 
+    pagination = {
+        "total": total_items,
+        "limit": chunk_size,
+        "offset": 0,
+        "has_more": total_chunks > 0,
+    }
+
     return success_response(
         SyncSessionInfo(
             sync_id=sync_id,
@@ -164,7 +171,8 @@ async def initiate_full_sync(
             chunks=total_chunks,
             download_urls=download_urls,
             expires_at=expires_at.isoformat().replace("+00:00", "Z"),
-        )
+        ),
+        pagination=pagination,
     )
 
 
@@ -237,13 +245,21 @@ async def download_sync_chunk(
             }
         )
 
+    pagination = {
+        "total": total_chunks * chunk_size,
+        "limit": chunk_size,
+        "offset": offset,
+        "has_more": chunk_number < total_chunks,
+    }
+
     return success_response(
         SyncChunkData(
             sync_id=sync_id,
             chunk_number=chunk_number,
             total_chunks=total_chunks,
             items=items,
-        )
+        ),
+        pagination=pagination,
     )
 
 
@@ -287,12 +303,21 @@ async def get_delta_sync(
     # add updated_at and deleted_at timestamps to Summary model and check against 'since'.
     # This is sufficient for MVP as summaries are immutable after creation.
 
+    has_more = len(created_items) >= limit
+    pagination = {
+        "total": len(created_items),
+        "limit": limit,
+        "offset": 0,
+        "has_more": has_more,
+    }
+
     return success_response(
         SyncDeltaData(
             changes={"created": created_items, "updated": [], "deleted": []},
             sync_timestamp=datetime.now(UTC).isoformat().replace("+00:00", "Z"),
-            has_more=len(created_items) >= limit,
-        )
+            has_more=has_more,
+        ),
+        pagination=pagination,
     )
 
 
