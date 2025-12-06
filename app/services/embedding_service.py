@@ -146,6 +146,9 @@ def prepare_text_for_embedding(
     tldr: str | None,
     key_ideas: list[str] | None = None,
     topic_tags: list[str] | None = None,
+    semantic_boosters: list[str] | None = None,
+    query_expansion_keywords: list[str] | None = None,
+    semantic_chunks: list[dict[str, Any]] | None = None,
     max_length: int = 512,
 ) -> str:
     """Compose optimized text for embedding generation.
@@ -177,6 +180,26 @@ def prepare_text_for_embedding(
         # Remove hashtags for cleaner embedding
         clean_tags = [tag.lstrip("#") for tag in topic_tags[:5]]
         parts.extend(clean_tags)
+
+    if semantic_boosters:
+        parts.extend(semantic_boosters[:10])
+
+    if semantic_chunks:
+        for chunk in semantic_chunks[:6]:
+            if not isinstance(chunk, dict):
+                continue
+            text = chunk.get("text")
+            if text:
+                parts.append(str(text))
+            local_summary = chunk.get("local_summary")
+            if local_summary:
+                parts.append(str(local_summary))
+            local_keywords = chunk.get("local_keywords") or []
+            if isinstance(local_keywords, list):
+                parts.extend([str(k) for k in local_keywords[:3] if str(k).strip()])
+
+    if query_expansion_keywords:
+        parts.extend(query_expansion_keywords[:10])
 
     # Combine and truncate
     text = " ".join(parts)

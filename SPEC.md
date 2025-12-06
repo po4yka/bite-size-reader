@@ -180,7 +180,21 @@ sequenceDiagram
     "score": 12.4,
     "level": "College"
   },
-  "seo_keywords": ["keyword one", "keyword two", "keyword three"]
+  "seo_keywords": ["keyword one", "keyword two", "keyword three"],
+  "article_id": "canonical URL or request hash",
+  "query_expansion_keywords": ["search phrasing 1", "... (20-30 total)"],
+  "semantic_boosters": ["standalone sentence 1", "... (8-15 total)"],
+  "semantic_chunks": [
+    {
+      "article_id": "same as above",
+      "section": null,
+      "language": "en",
+      "topics": ["energy", "policy"],
+      "text": "100-200 word chunk text",
+      "local_summary": "1-2 sentence summary of this chunk",
+      "local_keywords": ["phrase1", "phrase2", "phrase3"]
+    }
+  ]
 }
 ```
 
@@ -188,6 +202,9 @@ sequenceDiagram
 - `summary_250`: hard cap; end on sentence/phrase boundary.
 - `summary_1000`: hard cap; multi-sentence overview that expands on `summary_250` while staying within 1000 characters.
 - `tldr`: no hard cap but should remain purposeful and avoid rambling.
+- `query_expansion_keywords`: 20–30 short English phrases (deduped); mix synonyms, broader/narrower phrasings.
+- `semantic_boosters`: 8–15 standalone English sentences optimized for embeddings.
+- `semantic_chunks`: non-overlapping 100–200 word chunks with `local_summary` (1–2 sentences) and `local_keywords` (3–8 phrases); include article_id/topics/language for metadata.
 - `topic_tags`: enforce leading `#`; dedupe; max 10.
 - `entities`: lists deduped case‑insensitively.
 - `estimated_reading_time_min`: integer; compute from words/WPM or accept LLM value (choose one method and record it).

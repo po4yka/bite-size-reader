@@ -1,4 +1,35 @@
 # Test Plan Title
+- Date: YYYY-MM-DD
+- Owner: NAME
+- Related Docs: [requirements, tech design]
+
+## Scope & Objectives
+- Features and behaviors covered; exclusions.
+
+## Test Approach
+- Types (unit, integration, e2e), data strategy, mocking/fakes.
+
+## Environments & Tooling
+- Environments, configs, fixtures, special flags.
+
+## Test Cases
+- List or table of key cases with expected results.
+
+## Regression Coverage
+- Critical paths to guard against regressions.
+
+## Non-Functional
+- Performance, scalability, security, resilience checks.
+
+## Entry / Exit Criteria
+- Conditions to start/finish testing.
+
+## Risks & Mitigations
+- Test gaps and planned mitigations.
+
+## Reporting
+- How results are captured and communicated.
+# Test Plan Title
 - Date:
 - Author:
 

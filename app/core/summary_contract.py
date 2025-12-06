@@ -499,6 +499,97 @@ def _clean_string_list(values: Any, *, limit: int | None = None) -> list[str]:
     return result
 
 
+def _shape_query_expansion_keywords(payload: SummaryJSON, base_text: str) -> list[str]:
+    """Build a diversified list of query expansion keywords."""
+    seeds = _clean_string_list(payload.get("query_expansion_keywords"))
+
+    # Harvest from topic tags, seo keywords, key ideas
+    topics = [
+        str(t).strip().lstrip("#") for t in payload.get("topic_tags", []) or [] if str(t).strip()
+    ]
+    seo = [str(s).strip() for s in payload.get("seo_keywords", []) or [] if str(s).strip()]
+    ideas = [str(i).strip() for i in payload.get("key_ideas", []) or [] if str(i).strip()]
+    seeds.extend(topics)
+    seeds.extend(seo)
+    seeds.extend(ideas)
+
+    # Add TF-IDF keywords from text
+    tfidf = _extract_keywords_tfidf(base_text, topn=40)
+    seeds.extend(tfidf)
+
+    deduped = _dedupe_case_insensitive(seeds)
+    trimmed = deduped[:30]
+
+    # Ensure we have at least 20 items by repeating from tfidf if needed
+    if len(trimmed) < 20:
+        for term in tfidf:
+            if term not in trimmed:
+                trimmed.append(term)
+            if len(trimmed) >= 20:
+                break
+
+    return trimmed[:30]
+
+
+def _shape_semantic_boosters(payload: SummaryJSON, base_text: str) -> list[str]:
+    """Create embedding-friendly standalone booster sentences."""
+    boosters = _clean_string_list(payload.get("semantic_boosters"))
+
+    # Extract sentences from summary text as fallback
+    sentences = re.split(r"(?<=[.!?])\s+", base_text)
+    sentences = [s.strip() for s in sentences if s and len(s.strip()) > 20]
+
+    for sentence in sentences:
+        if len(boosters) >= 15:
+            break
+        if sentence not in boosters:
+            boosters.append(sentence)
+
+    if not boosters:
+        boosters = sentences[:10]
+
+    # Cap length and count
+    boosters = [_cap_text(sentence, 320) for sentence in boosters if sentence.strip()]
+    return boosters[:15]
+
+
+def _shape_semantic_chunks(
+    raw_chunks: Any,
+    *,
+    article_id: str | None,
+    topics: list[str],
+    language: str | None,
+) -> list[dict[str, Any]]:
+    """Normalize semantic chunk payloads."""
+    if not isinstance(raw_chunks, list):
+        return []
+
+    normalized: list[dict[str, Any]] = []
+    for item in raw_chunks:
+        if not isinstance(item, dict):
+            continue
+        text = str(item.get("text") or item.get("content") or "").strip()
+        if not text:
+            continue
+        local_summary = str(item.get("local_summary") or item.get("summary") or "").strip()
+        local_summary = _cap_text(local_summary, 480) if local_summary else ""
+        local_keywords = _clean_string_list(item.get("local_keywords"), limit=8)
+
+        normalized.append(
+            {
+                "article_id": str(item.get("article_id") or article_id or "").strip() or None,
+                "section": item.get("section"),
+                "language": str(item.get("language") or language or "").strip() or None,
+                "topics": _clean_string_list(item.get("topics") or topics),
+                "text": text,
+                "local_summary": local_summary,
+                "local_keywords": local_keywords,
+            }
+        )
+
+    return normalized
+
+
 def _enrich_tldr_from_payload(base_text: str, payload: SummaryJSON) -> str:
     """Expand a TL;DR when it mirrors the 1000-char summary.
 
@@ -940,6 +1031,34 @@ def validate_and_shape_summary(payload: SummaryJSON) -> SummaryJSON:
             )
     p["topic_taxonomy"] = clean_taxonomy
 
+    # RAG-optimized fields
+    metadata = p.get("metadata") or {}
+    base_text = " ".join(
+        [
+            p.get("summary_1000") or "",
+            p.get("summary_250") or "",
+            p.get("tldr") or "",
+        ]
+    ).strip()
+    topics_clean = [t.lstrip("#") for t in p.get("topic_tags") or []]
+    language = p.get("language") or metadata.get("language")
+    article_id = p.get("article_id") or metadata.get("canonical_url") or metadata.get("url")
+    if article_id:
+        p["article_id"] = str(article_id).strip()
+    else:
+        p.setdefault("article_id", None)
+
+    p["query_expansion_keywords"] = _shape_query_expansion_keywords(p, base_text)
+    p["semantic_boosters"] = _shape_semantic_boosters(p, base_text)
+
+    raw_chunks = p.get("semantic_chunks") or p.get("chunks") or []
+    p["semantic_chunks"] = _shape_semantic_chunks(
+        raw_chunks,
+        article_id=p.get("article_id"),
+        topics=topics_clean,
+        language=language,
+    )
+
     # Optional strict validation via Pydantic
     if PydanticAvailable:
         try:
@@ -1089,6 +1208,34 @@ def get_summary_json_schema() -> dict[str, Any]:
                 "required": ["method", "score", "level"],
             },
             "seo_keywords": {"type": "array", "items": {"type": "string"}},
+            "query_expansion_keywords": {"type": "array", "items": {"type": "string"}},
+            "semantic_boosters": {"type": "array", "items": {"type": "string"}},
+            "semantic_chunks": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "additionalProperties": False,
+                    "properties": {
+                        "article_id": {"type": ["string", "null"]},
+                        "section": {"type": ["string", "null"]},
+                        "language": {"type": ["string", "null"]},
+                        "topics": {"type": "array", "items": {"type": "string"}},
+                        "text": {"type": "string"},
+                        "local_summary": {"type": ["string", "null"]},
+                        "local_keywords": {"type": "array", "items": {"type": "string"}},
+                    },
+                    "required": [
+                        "article_id",
+                        "section",
+                        "language",
+                        "topics",
+                        "text",
+                        "local_summary",
+                        "local_keywords",
+                    ],
+                },
+            },
+            "article_id": {"type": ["string", "null"]},
             "metadata": {
                 "type": "object",
                 "additionalProperties": False,
@@ -1232,5 +1379,9 @@ def get_summary_json_schema() -> dict[str, Any]:
             "forwarded_post_extras",
             "key_points_to_remember",
             "insights",
+            "query_expansion_keywords",
+            "semantic_boosters",
+            "semantic_chunks",
+            "article_id",
         ],
     }

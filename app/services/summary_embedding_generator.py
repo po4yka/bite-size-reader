@@ -86,6 +86,9 @@ class SummaryEmbeddingGenerator:
                 tldr=payload.get("tldr"),
                 key_ideas=payload.get("key_ideas"),
                 topic_tags=payload.get("topic_tags"),
+                semantic_boosters=payload.get("semantic_boosters"),
+                query_expansion_keywords=payload.get("query_expansion_keywords"),
+                semantic_chunks=payload.get("semantic_chunks"),
             )
 
             if not text or not text.strip():

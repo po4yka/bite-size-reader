@@ -194,6 +194,12 @@ class URLProcessor:
                 )
 
                 if shaped:
+                    shaped = self.llm_summarizer._enrich_with_rag_fields(
+                        shaped,
+                        content_text=content_text,
+                        chosen_lang=chosen_lang,
+                        req_id=req_id,
+                    )
                     # Create stub LLM result for consistency
                     llm = self._create_chunk_llm_stub()
 

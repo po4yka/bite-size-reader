@@ -71,6 +71,15 @@ if PydanticAvailable:
         hashtags: list[str] = Field(default_factory=list)
         mentions: list[str] = Field(default_factory=list)
 
+    class SemanticChunk(BaseModel):
+        text: str
+        local_summary: str | None = None
+        local_keywords: list[str] = Field(default_factory=list)
+        article_id: str | None = None
+        section: str | None = None
+        language: str | None = None
+        topics: list[str] = Field(default_factory=list)
+
     class SummaryModel(BaseModel):
         summary_250: str = Field(max_length=250)
         summary_1000: str = Field(max_length=1000)
@@ -83,6 +92,10 @@ if PydanticAvailable:
         answered_questions: list[str] = Field(default_factory=list)
         readability: Readability = Field(default_factory=Readability)
         seo_keywords: list[str] = Field(default_factory=list)
+        query_expansion_keywords: list[str] = Field(default_factory=list)
+        semantic_boosters: list[str] = Field(default_factory=list)
+        semantic_chunks: list[SemanticChunk] = Field(default_factory=list)
+        article_id: str | None = None
 
         # New fields
         metadata: Metadata = Field(default_factory=Metadata)

@@ -112,6 +112,29 @@ class TestSummaryContract(unittest.TestCase):
         assert len(out["tldr"]) > len(payload["tldr"])
         assert "Key ideas:" in out["tldr"]
 
+    def test_rag_fields_are_populated_and_capped(self):
+        payload = {
+            "summary_250": "Concise summary about renewable energy transition.",
+            "summary_1000": (
+                "The article explores the transition to renewable energy, highlighting policy incentives, "
+                "grid modernization, storage breakthroughs, and regional cooperation. It notes trade-offs "
+                "between reliability, cost, and speed of rollout."
+            ),
+            "tldr": "A fuller TLDR about renewable energy grids and storage economics.",
+            "topic_tags": ["energy", "policy", "grid"],
+            "seo_keywords": ["renewable energy", "grid modernization", "energy storage"],
+            "key_ideas": ["Policy incentives", "Grid modernization", "Storage breakthroughs"],
+        }
+
+        out = validate_and_shape_summary(payload)
+
+        assert "article_id" in out
+        assert isinstance(out["query_expansion_keywords"], list)
+        assert 1 <= len(out["semantic_boosters"]) <= 15
+        assert len(out["query_expansion_keywords"]) <= 30
+        assert "semantic_chunks" in out
+        assert isinstance(out["semantic_chunks"], list)
+
 
 if __name__ == "__main__":
     unittest.main()

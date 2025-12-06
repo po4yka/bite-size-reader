@@ -1,3 +1,60 @@
+# Tech Design Title
+- Date: YYYY-MM-DD
+- Owner: NAME
+- Related Docs: [requirements, ADRs, proposals, test plan]
+
+## Summary
+- One-paragraph overview of the solution.
+
+## Context & Problem
+- Current behavior and gaps.
+
+## Goals / Non-Goals
+- Goals:
+- Non-Goals:
+
+## Assumptions & Constraints
+- List assumptions, limits, and known constraints.
+
+## Requirements Traceability
+- Map requirements to design elements.
+
+## Architecture
+- High-level diagram/description.
+- Key components and responsibilities.
+
+## Data Contracts
+- Schemas, JSON contracts, migrations, compatibility notes.
+
+## Flows
+- Request/response and processing flows (bullets or sequence).
+
+## Algorithms / Logic
+- Core algorithms, heuristics, prompts, fallback behavior.
+
+## Error Handling & Retries
+- Failure modes, retries, timeouts, idempotency.
+
+## Security & Privacy
+- AuthN/Z, secrets, PII handling, logging redaction.
+
+## Performance & Scalability
+- Expected volumes, latency, resource considerations.
+
+## Operations
+- Observability (logs/metrics/traces), feature flags, rollout/rollback.
+
+## Testing Strategy
+- Unit, integration, e2e, data validation.
+
+## Risks / Trade-offs
+- Known trade-offs and mitigations.
+
+## Alternatives Considered
+- Options not chosen and reasons.
+
+## Open Questions
+- Items to resolve.
 # Technical Design Title
 - Date:
 - Author:

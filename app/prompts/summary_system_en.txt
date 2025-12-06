@@ -23,6 +23,10 @@ Top-level keys (exactly these, no extras):
 - forwarded_post_extras
 - key_points_to_remember
 - insights
+- article_id
+- query_expansion_keywords
+- semantic_boosters
+- semantic_chunks
 
 Field requirements:
 - summary_250: string, max 250 characters. One high-signal sentence (news lead style) that ends cleanly; must differ from summary_1000 and TL;DR wording.
@@ -46,6 +50,10 @@ Field requirements:
 - confidence: number between 0 and 1 expressing overall certainty.
 - forwarded_post_extras: object|null capturing Telegram metadata { channel_id, channel_title, channel_username, message_id, post_datetime, hashtags, mentions }.
 - key_points_to_remember: array of strings listing enduring takeaways.
+- article_id: string identifier (use canonical URL or hash when available).
+- query_expansion_keywords: array of 20–30 short English phrases a user might search (synonyms, alternative phrasings, specific/general intents). Deduplicated, lower risk of overlap.
+- semantic_boosters: array of 8–15 standalone English sentences capturing key relationships/trade-offs/claims suitable for embeddings.
+- semantic_chunks: array of objects, each representing a 100–200 word, non-overlapping chunk with keys { text, local_summary, local_keywords, section|null, language|null, topics: [strings], article_id }. `local_summary` must be 1–2 sentences; `local_keywords` 3–8 phrases.
 - insights: object with keys:
   * topic_overview: string summarizing broader context.
   * new_facts: array of objects { fact: string, why_it_matters: string|null, source_hint: string|null, confidence: number|string|null } containing 4–6 beyond-text insights.

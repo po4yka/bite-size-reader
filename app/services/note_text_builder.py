@@ -55,6 +55,9 @@ def build_note_text(
         tldr=payload.get("tldr"),
         key_ideas=payload.get("key_ideas"),
         topic_tags=topic_tags,
+        semantic_boosters=payload.get("semantic_boosters"),
+        query_expansion_keywords=payload.get("query_expansion_keywords"),
+        semantic_chunks=payload.get("semantic_chunks"),
         max_length=max_length,
     )
 
@@ -79,9 +82,21 @@ def _extract_tags(payload: dict[str, Any], metadata: dict[str, Any]) -> list[str
 
     raw_tag_sources: list[list[Any]] = []
 
-    for candidate in (payload.get("topic_tags"), metadata.get("tags")):
+    for candidate in (
+        payload.get("topic_tags"),
+        metadata.get("tags"),
+        payload.get("query_expansion_keywords"),
+    ):
         if isinstance(candidate, list | tuple | set):
             raw_tag_sources.append(list(candidate))
+
+    semantic_chunks = payload.get("semantic_chunks") or []
+    if isinstance(semantic_chunks, list):
+        for chunk in semantic_chunks:
+            if isinstance(chunk, dict):
+                kws = chunk.get("local_keywords")
+                if isinstance(kws, list):
+                    raw_tag_sources.append(kws)
 
     clean_tags: list[str] = []
     seen: set[str] = set()
