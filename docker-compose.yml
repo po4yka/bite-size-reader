@@ -84,7 +84,7 @@ services:
           memory: 512M
           cpus: '0.25'
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v2/tenants/default_tenant"]
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/heartbeat"]
       interval: 30s
       timeout: 10s
       retries: 3
