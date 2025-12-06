@@ -628,6 +628,86 @@ class LLMSummarizer:
             )
             return None
 
+    async def translate_summary_to_ru(
+        self,
+        summary: dict[str, Any],
+        *,
+        req_id: int,
+        correlation_id: str | None = None,
+    ) -> str | None:
+        """Translate a shaped summary to fluent Russian for Telegram delivery."""
+        summary_json = json.dumps(summary, ensure_ascii=False, indent=2)
+
+        system_prompt = (
+            "Ты опытный редактор и переводчик. Получишь структурированное резюме (JSON). "
+            "Передай тот же смысл на русском в сжатом виде: 2–3 коротких абзаца и, если уместно, "
+            "несколько лаконичных bullet-пунктов. Не возвращай JSON, не используй Markdown-разметку "
+            "или кодовые блоки. Сохраняй факты, числа и имена без искажений."
+        )
+        user_prompt = (
+            "Преобразуй резюме ниже в связный русский текст для Telegram. "
+            "Сделай адаптированный перевод (не дословный), сохрани ключевые факты, тон и цифры. "
+            "Избегай префиксов вроде 'Translation:' и любых служебных пометок.\n\n"
+            f"Резюме:\n{summary_json}"
+        )
+
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ]
+
+        candidate_models: list[str] = [self.cfg.openrouter.model]
+        fallback_models = getattr(self.cfg.openrouter, "fallback_models", []) or []
+        candidate_models.extend(
+            [model for model in fallback_models if model and model not in candidate_models]
+        )
+
+        max_tokens = 900
+
+        for model_name in candidate_models:
+            try:
+                async with self._sem():
+                    llm = await self.openrouter.chat(
+                        messages,
+                        temperature=self.cfg.openrouter.temperature,
+                        max_tokens=max_tokens,
+                        top_p=self.cfg.openrouter.top_p,
+                        model_override=model_name,
+                        request_id=req_id,
+                    )
+
+                await self._workflow.persist_llm_call(llm, req_id, correlation_id)
+
+                if llm.status != "ok":
+                    logger.warning(
+                        "ru_translation_llm_error",
+                        extra={
+                            "cid": correlation_id,
+                            "error": llm.error_text,
+                            "model": model_name,
+                        },
+                    )
+                    continue
+
+                candidate = (llm.response_text or "").strip()
+                if candidate:
+                    return candidate
+
+                logger.warning(
+                    "ru_translation_empty_text",
+                    extra={"cid": correlation_id, "model": model_name},
+                )
+            except Exception as exc:
+                raise_if_cancelled(exc)
+                logger.exception(
+                    "ru_translation_call_failed",
+                    extra={"cid": correlation_id, "model": model_name, "error": str(exc)},
+                )
+                continue
+
+        logger.warning("ru_translation_exhausted", extra={"cid": correlation_id})
+        return None
+
     def _build_article_system_prompt(self, lang: str) -> str:
         if lang == LANG_RU:
             return (

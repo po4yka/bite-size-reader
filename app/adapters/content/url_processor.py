@@ -20,7 +20,7 @@ from app.adapters.openrouter.openrouter_client import OpenRouterClient
 from app.adapters.telegram.message_persistence import MessagePersistence
 from app.config import AppConfig
 from app.core.async_utils import raise_if_cancelled
-from app.core.lang import choose_language
+from app.core.lang import LANG_RU, choose_language
 from app.core.url_utils import normalize_url, url_hash_sha256
 from app.db.database import Database
 from app.db.user_interactions import async_safe_update_user_interaction
@@ -128,6 +128,7 @@ class URLProcessor:
 
             # Choose language and load system prompt
             chosen_lang = choose_language(self.cfg.runtime.preferred_lang, detected)
+            needs_ru_translation = not silent and detected != LANG_RU and chosen_lang != LANG_RU
             system_prompt = await self._load_system_prompt(chosen_lang)
 
             logger.debug(
@@ -206,7 +207,15 @@ class URLProcessor:
                         len(chunks),
                         correlation_id,
                         interaction_id,
+                        needs_ru_translation,
                         silent=silent,
+                    )
+                    await self._maybe_send_russian_translation(
+                        message,
+                        shaped,
+                        req_id,
+                        correlation_id,
+                        needs_ru_translation,
                     )
                     # Generate insights even in silent mode (for batch processing)
                     await self._handle_additional_insights(
@@ -251,6 +260,14 @@ class URLProcessor:
                     )
                     logger.info(
                         "reply_json_sent", extra={"cid": correlation_id, "request_id": req_id}
+                    )
+
+                    await self._maybe_send_russian_translation(
+                        message,
+                        shaped,
+                        req_id,
+                        correlation_id,
+                        needs_ru_translation,
                     )
 
                     # Notify user that we will attempt to generate extra research insights
@@ -362,6 +379,7 @@ class URLProcessor:
         chunk_count: int,
         correlation_id: str | None,
         interaction_id: int | None,
+        needs_ru_translation: bool,
         silent: bool = False,
     ) -> None:
         """Persist chunked results and send response."""
@@ -394,6 +412,47 @@ class URLProcessor:
                 message, shaped, llm, chunks=chunk_count
             )
             logger.info("reply_json_sent", extra={"cid": correlation_id, "request_id": req_id})
+
+    async def _maybe_send_russian_translation(
+        self,
+        message: Any,
+        summary: dict[str, Any],
+        req_id: int,
+        correlation_id: str | None,
+        needs_translation: bool,
+    ) -> None:
+        """Generate and send an adapted Russian translation of the summary when required."""
+        if not needs_translation:
+            return
+
+        try:
+            translated = await self.llm_summarizer.translate_summary_to_ru(
+                summary,
+                req_id=req_id,
+                correlation_id=correlation_id,
+            )
+            if translated:
+                await self.response_formatter.send_russian_translation(
+                    message, translated, correlation_id=correlation_id
+                )
+                return
+
+            await self.response_formatter.safe_reply(
+                message,
+                f"⚠️ Unable to generate Russian translation right now. Error ID: {correlation_id or 'unknown'}.",
+            )
+        except Exception as exc:  # noqa: BLE001
+            raise_if_cancelled(exc)
+            logger.exception(
+                "ru_translation_failed", extra={"cid": correlation_id, "error": str(exc)}
+            )
+            try:
+                await self.response_formatter.safe_reply(
+                    message,
+                    f"⚠️ Russian translation failed. Error ID: {correlation_id or 'unknown'}.",
+                )
+            except Exception:
+                pass
 
     async def _handle_additional_insights(
         self,

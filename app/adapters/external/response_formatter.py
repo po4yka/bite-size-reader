@@ -754,6 +754,22 @@ class ResponseFormatter:
 
             await self.reply_json(message, summary_shaped)
 
+    async def send_russian_translation(
+        self, message: Any, translated_text: str, correlation_id: str | None = None
+    ) -> None:
+        """Send the adapted Russian translation as a follow-up message."""
+        if not translated_text or not translated_text.strip():
+            logger.warning("russian_translation_empty", extra={"cid": correlation_id})
+            return
+
+        cleaned = self._sanitize_summary_text(translated_text.strip())
+        header = "🇷🇺 Перевод резюме"
+        if correlation_id:
+            header += f"\n🆔 Correlation ID: `{correlation_id}`"
+
+        await self.safe_reply(message, header)
+        await self._send_long_text(message, cleaned)
+
     async def send_additional_insights_message(
         self, message: Any, insights: dict[str, Any], correlation_id: str | None = None
     ) -> None:

@@ -60,6 +60,10 @@
   - Mobile API: JSON envelope returned on all routes (including `/` and `/health`), headers keep `X-Correlation-ID`.
   - Telegram: structured JSON attachments use the same envelope; textual replies mention correlation_id/error_id; fallback allowed when Telegram formatting limits apply.
   - CLI/agents: print envelope JSON to stdout for machine readability; human-friendly text may accompany it.
+- Telegram Russian translation add-on:
+  - When detected content language is non-Russian and the chosen summary language is not Russian, send a second follow-up message with an adapted Russian translation of the final summary (translate the shaped summary JSON, not the raw content).
+  - Translation uses OpenRouter chat completion (no schema enforcement), targets concise, fluent Russian with 2–3 short paragraphs plus optional bullet highlights; no change to the JSON contract or storage schema.
+  - If translation fails, send a short notice referencing the correlation_id; main summary delivery remains unchanged.
 
 ## Decisions
 - Adopt Pydantic envelope models/helpers in `app/api/models/responses.py` (and shared helper module for non-API surfaces).

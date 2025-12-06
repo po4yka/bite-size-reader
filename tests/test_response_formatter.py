@@ -196,6 +196,30 @@ class TestResponseFormatter(unittest.IsolatedAsyncioTestCase):
 
         assert result is False
 
+    async def test_send_russian_translation_sends_header_and_body(self) -> None:
+        recorded_replies: list[str] = []
+
+        async def record_reply(
+            message: DummyMessage,
+            text: str,
+            parse_mode: str | None = None,
+            reply_markup: object | None = None,
+        ) -> None:
+            message.replies.append(text)
+            recorded_replies.append(text)
+
+        formatter = ResponseFormatter(safe_reply_func=record_reply)
+        formatter.MIN_MESSAGE_INTERVAL_MS = 0
+
+        msg = DummyMessage()
+        await formatter.send_russian_translation(
+            msg, "Line one\nLine two", correlation_id="cid-ru-1"
+        )
+
+        assert any("Перевод резюме" in text for text in recorded_replies)
+        assert any("cid-ru-1" in text for text in recorded_replies)
+        assert any("Line one" in text or "Line two" in text for text in recorded_replies)
+
     async def test_reply_json_wraps_success_envelope(self) -> None:
         recorded_json: list[dict] = []
 
