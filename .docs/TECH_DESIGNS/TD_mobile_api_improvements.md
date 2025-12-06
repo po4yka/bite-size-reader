@@ -12,8 +12,8 @@
 ## Architecture / Flow (targeted changes)
 - Rate limiting and sync: move counters/sessions to shared store (Redis/SQLite), key by user/client_id with per-endpoint buckets, emit headers consistently.
 - Auth: include `is_owner` and `client_id` in access tokens, rotate refresh tokens, enforce allowlist defaults explicitly, and return errors via APIException.
-- API surface: wrap responses in typed Pydantic response models (success/error/meta) and standardize error codes.
-- Background processing: refactor `app/api/background_processor.py` to new config/DI, add idempotent request locks, retries with backoff, and propagate correlation_id.
+- API surface: wrap responses in typed Pydantic response models (success/error/meta) and standardize error codes. **Implemented:** unified success envelopes via `success_response`, per-endpoint data models, routers returning typed payloads.
+- Background processing: refactor `app/api/background_processor.py` to new config/DI, add idempotent request locks, retries with backoff, and propagate correlation_id. **Implemented:** config-driven init, per-request locks, semaphore from `runtime.max_concurrent_calls`, 3x retry with backoff.
 - Sync protocol: support created/updated/deleted with server version/ETag; configurable chunk size; conflict reporting; delete semantics distinct from read.
 - Observability: structured logs with correlation_id in background tasks and rate limiter decisions.
 
@@ -43,3 +43,8 @@
 - Phase 2: refactor background processor and response contracts.
 - Phase 3: add sync versioning and deletion semantics.
 - Add migration guide and env samples; monitor logs for rate-limit and processing errors.
+
+## Search Performance Improvements (2025-12-06)
+- Chroma semantic search now uses a managed singleton with explicit shutdown; FastAPI shutdown event calls the lifecycle hook to close the vector store and embedding service.
+- EmbeddingService and ChromaVectorStore expose close/aclose to release model memory and HTTP clients.
+- Trending topics endpoint limits scan size (cap 1000 rows, adaptive to requested limit) and caches results per-user/params with a short TTL; cache is cleared on summary insert/update to reflect new tags promptly.

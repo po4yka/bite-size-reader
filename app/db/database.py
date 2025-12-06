@@ -41,6 +41,7 @@ from app.services.topic_search_utils import (
     ensure_mapping,
     tokenize,
 )
+from app.services.trending_cache import clear_trending_cache
 
 JSONValue = Mapping[str, Any] | Sequence[Any] | str | None
 
@@ -1453,6 +1454,7 @@ class Database:
             is_read=is_read,
         )
         self._refresh_topic_search_index(request_id)
+        clear_trending_cache()
         return summary.id
 
     def upsert_summary(
@@ -1476,6 +1478,7 @@ class Database:
                 is_read=is_read if is_read is not None else False,
             )
             self._refresh_topic_search_index(request_id)
+            clear_trending_cache()
             return summary.version
         except peewee.IntegrityError:
             update_map: dict[Any, Any] = {
@@ -1493,6 +1496,7 @@ class Database:
             updated = Summary.get_or_none(Summary.request == request_id)
             version_val = updated.version if updated else 0
             self._refresh_topic_search_index(request_id)
+            clear_trending_cache()
             return version_val
 
     async def async_upsert_summary(self, **kwargs: Any) -> int:

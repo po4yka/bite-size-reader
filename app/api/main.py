@@ -12,6 +12,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import ValidationError as PydanticValidationError
 
+from app.api.dependencies import search_resources
 from app.api.error_handlers import (
     api_exception_handler,
     database_exception_handler,
@@ -111,6 +112,11 @@ app.add_exception_handler(PydanticValidationError, validation_exception_handler)
 app.add_exception_handler(peewee.DatabaseError, database_exception_handler)
 app.add_exception_handler(peewee.OperationalError, database_exception_handler)
 app.add_exception_handler(Exception, global_error_handler)
+
+
+@app.on_event("shutdown")
+async def shutdown_resources() -> None:
+    await search_resources.shutdown_chroma_search_resources()
 
 
 if __name__ == "__main__":

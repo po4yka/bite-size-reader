@@ -76,6 +76,7 @@ ignore = [
   "ASYNC109", # async timeout parameter - trio-specific, not relevant
   "B008",    # function call in argument defaults - standard FastAPI pattern
   "PLW0603", # global statement - needed for asyncio semaphore initialization
+  "TC003",   # allow stdlib typing imports without TYPE_CHECKING blocks when used at runtime
 ]
 
 # Per-file ignores for test files

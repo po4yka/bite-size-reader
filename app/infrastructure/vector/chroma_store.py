@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import TYPE_CHECKING, Any
 from uuid import uuid4
@@ -156,3 +157,33 @@ class ChromaVectorStore:
     def count(self) -> int:
         """Count the number of items in the collection."""
         return self._collection.count()
+
+    def close(self) -> None:
+        """Close underlying Chroma client connections."""
+        client = getattr(self, "_client", None)
+        if client is None:
+            return
+
+        close_fn = getattr(client, "close", None)
+        if callable(close_fn):
+            try:
+                close_fn()
+                return
+            except Exception as e:  # pragma: no cover - defensive close
+                logger.warning("chroma_client_close_failed", extra={"error": str(e)})
+
+        session = getattr(client, "_session", None)
+        if session:
+            close_session = getattr(session, "close", None)
+            if callable(close_session):
+                try:
+                    close_session()
+                except Exception as e:  # pragma: no cover - defensive close
+                    logger.warning("chroma_session_close_failed", extra={"error": str(e)})
+
+    async def aclose(self) -> None:
+        """Async wrapper for close()."""
+        try:
+            await asyncio.to_thread(self.close)
+        except Exception:  # pragma: no cover - defensive close
+            logger.exception("chroma_client_async_close_failed")

@@ -1,44 +1,17 @@
 """Search and discovery endpoints."""
 
-from collections import Counter
-from datetime import datetime, timedelta
-from functools import lru_cache
-
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.api.auth import get_current_user
+from app.api.dependencies.search_resources import get_chroma_search_service
 from app.api.models.responses import SearchResult, SearchResultsData, success_response
-from app.config import ChromaConfig
 from app.core.logging_utils import get_logger
-from app.core.time_utils import UTC
 from app.db.models import Request as RequestModel, Summary, TopicSearchIndex
-from app.infrastructure.vector.chroma_store import ChromaVectorStore
 from app.services.chroma_vector_search_service import ChromaVectorSearchService
-from app.services.embedding_service import EmbeddingService
+from app.services.trending_cache import get_trending_payload
 
 logger = get_logger(__name__)
 router = APIRouter()
-
-
-@lru_cache(maxsize=1)
-def _chroma_search_service() -> ChromaVectorSearchService:
-    config = ChromaConfig()
-    embedding_service = EmbeddingService()
-    vector_store = ChromaVectorStore(
-        host=config.host,
-        auth_token=config.auth_token,
-        environment=config.environment,
-        user_scope=config.user_scope,
-    )
-    return ChromaVectorSearchService(
-        vector_store=vector_store,
-        embedding_service=embedding_service,
-        default_top_k=100,
-    )
-
-
-def get_chroma_search_service() -> ChromaVectorSearchService:
-    return _chroma_search_service()
 
 
 @router.get("/search")
@@ -260,86 +233,8 @@ async def get_trending_topics(
     user=Depends(get_current_user),
 ):
     """Get trending topic tags across recent summaries."""
-    now = datetime.now(UTC)
-    current_period_start = now - timedelta(days=days)
-    previous_period_start = current_period_start - timedelta(days=days)
-
-    # Query summaries for current period
-    current_summaries = (
-        Summary.select()
-        .join(RequestModel)
-        .where(
-            (RequestModel.user_id == user["user_id"])
-            & (RequestModel.created_at >= current_period_start)
-        )
-    )
-
-    # Query summaries for previous period (for trend calculation)
-    previous_summaries = (
-        Summary.select()
-        .join(RequestModel)
-        .where(
-            (RequestModel.user_id == user["user_id"])
-            & (RequestModel.created_at >= previous_period_start)
-            & (RequestModel.created_at < current_period_start)
-        )
-    )
-
-    # Extract and count tags from current period
-    current_tags: Counter[str] = Counter()
-    for summary in current_summaries:
-        json_payload = summary.json_payload or {}
-        topic_tags = json_payload.get("topic_tags", [])
-        for tag in topic_tags:
-            if tag:  # Skip empty tags
-                current_tags[tag.lower()] += 1
-
-    # Extract and count tags from previous period
-    previous_tags: Counter[str] = Counter()
-    for summary in previous_summaries:
-        json_payload = summary.json_payload or {}
-        topic_tags = json_payload.get("topic_tags", [])
-        for tag in topic_tags:
-            if tag:
-                previous_tags[tag.lower()] += 1
-
-    # Calculate trends
-    trending_tags = []
-    for tag, count in current_tags.most_common(limit):
-        prev_count = previous_tags.get(tag, 0)
-
-        if prev_count > 0:
-            percentage_change = ((count - prev_count) / prev_count) * 100
-        else:
-            # New tag or no data in previous period
-            percentage_change = 100.0 if count > 0 else 0.0
-
-        # Determine trend direction
-        if percentage_change > 10:
-            trend = "up"
-        elif percentage_change < -10:
-            trend = "down"
-        else:
-            trend = "stable"
-
-        trending_tags.append(
-            {
-                "tag": tag,
-                "count": count,
-                "trend": trend,
-                "percentage_change": round(percentage_change, 1),
-            }
-        )
-
-    return success_response(
-        {
-            "tags": trending_tags,
-            "time_range": {
-                "start": current_period_start.isoformat().replace("+00:00", "Z"),
-                "end": now.isoformat().replace("+00:00", "Z"),
-            },
-        }
-    )
+    payload = await get_trending_payload(user["user_id"], limit=limit, days=days)
+    return success_response(payload)
 
 
 @router.get("/topics/related")

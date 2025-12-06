@@ -109,6 +109,24 @@ class EmbeddingService:
             self._ensure_model(model_name)
         return self._dimensions[model_name]
 
+    def close(self) -> None:
+        """Release cached models and clear state."""
+        for model in self._models.values():
+            try:
+                # Ensure model is moved off GPU if used; ignore if unsupported
+                if hasattr(model, "to"):
+                    model.to("cpu")
+            except Exception:  # pragma: no cover - defensive cleanup
+                logger.exception(
+                    "embedding_model_close_failed", extra={"model": getattr(model, "name", None)}
+                )
+        self._models.clear()
+        self._dimensions.clear()
+
+    async def aclose(self) -> None:
+        """Async wrapper for close()."""
+        await asyncio.to_thread(self.close)
+
     @property
     def model_name(self) -> str:
         """Get default model name (for backward compatibility)."""
