@@ -8,6 +8,12 @@ from fastapi import APIRouter, Depends
 
 from app.api.auth import get_current_user
 from app.api.models.requests import UpdatePreferencesRequest
+from app.api.models.responses import (
+    PreferencesData,
+    PreferencesUpdateResult,
+    UserStatsData,
+    success_response,
+)
 from app.core.logging_utils import get_logger
 from app.core.time_utils import UTC
 from app.db.models import Request as RequestModel, Summary, User
@@ -34,14 +40,15 @@ async def get_user_preferences(user=Depends(get_current_user)):
     else:
         preferences = default_preferences
 
-    return {
-        "success": True,
-        "data": {
-            "user_id": user["user_id"],
-            "telegram_username": user.get("username"),
-            **preferences,
-        },
-    }
+    return success_response(
+        PreferencesData(
+            user_id=user["user_id"],
+            telegram_username=user.get("username"),
+            lang_preference=preferences.get("lang_preference"),
+            notification_settings=preferences.get("notification_settings"),
+            app_settings=preferences.get("app_settings"),
+        )
+    )
 
 
 @router.patch("/preferences")
@@ -84,13 +91,12 @@ async def update_user_preferences(
     user_record.preferences_json = current_prefs
     user_record.save()
 
-    return {
-        "success": True,
-        "data": {
-            "updated_fields": updated_fields,
-            "updated_at": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
-        },
-    }
+    return success_response(
+        PreferencesUpdateResult(
+            updated_fields=updated_fields,
+            updated_at=datetime.now(UTC).isoformat().replace("+00:00", "Z"),
+        )
+    )
 
 
 @router.get("/stats")
@@ -166,18 +172,17 @@ async def get_user_stats(user=Depends(get_current_user)):
     )
     last_summary_at = last_summary.created_at.isoformat() + "Z" if last_summary else None
 
-    return {
-        "success": True,
-        "data": {
-            "total_summaries": total_summaries,
-            "unread_count": unread_count,
-            "read_count": read_count,
-            "total_reading_time_min": total_reading_time,
-            "average_reading_time_min": round(average_reading_time, 1),
-            "favorite_topics": favorite_topics,
-            "favorite_domains": favorite_domains,
-            "language_distribution": {"en": en_count, "ru": ru_count},
-            "joined_at": user_record.created_at.isoformat() + "Z" if user_record else None,
-            "last_summary_at": last_summary_at,
-        },
-    }
+    return success_response(
+        UserStatsData(
+            total_summaries=total_summaries,
+            unread_count=unread_count,
+            read_count=read_count,
+            total_reading_time_min=total_reading_time,
+            average_reading_time_min=round(average_reading_time, 1),
+            favorite_topics=favorite_topics,
+            favorite_domains=favorite_domains,
+            language_distribution={"en": en_count, "ru": ru_count},
+            joined_at=user_record.created_at.isoformat() + "Z" if user_record else None,
+            last_summary_at=last_summary_at,
+        )
+    )

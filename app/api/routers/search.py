@@ -7,6 +7,7 @@ from functools import lru_cache
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.api.auth import get_current_user
+from app.api.models.responses import SearchResult, SearchResultsData, success_response
 from app.config import ChromaConfig
 from app.core.logging_utils import get_logger
 from app.core.time_utils import UTC
@@ -112,19 +113,36 @@ async def search_summaries(
 
         total = search_query.count()
 
-        return {
-            "success": True,
-            "data": {
-                "results": results,
-                "pagination": {
+        result_models = [
+            SearchResult(
+                request_id=item["request_id"],
+                summary_id=item["summary_id"],
+                url=item["url"],
+                title=item["title"],
+                domain=item["domain"],
+                snippet=item["snippet"],
+                tldr=item["tldr"],
+                published_at=item["published_at"],
+                created_at=item["created_at"],
+                relevance_score=item["relevance_score"],
+                topic_tags=item["topic_tags"],
+                is_read=item["is_read"],
+            )
+            for item in results
+        ]
+
+        return success_response(
+            SearchResultsData(
+                results=result_models,
+                pagination={
                     "total": total,
                     "limit": limit,
                     "offset": offset,
                     "has_more": (offset + limit) < total,
                 },
-                "query": q,
-            },
-        }
+                query=q,
+            )
+        )
 
     except Exception as e:
         logger.error(f"Search failed: {e}", exc_info=True)
@@ -199,19 +217,36 @@ async def semantic_search_summaries(
 
         estimated_total = offset + len(results) + (1 if search_results.has_more else 0)
 
-        return {
-            "success": True,
-            "data": {
-                "results": results,
-                "pagination": {
+        result_models = [
+            SearchResult(
+                request_id=item["request_id"],
+                summary_id=item["summary_id"],
+                url=item["url"],
+                title=item["title"],
+                domain=item["domain"],
+                snippet=item["snippet"],
+                tldr=item["tldr"],
+                published_at=item["published_at"],
+                created_at=item["created_at"],
+                relevance_score=item["relevance_score"],
+                topic_tags=item["topic_tags"],
+                is_read=item["is_read"],
+            )
+            for item in results
+        ]
+
+        return success_response(
+            SearchResultsData(
+                results=result_models,
+                pagination={
                     "total": estimated_total,
                     "limit": limit,
                     "offset": offset,
                     "has_more": search_results.has_more,
                 },
-                "query": q,
-            },
-        }
+                query=q,
+            )
+        )
 
     except Exception as e:
         logger.error(f"Semantic search failed: {e}", exc_info=True)
@@ -296,16 +331,15 @@ async def get_trending_topics(
             }
         )
 
-    return {
-        "success": True,
-        "data": {
+    return success_response(
+        {
             "tags": trending_tags,
             "time_range": {
                 "start": current_period_start.isoformat().replace("+00:00", "Z"),
                 "end": now.isoformat().replace("+00:00", "Z"),
             },
-        },
-    }
+        }
+    )
 
 
 @router.get("/topics/related")
@@ -350,9 +384,8 @@ async def get_related_summaries(
                 }
             )
 
-    return {
-        "success": True,
-        "data": {
+    return success_response(
+        {
             "tag": tag,
             "summaries": matching_summaries,
             "pagination": {
@@ -360,8 +393,8 @@ async def get_related_summaries(
                 "limit": limit,
                 "offset": offset,
             },
-        },
-    }
+        }
+    )
 
 
 @router.get("/urls/check-duplicate")
@@ -386,14 +419,13 @@ async def check_duplicate(
     )
 
     if not existing:
-        return {
-            "success": True,
-            "data": {
+        return success_response(
+            {
                 "is_duplicate": False,
                 "normalized_url": normalized,
                 "dedupe_hash": dedupe_hash,
-            },
-        }
+            }
+        )
 
     # Found duplicate - load summary in same query to avoid N+1
     summary = Summary.select().where(Summary.request == existing.id).first()
@@ -415,4 +447,4 @@ async def check_duplicate(
             "url": existing.input_url or existing.normalized_url,
         }
 
-    return {"success": True, "data": response_data}
+    return success_response(response_data)

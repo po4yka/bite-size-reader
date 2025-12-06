@@ -11,7 +11,12 @@ from peewee import OperationalError
 
 from app.api.auth import get_current_user
 from app.api.models.requests import UpdateSummaryRequest
-from app.api.models.responses import SummaryCompact
+from app.api.models.responses import (
+    SummaryCompact,
+    SummaryDetail,
+    SummaryListResponse,
+    success_response,
+)
 from app.api.services import SummaryService
 from app.core.logging_utils import get_logger
 from app.core.time_utils import UTC
@@ -57,7 +62,7 @@ async def get_summaries(
     )
 
     # Build response
-    summary_list = []
+    summary_list: list[SummaryCompact] = []
     for summary in summaries:
         request = summary.request
         json_payload = summary.json_payload or {}
@@ -79,25 +84,21 @@ async def get_summaries(
                 created_at=summary.created_at.isoformat() + "Z",
                 confidence=json_payload.get("confidence", 0.0),
                 hallucination_risk=json_payload.get("hallucination_risk", "unknown"),
-            ).dict()
+            )
         )
 
-    return {
-        "success": True,
-        "data": {
-            "summaries": summary_list,
-            "pagination": {
+    return success_response(
+        SummaryListResponse(
+            summaries=summary_list,
+            pagination={
                 "total": total,
                 "limit": limit,
                 "offset": offset,
                 "has_more": (offset + limit) < total,
             },
-            "stats": {
-                "total_summaries": total,
-                "unread_count": unread_count,
-            },
-        },
-    }
+            stats={"total_summaries": total, "unread_count": unread_count},
+        )
+    )
 
 
 @router.get("/{summary_id}")
@@ -156,10 +157,9 @@ async def get_summary(
             "llm_latency_ms": latest_call.latency_ms,
         }
 
-    return {
-        "success": True,
-        "data": {
-            "summary": {
+    return success_response(
+        SummaryDetail(
+            summary={
                 "id": summary.id,
                 "request_id": request.id,
                 "lang": summary.lang,
@@ -168,7 +168,7 @@ async def get_summary(
                 "created_at": summary.created_at.isoformat() + "Z",
                 "json_payload": summary.json_payload,
             },
-            "request": {
+            request={
                 "id": request.id,
                 "type": request.type,
                 "status": request.status,
@@ -177,10 +177,10 @@ async def get_summary(
                 "correlation_id": request.correlation_id,
                 "created_at": request.created_at.isoformat() + "Z",
             },
-            "source": source,
-            "processing": processing,
-        },
-    }
+            source=source,
+            processing=processing,
+        )
+    )
 
 
 @router.patch("/{summary_id}")
@@ -197,14 +197,13 @@ async def update_summary(
         is_read=update.is_read,
     )
 
-    return {
-        "success": True,
-        "data": {
+    return success_response(
+        {
             "id": summary_id,
             "is_read": update.is_read,
             "updated_at": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
-        },
-    }
+        }
+    )
 
 
 @router.delete("/{summary_id}")
@@ -216,10 +215,9 @@ async def delete_summary(
     # Use service layer
     SummaryService.delete_summary(user_id=user["user_id"], summary_id=summary_id)
 
-    return {
-        "success": True,
-        "data": {
+    return success_response(
+        {
             "id": summary_id,
             "deleted_at": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
-        },
-    }
+        }
+    )

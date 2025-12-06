@@ -38,6 +38,7 @@ except Exception:  # pragma: no cover - fallback for environments without compat
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.api.models.responses import AuthTokensResponse, TokenPair, UserInfo, success_response
 from app.config import Config
 from app.core.logging_utils import get_logger
 from app.core.time_utils import UTC
@@ -447,15 +448,13 @@ async def telegram_login(login_data: TelegramLoginRequest):
             },
         )
 
-        return {
-            "success": True,
-            "data": {
-                "access_token": access_token,
-                "refresh_token": refresh_token,
-                "expires_in": ACCESS_TOKEN_EXPIRE_MINUTES * 60,
-                "token_type": "Bearer",
-            },
-        }
+        tokens = TokenPair(
+            access_token=access_token,
+            refresh_token=refresh_token,
+            expires_in=ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+            token_type="Bearer",
+        )
+        return success_response(AuthTokensResponse(tokens=tokens))
 
     except HTTPException:
         # Re-raise HTTP exceptions from verify_telegram_auth or validate_client_id
@@ -493,13 +492,13 @@ async def refresh_access_token(refresh_data: RefreshTokenRequest):
     # Generate new access token with same client_id
     access_token = create_access_token(user.telegram_user_id, user.username, client_id)
 
-    return {
-        "success": True,
-        "data": {
-            "access_token": access_token,
-            "expires_in": ACCESS_TOKEN_EXPIRE_MINUTES * 60,
-        },
-    }
+    tokens = TokenPair(
+        access_token=access_token,
+        refresh_token=None,
+        expires_in=ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        token_type="Bearer",
+    )
+    return success_response(AuthTokensResponse(tokens=tokens))
 
 
 @router.get("/me")
@@ -507,13 +506,12 @@ async def get_current_user_info(user=Depends(get_current_user)):
     """Get current authenticated user information."""
     user_record = User.select().where(User.telegram_user_id == user["user_id"]).first()
 
-    return {
-        "success": True,
-        "data": {
-            "user_id": user["user_id"],
-            "username": user.get("username"),
-            "client_id": user.get("client_id"),
-            "is_owner": user_record.is_owner if user_record else False,
-            "created_at": user_record.created_at.isoformat() + "Z" if user_record else None,
-        },
-    }
+    return success_response(
+        UserInfo(
+            user_id=user["user_id"],
+            username=user.get("username"),
+            client_id=user.get("client_id"),
+            is_owner=user_record.is_owner if user_record else False,
+            created_at=user_record.created_at.isoformat() + "Z" if user_record else None,
+        )
+    )

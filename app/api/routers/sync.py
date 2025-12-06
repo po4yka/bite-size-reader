@@ -9,6 +9,13 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.api.auth import get_current_user
 from app.api.models.requests import SyncUploadRequest
+from app.api.models.responses import (
+    SyncChunkData,
+    SyncDeltaData,
+    SyncSessionInfo,
+    SyncUploadResult,
+    success_response,
+)
 from app.core.logging_utils import get_logger
 from app.core.time_utils import UTC
 from app.db.models import CrawlResult, Request as RequestModel, Summary
@@ -96,17 +103,16 @@ async def initiate_full_sync(
     # Clean up expired sessions (simple cleanup on each request)
     _cleanup_expired_sessions()
 
-    return {
-        "success": True,
-        "data": {
-            "sync_id": sync_id,
-            "timestamp": now.isoformat().replace("+00:00", "Z"),
-            "total_items": total_items,
-            "chunks": total_chunks,
-            "download_urls": download_urls,
-            "expires_at": expires_at.isoformat().replace("+00:00", "Z"),
-        },
-    }
+    return success_response(
+        SyncSessionInfo(
+            sync_id=sync_id,
+            timestamp=now.isoformat().replace("+00:00", "Z"),
+            total_items=total_items,
+            chunks=total_chunks,
+            download_urls=download_urls,
+            expires_at=expires_at.isoformat().replace("+00:00", "Z"),
+        )
+    )
 
 
 @router.get("/full/{sync_id}/chunk/{chunk_number}")
@@ -178,15 +184,14 @@ async def download_sync_chunk(
             }
         )
 
-    return {
-        "success": True,
-        "data": {
-            "sync_id": sync_id,
-            "chunk_number": chunk_number,
-            "total_chunks": total_chunks,
-            "items": items,
-        },
-    }
+    return success_response(
+        SyncChunkData(
+            sync_id=sync_id,
+            chunk_number=chunk_number,
+            total_chunks=total_chunks,
+            items=items,
+        )
+    )
 
 
 @router.get("/delta")
@@ -229,18 +234,13 @@ async def get_delta_sync(
     # add updated_at and deleted_at timestamps to Summary model and check against 'since'.
     # This is sufficient for MVP as summaries are immutable after creation.
 
-    return {
-        "success": True,
-        "data": {
-            "changes": {
-                "created": created_items,
-                "updated": [],
-                "deleted": [],
-            },
-            "sync_timestamp": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
-            "has_more": len(created_items) >= limit,
-        },
-    }
+    return success_response(
+        SyncDeltaData(
+            changes={"created": created_items, "updated": [], "deleted": []},
+            sync_timestamp=datetime.now(UTC).isoformat().replace("+00:00", "Z"),
+            has_more=len(created_items) >= limit,
+        )
+    )
 
 
 @router.post("/upload-changes")
@@ -287,11 +287,10 @@ async def upload_local_changes(
             summary.save()
             applied_changes += 1
 
-    return {
-        "success": True,
-        "data": {
-            "applied_changes": applied_changes,
-            "conflicts": conflicts,
-            "sync_timestamp": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
-        },
-    }
+    return success_response(
+        SyncUploadResult(
+            applied_changes=applied_changes,
+            conflicts=conflicts,
+            sync_timestamp=datetime.now(UTC).isoformat().replace("+00:00", "Z"),
+        )
+    )

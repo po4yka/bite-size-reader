@@ -35,7 +35,7 @@ class SuccessResponse(BaseModel):
     """Standard success response wrapper."""
 
     success: bool = True
-    data: dict[str, Any]
+    data: dict[str, Any] | Any
     meta: MetaInfo = Field(default_factory=MetaInfo)
 
 
@@ -75,6 +75,15 @@ class SummaryCompact(BaseModel):
     hallucination_risk: str
 
 
+class SummaryDetail(BaseModel):
+    """Full summary payload with related request/source/processing details."""
+
+    summary: dict[str, Any]
+    request: dict[str, Any]
+    source: dict[str, Any]
+    processing: dict[str, Any]
+
+
 class SummaryListResponse(BaseModel):
     """Response for GET /summaries."""
 
@@ -106,3 +115,156 @@ class SubmitRequestResponse(BaseModel):
     estimated_wait_seconds: int
     created_at: str
     is_duplicate: bool = False
+
+
+class TokenPair(BaseModel):
+    """JWT token pair."""
+
+    access_token: str
+    refresh_token: str | None = None
+    expires_in: int
+    token_type: str = "Bearer"
+
+
+class AuthTokensResponse(BaseModel):
+    """Authentication tokens payload."""
+
+    tokens: TokenPair
+
+
+class UserInfo(BaseModel):
+    """Basic user info."""
+
+    user_id: int
+    username: str | None = None
+    client_id: str | None = None
+    is_owner: bool = False
+    created_at: str | None = None
+
+
+class SubmitRequestData(BaseModel):
+    """Wrapper for request submission."""
+
+    request: SubmitRequestResponse
+
+
+class RequestStatusData(BaseModel):
+    """Wrapper for request status polling."""
+
+    status: RequestStatus
+
+
+class DuplicateCheckData(BaseModel):
+    """Duplicate check response."""
+
+    is_duplicate: bool
+    normalized_url: str | None = None
+    dedupe_hash: str | None = None
+    request_id: int | None = None
+    summary_id: int | None = None
+    summarized_at: str | None = None
+    summary: dict[str, Any] | None = None
+
+
+class SearchResult(BaseModel):
+    """Search result payload."""
+
+    request_id: int
+    summary_id: int
+    url: str | None
+    title: str
+    domain: str | None = None
+    snippet: str | None = None
+    tldr: str | None = None
+    published_at: str | None = None
+    created_at: str
+    relevance_score: float | None = None
+    topic_tags: list[str] | None = None
+    is_read: bool | None = None
+
+
+class SearchResultsData(BaseModel):
+    """Wrapper for search responses."""
+
+    results: list[SearchResult]
+    pagination: PaginationInfo
+    query: str
+
+
+class SyncSessionInfo(BaseModel):
+    """Sync session metadata."""
+
+    sync_id: str
+    timestamp: str
+    total_items: int
+    chunks: int
+    download_urls: list[str]
+    expires_at: str
+
+
+class SyncChunkData(BaseModel):
+    """Chunk download payload."""
+
+    sync_id: str
+    chunk_number: int
+    total_chunks: int
+    items: list[dict[str, Any]]
+
+
+class SyncDeltaData(BaseModel):
+    """Delta sync payload."""
+
+    changes: dict[str, list[dict[str, Any]]]
+    sync_timestamp: str
+    has_more: bool
+
+
+class SyncUploadResult(BaseModel):
+    """Upload local changes result."""
+
+    applied_changes: int
+    conflicts: list[dict[str, Any]]
+    sync_timestamp: str
+
+
+class PreferencesData(BaseModel):
+    """User preferences payload."""
+
+    user_id: int
+    telegram_username: str | None = None
+    lang_preference: str | None = None
+    notification_settings: dict[str, Any] | None = None
+    app_settings: dict[str, Any] | None = None
+
+
+class PreferencesUpdateResult(BaseModel):
+    """Preferences update result."""
+
+    updated_fields: list[str]
+    updated_at: str
+
+
+class UserStatsData(BaseModel):
+    """User statistics payload."""
+
+    total_summaries: int
+    unread_count: int
+    read_count: int
+    total_reading_time_min: int
+    average_reading_time_min: float
+    favorite_topics: list[dict[str, Any]]
+    favorite_domains: list[dict[str, Any]]
+    language_distribution: dict[str, int]
+    joined_at: str | None
+    last_summary_at: str | None
+
+
+def success_response(data: BaseModel | dict[str, Any]) -> dict[str, Any]:
+    """Helper to build a standardized success response."""
+    payload = data.model_dump() if isinstance(data, BaseModel) else data
+    return SuccessResponse(data=payload).model_dump()
+
+
+def error_response(detail: ErrorDetail) -> dict[str, Any]:
+    """Helper to build a standardized error response."""
+    return ErrorResponse(error=detail).model_dump()

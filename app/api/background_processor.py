@@ -13,16 +13,19 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from app.adapters.content.url_processor import URLProcessor
 from app.adapters.external.firecrawl_parser import FirecrawlClient
 from app.adapters.external.response_formatter import ResponseFormatter
 from app.adapters.openrouter.openrouter_client import OpenRouterClient
-from app.config import load_config
+from app.config import AppConfig, load_config
 from app.core.logging_utils import get_logger
 from app.db.database import Database
 from app.db.models import Request as RequestModel, Summary
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 logger = get_logger(__name__)
 
@@ -30,14 +33,26 @@ logger = get_logger(__name__)
 # Global instances (initialized once)
 _processor_instances: dict[str, Any] = {}
 _semaphore: asyncio.Semaphore | None = None
+_cfg: AppConfig | None = None
+_request_locks: dict[int, asyncio.Lock] = {}
 
 
 def _get_semaphore() -> asyncio.Semaphore:
     """Get or create the global semaphore for rate limiting."""
     global _semaphore
+    limit = 4
+    if _cfg:
+        limit = max(1, min(100, _cfg.runtime.max_concurrent_calls))
     if _semaphore is None:
-        _semaphore = asyncio.Semaphore(4)  # Max 4 concurrent API calls
+        _semaphore = asyncio.Semaphore(limit)
     return _semaphore
+
+
+def _get_request_lock(request_id: int) -> asyncio.Lock:
+    """Get per-request lock to ensure idempotent processing."""
+    if request_id not in _request_locks:
+        _request_locks[request_id] = asyncio.Lock()
+    return _request_locks[request_id]
 
 
 def _audit_func(level: str, event: str, details: dict) -> None:
@@ -49,13 +64,39 @@ def _audit_func(level: str, event: str, details: dict) -> None:
     )
 
 
+async def _run_with_retries(
+    func: Callable[[], Any],
+    *,
+    attempts: int = 3,
+    base_delay: float = 1.0,
+) -> Any:
+    """Execute coroutine with simple exponential backoff."""
+    last_error: Exception | None = None
+    for attempt in range(1, attempts + 1):
+        try:
+            return await func()
+        except Exception as exc:  # pragma: no cover - best effort logging
+            last_error = exc
+            delay = base_delay * attempt
+            logger.warning(
+                "processor_retry", extra={"attempt": attempt, "delay": delay, "error": str(exc)}
+            )
+            await asyncio.sleep(delay)
+    if last_error:
+        raise last_error
+    raise RuntimeError("Retry loop exited without result or error")
+
+
 async def _get_url_processor() -> URLProcessor:
     """Get or create the URL processor singleton."""
     if "url_processor" in _processor_instances:
         return _processor_instances["url_processor"]
 
     # Initialize components
+    global _cfg
     cfg = load_config()
+    _cfg = cfg
+
     db = Database(
         path=cfg.runtime.db_path,
         operation_timeout=cfg.database.operation_timeout,
@@ -67,16 +108,28 @@ async def _get_url_processor() -> URLProcessor:
     )
 
     firecrawl = FirecrawlClient(
-        api_key=cfg.credentials.firecrawl_api_key,
+        api_key=cfg.firecrawl.api_key,
         timeout=cfg.runtime.request_timeout_sec,
+        max_connections=cfg.firecrawl.max_connections,
+        max_keepalive_connections=cfg.firecrawl.max_keepalive_connections,
+        keepalive_expiry=cfg.firecrawl.keepalive_expiry,
     )
 
     openrouter = OpenRouterClient(
-        api_key=cfg.credentials.openrouter_api_key,
-        default_model=cfg.llm.default_model,
-        timeout=cfg.runtime.request_timeout_sec,
-        http_referer=cfg.llm.openrouter_http_referer,
-        x_title=cfg.llm.openrouter_x_title,
+        api_key=cfg.openrouter.api_key,
+        model=cfg.openrouter.model,
+        fallback_models=list(cfg.openrouter.fallback_models),
+        http_referer=cfg.openrouter.http_referer,
+        x_title=cfg.openrouter.x_title,
+        timeout_sec=cfg.runtime.request_timeout_sec,
+        debug_payloads=cfg.runtime.debug_payloads,
+        provider_order=list(cfg.openrouter.provider_order),
+        enable_stats=cfg.openrouter.enable_stats,
+        enable_structured_outputs=cfg.openrouter.enable_structured_outputs,
+        structured_output_mode=cfg.openrouter.structured_output_mode,
+        require_parameters=cfg.openrouter.require_parameters,
+        auto_fallback_structured=cfg.openrouter.auto_fallback_structured,
+        max_response_size_mb=cfg.openrouter.max_response_size_mb,
     )
 
     response_formatter = ResponseFormatter(telegram_limits=cfg.telegram_limits)
@@ -132,70 +185,80 @@ async def process_url_request(request_id: int, db_path: str | None = None) -> No
         db = _processor_instances["db"]
 
     correlation_id = f"bg-proc-{request_id}"
+    lock = _get_request_lock(request_id)
 
-    try:
-        # Load request
-        request = RequestModel.get_by_id(request_id)
-        if not request:
-            logger.error(
-                f"Request {request_id} not found", extra={"correlation_id": correlation_id}
-            )
-            return
+    async with lock:
+        try:
+            # Load request
+            request = RequestModel.get_by_id(request_id)
+            if not request:
+                logger.error(
+                    f"Request {request_id} not found", extra={"correlation_id": correlation_id}
+                )
+                return
 
-        # Check if already processed
-        existing_summary = Summary.select().where(Summary.request == request).first()
-        if existing_summary:
+            # Check if already processed
+            existing_summary = Summary.select().where(Summary.request == request).first()
+            if existing_summary:
+                logger.info(
+                    f"Request {request_id} already has summary, skipping",
+                    extra={"correlation_id": correlation_id},
+                )
+                return
+
+            correlation_id = request.correlation_id or correlation_id
             logger.info(
-                f"Request {request_id} already has summary, skipping",
+                f"Starting background processing for request {request_id}",
+                extra={
+                    "correlation_id": correlation_id,
+                    "type": request.type,
+                    "url": request.input_url,
+                },
+            )
+
+            # Update status to processing
+            request.status = "processing"
+            request.save()
+
+            if request.type == "url":
+                await _run_with_retries(
+                    lambda: _process_url_type(request, db),
+                    attempts=3,
+                    base_delay=1.0,
+                )
+            elif request.type == "forward":
+                await _run_with_retries(
+                    lambda: _process_forward_type(request, db),
+                    attempts=3,
+                    base_delay=1.0,
+                )
+            else:
+                raise ValueError(f"Unknown request type: {request.type}")
+
+            # Update status to success
+            request.status = "success"
+            request.save()
+
+            logger.info(
+                f"Successfully processed request {request_id}",
                 extra={"correlation_id": correlation_id},
             )
-            return
 
-        correlation_id = request.correlation_id or correlation_id
-        logger.info(
-            f"Starting background processing for request {request_id}",
-            extra={
-                "correlation_id": correlation_id,
-                "type": request.type,
-                "url": request.input_url,
-            },
-        )
+        except Exception as e:
+            logger.error(
+                f"Failed to process request {request_id}: {e}",
+                exc_info=True,
+                extra={"correlation_id": correlation_id, "error": str(e)},
+            )
 
-        # Update status to processing
-        request.status = "processing"
-        request.save()
-
-        if request.type == "url":
-            await _process_url_type(request, db)
-        elif request.type == "forward":
-            await _process_forward_type(request, db)
-        else:
-            raise ValueError(f"Unknown request type: {request.type}")
-
-        # Update status to success
-        request.status = "success"
-        request.save()
-
-        logger.info(
-            f"Successfully processed request {request_id}",
-            extra={"correlation_id": correlation_id},
-        )
-
-    except Exception as e:
-        logger.error(
-            f"Failed to process request {request_id}: {e}",
-            exc_info=True,
-            extra={"correlation_id": correlation_id, "error": str(e)},
-        )
-
-        # Update status to error
-        try:
-            request = RequestModel.get_by_id(request_id)
-            if request:
-                request.status = "error"
-                request.save()
-        except Exception as save_error:
-            logger.error(f"Failed to update request status: {save_error}")
+            # Update status to error
+            try:
+                request = RequestModel.get_by_id(request_id)
+                if request:
+                    request.status = "error"
+                    request.save()
+            except Exception as save_error:
+                logger.error(f"Failed to update request status: {save_error}")
 
 
 async def _process_url_type(request: RequestModel, db: Database) -> None:
@@ -213,7 +276,7 @@ async def _process_url_type(request: RequestModel, db: Database) -> None:
     # Determine language
     lang = request.lang_detected or "auto"
     if lang == "auto":
-        lang = choose_language(normalized_url, None, cfg.llm.preferred_lang)
+        lang = choose_language(normalized_url, None, cfg.runtime.preferred_lang)
 
     # Extract content
     logger.info(
@@ -275,7 +338,7 @@ async def _process_forward_type(request: RequestModel, db: Database) -> None:
     lang = request.lang_detected or "auto"
     if lang == "auto":
         content_text = request.content_text or ""
-        lang = choose_language(None, content_text, cfg.llm.preferred_lang)
+        lang = choose_language(None, content_text, cfg.runtime.preferred_lang)
 
     # Generate summary from forwarded content
     logger.info(
