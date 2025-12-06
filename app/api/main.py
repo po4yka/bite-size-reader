@@ -25,6 +25,7 @@ from app.api.routers import auth, requests, search, summaries, sync, user
 from app.config import Config
 from app.core.logging_utils import get_logger
 from app.core.time_utils import UTC
+from app.infrastructure.redis import close_redis
 
 logger = get_logger(__name__)
 
@@ -117,6 +118,7 @@ app.add_exception_handler(Exception, global_error_handler)
 @app.on_event("shutdown")
 async def shutdown_resources() -> None:
     await search_resources.shutdown_chroma_search_resources()
+    await close_redis()
 
 
 if __name__ == "__main__":

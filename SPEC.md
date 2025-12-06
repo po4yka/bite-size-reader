@@ -670,6 +670,12 @@ The project includes a RESTful API built with FastAPI to support mobile clients 
 - **User**: `preferences_json` for client-side settings.
 - **Summary**: `is_read`, `is_deleted`, `deleted_at` for state management.
 
+### Rate limiting and sync (Redis-backed)
+- **Redis config**: `REDIS_ENABLED` (default true), `REDIS_URL` or `REDIS_HOST`/`REDIS_PORT`/`REDIS_DB`, `REDIS_PASSWORD` (optional), `REDIS_PREFIX` (default `bsr`), `REDIS_REQUIRED` (fail fast if Redis is down), `REDIS_SOCKET_TIMEOUT` (default 5s).
+- **API limits**: window `API_RATE_LIMIT_WINDOW_SECONDS` (default 60s), `API_RATE_LIMIT_COOLDOWN_MULTIPLIER` (default 2.0), `API_RATE_LIMIT_MAX_CONCURRENT_PER_USER` (default 3), per-path caps `API_RATE_LIMIT_SUMMARIES` (200), `API_RATE_LIMIT_REQUESTS` (10), `API_RATE_LIMIT_SEARCH` (50), and `API_RATE_LIMIT_DEFAULT` (100).
+- **Sync sessions**: stored in Redis with TTL; `SYNC_EXPIRY_HOURS` (default 1h) and `SYNC_DEFAULT_CHUNK_SIZE` (default 100, bounded 1..500). Fallback to in-process cache when Redis is disabled/unavailable (logs warning).
+- **Headers/behavior**: `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset`; 429 includes `Retry-After` and JSON error with `retry_after`. If Redis is required but unavailable, middleware returns 503 with code `RATE_LIMIT_BACKEND_UNAVAILABLE`.
+
 ## Future work
 
 - Optional: store Firecrawl screenshots (object storage) and page text embeddings.

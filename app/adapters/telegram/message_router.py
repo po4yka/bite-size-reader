@@ -19,9 +19,10 @@ from app.core.logging_utils import generate_correlation_id
 from app.core.url_utils import extract_all_urls, looks_like_url
 from app.db.database import Database
 from app.db.user_interactions import async_safe_update_user_interaction
+from app.infrastructure.redis import get_redis
 from app.models.telegram.telegram_models import TelegramMessage
 from app.security.file_validation import FileValidationError, SecureFileValidator
-from app.security.rate_limiter import RateLimitConfig, UserRateLimiter
+from app.security.rate_limiter import RateLimitConfig, RedisUserRateLimiter, UserRateLimiter
 from app.utils.circuit_breaker import CircuitBreaker
 from app.utils.message_formatter import (
     create_progress_bar,
@@ -73,12 +74,14 @@ class MessageRouter:
 
         # Initialize security components
         self._rate_limiter_config = RateLimitConfig(
-            max_requests=10,  # 10 requests per window
-            window_seconds=60,  # 60 second window
-            max_concurrent=3,  # Max 3 concurrent operations per user
-            cooldown_multiplier=2.0,  # 2x window cooldown after limit
+            max_requests=cfg.api_limits.requests_limit,
+            window_seconds=cfg.api_limits.window_seconds,
+            max_concurrent=cfg.api_limits.max_concurrent,
+            cooldown_multiplier=cfg.api_limits.cooldown_multiplier,
         )
         self._rate_limiter = UserRateLimiter(self._rate_limiter_config)
+        self._redis_limiter: RedisUserRateLimiter | None = None
+        self._redis_limiter_available: bool | None = None
         self._file_validator = SecureFileValidator(
             max_file_size=10 * 1024 * 1024  # 10 MB max file size
         )
@@ -87,11 +90,53 @@ class MessageRouter:
         self._recent_message_ids: dict[tuple[int, int, int], tuple[float, str]] = {}
         self._recent_message_ttl = 120
 
+    async def _get_active_rate_limiter(self) -> RedisUserRateLimiter | UserRateLimiter:
+        if self._redis_limiter_available is None:
+            redis_client = await get_redis(self.cfg)
+            if redis_client:
+                self._redis_limiter = RedisUserRateLimiter(
+                    redis_client, self._rate_limiter_config, self.cfg.redis.prefix
+                )
+                self._redis_limiter_available = True
+                logger.info("telegram_rate_limiter_redis_enabled")
+            else:
+                self._redis_limiter_available = False
+        return (
+            self._redis_limiter
+            if self._redis_limiter_available and self._redis_limiter
+            else self._rate_limiter
+        )
+
+    async def _check_rate_limit(
+        self, limiter: RedisUserRateLimiter | UserRateLimiter, uid: int, interaction_type: str
+    ) -> tuple[bool, str | None]:
+        if isinstance(limiter, RedisUserRateLimiter):
+            allowed, error_msg, _ = await limiter.check_and_record(uid, operation=interaction_type)
+            return allowed, error_msg
+        return await limiter.check_and_record(uid, operation=interaction_type)
+
+    async def _acquire_concurrent_slot(
+        self, limiter: RedisUserRateLimiter | UserRateLimiter, uid: int
+    ) -> bool:
+        if isinstance(limiter, RedisUserRateLimiter):
+            return await limiter.acquire_concurrent_slot(uid)
+        return await limiter.acquire_concurrent_slot(uid)
+
+    async def _release_concurrent_slot(
+        self, limiter: RedisUserRateLimiter | UserRateLimiter, uid: int
+    ) -> None:
+        if isinstance(limiter, RedisUserRateLimiter):
+            await limiter.release_concurrent_slot(uid)
+            return
+        await limiter.release_concurrent_slot(uid)
+
     async def route_message(self, message: Any) -> None:
         """Main message routing entry point."""
         start_time = time.time()
         interaction_id = 0
         uid = 0
+        limiter: RedisUserRateLimiter | UserRateLimiter = self._rate_limiter
+        concurrent_acquired = False
 
         try:
             correlation_id = generate_correlation_id()
@@ -202,6 +247,9 @@ class MessageRouter:
             elif text:
                 interaction_type = "text"
 
+            # Select rate limiter (Redis preferred, fallback in-memory)
+            limiter = await self._get_active_rate_limiter()
+
             # Log the initial user interaction after access is confirmed
             interaction_id = self._log_user_interaction(
                 user_id=uid,
@@ -219,11 +267,8 @@ class MessageRouter:
                 correlation_id=correlation_id,
             )
 
-            # Access control check
             # Rate limiting check
-            allowed, error_msg = await self._rate_limiter.check_and_record(
-                uid, operation=interaction_type
-            )
+            allowed, error_msg = await self._check_rate_limit(limiter, uid, interaction_type)
             if not allowed:
                 logger.warning(
                     "rate_limit_rejected",
@@ -249,7 +294,7 @@ class MessageRouter:
                 return
 
             # Acquire concurrent slot
-            if not await self._rate_limiter.acquire_concurrent_slot(uid):
+            if not await self._acquire_concurrent_slot(limiter, uid):
                 logger.warning(
                     "concurrent_limit_rejected",
                     extra={"uid": uid, "interaction_type": interaction_type, "cid": correlation_id},
@@ -270,6 +315,7 @@ class MessageRouter:
                         logger_=logger,
                     )
                 return
+            concurrent_acquired = True
 
             try:
                 if self._task_manager is not None:
@@ -297,7 +343,8 @@ class MessageRouter:
                     )
             finally:
                 # Always release concurrent slot
-                await self._rate_limiter.release_concurrent_slot(uid)
+                if concurrent_acquired:
+                    await self._release_concurrent_slot(limiter, uid)
 
         except asyncio.CancelledError:
             logger.info(
@@ -314,7 +361,8 @@ class MessageRouter:
                     logger_=logger,
                 )
             # Release concurrent slot on cancellation
-            await self._rate_limiter.release_concurrent_slot(uid)
+            if concurrent_acquired:
+                await self._release_concurrent_slot(limiter, uid)
             return
         except Exception as e:  # noqa: BLE001
             logger.exception("handler_error", extra={"cid": correlation_id})
@@ -347,7 +395,8 @@ class MessageRouter:
                     logger_=logger,
                 )
             # Release concurrent slot on error
-            await self._rate_limiter.release_concurrent_slot(uid)
+            if concurrent_acquired:
+                await self._release_concurrent_slot(limiter, uid)
 
     async def handle_multi_confirm_response(self, message: Any, uid: int, response: str) -> None:
         """Handle multi-link confirmation response from button or text.

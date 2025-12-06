@@ -16,11 +16,11 @@
 
 ## Test Cases
 - TC1 Auth: Telegram login hash valid/invalid/expired/future timestamp; whitelist and client_id allowlist enforcement; tokens carry is_owner/client_id claims.
-- TC2 Rate Limit: per-user bucket caps per endpoint; exceed returns 429 with headers; unauthenticated uses IP key.
+- TC2 Rate Limit: per-user bucket caps per endpoint (Redis-backed); exceed returns 429 with headers and correct Retry-After; unauthenticated uses IP key; Redis unavailable path (required=false) falls back to noop with warning; required=true returns 503.
 - TC3 Requests: submit URL → duplicate detection; submit forward; retry failed request validation; background status transitions.
 - TC4 Summaries: list filters (is_read/lang/date/sort); get summary includes source/processing; patch read flag; delete sets is_deleted.
 - TC5 Search: FTS and semantic require auth; pagination; relevance fields; topic-related path handles tags normalization.
-- TC6 Sync Full: initiate session, download chunks with user scoping, expiry handling, chunk size config; session payload uses standard envelope.
+- TC6 Sync Full: initiate session, download chunks with user scoping, expiry handling via Redis TTL, chunk size config; session payload uses standard envelope; expired session returns 410.
 - TC7 Sync Delta: created/updated/deleted sets; has_more logic; since timestamp parsing; conflict handling when uploading changes.
 - TC8 Preferences/Stats: merge semantics, validation of notification/app settings shapes, stats computed only for user’s data.
 - TC9 Responses: all routers return `success` wrapper with meta; schemas validate (auth tokens, request submit/status, summaries, search, sync, preferences/stats).

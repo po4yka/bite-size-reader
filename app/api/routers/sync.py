@@ -1,7 +1,6 @@
-"""
-Database synchronization endpoints for offline mobile support.
-"""
+"""Database synchronization endpoints for offline mobile support."""
 
+import json
 import uuid
 from datetime import datetime, timedelta
 
@@ -16,58 +15,111 @@ from app.api.models.responses import (
     SyncUploadResult,
     success_response,
 )
+from app.config import AppConfig, load_config
 from app.core.logging_utils import get_logger
 from app.core.time_utils import UTC
 from app.db.models import CrawlResult, Request as RequestModel, Summary
+from app.infrastructure.redis import get_redis, redis_key
 
 logger = get_logger(__name__)
 router = APIRouter()
 
-# In-memory cache for sync sessions (sync_id -> expiry_time)
-# Note: In production, use Redis or DB-backed session storage
-_sync_sessions: dict[str, datetime] = {}
-
-# Sync session expiry time (1 hour)
-SYNC_EXPIRY_HOURS = 1
+# In-memory fallback cache for sync sessions (sync_id -> (expiry_time, chunk_size))
+_sync_sessions: dict[str, tuple[datetime, int]] = {}
+_cfg: AppConfig | None = None
+_redis_warning_logged = False
 
 
-def _cleanup_expired_sessions():
-    """Remove expired sync sessions from cache."""
-    now = datetime.now(UTC)
-    expired_keys = [sync_id for sync_id, expiry in _sync_sessions.items() if expiry < now]
-    for key in expired_keys:
-        del _sync_sessions[key]
-    if expired_keys:
-        logger.debug(f"Cleaned up {len(expired_keys)} expired sync session(s)")
+def _get_cfg() -> AppConfig:
+    global _cfg
+    if _cfg is None:
+        _cfg = load_config(allow_stub_telegram=True)
+    return _cfg
 
 
-def _validate_sync_session(sync_id: str) -> None:
+def _resolve_chunk_size(requested_chunk_size: int | None, cfg: AppConfig) -> int:
+    base = cfg.sync.default_chunk_size
+    if requested_chunk_size:
+        base = requested_chunk_size
+    return max(1, min(500, base))
+
+
+async def _store_sync_session(
+    sync_id: str, chunk_size: int, expires_at: datetime, cfg: AppConfig
+) -> None:
+    redis_client = await get_redis(cfg)
+    ttl_seconds = int(cfg.sync.expiry_hours * 3600)
+    if redis_client:
+        key = redis_key(cfg.redis.prefix, "sync", "session", sync_id)
+        payload = json.dumps({"chunk_size": chunk_size, "expires_at": expires_at.isoformat()})
+        await redis_client.set(key, payload, ex=ttl_seconds)
+        return
+
+    global _redis_warning_logged
+    if not _redis_warning_logged:
+        logger.warning("sync_session_redis_unavailable_fallback")
+        _redis_warning_logged = True
+    _sync_sessions[sync_id] = (expires_at, chunk_size)
+
+
+async def _validate_sync_session(sync_id: str, cfg: AppConfig) -> int:
     """
     Validate sync session ID and expiry.
+
+    Returns:
+        chunk_size for the session
 
     Raises:
         HTTPException: If sync_id is invalid or expired
     """
+    redis_client = await get_redis(cfg)
+    if redis_client:
+        key = redis_key(cfg.redis.prefix, "sync", "session", sync_id)
+        payload = await redis_client.get(key)
+        ttl = await redis_client.ttl(key)
+
+        if payload is None or ttl == -2:
+            raise HTTPException(
+                status_code=404,
+                detail="Sync session not found. Please initiate a new sync.",
+            )
+
+        if ttl is not None and ttl <= 0:
+            await redis_client.delete(key)
+            raise HTTPException(
+                status_code=410,
+                detail="Sync session expired. Please initiate a new sync.",
+            )
+
+        try:
+            data = json.loads(payload)
+            chunk_size = int(data.get("chunk_size", cfg.sync.default_chunk_size))
+        except Exception:
+            chunk_size = cfg.sync.default_chunk_size
+
+        return max(1, min(500, chunk_size))
+
     if sync_id not in _sync_sessions:
         raise HTTPException(
             status_code=404,
             detail="Sync session not found. Please initiate a new sync.",
         )
 
-    expiry = _sync_sessions[sync_id]
+    expiry, chunk_size = _sync_sessions[sync_id]
     if datetime.now(UTC) >= expiry:
-        # Remove expired session
         del _sync_sessions[sync_id]
         raise HTTPException(
             status_code=410,
             detail="Sync session expired. Please initiate a new sync.",
         )
 
+    return max(1, min(500, chunk_size))
+
 
 @router.get("/full")
 async def initiate_full_sync(
     since: str | None = Query(None),
-    chunk_size: int = Query(100, ge=1, le=500),
+    chunk_size: int | None = Query(None, ge=1, le=500),
     user=Depends(get_current_user),
 ):
     """
@@ -75,6 +127,8 @@ async def initiate_full_sync(
 
     Returns sync session ID and chunk download URLs.
     """
+    cfg = _get_cfg()
+
     # Build query with user authorization filter
     query = (
         Summary.select()
@@ -87,6 +141,8 @@ async def initiate_full_sync(
         query = query.where(Summary.created_at >= since)
 
     total_items = query.count()
+    resolved_chunk_size = _resolve_chunk_size(chunk_size, cfg)
+    chunk_size = resolved_chunk_size
     total_chunks = (total_items + chunk_size - 1) // chunk_size
 
     # Generate sync session ID
@@ -97,11 +153,8 @@ async def initiate_full_sync(
 
     # Store sync session with expiry time
     now = datetime.now(UTC)
-    expires_at = now + timedelta(hours=SYNC_EXPIRY_HOURS)
-    _sync_sessions[sync_id] = expires_at
-
-    # Clean up expired sessions (simple cleanup on each request)
-    _cleanup_expired_sessions()
+    expires_at = now + timedelta(hours=cfg.sync.expiry_hours)
+    await _store_sync_session(sync_id, chunk_size, expires_at, cfg)
 
     return success_response(
         SyncSessionInfo(
@@ -122,11 +175,11 @@ async def download_sync_chunk(
     user=Depends(get_current_user),
 ):
     """Download a specific chunk of the database."""
-    # Validate sync session
-    _validate_sync_session(sync_id)
+    cfg = _get_cfg()
+    # Validate sync session and get chunk size
+    chunk_size = await _validate_sync_session(sync_id, cfg)
 
     # Calculate offset
-    chunk_size = 100
     offset = (chunk_number - 1) * chunk_size
 
     # Get summaries for this chunk with eager loading (fixes N+1)

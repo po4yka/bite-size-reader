@@ -562,6 +562,192 @@ class TelegramLimitsConfig(BaseModel):
         return parsed
 
 
+class RedisConfig(BaseModel):
+    """Shared Redis connection settings."""
+
+    model_config = ConfigDict(frozen=True, populate_by_name=True)
+
+    enabled: bool = Field(default=True, validation_alias="REDIS_ENABLED")
+    required: bool = Field(
+        default=False,
+        validation_alias="REDIS_REQUIRED",
+        description="If true, fail requests when Redis is unavailable.",
+    )
+    url: str | None = Field(default=None, validation_alias="REDIS_URL")
+    host: str = Field(default="127.0.0.1", validation_alias="REDIS_HOST")
+    port: int = Field(default=6379, validation_alias="REDIS_PORT")
+    db: int = Field(default=0, validation_alias="REDIS_DB")
+    password: str | None = Field(default=None, validation_alias="REDIS_PASSWORD")
+    prefix: str = Field(default="bsr", validation_alias="REDIS_PREFIX")
+    socket_timeout: float = Field(default=5.0, validation_alias="REDIS_SOCKET_TIMEOUT")
+
+    @field_validator("url", mode="before")
+    @classmethod
+    def _normalize_url(cls, value: Any) -> str | None:
+        if value in (None, ""):
+            return None
+        cleaned = str(value).strip()
+        if cleaned and len(cleaned) > 200:
+            msg = "Redis URL appears too long"
+            raise ValueError(msg)
+        return cleaned
+
+    @field_validator("host", mode="before")
+    @classmethod
+    def _validate_host(cls, value: Any) -> str:
+        host = str(value or "").strip()
+        if not host:
+            msg = "Redis host is required when URL is not provided"
+            raise ValueError(msg)
+        if len(host) > 200:
+            msg = "Redis host appears too long"
+            raise ValueError(msg)
+        return host
+
+    @field_validator("port", "db", mode="before")
+    @classmethod
+    def _validate_int_bounds(cls, value: Any, info: ValidationInfo) -> int:
+        default = cls.model_fields[info.field_name].default
+        try:
+            parsed = int(str(value if value not in (None, "") else default))
+        except ValueError as exc:  # pragma: no cover - defensive
+            msg = f"{info.field_name.replace('_', ' ')} must be a valid integer"
+            raise ValueError(msg) from exc
+        if parsed < 0 or parsed > 65535:
+            msg = f"{info.field_name.replace('_', ' ').capitalize()} must be between 0 and 65535"
+            raise ValueError(msg)
+        return parsed
+
+    @field_validator("socket_timeout", mode="before")
+    @classmethod
+    def _validate_timeout(cls, value: Any) -> float:
+        default = cls.model_fields["socket_timeout"].default
+        try:
+            parsed = float(str(value if value not in (None, "") else default))
+        except ValueError as exc:  # pragma: no cover - defensive
+            msg = "Redis socket timeout must be a valid number"
+            raise ValueError(msg) from exc
+        if parsed <= 0 or parsed > 60:
+            msg = "Redis socket timeout must be between 0 and 60 seconds"
+            raise ValueError(msg)
+        return parsed
+
+    @field_validator("prefix", mode="before")
+    @classmethod
+    def _validate_prefix(cls, value: Any) -> str:
+        prefix = str(value or "bsr").strip()
+        if not prefix:
+            msg = "Redis prefix cannot be empty"
+            raise ValueError(msg)
+        if len(prefix) > 50:
+            msg = "Redis prefix appears too long"
+            raise ValueError(msg)
+        if any(ch in prefix for ch in (" ", "\t", "\n", "\r")):
+            msg = "Redis prefix cannot contain whitespace"
+            raise ValueError(msg)
+        return prefix
+
+
+class ApiLimitsConfig(BaseModel):
+    """API rate limiting configuration."""
+
+    model_config = ConfigDict(frozen=True, populate_by_name=True)
+
+    window_seconds: int = Field(default=60, validation_alias="API_RATE_LIMIT_WINDOW_SECONDS")
+    cooldown_multiplier: float = Field(
+        default=2.0, validation_alias="API_RATE_LIMIT_COOLDOWN_MULTIPLIER"
+    )
+    max_concurrent: int = Field(
+        default=3, validation_alias="API_RATE_LIMIT_MAX_CONCURRENT_PER_USER"
+    )
+    default_limit: int = Field(default=100, validation_alias="API_RATE_LIMIT_DEFAULT")
+    summaries_limit: int = Field(default=200, validation_alias="API_RATE_LIMIT_SUMMARIES")
+    requests_limit: int = Field(default=10, validation_alias="API_RATE_LIMIT_REQUESTS")
+    search_limit: int = Field(default=50, validation_alias="API_RATE_LIMIT_SEARCH")
+
+    @field_validator("window_seconds", mode="before")
+    @classmethod
+    def _validate_window(cls, value: Any) -> int:
+        try:
+            parsed = int(str(value if value not in (None, "") else 60))
+        except ValueError as exc:
+            msg = "API rate limit window must be a valid integer"
+            raise ValueError(msg) from exc
+        if parsed <= 0 or parsed > 3600:
+            msg = "API rate limit window must be between 1 and 3600 seconds"
+            raise ValueError(msg)
+        return parsed
+
+    @field_validator("cooldown_multiplier", mode="before")
+    @classmethod
+    def _validate_cooldown_multiplier(cls, value: Any) -> float:
+        try:
+            parsed = float(str(value if value not in (None, "") else 2.0))
+        except ValueError as exc:
+            msg = "Cooldown multiplier must be a valid number"
+            raise ValueError(msg) from exc
+        if parsed < 0 or parsed > 10:
+            msg = "Cooldown multiplier must be between 0 and 10"
+            raise ValueError(msg)
+        return parsed
+
+    @field_validator(
+        "max_concurrent",
+        "default_limit",
+        "summaries_limit",
+        "requests_limit",
+        "search_limit",
+        mode="before",
+    )
+    @classmethod
+    def _validate_limits(cls, value: Any, info: ValidationInfo) -> int:
+        default = cls.model_fields[info.field_name].default
+        try:
+            parsed = int(str(value if value not in (None, "") else default))
+        except ValueError as exc:
+            msg = f"{info.field_name.replace('_', ' ')} must be a valid integer"
+            raise ValueError(msg) from exc
+        if parsed <= 0 or parsed > 10000:
+            msg = f"{info.field_name.replace('_', ' ').capitalize()} must be between 1 and 10000"
+            raise ValueError(msg)
+        return parsed
+
+
+class SyncConfig(BaseModel):
+    """Mobile sync configuration."""
+
+    model_config = ConfigDict(frozen=True, populate_by_name=True)
+
+    expiry_hours: int = Field(default=1, validation_alias="SYNC_EXPIRY_HOURS")
+    default_chunk_size: int = Field(default=100, validation_alias="SYNC_DEFAULT_CHUNK_SIZE")
+
+    @field_validator("expiry_hours", mode="before")
+    @classmethod
+    def _validate_expiry(cls, value: Any) -> int:
+        try:
+            parsed = int(str(value if value not in (None, "") else 1))
+        except ValueError as exc:
+            msg = "Sync expiry hours must be a valid integer"
+            raise ValueError(msg) from exc
+        if parsed <= 0 or parsed > 168:
+            msg = "Sync expiry hours must be between 1 and 168"
+            raise ValueError(msg)
+        return parsed
+
+    @field_validator("default_chunk_size", mode="before")
+    @classmethod
+    def _validate_chunk_size(cls, value: Any) -> int:
+        try:
+            parsed = int(str(value if value not in (None, "") else 100))
+        except ValueError as exc:
+            msg = "Sync default chunk size must be a valid integer"
+            raise ValueError(msg) from exc
+        if parsed < 1 or parsed > 500:
+            msg = "Sync default chunk size must be between 1 and 500"
+            raise ValueError(msg)
+        return parsed
+
+
 class DatabaseConfig(BaseModel):
     """Database operation limits and timeouts configuration."""
 
@@ -903,6 +1089,9 @@ class AppConfig:
     database: DatabaseConfig
     content_limits: ContentLimitsConfig
     vector_store: ChromaConfig
+    redis: RedisConfig
+    api_limits: ApiLimitsConfig
+    sync: SyncConfig
 
 
 class Settings(BaseSettings):
@@ -930,6 +1119,9 @@ class Settings(BaseSettings):
     database: DatabaseConfig = Field(default_factory=DatabaseConfig)
     content_limits: ContentLimitsConfig = Field(default_factory=ContentLimitsConfig)
     vector_store: ChromaConfig = Field(default_factory=ChromaConfig)
+    redis: RedisConfig = Field(default_factory=RedisConfig)
+    api_limits: ApiLimitsConfig = Field(default_factory=ApiLimitsConfig)
+    sync: SyncConfig = Field(default_factory=SyncConfig)
 
     @model_validator(mode="before")
     @classmethod
@@ -1013,6 +1205,9 @@ class Settings(BaseSettings):
             database=self.database,
             content_limits=self.content_limits,
             vector_store=self.vector_store,
+            redis=self.redis,
+            api_limits=self.api_limits,
+            sync=self.sync,
         )
 
 

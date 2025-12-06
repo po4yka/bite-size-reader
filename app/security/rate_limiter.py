@@ -7,7 +7,10 @@ import logging
 import time
 from collections import defaultdict, deque
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    import redis.asyncio as aioredis
 
 logger = logging.getLogger(__name__)
 
@@ -290,3 +293,85 @@ class UserRateLimiter:
                 logger.debug("rate_limiter_cleanup", extra={"users_cleaned": cleaned_users})
 
             return cleaned_users
+
+
+class RedisUserRateLimiter:
+    """Redis-backed per-user rate limiter with concurrency control."""
+
+    def __init__(self, redis_client: aioredis.Redis, config: RateLimitConfig, prefix: str) -> None:
+        self._redis = redis_client
+        self._config = config
+        self._prefix = prefix
+
+    def _window_key(self, user_id: int | str, window_start: int) -> str:
+        return f"{self._prefix}:tg_rate:{user_id}:{window_start}"
+
+    def _concurrency_key(self, user_id: int | str) -> str:
+        return f"{self._prefix}:tg_concurrent:{user_id}"
+
+    async def check_and_record(
+        self, user_id: int | str, *, cost: int = 1, operation: str = "request"
+    ) -> tuple[bool, str | None, int]:
+        now = time.time()
+        window_start = int(now // self._config.window_seconds) * self._config.window_seconds
+        key = self._window_key(user_id, window_start)
+        ttl = max(
+            self._config.window_seconds + 5,
+            int(self._config.window_seconds * self._config.cooldown_multiplier),
+        )
+
+        pipe = self._redis.pipeline()
+        pipe.incrby(key, cost)
+        pipe.expire(key, ttl)
+        result = await pipe.execute()
+        count = int(result[0]) if result else 0
+
+        if count > self._config.max_requests:
+            retry_after = int(window_start + self._config.window_seconds - now)
+            cooldown = int(self._config.window_seconds * self._config.cooldown_multiplier)
+            retry_after = max(retry_after, cooldown)
+            logger.warning(
+                "redis_rate_limit_exceeded",
+                extra={
+                    "user_id": user_id,
+                    "operation": operation,
+                    "count": count,
+                    "max_requests": self._config.max_requests,
+                    "retry_after": retry_after,
+                },
+            )
+            return (
+                False,
+                f"🚫 Rate limit exceeded. You can make {self._config.max_requests} requests "
+                f"per {self._config.window_seconds} seconds. "
+                f"Cooldown active for {retry_after} seconds.",
+                retry_after,
+            )
+
+        remaining = max(self._config.max_requests - count, 0)
+        return True, None, remaining
+
+    async def acquire_concurrent_slot(self, user_id: int | str) -> bool:
+        key = self._concurrency_key(user_id)
+        ttl = max(self._config.window_seconds, 60)
+        new_count = int(await self._redis.incr(key))
+        if new_count == 1:
+            await self._redis.expire(key, ttl)
+        if new_count > self._config.max_concurrent:
+            await self._redis.decr(key)
+            logger.warning(
+                "redis_concurrent_limit_exceeded",
+                extra={
+                    "user_id": user_id,
+                    "new_count": new_count,
+                    "max": self._config.max_concurrent,
+                },
+            )
+            return False
+        return True
+
+    async def release_concurrent_slot(self, user_id: int | str) -> None:
+        key = self._concurrency_key(user_id)
+        new_count = int(await self._redis.decr(key))
+        if new_count <= 0:
+            await self._redis.delete(key)

@@ -17,6 +17,20 @@
 - Sync protocol: support created/updated/deleted with server version/ETag; configurable chunk size; conflict reporting; delete semantics distinct from read.
 - Observability: structured logs with correlation_id in background tasks and rate limiter decisions.
 
+## Redis-backed limits and sessions
+- Store: Redis preferred; fallback to in-process noop when disabled/unavailable (warn + metrics). Keys prefixed by `cfg.redis.prefix` (default `bsr`).
+- Connection: `cfg.redis.url` or host/port/db/prefix. Single shared async client; graceful close on shutdown.
+- Rate limits:
+  - Config under `cfg.api_limits`: default window 60s, cooldown multiplier 2.0, max concurrent 3.
+  - Per-path buckets (requests/s): `summaries` 200, `requests` 10, `search` 50, default 100; keyed by authenticated user_id else IP.
+  - Sliding window counter with TTL = window+grace; headers: `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset`, `Retry-After` on 429.
+  - Log extras: correlation_id, user_id/client_ip, path bucket, retry_after, window.
+- Sync sessions:
+  - Keys `sync:session:{sync_id}` storing expiry timestamp; TTL = configured `sync_expiry_hours` (default 1h). Validation uses Redis existence/TTL.
+  - Chunk size configurable per request (bounded 1..500) but also overridable via config default.
+  - Expiry handled by Redis TTL; manual cleanup no longer needed.
+- Error handling: If Redis unavailable and `redis.required=true`, return 503 with correlation_id; if `false`, continue with in-memory noop and emit warning metric.
+
 ## Data Model / Contracts
 - Responses: adopt `SuccessResponse`/`ErrorResponse` wrappers and use explicit schemas per endpoint.
 - Auth tokens: payload `{user_id, username, client_id, is_owner, type, exp, iat}`; refresh rotation required.

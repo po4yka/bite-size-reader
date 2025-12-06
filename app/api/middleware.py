@@ -1,22 +1,21 @@
-"""
-FastAPI middleware for request processing.
-"""
+"""FastAPI middleware for request processing."""
 
 import time
 import uuid
 from collections.abc import Callable
-from typing import Any
 
 from fastapi import Request
 from fastapi.responses import JSONResponse
 
+from app.config import AppConfig, load_config
 from app.core.logging_utils import get_logger
+from app.infrastructure.redis import get_redis, redis_key
 
 logger = get_logger(__name__)
 
-# Simple in-memory rate limiter (use Redis in production)
-# Store structure: {ip_address: {"count": int, "window_start": int}}
-_rate_limit_store: dict[str, Any] = {}
+# Cached config for middleware usage
+_cfg: AppConfig | None = None
+_redis_warning_logged = False
 
 
 async def correlation_id_middleware(request: Request, call_next: Callable):
@@ -42,80 +41,118 @@ async def correlation_id_middleware(request: Request, call_next: Callable):
     return response
 
 
+def _get_cfg() -> AppConfig:
+    global _cfg
+    if _cfg is None:
+        _cfg = load_config(allow_stub_telegram=True)
+    return _cfg
+
+
+def _resolve_limit(path: str, cfg: AppConfig) -> int:
+    limits = cfg.api_limits
+    if path.startswith("/v1/summaries"):
+        return limits.summaries_limit
+    if path.startswith("/v1/requests"):
+        return limits.requests_limit
+    if path.startswith("/v1/search"):
+        return limits.search_limit
+    return limits.default_limit
+
+
 async def rate_limit_middleware(request: Request, call_next: Callable):
-    """
-    Rate limiting middleware.
+    """Redis-backed rate limiting middleware with graceful fallback."""
+    cfg = _get_cfg()
+    correlation_id = getattr(request.state, "correlation_id", None)
 
-    Note: This is an in-memory rate limiter suitable for single-process deployments.
-    For production with multiple processes/replicas, use a Redis-based rate limiter
-    or a distributed rate limiting service (e.g., Kong, Envoy).
-    """
-    # Get user ID from auth (if authenticated)
-    user_id = getattr(request.state, "user_id", None)
+    # Identify actor
+    user_id = getattr(request.state, "user_id", None) or request.client.host
+    bucket_limit = _resolve_limit(request.url.path, cfg)
+    window = cfg.api_limits.window_seconds
+    now = int(time.time())
+    window_start = (now // window) * window
 
-    if not user_id:
-        # Use IP as fallback for unauthenticated requests
-        user_id = request.client.host
+    redis_client = await get_redis(cfg)
+    if redis_client is None:
+        global _redis_warning_logged
+        if not _redis_warning_logged:
+            logger.warning(
+                "rate_limit_redis_unavailable",
+                extra={
+                    "required": cfg.redis.required,
+                    "correlation_id": correlation_id,
+                    "path": request.url.path,
+                },
+            )
+            _redis_warning_logged = True
 
-    # Rate limit key
-    key = f"rate_limit:{user_id}:{int(time.time() / 60)}"  # Per minute
+        if cfg.redis.required:
+            return JSONResponse(
+                status_code=503,
+                content={
+                    "success": False,
+                    "error": {
+                        "code": "RATE_LIMIT_BACKEND_UNAVAILABLE",
+                        "message": "Rate limit backend unavailable. Please try again later.",
+                        "correlation_id": correlation_id,
+                    },
+                },
+            )
 
-    # Get current count
-    current_count = _rate_limit_store.get(key, 0)
+        response = await call_next(request)
+        response.headers["X-RateLimit-Limit"] = str(bucket_limit)
+        response.headers["X-RateLimit-Remaining"] = "unknown"
+        response.headers["X-RateLimit-Reset"] = str(window_start + window)
+        return response
 
-    # Rate limits (requests per minute)
-    if request.url.path.startswith("/v1/summaries"):
-        limit = 200
-    elif request.url.path.startswith("/v1/requests"):
-        limit = 10
-    elif request.url.path.startswith("/v1/search"):
-        limit = 50
-    else:
-        limit = 100
+    key = redis_key(cfg.redis.prefix, "rate", str(user_id), str(window_start))
 
-    # Check if exceeded
-    if current_count >= limit:
-        reset_time = int(time.time() / 60 + 1) * 60
+    # Increment counter with TTL in a pipeline
+    ttl = max(window + 5, int(window * cfg.api_limits.cooldown_multiplier))
+    pipe = redis_client.pipeline()
+    pipe.incr(key)
+    pipe.expire(key, ttl)
+    count, _ = await pipe.execute()
 
+    if count > bucket_limit:
+        retry_after = max(
+            (window_start + window) - now, int(window * cfg.api_limits.cooldown_multiplier)
+        )
+        logger.info(
+            "rate_limit_exceeded",
+            extra={
+                "user_id": user_id,
+                "path": request.url.path,
+                "limit": bucket_limit,
+                "count": count,
+                "retry_after": retry_after,
+                "correlation_id": correlation_id,
+            },
+        )
         return JSONResponse(
             status_code=429,
             content={
                 "success": False,
                 "error": {
                     "code": "RATE_LIMIT_EXCEEDED",
-                    "message": f"Rate limit exceeded. Try again in {reset_time - int(time.time())} seconds.",
-                    "retry_after": reset_time - int(time.time()),
+                    "message": f"Rate limit exceeded. Try again in {retry_after} seconds.",
+                    "retry_after": retry_after,
+                    "correlation_id": correlation_id,
                 },
             },
             headers={
-                "X-RateLimit-Limit": str(limit),
+                "X-RateLimit-Limit": str(bucket_limit),
                 "X-RateLimit-Remaining": "0",
-                "X-RateLimit-Reset": str(reset_time),
-                "Retry-After": str(reset_time - int(time.time())),
+                "X-RateLimit-Reset": str(window_start + window),
+                "Retry-After": str(retry_after),
             },
         )
-
-    # Increment count
-    _rate_limit_store[key] = current_count + 1
 
     # Process request
     response = await call_next(request)
 
-    # Add rate limit headers
-    response.headers["X-RateLimit-Limit"] = str(limit)
-    response.headers["X-RateLimit-Remaining"] = str(limit - current_count - 1)
-    response.headers["X-RateLimit-Reset"] = str(int(time.time() / 60 + 1) * 60)
+    remaining = max(bucket_limit - count, 0)
+    response.headers["X-RateLimit-Limit"] = str(bucket_limit)
+    response.headers["X-RateLimit-Remaining"] = str(remaining)
+    response.headers["X-RateLimit-Reset"] = str(window_start + window)
 
     return response
-
-
-# Clean up old rate limit entries periodically
-def cleanup_rate_limit_store():
-    """Remove expired rate limit entries."""
-    current_minute = int(time.time() / 60)
-    expired_keys = [
-        key for key in _rate_limit_store if int(key.split(":")[-1]) < current_minute - 5
-    ]
-
-    for key in expired_keys:
-        del _rate_limit_store[key]
