@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import difflib
 import re
 from typing import Any
 
@@ -197,6 +198,39 @@ def _cap_text(text: str, limit: int) -> str:
         if idx > 0:
             return snippet[: idx + len(sep)].strip()
     return snippet.strip()
+
+
+def _normalize_whitespace(text: str) -> str:
+    if not isinstance(text, str):
+        return ""
+    return " ".join(text.split()).strip()
+
+
+def _similarity_ratio(text_a: str, text_b: str) -> float:
+    if not text_a or not text_b:
+        return 0.0
+    return difflib.SequenceMatcher(None, text_a, text_b).ratio()
+
+
+def _tldr_needs_enrichment(tldr: str, summary_1000: str) -> bool:
+    tldr_norm = _normalize_whitespace(tldr)
+    summary_norm = _normalize_whitespace(summary_1000)
+
+    if not tldr_norm or not summary_norm:
+        return False
+
+    if tldr_norm == summary_norm:
+        return True
+
+    similarity = _similarity_ratio(tldr_norm, summary_norm)
+    if similarity >= 0.92:
+        return True
+
+    if summary_norm.startswith(tldr_norm) or tldr_norm.startswith(summary_norm):
+        if abs(len(tldr_norm) - len(summary_norm)) <= 120:
+            return True
+
+    return len(tldr_norm) <= len(summary_norm) + 40
 
 
 def _hash_tagify(tags: list[str], max_tags: int = 10) -> list[str]:
@@ -465,6 +499,87 @@ def _clean_string_list(values: Any, *, limit: int | None = None) -> list[str]:
     return result
 
 
+def _enrich_tldr_from_payload(base_text: str, payload: SummaryJSON) -> str:
+    """Expand a TL;DR when it mirrors the 1000-char summary.
+
+    Uses supporting fields (key ideas, highlights, stats, answered questions, insights)
+    to add depth so the TL;DR is richer than summary_1000.
+    """
+
+    def _add_segment(text: str) -> None:
+        cleaned = str(text).strip()
+        if not cleaned:
+            return
+        normalized = _normalize_whitespace(cleaned).lower()
+        if normalized in seen:
+            return
+        seen.add(normalized)
+        segments.append(cleaned)
+
+    segments: list[str] = []
+    seen: set[str] = set()
+
+    _add_segment(base_text)
+
+    key_ideas = _clean_string_list(payload.get("key_ideas"), limit=6)
+    if key_ideas:
+        _add_segment(f"Key ideas: {'; '.join(key_ideas)}.")
+
+    highlights = _clean_string_list(payload.get("highlights"), limit=5)
+    if highlights:
+        _add_segment(f"Highlights: {'; '.join(highlights)}.")
+
+    stats_parts: list[str] = []
+    for stat in payload.get("key_stats") or []:
+        if not isinstance(stat, dict):
+            continue
+        label = str(stat.get("label", "")).strip()
+        value = stat.get("value")
+        if not label or not _is_numeric(value):
+            continue
+        unit_raw = stat.get("unit")
+        unit = str(unit_raw).strip() if unit_raw is not None else ""
+        unit_part = f" {unit}" if unit else ""
+        stats_parts.append(f"{label}: {value}{unit_part}")
+    if stats_parts:
+        _add_segment(f"Key stats: {'; '.join(stats_parts)}.")
+
+    answered = payload.get("answered_questions")
+    if isinstance(answered, list):
+        questions: list[str] = []
+        for qa in answered:
+            if isinstance(qa, dict):
+                question = str(qa.get("question", "")).strip()
+                answer = str(qa.get("answer", "")).strip()
+                if question and answer:
+                    questions.append(f"{question} — {answer}")
+                elif question:
+                    questions.append(question)
+            elif isinstance(qa, str) and qa.strip():
+                questions.append(qa.strip())
+        if questions:
+            deduped = _dedupe_case_insensitive(questions)
+            _add_segment(f"Questions answered: {'; '.join(deduped)}.")
+
+    insights = payload.get("insights")
+    if isinstance(insights, dict):
+        topic_overview = str(insights.get("topic_overview", "")).strip()
+        if topic_overview:
+            _add_segment(topic_overview)
+        caution = str(insights.get("caution", "")).strip()
+        if caution:
+            _add_segment(f"Caution: {caution}")
+
+    fallback = _summary_fallback_from_supporting_fields(payload)
+    if fallback:
+        _add_segment(fallback)
+
+    enriched = " ".join(segments).strip()
+    if not enriched:
+        return base_text
+    return _cap_text(enriched, 2000)
+
+
 def _shape_insights(raw: Any) -> dict[str, Any]:
     shaped: dict[str, Any] = {
         "topic_overview": "",
@@ -640,6 +755,9 @@ def validate_and_shape_summary(payload: SummaryJSON) -> SummaryJSON:
 
     if not tldr:
         tldr = summary_1000 or summary_250
+
+    if _tldr_needs_enrichment(tldr, summary_1000):
+        tldr = _enrich_tldr_from_payload(summary_1000 or tldr, p)
 
     p["summary_250"] = summary_250
     p["summary_1000"] = summary_1000

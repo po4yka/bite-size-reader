@@ -36,6 +36,9 @@
 - TC5: Validation error (422) returns ErrorResponse code VALIDATION_ERROR, details.fields present.
 - TC6: Telegram formatter `reply_json` attaches SuccessResponse envelope; `send_error_notification` embeds correlation_id in JSON and text.
 - TC7: CLI summary command success prints SuccessResponse envelope; failure prints ErrorResponse.
+- TC8: Summary shaping enriches TL;DR when the model returns TL;DR identical to summary_1000 (adds key ideas/highlights/stats so TL;DR is longer and not verbatim).
+- TC9: Summary shaping enriches TL;DR when TL;DR is highly similar (not identical) to summary_1000.
+- TC10: Prompt text (EN/RU) instructs: JSON-only (no Markdown/fences), distinct tiers (hook vs 3–5 sentence overview vs 2–3 paragraph TL;DR), no invented data/URLs/names, extractive quotes verbatim or empty, topic_tags lowercase without punctuation.
 
 ## Non-Functional
 - Load: envelope helpers are allocation-light; pagination meta computed without N+1 queries.

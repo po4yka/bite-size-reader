@@ -76,6 +76,42 @@ class TestSummaryContract(unittest.TestCase):
         assert out["tldr"].strip()
         assert "Key idea one" in out["summary_1000"]
 
+    def test_tldr_enriched_when_matching_summary(self):
+        payload = {
+            "summary_250": "Stripe animation trick.",
+            "summary_1000": "Stripe animation trick using gradients and helper functions.",
+            "tldr": "Stripe animation trick using gradients and helper functions.",
+            "key_ideas": [
+                "Color stops create sharp edges",
+                "Helper functions simplify stripe spacing",
+            ],
+            "highlights": ["Avoids jagged edges and keeps motion smooth."],
+            "key_stats": [{"label": "frames", "value": 120, "unit": "fps", "source_excerpt": None}],
+            "answered_questions": [
+                {"question": "How to keep stripes crisp?", "answer": "Use strategic color stops."}
+            ],
+        }
+
+        out = validate_and_shape_summary(payload)
+
+        assert out["tldr"] != out["summary_1000"]
+        assert "Key ideas:" in out["tldr"]
+        assert len(out["tldr"]) > len(out["summary_1000"])
+
+    def test_tldr_enriched_when_high_similarity(self):
+        payload = {
+            "summary_250": "Short hook.",
+            "summary_1000": "Detailed paragraph about gradients, motion, and easing for stripes.",
+            "tldr": "Detailed paragraph about gradients, motion, and easing.",
+            "key_ideas": ["Easing reduces jitter", "Gradients control contrast"],
+            "highlights": ["Adds easing to keep motion smooth."],
+        }
+
+        out = validate_and_shape_summary(payload)
+
+        assert len(out["tldr"]) > len(payload["tldr"])
+        assert "Key ideas:" in out["tldr"]
+
 
 if __name__ == "__main__":
     unittest.main()

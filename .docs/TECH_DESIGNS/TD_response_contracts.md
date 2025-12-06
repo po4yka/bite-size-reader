@@ -45,6 +45,15 @@
   - `build: string | null` (e.g., git SHA or image tag; optional)
   - `pagination?: { total: int, limit: int, offset: int, has_more: bool }` for list endpoints
   - `debug?: { latency_ms?: int, backend?: string }` optional, only when debug enabled
+- Summary field tiers:
+  - `summary_250`: single-sentence hook (<=250 chars).
+  - `summary_1000`: compact 3–5 sentence overview; must not reuse TL;DR sentences verbatim.
+  - `tldr`: richest 2–3 paragraph narrative that expands on summary_1000 with extra detail/examples/stats; never identical to summary_1000.
+- Prompt guardrails (EN/RU parity):
+  - Role: structured summarization agent for Telegram; JSON-only, no Markdown/fences.
+  - Explicit field guidance: distinct tiers, evidence-forward key_stats (with source_excerpt), extractive quotes verbatim or empty, no invented names/URLs/numbers, no placeholders like “N/A”.
+  - Anti-duplication: avoid sentence reuse across summary_250/summary_1000/TL;DR; dedupe arrays/entities; topic_tags lowercase without punctuation.
+  - Output hygiene: valid UTF-8 JSON, no extra keys, keep strings concise within limits.
 - Error codes:
   - Use `ErrorCode` enum for API errors; HTTPException paths mapped to standardized codes (e.g., AUTH_ERROR, VALIDATION_ERROR, RATE_LIMIT_EXCEEDED, NOT_FOUND, INTERNAL_ERROR).
 - Surface specifics:
