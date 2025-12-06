@@ -61,7 +61,10 @@ services:
     stop_grace_period: 30s
 
   chroma:
-    image: chromadb/chroma:1.3.5
+    image: bsr-chroma:1.3.5-curl
+    build:
+      context: .
+      dockerfile: Dockerfile.chroma
     container_name: bsr-chroma
     init: true
     volumes:
@@ -92,7 +95,7 @@ services:
           memory: 512M
           cpus: '0.25'
     healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://localhost:8000/api/v1/heartbeat"]
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/api/v2/heartbeat"]
       interval: 30s
       timeout: 10s
       retries: 3
