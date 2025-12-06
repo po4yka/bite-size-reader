@@ -3,7 +3,7 @@
 # =============================================================================
 # Stage 1: Builder - Install dependencies and compile wheels
 # =============================================================================
-FROM python:3.13-slim AS builder
+FROM python:3.13.0-slim AS builder
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -39,7 +39,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 # =============================================================================
 # Stage 2: Runtime - Minimal production image
 # =============================================================================
-FROM python:3.13-slim AS runtime
+FROM python:3.13.0-slim AS runtime
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -49,17 +49,15 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /app
 
 # Install only runtime dependencies (no build tools)
-# ffmpeg is required for yt-dlp video/audio merging
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends \
-       sqlite3 \
-       libsqlite3-0 \
-       libxml2 \
-       libxslt1.1 \
-       zlib1g \
-       ffmpeg \
-    && rm -rf /var/lib/apt/lists/* \
-    && apt-get clean
+# ffmpeg is required for yt-dlp video/audio merging (can be disabled with build-arg)
+ARG WITH_FFMPEG=1
+RUN set -eux; \
+    apt-get update; \
+    pkgs="sqlite3 libsqlite3-0 libxml2 libxslt1.1 zlib1g"; \
+    if [ "${WITH_FFMPEG}" = "1" ]; then pkgs="$pkgs ffmpeg"; fi; \
+    apt-get install -y --no-install-recommends ${pkgs}; \
+    rm -rf /var/lib/apt/lists/*; \
+    apt-get clean
 
 # Copy virtual environment from builder stage
 COPY --from=builder /app/.venv /app/.venv
