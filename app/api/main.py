@@ -26,6 +26,7 @@ from app.api.routers import auth, requests, search, summaries, sync, user
 from app.config import Config
 from app.core.logging_utils import get_logger
 from app.core.time_utils import UTC
+from app.db.database import Database
 from app.infrastructure.redis import close_redis
 
 logger = get_logger(__name__)
@@ -116,10 +117,20 @@ app.add_exception_handler(peewee.OperationalError, database_exception_handler)
 app.add_exception_handler(Exception, global_error_handler)
 
 
+# Initialize database proxy eagerly so Peewee models can be used immediately
+DB_PATH = Config.get("DB_PATH", "/data/app.db")
+_db = Database(path=DB_PATH)
+_db._database.connect(reuse_if_open=True)
+logger.info("database_initialized", extra={"db_path": DB_PATH})
+
+
 @app.on_event("shutdown")
 async def shutdown_resources() -> None:
     await search_resources.shutdown_chroma_search_resources()
     await close_redis()
+    if _db:
+        _db._database.close()
+        logger.info("database_closed")
 
 
 if __name__ == "__main__":
