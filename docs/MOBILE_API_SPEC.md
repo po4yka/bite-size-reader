@@ -40,7 +40,7 @@ The Bite-Size Reader Mobile API provides RESTful endpoints for:
 
 ### Base URL
 ```
-Production: https://api.bite-size-reader.com/v1
+Production: https://api.bite-size-reader.po4yka.com/v1
 Development: http://localhost:8000/v1
 ```
 

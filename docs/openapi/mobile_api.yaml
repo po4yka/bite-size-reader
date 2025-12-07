@@ -4,9 +4,9 @@ info:
   description: RESTful API for Android/iOS mobile clients
   version: 1.0.0
 servers:
-  - url: https://api.bite-size-reader.com
+  - url: https://api.bite-size-reader.po4yka.com
     description: Production
-  - url: https://staging-api.bite-size-reader.com
+  - url: https://staging-api.bite-size-reader.po4yka.com
     description: Staging
   - url: http://localhost:8000
     description: Local development

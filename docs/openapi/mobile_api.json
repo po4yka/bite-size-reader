@@ -7,11 +7,11 @@
   },
   "servers": [
     {
-      "url": "https://api.bite-size-reader.com",
+      "url": "https://api.bite-size-reader.po4yka.com",
       "description": "Production"
     },
     {
-      "url": "https://staging-api.bite-size-reader.com",
+      "url": "https://staging-api.bite-size-reader.po4yka.com",
       "description": "Staging"
     },
     {
