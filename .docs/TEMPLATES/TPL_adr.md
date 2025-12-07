@@ -1,3 +1,26 @@
+# Architecture Decision Record Template
+- Title:
+- ADR ID:
+- Date:
+- Status: Proposed | Accepted | Superseded | Deprecated
+- Context:
+
+## Decision
+- Summary of the choice:
+
+## Consequences
+- Positive:
+- Negative:
+
+## Alternatives Considered
+- Alternative:
+- Rationale for not choosing:
+
+## Follow-up
+- Actions / migrations:
+
+## References
+- Links or docs:
 # ADR Title
 - Status: Proposed | Decided | Deprecated | Superseded
 - Date: YYYY-MM-DD

@@ -1,3 +1,42 @@
+# Proposal Template
+- Title:
+- Date:
+- Owner:
+- Status: Draft | In Review | Approved
+- Related Docs:
+
+## Context
+- Problem / Opportunity:
+- Current State:
+- Desired Outcome:
+
+## Goals
+- Primary goals:
+- Non-goals:
+
+## Options
+- Option A:
+- Option B:
+- Option C:
+
+## Recommendation
+- Chosen option and rationale:
+- Trade-offs:
+
+## Impact
+- Users / stakeholders:
+- Systems / services:
+- Data:
+
+## Risks & Mitigations
+- Risk:
+- Mitigation:
+
+## Timeline & Milestones
+- Phases and checkpoints:
+
+## Open Questions
+- Question:
 # Proposal Title
 - Date: YYYY-MM-DD
 - Owner: NAME

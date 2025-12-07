@@ -23,6 +23,7 @@ from app.core.html_utils import clean_markdown_article_text, html_to_text, norma
 from app.core.lang import detect_language
 from app.core.url_utils import normalize_url, url_hash_sha256
 from app.db.database import Database
+from app.infrastructure.cache.redis_cache import RedisCache
 
 if TYPE_CHECKING:
     from app.adapters.external.response_formatter import ResponseFormatter
@@ -82,6 +83,7 @@ class ContentExtractor:
         self.response_formatter = response_formatter
         self._audit = audit_func
         self._sem = sem
+        self._cache = RedisCache(cfg)
 
     def _schedule_crawl_persistence(
         self, req_id: int, crawl: FirecrawlResult, correlation_id: str | None
@@ -307,7 +309,13 @@ class ContentExtractor:
 
         # Extract content from Firecrawl or reuse existing
         content_text, content_source = await self._extract_or_reuse_content(
-            message, req_id, url_text, correlation_id, interaction_id, silent=silent
+            message,
+            req_id,
+            url_text,
+            dedupe,
+            correlation_id,
+            interaction_id,
+            silent=silent,
         )
 
         # Language detection
@@ -493,6 +501,7 @@ class ContentExtractor:
         message: Any,
         req_id: int,
         url_text: str,
+        dedupe_hash: str,
         correlation_id: str | None,
         interaction_id: int | None,
         silent: bool = False,
@@ -514,7 +523,13 @@ class ContentExtractor:
             )
         else:
             return await self._perform_new_crawl(
-                message, req_id, url_text, correlation_id, interaction_id, silent
+                message,
+                req_id,
+                url_text,
+                dedupe_hash,
+                correlation_id,
+                interaction_id,
+                silent,
             )
 
     async def _process_existing_crawl(
@@ -593,17 +608,48 @@ class ContentExtractor:
         message: Any,
         req_id: int,
         url_text: str,
+        dedupe_hash: str,
         correlation_id: str | None,
         interaction_id: int | None,
         silent: bool = False,
     ) -> tuple[str, str]:
         """Perform new Firecrawl extraction."""
+        persist_task: asyncio.Task[None] | None = None
+
+        cached_crawl = await self._get_cached_crawl(dedupe_hash, correlation_id)
+        if cached_crawl:
+            logger.info(
+                "firecrawl_cache_hit",
+                extra={
+                    "cid": correlation_id,
+                    "hash": dedupe_hash,
+                    "endpoint": cached_crawl.endpoint,
+                },
+            )
+            options_obj = (
+                cached_crawl.options_json if isinstance(cached_crawl.options_json, dict) else None
+            )
+            await self.response_formatter.send_content_reuse_notification(
+                message,
+                http_status=cached_crawl.http_status,
+                crawl_status=cached_crawl.status,
+                latency_sec=None,
+                correlation_id=cached_crawl.correlation_id,
+                options=options_obj,
+                silent=silent,
+            )
+            persist_task = self._schedule_crawl_persistence(req_id, cached_crawl, correlation_id)
+            result = await self._process_successful_crawl(
+                message, cached_crawl, correlation_id, silent
+            )
+            await self._await_persistence_task(persist_task)
+            return result
+
         # Notify: starting Firecrawl with progress indicator
         await self.response_formatter.send_firecrawl_start_notification(
             message, url=url_text, silent=silent
         )
 
-        persist_task: asyncio.Task[None] | None = None
         async with self._sem():
             crawl = await self.firecrawl.scrape_markdown(url_text, request_id=req_id)
 
@@ -733,6 +779,7 @@ class ContentExtractor:
                 result = await self._process_successful_crawl(
                     message, salvage_crawl, correlation_id, silent
                 )
+                await self._write_firecrawl_cache(dedupe_hash, salvage_crawl)
                 await self._await_persistence_task(salvage_persist_task)
                 return result
 
@@ -751,7 +798,9 @@ class ContentExtractor:
             raise ValueError(f"Firecrawl extraction failed: {failure_reason}") from None
 
         # Process successful crawl
-        return await self._process_successful_crawl(message, crawl, correlation_id, silent)
+        result = await self._process_successful_crawl(message, crawl, correlation_id, silent)
+        await self._write_firecrawl_cache(dedupe_hash, crawl)
+        return result
 
     def _detect_low_value_content(self, crawl: FirecrawlResult) -> LowValueContentIssue | None:
         """Detect low-value Firecrawl responses that should halt processing."""
@@ -819,6 +868,51 @@ class ContentExtractor:
             return LowValueContentIssue(reason=reason, metrics=metrics, preview=preview)
 
         return None
+
+    async def _get_cached_crawl(
+        self, dedupe_hash: str, correlation_id: str | None
+    ) -> FirecrawlResult | None:
+        """Fetch a cached Firecrawl result if available and valid."""
+        if not self._cache.enabled:
+            return None
+
+        cached = await self._cache.get_json("fc", str(URL_ROUTE_VERSION), dedupe_hash)
+        if not isinstance(cached, dict):
+            return None
+
+        try:
+            crawl = FirecrawlResult(**cached)
+        except Exception:
+            logger.warning("firecrawl_cache_invalid", extra={"cid": correlation_id})
+            return None
+
+        if self._detect_low_value_content(crawl):
+            logger.debug(
+                "firecrawl_cache_low_value_skipped",
+                extra={"cid": correlation_id, "hash": dedupe_hash},
+            )
+            return None
+
+        return crawl
+
+    async def _write_firecrawl_cache(self, dedupe_hash: str, crawl: FirecrawlResult) -> None:
+        """Persist Firecrawl response into Redis cache."""
+        if not self._cache.enabled:
+            return
+        if crawl.status != "ok":
+            return
+
+        has_markdown = bool(crawl.content_markdown and crawl.content_markdown.strip())
+        has_html = bool(crawl.content_html and crawl.content_html.strip())
+        if not (has_markdown or has_html):
+            return
+
+        payload = crawl.model_dump()
+        await self._cache.set_json(
+            value=payload,
+            ttl_seconds=getattr(self.cfg.redis, "firecrawl_ttl_seconds", 21_600),
+            parts=("fc", str(URL_ROUTE_VERSION), dedupe_hash),
+        )
 
     async def _handle_crawl_error(
         self,

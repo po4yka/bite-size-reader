@@ -1,3 +1,46 @@
+# Requirement Template
+- Requirement ID:
+- Date:
+- Owner:
+- Status: Draft | In Review | Approved
+- Related Docs:
+
+## Background
+- Problem statement:
+- Objectives:
+
+## Personas & Use Cases
+- Persona:
+- User story:
+- Preconditions:
+
+## Functional Requirements
+- Must have:
+- Should have:
+- Won't have:
+
+## Non-Functional Requirements
+- Performance:
+- Reliability/Availability:
+- Security/Privacy:
+- Observability:
+
+## Constraints & Assumptions
+- Constraint:
+- Assumption:
+
+## Dependencies
+- Upstream:
+- Downstream:
+
+## Acceptance Criteria
+- Criterion:
+
+## Metrics
+- Success metrics:
+
+## Open Questions
+- Question:
 # Requirement Title
 - Date: YYYY-MM-DD
 - Owner: NAME

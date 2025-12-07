@@ -1,3 +1,40 @@
+# Overall Architecture (Bite-Size Reader)
+- Date: 2025-12-07
+- Owner: AI Dev Partner
+- Status: Draft
+
+## System Context
+- Single Dockerized service exposing Telegram bot, CLI, and optional FastAPI mobile API.
+- Integrations: Firecrawl for extraction, OpenRouter for LLM, YouTube (yt-dlp + transcripts), SQLite for persistence.
+
+## High-Level Components
+- Adapters: Telegram, content (Firecrawl/YouTube), OpenRouter, external formatters.
+- Core: URL normalization, summary contract, language detection, logging.
+- Pipeline: Request routing → extraction → chunking/summarization → validation → formatting → persistence.
+- Agents: Extraction, summarization, validation with orchestrator.
+- Services: Search (vector/hybrid), embeddings, topic search, background tasks.
+
+## Data & Storage
+- SQLite at /data for requests, crawl results, LLM calls, summaries, videos metadata.
+- File storage under /data/videos for downloads; backups under /data/backups.
+
+## Flows (simplified)
+- URL: Normalize → dedupe → Firecrawl → quality checks → summarize → validate JSON → reply + persist.
+- YouTube: Detect → download + transcript → summarize → validate → reply + persist.
+- Forwarded posts: Extract text → summarize → validate → reply + persist.
+
+## Non-Functional Notes
+- Async throughout (Pyrogram, httpx, Peewee async patterns).
+- Rate limiting/semaphores for external APIs; retries with backoff.
+- Structured logging with correlation IDs; redact Authorization headers.
+
+## Security & Access
+- Owner-only access via ALLOWED_USER_IDS.
+- Secrets via environment variables; no secrets in DB/logs.
+
+## Observability
+- Persist Firecrawl/LLM artifacts; notifications for major pipeline steps.
+- Use correlation IDs to trace through DB records and logs.
 # Overall Architecture
 - Date: 2025-12-07
 - Owner: AI Assistant (with user)

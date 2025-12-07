@@ -26,6 +26,7 @@ from app.core.json_utils import extract_json
 from app.core.lang import LANG_RU
 from app.core.summary_contract import _cap_text, _extract_keywords_tfidf, _normalize_whitespace
 from app.db.user_interactions import async_safe_update_user_interaction
+from app.infrastructure.cache.redis_cache import RedisCache
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -124,6 +125,8 @@ class LLMSummarizer:
             audit_func=audit_func,
             sem=sem,
         )
+        self._cache = RedisCache(cfg)
+        self._prompt_version = getattr(cfg.runtime, "summary_prompt_version", "v1")
         self._last_llm_result: Any | None = None
         self._last_summary_shaped: dict[str, Any] | None = None
         self._last_insights: dict[str, Any] | None = None
@@ -139,6 +142,7 @@ class LLMSummarizer:
         correlation_id: str | None = None,
         interaction_id: int | None = None,
         *,
+        url_hash: str | None = None,
         url: str | None = None,
         silent: bool = False,
         defer_persistence: bool = False,
@@ -161,16 +165,6 @@ class LLMSummarizer:
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_content},
         ]
-
-        # Notify: Starting LLM call
-        await self.response_formatter.send_llm_start_notification(
-            message,
-            self.cfg.openrouter.model,
-            len(content_text),
-            self.cfg.openrouter.structured_output_mode,
-            url=url,
-            silent=silent,
-        )
 
         # If we have a long-context model configured and content exceeds threshold,
         # prefer a single-pass summary using that model (avoids chunking multi-calls).
@@ -328,7 +322,42 @@ class LLMSummarizer:
             summary, req_id, content_text, correlation_id, chosen_lang
         )
 
-        return await self._workflow.execute_summary_workflow(
+        model_for_cache = model_override or self.cfg.openrouter.model
+        cached_summary = await self._get_cached_summary(
+            url_hash, chosen_lang, model_for_cache, correlation_id
+        )
+        if cached_summary is not None:
+            llm_stub = self._build_cache_stub(model_for_cache)
+            self._last_llm_result = llm_stub
+            shaped = await self._workflow._finalize_success(
+                cached_summary,
+                llm_stub,
+                req_id,
+                correlation_id,
+                interaction_config,
+                persistence,
+                ensure_summary,
+                _on_success,
+                defer_persistence,
+            )
+            if not silent:
+                await self.response_formatter.send_cached_summary_notification(
+                    message, silent=silent
+                )
+            if url_hash:
+                await self._write_summary_cache(url_hash, model_for_cache, chosen_lang, shaped)
+            return shaped
+
+        await self.response_formatter.send_llm_start_notification(
+            message,
+            model_for_cache,
+            len(content_text),
+            self.cfg.openrouter.structured_output_mode,
+            url=url,
+            silent=silent,
+        )
+
+        summary = await self._workflow.execute_summary_workflow(
             message=message,
             req_id=req_id,
             correlation_id=correlation_id,
@@ -342,6 +371,10 @@ class LLMSummarizer:
             on_success=_on_success,
             defer_persistence=defer_persistence,
         )
+        if summary and url_hash:
+            chosen_model = getattr(self._last_llm_result, "model", model_for_cache)
+            await self._write_summary_cache(url_hash, chosen_model, chosen_lang, summary)
+        return summary
 
     async def summarize_content_pure(
         self,
@@ -1485,6 +1518,64 @@ class LLMSummarizer:
             )
 
         return summary
+
+    async def _get_cached_summary(
+        self,
+        url_hash: str | None,
+        chosen_lang: str | None,
+        model_name: str,
+        correlation_id: str | None,
+    ) -> dict[str, Any] | None:
+        """Return cached summary if present and valid."""
+        if not url_hash or not self._cache.enabled:
+            return None
+
+        lang_key = chosen_lang or "auto"
+        cached = await self._cache.get_json(
+            "llm", self._prompt_version, model_name, lang_key, url_hash
+        )
+        if not isinstance(cached, dict):
+            return None
+
+        if not self._workflow._summary_has_content(
+            cached, required_fields=("tldr", "summary_250", "summary_1000")
+        ):
+            logger.debug(
+                "llm_cache_missing_fields",
+                extra={"cid": correlation_id, "lang": lang_key, "model": model_name},
+            )
+            return None
+
+        return cached
+
+    async def _write_summary_cache(
+        self, url_hash: str, model_name: str, chosen_lang: str, summary: dict[str, Any]
+    ) -> None:
+        """Persist shaped summary into Redis cache."""
+        if not self._cache.enabled:
+            return
+        if not summary or not isinstance(summary, dict):
+            return
+
+        await self._cache.set_json(
+            value=summary,
+            ttl_seconds=getattr(self.cfg.redis, "llm_ttl_seconds", 7_200),
+            parts=("llm", self._prompt_version, model_name, chosen_lang or "auto", url_hash),
+        )
+
+    def _build_cache_stub(self, model_name: str) -> Any:
+        """LLM stub used when summary is served from cache."""
+        return type(
+            "LLMCacheStub",
+            (),
+            {
+                "status": "ok",
+                "latency_ms": 0,
+                "model": model_name,
+                "structured_output_used": True,
+                "structured_output_mode": self.cfg.openrouter.structured_output_mode,
+            },
+        )()
 
     def _generate_query_expansion_keywords(
         self, summary: dict[str, Any], content_text: str

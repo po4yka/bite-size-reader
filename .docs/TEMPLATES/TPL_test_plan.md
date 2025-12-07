@@ -1,3 +1,45 @@
+# Test Plan Template
+- Title:
+- Doc ID:
+- Date:
+- Owner:
+- Status: Draft | In Review | Approved
+- Related Docs:
+
+## Scope
+- In-scope:
+- Out-of-scope:
+
+## Test Strategy
+- Levels: Unit / Integration / E2E / Manual
+- Tools & frameworks:
+- Environments:
+
+## Test Matrix
+- Cases per level with expected results:
+
+## Data & Fixtures
+- Test data requirements:
+- Seed/setup steps:
+
+## Entry / Exit Criteria
+- Entry:
+- Exit:
+
+## Risks & Mitigations
+- Risk:
+- Mitigation:
+
+## Schedule & Ownership
+- Milestones:
+- Owners:
+
+## Reporting
+- Metrics (pass rate, coverage, defects):
+- Reporting cadence:
+
+## Open Questions
+- Question:
 # Test Plan Title
 - Date: YYYY-MM-DD
 - Owner: NAME

@@ -568,6 +568,7 @@ class RedisConfig(BaseModel):
     model_config = ConfigDict(frozen=True, populate_by_name=True)
 
     enabled: bool = Field(default=True, validation_alias="REDIS_ENABLED")
+    cache_enabled: bool = Field(default=True, validation_alias="REDIS_CACHE_ENABLED")
     required: bool = Field(
         default=False,
         validation_alias="REDIS_REQUIRED",
@@ -580,6 +581,11 @@ class RedisConfig(BaseModel):
     password: str | None = Field(default=None, validation_alias="REDIS_PASSWORD")
     prefix: str = Field(default="bsr", validation_alias="REDIS_PREFIX")
     socket_timeout: float = Field(default=5.0, validation_alias="REDIS_SOCKET_TIMEOUT")
+    cache_timeout_sec: float = Field(default=0.3, validation_alias="REDIS_CACHE_TIMEOUT_SEC")
+    firecrawl_ttl_seconds: int = Field(
+        default=21_600, validation_alias="REDIS_FIRECRAWL_TTL_SECONDS"
+    )
+    llm_ttl_seconds: int = Field(default=7_200, validation_alias="REDIS_LLM_TTL_SECONDS")
 
     @field_validator("url", mode="before")
     @classmethod
@@ -613,8 +619,18 @@ class RedisConfig(BaseModel):
         except ValueError as exc:  # pragma: no cover - defensive
             msg = f"{info.field_name.replace('_', ' ')} must be a valid integer"
             raise ValueError(msg) from exc
-        if parsed < 0 or parsed > 65535:
-            msg = f"{info.field_name.replace('_', ' ').capitalize()} must be between 0 and 65535"
+        limits: dict[str, tuple[int, int]] = {
+            "port": (0, 65535),
+            "db": (0, 65535),
+            "firecrawl_ttl_seconds": (60, 86_400 * 14),
+            "llm_ttl_seconds": (60, 86_400 * 14),
+        }
+        min_val, max_val = limits.get(info.field_name, (0, 65535))
+        if parsed < min_val or parsed > max_val:
+            msg = (
+                f"{info.field_name.replace('_', ' ').capitalize()} must be between "
+                f"{min_val} and {max_val}"
+            )
             raise ValueError(msg)
         return parsed
 
@@ -629,6 +645,20 @@ class RedisConfig(BaseModel):
             raise ValueError(msg) from exc
         if parsed <= 0 or parsed > 60:
             msg = "Redis socket timeout must be between 0 and 60 seconds"
+            raise ValueError(msg)
+        return parsed
+
+    @field_validator("cache_timeout_sec", mode="before")
+    @classmethod
+    def _validate_cache_timeout(cls, value: Any) -> float:
+        default = cls.model_fields["cache_timeout_sec"].default
+        try:
+            parsed = float(str(value if value not in (None, "") else default))
+        except ValueError as exc:  # pragma: no cover - defensive
+            msg = "Redis cache timeout must be a valid number"
+            raise ValueError(msg) from exc
+        if parsed <= 0 or parsed > 5:
+            msg = "Redis cache timeout must be between 0 and 5 seconds"
             raise ValueError(msg)
         return parsed
 
@@ -1042,6 +1072,7 @@ class RuntimeConfig(BaseModel):
     log_truncate_length: int = Field(default=1000, validation_alias="LOG_TRUNCATE_LENGTH")
     topic_search_max_results: int = Field(default=5, validation_alias="TOPIC_SEARCH_MAX_RESULTS")
     max_concurrent_calls: int = Field(default=4, validation_alias="MAX_CONCURRENT_CALLS")
+    summary_prompt_version: str = Field(default="v1", validation_alias="SUMMARY_PROMPT_VERSION")
     jwt_secret_key: str = Field(
         default="", validation_alias=AliasChoices("JWT_SECRET_KEY", "JWT_SECRET")
     )
@@ -1118,6 +1149,21 @@ class RuntimeConfig(BaseModel):
             msg = "Topic search max results must be 10 or fewer"
             raise ValueError(msg)
         return parsed
+
+    @field_validator("summary_prompt_version", mode="before")
+    @classmethod
+    def _validate_prompt_version(cls, value: Any) -> str:
+        raw = str(value or "v1").strip()
+        if not raw:
+            msg = "Summary prompt version cannot be empty"
+            raise ValueError(msg)
+        if len(raw) > 30:
+            msg = "Summary prompt version is too long"
+            raise ValueError(msg)
+        if any(ch.isspace() for ch in raw):
+            msg = "Summary prompt version cannot contain whitespace"
+            raise ValueError(msg)
+        return raw
 
     @field_validator("db_backup_interval_minutes", mode="before")
     @classmethod

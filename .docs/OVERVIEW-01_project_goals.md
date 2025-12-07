@@ -1,3 +1,32 @@
+# Project Goals (Bite-Size Reader)
+- Date: 2025-12-07
+- Owner: AI Dev Partner
+- Status: Draft
+
+## Vision
+- Provide concise, high-quality summaries of web articles, YouTube videos, and forwarded posts with strict JSON contracts and reliable delivery via Telegram, CLI, and APIs.
+
+## Objectives
+- Accuracy: Preserve facts, numbers, and entities with validation against the summary contract.
+- Speed: Keep end-to-end latency low with efficient extraction, caching, and async workflows.
+- Observability: Maintain correlation IDs, structured logs, and persisted artifacts for debugging.
+- Safety: Enforce access control, redact secrets, and avoid PII beyond IDs.
+
+## Scope & Channels
+- Telegram bot (primary), CLI tooling, and mobile API for retrieval/search.
+- Content sources: Web articles (Firecrawl), YouTube transcripts/downloads, forwarded channel posts.
+
+## Success Metrics
+- Summary validity rate (contract compliance).
+- P50/P95 time from request to response.
+- Cache hit rate for extraction and summarization.
+- Error rate and retry success for Firecrawl/OpenRouter.
+
+## Roadmap (high level)
+- Harden extraction and summarization quality with validation and retries.
+- Add caching layers for extraction and LLM responses to reduce latency and cost.
+- Strengthen search/embeddings for retrieval use-cases.
+- Improve operational tooling (migrations, backups, monitoring).
 # Project Goals (Overview)
 - Date: 2025-12-07
 - Owner: AI Assistant (with user)

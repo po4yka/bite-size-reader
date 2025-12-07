@@ -153,6 +153,8 @@ class URLProcessor:
             return
 
         try:
+            norm = normalize_url(url_text)
+            dedupe_hash = url_hash_sha256(norm)
             # Extract and process content
             (
                 req_id,
@@ -287,6 +289,7 @@ class URLProcessor:
                 max_chars,
                 correlation_id,
                 interaction_id,
+                url_hash=dedupe_hash,
                 url=url_text,
                 silent=silent,
                 defer_persistence=True,

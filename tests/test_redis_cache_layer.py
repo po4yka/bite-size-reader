@@ -1,0 +1,197 @@
+import asyncio
+from types import SimpleNamespace
+from unittest.mock import AsyncMock
+
+import pytest
+
+from app.adapters.content.content_extractor import ContentExtractor, FirecrawlResult
+from app.adapters.content.llm_summarizer import LLMSummarizer
+from app.infrastructure.cache.redis_cache import RedisCache
+
+
+class _FakeRedis:
+    def __init__(self) -> None:
+        self.store: dict[str, str] = {}
+
+    async def get(self, key: str) -> str | None:
+        return self.store.get(key)
+
+    async def set(self, key: str, value: str, ex: int | None = None) -> None:
+        self.store[key] = value
+
+
+def _dummy_cfg() -> SimpleNamespace:
+    redis_cfg = SimpleNamespace(
+        enabled=True,
+        cache_enabled=True,
+        required=False,
+        prefix="test",
+        cache_timeout_sec=0.1,
+        firecrawl_ttl_seconds=60,
+        llm_ttl_seconds=60,
+    )
+    runtime_cfg = SimpleNamespace(
+        enable_textacy=False,
+        request_timeout_sec=5,
+        summary_prompt_version="v1",
+    )
+    openrouter_cfg = SimpleNamespace(
+        model="test-model",
+        structured_output_mode="json_schema",
+        max_tokens=None,
+        temperature=0.1,
+        top_p=1.0,
+        fallback_models=(),
+        long_context_model=None,
+        enable_structured_outputs=True,
+        require_parameters=True,
+        auto_fallback_structured=True,
+        max_response_size_mb=10,
+    )
+    firecrawl_cfg = SimpleNamespace()
+    return SimpleNamespace(
+        redis=redis_cfg, runtime=runtime_cfg, openrouter=openrouter_cfg, firecrawl=firecrawl_cfg
+    )
+
+
+@pytest.mark.asyncio
+async def test_redis_cache_set_get_roundtrip():
+    cfg = _dummy_cfg()
+    cache = RedisCache(cfg)
+    fake_client = _FakeRedis()
+    cache._client = fake_client
+
+    stored = {"hello": "world"}
+    ok = await cache.set_json(value=stored, ttl_seconds=10, parts=("fc", "v1", "abc"))
+    assert ok
+
+    result = await cache.get_json("fc", "v1", "abc")
+    assert result == stored
+
+
+@pytest.mark.asyncio
+async def test_content_extractor_uses_cached_crawl(monkeypatch):
+    cfg = _dummy_cfg()
+    db = SimpleNamespace()
+
+    async def _scrape_markdown(*args, **kwargs):
+        raise AssertionError("scrape_markdown should not be called when cache hits")
+
+    firecrawl = SimpleNamespace(scrape_markdown=_scrape_markdown)
+
+    response_formatter = SimpleNamespace(
+        send_content_reuse_notification=AsyncMock(),
+        send_firecrawl_start_notification=AsyncMock(),
+        send_html_fallback_notification=AsyncMock(),
+    )
+
+    extractor = ContentExtractor(
+        cfg=cfg,
+        db=db,
+        firecrawl=firecrawl,
+        response_formatter=response_formatter,
+        audit_func=lambda *args, **kwargs: None,
+        sem=lambda: asyncio.Semaphore(1),
+    )
+
+    cached = FirecrawlResult(
+        status="ok",
+        http_status=200,
+        content_markdown="cached text",
+        content_html=None,
+        structured_json=None,
+        metadata_json=None,
+        links_json=None,
+        response_success=True,
+        response_error_code=None,
+        response_error_message=None,
+        response_details=None,
+        latency_ms=10,
+        error_text=None,
+        source_url="http://example.com",
+        endpoint="cache",
+        options_json=None,
+        correlation_id=None,
+    )
+
+    extractor._get_cached_crawl = AsyncMock(return_value=cached)
+    extractor._write_firecrawl_cache = AsyncMock()
+
+    extractor._schedule_crawl_persistence = lambda *args, **kwargs: None
+
+    async def _process_successful_crawl(*args, **kwargs):
+        return ("cached text", "markdown")
+
+    extractor._process_successful_crawl = _process_successful_crawl
+
+    result = await extractor._perform_new_crawl(
+        message=None,
+        req_id=1,
+        url_text="http://example.com",
+        dedupe_hash="hash",
+        correlation_id=None,
+        interaction_id=None,
+        silent=True,
+    )
+
+    assert result == ("cached text", "markdown")
+    response_formatter.send_firecrawl_start_notification.assert_not_awaited()
+    response_formatter.send_content_reuse_notification.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_llm_summarizer_uses_cached_summary(monkeypatch):
+    cfg = _dummy_cfg()
+
+    openrouter = SimpleNamespace()
+    db = SimpleNamespace(
+        async_upsert_summary=AsyncMock(),
+        async_update_request_status=AsyncMock(),
+    )
+    response_formatter = SimpleNamespace(
+        send_llm_start_notification=AsyncMock(),
+        send_llm_completion_notification=AsyncMock(),
+        send_error_notification=AsyncMock(),
+        send_cached_summary_notification=AsyncMock(),
+    )
+
+    summarizer = LLMSummarizer(
+        cfg=cfg,
+        db=db,
+        openrouter=openrouter,
+        response_formatter=response_formatter,
+        audit_func=lambda *args, **kwargs: None,
+        sem=lambda: asyncio.Semaphore(1),
+    )
+
+    cached_summary = {
+        "summary_250": "short",
+        "summary_1000": "long form",
+        "tldr": "tl;dr",
+        "topic_tags": [],
+    }
+
+    summarizer._get_cached_summary = AsyncMock(return_value=cached_summary)
+    summarizer._write_summary_cache = AsyncMock()
+
+    async def _finalize_success(*args, **kwargs):
+        return cached_summary
+
+    summarizer._workflow._finalize_success = _finalize_success
+
+    summary = await summarizer.summarize_content(
+        message=None,
+        content_text="hello world",
+        chosen_lang="en",
+        system_prompt="prompt",
+        req_id=1,
+        max_chars=100,
+        url_hash="hash",
+        correlation_id=None,
+        interaction_id=None,
+        silent=True,
+    )
+
+    assert summary == cached_summary
+    response_formatter.send_llm_start_notification.assert_not_called()
+    response_formatter.send_cached_summary_notification.assert_not_awaited()

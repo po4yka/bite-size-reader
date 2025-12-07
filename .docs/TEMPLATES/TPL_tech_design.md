@@ -1,3 +1,67 @@
+# Tech Design Template
+- Title:
+- Doc ID:
+- Date:
+- Owner:
+- Status: Draft | In Review | Approved
+- Related Docs:
+
+## Summary
+- What we are building and why:
+
+## Goals / Non-Goals
+- Goals:
+- Non-goals:
+
+## Context & Constraints
+- Current state:
+- Constraints & assumptions:
+
+## Architecture
+- High-level design:
+- Components and responsibilities:
+- Data flows / sequence diagrams:
+- External dependencies:
+
+## Data & Storage
+- Schemas / models impacted:
+- Migration needs:
+
+## Interfaces
+- APIs / contracts:
+- Config / feature flags:
+
+## Failure, Reliability, Performance
+- Error handling & retries:
+- Timeouts / limits:
+- SLIs/SLOs:
+
+## Security & Privacy
+- Authn/Z:
+- Secrets handling:
+- Data protection:
+
+## Observability
+- Logging:
+- Metrics:
+- Tracing:
+
+## Testing Strategy
+- Unit:
+- Integration:
+- E2E / manual:
+
+## Rollout / Migration
+- Phased rollout:
+- Backward compatibility:
+- Migration steps:
+
+## Risks & Mitigations
+- Risk:
+- Mitigation:
+
+## Open Questions
+- Question:
 # Tech Design Title
 - Date: YYYY-MM-DD
 - Owner: NAME
