@@ -81,6 +81,22 @@ class BotFactory:
             credit_warning_threshold=cfg.firecrawl.credit_warning_threshold,
             credit_critical_threshold=cfg.firecrawl.credit_critical_threshold,
             max_response_size_mb=cfg.firecrawl.max_response_size_mb,
+            max_age_seconds=cfg.firecrawl.max_age_seconds,
+            remove_base64_images=cfg.firecrawl.remove_base64_images,
+            block_ads=cfg.firecrawl.block_ads,
+            skip_tls_verification=cfg.firecrawl.skip_tls_verification,
+            include_markdown_format=cfg.firecrawl.include_markdown_format,
+            include_html_format=cfg.firecrawl.include_html_format,
+            include_links_format=cfg.firecrawl.include_links_format,
+            include_summary_format=cfg.firecrawl.include_summary_format,
+            include_images_format=cfg.firecrawl.include_images_format,
+            enable_screenshot_format=cfg.firecrawl.enable_screenshot_format,
+            screenshot_full_page=cfg.firecrawl.screenshot_full_page,
+            screenshot_quality=cfg.firecrawl.screenshot_quality,
+            screenshot_viewport_width=cfg.firecrawl.screenshot_viewport_width,
+            screenshot_viewport_height=cfg.firecrawl.screenshot_viewport_height,
+            json_prompt=cfg.firecrawl.json_prompt,
+            json_schema=cfg.firecrawl.json_schema,
         )
 
         openrouter = OpenRouterClient(

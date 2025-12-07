@@ -28,7 +28,7 @@ Add a Redis-backed request-level cache to reduce Firecrawl/API calls and LLM cos
 - Values: JSON payloads storing serialized FirecrawlResult-like dict and shaped summary dict. Include checksum/version to detect incompatible formats.
 
 ## Flows
-- Firecrawl: Before scrape, try cache → if hit, reuse content (respect low-value rules). After successful scrape or salvage, write cache with TTL. Do not cache low-value or error results.
+- Firecrawl: Before scrape, try cache → if hit, reuse content (respect low-value rules). After successful scrape or salvage, write cache with TTL. Do not cache low-value or error results. TTL should not exceed the Firecrawl v2 `maxAge` used on the request (default 2 days; current Redis TTL 6h is safely below).
 - LLM: Before OpenRouter call, try cache → if hit, return shaped summary and skip call. After successful summary, write cache. Do not cache invalid/empty summaries or errors.
 
 ## Failure, Reliability, Performance

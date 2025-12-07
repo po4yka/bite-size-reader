@@ -182,6 +182,40 @@ class FirecrawlConfig(BaseModel):
         default=100, validation_alias="FIRECRAWL_CREDIT_CRITICAL_THRESHOLD"
     )
     max_response_size_mb: int = Field(default=50, validation_alias="FIRECRAWL_MAX_RESPONSE_SIZE_MB")
+    max_age_seconds: int = Field(default=172_800, validation_alias="FIRECRAWL_MAX_AGE_SECONDS")
+    remove_base64_images: bool = Field(
+        default=True, validation_alias="FIRECRAWL_REMOVE_BASE64_IMAGES"
+    )
+    block_ads: bool = Field(default=True, validation_alias="FIRECRAWL_BLOCK_ADS")
+    skip_tls_verification: bool = Field(
+        default=True, validation_alias="FIRECRAWL_SKIP_TLS_VERIFICATION"
+    )
+    include_markdown_format: bool = Field(
+        default=True, validation_alias="FIRECRAWL_INCLUDE_MARKDOWN"
+    )
+    include_html_format: bool = Field(default=True, validation_alias="FIRECRAWL_INCLUDE_HTML")
+    include_links_format: bool = Field(default=False, validation_alias="FIRECRAWL_INCLUDE_LINKS")
+    include_summary_format: bool = Field(
+        default=False, validation_alias="FIRECRAWL_INCLUDE_SUMMARY"
+    )
+    include_images_format: bool = Field(default=False, validation_alias="FIRECRAWL_INCLUDE_IMAGES")
+    enable_screenshot_format: bool = Field(
+        default=False, validation_alias="FIRECRAWL_ENABLE_SCREENSHOT"
+    )
+    screenshot_full_page: bool = Field(
+        default=True, validation_alias="FIRECRAWL_SCREENSHOT_FULL_PAGE"
+    )
+    screenshot_quality: int = Field(default=80, validation_alias="FIRECRAWL_SCREENSHOT_QUALITY")
+    screenshot_viewport_width: int | None = Field(
+        default=None, validation_alias="FIRECRAWL_SCREENSHOT_VIEWPORT_WIDTH"
+    )
+    screenshot_viewport_height: int | None = Field(
+        default=None, validation_alias="FIRECRAWL_SCREENSHOT_VIEWPORT_HEIGHT"
+    )
+    json_prompt: str | None = Field(default=None, validation_alias="FIRECRAWL_JSON_PROMPT")
+    json_schema: dict[str, Any] | None = Field(
+        default=None, validation_alias="FIRECRAWL_JSON_SCHEMA"
+    )
 
     @field_validator("api_key", mode="before")
     @classmethod
@@ -195,6 +229,7 @@ class FirecrawlConfig(BaseModel):
         "credit_warning_threshold",
         "credit_critical_threshold",
         "max_response_size_mb",
+        "max_age_seconds",
         mode="before",
     )
     @classmethod
@@ -218,6 +253,7 @@ class FirecrawlConfig(BaseModel):
             "credit_warning_threshold": (1, 10000),
             "credit_critical_threshold": (1, 1000),
             "max_response_size_mb": (1, 1024),
+            "max_age_seconds": (60, 2_592_000),  # 1 minute to 30 days
         }
         min_val, max_val = limits[info.field_name]
         if parsed < min_val or parsed > max_val:
@@ -257,6 +293,29 @@ class FirecrawlConfig(BaseModel):
             msg = f"{info.field_name.replace('_', ' ').capitalize()} must be between {min_val} and {max_val}"
             raise ValueError(msg)
         return parsed
+
+    @field_validator("screenshot_quality", mode="before")
+    @classmethod
+    def _validate_screenshot_quality(cls, value: Any) -> int:
+        if value in (None, ""):
+            return 80
+        try:
+            parsed = int(str(value))
+        except ValueError as exc:  # pragma: no cover - defensive
+            msg = "Screenshot quality must be a valid integer"
+            raise ValueError(msg) from exc
+        if parsed < 1 or parsed > 100:
+            msg = "Screenshot quality must be between 1 and 100"
+            raise ValueError(msg)
+        return parsed
+
+    @field_validator("json_prompt", mode="before")
+    @classmethod
+    def _strip_json_prompt(cls, value: Any) -> str | None:
+        if value in (None, ""):
+            return None
+        text = str(value).strip()
+        return text or None
 
 
 class OpenRouterConfig(BaseModel):

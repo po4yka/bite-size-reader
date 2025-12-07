@@ -484,10 +484,10 @@ classDiagram
 
 ### URL flow
 1) `MessageRouter` classifies the interaction, persists a `requests` row (`type='url'`), normalizes the URL, and records the `dedupe_hash` via `MessagePersistence`.
-2) `URLProcessor.content_extractor` invokes **Firecrawl `/scrape`**:
-   - **Formats**: always request `markdown`; optionally add `html`, `structured`, `screenshot` based on config.
-   - **Options**: `mobile` emulation, `parsers: ["pdf"]`, scripted “actions” for dynamic pages.
-   - Persist the full raw response, extracted content, metadata, and latency telemetry in SQLite.
+2) `URLProcessor.content_extractor` invokes **Firecrawl `/v2/scrape`**:
+   - **Formats**: markdown/html by default; optional links/summary/images plus v2 object formats for `json` (prompt/schema) and `screenshot` (full-page, quality, viewport) via config.
+   - **Options**: v2 defaults (`maxAge`, `removeBase64Images`, `blockAds`, `skipTlsVerification`), `mobile` emulation, `parsers: ["pdf"]` when hinted, scripted “actions” for dynamic pages.
+   - Persist the full raw response, extracted content, metadata (includes summary_text/screenshots when requested), and latency telemetry in SQLite.
 3) `URLProcessor` determines language, loads the matching system prompt, and reports detection back to the user through `ResponseFormatter`.
 4) `ContentChunker` decides whether to chunk. When chunking is enabled it fans out concurrent OpenRouter calls and aggregates responses; otherwise it hands the full article to `LLMSummarizer`.
 5) `LLMSummarizer` calls **OpenRouter /api/v1/chat/completions** with structured output hints, automatic provider/model fallbacks, and optional long-context support:

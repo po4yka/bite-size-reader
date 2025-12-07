@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 from uuid import uuid4
 
 import chromadb
@@ -121,7 +121,8 @@ class ChromaVectorStore:
             )
 
         try:
-            self._collection.upsert(
+            collection = cast("Any", self._collection)
+            collection.upsert(
                 embeddings=[list(vector) for vector in vectors],
                 metadatas=validated_metadata,
                 ids=final_ids,
@@ -161,11 +162,13 @@ class ChromaVectorStore:
         ).to_where()
 
         try:
-            return self._collection.query(
+            collection = cast("Any", self._collection)
+            result = collection.query(
                 query_embeddings=[list(query_vector)],
                 where=validated_filters,
                 n_results=top_k,
             )
+            return cast("dict[str, Any]", result)
         except ChromaError as e:
             logger.error(
                 "chroma_query_failed",

@@ -26,6 +26,7 @@
 
 ## Regression Coverage
 - Ensure existing error-handling tests still pass (`test_firecrawl_error_handling`, summary contract tests, URL handler flow).
+- New v2 surface checks: `tests/test_firecrawl_client_v2.py` exercises v2 formats/options and crawl waiter helpers with mocked responses; keep mocks aligned with Firecrawl defaults (maxAge, blockAds, removeBase64Images, skipTlsVerification).
 
 ## Non-Functional
 - Concurrency/resilience under simulated DB latency; basic timing asserts to confirm overlap.

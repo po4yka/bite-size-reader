@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import inspect
 import logging
 from typing import TYPE_CHECKING
 
@@ -53,7 +54,9 @@ async def get_redis(cfg: AppConfig) -> aioredis.Redis | None:
                 socket_timeout=cfg.redis.socket_timeout,
                 decode_responses=True,
             )
-            await _client.ping()
+            ping_result = _client.ping()
+            if inspect.isawaitable(ping_result):
+                await ping_result
             logger.info(
                 "redis_connected",
                 extra={"url": url, "db": cfg.redis.db, "prefix": cfg.redis.prefix},

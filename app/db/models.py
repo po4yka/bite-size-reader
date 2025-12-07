@@ -17,7 +17,7 @@ class BaseModel(peewee.Model):
 
     def save(self, *args: Any, **kwargs: Any) -> int:
         """Ensure updated_at/server_version fields stay monotonic on every save."""
-        now = _dt.datetime.utcnow()
+        now = _utcnow()
 
         if hasattr(self, "updated_at"):
             self.updated_at = now
@@ -38,9 +38,14 @@ class BaseModel(peewee.Model):
         legacy_table_names = False
 
 
+def _utcnow() -> _dt.datetime:
+    """Timezone-aware UTC now (avoids deprecated datetime.utcnow)."""
+    return _dt.datetime.now(_dt.UTC)
+
+
 def _next_server_version() -> int:
     """Monotonic-ish server version seed based on current UTC timestamp (ms)."""
-    return int(_dt.datetime.utcnow().timestamp() * 1000)
+    return int(_utcnow().timestamp() * 1000)
 
 
 class User(BaseModel):
@@ -57,8 +62,8 @@ class User(BaseModel):
     link_nonce = peewee.TextField(null=True)
     link_nonce_expires_at = peewee.DateTimeField(null=True)
     server_version = peewee.BigIntegerField(default=_next_server_version)
-    updated_at = peewee.DateTimeField(default=_dt.datetime.utcnow)
-    created_at = peewee.DateTimeField(default=_dt.datetime.utcnow)
+    updated_at = peewee.DateTimeField(default=_utcnow)
+    created_at = peewee.DateTimeField(default=_utcnow)
 
     class Meta:
         table_name = "users"
@@ -81,8 +86,8 @@ class ClientSecret(BaseModel):
     failed_attempts = peewee.IntegerField(default=0)
     locked_until = peewee.DateTimeField(null=True)
     server_version = peewee.BigIntegerField(default=_next_server_version)
-    updated_at = peewee.DateTimeField(default=_dt.datetime.utcnow)
-    created_at = peewee.DateTimeField(default=_dt.datetime.utcnow)
+    updated_at = peewee.DateTimeField(default=_utcnow)
+    created_at = peewee.DateTimeField(default=_utcnow)
 
     class Meta:
         table_name = "client_secrets"
@@ -98,16 +103,16 @@ class Chat(BaseModel):
     title = peewee.TextField(null=True)
     username = peewee.TextField(null=True)
     server_version = peewee.BigIntegerField(default=_next_server_version)
-    updated_at = peewee.DateTimeField(default=_dt.datetime.utcnow)
-    created_at = peewee.DateTimeField(default=_dt.datetime.utcnow)
+    updated_at = peewee.DateTimeField(default=_utcnow)
+    created_at = peewee.DateTimeField(default=_utcnow)
 
     class Meta:
         table_name = "chats"
 
 
 class Request(BaseModel):
-    created_at = peewee.DateTimeField(default=_dt.datetime.utcnow)
-    updated_at = peewee.DateTimeField(default=_dt.datetime.utcnow)
+    created_at = peewee.DateTimeField(default=_utcnow)
+    updated_at = peewee.DateTimeField(default=_utcnow)
     type = peewee.TextField()
     status = peewee.TextField(default="pending")
     correlation_id = peewee.TextField(null=True)
@@ -164,7 +169,7 @@ class CrawlResult(BaseModel):
     request = peewee.ForeignKeyField(
         Request, backref="crawl_result", unique=True, on_delete="CASCADE"
     )
-    updated_at = peewee.DateTimeField(default=_dt.datetime.utcnow)
+    updated_at = peewee.DateTimeField(default=_utcnow)
     source_url = peewee.TextField(null=True)
     endpoint = peewee.TextField(null=True)
     http_status = peewee.IntegerField(null=True)
@@ -196,7 +201,7 @@ class LLMCall(BaseModel):
     request = peewee.ForeignKeyField(
         Request, backref="llm_calls", null=False, on_delete="CASCADE"
     )  # Phase 2: Made NOT NULL for data integrity
-    updated_at = peewee.DateTimeField(default=_dt.datetime.utcnow)
+    updated_at = peewee.DateTimeField(default=_utcnow)
     provider = peewee.TextField(null=True)
     model = peewee.TextField(null=True)
     endpoint = peewee.TextField(null=True)
@@ -215,7 +220,7 @@ class LLMCall(BaseModel):
     structured_output_used = peewee.BooleanField(null=True)
     structured_output_mode = peewee.TextField(null=True)
     error_context_json = JSONField(null=True)
-    created_at = peewee.DateTimeField(default=_dt.datetime.utcnow)
+    created_at = peewee.DateTimeField(default=_utcnow)
     server_version = peewee.BigIntegerField(default=_next_server_version)
     is_deleted = peewee.BooleanField(default=False)
     deleted_at = peewee.DateTimeField(null=True)
@@ -234,8 +239,8 @@ class Summary(BaseModel):
     is_read = peewee.BooleanField(default=False)
     is_deleted = peewee.BooleanField(default=False)
     deleted_at = peewee.DateTimeField(null=True)
-    updated_at = peewee.DateTimeField(default=_dt.datetime.utcnow)
-    created_at = peewee.DateTimeField(default=_dt.datetime.utcnow)
+    updated_at = peewee.DateTimeField(default=_utcnow)
+    created_at = peewee.DateTimeField(default=_utcnow)
 
     class Meta:
         table_name = "summaries"
@@ -287,8 +292,8 @@ class UserInteraction(BaseModel):
     request = peewee.ForeignKeyField(
         Request, backref="interactions", null=True, on_delete="SET NULL"
     )
-    created_at = peewee.DateTimeField(default=_dt.datetime.utcnow)
-    updated_at = peewee.DateTimeField(default=_dt.datetime.utcnow)
+    created_at = peewee.DateTimeField(default=_utcnow)
+    updated_at = peewee.DateTimeField(default=_utcnow)
 
     class Meta:
         table_name = "user_interactions"
@@ -296,7 +301,7 @@ class UserInteraction(BaseModel):
 
 
 class AuditLog(BaseModel):
-    ts = peewee.DateTimeField(default=_dt.datetime.utcnow)
+    ts = peewee.DateTimeField(default=_utcnow)
     level = peewee.TextField()
     event = peewee.TextField()
     details_json = JSONField(null=True)
@@ -314,7 +319,7 @@ class SummaryEmbedding(BaseModel):
     embedding_blob = peewee.BlobField()
     dimensions = peewee.IntegerField()
     language = peewee.TextField(null=True)  # Language code (en, ru, auto)
-    created_at = peewee.DateTimeField(default=_dt.datetime.utcnow)
+    created_at = peewee.DateTimeField(default=_utcnow)
 
     class Meta:
         table_name = "summary_embeddings"
@@ -358,7 +363,7 @@ class VideoDownload(BaseModel):
     # Timestamps
     download_started_at = peewee.DateTimeField(null=True)
     download_completed_at = peewee.DateTimeField(null=True)
-    created_at = peewee.DateTimeField(default=_dt.datetime.utcnow)
+    created_at = peewee.DateTimeField(default=_utcnow)
 
     # Status tracking
     status = peewee.TextField(default="pending")  # 'pending', 'downloading', 'completed', 'error'
