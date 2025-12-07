@@ -109,8 +109,11 @@ class RequestStatus(BaseModel):
     stage: str | None = None
     progress: dict[str, Any] | None = None
     estimated_seconds_remaining: int | None = None
+    error_stage: str | None = None
+    error_type: str | None = None
     error_message: str | None = None
     can_retry: bool | None = None
+    correlation_id: str | None = None
     updated_at: str
 
 

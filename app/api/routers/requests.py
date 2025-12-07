@@ -206,6 +206,11 @@ async def get_request_status(
         stage=status_info["stage"],
         progress=status_info["progress"],
         estimated_seconds_remaining=status_info["estimated_seconds_remaining"],
+        error_stage=status_info["error_stage"],
+        error_type=status_info["error_type"],
+        error_message=status_info["error_message"],
+        can_retry=status_info["can_retry"],
+        correlation_id=status_info["correlation_id"],
         updated_at=datetime.now(UTC).isoformat().replace("+00:00", "Z"),
     )
 

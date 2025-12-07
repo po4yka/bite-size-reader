@@ -208,6 +208,10 @@ class RequestService:
         # Determine stage based on status and related records
         stage = None
         progress = None
+        error_stage = None
+        error_type = None
+        error_message = None
+        can_retry = None
 
         if request.status == "processing":
             crawl_result = CrawlResult.select().where(CrawlResult.request == request.id).first()
@@ -223,6 +227,18 @@ class RequestService:
             elif not summary:
                 stage = "validation"
                 progress = {"current_step": 3, "total_steps": 4, "percentage": 75}
+        elif request.status == "pending":
+            stage = "pending"
+        elif request.status == "success":
+            stage = "success"
+        elif request.status == "error":
+            error_stage, error_type, error_message = RequestService._derive_error_details(
+                request.id
+            )
+            if not error_message:
+                error_message = "Request failed"
+            stage = error_stage or "error"
+            can_retry = True
 
         return {
             "request_id": request.id,
@@ -230,6 +246,11 @@ class RequestService:
             "stage": stage,
             "progress": progress,
             "estimated_seconds_remaining": 8 if request.status == "processing" else None,
+            "error_stage": error_stage,
+            "error_type": error_type,
+            "error_message": error_message,
+            "can_retry": can_retry,
+            "correlation_id": request.correlation_id,
         }
 
     @staticmethod
@@ -287,3 +308,48 @@ class RequestService:
         )
 
         return new_request
+
+    @staticmethod
+    def _derive_error_details(
+        request_id: int,
+    ) -> tuple[str | None, str | None, str | None]:
+        """
+        Infer error stage/type/message from persisted artifacts.
+        Prefers LLM errors (later stage) over crawl errors.
+        """
+        latest_llm = (
+            LLMCall.select()
+            .where(LLMCall.request == request_id)
+            .order_by(LLMCall.updated_at.desc())
+            .first()
+        )
+        if latest_llm and (latest_llm.status == "error" or latest_llm.error_text):
+            error_context = latest_llm.error_context_json or {}
+            error_type = None
+            message = latest_llm.error_text
+            if isinstance(error_context, dict):
+                error_type = error_context.get("error_code")
+                if message is None:
+                    message = error_context.get("error_message")
+            return (
+                "llm_summarization",
+                error_type or "LLM_FAILED",
+                message or "LLM summarization failed",
+            )
+
+        latest_crawl = (
+            CrawlResult.select()
+            .where(CrawlResult.request == request_id)
+            .order_by(CrawlResult.updated_at.desc())
+            .first()
+        )
+        if latest_crawl and (latest_crawl.status == "error" or latest_crawl.error_text):
+            return (
+                "content_extraction",
+                latest_crawl.firecrawl_error_code or "EXTRACTION_FAILED",
+                latest_crawl.error_text
+                or latest_crawl.firecrawl_error_message
+                or "Content extraction failed",
+            )
+
+        return None, None, None

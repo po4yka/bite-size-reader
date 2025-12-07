@@ -1,0 +1,78 @@
+import datetime as dt
+
+import peewee
+import pytest
+
+from app.api.services.request_service import RequestService
+from app.db.models import CrawlResult, LLMCall, Request, database_proxy
+
+
+@pytest.fixture
+def in_memory_db():
+    db = peewee.SqliteDatabase(":memory:")
+    database_proxy.initialize(db)
+    db.bind([Request, CrawlResult, LLMCall], bind_refs=False, bind_backrefs=False)
+    db.create_tables([Request, CrawlResult, LLMCall])
+    yield db
+    db.drop_tables([Request, CrawlResult, LLMCall])
+    db.close()
+
+
+def _create_request(
+    user_id: int,
+    dedupe_hash: str,
+    *,
+    status: str = "error",
+    correlation_id: str = "cid-1",
+) -> Request:
+    return Request.create(
+        type="url",
+        status=status,
+        correlation_id=correlation_id,
+        user_id=user_id,
+        input_url="https://example.com",
+        normalized_url="https://example.com",
+        dedupe_hash=dedupe_hash,
+        lang_detected="en",
+    )
+
+
+def test_status_includes_crawl_error(in_memory_db):
+    req = _create_request(user_id=1, dedupe_hash="hash-1", correlation_id="cid-crawl")
+
+    CrawlResult.create(
+        request=req,
+        status="error",
+        error_text="firecrawl failed to fetch",
+        updated_at=dt.datetime.utcnow(),
+    )
+
+    status_info = RequestService.get_request_status(req.user_id, req.id)
+
+    assert status_info["status"] == "error"
+    assert status_info["error_stage"] == "content_extraction"
+    assert status_info["error_type"] == "EXTRACTION_FAILED"
+    assert status_info["error_message"] == "firecrawl failed to fetch"
+    assert status_info["correlation_id"] == "cid-crawl"
+    assert status_info["can_retry"] is True
+
+
+def test_status_prefers_llm_error_when_available(in_memory_db):
+    req = _create_request(user_id=2, dedupe_hash="hash-2", correlation_id="cid-llm")
+
+    LLMCall.create(
+        request=req,
+        status="error",
+        error_text="llm summary failed",
+        error_context_json={"error_code": "LLM_FAILED"},
+        updated_at=dt.datetime.utcnow(),
+    )
+
+    status_info = RequestService.get_request_status(req.user_id, req.id)
+
+    assert status_info["status"] == "error"
+    assert status_info["error_stage"] == "llm_summarization"
+    assert status_info["error_type"] == "LLM_FAILED"
+    assert status_info["error_message"] == "llm summary failed"
+    assert status_info["correlation_id"] == "cid-llm"
+    assert status_info["can_retry"] is True
