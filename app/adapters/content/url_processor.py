@@ -5,9 +5,10 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
-from collections.abc import Callable, Mapping
+from collections.abc import Awaitable, Callable, Coroutine, Mapping
 from functools import lru_cache
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
@@ -91,6 +92,42 @@ class URLProcessor:
         )
 
         self.message_persistence = MessagePersistence(db=db)
+
+    def _schedule_persistence_task(
+        self, coro: Coroutine[Any, Any, Any], correlation_id: str | None, label: str
+    ) -> asyncio.Task[Any] | None:
+        """Run a persistence task without blocking the main flow."""
+        try:
+            task: asyncio.Task[Any] = asyncio.create_task(coro)
+        except RuntimeError as exc:
+            logger.error(
+                "persistence_task_schedule_failed",
+                extra={"cid": correlation_id, "label": label, "error": str(exc)},
+            )
+            return None
+
+        def _log_task_error(t: asyncio.Task) -> None:
+            if t.cancelled():
+                return
+            exc = t.exception()
+            if exc:
+                logger.error(
+                    "persistence_task_failed",
+                    extra={"cid": correlation_id, "label": label, "error": str(exc)},
+                )
+
+        task.add_done_callback(_log_task_error)
+        return task
+
+    async def _await_persistence_task(self, task: asyncio.Task | None) -> None:
+        """Await a scheduled persistence task when required (silent flows)."""
+        if task is None:
+            return
+        try:
+            await task
+        except Exception as exc:  # noqa: BLE001
+            raise_if_cancelled(exc)
+            logger.error("persistence_task_failed", extra={"error": str(exc)})
 
     async def handle_url_flow(
         self,
@@ -252,6 +289,7 @@ class URLProcessor:
                 interaction_id,
                 url=url_text,
                 silent=silent,
+                defer_persistence=True,
             )
 
             if shaped:
@@ -390,14 +428,24 @@ class URLProcessor:
     ) -> None:
         """Persist chunked results and send response."""
         try:
-            new_version = await self.db.async_upsert_summary(
-                request_id=req_id,
-                lang=chosen_lang,
-                json_payload=shaped,
-                is_read=not silent,
+
+            async def _persist_chunk() -> None:
+                new_version = await self.db.async_upsert_summary(
+                    request_id=req_id,
+                    lang=chosen_lang,
+                    json_payload=shaped,
+                    is_read=not silent,
+                )
+                await self.db.async_update_request_status(req_id, "ok")
+                self._audit(
+                    "INFO", "summary_upserted", {"request_id": req_id, "version": new_version}
+                )
+
+            persistence_task = self._schedule_persistence_task(
+                _persist_chunk(), correlation_id, "chunk_summary_persist"
             )
-            await self.db.async_update_request_status(req_id, "ok")
-            self._audit("INFO", "summary_upserted", {"request_id": req_id, "version": new_version})
+            if silent:
+                await self._await_persistence_task(persistence_task)
         except Exception as e:  # noqa: BLE001
             raise_if_cancelled(e)
             logger.error("persist_summary_error", extra={"error": str(e), "cid": correlation_id})

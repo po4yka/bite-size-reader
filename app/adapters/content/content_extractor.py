@@ -83,6 +83,76 @@ class ContentExtractor:
         self._audit = audit_func
         self._sem = sem
 
+    def _schedule_crawl_persistence(
+        self, req_id: int, crawl: FirecrawlResult, correlation_id: str | None
+    ) -> asyncio.Task[None] | None:
+        """Run crawl persistence off the network path and log any errors."""
+        try:
+            task: asyncio.Task[None] = asyncio.create_task(
+                self._persist_crawl_result(req_id, crawl, correlation_id)
+            )
+        except RuntimeError as exc:
+            logger.error(
+                "persist_crawl_schedule_failed",
+                extra={"cid": correlation_id, "error": str(exc)},
+            )
+            return None
+
+        def _log_task_error(t: asyncio.Task[None]) -> None:
+            if t.cancelled():
+                return
+            exc = t.exception()
+            if exc:
+                logger.error(
+                    "persist_crawl_task_error",
+                    extra={"cid": correlation_id, "error": str(exc)},
+                )
+
+        task.add_done_callback(_log_task_error)
+        return task
+
+    async def _persist_crawl_result(
+        self, req_id: int, crawl: FirecrawlResult, correlation_id: str | None
+    ) -> None:
+        """Persist crawl result with error logging."""
+        try:
+            details_payload = Database._prepare_json_payload(crawl.response_details)
+            self.db.insert_crawl_result(
+                request_id=req_id,
+                source_url=crawl.source_url,
+                endpoint=crawl.endpoint,
+                http_status=crawl.http_status,
+                status=crawl.status,
+                options_json=crawl.options_json,
+                correlation_id=crawl.correlation_id,
+                content_markdown=crawl.content_markdown,
+                content_html=crawl.content_html,
+                structured_json=crawl.structured_json,
+                metadata_json=crawl.metadata_json,
+                links_json=crawl.links_json,
+                screenshots_paths_json=None,
+                firecrawl_success=crawl.response_success,
+                firecrawl_error_code=crawl.response_error_code,
+                firecrawl_error_message=crawl.response_error_message,
+                firecrawl_details_json=details_payload,
+                raw_response_json=None,
+                latency_ms=crawl.latency_ms,
+                error_text=crawl.error_text,
+            )
+        except Exception as e:  # noqa: BLE001
+            raise_if_cancelled(e)
+            logger.error("persist_crawl_error", extra={"error": str(e), "cid": correlation_id})
+
+    async def _await_persistence_task(self, task: asyncio.Task[None] | None) -> None:
+        """Await a scheduled persistence task, logging any errors."""
+        if task is None:
+            return
+        try:
+            await task
+        except Exception as exc:  # noqa: BLE001
+            raise_if_cancelled(exc)
+            logger.error("persist_crawl_task_error", extra={"error": str(exc)})
+
     async def extract_content_pure(
         self,
         url: str,
@@ -533,6 +603,7 @@ class ContentExtractor:
             message, url=url_text, silent=silent
         )
 
+        persist_task: asyncio.Task[None] | None = None
         async with self._sem():
             crawl = await self.firecrawl.scrape_markdown(url_text, request_id=req_id)
 
@@ -584,32 +655,7 @@ class ContentExtractor:
             )
 
         # Persist crawl result
-        try:
-            details_payload = Database._prepare_json_payload(crawl.response_details)
-            self.db.insert_crawl_result(
-                request_id=req_id,
-                source_url=crawl.source_url,
-                endpoint=crawl.endpoint,
-                http_status=crawl.http_status,
-                status=crawl.status,
-                options_json=crawl.options_json,
-                correlation_id=crawl.correlation_id,
-                content_markdown=crawl.content_markdown,
-                content_html=crawl.content_html,
-                structured_json=crawl.structured_json,
-                metadata_json=crawl.metadata_json,
-                links_json=crawl.links_json,
-                screenshots_paths_json=None,
-                firecrawl_success=crawl.response_success,
-                firecrawl_error_code=crawl.response_error_code,
-                firecrawl_error_message=crawl.response_error_message,
-                firecrawl_details_json=details_payload,
-                raw_response_json=None,
-                latency_ms=crawl.latency_ms,
-                error_text=crawl.error_text,
-            )
-        except Exception as e:  # noqa: BLE001
-            logger.error("persist_crawl_error", extra={"error": str(e), "cid": correlation_id})
+        persist_task = self._schedule_crawl_persistence(req_id, crawl, correlation_id)
 
         # Debug logging for crawl result
         logger.debug(
@@ -672,34 +718,9 @@ class ContentExtractor:
                 )
 
                 # Persist salvage crawl result (separate entry)
-                try:
-                    self.db.insert_crawl_result(
-                        request_id=req_id,
-                        source_url=salvage_crawl.source_url,
-                        endpoint=salvage_crawl.endpoint,
-                        http_status=salvage_crawl.http_status,
-                        status=salvage_crawl.status,
-                        options_json=salvage_crawl.options_json,
-                        correlation_id=salvage_crawl.correlation_id,
-                        content_markdown=salvage_crawl.content_markdown,
-                        content_html=salvage_crawl.content_html,
-                        structured_json=salvage_crawl.structured_json,
-                        metadata_json=salvage_crawl.metadata_json,
-                        links_json=salvage_crawl.links_json,
-                        screenshots_paths_json=None,
-                        firecrawl_success=salvage_crawl.response_success,
-                        firecrawl_error_code=salvage_crawl.response_error_code,
-                        firecrawl_error_message=salvage_crawl.response_error_message,
-                        firecrawl_details_json=None,
-                        raw_response_json=None,
-                        latency_ms=salvage_crawl.latency_ms,
-                        error_text=salvage_crawl.error_text,
-                    )
-                except Exception as e:  # noqa: BLE001
-                    logger.error(
-                        "persist_salvage_crawl_error",
-                        extra={"error": str(e), "cid": correlation_id},
-                    )
+                salvage_persist_task = self._schedule_crawl_persistence(
+                    req_id, salvage_crawl, correlation_id
+                )
 
                 # Notify user we are using HTML fallback due to markdown/FC failure
                 await self.response_formatter.send_html_fallback_notification(
@@ -709,10 +730,13 @@ class ContentExtractor:
                 )
 
                 # Continue as if crawl succeeded with HTML
-                return await self._process_successful_crawl(
+                result = await self._process_successful_crawl(
                     message, salvage_crawl, correlation_id, silent
                 )
+                await self._await_persistence_task(salvage_persist_task)
+                return result
 
+            await self._await_persistence_task(persist_task)
             await self._handle_crawl_error(
                 message,
                 req_id,

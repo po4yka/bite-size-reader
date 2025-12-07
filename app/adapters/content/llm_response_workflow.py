@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
-from typing import TYPE_CHECKING, Any
+from collections.abc import Awaitable, Callable, Coroutine, Sequence
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict
 
@@ -11,10 +13,6 @@ from app.core.json_utils import extract_json
 from app.core.summary_contract import validate_and_shape_summary
 from app.db.user_interactions import async_safe_update_user_interaction
 from app.utils.json_validation import finalize_summary_texts, parse_summary_response
-
-if TYPE_CHECKING:
-    from collections.abc import Awaitable, Callable, Sequence
-
 
 logger = logging.getLogger(__name__)
 
@@ -76,6 +74,7 @@ class LLMSummaryPersistenceSettings(BaseModel):
     lang: str
     is_read: bool = True
     insights_getter: Any | None = None  # Callable[[dict[str, Any]], dict[str, Any] | None]
+    defer_write: bool = False
 
 
 class LLMResponseWorkflow:
@@ -115,6 +114,32 @@ class LLMResponseWorkflow:
         self._audit = audit_func
         self._sem = sem
 
+    def _schedule_background_task(
+        self, coro: Coroutine[Any, Any, Any], label: str, correlation_id: str | None
+    ) -> asyncio.Task[Any] | None:
+        """Run a persistence task in the background and log errors."""
+        try:
+            task: asyncio.Task[Any] = asyncio.create_task(coro)
+        except RuntimeError as exc:
+            logger.error(
+                "background_task_schedule_failed",
+                extra={"label": label, "cid": correlation_id, "error": str(exc)},
+            )
+            return None
+
+        def _log_task_error(t: asyncio.Task[Any]) -> None:
+            if t.cancelled():
+                return
+            exc = t.exception()
+            if exc:
+                logger.error(
+                    "background_task_failed",
+                    extra={"label": label, "cid": correlation_id, "error": str(exc)},
+                )
+
+        task.add_done_callback(_log_task_error)
+        return task
+
     async def execute_summary_workflow(
         self,
         *,
@@ -130,6 +155,7 @@ class LLMResponseWorkflow:
         on_attempt: Callable[[Any], Awaitable[None]] | None = None,
         on_success: Callable[[dict[str, Any], Any], Awaitable[None]] | None = None,
         required_summary_fields: Sequence[str] = ("tldr", "summary_250", "summary_1000"),
+        defer_persistence: bool = False,
     ) -> dict[str, Any] | None:
         """Run the shared summary processing workflow for a sequence of attempts."""
         if not requests:
@@ -148,7 +174,14 @@ class LLMResponseWorkflow:
             if on_attempt is not None:
                 await on_attempt(llm)
 
-            await self._persist_llm_call(llm, req_id, correlation_id)
+            if defer_persistence or persistence.defer_write:
+                self._schedule_background_task(
+                    self._persist_llm_call(llm, req_id, correlation_id),
+                    "persist_llm_call",
+                    correlation_id,
+                )
+            else:
+                await self._persist_llm_call(llm, req_id, correlation_id)
 
             # Only send completion notifications for successful attempts or the last attempt
             if (
@@ -173,6 +206,7 @@ class LLMResponseWorkflow:
                 required_summary_fields=required_summary_fields,
                 is_last_attempt=is_last_attempt,
                 failed_attempts=failed_attempts,
+                defer_persistence=defer_persistence,
             )
 
             if summary is not None:
@@ -246,6 +280,7 @@ class LLMResponseWorkflow:
         required_summary_fields: Sequence[str],
         is_last_attempt: bool = False,
         failed_attempts: list[tuple[Any, LLMRequestConfig]] | None = None,
+        defer_persistence: bool = False,
     ) -> dict[str, Any] | None:
         if llm.status != "ok":
             salvage = None
@@ -261,6 +296,7 @@ class LLMResponseWorkflow:
                     persistence,
                     ensure_summary,
                     on_success,
+                    defer_persistence,
                 )
 
             # Only handle LLM error immediately if this is the last attempt
@@ -317,6 +353,7 @@ class LLMResponseWorkflow:
             persistence,
             ensure_summary,
             on_success,
+            defer_persistence,
         )
 
     async def _finalize_success(
@@ -329,6 +366,7 @@ class LLMResponseWorkflow:
         persistence: LLMSummaryPersistenceSettings,
         ensure_summary: Callable[[dict[str, Any]], Awaitable[dict[str, Any]]] | None,
         on_success: Callable[[dict[str, Any], Any], Awaitable[None]] | None,
+        defer_persistence: bool,
     ) -> dict[str, Any]:
         if ensure_summary is not None:
             summary = await ensure_summary(summary)
@@ -348,24 +386,26 @@ class LLMResponseWorkflow:
                     extra={"cid": correlation_id, "error": str(exc)},
                 )
 
-        try:
-            new_version = await self.db.async_upsert_summary(
-                request_id=req_id,
-                lang=persistence.lang,
-                json_payload=summary,
+        if defer_persistence or persistence.defer_write:
+            self._schedule_background_task(
+                self._persist_summary(
+                    req_id=req_id,
+                    persistence=persistence,
+                    summary=summary,
+                    insights_json=insights_json,
+                    correlation_id=correlation_id,
+                ),
+                "persist_summary",
+                correlation_id,
+            )
+        else:
+            await self._persist_summary(
+                req_id=req_id,
+                persistence=persistence,
+                summary=summary,
                 insights_json=insights_json,
-                is_read=persistence.is_read,
+                correlation_id=correlation_id,
             )
-            await self.db.async_update_request_status(req_id, "ok")
-            self._audit("INFO", "summary_upserted", {"request_id": req_id, "version": new_version})
-        except Exception as exc:
-            logger.exception(
-                "persist_summary_error",
-                extra={"error": str(exc), "cid": correlation_id},
-            )
-            # Re-raise to ensure database errors don't go unnoticed
-            # This prevents the workflow from continuing with unsaved data
-            raise
 
         if interaction_config.interaction_id and interaction_config.success_kwargs:
             try:
@@ -401,6 +441,33 @@ class LLMResponseWorkflow:
         )
 
         return summary
+
+    async def _persist_summary(
+        self,
+        *,
+        req_id: int,
+        persistence: LLMSummaryPersistenceSettings,
+        summary: dict[str, Any],
+        insights_json: dict[str, Any] | None,
+        correlation_id: str | None,
+    ) -> None:
+        try:
+            new_version = await self.db.async_upsert_summary(
+                request_id=req_id,
+                lang=persistence.lang,
+                json_payload=summary,
+                insights_json=insights_json,
+                is_read=persistence.is_read,
+            )
+            await self.db.async_update_request_status(req_id, "ok")
+            self._audit("INFO", "summary_upserted", {"request_id": req_id, "version": new_version})
+        except Exception as exc:
+            logger.exception(
+                "persist_summary_error",
+                extra={"error": str(exc), "cid": correlation_id},
+            )
+            # Re-raise to surface persistent failures to callers when awaited
+            raise
 
     async def _attempt_salvage_parsing(
         self, llm: Any, correlation_id: str | None

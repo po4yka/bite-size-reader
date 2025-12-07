@@ -141,6 +141,7 @@ class LLMSummarizer:
         *,
         url: str | None = None,
         silent: bool = False,
+        defer_persistence: bool = False,
     ) -> dict[str, Any] | None:
         """Summarize content using LLM and return shaped summary."""
         # Validate content before sending to LLM
@@ -313,6 +314,7 @@ class LLMSummarizer:
             lang=chosen_lang,
             is_read=True,
             insights_getter=_insights_from_summary,
+            defer_write=defer_persistence,
         )
 
         async def _on_attempt(llm_result: Any) -> None:
@@ -338,6 +340,7 @@ class LLMSummarizer:
             ensure_summary=ensure_summary,
             on_attempt=_on_attempt,
             on_success=_on_success,
+            defer_persistence=defer_persistence,
         )
 
     async def summarize_content_pure(
