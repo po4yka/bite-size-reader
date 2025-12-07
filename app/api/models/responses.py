@@ -31,15 +31,13 @@ class MetaInfo(BaseModel):
 
 
 class ErrorDetail(BaseModel):
-    """Error details."""
+    """Error details aligned to API error envelope."""
 
     code: str
     message: str
     details: dict[str, Any] | None = None
     correlation_id: str | None = None
-    timestamp: str = Field(
-        default_factory=lambda: datetime.now(UTC).isoformat().replace("+00:00", "Z")
-    )
+    retry_after: int | None = None
 
 
 class SuccessResponse(BaseModel):
@@ -202,36 +200,52 @@ class SearchResultsData(BaseModel):
     query: str
 
 
-class SyncSessionInfo(BaseModel):
-    """Sync session metadata."""
+class SyncSessionData(BaseModel):
+    """Sync session metadata (aligned to OpenAPI)."""
 
     session_id: str
     expires_at: str
-    chunk_limit: int
-    created_at: str
+    default_limit: int
+    max_limit: int
+    last_issued_since: int | None = None
 
 
-class SyncRecord(BaseModel):
-    """Single sync record (created/updated) or tombstone (deleted)."""
+class SyncEntityEnvelope(BaseModel):
+    """Envelope for a synced entity or tombstone."""
 
     entity_type: str
     id: int | str
     server_version: int
     updated_at: str
     deleted_at: str | None = None
-    data: dict[str, Any] | None = None
+    summary: dict[str, Any] | None = None
+    request: dict[str, Any] | None = None
+    preference: dict[str, Any] | None = None
+    stat: dict[str, Any] | None = None
+    crawl_result: dict[str, Any] | None = None
+    llm_call: dict[str, Any] | None = None
 
 
-class SyncPage(BaseModel):
-    """Sync page containing created/updated/deleted entries."""
+class FullSyncResponseData(BaseModel):
+    """Response payload for full sync chunks."""
 
     session_id: str
-    created: list[SyncRecord]
-    updated: list[SyncRecord]
-    deleted: list[SyncRecord]
     has_more: bool
-    next_since: int | None
-    limit: int
+    next_since: int | None = None
+    items: list[SyncEntityEnvelope]
+    pagination: PaginationInfo
+
+
+class DeltaSyncResponseData(BaseModel):
+    """Response payload for delta sync."""
+
+    session_id: str
+    since: int
+    has_more: bool
+    next_since: int | None = None
+    created: list[SyncEntityEnvelope]
+    updated: list[SyncEntityEnvelope]
+    deleted: list[SyncEntityEnvelope]
 
 
 class SyncApplyItemResult(BaseModel):
@@ -245,15 +259,13 @@ class SyncApplyItemResult(BaseModel):
     error_code: str | None = None
 
 
-class SyncApplyResult(BaseModel):
-    """Upload local changes result."""
+class SyncApplyResponseData(BaseModel):
+    """Upload local changes result (aligned to OpenAPI)."""
 
     session_id: str
     results: list[SyncApplyItemResult]
-    applied: int
-    conflicts: int
-    invalid: int
-    sync_timestamp: str
+    conflicts: list[SyncApplyItemResult] | None = None
+    has_more: bool | None = None
 
 
 class PreferencesData(BaseModel):

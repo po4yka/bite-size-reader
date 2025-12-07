@@ -11,6 +11,11 @@ The Mobile API is a RESTful API built with FastAPI that provides:
 - **Database sync** - Sync entire database to mobile device
 - **Authentication** - JWT-based auth with Telegram login
 
+### What Changed (2025-12-07)
+- OpenAPI `/v1` spec now defines typed envelopes for all success responses and standardized `ErrorResponse` for 401/403/404/409/410/422/429/500 with correlation IDs.
+- Added concrete schemas for summaries, requests/status, search pagination, duplicate checks, user preferences/stats, and sync (session/full/delta/apply with conflicts).
+- Servers block documents production/staging/local URLs; array query params are encoded as repeated keys (e.g., `tags=ai&tags=travel`).
+
 ## Quick Start
 
 ### 1. Install Dependencies

@@ -6,6 +6,15 @@
 
 ---
 
+## Latest Updates (2025-12-07)
+
+- OpenAPI `/v1` spec now uses typed envelopes for all 200 responses (auth, summaries, requests, search, sync, user) and standardizes error envelopes (401/403/404/409/410/422/429/500) with `correlation_id` and retry metadata.
+- Added explicit schemas for summaries (list/detail), search/pagination, request submission/status, duplicate checks, user preferences/stats, and sync (session/full/delta/apply with conflict results).
+- Sync endpoints document cursors (`since`, `next_since`), `server_version`, and tombstone handling; `apply` returns per-item statuses and conflicts.
+- Servers section added for production/staging/local; array query parameters clarified as repeated keys (e.g., `tags=ai&tags=travel`).
+
+---
+
 ## Table of Contents
 
 1. [Overview](#overview)

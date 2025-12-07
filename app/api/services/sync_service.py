@@ -6,15 +6,16 @@ from collections.abc import Iterable
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
-from fastapi import HTTPException
 from peewee import JOIN
 
+from app.api.exceptions import APIException, ErrorCode
 from app.api.models.responses import (
+    DeltaSyncResponseData,
+    FullSyncResponseData,
     SyncApplyItemResult,
-    SyncApplyResult,
-    SyncPage,
-    SyncRecord,
-    SyncSessionInfo,
+    SyncApplyResponseData,
+    SyncEntityEnvelope,
+    SyncSessionData,
 )
 from app.core.logging_utils import get_logger
 from app.core.time_utils import UTC
@@ -68,29 +69,43 @@ class SyncService:
             ttl = await redis_client.ttl(key)
 
             if payload_raw is None or ttl == -2:
-                raise HTTPException(status_code=410, detail="Sync session expired or not found")
+                raise APIException(
+                    message="Sync session expired or not found",
+                    error_code=ErrorCode.SESSION_EXPIRED,
+                    status_code=410,
+                )
 
             payload = json.loads(payload_raw)
         else:
             payload = _sync_sessions.get(session_id)
             if not payload:
-                raise HTTPException(status_code=410, detail="Sync session expired or not found")
+                raise APIException(
+                    message="Sync session expired or not found",
+                    error_code=ErrorCode.SESSION_EXPIRED,
+                    status_code=410,
+                )
 
         if payload.get("user_id") != user_id or payload.get("client_id") != client_id:
-            raise HTTPException(
-                status_code=403, detail="Sync session does not belong to this user/client"
+            raise APIException(
+                message="Sync session does not belong to this user/client",
+                error_code=ErrorCode.FORBIDDEN,
+                status_code=403,
             )
 
         expires_raw = payload["expires_at"]
         expires_at = datetime.fromisoformat(expires_raw.replace("Z", "+00:00"))
         if datetime.now(UTC) >= expires_at:
-            raise HTTPException(status_code=410, detail="Sync session expired")
+            raise APIException(
+                message="Sync session expired",
+                error_code=ErrorCode.SESSION_EXPIRED,
+                status_code=410,
+            )
 
         return payload
 
     async def start_session(
         self, *, user_id: int, client_id: str | None, limit: int | None
-    ) -> SyncSessionInfo:
+    ) -> SyncSessionData:
         resolved = self._resolve_limit(limit)
         session_id = f"sync-{uuid.uuid4().hex[:16]}"
         now = datetime.now(UTC)
@@ -108,19 +123,20 @@ class SyncService:
 
         await self._store_session(payload)
 
-        return SyncSessionInfo(
+        return SyncSessionData(
             session_id=session_id,
             expires_at=payload["expires_at"],
-            chunk_limit=resolved,
-            created_at=payload["created_at"],
+            default_limit=self.cfg.sync.default_limit,
+            max_limit=self.cfg.sync.max_limit,
+            last_issued_since=0,
         )
 
-    def _serialize_request(self, request: Request) -> SyncRecord:
+    def _serialize_request(self, request: Request) -> SyncEntityEnvelope:
         deleted_at = request.deleted_at.isoformat() + "Z" if request.deleted_at else None
-        data = (
-            None
-            if request.is_deleted
-            else {
+        payload = None
+        if not request.is_deleted:
+            payload = {
+                "id": request.id,
                 "type": request.type,
                 "status": request.status,
                 "input_url": request.input_url,
@@ -128,17 +144,16 @@ class SyncService:
                 "correlation_id": request.correlation_id,
                 "created_at": request.created_at.isoformat() + "Z",
             }
-        )
-        return SyncRecord(
+        return SyncEntityEnvelope(
             entity_type="request",
             id=request.id,
             server_version=int(request.server_version or 0),
             updated_at=request.updated_at.isoformat() + "Z",
             deleted_at=deleted_at,
-            data=data,
+            request=payload,
         )
 
-    def _serialize_summary(self, summary: Summary) -> SyncRecord:
+    def _serialize_summary(self, summary: Summary) -> SyncEntityEnvelope:
         deleted_at = summary.deleted_at.isoformat() + "Z" if summary.deleted_at else None
         payload = None
         if not summary.is_deleted:
@@ -151,16 +166,16 @@ class SyncService:
                 "created_at": summary.created_at.isoformat() + "Z",
             }
 
-        return SyncRecord(
+        return SyncEntityEnvelope(
             entity_type="summary",
             id=summary.id,
             server_version=int(summary.server_version or 0),
             updated_at=summary.updated_at.isoformat() + "Z",
             deleted_at=deleted_at,
-            data=payload,
+            summary=payload,
         )
 
-    def _serialize_crawl_result(self, crawl: CrawlResult) -> SyncRecord:
+    def _serialize_crawl_result(self, crawl: CrawlResult) -> SyncEntityEnvelope:
         deleted_at = crawl.deleted_at.isoformat() + "Z" if crawl.deleted_at else None
         payload = None
         if not crawl.is_deleted:
@@ -173,16 +188,16 @@ class SyncService:
                 "latency_ms": crawl.latency_ms,
             }
 
-        return SyncRecord(
+        return SyncEntityEnvelope(
             entity_type="crawl_result",
             id=crawl.id,
             server_version=int(crawl.server_version or 0),
             updated_at=crawl.updated_at.isoformat() + "Z",
             deleted_at=deleted_at,
-            data=payload,
+            crawl_result=payload,
         )
 
-    def _serialize_llm_call(self, call: LLMCall) -> SyncRecord:
+    def _serialize_llm_call(self, call: LLMCall) -> SyncEntityEnvelope:
         deleted_at = call.deleted_at.isoformat() + "Z" if call.deleted_at else None
         payload = None
         if not call.is_deleted:
@@ -197,22 +212,22 @@ class SyncService:
                 "created_at": call.created_at.isoformat() + "Z",
             }
 
-        return SyncRecord(
+        return SyncEntityEnvelope(
             entity_type="llm_call",
             id=call.id,
             server_version=int(call.server_version or 0),
             updated_at=call.updated_at.isoformat() + "Z",
             deleted_at=deleted_at,
-            data=payload,
+            llm_call=payload,
         )
 
-    def _serialize_user(self, user: User) -> SyncRecord:
-        return SyncRecord(
+    def _serialize_user(self, user: User) -> SyncEntityEnvelope:
+        return SyncEntityEnvelope(
             entity_type="user",
             id=user.telegram_user_id,
             server_version=int(user.server_version or 0),
             updated_at=user.updated_at.isoformat() + "Z",
-            data={
+            preference={
                 "username": user.username,
                 "is_owner": user.is_owner,
                 "preferences": user.preferences_json,
@@ -220,8 +235,8 @@ class SyncService:
             },
         )
 
-    def _collect_records(self, user_id: int) -> list[SyncRecord]:
-        records: list[SyncRecord] = []
+    def _collect_records(self, user_id: int) -> list[SyncEntityEnvelope]:
+        records: list[SyncEntityEnvelope] = []
 
         user = User.select().where(User.telegram_user_id == user_id).first()
         if user:
@@ -253,8 +268,8 @@ class SyncService:
         return records
 
     def _paginate_records(
-        self, records: Iterable[SyncRecord], since: int, limit: int
-    ) -> tuple[list[SyncRecord], bool, int | None]:
+        self, records: Iterable[SyncEntityEnvelope], since: int, limit: int
+    ) -> tuple[list[SyncEntityEnvelope], bool, int | None]:
         filtered = [rec for rec in records if rec.server_version > since]
         page = filtered[:limit]
         has_more = len(filtered) > limit
@@ -263,49 +278,72 @@ class SyncService:
 
     async def get_full(
         self, *, session_id: str, user_id: int, client_id: str | None, limit: int | None
-    ) -> SyncPage:
+    ) -> FullSyncResponseData:
         session = await self._load_session(session_id, user_id, client_id)
         resolved_limit = self._resolve_limit(limit or session.get("chunk_limit"))
         records = self._collect_records(user_id)
         page, has_more, next_since = self._paginate_records(records, since=0, limit=resolved_limit)
-        return self._build_page(session_id, page, has_more, next_since, resolved_limit)
+        return self._build_full(session_id, page, has_more, next_since, resolved_limit)
 
     async def get_delta(
         self, *, session_id: str, user_id: int, client_id: str | None, since: int, limit: int | None
-    ) -> SyncPage:
+    ) -> DeltaSyncResponseData:
         session = await self._load_session(session_id, user_id, client_id)
         resolved_limit = self._resolve_limit(limit or session.get("chunk_limit"))
         records = self._collect_records(user_id)
         page, has_more, next_since = self._paginate_records(
             records, since=since, limit=resolved_limit
         )
-        return self._build_page(session_id, page, has_more, next_since, resolved_limit)
+        return self._build_delta(session_id, since, page, has_more, next_since, resolved_limit)
 
-    def _build_page(
+    def _build_full(
         self,
         session_id: str,
-        records: list[SyncRecord],
+        records: list[SyncEntityEnvelope],
         has_more: bool,
         next_since: int | None,
         limit: int,
-    ) -> SyncPage:
+    ) -> FullSyncResponseData:
+        pagination = {
+            "total": len(records),
+            "limit": limit,
+            "offset": 0,
+            "has_more": has_more,
+        }
+        return FullSyncResponseData(
+            session_id=session_id,
+            has_more=has_more,
+            next_since=next_since,
+            items=records,
+            pagination=pagination,
+        )
+
+    def _build_delta(
+        self,
+        session_id: str,
+        since: int,
+        records: list[SyncEntityEnvelope],
+        has_more: bool,
+        next_since: int | None,
+        limit: int,
+    ) -> DeltaSyncResponseData:
         created = [rec for rec in records if not rec.deleted_at]
-        updated: list[SyncRecord] = []
+        updated: list[SyncEntityEnvelope] = []
         deleted = [rec for rec in records if rec.deleted_at]
 
-        return SyncPage(
+        return DeltaSyncResponseData(
             session_id=session_id,
+            since=since,
+            has_more=has_more,
+            next_since=next_since,
             created=created,
             updated=updated,
             deleted=deleted,
-            has_more=has_more,
-            next_since=next_since,
-            limit=limit,
         )
 
     async def apply_changes(
         self, *, session_id: str, user_id: int, client_id: str | None, changes: list[SyncApplyItem]
-    ) -> SyncApplyResult:
+    ) -> SyncApplyResponseData:
         await self._load_session(session_id, user_id, client_id)
 
         results: list[SyncApplyItemResult] = []
@@ -333,13 +371,13 @@ class SyncService:
             else:
                 invalid += 1
 
-        return SyncApplyResult(
+        conflicts_list = [r for r in results if r.status == "conflict"]
+
+        return SyncApplyResponseData(
             session_id=session_id,
             results=results,
-            applied=applied,
-            conflicts=conflicts,
-            invalid=invalid,
-            sync_timestamp=datetime.now(UTC).isoformat().replace("+00:00", "Z"),
+            conflicts=conflicts_list or None,
+            has_more=None,
         )
 
     def _apply_summary_change(self, change: SyncApplyItem, user_id: int) -> SyncApplyItemResult:

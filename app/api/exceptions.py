@@ -12,12 +12,12 @@ class ErrorCode(str, Enum):
 
     # Client errors (4xx)
     VALIDATION_ERROR = "VALIDATION_ERROR"
-    AUTHENTICATION_FAILED = "AUTHENTICATION_FAILED"
-    AUTHORIZATION_FAILED = "AUTHORIZATION_FAILED"
-    RESOURCE_NOT_FOUND = "RESOURCE_NOT_FOUND"
-    DUPLICATE_RESOURCE = "DUPLICATE_RESOURCE"
+    UNAUTHORIZED = "UNAUTHORIZED"
+    FORBIDDEN = "FORBIDDEN"
+    NOT_FOUND = "NOT_FOUND"
+    CONFLICT = "CONFLICT"
     RATE_LIMIT_EXCEEDED = "RATE_LIMIT_EXCEEDED"
-    INVALID_REQUEST = "INVALID_REQUEST"
+    SESSION_EXPIRED = "SESSION_EXPIRED"
 
     # Server errors (5xx)
     INTERNAL_ERROR = "INTERNAL_ERROR"
@@ -61,7 +61,7 @@ class AuthenticationError(APIException):
     def __init__(self, message: str = "Authentication failed"):
         super().__init__(
             message=message,
-            error_code=ErrorCode.AUTHENTICATION_FAILED,
+            error_code=ErrorCode.UNAUTHORIZED,
             status_code=401,
         )
 
@@ -72,7 +72,7 @@ class AuthorizationError(APIException):
     def __init__(self, message: str = "Access denied"):
         super().__init__(
             message=message,
-            error_code=ErrorCode.AUTHORIZATION_FAILED,
+            error_code=ErrorCode.FORBIDDEN,
             status_code=403,
         )
 
@@ -83,7 +83,7 @@ class ResourceNotFoundError(APIException):
     def __init__(self, resource_type: str, resource_id: int | str):
         super().__init__(
             message=f"{resource_type} with ID {resource_id} not found",
-            error_code=ErrorCode.RESOURCE_NOT_FOUND,
+            error_code=ErrorCode.NOT_FOUND,
             status_code=404,
             details={"resource_type": resource_type, "resource_id": str(resource_id)},
         )
@@ -99,7 +99,7 @@ class DuplicateResourceError(APIException):
 
         super().__init__(
             message=message,
-            error_code=ErrorCode.DUPLICATE_RESOURCE,
+            error_code=ErrorCode.CONFLICT,
             status_code=409,
             details=details,
         )

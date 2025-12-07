@@ -112,6 +112,11 @@ jobs:
       - name: Install additional test/coverage tools
         run: uv pip install --system pytest-cov pytest-xdist pytest-rerunfailures pytest-asyncio coverage[toml]
 
+      - name: Validate OpenAPI spec
+        run: |
+          openapi-spec-validator docs/openapi/mobile_api.yaml
+          openapi-spec-validator docs/openapi/mobile_api.json
+
       - name: Lint (ruff) - comprehensive
         run: ruff check .
 
