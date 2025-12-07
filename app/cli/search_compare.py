@@ -6,6 +6,7 @@ import asyncio
 import logging
 import sys
 from pathlib import Path
+from typing import cast
 
 logging.basicConfig(
     level=logging.WARNING,
@@ -25,22 +26,31 @@ async def run_all_searches(db_path: str, query: str, max_results: int = 10) -> d
     Returns:
         Dict with keys 'fts', 'vector', 'hybrid' containing search results
     """
+    from app.config import ChromaConfig
     from app.db.database import Database
+    from app.infrastructure.vector.chroma_store import ChromaVectorStore
+    from app.services.chroma_vector_search_service import ChromaVectorSearchService
     from app.services.embedding_service import EmbeddingService
     from app.services.hybrid_search_service import HybridSearchService
     from app.services.topic_search import LocalTopicSearchService, TopicArticle
-    from app.services.vector_search_service import VectorSearchService
 
     db = Database(path=db_path)
 
     # Initialize services
     embedding_service = EmbeddingService()
     fts_service = LocalTopicSearchService(db=db, max_results=max_results)
-    vector_service = VectorSearchService(
-        db=db,
+    chroma_cfg = ChromaConfig()
+    vector_store = ChromaVectorStore(
+        host=chroma_cfg.host,
+        auth_token=chroma_cfg.auth_token,
+        environment=chroma_cfg.environment,
+        user_scope=chroma_cfg.user_scope,
+        collection_version=chroma_cfg.collection_version,
+    )
+    vector_service = ChromaVectorSearchService(
+        vector_store=vector_store,
         embedding_service=embedding_service,
-        max_results=max_results,
-        min_similarity=0.3,
+        default_top_k=max_results,
     )
     hybrid_service = HybridSearchService(
         fts_service=fts_service,
@@ -61,15 +71,18 @@ async def run_all_searches(db_path: str, query: str, max_results: int = 10) -> d
     )
 
     # Convert vector results to TopicArticle format
+    vector_results_list = cast(
+        "list", getattr(vector_results_raw, "results", vector_results_raw) or []
+    )
     vector_results = [
         TopicArticle(
             title=r.title or r.url or "Untitled",
             url=r.url or "",
             snippet=r.snippet,
-            source=r.source,
-            published_at=r.published_at,
+            source=getattr(r, "source", None),
+            published_at=getattr(r, "published_at", None),
         )
-        for r in vector_results_raw
+        for r in vector_results_list
     ]
 
     return {

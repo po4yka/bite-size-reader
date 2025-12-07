@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from sentence_transformers import CrossEncoder
+
+    from app.adapters.openrouter.openrouter_client import OpenRouterClient
 
 logger = logging.getLogger(__name__)
 
@@ -142,3 +145,151 @@ class RerankingService:
     def model_name(self) -> str:
         """Get the model name."""
         return self._model_name
+
+
+class OpenRouterRerankingService:
+    """Re-rank results using OpenRouter chat completions."""
+
+    def __init__(
+        self,
+        client: OpenRouterClient,
+        *,
+        top_k: int | None = None,
+        timeout_sec: float = 8.0,
+        model_override: str | None = None,
+    ) -> None:
+        self._client = client
+        self._top_k = top_k
+        self._timeout_sec = timeout_sec
+        self._model_override = model_override
+
+    async def rerank(
+        self,
+        query: str,
+        results: list[dict[str, Any]],
+        *,
+        text_field: str = "text",
+        title_field: str = "title",
+        id_field: str = "id",
+        score_field: str = "rerank_score",
+    ) -> list[dict[str, Any]]:
+        """Re-rank results with an LLM. Falls back to original order on failure."""
+        if not query or not results:
+            return results
+
+        candidates = results[: self._top_k] if self._top_k else list(results)
+        payload = []
+        for idx, result in enumerate(candidates):
+            rid = str(result.get(id_field) or result.get("url") or idx)
+            text = str(result.get(text_field) or result.get("snippet") or "")
+            title = str(result.get(title_field) or "")
+            payload.append(
+                {
+                    "id": rid,
+                    "title": title[:200],
+                    "text": text[:2000],
+                }
+            )
+
+        schema = {
+            "name": "rerank_response",
+            "schema": {
+                "type": "object",
+                "additionalProperties": False,
+                "properties": {
+                    "results": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "additionalProperties": False,
+                            "properties": {
+                                "id": {"type": "string"},
+                                "score": {"type": "number"},
+                            },
+                            "required": ["id", "score"],
+                        },
+                    }
+                },
+                "required": ["results"],
+            },
+        }
+
+        messages = [
+            {
+                "role": "system",
+                "content": (
+                    "You are a retrieval reranker. Order the provided results by relevance to the query. "
+                    "Return JSON matching the provided schema with descending scores."
+                ),
+            },
+            {
+                "role": "user",
+                "content": json.dumps(
+                    {
+                        "query": query,
+                        "results": payload,
+                    },
+                    ensure_ascii=False,
+                ),
+            },
+        ]
+
+        try:
+            response = await asyncio.wait_for(
+                self._client.chat(
+                    messages,
+                    temperature=0.0,
+                    max_tokens=400,
+                    response_format={"type": "json_schema", "json_schema": schema},
+                    model_override=self._model_override,
+                ),
+                timeout=self._timeout_sec,
+            )
+        except Exception:
+            logger.exception(
+                "llm_rerank_failed",
+                extra={"results": len(results)},
+            )
+            return results
+
+        ranking = self._extract_ranking(response)
+        if not ranking:
+            return results
+
+        score_map = {entry["id"]: float(entry.get("score", 0.0)) for entry in ranking}
+
+        reranked = sorted(
+            candidates,
+            key=lambda r: score_map.get(str(r.get(id_field) or r.get("url")), -1.0),
+            reverse=True,
+        )
+
+        if len(candidates) < len(results):
+            reranked.extend(results[len(candidates) :])
+
+        for item in reranked:
+            rid = str(item.get(id_field) or item.get("url"))
+            if rid in score_map:
+                item[score_field] = score_map[rid]
+
+        return reranked
+
+    @staticmethod
+    def _extract_ranking(response: Any) -> list[dict[str, Any]]:
+        try:
+            if response and response.response_json:
+                results = response.response_json.get("results")
+                if isinstance(results, list):
+                    return [
+                        r for r in results if isinstance(r, dict) and "id" in r and "score" in r
+                    ]
+            if response and response.response_text:
+                data = json.loads(response.response_text)
+                results = data.get("results")
+                if isinstance(results, list):
+                    return [
+                        r for r in results if isinstance(r, dict) and "id" in r and "score" in r
+                    ]
+        except Exception:
+            logger.debug("llm_rerank_parse_failed")
+        return []

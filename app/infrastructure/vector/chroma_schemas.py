@@ -20,12 +20,16 @@ class ChromaMetadata(BaseModel):
     title: str | None = None
     source: str | None = None
     published_at: str | None = None
+    window_id: str | None = None
+    window_index: int | None = Field(default=None, ge=0)
     chunk_id: str | None = None
+    neighbor_chunk_ids: list[str] = Field(default_factory=list)
     created_at: str | None = None
     tags: list[str] = Field(default_factory=list)
     topics: list[str] = Field(default_factory=list)
     semantic_boosters: list[str] = Field(default_factory=list)
     local_keywords: list[str] = Field(default_factory=list)
+    local_summary: str | None = None
     query_expansion_keywords: list[str] = Field(default_factory=list)
     section: str | None = None
 
@@ -54,6 +58,7 @@ class ChromaMetadata(BaseModel):
         "topics",
         "semantic_boosters",
         "local_keywords",
+        "neighbor_chunk_ids",
         "query_expansion_keywords",
         mode="before",
     )

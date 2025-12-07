@@ -55,6 +55,8 @@ class MessageHandler:
             response_formatter=response_formatter,
             url_processor=url_processor,
         )
+        # Expose url_processor for legacy integrations/tests
+        self.url_processor = url_processor
 
         self.command_processor = CommandProcessor(
             cfg=cfg,

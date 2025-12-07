@@ -57,3 +57,61 @@ def test_sync_vector_store_embeds_note_text_and_user_notes():
     assert metadatas[0]["text"] == expected_text
     assert metadatas[0]["request_id"] == request_id
     assert metadatas[0]["summary_id"] == summary_id
+
+
+def test_sync_vector_store_chunk_windows():
+    request_id = 321
+    summary_id = 654
+    payload = {
+        "summary_250": "Base summary",
+        "semantic_boosters": ["booster one", "booster two"],
+        "query_expansion_keywords": ["alpha", "beta"],
+        "topic_tags": ["#news"],
+        "semantic_chunks": [
+            {
+                "text": "Chunk A text",
+                "local_summary": "Chunk A summary",
+                "local_keywords": ["k1", "k2"],
+                "section": "lead",
+                "language": "en",
+                "topics": ["news"],
+            },
+            {
+                "text": "Chunk B text",
+                "local_summary": "Chunk B summary",
+                "local_keywords": ["k3", "k4"],
+                "section": "body",
+                "language": "en",
+                "topics": ["news"],
+            },
+        ],
+    }
+
+    summary = {
+        "id": summary_id,
+        "json_payload": payload,
+        "lang": "en",
+        "request": {"lang_detected": "en"},
+    }
+
+    db = types.SimpleNamespace(async_get_summary_by_request=AsyncMock(return_value=summary))
+    embedding_service = MagicMock()
+    embedding_service.generate_embedding = AsyncMock(side_effect=[[0.1, 0.2], [0.3, 0.4]])
+
+    generator = types.SimpleNamespace(db=db, embedding_service=embedding_service)
+
+    vector_store = MagicMock()
+    vector_store.user_scope = "public"
+    vector_store.environment = "dev"
+    handler = EmbeddingGenerationEventHandler(generator, vector_store)
+
+    asyncio.run(handler._sync_vector_store(request_id))
+
+    # Two chunk windows should be embedded
+    assert embedding_service.generate_embedding.await_count == 2
+    vectors, metadatas = vector_store.upsert_notes.call_args.args
+    assert vectors == [[0.1, 0.2], [0.3, 0.4]]
+    assert len(metadatas) == 2
+    assert metadatas[0]["window_id"]
+    assert metadatas[0]["local_summary"]
+    assert metadatas[0]["chunk_id"]

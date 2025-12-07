@@ -622,6 +622,14 @@ DB & runtime:
 DB_PATH=/data/app.db
 LOG_LEVEL=INFO
 REQUEST_TIMEOUT_SEC=60
+HYBRID_FTS_WEIGHT=0.4
+HYBRID_VECTOR_WEIGHT=0.6
+HYBRID_WINDOW_SIZE=3
+HYBRID_FUSION_TOPK=50
+RERANK_ENABLED=true
+RERANK_TOPK=50
+RERANK_TIMEOUT_SEC=8
+CHROMA_COLLECTION_VERSION=v1
 ```
 
 > Local CLI runs (`python -m app.cli.summary`) automatically load environment variables from a `.env` file in the current directory or repository root before invoking `load_config`. You can override the location with `--env-file path/to/.env`.

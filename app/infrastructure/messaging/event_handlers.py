@@ -126,17 +126,53 @@ class EmbeddingGenerationEventHandler:
         user_scope = getattr(self._vector_store, "user_scope", None) or "public"
         environment = getattr(self._vector_store, "environment", None) or "dev"
 
-        text, metadata = MetadataBuilder.prepare_for_upsert(
+        chunk_windows = MetadataBuilder.prepare_chunk_windows_for_upsert(
             request_id=request_id,
             summary_id=summary_id,
             payload=payload,
             language=self._determine_language(summary),
             user_scope=user_scope,
             environment=environment,
-            summary_row=summary,
         )
 
-        if not text:
+        vectors: list[list[float]] = []
+        metadatas: list[dict[str, Any]] = []
+
+        if chunk_windows:
+            for text, metadata in chunk_windows:
+                embedding = await embedding_service.generate_embedding(
+                    text, language=metadata.get("language")
+                )
+                vector = embedding.tolist() if hasattr(embedding, "tolist") else list(embedding)
+                vectors.append(vector)
+                metadatas.append(metadata)
+        else:
+            text, metadata = MetadataBuilder.prepare_for_upsert(
+                request_id=request_id,
+                summary_id=summary_id,
+                payload=payload,
+                language=self._determine_language(summary),
+                user_scope=user_scope,
+                environment=environment,
+                summary_row=summary,
+            )
+
+            if not text:
+                logger.info(
+                    "vector_store_delete_empty_note",
+                    extra={"request_id": request_id, "summary_id": summary_id},
+                )
+                self._vector_store.delete_by_request_id(request_id)
+                return
+
+            embedding = await embedding_service.generate_embedding(
+                text, language=metadata.get("language")
+            )
+            vector = embedding.tolist() if hasattr(embedding, "tolist") else list(embedding)
+            vectors.append(vector)
+            metadatas.append(metadata)
+
+        if not vectors:
             logger.info(
                 "vector_store_delete_empty_note",
                 extra={"request_id": request_id, "summary_id": summary_id},
@@ -144,19 +180,15 @@ class EmbeddingGenerationEventHandler:
             self._vector_store.delete_by_request_id(request_id)
             return
 
-        embedding = await embedding_service.generate_embedding(
-            text, language=metadata.get("language")
-        )
-        vector = embedding.tolist() if hasattr(embedding, "tolist") else list(embedding)
-
-        self._vector_store.upsert_notes([vector], [metadata])
+        self._vector_store.upsert_notes(vectors, metadatas)
 
         logger.info(
             "vector_store_synced",
             extra={
                 "request_id": request_id,
                 "summary_id": summary_id,
-                "metadata_keys": sorted(metadata.keys()),
+                "metadata_keys": sorted(metadatas[0].keys()) if metadatas else [],
+                "vector_count": len(vectors),
             },
         )
 

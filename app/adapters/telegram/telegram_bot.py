@@ -112,7 +112,8 @@ class TelegramBot:
         self.topic_searcher = components.topic_searcher
         self.local_searcher = components.local_searcher
         self.embedding_service = components.embedding_service
-        self.vector_search_service = components.vector_search_service
+        # Backward-compat alias for legacy usages
+        self.vector_search_service = components.chroma_vector_search_service
         self.query_expansion_service = components.query_expansion_service
         self.hybrid_search_service = components.hybrid_search_service
         self.vector_store = components.vector_store
@@ -129,7 +130,7 @@ class TelegramBot:
         self.message_handler.url_handler.url_processor = cast("URLProcessor", self)
 
         # Update message handler to use entrypoint
-        self.message_handler.url_processor = cast("URLProcessor", self._url_processor_entrypoint)  # type: ignore[attr-defined]
+        self.message_handler.url_processor = cast("URLProcessor", self._url_processor_entrypoint)
 
         # Expose in-memory state containers for unit tests
         self._awaiting_url_users = self.message_handler.url_handler._awaiting_url_users

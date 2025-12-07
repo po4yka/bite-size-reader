@@ -14,6 +14,7 @@ class FakeVectorResult:
         self.url = url
         self.title = title
         self.snippet = snippet
+        self.text = snippet
         self.source = "example.com"
         self.published_at = "2024-01-01"
         self.similarity_score = similarity_score

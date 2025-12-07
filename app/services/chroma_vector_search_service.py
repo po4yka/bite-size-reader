@@ -32,8 +32,21 @@ class ChromaVectorSearchResult(BaseModel):
     url: str | None = None
     title: str | None = None
     snippet: str | None = None
+    text: str | None = None
+    source: str | None = None
+    published_at: str | None = None
     tags: list[str] = Field(default_factory=list)
     language: str | None = None
+    window_id: str | None = None
+    window_index: int | None = None
+    chunk_id: str | None = None
+    neighbor_chunk_ids: list[str] = Field(default_factory=list)
+    semantic_boosters: list[str] = Field(default_factory=list)
+    local_keywords: list[str] = Field(default_factory=list)
+    local_summary: str | None = None
+    query_expansion_keywords: list[str] = Field(default_factory=list)
+    section: str | None = None
+    topics: list[str] = Field(default_factory=list)
 
 
 class ChromaVectorSearchResults(BaseModel):
@@ -72,6 +85,7 @@ class ChromaVectorSearchService:
         user_scope: str | None = None,
         limit: int | None = None,
         offset: int = 0,
+        correlation_id: str | None = None,
     ) -> ChromaVectorSearchResults:
         """Search Chroma for summaries similar to the query text."""
 
@@ -139,7 +153,8 @@ class ChromaVectorSearchService:
                 continue
 
             similarity_score = self._compute_similarity(distance_batch, idx)
-            snippet = metadata.get("text")
+            raw_text = metadata.get("text")
+            snippet = metadata.get("local_summary") or raw_text
             if snippet and len(str(snippet)) > 300:
                 snippet = str(snippet)[:297] + "..."
 
@@ -151,8 +166,23 @@ class ChromaVectorSearchService:
                     url=metadata.get("url"),
                     title=metadata.get("title"),
                     snippet=snippet,
+                    text=raw_text,
+                    source=metadata.get("source"),
+                    published_at=metadata.get("published_at"),
                     tags=self._normalize_tags(metadata.get("tags")),
                     language=metadata.get("language"),
+                    window_id=metadata.get("window_id"),
+                    window_index=self._safe_int(metadata.get("window_index")),
+                    chunk_id=metadata.get("chunk_id"),
+                    neighbor_chunk_ids=self._normalize_tags(metadata.get("neighbor_chunk_ids")),
+                    semantic_boosters=self._normalize_tags(metadata.get("semantic_boosters")),
+                    local_keywords=self._normalize_tags(metadata.get("local_keywords")),
+                    local_summary=metadata.get("local_summary"),
+                    query_expansion_keywords=self._normalize_tags(
+                        metadata.get("query_expansion_keywords")
+                    ),
+                    section=metadata.get("section"),
+                    topics=self._normalize_tags(metadata.get("topics")),
                 )
             )
 

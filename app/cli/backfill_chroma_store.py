@@ -155,31 +155,50 @@ async def backfill_chroma_store(
             skipped += 1
             continue
 
-        text, metadata = MetadataBuilder.prepare_for_upsert(
+        chunk_windows = MetadataBuilder.prepare_chunk_windows_for_upsert(
             request_id=request_id,
             summary_id=summary_id,
             payload=payload,
             language=language,
             user_scope=chroma_cfg.user_scope,
             environment=chroma_cfg.environment,
-            summary_row=summary,
         )
 
-        if not text:
-            logger.info(
-                "Deleting vector due to empty note text",
-                extra={"request_id": request_id, "summary_id": summary_id},
+        if chunk_windows:
+            for text, metadata in chunk_windows:
+                embedding = await embedding_service.generate_embedding(
+                    text, language=metadata.get("language")
+                )
+                vector = embedding.tolist() if hasattr(embedding, "tolist") else list(embedding)
+                pending_vectors.append(vector)
+                pending_metadata.append(metadata)
+                processed += 1
+        else:
+            text, metadata = MetadataBuilder.prepare_for_upsert(
+                request_id=request_id,
+                summary_id=summary_id,
+                payload=payload,
+                language=language,
+                user_scope=chroma_cfg.user_scope,
+                environment=chroma_cfg.environment,
+                summary_row=summary,
             )
-            vector_store.delete_by_request_id(request_id)
-            deleted += 1
-            continue
 
-        embedding = embedding_service.deserialize_embedding(existing["embedding_blob"])
-        vector = embedding.tolist() if hasattr(embedding, "tolist") else list(embedding)
+            if not text:
+                logger.info(
+                    "Deleting vector due to empty note text",
+                    extra={"request_id": request_id, "summary_id": summary_id},
+                )
+                vector_store.delete_by_request_id(request_id)
+                deleted += 1
+                continue
 
-        pending_vectors.append(vector)
-        pending_metadata.append(metadata)
-        processed += 1
+            embedding = embedding_service.deserialize_embedding(existing["embedding_blob"])
+            vector = embedding.tolist() if hasattr(embedding, "tolist") else list(embedding)
+
+            pending_vectors.append(vector)
+            pending_metadata.append(metadata)
+            processed += 1
 
         if len(pending_vectors) >= batch_size:
             vector_store.upsert_notes(pending_vectors, pending_metadata)

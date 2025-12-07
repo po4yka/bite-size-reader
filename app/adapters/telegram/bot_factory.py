@@ -12,12 +12,13 @@ from app.adapters.telegram.forward_processor import ForwardProcessor
 from app.adapters.telegram.message_handler import MessageHandler
 from app.adapters.telegram.telegram_client import TelegramClient
 from app.infrastructure.vector.chroma_store import ChromaVectorStore
+from app.services.chroma_vector_search_service import ChromaVectorSearchService
 from app.services.embedding_service import EmbeddingService
 from app.services.hybrid_search_service import HybridSearchService
 from app.services.query_expansion_service import QueryExpansionService
+from app.services.reranking_service import OpenRouterRerankingService
 from app.services.summary_embedding_generator import SummaryEmbeddingGenerator
 from app.services.topic_search import LocalTopicSearchService, TopicSearchService
-from app.services.vector_search_service import VectorSearchService
 
 if TYPE_CHECKING:
     import asyncio
@@ -52,7 +53,7 @@ class BotComponents:
     topic_searcher: TopicSearchService
     local_searcher: LocalTopicSearchService
     embedding_service: EmbeddingService
-    vector_search_service: VectorSearchService
+    chroma_vector_search_service: ChromaVectorSearchService
     query_expansion_service: QueryExpansionService
     hybrid_search_service: HybridSearchService
     vector_store: ChromaVectorStore
@@ -169,22 +170,24 @@ class BotFactory:
 
         # Create hybrid search services
         embedding_service = EmbeddingService()
-        vector_search_service = VectorSearchService(
-            db=db,
-            embedding_service=embedding_service,
-            max_results=topic_search_max_results,
-            min_similarity=0.3,
-        )
         embedding_generator = SummaryEmbeddingGenerator(db=db, embedding_service=embedding_service)
         query_expansion_service = QueryExpansionService(
             max_expansions=5,
             use_synonyms=True,
         )
-        # Re-ranking is optional and slower, so disabled by default
-        reranking_service = None
+        chroma_vector_search_service = ChromaVectorSearchService(
+            vector_store=vector_store,
+            embedding_service=embedding_service,
+            default_top_k=topic_search_max_results * 2,
+        )
+        reranking_service = OpenRouterRerankingService(
+            client=clients.openrouter,
+            top_k=topic_search_max_results * 2,
+            timeout_sec=cfg.runtime.request_timeout_sec,
+        )
         hybrid_search_service = HybridSearchService(
             fts_service=local_searcher,
-            vector_service=vector_search_service,
+            vector_service=chroma_vector_search_service,
             fts_weight=0.4,
             vector_weight=0.6,
             max_results=topic_search_max_results,
@@ -246,7 +249,7 @@ class BotFactory:
             topic_searcher=topic_searcher,
             local_searcher=local_searcher,
             embedding_service=embedding_service,
-            vector_search_service=vector_search_service,
+            chroma_vector_search_service=chroma_vector_search_service,
             query_expansion_service=query_expansion_service,
             hybrid_search_service=hybrid_search_service,
             vector_store=vector_store,

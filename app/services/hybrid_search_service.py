@@ -4,16 +4,32 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Protocol
 
 from app.services.topic_search import TopicArticle
 
 if TYPE_CHECKING:
+    from app.services.chroma_vector_search_service import (
+        ChromaVectorSearchResult,
+        ChromaVectorSearchService,
+    )
     from app.services.query_expansion_service import QueryExpansionService
-    from app.services.reranking_service import RerankingService
     from app.services.search_filters import SearchFilters
     from app.services.topic_search import LocalTopicSearchService
-    from app.services.vector_search_service import VectorSearchResult, VectorSearchService
+
+
+class RerankerProtocol(Protocol):
+    async def rerank(
+        self,
+        query: str,
+        results: list[dict[str, Any]],
+        *,
+        text_field: str = ...,
+        title_field: str = ...,
+        id_field: str | None = ...,
+        score_field: str = ...,
+    ) -> list[dict[str, Any]]: ...
+
 
 logger = logging.getLogger(__name__)
 
@@ -24,13 +40,13 @@ class HybridSearchService:
     def __init__(
         self,
         fts_service: LocalTopicSearchService,
-        vector_service: VectorSearchService,
+        vector_service: ChromaVectorSearchService,
         *,
         fts_weight: float = 0.4,
         vector_weight: float = 0.6,
         max_results: int = 25,
         query_expansion: QueryExpansionService | None = None,
-        reranking: RerankingService | None = None,
+        reranking: RerankerProtocol | None = None,
     ) -> None:
         """Initialize hybrid search service.
 
@@ -98,10 +114,16 @@ class HybridSearchService:
             self._fts.find_articles(fts_query, correlation_id=correlation_id)
         )
         vector_task = asyncio.create_task(
-            self._vector.search(query.strip(), filters=filters, correlation_id=correlation_id)
+            self._vector.search(
+                query.strip(),
+                language=getattr(filters, "language", None) if filters else None,
+                user_scope=getattr(self._vector, "user_scope", None),
+                correlation_id=correlation_id,
+            )
         )
 
-        fts_results, vector_results = await asyncio.gather(fts_task, vector_task)
+        fts_results, vector_search_results = await asyncio.gather(fts_task, vector_task)
+        vector_results: list[ChromaVectorSearchResult] = vector_search_results.results
 
         # Apply filters to FTS results (vector results already filtered)
         if filters and filters.has_filters():
@@ -121,7 +143,7 @@ class HybridSearchService:
                 reranked = await self._reranking.rerank(
                     query=query.strip(),
                     results=top_candidates,
-                    text_field="snippet",
+                    text_field="text",
                     title_field="title",
                 )
                 # Use re-ranked results, fall back to combined if re-ranking fails
@@ -158,7 +180,7 @@ class HybridSearchService:
     def _combine_results(
         self,
         fts_results: list[TopicArticle],
-        vector_results: list[VectorSearchResult],
+        vector_results: list[ChromaVectorSearchResult],
     ) -> list[dict]:
         """Combine and normalize scores from both search methods.
 
@@ -171,62 +193,64 @@ class HybridSearchService:
         """
         # Normalize FTS scores using rank-based scoring
         # (BM25 scores are unbounded, so we use position-based normalization)
-        fts_scores = {}
+        fts_scores: dict[str, float] = {}
         for idx, result in enumerate(fts_results):
-            # Rank-based score: 1.0 for top result, decreasing linearly
             score = 1.0 - (idx / max(len(fts_results), 1))
             fts_scores[result.url] = score
 
-        # Vector scores are already normalized (0-1 cosine similarity)
         vector_scores: dict[str, float] = {}
-        vector_data: dict[str, VectorSearchResult] = {}
+        vector_data: dict[str, ChromaVectorSearchResult] = {}
         for vector_result in vector_results:
-            if vector_result.url:
-                vector_scores[vector_result.url] = vector_result.similarity_score
-                vector_data[vector_result.url] = vector_result
+            result_id = (
+                getattr(vector_result, "window_id", None)
+                or getattr(vector_result, "chunk_id", None)
+                or vector_result.url
+            )
+            if result_id:
+                vector_scores[result_id] = getattr(vector_result, "similarity_score", 0.0)
+                vector_data[result_id] = vector_result
 
-        # Combine all URLs from both sources
-        all_urls = set(fts_scores.keys()) | set(vector_scores.keys())
+        all_ids = set(vector_scores.keys()) | set(fts_scores.keys())
         combined = []
 
-        for url in all_urls:
-            fts_score = fts_scores.get(url, 0.0)
-            vector_score = vector_scores.get(url, 0.0)
+        for result_id in all_ids:
+            vector_match = vector_data.get(result_id)
 
-            # Weighted combination
+            url = (
+                getattr(vector_match, "url", None)
+                if vector_match
+                else next((r.url for r in fts_results if r.url and r.url == result_id), None)
+            )
+            title = getattr(vector_match, "title", None) if vector_match else None
+            snippet = getattr(vector_match, "snippet", None) if vector_match else None
+            text = getattr(vector_match, "text", None) if vector_match else None
+            source = getattr(vector_match, "source", None) if vector_match else None
+            published_at = getattr(vector_match, "published_at", None) if vector_match else None
+
+            fts_score = fts_scores.get(url or result_id, 0.0)
+            vector_score = vector_scores.get(result_id, 0.0)
             combined_score = self._fts_weight * fts_score + self._vector_weight * vector_score
-
-            # Get metadata (prefer FTS source if available, fallback to vector)
-            fts_match = next((r for r in fts_results if r.url == url), None)
-            vector_match = vector_data.get(url)
-
-            if fts_match:
-                title = fts_match.title
-                snippet = fts_match.snippet
-                source = fts_match.source
-                published_at = fts_match.published_at
-            elif vector_match:
-                title = vector_match.title
-                snippet = vector_match.snippet
-                source = vector_match.source
-                published_at = vector_match.published_at
-            else:
-                # This shouldn't happen, but handle it gracefully
-                title = url
-                snippet = None
-                source = None
-                published_at = None
 
             combined.append(
                 {
-                    "url": url,
-                    "title": title,
-                    "snippet": snippet,
+                    "id": result_id,
+                    "url": url or result_id,
+                    "title": title or (url or result_id),
+                    "snippet": snippet or text,
+                    "text": text or snippet,
                     "source": source,
                     "published_at": published_at,
                     "combined_score": combined_score,
                     "fts_score": fts_score,
                     "vector_score": vector_score,
+                    "window_id": getattr(vector_match, "window_id", None) if vector_match else None,
+                    "window_index": getattr(vector_match, "window_index", None)
+                    if vector_match
+                    else None,
+                    "chunk_id": getattr(vector_match, "chunk_id", None) if vector_match else None,
+                    "neighbor_chunk_ids": getattr(vector_match, "neighbor_chunk_ids", [])
+                    if vector_match
+                    else [],
                 }
             )
 
