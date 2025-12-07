@@ -7,10 +7,8 @@ alwaysApply: true
 
 # Security Guidelines
 
-- Do not hardcode API keys, tokens, or secrets in source code or config files.
-- Store sensitive data in environment variables or secure vaults.
-- Validate any URLs or message content from users to prevent injection attacks.
-- Limit the bot’s permissions and exposure; it is for personal use only.
-- Avoid logging sensitive data; redact if necessary.
-- Use latest dependency versions with security patches.
-- Regularly review dependencies for vulnerabilities.
+- Never hardcode API keys, tokens, or secrets; load them from environment variables only and do not persist them in logs/DB.
+- Enforce owner-only access via `ALLOWED_USER_IDS`; validate and normalize URLs before processing to avoid injection.
+- Redact `Authorization` and other sensitive headers before logging; include correlation IDs for traceability.
+- Avoid PII storage; keep SQLite DB and `/data` artifacts private to the container/host.
+- Keep dependencies patched; scan for vulnerabilities and rotate credentials if compromise is suspected.

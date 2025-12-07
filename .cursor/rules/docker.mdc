@@ -7,11 +7,9 @@ alwaysApply: true
 
 # Docker Container Guidelines
 
-- Use official Python base images with appropriate tags (e.g. python:3.11-slim).
-- Minimize image layer size by cleaning cache and unnecessary files.
-- Use multi-stage builds if needed to separate build/dependency and runtime layers.
-- Pass secrets like API keys as environment variables, never baked into image.
-- Expose only necessary ports and restrict to localhost if possible.
-- Use persistent volumes or bind mounts for SQLite database files.
-- Document Docker build and run instructions clearly.
-- Keep Dockerfile simple and readable.
+- Base on an official slim Python image matching the runtime (Python 3.13); install build tools only when needed and clean them up.
+- Use uv for dependency installation; cache wheels between stages and prefer multi-stage builds to keep runtime slim.
+- Include required system deps (e.g., ffmpeg/yt-dlp deps) for YouTube handling; avoid bundling unused tools.
+- Pass secrets via environment variables; do not bake them into the image or layers.
+- Persist SQLite DB and downloaded artifacts under `/data` via a volume/bind mount; limit exposed ports to what FastAPI/Telegram need.
+- Keep Dockerfile readable with clear build/run instructions; avoid unnecessary layers and remove caches.

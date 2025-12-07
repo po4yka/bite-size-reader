@@ -7,12 +7,11 @@ alwaysApply: true
 
 # Python Service Coding Guidelines
 
-- Use async/await syntax for all I/O and network calls.
-- Modularize concerns: separate bot client, parser, API client, and DB layers.
-- Use type hints and docstrings on all public functions/classes.
-- Follow PEP8 style conventions strictly.
-- Gracefully handle errors with retries for transient API failures (Firecrawl, OpenRouter).
-- Validate and sanitize all user inputs before processing.
-- Use environment variables for sensitive API keys and endpoints.
-- Write unit tests and integration tests with mocked external APIs.
-- Log important events including API call success/failure.
+- Use async/await for all I/O (Pyrogram, httpx, SQLite/Peewee) and avoid blocking operations.
+- Keep layers isolated: Telegram adapters, content pipeline (Firecrawl + YouTube), OpenRouter client, DB models, and agents/orchestrator.
+- Enforce summary contract validation and URL normalization/deduping before processing; add retries with backoff for Firecrawl/OpenRouter.
+- Redact sensitive headers in logs and include correlation IDs in structured logging.
+- Configure via environment variables only; fail fast when required keys are missing.
+- Write tests with pytest/pytest-asyncio and mock external services (Firecrawl/OpenRouter/YouTube); prefer small unit tests for core utils.
+- Follow project formatters/linters (ruff, black/isort profile) and add type hints/docstrings for public interfaces.
+- Keep long-running tasks chunked and track progress (e.g., progress tracker/task manager); avoid holding the event loop.

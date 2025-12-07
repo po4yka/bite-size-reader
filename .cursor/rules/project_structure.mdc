@@ -7,11 +7,9 @@ alwaysApply: true
 
 # File and Module Organization
 
-- `bot.py` to handle Telegram MTProto client using PyroTGFork.
-- `firecrawl_parser.py` to encapsulate article parsing logic.
-- `openrouter_client.py` to handle OpenRouter ChatGPT API interactions.
-- `database.py` for SQLite access and queries.
-- `Dockerfile` for containerization specifications.
-- `requirements.txt` or `pyproject.toml` for Python dependencies.
-- `tests/` directory containing unit and integration tests.
-- Separate business logic cleanly from request/response handling.
+- `bot.py` wires DI and starts the Telegram bot.
+- `app/` contains core packages: adapters (`telegram/`, `content/`, `youtube/`, `openrouter/`, `external/`), `core/` utilities (URL normalization, summary contract, logging), `db/` (SQLite + Peewee models), `agents/`, `cli/`, `api/` (FastAPI mobile endpoints), `services/`, `domain/`, and `prompts/`.
+- `SPEC.md` and `.docs/` are the canonical references for architecture, requirements, tests, and ADRs.
+- `tests/` holds unit/integration/E2E tests (pytest + pytest-asyncio).
+- `Dockerfile` builds the runtime image; persistent data (SQLite, downloads) live under `/data`.
+- Keep business logic separated from transport layers (Telegram, FastAPI, CLI).

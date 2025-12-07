@@ -1,0 +1,17 @@
+---
+description: Mobile API guidelines (FastAPI endpoints, sync, auth, envelopes)
+globs:
+  - "app/api/**"
+  - "app/api/**/*.py"
+alwaysApply: true
+---
+
+# Mobile API Guidelines
+
+- Use success/error envelopes with meta (correlation_id, timestamp, version/build, pagination when applicable); no raw dict responses. Reuse envelope helpers and ErrorResponse mapping.
+- Enforce auth: Telegram login hash validation, JWT HS256 with >=32-char secret, claims {user_id, username, client_id, is_owner, type, exp, iat}; enforce ALLOWED_USER_IDS and optional ALLOWED_CLIENT_IDS; rotate refresh tokens.
+- Rate limiting and sync sessions use shared store (Redis preferred, SQLite fallback); per-path buckets with headers (`X-RateLimit-*`, `Retry-After`); Redis required=true → 503 on outage, else noop fallback + warning metric.
+- Sync v2: `/v1/sync` endpoints must return created/updated/tombstone deleted ordered by server_version with `has_more`/`next_since`; chunk limits bounded [1..500] (default 200) and may be downsized; session TTL enforced (410 when expired); uploads require last_seen_version and only allow whitelisted fields (e.g., summary.is_read, client_note).
+- Background processor and async routes propagate correlation_id, use per-request locks, and retry transient failures with backoff; avoid blocking operations.
+- Search/embedding services use managed singletons with explicit shutdown; trending topics cache per-user/params with short TTL and invalidate on summary writes.
+- Redact Authorization and sensitive fields in logs; scope all data access by authenticated user/client; no PII beyond IDs.
