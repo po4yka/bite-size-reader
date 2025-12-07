@@ -24,9 +24,9 @@ else:
         # Python 3.13+ raises when no loop exists, so we provision a temporary
         # one to keep the import compatible inside containers.
         try:
-            _previous_loop = asyncio.get_event_loop()
+            _previous_loop = asyncio.get_running_loop()
         except RuntimeError:
-            pass
+            _previous_loop = None
 
         if _previous_loop is None or _previous_loop.is_closed():
             _pyrogram_bootstrap_loop = asyncio.new_event_loop()

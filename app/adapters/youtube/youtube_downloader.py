@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-from datetime import datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
@@ -74,7 +74,7 @@ class YouTubeDownloader:
             extra={"video_id": video_id, "url": url, "cid": correlation_id},
         )
 
-        # Check storage limits
+        # Check storage limits (may trigger cleanup)
         await self._check_storage_limits()
 
         # Normalize URL for deduplication
@@ -100,13 +100,33 @@ class YouTubeDownloader:
                 "youtube_video_already_downloaded",
                 extra={"video_id": video_id, "request_id": req_id, "cid": correlation_id},
             )
-            # Reuse existing transcript
+            metadata = self._build_metadata_dict(existing_download)
+            transcript_text = existing_download.transcript_text or ""
+            transcript_source = existing_download.transcript_source or "cached"
+            detected_lang = existing_download.subtitle_language or detect_language(transcript_text)
+            combined_text = self._combine_metadata_and_transcript(metadata, transcript_text)
+
+            if not combined_text.strip():
+                raise ValueError(
+                    "❌ Cached video found but no transcript or subtitles were available. "
+                    "Try re-downloading with subtitles enabled."
+                )
+
+            if not silent:
+                try:
+                    await self.response_formatter.safe_reply(
+                        message,
+                        "♻️ Reusing previously downloaded video and transcript. Skipping re-download.",
+                    )
+                except Exception:
+                    logger.debug("youtube_cached_reply_failed", exc_info=True)
+
             return (
                 req_id,
-                existing_download.transcript_text or "",
-                existing_download.transcript_source or "cached",
-                existing_download.subtitle_language or "en",
-                self._build_metadata_dict(existing_download),
+                combined_text,
+                transcript_source,
+                detected_lang,
+                metadata,
             )
 
         # Create video download record
@@ -117,7 +137,7 @@ class YouTubeDownloader:
         try:
             # Update status to downloading
             self.db.update_video_download_status(
-                download_id, "downloading", download_started_at=datetime.utcnow()
+                download_id, "downloading", download_started_at=datetime.now(UTC)
             )
 
             # Notify user: starting download
@@ -126,10 +146,13 @@ class YouTubeDownloader:
                     message, url, silent=silent
                 )
 
-            # Step 1: Extract transcript using youtube-transcript-api
-            transcript_text, transcript_lang, auto_generated = await self._extract_transcript_api(
-                video_id, correlation_id
-            )
+            # Step 1: Extract transcript using youtube-transcript-api (with retries)
+            (
+                transcript_text,
+                transcript_lang,
+                auto_generated,
+                transcript_source,
+            ) = await self._extract_transcript_api(video_id, correlation_id)
 
             # Step 2: Download video with yt-dlp
             output_dir = self.storage_path / datetime.now().strftime("%Y%m%d")
@@ -148,8 +171,34 @@ class YouTubeDownloader:
                 correlation_id,
             )
 
+            # Fallback to downloaded VTT subtitles if API transcript is missing
+            if not transcript_text:
+                vtt_text, vtt_lang = self._load_transcript_from_vtt(
+                    video_metadata.get("subtitle_file_path"), correlation_id
+                )
+                if vtt_text:
+                    transcript_text = vtt_text
+                    transcript_lang = vtt_lang or transcript_lang
+                    transcript_source = "vtt"
+                    auto_generated = True
+                    logger.info(
+                        "youtube_transcript_vtt_fallback_success",
+                        extra={
+                            "video_id": video_id,
+                            "subtitle_lang": transcript_lang,
+                            "cid": correlation_id,
+                        },
+                    )
+
+            if not transcript_text:
+                raise ValueError(
+                    f"❌ No transcript or subtitles available for this video. "
+                    f"Error ID: {correlation_id or 'unknown'}"
+                )
+
             # Detect language from transcript
             detected_lang = detect_language(transcript_text or "")
+            combined_text = self._combine_metadata_and_transcript(video_metadata, transcript_text)
 
             # Update database with complete metadata
             self.db.update_video_download(
@@ -172,10 +221,10 @@ class YouTubeDownloader:
                 audio_codec=video_metadata.get("acodec"),
                 format_id=video_metadata.get("format_id"),
                 transcript_text=transcript_text,
-                transcript_source="youtube-transcript-api",
+                transcript_source=transcript_source,
                 subtitle_language=transcript_lang or detected_lang,
                 auto_generated=auto_generated,
-                download_completed_at=datetime.utcnow(),
+                download_completed_at=datetime.now(UTC),
             )
 
             # Update request status
@@ -204,7 +253,7 @@ class YouTubeDownloader:
                 },
             )
 
-            return req_id, transcript_text, "youtube-transcript-api", detected_lang, video_metadata
+            return req_id, combined_text, transcript_source, detected_lang, video_metadata
 
         except Exception as e:
             raise_if_cancelled(e)
@@ -231,124 +280,142 @@ class YouTubeDownloader:
 
     async def _extract_transcript_api(
         self, video_id: str, correlation_id: str | None
-    ) -> tuple[str, str, bool]:
-        """Extract transcript using youtube-transcript-api.
+    ) -> tuple[str, str, bool, str]:
+        """Extract transcript using youtube-transcript-api with a light retry.
 
         Returns:
-            (transcript_text, language, auto_generated)
+            (transcript_text, language, auto_generated, transcript_source)
         """
-        try:
-            # Preferred languages from config
-            preferred_langs = self.cfg.youtube.subtitle_languages
-
-            # Try to get transcript in preferred language
-            transcript_list = await asyncio.to_thread(
-                cast("Any", YouTubeTranscriptApi).list_transcripts,
-                video_id,
-            )
-
-            transcript = None
-            auto_generated = False
-            selected_lang = "en"
-
-            # Try manually created transcripts first
+        last_error: Exception | None = None
+        for attempt in range(2):
             try:
-                for lang in preferred_langs:
+                # Preferred languages from config
+                preferred_langs = self.cfg.youtube.subtitle_languages
+
+                # Try to get transcript in preferred language
+                transcript_list = await asyncio.to_thread(
+                    cast("Any", YouTubeTranscriptApi).list_transcripts,
+                    video_id,
+                )
+
+                transcript = None
+                auto_generated = False
+                selected_lang = "en"
+
+                # Try manually created transcripts first
+                try:
+                    for lang in preferred_langs:
+                        try:
+                            transcript = transcript_list.find_transcript([lang])
+                            selected_lang = lang
+                            auto_generated = False
+                            logger.info(
+                                "youtube_transcript_manual_found",
+                                extra={
+                                    "video_id": video_id,
+                                    "language": lang,
+                                    "cid": correlation_id,
+                                },
+                            )
+                            break
+                        except NoTranscriptFound:
+                            continue
+                except (TranscriptsDisabled, VideoUnavailable):
+                    # Re-raise these to be handled by outer try-except
+                    raise
+                except Exception as e:
+                    # Log unexpected errors but continue to auto-generated fallback
+                    logger.warning(
+                        "youtube_transcript_manual_search_error",
+                        extra={
+                            "video_id": video_id,
+                            "error": str(e),
+                            "error_type": type(e).__name__,
+                            "cid": correlation_id,
+                        },
+                    )
+
+                # Fallback to auto-generated if no manual transcript found
+                if not transcript:
                     try:
-                        transcript = transcript_list.find_transcript([lang])
-                        selected_lang = lang
-                        auto_generated = False
+                        transcript = transcript_list.find_generated_transcript(preferred_langs)
+                        selected_lang = transcript.language_code
+                        auto_generated = True
                         logger.info(
-                            "youtube_transcript_manual_found",
-                            extra={"video_id": video_id, "language": lang, "cid": correlation_id},
+                            "youtube_transcript_auto_found",
+                            extra={
+                                "video_id": video_id,
+                                "language": selected_lang,
+                                "cid": correlation_id,
+                            },
                         )
-                        break
                     except NoTranscriptFound:
-                        continue
-            except (TranscriptsDisabled, VideoUnavailable):
-                # Re-raise these to be handled by outer try-except
-                raise
-            except Exception as e:
-                # Log unexpected errors but continue to auto-generated fallback
-                logger.warning(
-                    "youtube_transcript_manual_search_error",
+                        logger.warning(
+                            "youtube_transcript_not_found",
+                            extra={"video_id": video_id, "cid": correlation_id},
+                        )
+                        return "", "en", False, "youtube-transcript-api"
+
+                # Fetch transcript data
+                transcript_data = await asyncio.to_thread(transcript.fetch)
+
+                # Format transcript text
+                transcript_text = self._format_transcript(transcript_data)
+
+                logger.info(
+                    "youtube_transcript_extracted",
                     extra={
                         "video_id": video_id,
-                        "error": str(e),
-                        "error_type": type(e).__name__,
+                        "language": selected_lang,
+                        "auto_generated": auto_generated,
+                        "length": len(transcript_text),
                         "cid": correlation_id,
                     },
                 )
 
-            # Fallback to auto-generated if no manual transcript found
-            if not transcript:
-                try:
-                    transcript = transcript_list.find_generated_transcript(preferred_langs)
-                    selected_lang = transcript.language_code
-                    auto_generated = True
-                    logger.info(
-                        "youtube_transcript_auto_found",
-                        extra={
-                            "video_id": video_id,
-                            "language": selected_lang,
-                            "cid": correlation_id,
-                        },
-                    )
-                except NoTranscriptFound:
-                    logger.warning(
-                        "youtube_transcript_not_found",
-                        extra={"video_id": video_id, "cid": correlation_id},
-                    )
-                    return "", "en", False
+                return transcript_text, selected_lang, auto_generated, "youtube-transcript-api"
 
-            # Fetch transcript data
-            transcript_data = await asyncio.to_thread(transcript.fetch)
+            except TranscriptsDisabled as e:
+                logger.warning(
+                    "youtube_transcript_disabled",
+                    extra={"video_id": video_id, "error": str(e), "cid": correlation_id},
+                )
+                logger.info(
+                    "youtube_continuing_without_transcript",
+                    extra={"video_id": video_id, "cid": correlation_id},
+                )
+                return "", "en", False, "youtube-transcript-api"
+            except VideoUnavailable as e:
+                logger.error(
+                    "youtube_transcript_video_unavailable",
+                    extra={"video_id": video_id, "error": str(e), "cid": correlation_id},
+                )
+                raise ValueError(
+                    "❌ Video is unavailable or does not exist. The video may have been deleted or made private."
+                ) from e
+            except Exception as e:
+                raise_if_cancelled(e)
+                last_error = e
+                logger.warning(
+                    "youtube_transcript_extraction_failed",
+                    extra={
+                        "video_id": video_id,
+                        "error": str(e),
+                        "attempt": attempt + 1,
+                        "cid": correlation_id,
+                    },
+                )
+                if attempt == 0:
+                    await asyncio.sleep(1)
+                    continue
+                return "", "en", False, "youtube-transcript-api"
 
-            # Format transcript text
-            transcript_text = self._format_transcript(transcript_data)
-
-            logger.info(
-                "youtube_transcript_extracted",
-                extra={
-                    "video_id": video_id,
-                    "language": selected_lang,
-                    "auto_generated": auto_generated,
-                    "length": len(transcript_text),
-                    "cid": correlation_id,
-                },
-            )
-
-            return transcript_text, selected_lang, auto_generated
-
-        except TranscriptsDisabled as e:
-            logger.warning(
-                "youtube_transcript_disabled",
-                extra={"video_id": video_id, "error": str(e), "cid": correlation_id},
-            )
-            # Don't fail the download - we can still process the video without transcript
-            # But log it clearly for the user
-            logger.info(
-                "youtube_continuing_without_transcript",
-                extra={"video_id": video_id, "cid": correlation_id},
-            )
-            return "", "en", False
-        except VideoUnavailable as e:
-            logger.error(
-                "youtube_transcript_video_unavailable",
-                extra={"video_id": video_id, "error": str(e), "cid": correlation_id},
-            )
-            raise ValueError(
-                "❌ Video is unavailable or does not exist. The video may have been deleted or made private."
-            ) from e
-        except Exception as e:
-            raise_if_cancelled(e)
-            logger.warning(
-                "youtube_transcript_extraction_failed",
-                extra={"video_id": video_id, "error": str(e), "cid": correlation_id},
-            )
-            # Don't fail the entire download if transcript fails - continue without transcript
-            # This allows the video download to proceed even if transcript extraction fails
-            return "", "en", False
+        # Should not reach here, but return safe empty result
+        logger.warning(
+            "youtube_transcript_extraction_exhausted",
+            extra={"video_id": video_id, "error": str(last_error), "cid": correlation_id},
+        )
+        return "", "en", False, "youtube-transcript-api"
 
     def _format_transcript(self, transcript_data: list[dict]) -> str:
         """Format transcript data into readable text with timestamps.
@@ -600,24 +667,29 @@ class YouTubeDownloader:
         return req_id
 
     async def _check_storage_limits(self) -> None:
-        """Check if storage limits would be exceeded."""
+        """Check if storage limits would be exceeded and trigger cleanup if needed."""
         current_usage = self._calculate_storage_usage()
         max_storage = self.cfg.youtube.max_storage_gb * 1024 * 1024 * 1024
+        threshold = max_storage * 0.9
 
-        if current_usage > max_storage * 0.9:  # 90% threshold
-            logger.warning(
-                "youtube_storage_approaching_limit",
+        if current_usage > threshold and self.cfg.youtube.auto_cleanup_enabled:
+            reclaimed = await asyncio.to_thread(
+                self._auto_cleanup_storage, current_usage, max_storage
+            )
+            current_usage = self._calculate_storage_usage()
+            logger.info(
+                "youtube_storage_cleanup_attempted",
                 extra={
                     "current_gb": current_usage / 1024 / 1024 / 1024,
                     "max_gb": self.cfg.youtube.max_storage_gb,
+                    "reclaimed_gb": reclaimed / 1024 / 1024 / 1024,
                 },
             )
 
-            # Trigger cleanup if enabled
-            if self.cfg.youtube.auto_cleanup_enabled:
-                logger.info("youtube_triggering_auto_cleanup")
-                # Cleanup will be implemented in a separate service
-                # For now, just log the warning
+        if current_usage > max_storage:
+            raise ValueError(
+                "❌ Storage limit exceeded. Unable to download new videos until cleanup frees space."
+            )
 
     def _calculate_storage_usage(self) -> int:
         """Calculate total storage used by videos in bytes."""
@@ -630,6 +702,148 @@ class YouTubeDownloader:
             logger.warning("youtube_storage_calculation_failed", extra={"error": str(e)})
 
         return total
+
+    def _auto_cleanup_storage(self, current_usage: int, max_storage: int) -> int:
+        """Remove old files until under budget or no candidates remain.
+
+        Returns reclaimed bytes.
+        """
+        reclaimed = 0
+        retention_days = self.cfg.youtube.cleanup_after_days
+        cutoff = datetime.now(UTC) - timedelta(days=retention_days)
+        eligible_suffixes = {".mp4", ".info.json", ".vtt", ".jpg", ".png", ".webp"}
+
+        candidates: list[tuple[Path, int, float]] = []
+        for file_path in self.storage_path.rglob("*"):
+            if not file_path.is_file():
+                continue
+            if file_path.suffix.lower() not in eligible_suffixes:
+                continue
+            try:
+                stat = file_path.stat()
+            except OSError:
+                continue
+            modified = datetime.fromtimestamp(stat.st_mtime, UTC)
+            if modified < cutoff:
+                candidates.append((file_path, stat.st_size, stat.st_mtime))
+
+        candidates.sort(key=lambda x: x[2])  # oldest first
+
+        for path, size, _ in candidates:
+            if current_usage - reclaimed <= max_storage * 0.9:
+                break
+            try:
+                path.unlink()
+                reclaimed += size
+            except OSError as exc:
+                logger.warning(
+                    "youtube_cleanup_delete_failed",
+                    extra={"path": str(path), "error": str(exc)},
+                )
+                continue
+
+        logger.info(
+            "youtube_cleanup_completed",
+            extra={
+                "candidates": len(candidates),
+                "reclaimed_bytes": reclaimed,
+                "retention_days": retention_days,
+            },
+        )
+        return reclaimed
+
+    def _load_transcript_from_vtt(
+        self, subtitle_path: str | None, correlation_id: str | None
+    ) -> tuple[str, str | None]:
+        """Load transcript text from a downloaded VTT subtitle file."""
+        if not subtitle_path:
+            return "", None
+
+        try:
+            text, lang = self._parse_vtt_file(Path(subtitle_path))
+            if text:
+                logger.info(
+                    "youtube_transcript_vtt_loaded",
+                    extra={"subtitle_lang": lang, "cid": correlation_id},
+                )
+            return text, lang
+        except FileNotFoundError:
+            logger.warning(
+                "youtube_transcript_vtt_missing",
+                extra={"subtitle_path": subtitle_path, "cid": correlation_id},
+            )
+            return "", None
+        except Exception as exc:
+            logger.warning(
+                "youtube_transcript_vtt_parse_failed",
+                extra={"subtitle_path": subtitle_path, "error": str(exc), "cid": correlation_id},
+            )
+            return "", None
+
+    def _parse_vtt_file(self, path: Path) -> tuple[str, str | None]:
+        """Parse a VTT subtitle file into plain text."""
+        lines: list[str] = []
+        lang = None
+
+        # Try to infer language code from filename suffix, e.g., .en.vtt
+        parts = path.name.split(".")
+        if len(parts) >= 3:
+            lang = parts[-2]
+
+        with path.open(encoding="utf-8") as f:
+            for raw in f:
+                stripped = raw.strip()
+                if not stripped:
+                    continue
+                if stripped.startswith("WEBVTT"):
+                    continue
+                if "-->" in stripped:
+                    continue
+                if stripped.isdigit():
+                    continue
+                lines.append(stripped)
+
+        text = " ".join(lines)
+        return " ".join(text.split()), lang
+
+    def _format_metadata_header(self, metadata: dict) -> str:
+        """Create a concise metadata header to give the summarizer context."""
+        title = metadata.get("title")
+        channel = metadata.get("channel")
+        duration = metadata.get("duration")
+        resolution = metadata.get("resolution")
+
+        parts = []
+        if title:
+            parts.append(f"Title: {title}")
+        if channel:
+            parts.append(f"Channel: {channel}")
+        if duration:
+            parts.append(self._format_duration(duration))
+        if resolution:
+            parts.append(f"Resolution: {resolution}")
+
+        return " | ".join(parts)
+
+    def _format_duration(self, duration: int | None) -> str:
+        if duration is None:
+            return ""
+        minutes, seconds = divmod(int(duration), 60)
+        hours, minutes = divmod(minutes, 60)
+        if hours:
+            return f"Duration: {hours}h {minutes}m {seconds}s"
+        if minutes:
+            return f"Duration: {minutes}m {seconds}s"
+        return f"Duration: {seconds}s"
+
+    def _combine_metadata_and_transcript(self, metadata: dict, transcript_text: str) -> str:
+        """Prepend metadata header to transcript for better summarization context."""
+        header = self._format_metadata_header(metadata)
+        if header and transcript_text:
+            return f"{header}\n\n{transcript_text}"
+        if header:
+            return header
+        return transcript_text
 
     def _build_metadata_dict(self, download) -> dict:
         """Build metadata dictionary from VideoDownload model."""

@@ -1,13 +1,115 @@
+from __future__ import annotations
+
+import os
 import sys
 import unittest
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import TYPE_CHECKING, cast
 from unittest.mock import AsyncMock, MagicMock, patch
+
+from app.adapters.youtube.youtube_downloader import YouTubeDownloader
+
+if TYPE_CHECKING:
+    from app.adapters.external.response_formatter import ResponseFormatter
+    from app.config import AppConfig
+    from app.db.database import Database
 
 sys.modules.setdefault("pydantic", MagicMock())
 sys.modules.setdefault("pydantic_settings", MagicMock())
 sys.modules.setdefault("peewee", MagicMock())
 sys.modules.setdefault("playhouse", MagicMock())
 sys.modules.setdefault("playhouse.sqlite_ext", MagicMock())
+
+
+class _StubYouTubeConfig:
+    def __init__(self, storage_path: str) -> None:
+        self.enabled = True
+        self.storage_path = storage_path
+        self.max_video_size_mb = 500
+        self.max_storage_gb = 0.0005  # small for tests
+        self.auto_cleanup_enabled = True
+        self.cleanup_after_days = 1
+        self.preferred_quality = "1080p"
+        self.subtitle_languages = ["en"]
+
+
+def _make_downloader(tmp_path: Path) -> YouTubeDownloader:
+    cfg = MagicMock()
+    cfg.youtube = _StubYouTubeConfig(str(tmp_path / "videos"))
+    db = MagicMock()
+    rf = MagicMock()
+    rf.safe_reply = MagicMock()
+    return YouTubeDownloader(
+        cfg=cast("AppConfig", cfg),
+        db=cast("Database", db),
+        response_formatter=cast("ResponseFormatter", rf),
+        audit_func=lambda *a, **k: None,
+    )
+
+
+def test_parse_vtt_file_extracts_text(tmp_path):
+    vtt_content = "\n".join(
+        [
+            "WEBVTT",
+            "",
+            "1",
+            "00:00:00.000 --> 00:00:02.000",
+            "Hello world",
+            "",
+            "2",
+            "00:00:02.000 --> 00:00:04.000",
+            "Another line",
+        ]
+    )
+    vtt_path = tmp_path / "sample.en.vtt"
+    vtt_path.write_text(vtt_content, encoding="utf-8")
+
+    downloader = _make_downloader(tmp_path)
+    text, lang = downloader._parse_vtt_file(vtt_path)
+
+    assert text == "Hello world Another line"
+    assert lang == "en"
+
+
+def test_combine_metadata_and_transcript_includes_header(tmp_path):
+    downloader = _make_downloader(tmp_path)
+    metadata = {
+        "title": "Sample Video",
+        "channel": "Test Channel",
+        "duration": 125,
+        "resolution": "1080p",
+    }
+    transcript = "This is the body."
+
+    combined = downloader._combine_metadata_and_transcript(metadata, transcript)
+
+    assert combined.startswith("Title: Sample Video")
+    assert "Channel: Test Channel" in combined
+    assert "Duration:" in combined
+    assert "This is the body." in combined
+
+
+def test_auto_cleanup_storage_removes_old_files(tmp_path):
+    downloader = _make_downloader(tmp_path)
+    videos_dir = downloader.storage_path
+    videos_dir.mkdir(parents=True, exist_ok=True)
+
+    old_file = videos_dir / "old.mp4"
+    old_file.write_bytes(b"0" * 1024)
+    old_mtime = (datetime.now(UTC) - timedelta(days=2)).timestamp()
+    os.utime(old_file, (old_mtime, old_mtime))
+
+    new_file = videos_dir / "new.mp4"
+    new_file.write_bytes(b"0" * 1024)
+
+    current_usage = downloader._calculate_storage_usage()
+    reclaimed = downloader._auto_cleanup_storage(current_usage, max_storage=1500)
+
+    assert reclaimed >= 1024
+    assert not old_file.exists()
+    assert new_file.exists()
+
 
 try:
     from youtube_transcript_api import YouTubeTranscriptApi
@@ -37,8 +139,6 @@ except ModuleNotFoundError:
 
 import yt_dlp  # noqa: E402
 
-from app.adapters.youtube.youtube_downloader import YouTubeDownloader  # noqa: E402
-
 
 class TestYouTubeDownloader(unittest.IsolatedAsyncioTestCase):
     def setUp(self) -> None:
@@ -49,6 +149,7 @@ class TestYouTubeDownloader(unittest.IsolatedAsyncioTestCase):
         self.cfg.youtube.preferred_quality = "1080p"
         self.cfg.youtube.subtitle_languages = ["en", "ru"]
         self.cfg.youtube.auto_cleanup_enabled = True
+        self.cfg.youtube.cleanup_after_days = 30
 
         self.db = MagicMock()
         self.db.async_get_request_by_dedupe_hash = AsyncMock(return_value=None)
@@ -91,7 +192,9 @@ class TestURLParsing(TestYouTubeDownloader):
         message = self._create_mock_message()
 
         with patch.object(
-            self.downloader, "_extract_transcript_api", return_value=("", "en", False)
+            self.downloader,
+            "_extract_transcript_api",
+            return_value=("Test transcript", "en", False, "youtube-transcript-api"),
         ):
             with patch.object(
                 self.downloader,
@@ -118,7 +221,9 @@ class TestURLParsing(TestYouTubeDownloader):
         message = self._create_mock_message()
 
         with patch.object(
-            self.downloader, "_extract_transcript_api", return_value=("", "en", False)
+            self.downloader,
+            "_extract_transcript_api",
+            return_value=("Test transcript", "en", False, "youtube-transcript-api"),
         ):
             with patch.object(
                 self.downloader,
@@ -157,7 +262,9 @@ class TestURLParsing(TestYouTubeDownloader):
         message = self._create_mock_message()
 
         with patch.object(
-            self.downloader, "_extract_transcript_api", return_value=("", "en", False)
+            self.downloader,
+            "_extract_transcript_api",
+            return_value=("Test transcript", "en", False, "youtube-transcript-api"),
         ):
             with patch.object(
                 self.downloader,
@@ -198,11 +305,14 @@ class TestTranscriptExtraction(TestYouTubeDownloader):
 
         mock_api_class.list_transcripts.return_value = mock_transcript_list
 
-        text, lang, auto = await self.downloader._extract_transcript_api("test_video", "cid")
+        text, lang, auto, source = await self.downloader._extract_transcript_api(
+            "test_video", "cid"
+        )
 
         self.assertEqual(text, "Hello World")
         self.assertEqual(lang, "en")
         self.assertFalse(auto)
+        self.assertEqual(source, "youtube-transcript-api")
 
     @patch("app.adapters.youtube.youtube_downloader.YouTubeTranscriptApi")
     async def test_fallback_to_auto_generated_transcript(self, mock_api_class):
@@ -222,11 +332,14 @@ class TestTranscriptExtraction(TestYouTubeDownloader):
 
         mock_api_class.list_transcripts.return_value = mock_transcript_list
 
-        text, lang, auto = await self.downloader._extract_transcript_api("test_video", "cid")
+        text, lang, auto, source = await self.downloader._extract_transcript_api(
+            "test_video", "cid"
+        )
 
         self.assertEqual(text, "Auto generated")
         self.assertEqual(lang, "en")
         self.assertTrue(auto)
+        self.assertEqual(source, "youtube-transcript-api")
 
     @patch("app.adapters.youtube.youtube_downloader.YouTubeTranscriptApi")
     @patch("asyncio.to_thread")
@@ -246,11 +359,14 @@ class TestTranscriptExtraction(TestYouTubeDownloader):
 
         mock_to_thread.side_effect = mock_thread_fn
 
-        text, lang, auto = await self.downloader._extract_transcript_api("test_video", "cid")
+        text, lang, auto, source = await self.downloader._extract_transcript_api(
+            "test_video", "cid"
+        )
 
         self.assertEqual(text, "")
         self.assertEqual(lang, "en")
         self.assertFalse(auto)
+        self.assertEqual(source, "youtube-transcript-api")
 
     @patch("app.adapters.youtube.youtube_downloader.YouTubeTranscriptApi")
     @patch("asyncio.to_thread")
@@ -265,11 +381,14 @@ class TestTranscriptExtraction(TestYouTubeDownloader):
 
         mock_to_thread.side_effect = mock_thread_fn
 
-        text, lang, auto = await self.downloader._extract_transcript_api("test_video", "cid")
+        text, lang, auto, source = await self.downloader._extract_transcript_api(
+            "test_video", "cid"
+        )
 
         self.assertEqual(text, "")
         self.assertEqual(lang, "en")
         self.assertFalse(auto)
+        self.assertEqual(source, "youtube-transcript-api")
 
     @patch("app.adapters.youtube.youtube_downloader.YouTubeTranscriptApi")
     async def test_video_unavailable(self, mock_api_class):
@@ -299,11 +418,14 @@ class TestTranscriptExtraction(TestYouTubeDownloader):
 
         mock_api_class.list_transcripts.return_value = mock_transcript_list
 
-        text, lang, auto = await self.downloader._extract_transcript_api("test_video", "cid")
+        text, lang, auto, source = await self.downloader._extract_transcript_api(
+            "test_video", "cid"
+        )
 
         self.assertEqual(text, "English text")
         self.assertEqual(lang, "en")
         self.assertFalse(auto)
+        self.assertEqual(source, "youtube-transcript-api")
 
 
 class TestVideoDownload(TestYouTubeDownloader):
@@ -438,7 +560,8 @@ class TestVideoDownload(TestYouTubeDownloader):
                             )
 
                             self.assertEqual(req_id, 789)
-                            self.assertEqual(transcript, "Existing transcript")
+                            self.assertIn("Existing transcript", transcript)
+                            self.assertTrue(transcript.startswith("Title: Test"))
                             self.assertEqual(source, "cached")
 
                         import asyncio
@@ -714,7 +837,7 @@ class TestMetadataExtraction(TestYouTubeDownloader):
         with patch.object(
             self.downloader,
             "_extract_transcript_api",
-            return_value=("Test transcript", "en", False),
+            return_value=("Test transcript", "en", False, "youtube-transcript-api"),
         ):
             with patch.object(
                 self.downloader,
@@ -821,7 +944,9 @@ class TestNotifications(TestYouTubeDownloader):
         message = self._create_mock_message()
 
         with patch.object(
-            self.downloader, "_extract_transcript_api", return_value=("", "en", False)
+            self.downloader,
+            "_extract_transcript_api",
+            return_value=("Test transcript", "en", False, "youtube-transcript-api"),
         ):
             with patch.object(
                 self.downloader,
@@ -857,7 +982,9 @@ class TestNotifications(TestYouTubeDownloader):
         message = self._create_mock_message()
 
         with patch.object(
-            self.downloader, "_extract_transcript_api", return_value=("", "en", False)
+            self.downloader,
+            "_extract_transcript_api",
+            return_value=("Test transcript", "en", False, "youtube-transcript-api"),
         ):
             with patch.object(
                 self.downloader,
@@ -893,7 +1020,9 @@ class TestNotifications(TestYouTubeDownloader):
         message = self._create_mock_message()
 
         with patch.object(
-            self.downloader, "_extract_transcript_api", return_value=("", "en", False)
+            self.downloader,
+            "_extract_transcript_api",
+            return_value=("Test transcript", "en", False, "youtube-transcript-api"),
         ):
             with patch.object(
                 self.downloader,
