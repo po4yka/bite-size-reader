@@ -117,18 +117,11 @@ app.add_exception_handler(peewee.OperationalError, database_exception_handler)
 app.add_exception_handler(Exception, global_error_handler)
 
 
-_db: Database | None = None
-
-
-@app.on_event("startup")
-async def startup_resources() -> None:
-    """Initialize shared resources (database, etc.)."""
-    global _db
-    db_path = Config.get("DB_PATH", "/data/app.db")
-    _db = Database(path=db_path)
-    # Ensure the SQLite connection is established so peewee proxy is usable
-    _db._database.connect(reuse_if_open=True)
-    logger.info("database_initialized", extra={"db_path": db_path})
+# Initialize database proxy eagerly so Peewee models can be used immediately
+DB_PATH = Config.get("DB_PATH", "/data/app.db")
+_db = Database(path=DB_PATH)
+_db._database.connect(reuse_if_open=True)
+logger.info("database_initialized", extra={"db_path": DB_PATH})
 
 
 @app.on_event("shutdown")
