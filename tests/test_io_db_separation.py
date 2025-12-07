@@ -63,7 +63,7 @@ async def test_firecrawl_persistence_runs_in_background() -> None:
             latency_ms=10,
             error_text=None,
             source_url=url,
-            endpoint="/v1/scrape",
+            endpoint="/v2/scrape",
             options_json=None,
             correlation_id=None,
         )
@@ -76,12 +76,14 @@ async def test_firecrawl_persistence_runs_in_background() -> None:
     extractor._audit = lambda *args, **kwargs: None
     extractor._sem = lambda: _DummySemaphore()
     extractor._persist_crawl_result = MethodType(slow_persist, extractor)
+    extractor._cache = SimpleNamespace(enabled=False)
 
     content_text, content_source = await asyncio.wait_for(
         extractor._perform_new_crawl(
             message=SimpleNamespace(),
             req_id=1,
             url_text="https://example.com",
+            dedupe_hash="hash",
             correlation_id="cid-firecrawl",
             interaction_id=None,
             silent=False,

@@ -7,13 +7,18 @@ from unittest.mock import AsyncMock, patch
 from app.adapters.telegram.command_processor import CommandProcessor
 from app.adapters.telegram.telegram_bot import TelegramBot
 from app.config import (
+    ApiLimitsConfig,
     AppConfig,
+    AuthConfig,
+    BackgroundProcessorConfig,
     ChromaConfig,
     ContentLimitsConfig,
     DatabaseConfig,
     FirecrawlConfig,
     OpenRouterConfig,
+    RedisConfig,
     RuntimeConfig,
+    SyncConfig,
     TelegramConfig,
     TelegramLimitsConfig,
     YouTubeConfig,
@@ -60,7 +65,7 @@ class ReadStatusBot(TelegramBot):
                     self.source_url = "https://example.com"
                     self.language = "en"
                     self.http_status = 200
-                    self.endpoint = "https://api.firecrawl.dev/v1/scrape"
+                    self.endpoint = "/v2/scrape"
                     self.error_text = None
                     self.options_json = {"formats": ["markdown"]}
                     self.correlation_id = None
@@ -109,6 +114,11 @@ def make_bot(tmp_path: str) -> ReadStatusBot:
         database=DatabaseConfig(),
         content_limits=ContentLimitsConfig(),
         vector_store=ChromaConfig(),
+        redis=RedisConfig(enabled=False, cache_enabled=False, prefix="test"),
+        api_limits=ApiLimitsConfig(),
+        auth=AuthConfig(),
+        sync=SyncConfig(),
+        background=BackgroundProcessorConfig(),
     )
     from app.adapters import telegram_bot as tbmod
 

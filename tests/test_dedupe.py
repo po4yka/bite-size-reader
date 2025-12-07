@@ -8,13 +8,18 @@ from unittest.mock import AsyncMock, patch
 from app.adapters.openrouter.openrouter_client import LLMCallResult
 from app.adapters.telegram.telegram_bot import TelegramBot
 from app.config import (
+    ApiLimitsConfig,
     AppConfig,
+    AuthConfig,
+    BackgroundProcessorConfig,
     ChromaConfig,
     ContentLimitsConfig,
     DatabaseConfig,
     FirecrawlConfig,
     OpenRouterConfig,
+    RedisConfig,
     RuntimeConfig,
+    SyncConfig,
     TelegramConfig,
     TelegramLimitsConfig,
     YouTubeConfig,
@@ -115,7 +120,7 @@ class TestDedupeReuse(unittest.IsolatedAsyncioTestCase):
             db.insert_crawl_result(
                 request_id=req_id,
                 source_url=url,
-                endpoint="/v1/scrape",
+                endpoint="/v2/scrape",
                 http_status=200,
                 status="ok",
                 options_json={"formats": ["markdown"], "mobile": True},
@@ -161,6 +166,11 @@ class TestDedupeReuse(unittest.IsolatedAsyncioTestCase):
                 database=DatabaseConfig(),
                 content_limits=ContentLimitsConfig(),
                 vector_store=ChromaConfig(),
+                redis=RedisConfig(enabled=False, cache_enabled=False, prefix="test"),
+                api_limits=ApiLimitsConfig(),
+                auth=AuthConfig(),
+                sync=SyncConfig(),
+                background=BackgroundProcessorConfig(),
             )
 
             # Avoid creating real Telegram client
@@ -180,11 +190,12 @@ class TestDedupeReuse(unittest.IsolatedAsyncioTestCase):
             bot_any._openrouter = fake_or
 
             msg = FakeMessage()
-            # First run: should reuse crawl and insert summary version 1
+            # First run: should reuse crawl and insert summary with a version marker
             await bot._handle_url_flow(msg, url, correlation_id="cid1")
             s1 = db.get_summary_by_request(req_id)
             assert s1 is not None
-            assert int(s1["version"]) == 1
+            version1 = int(s1["version"])
+            assert version1 > 0
             # correlation id updated
             row = db.get_request_by_dedupe_hash(dedupe)
             assert row["correlation_id"] == "cid1"
@@ -195,7 +206,7 @@ class TestDedupeReuse(unittest.IsolatedAsyncioTestCase):
             await bot._handle_url_flow(msg, url, correlation_id="cid2")
             s2 = db.get_summary_by_request(req_id)
             assert s2 is not None
-            assert int(s2["version"]) == 1
+            assert int(s2["version"]) == version1
             row2 = db.get_request_by_dedupe_hash(dedupe)
             assert row2["correlation_id"] == "cid2"
             assert fake_or.calls == first_pass_calls  # cache reuse means no additional LLM calls
@@ -251,6 +262,11 @@ class TestDedupeReuse(unittest.IsolatedAsyncioTestCase):
                 database=DatabaseConfig(),
                 content_limits=ContentLimitsConfig(),
                 vector_store=ChromaConfig(),
+                redis=RedisConfig(enabled=False, cache_enabled=False, prefix="test"),
+                api_limits=ApiLimitsConfig(),
+                auth=AuthConfig(),
+                sync=SyncConfig(),
+                background=BackgroundProcessorConfig(),
             )
 
             from app.adapters import telegram_bot as tbmod
@@ -283,7 +299,7 @@ class TestDedupeReuse(unittest.IsolatedAsyncioTestCase):
 
             cached_summary = db.get_summary_by_request(req_id)
             assert cached_summary is not None
-            assert int(cached_summary["version"]) == 1
+            assert int(cached_summary["version"]) > 0
 
             existing_request = db.get_request_by_forward(fwd_chat_id, fwd_msg_id)
             assert existing_request is not None

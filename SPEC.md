@@ -264,7 +264,7 @@ sequenceDiagram
   id (PK)
   request_id (FK, unique)
   source_url
-  endpoint                 -- '/v1/scrape'
+  endpoint                 -- '/v2/scrape'
   http_status
   status                   -- 'ok'|'error'
   options_json             -- formats, mobile, pdf, actions, timeouts

@@ -6,13 +6,18 @@ from unittest.mock import AsyncMock, patch
 
 from app.adapters.telegram.telegram_bot import TelegramBot
 from app.config import (
+    ApiLimitsConfig,
     AppConfig,
+    AuthConfig,
+    BackgroundProcessorConfig,
     ChromaConfig,
     ContentLimitsConfig,
     DatabaseConfig,
     FirecrawlConfig,
     OpenRouterConfig,
+    RedisConfig,
     RuntimeConfig,
+    SyncConfig,
     TelegramConfig,
     TelegramLimitsConfig,
     YouTubeConfig,
@@ -80,6 +85,11 @@ def make_bot(tmp_path: str) -> BotSpy:
         database=DatabaseConfig(),
         content_limits=ContentLimitsConfig(),
         vector_store=ChromaConfig(),
+        redis=RedisConfig(enabled=False, cache_enabled=False, prefix="test"),
+        api_limits=ApiLimitsConfig(),
+        auth=AuthConfig(),
+        sync=SyncConfig(),
+        background=BackgroundProcessorConfig(),
     )
     from app.adapters import telegram_bot as tbmod
 
@@ -255,7 +265,7 @@ class TestCommands(unittest.IsolatedAsyncioTestCase):
             bot.db.insert_crawl_result(
                 request_id=rid_good,
                 source_url="https://example.com/good",
-                endpoint="/v1/scrape",
+                endpoint="/v2/scrape",
                 http_status=200,
                 status="ok",
                 options_json={},
@@ -313,7 +323,7 @@ class TestCommands(unittest.IsolatedAsyncioTestCase):
             bot.db.insert_crawl_result(
                 request_id=rid_empty,
                 source_url="https://example.com/empty",
-                endpoint="/v1/scrape",
+                endpoint="/v2/scrape",
                 http_status=200,
                 status="ok",
                 options_json={},

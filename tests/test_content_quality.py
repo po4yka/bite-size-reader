@@ -26,7 +26,17 @@ def _make_extractor(
 ) -> ContentExtractor:
     cfg = cast(
         "AppConfig",
-        SimpleNamespace(runtime=SimpleNamespace(enable_textacy=False, request_timeout_sec=5)),
+        SimpleNamespace(
+            runtime=SimpleNamespace(enable_textacy=False, request_timeout_sec=5),
+            redis=SimpleNamespace(
+                enabled=False,
+                cache_enabled=False,
+                prefix="test",
+                required=False,
+                cache_timeout_sec=0.1,
+                firecrawl_ttl_seconds=0,
+            ),
+        ),
     )
     return ContentExtractor(
         cfg=cfg,
@@ -54,7 +64,7 @@ def _firecrawl_result(markdown: str | None, html: str | None) -> FirecrawlResult
         latency_ms=123,
         error_text=None,
         source_url="https://example.com",
-        endpoint="/v1/scrape",
+        endpoint="/v2/scrape",
         options_json={"formats": ["markdown", "html"]},
         correlation_id="cid-123",
     )
@@ -83,6 +93,7 @@ async def test_low_value_content_triggers_failure() -> None:
             message=SimpleNamespace(),
             req_id=42,
             url_text="https://example.com",
+            dedupe_hash="hash",
             correlation_id="cid-123",
             interaction_id=None,
             silent=False,

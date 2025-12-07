@@ -124,7 +124,7 @@ class TestDatabaseHelpers(unittest.TestCase):
         cid = self.db.insert_crawl_result(
             request_id=rid,
             source_url="https://example.com",
-            endpoint="/v1/scrape",
+            endpoint="/v2/scrape",
             http_status=200,
             status="ok",
             options_json={},
@@ -305,7 +305,7 @@ class TestDatabaseHelpers(unittest.TestCase):
         self.db.insert_crawl_result(
             request_id=rid_good,
             source_url="https://example.com/good",
-            endpoint="/v1/scrape",
+            endpoint="/v2/scrape",
             http_status=200,
             status="ok",
             options_json={},
@@ -365,7 +365,7 @@ class TestDatabaseHelpers(unittest.TestCase):
         self.db.insert_crawl_result(
             request_id=rid_empty_links,
             source_url="https://example.com/empty",
-            endpoint="/v1/scrape",
+            endpoint="/v2/scrape",
             http_status=200,
             status="ok",
             options_json={},

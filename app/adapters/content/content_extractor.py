@@ -930,7 +930,7 @@ class ContentExtractor:
         # Provide a precise, user-visible stage and context
         detail_lines = []
         url_line = crawl.source_url or "unknown"
-        endpoint_line = crawl.endpoint or "/v1/scrape"
+        endpoint_line = crawl.endpoint or "/v2/scrape"
         http_line = str(crawl.http_status) if crawl.http_status is not None else "n/a"
         err_line = crawl.error_text or "unknown"
         content_hint = f"md:{int(has_markdown)} html:{int(has_html)}"

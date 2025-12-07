@@ -18,8 +18,15 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
 
+FIRECRAWL_BASE_URL = "https://api.firecrawl.dev"
+FIRECRAWL_SCRAPE_ENDPOINT = "/v2/scrape"
+FIRECRAWL_SEARCH_ENDPOINT = "/v2/search"
+FIRECRAWL_SCRAPE_URL = f"{FIRECRAWL_BASE_URL}{FIRECRAWL_SCRAPE_ENDPOINT}"
+FIRECRAWL_SEARCH_URL = f"{FIRECRAWL_BASE_URL}{FIRECRAWL_SEARCH_ENDPOINT}"
+
+
 class FirecrawlResult(BaseModel):
-    """Normalized representation of a Firecrawl `/v1/scrape` response."""
+    """Normalized representation of a Firecrawl `/v2/scrape` response."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -62,7 +69,7 @@ class FirecrawlResult(BaseModel):
     )
     source_url: str | None = Field(default=None, description="URL that was submitted to Firecrawl.")
     endpoint: str | None = Field(
-        default="/v1/scrape", description="Firecrawl endpoint that was called."
+        default=FIRECRAWL_SCRAPE_ENDPOINT, description="Firecrawl endpoint that was called."
     )
     options_json: dict[str, Any] | None = Field(
         default=None, description="Options payload sent to Firecrawl."
@@ -73,7 +80,7 @@ class FirecrawlResult(BaseModel):
 
 
 class FirecrawlSearchItem(BaseModel):
-    """Normalized representation of a Firecrawl `/v1/search` result item."""
+    """Normalized representation of a Firecrawl `/v2/search` result item."""
 
     model_config = ConfigDict(frozen=True)
 
@@ -188,7 +195,7 @@ class FirecrawlClient:
 
         self._api_key = api_key
         self._timeout = int(timeout_sec)
-        self._base_url = "https://api.firecrawl.dev/v1/scrape"
+        self._base_url = FIRECRAWL_SCRAPE_URL
         self._max_retries = max(0, int(max_retries))
         self._backoff_base = float(backoff_base)
         self._audit = audit
@@ -260,9 +267,7 @@ class FirecrawlClient:
 
         started = time.perf_counter()
         try:
-            resp = await self._client.post(
-                "https://api.firecrawl.dev/v1/search", headers=headers, json=body
-            )
+            resp = await self._client.post(FIRECRAWL_SEARCH_URL, headers=headers, json=body)
 
             # Validate response size before parsing
             await validate_response_size(resp, self._max_response_size_bytes, "Firecrawl Search")
@@ -616,7 +621,7 @@ class FirecrawlClient:
                         latency_ms=latency,
                         error_text=f"Response too large: {last_error}",
                         source_url=url,
-                        endpoint="/v1/scrape",
+                        endpoint=FIRECRAWL_SCRAPE_ENDPOINT,
                         options_json={
                             "formats": ["markdown", "html"],
                             "mobile": cur_mobile,
@@ -652,7 +657,7 @@ class FirecrawlClient:
                         latency_ms=latency,
                         error_text=last_error,
                         source_url=url,
-                        endpoint="/v1/scrape",
+                        endpoint=FIRECRAWL_SCRAPE_ENDPOINT,
                         options_json={
                             "formats": ["markdown", "html"],
                             "mobile": cur_mobile,
@@ -836,7 +841,7 @@ class FirecrawlClient:
                             latency_ms=latency,
                             error_text=last_error,
                             source_url=url,
-                            endpoint="/v1/scrape",
+                            endpoint=FIRECRAWL_SCRAPE_ENDPOINT,
                             options_json={
                                 "formats": ["markdown", "html"],
                                 "mobile": cur_mobile,
@@ -918,7 +923,7 @@ class FirecrawlClient:
                         latency_ms=latency,
                         error_text=None,
                         source_url=url,
-                        endpoint="/v1/scrape",
+                        endpoint=FIRECRAWL_SCRAPE_ENDPOINT,
                         options_json={
                             "formats": ["markdown", "html"],
                             "mobile": cur_mobile,
@@ -1025,7 +1030,7 @@ class FirecrawlClient:
                     latency_ms=latency,
                     error_text=error_message,
                     source_url=url,
-                    endpoint="/v1/scrape",
+                    endpoint=FIRECRAWL_SCRAPE_ENDPOINT,
                     options_json={
                         "formats": ["markdown", "html"],
                         "mobile": cur_mobile,
@@ -1103,7 +1108,7 @@ class FirecrawlClient:
             latency_ms=last_latency,
             error_text=last_error,
             source_url=url,
-            endpoint="/v1/scrape",
+            endpoint=FIRECRAWL_SCRAPE_ENDPOINT,
             options_json={
                 "formats": ["markdown", "html"],
                 "mobile": cur_mobile,
