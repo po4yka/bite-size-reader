@@ -1,0 +1,42 @@
+# syntax=docker/dockerfile:1
+
+FROM python:3.13-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PATH="/app/.venv/bin:$PATH"
+
+WORKDIR /app
+
+# System deps for SQLite and basic diagnostics
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends build-essential libsqlite3-0 curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install dependencies via uv using the lockfile
+COPY pyproject.toml uv.lock ./
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install --no-cache-dir uv \
+    && uv sync --frozen --no-dev
+
+# Copy API source
+COPY app ./app
+
+# Non-root user and data dir
+RUN useradd -r -u 1000 -m -d /home/appuser -s /sbin/nologin appuser \
+    && mkdir -p /data \
+    && chown -R appuser:appuser /app /data
+
+USER appuser
+
+VOLUME ["/data"]
+
+ENV DB_PATH=/data/app.db \
+    LOG_LEVEL=INFO \
+    API_HOST=0.0.0.0 \
+    API_PORT=8000 \
+    API_WORKERS=4
+
+EXPOSE 8000
+
+CMD ["sh", "-c", "uvicorn app.api.main:app --host ${API_HOST:-0.0.0.0} --port ${API_PORT:-8000} --workers ${API_WORKERS:-4}"]

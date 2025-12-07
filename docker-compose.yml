@@ -60,6 +60,43 @@ services:
 
     stop_grace_period: 30s
 
+  mobile-api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    container_name: bsr-mobile-api
+    init: true
+    env_file:
+      - .env
+    environment:
+      - API_HOST=0.0.0.0
+      - API_PORT=8000
+      - API_WORKERS=${API_WORKERS:-4}
+      - DB_PATH=/data/app.db
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - PYTHONUNBUFFERED=1
+      - PYTHONDONTWRITEBYTECODE=1
+    volumes:
+      - ./data:/data
+      - /etc/localtime:/etc/localtime:ro
+    ports:
+      - "18000:8000"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8000/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    security_opt:
+      - no-new-privileges:true
+    stop_grace_period: 30s
+
   chroma:
     image: bsr-chroma:1.3.5-curl
     build:
