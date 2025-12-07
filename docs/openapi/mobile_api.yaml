@@ -106,6 +106,200 @@ paths:
           $ref: '#/components/responses/InternalServerError'
       security:
       - HTTPBearer: []
+  /v1/auth/secret-login:
+    post:
+      tags:
+      - Authentication
+      summary: Secret Key Login
+      description: Exchange a pre-registered client secret for JWT tokens.
+      operationId: secret_login_v1_auth_secret_login_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SecretLoginRequest'
+        required: true
+      responses:
+        '200':
+          description: Login success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthTokensResponseEnvelope'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '429':
+          $ref: '#/components/responses/TooManyRequestsError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /v1/auth/secret-keys:
+    post:
+      tags:
+      - Authentication
+      summary: Create Client Secret (owner-only)
+      description: Create or register a client secret for a user. Returns plaintext secret once.
+      operationId: create_secret_key_v1_auth_secret_keys_post
+      security:
+      - HTTPBearer: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SecretKeyCreateRequest'
+        required: true
+      responses:
+        '200':
+          description: Secret created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SecretKeyCreateResponseEnvelope'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '429':
+          $ref: '#/components/responses/TooManyRequestsError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    get:
+      tags:
+      - Authentication
+      summary: List Client Secrets (owner-only)
+      description: List client secrets with optional filters.
+      operationId: list_secret_keys_v1_auth_secret_keys_get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: user_id
+        in: query
+        required: false
+        schema:
+          type: integer
+      - name: client_id
+        in: query
+        required: false
+        schema:
+          type: string
+      - name: status
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - active
+          - revoked
+          - expired
+          - locked
+      responses:
+        '200':
+          description: Secrets list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SecretKeyListResponseEnvelope'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '429':
+          $ref: '#/components/responses/TooManyRequestsError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /v1/auth/secret-keys/{key_id}/rotate:
+    post:
+      tags:
+      - Authentication
+      summary: Rotate Client Secret (owner-only)
+      description: Rotate an existing client secret; returns plaintext secret once.
+      operationId: rotate_secret_key_v1_auth_secret_keys_key_id_rotate_post
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: key_id
+        in: path
+        required: true
+        schema:
+          type: integer
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SecretKeyRotateRequest'
+        required: true
+      responses:
+        '200':
+          description: Secret rotated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SecretKeyCreateResponseEnvelope'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '429':
+          $ref: '#/components/responses/TooManyRequestsError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /v1/auth/secret-keys/{key_id}/revoke:
+    post:
+      tags:
+      - Authentication
+      summary: Revoke Client Secret (owner-only)
+      description: Revoke an existing client secret.
+      operationId: revoke_secret_key_v1_auth_secret_keys_key_id_revoke_post
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: key_id
+        in: path
+        required: true
+        schema:
+          type: integer
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SecretKeyRevokeRequest'
+        required: false
+      responses:
+        '200':
+          description: Secret revoked
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SecretKeyActionResponseEnvelope'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '429':
+          $ref: '#/components/responses/TooManyRequestsError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
   /v1/summaries:
     get:
       tags:
@@ -1216,6 +1410,187 @@ components:
         properties:
           data:
             $ref: '#/components/schemas/AuthTokens'
+    SecretLoginRequest:
+      type: object
+      required:
+      - user_id
+      - client_id
+      - secret
+      properties:
+        user_id:
+          type: integer
+          description: User ID (must be whitelisted)
+        client_id:
+          type: string
+          minLength: 1
+          maxLength: 100
+        secret:
+          type: string
+          minLength: 1
+        username:
+          type: string
+          nullable: true
+    SecretKeyCreateRequest:
+      type: object
+      required:
+      - user_id
+      - client_id
+      properties:
+        user_id:
+          type: integer
+        client_id:
+          type: string
+          minLength: 1
+          maxLength: 100
+        label:
+          type: string
+          maxLength: 200
+          nullable: true
+        description:
+          type: string
+          maxLength: 500
+          nullable: true
+        expires_at:
+          type: string
+          format: date-time
+          nullable: true
+        secret:
+          type: string
+          nullable: true
+          description: Optional client-provided secret; if omitted server generates
+        username:
+          type: string
+          nullable: true
+    SecretKeyRotateRequest:
+      type: object
+      properties:
+        label:
+          type: string
+          maxLength: 200
+          nullable: true
+        description:
+          type: string
+          maxLength: 500
+          nullable: true
+        expires_at:
+          type: string
+          format: date-time
+          nullable: true
+        secret:
+          type: string
+          nullable: true
+          description: Optional client-provided secret; if omitted server generates
+    SecretKeyRevokeRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 200
+          nullable: true
+    ClientSecretInfo:
+      type: object
+      required:
+      - id
+      - user_id
+      - client_id
+      - status
+      - failed_attempts
+      - created_at
+      - updated_at
+      properties:
+        id:
+          type: integer
+        user_id:
+          type: integer
+        client_id:
+          type: string
+        status:
+          type: string
+          enum:
+          - active
+          - revoked
+          - expired
+          - locked
+        label:
+          type: string
+          nullable: true
+        description:
+          type: string
+          nullable: true
+        expires_at:
+          type: string
+          format: date-time
+          nullable: true
+        last_used_at:
+          type: string
+          format: date-time
+          nullable: true
+        failed_attempts:
+          type: integer
+        locked_until:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    SecretKeyCreateResponse:
+      type: object
+      required:
+      - secret
+      - key
+      properties:
+        secret:
+          type: string
+          description: Plaintext secret (only returned once)
+        key:
+          $ref: '#/components/schemas/ClientSecretInfo'
+    SecretKeyActionResponse:
+      type: object
+      required:
+      - key
+      properties:
+        key:
+          $ref: '#/components/schemas/ClientSecretInfo'
+    SecretKeyListResponse:
+      type: object
+      required:
+      - keys
+      properties:
+        keys:
+          type: array
+          items:
+            $ref: '#/components/schemas/ClientSecretInfo'
+    SecretKeyCreateResponseEnvelope:
+      allOf:
+      - $ref: '#/components/schemas/BaseSuccessResponse'
+      - type: object
+        required:
+        - data
+        properties:
+          data:
+            $ref: '#/components/schemas/SecretKeyCreateResponse'
+    SecretKeyActionResponseEnvelope:
+      allOf:
+      - $ref: '#/components/schemas/BaseSuccessResponse'
+      - type: object
+        required:
+        - data
+        properties:
+          data:
+            $ref: '#/components/schemas/SecretKeyActionResponse'
+    SecretKeyListResponseEnvelope:
+      allOf:
+      - $ref: '#/components/schemas/BaseSuccessResponse'
+      - type: object
+        required:
+        - data
+        properties:
+          data:
+            $ref: '#/components/schemas/SecretKeyListResponse'
     User:
       type: object
       required:

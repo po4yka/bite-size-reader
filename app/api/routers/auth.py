@@ -4,6 +4,7 @@ Authentication endpoints and utilities.
 
 import hashlib
 import hmac
+import secrets
 import time
 from datetime import datetime, timedelta
 from typing import Any
@@ -38,15 +39,21 @@ except Exception:  # pragma: no cover - fallback for environments without compat
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.api.models.responses import AuthTokensResponse, TokenPair, UserInfo, success_response
-from app.config import Config
+from app.api.models.responses import (
+    AuthTokensResponse,
+    TokenPair,
+    UserInfo,
+    success_response,
+)
+from app.config import AppConfig, Config, load_config
 from app.core.logging_utils import get_logger
 from app.core.time_utils import UTC
-from app.db.models import User
+from app.db.models import ClientSecret, User
 
 logger = get_logger(__name__)
 router = APIRouter()
 security = HTTPBearer()
+_cfg: AppConfig | None = None
 
 
 def _load_secret_key() -> str:
@@ -84,6 +91,41 @@ REFRESH_TOKEN_EXPIRE_DAYS = 30
 logger.info("JWT authentication initialized with secure secret")
 
 
+def _get_cfg() -> AppConfig:
+    """Load and cache application configuration."""
+    global _cfg
+    if _cfg is None:
+        _cfg = load_config(allow_stub_telegram=True)
+    return _cfg
+
+
+def _get_auth_config():
+    cfg = _get_cfg()
+    return cfg.auth
+
+
+def _get_secret_pepper() -> str:
+    """Resolve pepper used to hash secrets (prefers explicit pepper, falls back to JWT secret)."""
+    cfg = _get_cfg()
+    if cfg.auth.secret_pepper:
+        return cfg.auth.secret_pepper
+    if cfg.runtime.jwt_secret_key:
+        return cfg.runtime.jwt_secret_key
+    return SECRET_KEY
+
+
+def _coerce_naive(dt_value: datetime | None) -> datetime | None:
+    if dt_value is None:
+        return None
+    if dt_value.tzinfo:
+        return dt_value.replace(tzinfo=None)
+    return dt_value
+
+
+def _utcnow_naive() -> datetime:
+    return datetime.now(UTC).replace(tzinfo=None)
+
+
 class TelegramLoginRequest(BaseModel):
     """Request body for Telegram login."""
 
@@ -108,6 +150,86 @@ class RefreshTokenRequest(BaseModel):
     """Request body for token refresh."""
 
     refresh_token: str
+
+
+class SecretLoginRequest(BaseModel):
+    """Request body for secret-key login."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    user_id: int
+    client_id: str = Field(..., min_length=1, max_length=100)
+    secret: str
+    username: str | None = None
+
+
+class SecretKeyCreateRequest(BaseModel):
+    """Request body to create or register a client secret."""
+
+    user_id: int
+    client_id: str = Field(..., min_length=1, max_length=100)
+    label: str | None = Field(default=None, max_length=200)
+    description: str | None = Field(default=None, max_length=500)
+    expires_at: datetime | None = None
+    secret: str | None = Field(
+        default=None,
+        description="Optional client-generated secret; if omitted, server will generate",
+    )
+    username: str | None = None
+
+
+class SecretKeyRotateRequest(BaseModel):
+    """Request body to rotate an existing client secret."""
+
+    label: str | None = Field(default=None, max_length=200)
+    description: str | None = Field(default=None, max_length=500)
+    expires_at: datetime | None = None
+    secret: str | None = Field(
+        default=None,
+        description="Optional client-generated secret; if omitted, server will generate",
+    )
+
+
+class SecretKeyRevokeRequest(BaseModel):
+    """Request body to revoke an existing client secret."""
+
+    reason: str | None = Field(default=None, max_length=200)
+
+
+class ClientSecretInfo(BaseModel):
+    """Safe representation of a stored client secret (no hash included)."""
+
+    id: int
+    user_id: int
+    client_id: str
+    status: str
+    label: str | None = None
+    description: str | None = None
+    expires_at: str | None = None
+    last_used_at: str | None = None
+    failed_attempts: int
+    locked_until: str | None = None
+    created_at: str
+    updated_at: str
+
+
+class SecretKeyCreateResponse(BaseModel):
+    """Payload returned when creating or rotating a secret key."""
+
+    secret: str
+    key: ClientSecretInfo
+
+
+class SecretKeyActionResponse(BaseModel):
+    """Payload for list/revoke actions."""
+
+    key: ClientSecretInfo
+
+
+class SecretKeyListResponse(BaseModel):
+    """Payload for listing stored secrets."""
+
+    keys: list[ClientSecretInfo]
 
 
 def verify_telegram_auth(
@@ -346,6 +468,165 @@ def validate_client_id(client_id: str | None) -> bool:
     return True
 
 
+def _ensure_secret_login_enabled() -> None:
+    if not _get_auth_config().secret_login_enabled:
+        raise HTTPException(status_code=404, detail="Secret-key login is disabled")
+
+
+def _ensure_user_allowed(user_id: int) -> None:
+    allowed_ids = Config.get_allowed_user_ids()
+    if user_id not in allowed_ids:
+        logger.warning(
+            "User not authorized for secret login",
+            extra={"user_id": user_id},
+        )
+        raise HTTPException(
+            status_code=403,
+            detail="User not authorized. Contact administrator to request access.",
+        )
+
+
+def _require_owner(user: dict) -> User:
+    user_record = User.select().where(User.telegram_user_id == user["user_id"]).first()
+    if not user_record or not user_record.is_owner:
+        raise HTTPException(status_code=403, detail="Owner permissions required")
+    return user_record
+
+
+def _get_target_user(user_id: int, username: str | None = None) -> User:
+    user, created = User.get_or_create(
+        telegram_user_id=user_id,
+        defaults={"username": username, "is_owner": True},
+    )
+    if not created and username and user.username != username:
+        user.username = username
+        user.save()
+    return user
+
+
+def _validate_secret_value(secret: str, *, context: str = "login") -> str:
+    """Validate provided secret length."""
+    cfg = _get_auth_config()
+    cleaned = secret.strip()
+    length = len(cleaned)
+    if length < cfg.secret_min_length or length > cfg.secret_max_length:
+        msg = "Invalid secret length"
+        status = 401 if context == "login" else 400
+        raise HTTPException(status_code=status, detail=msg)
+    return cleaned
+
+
+def _hash_secret(secret: str, salt: str) -> str:
+    pepper = _get_secret_pepper().encode()
+    payload = f"{salt}:{secret}".encode()
+    return hmac.new(pepper, payload, hashlib.sha256).hexdigest()
+
+
+def _generate_secret_value() -> str:
+    cfg = _get_auth_config()
+    target_len = max(cfg.secret_min_length, 32)
+    while True:
+        candidate = secrets.token_urlsafe(target_len)
+        if len(candidate) >= cfg.secret_min_length:
+            break
+    if len(candidate) > cfg.secret_max_length:
+        candidate = candidate[: cfg.secret_max_length]
+    return candidate
+
+
+def _serialize_secret(record: ClientSecret) -> ClientSecretInfo:
+    def _fmt(dt: datetime | None) -> str | None:
+        if dt is None:
+            return None
+        return dt.isoformat() + "Z"
+
+    return ClientSecretInfo(
+        id=record.id,
+        user_id=record.user.telegram_user_id if isinstance(record.user, User) else record.user_id,
+        client_id=record.client_id,
+        status=record.status,
+        label=record.label,
+        description=record.description,
+        expires_at=_fmt(record.expires_at),
+        last_used_at=_fmt(record.last_used_at),
+        failed_attempts=record.failed_attempts or 0,
+        locked_until=_fmt(record.locked_until),
+        created_at=_fmt(record.created_at) or "",
+        updated_at=_fmt(record.updated_at) or "",
+    )
+
+
+def _revoke_active_secrets(user: User, client_id: str) -> None:
+    active = (
+        ClientSecret.select()
+        .where(
+            (ClientSecret.user == user),
+            (ClientSecret.client_id == client_id),
+            (ClientSecret.status == "active"),
+        )
+        .execute()
+    )
+    for record in active:
+        record.status = "revoked"
+        record.failed_attempts = 0
+        record.locked_until = None
+        record.save()
+
+
+def _check_expired(record: ClientSecret) -> None:
+    now = _utcnow_naive()
+    if record.expires_at and record.expires_at < now:
+        record.status = "expired"
+        record.save()
+        raise HTTPException(status_code=401, detail="Secret has expired")
+
+
+def _handle_failed_attempt(record: ClientSecret) -> None:
+    cfg = _get_auth_config()
+    record.failed_attempts = (record.failed_attempts or 0) + 1
+    if record.failed_attempts >= cfg.secret_max_failed_attempts:
+        record.status = "locked"
+        record.locked_until = _utcnow_naive() + timedelta(minutes=cfg.secret_lockout_minutes)
+    record.save()
+
+
+def _reset_failed_attempts(record: ClientSecret) -> None:
+    record.failed_attempts = 0
+    record.locked_until = None
+    record.save()
+
+
+def _build_secret_record(
+    user: User,
+    client_id: str,
+    *,
+    provided_secret: str | None,
+    label: str | None,
+    description: str | None,
+    expires_at: datetime | None,
+) -> tuple[str, ClientSecret]:
+    secret_value = (
+        _validate_secret_value(provided_secret, context="create")
+        if provided_secret
+        else _generate_secret_value()
+    )
+    salt = secrets.token_hex(16)
+    secret_hash = _hash_secret(secret_value, salt)
+    record = ClientSecret.create(
+        user=user,
+        client_id=client_id,
+        secret_hash=secret_hash,
+        secret_salt=salt,
+        status="active",
+        label=label,
+        description=description,
+        expires_at=expires_at,
+        failed_attempts=0,
+        locked_until=None,
+    )
+    return secret_value, record
+
+
 def decode_token(token: str) -> dict:
     """Decode and validate JWT token."""
     try:
@@ -466,6 +747,77 @@ async def telegram_login(login_data: TelegramLoginRequest):
         ) from e
 
 
+@router.post("/secret-login")
+async def secret_login(login_data: SecretLoginRequest):
+    """Exchange a pre-registered client secret for JWT tokens."""
+    _ensure_secret_login_enabled()
+    validate_client_id(login_data.client_id)
+    _ensure_user_allowed(login_data.user_id)
+    now = _utcnow_naive()
+
+    user = User.select().where(User.telegram_user_id == login_data.user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found for secret login")
+
+    secret_record = (
+        ClientSecret.select()
+        .where(
+            (ClientSecret.user == user),
+            (ClientSecret.client_id == login_data.client_id),
+        )
+        .order_by(ClientSecret.created_at.desc())
+        .first()
+    )
+
+    if not secret_record:
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+
+    if secret_record.status == "revoked":
+        raise HTTPException(status_code=401, detail="Secret has been revoked")
+
+    if secret_record.status == "locked":
+        if secret_record.locked_until and secret_record.locked_until < now:
+            secret_record.status = "active"
+            _reset_failed_attempts(secret_record)
+        else:
+            raise HTTPException(status_code=403, detail="Secret is temporarily locked")
+
+    _check_expired(secret_record)
+
+    provided_secret = _validate_secret_value(login_data.secret, context="login")
+    expected_hash = _hash_secret(provided_secret, secret_record.secret_salt)
+
+    if not hmac.compare_digest(expected_hash, secret_record.secret_hash):
+        _handle_failed_attempt(secret_record)
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+
+    _reset_failed_attempts(secret_record)
+    secret_record.last_used_at = now
+    secret_record.status = "active"
+    secret_record.save()
+
+    if login_data.username and user.username != login_data.username:
+        user.username = login_data.username
+        user.save()
+
+    access_token = create_access_token(user.telegram_user_id, user.username, login_data.client_id)
+    refresh_token = create_refresh_token(user.telegram_user_id, login_data.client_id)
+
+    tokens = TokenPair(
+        access_token=access_token,
+        refresh_token=refresh_token,
+        expires_in=ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        token_type="Bearer",
+    )
+
+    logger.info(
+        "secret_login_success",
+        extra={"user_id": user.telegram_user_id, "client_id": login_data.client_id},
+    )
+
+    return success_response(AuthTokensResponse(tokens=tokens))
+
+
 @router.post("/refresh")
 async def refresh_access_token(refresh_data: RefreshTokenRequest):
     """
@@ -499,6 +851,146 @@ async def refresh_access_token(refresh_data: RefreshTokenRequest):
         token_type="Bearer",
     )
     return success_response(AuthTokensResponse(tokens=tokens))
+
+
+@router.post("/secret-keys")
+async def create_secret_key(payload: SecretKeyCreateRequest, user=Depends(get_current_user)):
+    """Create or register a client secret for a user (owner-only)."""
+    _ensure_secret_login_enabled()
+    admin_user = _require_owner(user)
+    validate_client_id(payload.client_id)
+    _ensure_user_allowed(payload.user_id)
+
+    target_user = _get_target_user(payload.user_id, payload.username)
+
+    _revoke_active_secrets(target_user, payload.client_id)
+    secret_value, record = _build_secret_record(
+        target_user,
+        payload.client_id,
+        provided_secret=payload.secret,
+        label=payload.label,
+        description=payload.description,
+        expires_at=_coerce_naive(payload.expires_at),
+    )
+
+    logger.info(
+        "secret_key_created",
+        extra={
+            "created_by": admin_user.telegram_user_id,
+            "user_id": target_user.telegram_user_id,
+            "client_id": payload.client_id,
+            "label": payload.label,
+        },
+    )
+
+    return success_response(
+        SecretKeyCreateResponse(secret=secret_value, key=_serialize_secret(record))
+    )
+
+
+@router.post("/secret-keys/{key_id}/rotate")
+async def rotate_secret_key(
+    key_id: int, payload: SecretKeyRotateRequest, user=Depends(get_current_user)
+):
+    """Rotate an existing client secret (owner-only)."""
+    _ensure_secret_login_enabled()
+    admin_user = _require_owner(user)
+
+    record = ClientSecret.select().where(ClientSecret.id == key_id).first()
+    if not record:
+        raise HTTPException(status_code=404, detail="Secret key not found")
+
+    _ensure_user_allowed(record.user_id)
+    validate_client_id(record.client_id)
+
+    new_secret_value = (
+        _validate_secret_value(payload.secret, context="create")
+        if payload.secret
+        else _generate_secret_value()
+    )
+    record.secret_salt = secrets.token_hex(16)
+    record.secret_hash = _hash_secret(new_secret_value, record.secret_salt)
+    record.status = "active"
+    record.failed_attempts = 0
+    record.locked_until = None
+    record.expires_at = _coerce_naive(payload.expires_at) or record.expires_at
+    record.label = payload.label if payload.label is not None else record.label
+    record.description = (
+        payload.description if payload.description is not None else record.description
+    )
+    record.last_used_at = None
+    record.save()
+
+    logger.info(
+        "secret_key_rotated",
+        extra={
+            "rotated_by": admin_user.telegram_user_id,
+            "user_id": record.user_id,
+            "client_id": record.client_id,
+            "key_id": record.id,
+        },
+    )
+
+    return success_response(
+        SecretKeyCreateResponse(secret=new_secret_value, key=_serialize_secret(record))
+    )
+
+
+@router.post("/secret-keys/{key_id}/revoke")
+async def revoke_secret_key(
+    key_id: int, payload: SecretKeyRevokeRequest | None = None, user=Depends(get_current_user)
+):
+    """Revoke an existing client secret (owner-only)."""
+    _ensure_secret_login_enabled()
+    admin_user = _require_owner(user)
+
+    record = ClientSecret.select().where(ClientSecret.id == key_id).first()
+    if not record:
+        raise HTTPException(status_code=404, detail="Secret key not found")
+
+    _ensure_user_allowed(record.user_id)
+    record.status = "revoked"
+    record.failed_attempts = 0
+    record.locked_until = None
+    record.save()
+
+    logger.info(
+        "secret_key_revoked",
+        extra={
+            "revoked_by": admin_user.telegram_user_id,
+            "user_id": record.user_id,
+            "client_id": record.client_id,
+            "key_id": record.id,
+            "reason": payload.reason if payload else None,
+        },
+    )
+
+    return success_response(SecretKeyActionResponse(key=_serialize_secret(record)))
+
+
+@router.get("/secret-keys")
+async def list_secret_keys(
+    user=Depends(get_current_user),
+    user_id: int | None = None,
+    client_id: str | None = None,
+    status: str | None = None,
+):
+    """List stored client secrets (owner-only)."""
+    _ensure_secret_login_enabled()
+    _require_owner(user)
+
+    query = ClientSecret.select()
+
+    if user_id is not None:
+        _ensure_user_allowed(user_id)
+        query = query.join(User).where(User.telegram_user_id == user_id)
+    if client_id:
+        query = query.where(ClientSecret.client_id == client_id)
+    if status:
+        query = query.where(ClientSecret.status == status)
+
+    keys = [_serialize_secret(rec) for rec in query]
+    return success_response(SecretKeyListResponse(keys=keys))
 
 
 @router.get("/me")

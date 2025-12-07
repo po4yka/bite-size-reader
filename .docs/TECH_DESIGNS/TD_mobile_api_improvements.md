@@ -11,7 +11,7 @@
 
 ## Architecture / Flow (targeted changes)
 - Rate limiting and sync: move counters/sessions to shared store (Redis/SQLite), key by user/client_id with per-endpoint buckets, emit headers consistently.
-- Auth: include `is_owner` and `client_id` in access tokens, rotate refresh tokens, enforce allowlist defaults explicitly, and return errors via APIException.
+- Auth: include `is_owner` and `client_id` in access tokens, rotate refresh tokens, enforce allowlist defaults explicitly, and return errors via APIException. **Added:** optional secret-key login backed by DB-stored client secrets with owner-only CRUD (create/rotate/revoke/list) and hashed storage.
 - API surface: wrap responses in typed Pydantic response models (success/error/meta) and standardize error codes. **Implemented:** unified success envelopes via `success_response`, per-endpoint data models, routers returning typed payloads.
 - Background processing: refactor `app/api/background_processor.py` to new config/DI, add idempotent request locks, retries with backoff, and propagate correlation_id. **Implemented:** config-driven init, per-request locks, semaphore from `runtime.max_concurrent_calls`, 3x retry with backoff.
 - Sync protocol: support created/updated/deleted with server version/ETag; configurable chunk size; conflict reporting; delete semantics distinct from read.
@@ -34,6 +34,8 @@
 ## Data Model / Contracts
 - Responses: adopt `SuccessResponse`/`ErrorResponse` wrappers and use explicit schemas per endpoint.
 - Auth tokens: payload `{user_id, username, client_id, is_owner, type, exp, iat}`; refresh rotation required.
+- Client secrets: new table `client_secrets` with `user_id`, `client_id`, `secret_hash`, `secret_salt`, `status (active|revoked|locked|expired)`, `label/description`, `expires_at`, `last_used_at`, `failed_attempts`, `locked_until`, `server_version`, timestamps. Hashing uses per-secret salt + global pepper (configurable) with constant-time verification; no plaintext is stored.
+- Endpoints: `/v1/auth/secret-login` issues JWTs using client secret + client_id + user_id; owner-only management endpoints `/v1/auth/secret-keys` (create), `/v1/auth/secret-keys/{id}/rotate`, `/v1/auth/secret-keys/{id}/revoke`, `/v1/auth/secret-keys` (list) return enveloped Pydantic payloads without exposing hashes.
 - Sync: version fields (`updated_at`, `deleted_at`) on `Summary` (and request if needed) to compute delta; sync session metadata persisted with expiry.
 
 ## Decisions (proposed)
@@ -46,11 +48,18 @@
 - Multi-process cache inconsistency: mitigate by shared store and tests.
 - Backward compatibility: maintain existing paths/fields; introduce new claims carefully; version responses.
 - Operational complexity: provide env toggles and defaults for Redis/SQLite implementations.
+- Secret sprawl: secrets are hashed with per-secret salt + pepper; management endpoints are owner-only and return plaintext only on creation/rotation; lockout + expiry + allowlists reduce blast radius.
 
 ## Testing Strategy
 - Unit: auth token encode/decode/claims, rate limit bucket decisions, sync session lifecycle, background retry logic.
-- Integration: login + protected endpoints, submit + status + summary retrieval, sync full/delta flows, search auth enforcement.
+- Integration: login (Telegram + secret-key) + protected endpoints, submit + status + summary retrieval, sync full/delta flows, search auth enforcement; secret management CRUD happy/locked/expired/revoked paths.
 - E2E (optional): mobile client happy path with Redis-backed rate limiting.
+
+## Configuration (secret-key auth)
+- `SECRET_LOGIN_ENABLED` (bool, default false)
+- `SECRET_LOGIN_MIN_LENGTH` / `SECRET_LOGIN_MAX_LENGTH` (length bounds for secrets)
+- `SECRET_LOGIN_MAX_FAILED_ATTEMPTS` / `SECRET_LOGIN_LOCKOUT_MINUTES` (lockout policy)
+- `SECRET_LOGIN_PEPPER` (optional pepper; falls back to `JWT_SECRET_KEY` when unset)
 
 ## Rollout
 - Phase 1: implement shared rate limiter + sync store behind feature flags.

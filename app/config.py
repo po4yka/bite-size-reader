@@ -800,6 +800,106 @@ class ApiLimitsConfig(BaseModel):
         return parsed
 
 
+class AuthConfig(BaseModel):
+    """Authentication feature configuration."""
+
+    model_config = ConfigDict(frozen=True, populate_by_name=True)
+
+    secret_login_enabled: bool = Field(
+        default=False,
+        validation_alias="SECRET_LOGIN_ENABLED",
+        description="Enable alternate secret-key login flow",
+    )
+    secret_min_length: int = Field(
+        default=32,
+        validation_alias="SECRET_LOGIN_MIN_LENGTH",
+        description="Minimum length for client-provided secrets",
+    )
+    secret_max_length: int = Field(
+        default=128,
+        validation_alias="SECRET_LOGIN_MAX_LENGTH",
+        description="Maximum length for client-provided secrets",
+    )
+    secret_max_failed_attempts: int = Field(
+        default=5,
+        validation_alias="SECRET_LOGIN_MAX_FAILED_ATTEMPTS",
+        description="Maximum failed attempts before lockout",
+    )
+    secret_lockout_minutes: int = Field(
+        default=15,
+        validation_alias="SECRET_LOGIN_LOCKOUT_MINUTES",
+        description="Lockout duration after repeated failures",
+    )
+    secret_pepper: str | None = Field(
+        default=None,
+        validation_alias="SECRET_LOGIN_PEPPER",
+        description="Optional pepper used when hashing secret keys",
+    )
+
+    @model_validator(mode="after")
+    def _validate_lengths(self) -> AuthConfig:
+        if self.secret_min_length <= 0 or self.secret_max_length <= 0:
+            raise ValueError("secret lengths must be positive")
+        if self.secret_min_length >= self.secret_max_length:
+            raise ValueError("secret_min_length must be less than secret_max_length")
+        return self
+
+    @field_validator("secret_max_failed_attempts", mode="before")
+    @classmethod
+    def _validate_failed_attempts(cls, value: Any) -> int:
+        default = cls.model_fields["secret_max_failed_attempts"].default
+        try:
+            parsed = int(str(value if value not in (None, "") else default))
+        except ValueError as exc:
+            msg = "secret_max_failed_attempts must be a valid integer"
+            raise ValueError(msg) from exc
+        if parsed <= 0 or parsed > 100:
+            msg = "secret_max_failed_attempts must be between 1 and 100"
+            raise ValueError(msg)
+        return parsed
+
+    @field_validator("secret_lockout_minutes", mode="before")
+    @classmethod
+    def _validate_lockout_minutes(cls, value: Any) -> int:
+        default = cls.model_fields["secret_lockout_minutes"].default
+        try:
+            parsed = int(str(value if value not in (None, "") else default))
+        except ValueError as exc:
+            msg = "secret_lockout_minutes must be a valid integer"
+            raise ValueError(msg) from exc
+        if parsed < 1 or parsed > 24 * 60:
+            msg = "secret_lockout_minutes must be between 1 and 1440"
+            raise ValueError(msg)
+        return parsed
+
+    @field_validator("secret_min_length", "secret_max_length", mode="before")
+    @classmethod
+    def _validate_lengths_fields(cls, value: Any, info: ValidationInfo) -> int:
+        defaults = {"secret_min_length": 32, "secret_max_length": 128}
+        try:
+            parsed = int(str(value if value not in (None, "") else defaults[info.field_name]))
+        except ValueError as exc:
+            msg = f"{info.field_name.replace('_', ' ')} must be a valid integer"
+            raise ValueError(msg) from exc
+        if parsed <= 0 or parsed > 4096:
+            msg = f"{info.field_name.replace('_', ' ')} must be between 1 and 4096"
+            raise ValueError(msg)
+        return parsed
+
+    @field_validator("secret_pepper", mode="before")
+    @classmethod
+    def _validate_pepper(cls, value: Any) -> str | None:
+        if value in (None, ""):
+            return None
+        pepper = str(value).strip()
+        if len(pepper) < 16:
+            logger.warning("SECRET_LOGIN_PEPPER is shorter than 16 characters - use stronger value")
+        if len(pepper) > 500:
+            msg = "SECRET_LOGIN_PEPPER appears too long"
+            raise ValueError(msg)
+        return pepper
+
+
 class SyncConfig(BaseModel):
     """Mobile sync configuration."""
 
@@ -1246,6 +1346,7 @@ class AppConfig:
     vector_store: ChromaConfig
     redis: RedisConfig
     api_limits: ApiLimitsConfig
+    auth: AuthConfig
     sync: SyncConfig
     background: BackgroundProcessorConfig
 
@@ -1277,6 +1378,7 @@ class Settings(BaseSettings):
     vector_store: ChromaConfig = Field(default_factory=ChromaConfig)
     redis: RedisConfig = Field(default_factory=RedisConfig)
     api_limits: ApiLimitsConfig = Field(default_factory=ApiLimitsConfig)
+    auth: AuthConfig = Field(default_factory=AuthConfig)
     sync: SyncConfig = Field(default_factory=SyncConfig)
     background: BackgroundProcessorConfig = Field(default_factory=BackgroundProcessorConfig)
 
@@ -1364,6 +1466,7 @@ class Settings(BaseSettings):
             vector_store=self.vector_store,
             redis=self.redis,
             api_limits=self.api_limits,
+            auth=self.auth,
             sync=self.sync,
             background=self.background,
         )

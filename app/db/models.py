@@ -56,6 +56,33 @@ class User(BaseModel):
         table_name = "users"
 
 
+class ClientSecret(BaseModel):
+    """Client-bound secret keys for alternate authentication."""
+
+    id = peewee.AutoField()
+    user = peewee.ForeignKeyField(User, backref="client_secrets", on_delete="CASCADE")
+    client_id = peewee.TextField()
+    secret_hash = peewee.TextField()
+    secret_salt = peewee.TextField()
+    status = peewee.TextField(default="active")  # active | revoked | expired | locked
+    label = peewee.TextField(null=True)
+    description = peewee.TextField(null=True)
+    expires_at = peewee.DateTimeField(null=True)
+    last_used_at = peewee.DateTimeField(null=True)
+    failed_attempts = peewee.IntegerField(default=0)
+    locked_until = peewee.DateTimeField(null=True)
+    server_version = peewee.BigIntegerField(default=_next_server_version)
+    updated_at = peewee.DateTimeField(default=_dt.datetime.utcnow)
+    created_at = peewee.DateTimeField(default=_dt.datetime.utcnow)
+
+    class Meta:
+        table_name = "client_secrets"
+        indexes = (
+            (("user", "client_id"), False),
+            (("status",), False),
+        )
+
+
 class Chat(BaseModel):
     chat_id = peewee.BigIntegerField(primary_key=True)
     type = peewee.TextField()
@@ -350,6 +377,7 @@ ALL_MODELS: tuple[type[BaseModel], ...] = (
     AuditLog,
     SummaryEmbedding,
     VideoDownload,
+    ClientSecret,
 )
 
 
