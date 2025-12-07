@@ -975,6 +975,11 @@ class ChromaConfig(BaseModel):
         validation_alias="CHROMA_USER_SCOPE",
         description="User or tenant scope used for namespacing collections",
     )
+    collection_version: str = Field(
+        default="v1",
+        validation_alias="CHROMA_COLLECTION_VERSION",
+        description="Collection version suffix to prevent bleed-over between schema changes",
+    )
 
     @field_validator("host", mode="before")
     @classmethod
@@ -1009,6 +1014,16 @@ class ChromaConfig(BaseModel):
         cleaned = "".join(ch for ch in raw if ch.isalnum() or ch in {"-", "_"})
         if not cleaned:
             msg = f"{info.field_name.replace('_', ' ').capitalize()} cannot be empty"
+            raise ValueError(msg)
+        return cleaned.lower()
+
+    @field_validator("collection_version", mode="before")
+    @classmethod
+    def _sanitize_version(cls, value: Any) -> str:
+        raw = str(value or "").strip() or "v1"
+        cleaned = "".join(ch for ch in raw if ch.isalnum() or ch in {"-", "_"})
+        if not cleaned:
+            msg = "Collection version cannot be empty"
             raise ValueError(msg)
         return cleaned.lower()
 

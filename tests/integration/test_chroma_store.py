@@ -46,6 +46,7 @@ def vector_store(chroma_config):
             auth_token=chroma_config.auth_token,
             environment=chroma_config.environment,
             user_scope=chroma_config.user_scope,
+            collection_version=chroma_config.collection_version,
         )
         # Attach mocks to store for assertions
         store._client = mock_client
@@ -63,8 +64,8 @@ def test_upsert_and_query(vector_store):
     # Data
     vectors = [[0.1, 0.2, 0.3], [0.4, 0.5, 0.6]]
     metadatas = [
-        {"request_id": 1, "text": "note 1", "user_scope": TEST_USER_SCOPE},
-        {"request_id": 2, "text": "note 2", "user_scope": TEST_USER_SCOPE},
+        {"request_id": 1, "summary_id": 11, "text": "note 1"},
+        {"request_id": 2, "summary_id": 22, "text": "note 2"},
     ]
     ids = ["id1", "id2"]
 
@@ -75,7 +76,11 @@ def test_upsert_and_query(vector_store):
     vector_store._collection.upsert.assert_called_once()
     call_args = vector_store._collection.upsert.call_args[1]
     assert call_args["embeddings"] == vectors
-    assert call_args["metadatas"] == metadatas
+    # Environment/user_scope are injected during validation
+    assert call_args["metadatas"][0]["request_id"] == 1
+    assert call_args["metadatas"][0]["summary_id"] == 11
+    assert call_args["metadatas"][0]["environment"] == TEST_ENV
+    assert call_args["metadatas"][0]["user_scope"] == TEST_USER_SCOPE
     assert call_args["ids"] == ids
 
     # Query
@@ -114,3 +119,17 @@ def test_reset(vector_store):
     vector_store._client.get_or_create_collection.assert_called()
 
     assert vector_store.count() == 0
+
+
+def test_collection_name_includes_version(vector_store, chroma_config):
+    assert (
+        vector_store.collection_name
+        == f"notes_{chroma_config.environment}_{chroma_config.user_scope}_{chroma_config.collection_version}"
+    )
+
+
+def test_upsert_requires_summary_id(vector_store):
+    vectors = [[0.1, 0.2]]
+    metadatas = [{"request_id": 1, "text": "note without summary"}]
+    with pytest.raises(ValueError):
+        vector_store.upsert_notes(vectors, metadatas)

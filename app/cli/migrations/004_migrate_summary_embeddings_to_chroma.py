@@ -33,11 +33,18 @@ def upgrade(db: Database) -> None:
         auth_token=chroma_cfg.auth_token,
         environment=chroma_cfg.environment,
         user_scope=chroma_cfg.user_scope,
+        collection_version=chroma_cfg.collection_version,
     )
 
     _log_chroma_heartbeat(vector_store)
 
-    embeddings = list(_fetch_summary_embeddings(db))
+    embeddings = list(
+        _fetch_summary_embeddings(
+            db,
+            environment=chroma_cfg.environment,
+            user_scope=chroma_cfg.user_scope,
+        )
+    )
     if not embeddings:
         logger.info("No summary embeddings found; nothing to migrate")
         return
@@ -96,6 +103,7 @@ def upgrade(db: Database) -> None:
             "published_at": entry.get("published_at"),
             "text": entry.get("text"),
             "user_scope": chroma_cfg.user_scope,
+            "environment": chroma_cfg.environment,
         }
         # Remove None values
         metadata = {k: v for k, v in metadata.items() if v is not None}
@@ -133,7 +141,9 @@ def downgrade(db: Database) -> None:
     logger.info("Chroma ingestion rollback is a no-op; manual cleanup may be required")
 
 
-def _fetch_summary_embeddings(db: Database) -> Iterable[dict[str, Any]]:
+def _fetch_summary_embeddings(
+    db: Database, *, environment: str, user_scope: str
+) -> Iterable[dict[str, Any]]:
     from app.db.models import Request, Summary, SummaryEmbedding
     from app.services.metadata_builder import MetadataBuilder
 
@@ -170,7 +180,8 @@ def _fetch_summary_embeddings(db: Database) -> Iterable[dict[str, Any]]:
                 summary_id=row.summary.id,
                 payload=payload,
                 language=summary_row["lang"],
-                user_scope="dummy",  # Will be overridden or unused in the yield
+                user_scope=user_scope,
+                environment=environment,
                 summary_row=summary_row,
             )
 

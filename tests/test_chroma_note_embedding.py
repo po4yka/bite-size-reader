@@ -32,7 +32,8 @@ def test_sync_vector_store_embeds_note_text_and_user_notes():
     generator = types.SimpleNamespace(db=db, embedding_service=embedding_service)
 
     vector_store = MagicMock()
-    vector_store._user_scope = "public"
+    vector_store.user_scope = "public"
+    vector_store.environment = "dev"
     handler = EmbeddingGenerationEventHandler(generator, vector_store)
 
     expected_text, _ = MetadataBuilder.prepare_for_upsert(
@@ -41,6 +42,7 @@ def test_sync_vector_store_embeds_note_text_and_user_notes():
         payload=payload,
         language="en",
         user_scope="public",
+        environment="dev",
         summary_row=summary,
     )
 

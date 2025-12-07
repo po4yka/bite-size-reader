@@ -123,12 +123,8 @@ class EmbeddingGenerationEventHandler:
 
         from app.services.metadata_builder import MetadataBuilder
 
-        # We need the user scope from the vector store config, but it's not directly exposed.
-        # However, the vector store instance has it.
-        # For now, we'll assume "public" or try to get it from the store if possible,
-        # but accessing private members is risky.
-        # Let's check if we can get it safely.
-        user_scope = getattr(self._vector_store, "_user_scope", "public")
+        user_scope = getattr(self._vector_store, "user_scope", None) or "public"
+        environment = getattr(self._vector_store, "environment", None) or "dev"
 
         text, metadata = MetadataBuilder.prepare_for_upsert(
             request_id=request_id,
@@ -136,6 +132,7 @@ class EmbeddingGenerationEventHandler:
             payload=payload,
             language=self._determine_language(summary),
             user_scope=user_scope,
+            environment=environment,
             summary_row=summary,
         )
 

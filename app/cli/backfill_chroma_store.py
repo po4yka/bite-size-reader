@@ -96,6 +96,7 @@ async def backfill_chroma_store(
         auth_token=chroma_cfg.auth_token,
         environment=chroma_cfg.environment,
         user_scope=chroma_cfg.user_scope,
+        collection_version=chroma_cfg.collection_version,
     )
 
     summaries = _fetch_summaries(db, limit)
@@ -160,6 +161,7 @@ async def backfill_chroma_store(
             payload=payload,
             language=language,
             user_scope=chroma_cfg.user_scope,
+            environment=chroma_cfg.environment,
             summary_row=summary,
         )
 
@@ -194,7 +196,12 @@ async def backfill_chroma_store(
 
 
 def _load_chroma_config(
-    *, host: str | None, auth_token: str | None, environment: str | None, user_scope: str | None
+    *,
+    host: str | None,
+    auth_token: str | None,
+    environment: str | None,
+    user_scope: str | None,
+    collection_version: str | None = None,
 ) -> ChromaConfig:
     base_cfg = ChromaConfig()
     return ChromaConfig(
@@ -202,6 +209,7 @@ def _load_chroma_config(
         auth_token=auth_token if auth_token is not None else base_cfg.auth_token,
         environment=environment or base_cfg.environment,
         user_scope=user_scope or base_cfg.user_scope,
+        collection_version=collection_version or base_cfg.collection_version,
     )
 
 
@@ -211,6 +219,7 @@ def main() -> int:
     chroma_token = None
     chroma_env = None
     chroma_scope = None
+    chroma_version = None
     limit = None
     force = False
     batch_size = 50
@@ -227,6 +236,8 @@ def main() -> int:
             chroma_env = arg.split("=", 1)[1]
         elif arg.startswith("--chroma-scope="):
             chroma_scope = arg.split("=", 1)[1]
+        elif arg.startswith("--chroma-version="):
+            chroma_version = arg.split("=", 1)[1]
         elif arg.startswith("--limit="):
             try:
                 limit = int(arg.split("=", 1)[1])
@@ -250,6 +261,7 @@ def main() -> int:
             print("  --chroma-token=TOKEN  Chroma auth token")
             print("  --chroma-env=NAME     Environment namespace for the collection")
             print("  --chroma-scope=NAME   User/tenant scope for the collection")
+            print("  --chroma-version=VER  Collection version suffix (default from config)")
             print("  --limit=N             Process only N summaries")
             print("  --force               Regenerate embeddings even if they exist")
             print("  --batch-size=N        Number of vectors per upsert batch (default: 50)")
@@ -266,6 +278,7 @@ def main() -> int:
             auth_token=chroma_token,
             environment=chroma_env,
             user_scope=chroma_scope,
+            collection_version=chroma_version,
         )
     except Exception:
         logger.exception("Failed to load Chroma configuration")

@@ -33,6 +33,15 @@
   - `chunks: List[{"text": str, "local_summary": str, "local_keywords": List[str], "section": Optional[str], "language": str, "topics": List[str], "article_id": str}]`
 - Embedding payload per chunk: `text + local_summary + semantic_boosters` (dedup, newline-joined).
 - Metadata persisted with chunk and embedding: article_id, topics, language, section, local_keywords, local_summary, semantic_boosters reference, query_expansion_keywords (article-level).
+- Chroma metadata schema (validated before upsert/query):
+  - Required: `request_id:int`, `summary_id:int`, `user_scope:str`, `environment:str`, `text:str` (<=4*max_length truncation), `language:str|None`, `tags:List[str]`.
+  - Optional but typed: `url:str`, `title:str`, `source:str`, `published_at:str`, `chunk_id:str`, `created_at:str (ISO)`, `topics:List[str]`, `semantic_boosters:List[str]`, `local_keywords:List[str]`, `query_expansion_keywords:List[str]`, `section:str`.
+  - Validation: coerce ints, strip/clean strings, dedupe lists, enforce tag/list length limits, reject unknown keys; raise clear errors with correlation_id context.
+  - Query filter schema: allow `language`, `tags contains`, and enforced `user_scope`/`environment` scoping.
+- Chroma collection naming/scoping:
+  - Name template: `notes_{environment}_{user_scope}_{version}` where each token is sanitized (alnum, - or _).
+  - `CHROMA_COLLECTION_VERSION` (default `v1`) governs collection evolution; changing version produces new collection, avoiding bleed-over.
+  - Collection metadata also stores `environment` and `user_scope`; per-document metadata repeats them for filter enforcement.
 
 ## Flows
 - Ingestion:

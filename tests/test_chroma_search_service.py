@@ -16,6 +16,8 @@ from app.services.chroma_vector_search_service import ChromaVectorSearchService 
 async def test_find_duplicates():
     # Setup mocks
     vector_store = MagicMock()
+    vector_store.user_scope = "public"
+    vector_store.environment = "dev"
     embedding_service = MagicMock()
     embedding_service.generate_embedding = AsyncMock(return_value=[0.1, 0.2, 0.3])
 
@@ -47,6 +49,9 @@ async def test_find_duplicates():
     assert args[0] == "some text"
 
     vector_store.query.assert_called_once()
+    _, filters_arg, _ = vector_store.query.call_args.args
+    assert filters_arg["environment"] == "dev"
+    assert filters_arg["user_scope"] == "public"
 
     # Check results
     assert len(duplicates) == 2
@@ -60,6 +65,8 @@ async def test_find_duplicates():
 async def test_find_duplicates_filters_by_threshold():
     # Setup mocks
     vector_store = MagicMock()
+    vector_store.user_scope = "public"
+    vector_store.environment = "dev"
     embedding_service = MagicMock()
     embedding_service.generate_embedding = AsyncMock(return_value=[0.1, 0.2, 0.3])
 

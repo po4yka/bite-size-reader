@@ -24,6 +24,7 @@ def _default_vector_store_factory(config: ChromaConfig) -> ChromaVectorStore:
         auth_token=config.auth_token,
         environment=config.environment,
         user_scope=config.user_scope,
+        collection_version=config.collection_version,
     )
 
 
@@ -61,7 +62,11 @@ class _ChromaSearchResourceManager:
 
             logger.info(
                 "chroma_search_service_initialized",
-                extra={"host": config.host, "environment": config.environment},
+                extra={
+                    "host": config.host,
+                    "environment": config.environment,
+                    "collection_version": config.collection_version,
+                },
             )
 
             return cls._service

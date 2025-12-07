@@ -8,6 +8,8 @@ from uuid import uuid4
 import chromadb
 from chromadb.errors import ChromaError
 
+from app.infrastructure.vector.chroma_schemas import ChromaMetadata, ChromaQueryFilters
+
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
@@ -24,6 +26,7 @@ class ChromaVectorStore:
         auth_token: str | None,
         environment: str,
         user_scope: str,
+        collection_version: str = "v1",
     ) -> None:
         if not host:
             msg = "Chroma host must be provided"
@@ -32,14 +35,21 @@ class ChromaVectorStore:
         self._host = host
         self._environment = environment
         self._user_scope = user_scope
+        self._collection_version = collection_version
 
         headers = {"Authorization": f"Bearer {auth_token}"} if auth_token else None
         try:
             self._client = chromadb.HttpClient(host=host, headers=headers)
-            self._collection_name = self._build_collection_name(environment, user_scope)
+            self._collection_name = self._build_collection_name(
+                environment, user_scope, collection_version
+            )
             self._collection = self._client.get_or_create_collection(
                 name=self._collection_name,
-                metadata={"environment": environment, "user_scope": user_scope},
+                metadata={
+                    "environment": environment,
+                    "user_scope": user_scope,
+                    "version": collection_version,
+                },
             )
             logger.info(
                 "chroma_collection_initialized",
@@ -47,6 +57,7 @@ class ChromaVectorStore:
                     "collection": self._collection_name,
                     "host": host,
                     "environment": environment,
+                    "version": collection_version,
                 },
             )
         except Exception as e:
@@ -56,11 +67,28 @@ class ChromaVectorStore:
             )
             raise
 
+    @property
+    def environment(self) -> str:
+        return self._environment
+
+    @property
+    def user_scope(self) -> str:
+        return self._user_scope
+
+    @property
+    def collection_version(self) -> str:
+        return self._collection_version
+
+    @property
+    def collection_name(self) -> str:
+        return self._collection_name
+
     @staticmethod
-    def _build_collection_name(environment: str, user_scope: str) -> str:
+    def _build_collection_name(environment: str, user_scope: str, version: str) -> str:
         safe_env = environment.replace(" ", "_")
         safe_scope = user_scope.replace(" ", "_")
-        return f"notes_{safe_env}_{safe_scope}"
+        safe_version = version.replace(" ", "_")
+        return f"notes_{safe_env}_{safe_scope}_{safe_version}"
 
     def upsert_notes(
         self,
@@ -79,10 +107,23 @@ class ChromaVectorStore:
 
         final_ids = list(ids) if ids else [self._extract_id(metadata) for metadata in metadatas]
 
+        validated_metadata = []
+        for metadata in metadatas:
+            safe_metadata = {
+                k: v for k, v in dict(metadata).items() if k not in {"environment", "user_scope"}
+            }
+            validated_metadata.append(
+                ChromaMetadata(
+                    **safe_metadata,
+                    environment=self._environment,
+                    user_scope=self._user_scope,
+                ).model_dump()
+            )
+
         try:
             self._collection.upsert(
                 embeddings=[list(vector) for vector in vectors],
-                metadatas=[dict(metadata) for metadata in metadatas],
+                metadatas=validated_metadata,
                 ids=final_ids,
             )
         except ChromaError as e:
@@ -110,10 +151,19 @@ class ChromaVectorStore:
             msg = "top_k must be positive"
             raise ValueError(msg)
 
+        filter_payload = dict(filters or {})
+        filter_payload.pop("environment", None)
+        filter_payload.pop("user_scope", None)
+        validated_filters = ChromaQueryFilters(
+            environment=self._environment,
+            user_scope=self._user_scope,
+            **filter_payload,
+        ).to_where()
+
         try:
             return self._collection.query(
                 query_embeddings=[list(query_vector)],
-                where=filters or {},
+                where=validated_filters,
                 n_results=top_k,
             )
         except ChromaError as e:
@@ -148,7 +198,11 @@ class ChromaVectorStore:
             self._client.delete_collection(self._collection_name)
             self._collection = self._client.get_or_create_collection(
                 name=self._collection_name,
-                metadata={"environment": self._environment, "user_scope": self._user_scope},
+                metadata={
+                    "environment": self._environment,
+                    "user_scope": self._user_scope,
+                    "version": self._collection_version,
+                },
             )
         except Exception as e:
             logger.error("chroma_reset_failed", extra={"error": str(e)})

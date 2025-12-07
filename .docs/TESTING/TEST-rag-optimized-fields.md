@@ -10,6 +10,7 @@
 - Unit tests for contract validation, chunking, embedding builder.
 - Integration tests for ingestion pipeline producing RAG fields.
 - Retrieval tests for query expansion, hybrid search, and reranking.
+-- Chroma metadata and scoping tests for validated upserts/queries and collection naming.
 
 ## Environments & Tooling
 - Use existing test harness with pytest/pytest-asyncio.
@@ -22,6 +23,8 @@
 - Ingestion integration: article run yields RAG fields, stored in DB/metadata, embeddings created.
 - Retrieval expansion: query_expansion_keywords applied; hybrid search uses local_keywords; boosters influence rerank ordering.
 - Graceful degradation: missing boosters/keywords logs warning but does not crash.
+- Chroma metadata validation: upsert rejects missing/invalid required fields (request_id, summary_id, user_scope, environment, text); cleans/limits tags and lists; rejects unknown keys.
+- Chroma scoping/versioning: collection name follows `notes_{env}_{scope}_{version}`; env/user_scope enforced in upserted metadata and query filters; queries without user_scope/env default to configured values and do not bleed across scopes.
 
 ## Regression Coverage
 - Existing summary contract tests still pass.

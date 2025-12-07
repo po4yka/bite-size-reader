@@ -151,6 +151,7 @@ class BotFactory:
             auth_token=cfg.vector_store.auth_token,
             environment=cfg.vector_store.environment,
             user_scope=cfg.vector_store.user_scope,
+            collection_version=cfg.vector_store.collection_version,
         )
 
         # Create search services

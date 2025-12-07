@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from app.infrastructure.vector.chroma_schemas import ChromaMetadata
 from app.services.note_text_builder import build_note_text
 
 
@@ -74,6 +75,7 @@ class MetadataBuilder:
         payload: dict[str, Any],
         language: str | None,
         user_scope: str,
+        environment: str,
         summary_row: dict[str, Any] | None = None,
     ) -> tuple[str, dict[str, Any]]:
         """Prepare text and metadata for upsert."""
@@ -103,6 +105,10 @@ class MetadataBuilder:
             **note_text.metadata,
             **base_metadata,
             "text": note_text.text,
+            "environment": environment,
+            "user_scope": user_scope,
         }
 
-        return note_text.text, final_metadata
+        validated = ChromaMetadata(**final_metadata).model_dump()
+
+        return note_text.text, validated
