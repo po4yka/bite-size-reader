@@ -12,6 +12,7 @@
 ## Architecture / Flow (targeted changes)
 - Rate limiting and sync: move counters/sessions to shared store (Redis/SQLite), key by user/client_id with per-endpoint buckets, emit headers consistently.
 - Auth: include `is_owner` and `client_id` in access tokens, rotate refresh tokens, enforce allowlist defaults explicitly, and return errors via APIException. **Added:** optional secret-key login backed by DB-stored client secrets with owner-only CRUD (create/rotate/revoke/list) and hashed storage.
+- Linking: mobile users can link/unlink Telegram from settings using Telegram Login Widget; flow uses nonce issuance → hash verification → linkage fields persisted on `users` with audit-friendly timestamps.
 - API surface: wrap responses in typed Pydantic response models (success/error/meta) and standardize error codes. **Implemented:** unified success envelopes via `success_response`, per-endpoint data models, routers returning typed payloads.
 - Background processing: refactor `app/api/background_processor.py` to new config/DI, add idempotent request locks, retries with backoff, and propagate correlation_id. **Implemented:** config-driven init, per-request locks, semaphore from `runtime.max_concurrent_calls`, 3x retry with backoff.
 - Sync protocol: support created/updated/deleted with server version/ETag; configurable chunk size; conflict reporting; delete semantics distinct from read.
@@ -35,6 +36,8 @@
 - Responses: adopt `SuccessResponse`/`ErrorResponse` wrappers and use explicit schemas per endpoint.
 - Auth tokens: payload `{user_id, username, client_id, is_owner, type, exp, iat}`; refresh rotation required.
 - Client secrets: new table `client_secrets` with `user_id`, `client_id`, `secret_hash`, `secret_salt`, `status (active|revoked|locked|expired)`, `label/description`, `expires_at`, `last_used_at`, `failed_attempts`, `locked_until`, `server_version`, timestamps. Hashing uses per-secret salt + global pepper (configurable) with constant-time verification; no plaintext is stored.
+- Telegram link fields on `users`: `linked_telegram_user_id`, `linked_telegram_username`, `linked_telegram_photo_url`, `linked_telegram_first_name/last_name`, `linked_at`, `link_nonce`, `link_nonce_expires_at`; index on `linked_telegram_user_id`.
+- Endpoints: `/v1/auth/secret-login` issues JWTs using client secret + client_id + user_id; owner-only management endpoints `/v1/auth/secret-keys` (create), `/v1/auth/secret-keys/{id}/rotate`, `/v1/auth/secret-keys/{id}/revoke`, `/v1/auth/secret-keys` (list) return enveloped Pydantic payloads without exposing hashes. **New:** `/v1/me/telegram` (GET status, DELETE unlink), `/v1/me/telegram/link` (POST begin nonce), `/v1/me/telegram/complete` (POST finish with Telegram payload + nonce).
 - Endpoints: `/v1/auth/secret-login` issues JWTs using client secret + client_id + user_id; owner-only management endpoints `/v1/auth/secret-keys` (create), `/v1/auth/secret-keys/{id}/rotate`, `/v1/auth/secret-keys/{id}/revoke`, `/v1/auth/secret-keys` (list) return enveloped Pydantic payloads without exposing hashes.
 - Sync: version fields (`updated_at`, `deleted_at`) on `Summary` (and request if needed) to compute delta; sync session metadata persisted with expiry.
 

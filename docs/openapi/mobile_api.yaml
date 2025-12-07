@@ -269,25 +269,89 @@ paths:
       operationId: revoke_secret_key_v1_auth_secret_keys_key_id_revoke_post
       security:
       - HTTPBearer: []
-      parameters:
-      - name: key_id
-        in: path
-        required: true
-        schema:
-          type: integer
+  /v1/me/telegram:
+    get:
+      tags:
+      - Authentication
+      summary: Get Telegram Link Status
+      description: Return current Telegram linkage state for the authenticated user.
+      operationId: get_telegram_link_status_v1_me_telegram_get
+      security:
+      - HTTPBearer: []
+      responses:
+        '200':
+          description: Link status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TelegramLinkStatusEnvelope'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    delete:
+      tags:
+      - Authentication
+      summary: Unlink Telegram Account
+      description: Remove Telegram linkage for the authenticated user.
+      operationId: unlink_telegram_v1_me_telegram_delete
+      security:
+      - HTTPBearer: []
+      responses:
+        '200':
+          description: Unlinked
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TelegramLinkStatusEnvelope'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /v1/me/telegram/link:
+    post:
+      tags:
+      - Authentication
+      summary: Begin Telegram Linking
+      description: Issue a nonce to start Telegram linking via Telegram Login Widget.
+      operationId: begin_telegram_link_v1_me_telegram_link_post
+      security:
+      - HTTPBearer: []
+      responses:
+        '200':
+          description: Nonce issued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TelegramLinkBeginResponseEnvelope'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /v1/me/telegram/complete:
+    post:
+      tags:
+      - Authentication
+      summary: Complete Telegram Linking
+      description: Validate Telegram login payload and nonce to complete linking.
+      operationId: complete_telegram_link_v1_me_telegram_complete_post
+      security:
+      - HTTPBearer: []
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/SecretKeyRevokeRequest'
-        required: false
+              $ref: '#/components/schemas/TelegramLinkCompleteRequest'
+        required: true
       responses:
         '200':
-          description: Secret revoked
+          description: Linked
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SecretKeyActionResponseEnvelope'
+                $ref: '#/components/schemas/TelegramLinkStatusEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
         '401':
           $ref: '#/components/responses/UnauthorizedError'
         '403':
@@ -1591,6 +1655,77 @@ components:
         properties:
           data:
             $ref: '#/components/schemas/SecretKeyListResponse'
+    TelegramLinkStatus:
+      type: object
+      required:
+      - linked
+      properties:
+        linked:
+          type: boolean
+        telegram_user_id:
+          type: integer
+          nullable: true
+        username:
+          type: string
+          nullable: true
+        photo_url:
+          type: string
+          nullable: true
+        first_name:
+          type: string
+          nullable: true
+        last_name:
+          type: string
+          nullable: true
+        linked_at:
+          type: string
+          format: date-time
+          nullable: true
+        link_nonce_expires_at:
+          type: string
+          format: date-time
+          nullable: true
+        link_nonce:
+          type: string
+          nullable: true
+    TelegramLinkBeginResponse:
+      type: object
+      required:
+      - nonce
+      - expires_at
+      properties:
+        nonce:
+          type: string
+        expires_at:
+          type: string
+          format: date-time
+    TelegramLinkCompleteRequest:
+      allOf:
+      - $ref: '#/components/schemas/TelegramLoginRequest'
+      - type: object
+        required:
+        - nonce
+        properties:
+          nonce:
+            type: string
+    TelegramLinkStatusEnvelope:
+      allOf:
+      - $ref: '#/components/schemas/BaseSuccessResponse'
+      - type: object
+        required:
+        - data
+        properties:
+          data:
+            $ref: '#/components/schemas/TelegramLinkStatus'
+    TelegramLinkBeginResponseEnvelope:
+      allOf:
+      - $ref: '#/components/schemas/BaseSuccessResponse'
+      - type: object
+        required:
+        - data
+        properties:
+          data:
+            $ref: '#/components/schemas/TelegramLinkBeginResponse'
     User:
       type: object
       required:

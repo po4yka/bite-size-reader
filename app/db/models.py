@@ -48,12 +48,21 @@ class User(BaseModel):
     username = peewee.TextField(null=True)
     is_owner = peewee.BooleanField(default=False)
     preferences_json = JSONField(null=True)  # User preferences (lang, notifications, app settings)
+    linked_telegram_user_id = peewee.BigIntegerField(null=True)
+    linked_telegram_username = peewee.TextField(null=True)
+    linked_telegram_photo_url = peewee.TextField(null=True)
+    linked_telegram_first_name = peewee.TextField(null=True)
+    linked_telegram_last_name = peewee.TextField(null=True)
+    linked_at = peewee.DateTimeField(null=True)
+    link_nonce = peewee.TextField(null=True)
+    link_nonce_expires_at = peewee.DateTimeField(null=True)
     server_version = peewee.BigIntegerField(default=_next_server_version)
     updated_at = peewee.DateTimeField(default=_dt.datetime.utcnow)
     created_at = peewee.DateTimeField(default=_dt.datetime.utcnow)
 
     class Meta:
         table_name = "users"
+        indexes = ((("linked_telegram_user_id",), False),)
 
 
 class ClientSecret(BaseModel):

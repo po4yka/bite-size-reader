@@ -232,6 +232,27 @@ class SecretKeyListResponse(BaseModel):
     keys: list[ClientSecretInfo]
 
 
+class TelegramLinkStatus(BaseModel):
+    """Link status payload."""
+
+    linked: bool
+    telegram_user_id: int | None = None
+    username: str | None = None
+    photo_url: str | None = None
+    first_name: str | None = None
+    last_name: str | None = None
+    linked_at: str | None = None
+    link_nonce_expires_at: str | None = None
+    link_nonce: str | None = None
+
+
+class TelegramLinkBeginResponse(BaseModel):
+    """Begin link payload with nonce."""
+
+    nonce: str
+    expires_at: str
+
+
 def verify_telegram_auth(
     user_id: int,
     auth_hash: str,
@@ -493,6 +514,14 @@ def _require_owner(user: dict) -> User:
     return user_record
 
 
+def _format_dt(dt_value: datetime | None) -> str | None:
+    if dt_value is None:
+        return None
+    if dt_value.tzinfo:
+        return dt_value.astimezone(UTC).isoformat().replace("+00:00", "Z")
+    return dt_value.replace(tzinfo=UTC).isoformat().replace("+00:00", "Z")
+
+
 def _get_target_user(user_id: int, username: str | None = None) -> User:
     user, created = User.get_or_create(
         telegram_user_id=user_id,
@@ -625,6 +654,40 @@ def _build_secret_record(
         locked_until=None,
     )
     return secret_value, record
+
+
+def _ensure_user(user_id: int) -> User:
+    user = User.select().where(User.telegram_user_id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    return user
+
+
+def _set_link_nonce(user: User, nonce: str, expires_at: datetime) -> None:
+    user.link_nonce = nonce
+    user.link_nonce_expires_at = _coerce_naive(expires_at)
+    user.save()
+
+
+def _clear_link_nonce(user: User) -> None:
+    user.link_nonce = None
+    user.link_nonce_expires_at = None
+    user.save()
+
+
+def _link_status_payload(user: User) -> TelegramLinkStatus:
+    linked = user.linked_telegram_user_id is not None
+    return TelegramLinkStatus(
+        linked=linked,
+        telegram_user_id=user.linked_telegram_user_id if linked else None,
+        username=user.linked_telegram_username if linked else None,
+        photo_url=user.linked_telegram_photo_url if linked else None,
+        first_name=user.linked_telegram_first_name if linked else None,
+        last_name=user.linked_telegram_last_name if linked else None,
+        linked_at=_format_dt(user.linked_at),
+        link_nonce_expires_at=_format_dt(user.link_nonce_expires_at),
+        link_nonce=user.link_nonce,
+    )
 
 
 def decode_token(token: str) -> dict:
@@ -1007,3 +1070,96 @@ async def get_current_user_info(user=Depends(get_current_user)):
             created_at=user_record.created_at.isoformat() + "Z" if user_record else None,
         )
     )
+
+
+@router.get("/me/telegram")
+async def get_telegram_link_status(user=Depends(get_current_user)):
+    """Fetch current Telegram link status."""
+    user_record = _ensure_user(user["user_id"])
+    return success_response(_link_status_payload(user_record))
+
+
+@router.post("/me/telegram/link")
+async def begin_telegram_link(user=Depends(get_current_user)):
+    """Begin linking by issuing a nonce."""
+    user_record = _ensure_user(user["user_id"])
+    expires_at = datetime.now(UTC) + timedelta(minutes=15)
+    nonce = secrets.token_urlsafe(32)
+    _set_link_nonce(user_record, nonce, expires_at)
+    return success_response(
+        TelegramLinkBeginResponse(nonce=nonce, expires_at=_format_dt(expires_at) or "")
+    )
+
+
+class TelegramLinkCompleteRequest(TelegramLoginRequest):
+    """Complete linking using Telegram login payload + nonce."""
+
+    nonce: str
+
+
+@router.post("/me/telegram/complete")
+async def complete_telegram_link(
+    payload: TelegramLinkCompleteRequest, user=Depends(get_current_user)
+):
+    """Complete Telegram linking by validating nonce and Telegram login payload."""
+    user_record = _ensure_user(user["user_id"])
+
+    if not user_record.link_nonce or not user_record.link_nonce_expires_at:
+        raise HTTPException(status_code=400, detail="Linking not initiated")
+
+    now = _utcnow_naive()
+    if payload.nonce != user_record.link_nonce:
+        raise HTTPException(status_code=400, detail="Invalid link nonce")
+    if user_record.link_nonce_expires_at < now:
+        raise HTTPException(status_code=400, detail="Link nonce expired")
+
+    verify_telegram_auth(
+        user_id=payload.telegram_user_id,
+        auth_hash=payload.auth_hash,
+        auth_date=payload.auth_date,
+        username=payload.username,
+        first_name=payload.first_name,
+        last_name=payload.last_name,
+        photo_url=payload.photo_url,
+    )
+
+    user_record.linked_telegram_user_id = payload.telegram_user_id
+    user_record.linked_telegram_username = payload.username
+    user_record.linked_telegram_photo_url = payload.photo_url
+    user_record.linked_telegram_first_name = payload.first_name
+    user_record.linked_telegram_last_name = payload.last_name
+    user_record.linked_at = now
+    _clear_link_nonce(user_record)
+
+    logger.info(
+        "telegram_linked",
+        extra={
+            "user_id": user_record.telegram_user_id,
+            "linked_telegram_user_id": payload.telegram_user_id,
+            "username": payload.username,
+        },
+    )
+
+    return success_response(_link_status_payload(user_record))
+
+
+@router.delete("/me/telegram")
+async def unlink_telegram(user=Depends(get_current_user)):
+    """Unlink Telegram account."""
+    user_record = _ensure_user(user["user_id"])
+    user_record.linked_telegram_user_id = None
+    user_record.linked_telegram_username = None
+    user_record.linked_telegram_photo_url = None
+    user_record.linked_telegram_first_name = None
+    user_record.linked_telegram_last_name = None
+    user_record.linked_at = None
+    _clear_link_nonce(user_record)
+
+    logger.info(
+        "telegram_unlinked",
+        extra={
+            "user_id": user_record.telegram_user_id,
+        },
+    )
+
+    return success_response(_link_status_payload(user_record))

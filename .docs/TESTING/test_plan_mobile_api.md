@@ -18,6 +18,7 @@
 - TC1 Auth: Telegram login hash valid/invalid/expired/future timestamp; whitelist and client_id allowlist enforcement; tokens carry is_owner/client_id claims.
 - TC1b Secret-key Auth: feature flag gating, secret length bounds, allowlist enforcement, lockout after N failures, expired/revoked/locked status handling, successful JWT issuance, last_used_at bump, and hashed storage (no plaintext persisted).
 - TC1c Secret-key Management: owner-only create/rotate/revoke/list; rotation returns plaintext once and updates hash/salt; revocation blocks login; list filtered by user_id/client_id/status.
+- TC1d Telegram Linking: begin->complete using Telegram Login Widget payload + nonce; invalid/expired nonce; invalid hash; already linked; unlink and relink; status endpoint reflects linkage fields and clears on unlink.
 - TC2 Rate Limit: per-user bucket caps per endpoint (Redis-backed); exceed returns 429 with headers and correct Retry-After; unauthenticated uses IP key; Redis unavailable path (required=false) falls back to noop with warning; required=true returns 503.
 - TC3 Requests: submit URL → duplicate detection; submit forward; retry failed request validation; background status transitions.
 - TC4 Summaries: list filters (is_read/lang/date/sort); get summary includes source/processing; patch read flag; delete sets is_deleted.
