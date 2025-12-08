@@ -78,3 +78,23 @@ class SyncApplyRequest(BaseModel):
 
     session_id: str
     changes: list[SyncApplyItem]
+
+
+class CollectionCreateRequest(BaseModel):
+    """Request body for creating a collection."""
+
+    name: str = Field(min_length=1, max_length=100)
+    description: str | None = Field(default=None, max_length=500)
+
+
+class CollectionUpdateRequest(BaseModel):
+    """Request body for updating a collection."""
+
+    name: str | None = Field(default=None, min_length=1, max_length=100)
+    description: str | None = Field(default=None, max_length=500)
+
+
+class CollectionItemCreateRequest(BaseModel):
+    """Request body for adding an item to a collection."""
+
+    summary_id: int

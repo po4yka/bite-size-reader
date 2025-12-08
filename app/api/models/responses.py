@@ -78,6 +78,7 @@ class SummaryCompact(BaseModel):
     reading_time_min: int
     topic_tags: list[str]
     is_read: bool
+    is_favorited: bool = False
     lang: str
     created_at: str
     confidence: float
@@ -176,6 +177,23 @@ class DuplicateCheckData(BaseModel):
     summary_id: int | None = None
     summarized_at: str | None = None
     summary: dict[str, Any] | None = None
+
+
+class CollectionResponse(BaseModel):
+    """Collection details."""
+
+    id: int
+    name: str
+    description: str | None = None
+    created_at: str
+    updated_at: str
+    server_version: int
+
+
+class CollectionListResponse(BaseModel):
+    """List of collections."""
+
+    collections: list[CollectionResponse]
 
 
 class SearchResult(BaseModel):

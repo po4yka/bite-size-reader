@@ -26,11 +26,19 @@ logger = get_logger(__name__)
 router = APIRouter()
 
 
+def _isotime(dt) -> str:
+    """Safely convert datetime to ISO string."""
+    if hasattr(dt, "isoformat"):
+        return dt.isoformat() + "Z"
+    return str(dt)
+
+
 @router.get("")
 async def get_summaries(
     limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0),
     is_read: bool | None = Query(None),
+    is_favorited: bool | None = Query(None),
     lang: str | None = Query(None, pattern="^(en|ru|auto)$"),
     start_date: str | None = Query(None),
     end_date: str | None = Query(None),
@@ -55,6 +63,7 @@ async def get_summaries(
         limit=limit,
         offset=offset,
         is_read=is_read,
+        is_favorited=is_favorited,
         lang=lang,
         start_date=start_date,
         end_date=end_date,
@@ -80,8 +89,9 @@ async def get_summaries(
                 reading_time_min=json_payload.get("estimated_reading_time_min", 0),
                 topic_tags=json_payload.get("topic_tags", []),
                 is_read=summary.is_read,
+                is_favorited=getattr(summary, "is_favorited", False),
                 lang=summary.lang or "auto",
-                created_at=summary.created_at.isoformat() + "Z",
+                created_at=_isotime(summary.created_at),
                 confidence=json_payload.get("confidence", 0.0),
                 hallucination_risk=json_payload.get("hallucination_risk", "unknown"),
             )
@@ -167,8 +177,9 @@ async def get_summary(
                 "request_id": request.id,
                 "lang": summary.lang,
                 "is_read": summary.is_read,
+                "is_favorited": getattr(summary, "is_favorited", False),
                 "version": summary.version,
-                "created_at": summary.created_at.isoformat() + "Z",
+                "created_at": _isotime(summary.created_at),
                 "json_payload": summary.json_payload,
             },
             request={
@@ -178,7 +189,7 @@ async def get_summary(
                 "input_url": request.input_url,
                 "normalized_url": request.normalized_url,
                 "correlation_id": request.correlation_id,
-                "created_at": request.created_at.isoformat() + "Z",
+                "created_at": _isotime(request.created_at),
             },
             source=source,
             processing=processing,
@@ -224,3 +235,13 @@ async def delete_summary(
             "deleted_at": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
         }
     )
+
+
+@router.post("/{summary_id}/favorite")
+async def toggle_favorite(
+    summary_id: int,
+    user=Depends(get_current_user),
+):
+    """Toggle the favorite status of a summary."""
+    is_favorited = SummaryService.toggle_favorite(user_id=user["user_id"], summary_id=summary_id)
+    return success_response({"success": True, "is_favorited": is_favorited})

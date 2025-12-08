@@ -25,6 +25,7 @@ from app.api.middleware import correlation_id_middleware, rate_limit_middleware
 from app.api.models.responses import success_response
 from app.api.routers import (
     auth,
+    collections,
     requests,
     search,
     summaries,
@@ -110,6 +111,7 @@ app.middleware("http")(rate_limit_middleware)
 
 # Include routers
 app.include_router(auth.router, prefix="/v1/auth", tags=["Authentication"])
+app.include_router(collections.router, prefix="/v1/collections", tags=["Collections"])
 app.include_router(summaries.router, prefix="/v1/summaries", tags=["Summaries"])
 app.include_router(requests.router, prefix="/v1/requests", tags=["Requests"])
 app.include_router(search.router, prefix="/v1", tags=["Search"])

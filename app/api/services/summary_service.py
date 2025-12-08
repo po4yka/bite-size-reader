@@ -18,6 +18,7 @@ class SummaryService:
         limit: int = 20,
         offset: int = 0,
         is_read: bool | None = None,
+        is_favorited: bool | None = None,
         lang: str | None = None,
         start_date: str | None = None,
         end_date: str | None = None,
@@ -31,6 +32,7 @@ class SummaryService:
             limit: Maximum results to return
             offset: Results offset for pagination
             is_read: Filter by read status (None = all)
+            is_favorited: Filter by favorite status (None = all)
             lang: Filter by language
             start_date: Filter by start date (ISO format)
             end_date: Filter by end date (ISO format)
@@ -52,6 +54,9 @@ class SummaryService:
         # Apply filters
         if is_read is not None:
             query = query.where(Summary.is_read == is_read)
+
+        if is_favorited is not None:
+            query = query.where(Summary.is_favorited == is_favorited)
 
         # Exclude deleted summaries
         query = query.where(Summary.is_deleted == False)  # noqa: E712
@@ -207,3 +212,46 @@ class SummaryService:
             f"Summary {summary_id} soft-deleted by user {user_id}",
             extra={"summary_id": summary_id, "user_id": user_id},
         )
+
+    @staticmethod
+    def toggle_favorite(user_id: int, summary_id: int) -> bool:
+        """
+        Toggle favorite status of a summary.
+
+        Args:
+            user_id: User ID for authorization
+            summary_id: Summary ID to toggle
+
+        Returns:
+            New is_favorited status
+
+        Raises:
+            ResourceNotFoundError: If summary not found or access denied
+        """
+        summary = (
+            Summary.select()
+            .join(RequestModel)
+            .where(
+                (Summary.id == summary_id)
+                & (RequestModel.user_id == user_id)
+                & (Summary.is_deleted == False)  # noqa: E712
+            )
+            .first()
+        )
+
+        if not summary:
+            raise ResourceNotFoundError("Summary", summary_id)
+
+        summary.is_favorited = not summary.is_favorited
+        summary.save()
+
+        logger.info(
+            f"Summary {summary_id} favorite status toggled to {summary.is_favorited} by user {user_id}",
+            extra={
+                "summary_id": summary_id,
+                "user_id": user_id,
+                "is_favorited": summary.is_favorited,
+            },
+        )
+
+        return summary.is_favorited

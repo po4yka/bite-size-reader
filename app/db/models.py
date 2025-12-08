@@ -239,6 +239,7 @@ class Summary(BaseModel):
     version = peewee.IntegerField(default=1)
     server_version = peewee.BigIntegerField(default=_next_server_version)
     is_read = peewee.BooleanField(default=False)
+    is_favorited = peewee.BooleanField(default=False)
     is_deleted = peewee.BooleanField(default=False)
     deleted_at = peewee.DateTimeField(null=True)
     updated_at = peewee.DateTimeField(default=_utcnow)
@@ -380,6 +381,40 @@ class VideoDownload(BaseModel):
         )
 
 
+class Collection(BaseModel):
+    """User-created collections for organizing summaries."""
+
+    id = peewee.AutoField()
+    user = peewee.ForeignKeyField(User, backref="collections", on_delete="CASCADE")
+    name = peewee.TextField()
+    description = peewee.TextField(null=True)
+    server_version = peewee.BigIntegerField(default=_next_server_version)
+    updated_at = peewee.DateTimeField(default=_utcnow)
+    created_at = peewee.DateTimeField(default=_utcnow)
+
+    class Meta:
+        table_name = "collections"
+        indexes = (
+            (("user", "name"), True),  # Unique name per user
+            (("updated_at",), False),
+        )
+
+
+class CollectionItem(BaseModel):
+    """Link table for items in a collection."""
+
+    id = peewee.AutoField()
+    collection = peewee.ForeignKeyField(Collection, backref="items", on_delete="CASCADE")
+    summary = peewee.ForeignKeyField(Summary, backref="collection_items", on_delete="CASCADE")
+    created_at = peewee.DateTimeField(default=_utcnow)
+
+    class Meta:
+        table_name = "collection_items"
+        indexes = (
+            (("collection", "summary"), True),  # Prevent duplicate items
+        )
+
+
 ALL_MODELS: tuple[type[BaseModel], ...] = (
     User,
     Chat,
@@ -394,6 +429,8 @@ ALL_MODELS: tuple[type[BaseModel], ...] = (
     SummaryEmbedding,
     VideoDownload,
     ClientSecret,
+    Collection,
+    CollectionItem,
 )
 
 

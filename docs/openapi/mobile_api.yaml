@@ -125,6 +125,183 @@ paths:
           $ref: '#/components/responses/UnauthorizedError'
         '500':
           $ref: '#/components/responses/InternalServerError'
+  /v1/summaries/{summary_id}/favorite:
+    post:
+      summary: Toggle favorite status
+      operationId: toggleFavorite
+      security:
+      - BearerAuth: []
+      parameters:
+      - name: summary_id
+        in: path
+        required: true
+        schema:
+          type: integer
+      tags:
+      - Summaries
+      responses:
+        200:
+          description: Favorite status updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /v1/collections:
+    get:
+      summary: List collections
+      operationId: getCollections
+      security:
+      - BearerAuth: []
+      tags:
+      - Collections
+      responses:
+        200:
+          description: List of user collections
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CollectionListResponseEnvelope'
+    post:
+      summary: Create collection
+      operationId: createCollection
+      security:
+      - BearerAuth: []
+      tags:
+      - Collections
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CollectionCreateRequest'
+      responses:
+        200:
+          description: Collection created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CollectionResponseEnvelope'
+
+  /v1/collections/{id}:
+    get:
+      summary: Get collection details
+      operationId: getCollection
+      security:
+      - BearerAuth: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+      tags:
+      - Collections
+      responses:
+        200:
+          description: Collection details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CollectionResponseEnvelope'
+    patch:
+      summary: Update collection
+      operationId: updateCollection
+      security:
+      - BearerAuth: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+      tags:
+      - Collections
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CollectionUpdateRequest'
+      responses:
+        200:
+          description: Collection updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CollectionResponseEnvelope'
+    delete:
+      summary: Delete collection
+      operationId: deleteCollection
+      security:
+      - BearerAuth: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+      tags:
+      - Collections
+      responses:
+        200:
+          description: Collection deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /v1/collections/{id}/items:
+    post:
+      summary: Add item to collection
+      operationId: addCollectionItem
+      security:
+      - BearerAuth: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+      tags:
+      - Collections
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CollectionItemCreateRequest'
+      responses:
+        200:
+          description: Item added
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /v1/collections/{id}/items/{summary_id}:
+    delete:
+      summary: Remove item from collection
+      operationId: removeCollectionItem
+      security:
+      - BearerAuth: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+      - name: summary_id
+        in: path
+        required: true
+        schema:
+          type: integer
+      tags:
+      - Collections
+      responses:
+        200:
+          description: Item removed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
   /v1/auth/apple-login:
     post:
       tags:
@@ -491,6 +668,14 @@ paths:
           - type: boolean
           - type: 'null'
           title: Is Read
+      - name: is_favorited
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          title: Is Favorited
       - name: lang
         in: query
         required: false
@@ -2114,6 +2299,9 @@ components:
         tldr:
           type: string
           nullable: true
+        is_favorited:
+          type: boolean
+          default: false
     SummaryListItem:
       type: object
       required:
@@ -2159,10 +2347,12 @@ components:
           format: date-time
         confidence:
           type: number
-          nullable: true
         hallucination_risk:
           type: string
           nullable: true
+        is_favorited:
+          type: boolean
+          default: false
     SummaryStats:
       type: object
       required:
@@ -2321,6 +2511,81 @@ components:
         family_name:
           type: string
           nullable: true
+    Collection:
+      type: object
+      required:
+      - id
+      - name
+      - created_at
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        description:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        server_version:
+          type: integer
+    CollectionCreateRequest:
+      type: object
+      required:
+      - name
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+          nullable: true
+    CollectionUpdateRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          nullable: true
+        description:
+          type: string
+          nullable: true
+    CollectionItemCreateRequest:
+      type: object
+      required:
+      - summary_id
+      properties:
+        summary_id:
+          type: integer
+    CollectionListResponse:
+      type: object
+      required:
+      - collections
+      properties:
+        collections:
+          type: array
+          items:
+            $ref: '#/components/schemas/Collection'
+    CollectionResponseEnvelope:
+      allOf:
+      - $ref: '#/components/schemas/BaseSuccessResponse'
+      - type: object
+        required:
+        - data
+        properties:
+          data:
+            $ref: '#/components/schemas/Collection'
+    CollectionListResponseEnvelope:
+      allOf:
+      - $ref: '#/components/schemas/BaseSuccessResponse'
+      - type: object
+        required:
+        - data
+        properties:
+          data:
+            $ref: '#/components/schemas/CollectionListResponse'
     GoogleLoginRequest:
       type: object
       required:
