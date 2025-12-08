@@ -95,6 +95,29 @@ class SummaryDetail(BaseModel):
     processing: dict[str, Any]
 
 
+class SummaryContent(BaseModel):
+    """Full article content for offline reading."""
+
+    summary_id: int
+    request_id: int | None = None
+    format: str
+    content: str
+    content_type: str
+    lang: str | None = None
+    source_url: str | None = None
+    title: str | None = None
+    domain: str | None = None
+    retrieved_at: str
+    size_bytes: int | None = None
+    checksum_sha256: str | None = None
+
+
+class SummaryContentData(BaseModel):
+    """Wrapper for summary content responses."""
+
+    content: SummaryContent
+
+
 class SummaryListResponse(BaseModel):
     """Response for GET /summaries."""
 

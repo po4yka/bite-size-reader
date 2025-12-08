@@ -5,19 +5,24 @@ Provides CRUD operations for summaries.
 """
 
 from datetime import datetime
+from hashlib import sha256
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from peewee import OperationalError
 
+from app.api.exceptions import ResourceNotFoundError
 from app.api.models.requests import UpdateSummaryRequest
 from app.api.models.responses import (
     SummaryCompact,
+    SummaryContent,
+    SummaryContentData,
     SummaryDetail,
     SummaryListResponse,
     success_response,
 )
 from app.api.routers.auth import get_current_user
 from app.api.services import SummaryService
+from app.core.html_utils import clean_markdown_article_text, html_to_text
 from app.core.logging_utils import get_logger
 from app.core.time_utils import UTC
 from app.db.models import CrawlResult, LLMCall, Request as RequestModel, Summary
@@ -237,6 +242,102 @@ async def get_summary(
             },
             source=source,
             processing=processing,
+        )
+    )
+
+
+@router.get("/{summary_id}/content")
+async def get_summary_content(
+    summary_id: int,
+    format: str = Query("markdown", pattern="^(markdown|text)$"),
+    user=Depends(get_current_user),
+):
+    """Get full article content for offline reading."""
+    try:
+        summary = SummaryService.get_summary_by_id(user["user_id"], summary_id)
+    except ResourceNotFoundError:
+        raise HTTPException(status_code=404, detail="Summary not found") from None
+
+    request = summary.request
+    crawl_result = CrawlResult.select().where(CrawlResult.request == request.id).first()
+
+    if not crawl_result:
+        raise HTTPException(status_code=404, detail="Content not found")
+
+    metadata = crawl_result.metadata_json or {}
+    summary_metadata = (summary.json_payload or {}).get("metadata", {})
+    source_url = crawl_result.source_url or request.input_url or request.normalized_url
+    title = metadata.get("title") or summary_metadata.get("title")
+    domain = metadata.get("domain") or summary_metadata.get("domain")
+
+    content_source = None
+    source_format = None
+    content_type = None
+
+    if crawl_result.content_markdown:
+        content_source = crawl_result.content_markdown
+        source_format = "markdown"
+        content_type = "text/markdown"
+    elif crawl_result.content_html:
+        content_source = crawl_result.content_html
+        source_format = "html"
+        content_type = "text/html"
+    elif request.content_text:
+        content_source = request.content_text
+        source_format = "text"
+        content_type = "text/plain"
+
+    if not content_source:
+        raise HTTPException(status_code=404, detail="Content not found")
+
+    output_format = format or "markdown"
+    content_value = content_source
+    content_mime = content_type
+
+    if output_format == "text":
+        if source_format == "markdown":
+            content_value = clean_markdown_article_text(content_source)
+        elif source_format == "html":
+            content_value = html_to_text(content_source)
+        content_mime = "text/plain"
+    # Requested markdown
+    elif source_format == "markdown":
+        content_value = content_source
+        content_mime = "text/markdown"
+    elif source_format == "html":
+        # Best-effort fallback to text when markdown unavailable
+        content_value = html_to_text(content_source)
+        content_mime = "text/plain"
+        output_format = "text"
+    else:
+        content_value = content_source
+        content_mime = "text/plain"
+        output_format = "text"
+
+    checksum = sha256(content_value.encode("utf-8")).hexdigest() if content_value else None
+    size_bytes = len(content_value.encode("utf-8")) if content_value else None
+    retrieved_dt = (
+        getattr(crawl_result, "updated_at", None)
+        or getattr(crawl_result, "created_at", None)
+        or datetime.now(UTC)
+    )
+
+    return success_response(
+        SummaryContentData(
+            content=SummaryContent(
+                summary_id=summary.id,
+                request_id=request.id if request else None,
+                format=output_format,
+                content=content_value,
+                content_type=content_mime,
+                lang=summary.lang,
+                source_url=source_url,
+                title=title,
+                domain=domain,
+                retrieved_at=_isotime(retrieved_dt),
+                size_bytes=size_bytes,
+                checksum_sha256=checksum,
+            )
         )
     )
 

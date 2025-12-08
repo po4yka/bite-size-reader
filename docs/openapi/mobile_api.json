@@ -1342,6 +1342,73 @@
         }
       }
     },
+  "/v1/summaries/{summary_id}/content": {
+    "get": {
+      "tags": [
+        "Summaries"
+      ],
+      "summary": "Get Summary Content",
+      "description": "Get full article content for offline reading (Markdown by default).",
+      "operationId": "get_summary_content_v1_summaries__summary_id__content_get",
+      "security": [
+        {
+          "HTTPBearer": []
+        }
+      ],
+      "parameters": [
+        {
+          "name": "summary_id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "integer",
+            "title": "Summary Id"
+          }
+        },
+        {
+          "name": "format",
+          "in": "query",
+          "required": false,
+          "schema": {
+            "type": "string",
+            "enum": [
+              "markdown",
+              "text"
+            ],
+            "default": "markdown",
+            "title": "Format"
+          }
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "Summary content",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SummaryContentResponseEnvelope"
+              }
+            }
+          }
+        },
+        "401": {
+          "$ref": "#/components/responses/UnauthorizedError"
+        },
+        "403": {
+          "$ref": "#/components/responses/ForbiddenError"
+        },
+        "404": {
+          "$ref": "#/components/responses/NotFoundError"
+        },
+        "429": {
+          "$ref": "#/components/responses/TooManyRequestsError"
+        },
+        "500": {
+          "$ref": "#/components/responses/InternalServerError"
+        }
+      }
+    }
+  },
     "/v1/requests": {
       "post": {
         "tags": [
@@ -3785,6 +3852,97 @@
             }
           }
         }
+      },
+      "SummaryContent": {
+        "type": "object",
+        "required": [
+          "summary_id",
+          "format",
+          "content",
+          "content_type",
+          "retrieved_at"
+        ],
+        "properties": {
+          "summary_id": {
+            "type": "integer"
+          },
+          "request_id": {
+            "type": "integer",
+            "nullable": true
+          },
+          "format": {
+            "type": "string",
+            "enum": [
+              "markdown",
+              "text"
+            ]
+          },
+          "content": {
+            "type": "string",
+            "description": "Full article content for offline reading."
+          },
+          "content_type": {
+            "type": "string",
+            "description": "MIME type for the returned content (e.g., text/markdown)."
+          },
+          "lang": {
+            "type": "string",
+            "nullable": true
+          },
+          "source_url": {
+            "type": "string",
+            "nullable": true
+          },
+          "title": {
+            "type": "string",
+            "nullable": true
+          },
+          "domain": {
+            "type": "string",
+            "nullable": true
+          },
+          "retrieved_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "size_bytes": {
+            "type": "integer",
+            "nullable": true
+          },
+          "checksum_sha256": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "SummaryContentData": {
+        "type": "object",
+        "required": [
+          "content"
+        ],
+        "properties": {
+          "content": {
+            "$ref": "#/components/schemas/SummaryContent"
+          }
+        }
+      },
+      "SummaryContentResponseEnvelope": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/BaseSuccessResponse"
+          },
+          {
+            "type": "object",
+            "required": [
+              "data"
+            ],
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/SummaryContentData"
+              }
+            }
+          }
+        ]
       },
       "SummaryDetailResponseEnvelope": {
         "allOf": [

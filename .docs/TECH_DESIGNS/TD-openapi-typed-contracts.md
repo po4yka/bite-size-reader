@@ -35,6 +35,7 @@
 - `Summary`: `{ id, request_id, lang, is_read, version, created_at, json_payload: SummaryPayload, title?, domain?, url?, tldr? }`.
 - `SummaryListItem`: lighter `{ id, request_id, title, domain, url, tldr, summary_250, reading_time_min, topic_tags, is_read, lang, created_at, confidence?, hallucination_risk? }`.
 - `PaginatedSummaries`: `{ items: [SummaryListItem], stats?: { total_summaries, unread_count }, pagination: Pagination }`.
+- `SummaryContent`: `{ summary_id, request_id?, format: enum(markdown, text), content: string (full article content for offline reading, typically Markdown), content_type (e.g., text/markdown), lang?, source_url?, title?, domain?, retrieved_at: date-time, size_bytes?, checksum_sha256? }`.
 - `SearchResultItem`: `{ request_id, summary_id, url, title, domain, snippet, tldr?, published_at?, created_at, relevance_score?, topic_tags?, is_read? }`.
 - `SearchResponse`: `{ results: [SearchResultItem], pagination: Pagination, query: string }`.
 - `Request`: `{ id, type: enum url|forward, status: enum pending|processing|success|error, correlation_id, input_url?, normalized_url?, dedupe_hash?, lang_detected?, created_at:date-time }`.
@@ -57,6 +58,19 @@
 - `ErrorResponse` reused across 401/403/404/409/410/422/429/500.
 - Validation errors embed `HTTPValidationError` in `error.details`.
 - Rate limiting uses `retry_after` when relevant.
+
+### New Endpoint: Fetch Full Article Content (Q4 2025)
+- Path: `GET /v1/summaries/{summary_id}/content`
+- Purpose: deliver full article content for offline reading (Markdown-first) tied to an existing summary.
+- Params:
+  - `summary_id` (path, required, int)
+  - `format` (query, optional, enum `markdown|text`, default `markdown`)
+- Response:
+  - `SummaryContentResponseEnvelope` (`success=true`, `data.content: SummaryContent`, `meta` per envelope rules).
+  - Content is UTF-8, Markdown by default; `content_type` reflects actual format (e.g., `text/markdown`, `text/plain`).
+  - Includes `retrieved_at`, `size_bytes`, `checksum_sha256` for caching/offline integrity.
+- Errors: 401/403/404/429/500 use existing `ErrorResponse`.
+- Notes: Content comes from stored crawl/transcript artifacts; no schema changes to summaries.
 
 ### Pagination & Query Encoding
 - Pagination block `{ total, limit, offset, has_more, next_cursor? }` for list/search/sync.

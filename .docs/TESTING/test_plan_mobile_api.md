@@ -32,6 +32,7 @@
 - TC12 Processor: per-request locking prevents double processing; retry/backoff triggers on transient failures (mocked exceptions) and surfaces status `error` on exhaustion.
 - TC13 Error Handling: APIException paths return standardized error codes and correlation_id; global handler hides internals in non-debug.
 - TC14 Search Performance: Chroma dependency is singleton per process, shutdown closes embedding/vector clients; trending topics caches per user/params with TTL, bounds DB scan size, and invalidates cache on summary writes.
+- TC15 Summary Content: `GET /v1/summaries/{id}/content` returns envelope with `data.content` (Markdown default) including `format`, `content_type`, `retrieved_at`, `checksum_sha256`, `size_bytes`; supports `format=text`; 401/403/404/429 paths use ErrorResponse; content matches stored crawl artifact for the summary.
 
 ## Non-Functional
 - Concurrency: background processing semaphore behavior and idempotency.
