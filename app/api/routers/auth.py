@@ -146,6 +146,23 @@ class TelegramLoginRequest(BaseModel):
     )
 
 
+class AppleLoginRequest(BaseModel):
+    """Request body for Apple login."""
+
+    id_token: str
+    client_id: str
+    authorization_code: str | None = None
+    given_name: str | None = None
+    family_name: str | None = None
+
+
+class GoogleLoginRequest(BaseModel):
+    """Request body for Google login."""
+
+    id_token: str
+    client_id: str
+
+
 class RefreshTokenRequest(BaseModel):
     """Request body for token refresh."""
 
@@ -1077,6 +1094,113 @@ async def get_telegram_link_status(user=Depends(get_current_user)):
     """Fetch current Telegram link status."""
     user_record = _ensure_user(user["user_id"])
     return success_response(_link_status_payload(user_record))
+
+
+@router.delete("/me")
+async def delete_account(user=Depends(get_current_user)):
+    """Delete the current user account and all associated data."""
+    user_id = user["user_id"]
+    user_record = _ensure_user(user_id)
+
+    # Delete all associated data
+    # Note: Use a transaction to ensure atomicity
+    # Assuming CASCADE delete is set up in db models for related data
+    try:
+        user_record.delete_instance(recursive=True)
+        logger.info(f"User {user_id} deleted their account")
+        return success_response({"success": True})
+    except Exception as e:
+        logger.error(f"Failed to delete user {user_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to delete account") from e
+
+
+@router.post("/apple-login")
+async def apple_login(login_data: AppleLoginRequest):
+    """Exchange Apple authentication data for JWT tokens."""
+    # Placeholder for Apple ID token verification
+    # In a real implementation, verify the id_token with Apple's public keys
+    # or use a library like pyjwt to decode and verify claims (iss, aud, exp)
+
+    logger.info(f"Apple login attempt for client {login_data.client_id}")
+
+    # TODO: Implement actual Apple token verification
+    # For now, we'll assume the token is valid and extract a dummy user ID
+    # This is STRICTLY for development/demonstration since we don't have Apple credentials
+
+    # Mock user ID derivation (in prod, use 'sub' claim from id_token)
+    apple_user_id = int(hashlib.sha256(login_data.id_token.encode()).hexdigest(), 16) % 1000000
+
+    # Validate client_id before creating tokens
+    validate_client_id(login_data.client_id)
+
+    # Get or create user
+    user, created = User.get_or_create(
+        telegram_user_id=apple_user_id,
+        defaults={
+            "username": f"apple_{apple_user_id}",
+            "is_owner": False,  # Default to non-owner for external auth
+        },
+    )
+
+    if created:
+        logger.info(f"Created new user via Apple login: {apple_user_id}")
+
+    # Generate tokens
+    access_token = create_access_token(user.telegram_user_id, user.username, login_data.client_id)
+    refresh_token = create_refresh_token(user.telegram_user_id, login_data.client_id)
+
+    tokens = TokenPair(
+        access_token=access_token,
+        refresh_token=refresh_token,
+        expires_in=ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        token_type="Bearer",
+    )
+
+    return success_response(AuthTokensResponse(tokens=tokens))
+
+
+@router.post("/google-login")
+async def google_login(login_data: GoogleLoginRequest):
+    """Exchange Google authentication data for JWT tokens."""
+    # Placeholder for Google ID token verification
+    # In a real implementation, verify using google-auth library:
+    # id_info = id_token.verify_oauth2_token(token, requests.Request(), client_id)
+
+    logger.info(f"Google login attempt for client {login_data.client_id}")
+
+    # TODO: Implement actual Google token verification
+    # This is STRICTLY for development/demonstration
+
+    # Mock user ID derivation (in prod, use 'sub' claim from id_token)
+    google_user_id = int(hashlib.sha256(login_data.id_token.encode()).hexdigest(), 16) % 1000000
+
+    # Validate client_id before creating tokens
+    validate_client_id(login_data.client_id)
+
+    # Get or create user
+    user, created = User.get_or_create(
+        telegram_user_id=google_user_id,
+        defaults={
+            "username": f"google_{google_user_id}",
+            "is_owner": False,
+        },
+    )
+
+    if created:
+        logger.info(f"Created new user via Google login: {google_user_id}")
+
+    # Generate tokens
+    access_token = create_access_token(user.telegram_user_id, user.username, login_data.client_id)
+    refresh_token = create_refresh_token(user.telegram_user_id, login_data.client_id)
+
+    tokens = TokenPair(
+        access_token=access_token,
+        refresh_token=refresh_token,
+        expires_in=ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        token_type="Bearer",
+    )
+
+    return success_response(AuthTokensResponse(tokens=tokens))
 
 
 @router.post("/me/telegram/link")

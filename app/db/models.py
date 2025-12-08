@@ -8,6 +8,8 @@ from typing import Any
 import peewee
 from playhouse.sqlite_ext import FTS5Model, JSONField, SearchField
 
+from app.core.time_utils import UTC
+
 # A proxy that will be initialised with the concrete database instance at runtime.
 database_proxy: peewee.Database = peewee.DatabaseProxy()
 
@@ -40,7 +42,7 @@ class BaseModel(peewee.Model):
 
 def _utcnow() -> _dt.datetime:
     """Timezone-aware UTC now (avoids deprecated datetime.utcnow)."""
-    return _dt.datetime.now(_dt.UTC)
+    return _dt.datetime.now(UTC)
 
 
 def _next_server_version() -> int:
