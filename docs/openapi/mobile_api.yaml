@@ -176,6 +176,31 @@ paths:
         500:
           $ref: '#/components/responses/InternalServerError'
 
+  /v1/notifications/device:
+    post:
+      tags:
+        - Notifications
+      summary: Register mobile device
+      description: Register a device token (FCM/APNS) for push notifications.
+      operationId: registerDevice
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeviceRegistrationPayload'
+      responses:
+        '200':
+          description: Device registered successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BaseResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+
   /v1/collections:
     get:
       summary: List collections
@@ -2140,6 +2165,24 @@ components:
         properties:
           data:
             $ref: '#/components/schemas/UserStats'
+    DeviceRegistrationPayload:
+      type: object
+      required:
+        - token
+        - platform
+      properties:
+        token:
+          type: string
+          description: FCM or APNS device token
+        platform:
+          type: string
+          enum: [ios, android]
+          description: Mobile platform
+        device_id:
+          type: string
+          nullable: true
+          description: Unique device identifier
+
     SummaryPayload:
       type: object
       required:

@@ -5,7 +5,7 @@ import tempfile
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException
-from fastapi.responses import FileResponse
+from starlette.responses import FileResponse
 
 from app.api.routers.auth import get_current_user
 from app.config import Config

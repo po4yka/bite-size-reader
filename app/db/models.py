@@ -400,6 +400,26 @@ class Collection(BaseModel):
         )
 
 
+class UserDevice(BaseModel):
+    """Mobile devices registered for push notifications."""
+
+    id = peewee.AutoField()
+    user = peewee.ForeignKeyField(User, backref="devices", on_delete="CASCADE")
+    token = peewee.TextField(unique=True)  # FCM/APNS token
+    platform = peewee.TextField()  # ios | android
+    device_id = peewee.TextField(null=True)  # Unique device identifier
+    is_active = peewee.BooleanField(default=True)
+    last_seen_at = peewee.DateTimeField(default=_utcnow)
+    created_at = peewee.DateTimeField(default=_utcnow)
+
+    class Meta:
+        table_name = "user_devices"
+        indexes = (
+            (("user", "platform"), False),
+            (("token",), True),
+        )
+
+
 class CollectionItem(BaseModel):
     """Link table for items in a collection."""
 
@@ -430,7 +450,9 @@ ALL_MODELS: tuple[type[BaseModel], ...] = (
     VideoDownload,
     ClientSecret,
     Collection,
+    Collection,
     CollectionItem,
+    UserDevice,
 )
 
 

@@ -26,6 +26,7 @@ from app.api.models.responses import success_response
 from app.api.routers import (
     auth,
     collections,
+    notifications,
     proxy,
     requests,
     search,
@@ -120,6 +121,7 @@ app.include_router(sync.router, prefix="/v1/sync", tags=["Sync"])
 app.include_router(user.router, prefix="/v1/user", tags=["User"])
 app.include_router(system.router, prefix="/v1/system", tags=["System"])
 app.include_router(proxy.router, prefix="/v1/proxy", tags=["Proxy"])
+app.include_router(notifications.router, prefix="/v1/notifications", tags=["Notifications"])
 
 
 @app.get("/")

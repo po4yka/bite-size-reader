@@ -1,20 +1,27 @@
 import logging
+import sys
+from unittest.mock import MagicMock
 
 import pytest
 
 from app.db.database import Database
 from app.db.models import Request, Summary, User
 
+# Mock chromadb to avoid Pydantic V2 compatibility issues in tests
+sys.modules["chromadb"] = MagicMock()
+sys.modules["chromadb.config"] = MagicMock()
+sys.modules["chromadb.errors"] = MagicMock()
+
 logger = logging.getLogger("peewee")
 logger.addHandler(logging.StreamHandler())
-logger.setLevel(logging.DEBUG)
+logger.setLevel(logging.WARNING)
 
 
 @pytest.fixture
 def db(tmp_path, monkeypatch):
     # Set config to avoid production DB usage
     monkeypatch.setenv("DB_PATH", str(tmp_path / "test.db"))
-    monkeypatch.setenv("JWT_SECRET_KEY", "test-secret")
+    monkeypatch.setenv("JWT_SECRET_KEY", "test-secret-at-least-32-chars-long-string")
 
     db_path = tmp_path / "test.db"
     database = Database(str(db_path))
@@ -22,6 +29,19 @@ def db(tmp_path, monkeypatch):
 
     yield database
     database._database.close()
+
+
+@pytest.fixture
+def client(db):
+    try:
+        from fastapi.testclient import TestClient
+    except ImportError:
+        # Fallback if specific test env issues, but should not happen now
+        from starlette.testclient import TestClient
+
+    from app.api.main import app
+
+    return TestClient(app)
 
 
 @pytest.fixture
