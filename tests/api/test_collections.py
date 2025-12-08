@@ -75,8 +75,10 @@ async def test_delete_collection(db, user_factory):
 
     await collections.delete_collection(collection_id=cid, user=user_context)
 
-    # Verify deletion
-    assert not Collection.select().where(Collection.id == cid).exists()
+    # Verify soft deletion
+    deleted = Collection.get_or_none(Collection.id == cid)
+    assert deleted is not None
+    assert deleted.is_deleted is True
 
 
 @pytest.mark.asyncio

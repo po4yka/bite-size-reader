@@ -209,15 +209,83 @@ class CollectionResponse(BaseModel):
     id: int
     name: str
     description: str | None = None
+    parent_id: int | None = None
+    position: int | None = None
     created_at: str
     updated_at: str
     server_version: int
+    is_shared: bool = False
+    share_count: int | None = None
+    item_count: int | None = None
+    children: list[CollectionResponse] | None = None
 
 
 class CollectionListResponse(BaseModel):
     """List of collections."""
 
     collections: list[CollectionResponse]
+    pagination: PaginationInfo | None = None
+
+
+class CollectionItem(BaseModel):
+    """Collection item entry."""
+
+    collection_id: int
+    summary_id: int
+    position: int | None = None
+    created_at: str
+
+
+class CollectionItemsResponse(BaseModel):
+    """List items in a collection."""
+
+    items: list[CollectionItem]
+    pagination: PaginationInfo
+
+
+class CollectionAclEntry(BaseModel):
+    """ACL entry for a collaborator."""
+
+    user_id: int | None = None
+    role: str
+    status: str
+    invited_by: int | None = None
+    created_at: str | None = None
+    updated_at: str | None = None
+
+
+class CollectionAclResponse(BaseModel):
+    """ACL listing."""
+
+    acl: list[CollectionAclEntry]
+
+
+class CollectionInviteResponse(BaseModel):
+    """Invite token response."""
+
+    token: str
+    role: str
+    expires_at: str | None = None
+
+
+class CollectionMoveResponse(BaseModel):
+    """Response for collection move."""
+
+    id: int
+    parent_id: int | None
+    position: int
+    server_version: int | None = None
+    updated_at: str
+
+
+class CollectionItemsMoveResponse(BaseModel):
+    """Response for moving collection items."""
+
+    moved_summary_ids: list[int]
+
+
+# Rebuild forward refs
+CollectionResponse.model_rebuild()
 
 
 class SearchResult(BaseModel):

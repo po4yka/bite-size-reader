@@ -4,17 +4,14 @@ from __future__ import annotations
 
 import logging
 from abc import ABC, abstractmethod
-from typing import Any, Generic, TypeVar
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
 logger = logging.getLogger(__name__)
 
-TOutput = TypeVar("TOutput")
-TInput = TypeVar("TInput")
 
-
-class AgentResult(BaseModel, Generic[TOutput]):
+class AgentResult[TOutput](BaseModel):
     """Result of an agent execution.
 
     Attributes:
@@ -42,7 +39,7 @@ class AgentResult(BaseModel, Generic[TOutput]):
         return cls(success=False, error=error, metadata=metadata)
 
 
-class BaseAgent(ABC, Generic[TInput, TOutput]):
+class BaseAgent[TInput, TOutput](ABC):
     """Base class for all agents in the multi-agent system.
 
     Each agent should:

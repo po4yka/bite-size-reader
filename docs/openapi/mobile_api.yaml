@@ -375,6 +375,41 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SuccessResponse'
+    get:
+      summary: List items in collection
+      operationId: listCollectionItems
+      security:
+      - BearerAuth: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 200
+          minimum: 1
+          default: 50
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+          default: 0
+      tags:
+      - Collections
+      responses:
+        200:
+          description: Items listed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CollectionItemsResponseEnvelope'
 
   /v1/collections/{id}/items/{summary_id}:
     delete:
@@ -402,6 +437,252 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SuccessResponse'
+  /v1/collections/tree:
+    get:
+      summary: List collections as tree
+      operationId: getCollectionTree
+      security:
+      - BearerAuth: []
+      tags:
+      - Collections
+      parameters:
+      - name: max_depth
+        in: query
+        required: false
+        schema:
+          type: integer
+          default: 3
+      responses:
+        200:
+          description: Collection tree
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CollectionTreeResponseEnvelope'
+  /v1/collections/{id}/acl:
+    get:
+      summary: Get collection ACL
+      operationId: getCollectionAcl
+      security:
+      - BearerAuth: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+      tags:
+      - Collections
+      responses:
+        200:
+          description: ACL entries
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CollectionAclResponseEnvelope'
+  /v1/collections/{id}/share:
+    post:
+      summary: Add collaborator
+      operationId: addCollectionCollaborator
+      security:
+      - BearerAuth: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+      tags:
+      - Collections
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CollectionShareRequest'
+      responses:
+        200:
+          description: Collaborator added
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+  /v1/collections/{id}/share/{user_id}:
+    delete:
+      summary: Remove collaborator
+      operationId: removeCollectionCollaborator
+      security:
+      - BearerAuth: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+      - name: user_id
+        in: path
+        required: true
+        schema:
+          type: integer
+      tags:
+      - Collections
+      responses:
+        200:
+          description: Collaborator removed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+  /v1/collections/{id}/invite:
+    post:
+      summary: Create invite token
+      operationId: createCollectionInvite
+      security:
+      - BearerAuth: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+      tags:
+      - Collections
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CollectionInviteRequest'
+      responses:
+        200:
+          description: Invite created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CollectionInviteResponseEnvelope'
+  /v1/collections/invites/{token}/accept:
+    post:
+      summary: Accept collection invite
+      operationId: acceptCollectionInvite
+      security:
+      - BearerAuth: []
+      parameters:
+      - name: token
+        in: path
+        required: true
+        schema:
+          type: string
+      tags:
+      - Collections
+      responses:
+        200:
+          description: Invite accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+  /v1/collections/{id}/reorder:
+    post:
+      summary: Reorder child collections
+      operationId: reorderCollections
+      security:
+      - BearerAuth: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+      tags:
+      - Collections
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CollectionReorderRequest'
+      responses:
+        200:
+          description: Reordered
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CollectionReorderResponseEnvelope'
+  /v1/collections/{id}/items/reorder:
+    post:
+      summary: Reorder collection items
+      operationId: reorderCollectionItems
+      security:
+      - BearerAuth: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+      tags:
+      - Collections
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CollectionItemReorderRequest'
+      responses:
+        200:
+          description: Items reordered
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CollectionReorderResponseEnvelope'
+  /v1/collections/{id}/move:
+    post:
+      summary: Move collection to another parent
+      operationId: moveCollection
+      security:
+      - BearerAuth: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+      tags:
+      - Collections
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CollectionMoveRequest'
+      responses:
+        200:
+          description: Collection moved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CollectionMoveResponseEnvelope'
+  /v1/collections/{id}/items/move:
+    post:
+      summary: Move items to another collection
+      operationId: moveCollectionItems
+      security:
+      - BearerAuth: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+      tags:
+      - Collections
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CollectionItemMoveRequest'
+      responses:
+        200:
+          description: Items moved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CollectionItemsMoveResponseEnvelope'
   /v1/auth/apple-login:
     post:
       tags:
@@ -2754,6 +3035,12 @@ components:
         description:
           type: string
           nullable: true
+        parent_id:
+          type: integer
+          nullable: true
+        position:
+          type: integer
+          nullable: true
         created_at:
           type: string
           format: date-time
@@ -2762,6 +3049,27 @@ components:
           format: date-time
         server_version:
           type: integer
+        is_shared:
+          type: boolean
+          default: false
+        item_count:
+          type: integer
+          nullable: true
+        children:
+          type: array
+          items:
+            $ref: '#/components/schemas/Collection'
+          nullable: true
+        acl_summary:
+          type: object
+          nullable: true
+          properties:
+            total_collaborators:
+              type: integer
+            roles:
+              type: array
+              items:
+                type: string
     CollectionCreateRequest:
       type: object
       required:
@@ -2772,6 +3080,12 @@ components:
         description:
           type: string
           nullable: true
+        parent_id:
+          type: integer
+          nullable: true
+        position:
+          type: integer
+          nullable: true
     CollectionUpdateRequest:
       type: object
       properties:
@@ -2781,6 +3095,12 @@ components:
         description:
           type: string
           nullable: true
+        parent_id:
+          type: integer
+          nullable: true
+        position:
+          type: integer
+          nullable: true
     CollectionItemCreateRequest:
       type: object
       required:
@@ -2788,6 +3108,35 @@ components:
       properties:
         summary_id:
           type: integer
+    CollectionItem:
+      type: object
+      required:
+      - collection_id
+      - summary_id
+      - created_at
+      properties:
+        collection_id:
+          type: integer
+        summary_id:
+          type: integer
+        position:
+          type: integer
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+    CollectionItemsResponse:
+      type: object
+      required:
+      - items
+      - pagination
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/CollectionItem'
+        pagination:
+          $ref: '#/components/schemas/Pagination'
     CollectionListResponse:
       type: object
       required:
@@ -2797,6 +3146,232 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Collection'
+    CollectionAclEntry:
+      type: object
+      required:
+      - user_id
+      - role
+      - status
+      properties:
+        user_id:
+          type: integer
+        role:
+          type: string
+          enum: [owner, editor, viewer]
+        status:
+          type: string
+          enum: [active, pending, revoked]
+        invited_by:
+          type: integer
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    CollectionAclResponse:
+      type: object
+      required:
+      - acl
+      properties:
+        acl:
+          type: array
+          items:
+            $ref: '#/components/schemas/CollectionAclEntry'
+    CollectionTreeResponse:
+      type: object
+      required:
+      - collections
+      properties:
+        collections:
+          type: array
+          items:
+            $ref: '#/components/schemas/Collection'
+    CollectionReorderRequest:
+      type: object
+      required:
+      - items
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+            required: [collection_id, position]
+            properties:
+              collection_id:
+                type: integer
+              position:
+                type: integer
+    CollectionItemReorderRequest:
+      type: object
+      required:
+      - items
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+            required: [summary_id, position]
+            properties:
+              summary_id:
+                type: integer
+              position:
+                type: integer
+    CollectionMoveRequest:
+      type: object
+      required:
+      - parent_id
+      properties:
+        parent_id:
+          type: integer
+          nullable: true
+        position:
+          type: integer
+          nullable: true
+    CollectionItemMoveRequest:
+      type: object
+      required:
+      - summary_ids
+      - target_collection_id
+      properties:
+        summary_ids:
+          type: array
+          items:
+            type: integer
+        target_collection_id:
+          type: integer
+        position:
+          type: integer
+          nullable: true
+    CollectionShareRequest:
+      type: object
+      required:
+      - user_id
+      - role
+      properties:
+        user_id:
+          type: integer
+        role:
+          type: string
+          enum: [editor, viewer]
+    CollectionInviteRequest:
+      type: object
+      required:
+      - role
+      properties:
+        role:
+          type: string
+          enum: [editor, viewer]
+        expires_at:
+          type: string
+          format: date-time
+          nullable: true
+    CollectionInviteResponse:
+      type: object
+      required:
+      - token
+      - role
+      properties:
+        token:
+          type: string
+        role:
+          type: string
+        expires_at:
+          type: string
+          format: date-time
+          nullable: true
+    CollectionMoveResponse:
+      type: object
+      required:
+      - id
+      - parent_id
+      - position
+      properties:
+        id:
+          type: integer
+        parent_id:
+          type: integer
+          nullable: true
+        position:
+          type: integer
+        server_version:
+          type: integer
+        updated_at:
+          type: string
+          format: date-time
+    CollectionItemsMoveResponse:
+      type: object
+      required:
+      - moved_summary_ids
+      properties:
+        moved_summary_ids:
+          type: array
+          items:
+            type: integer
+    CollectionReorderResponseEnvelope:
+      allOf:
+      - $ref: '#/components/schemas/BaseSuccessResponse'
+      - type: object
+        required:
+        - data
+        properties:
+          data:
+            $ref: '#/components/schemas/SuccessResponse'
+    CollectionMoveResponseEnvelope:
+      allOf:
+      - $ref: '#/components/schemas/BaseSuccessResponse'
+      - type: object
+        required:
+        - data
+        properties:
+          data:
+            $ref: '#/components/schemas/CollectionMoveResponse'
+    CollectionItemsMoveResponseEnvelope:
+      allOf:
+      - $ref: '#/components/schemas/BaseSuccessResponse'
+      - type: object
+        required:
+        - data
+        properties:
+          data:
+            $ref: '#/components/schemas/CollectionItemsMoveResponse'
+    CollectionItemsResponseEnvelope:
+      allOf:
+      - $ref: '#/components/schemas/BaseSuccessResponse'
+      - type: object
+        required:
+        - data
+        properties:
+          data:
+            $ref: '#/components/schemas/CollectionItemsResponse'
+    CollectionAclResponseEnvelope:
+      allOf:
+      - $ref: '#/components/schemas/BaseSuccessResponse'
+      - type: object
+        required:
+        - data
+        properties:
+          data:
+            $ref: '#/components/schemas/CollectionAclResponse'
+    CollectionTreeResponseEnvelope:
+      allOf:
+      - $ref: '#/components/schemas/BaseSuccessResponse'
+      - type: object
+        required:
+        - data
+        properties:
+          data:
+            $ref: '#/components/schemas/CollectionTreeResponse'
+    CollectionInviteResponseEnvelope:
+      allOf:
+      - $ref: '#/components/schemas/BaseSuccessResponse'
+      - type: object
+        required:
+        - data
+        properties:
+          data:
+            $ref: '#/components/schemas/CollectionInviteResponse'
     CollectionResponseEnvelope:
       allOf:
       - $ref: '#/components/schemas/BaseSuccessResponse'

@@ -1894,6 +1894,13 @@ class Database:
             ("llm_calls", "openrouter_response_json", "TEXT"),
             ("user_interactions", "updated_at", "DATETIME"),
             ("summary_embeddings", "language", "TEXT"),  # Multi-language support
+            ("collections", "parent_id", "INTEGER"),
+            ("collections", "position", "INTEGER"),
+            ("collections", "is_shared", "INTEGER"),
+            ("collections", "share_count", "INTEGER"),
+            ("collections", "is_deleted", "INTEGER"),
+            ("collections", "deleted_at", "DATETIME"),
+            ("collection_items", "position", "INTEGER"),
         ]
         for table, column, coltype in checks:
             self._ensure_column(table, column, coltype)

@@ -85,6 +85,8 @@ class CollectionCreateRequest(BaseModel):
 
     name: str = Field(min_length=1, max_length=100)
     description: str | None = Field(default=None, max_length=500)
+    parent_id: int | None = Field(default=None, ge=1)
+    position: int | None = Field(default=None, ge=1)
 
 
 class CollectionUpdateRequest(BaseModel):
@@ -92,9 +94,52 @@ class CollectionUpdateRequest(BaseModel):
 
     name: str | None = Field(default=None, min_length=1, max_length=100)
     description: str | None = Field(default=None, max_length=500)
+    parent_id: int | None = Field(default=None, ge=1)
+    position: int | None = Field(default=None, ge=1)
 
 
 class CollectionItemCreateRequest(BaseModel):
     """Request body for adding an item to a collection."""
 
     summary_id: int
+
+
+class CollectionReorderRequest(BaseModel):
+    """Reorder child collections."""
+
+    items: list[dict[str, int]] = Field(min_length=1)
+
+
+class CollectionItemReorderRequest(BaseModel):
+    """Reorder items inside a collection."""
+
+    items: list[dict[str, int]] = Field(min_length=1)
+
+
+class CollectionMoveRequest(BaseModel):
+    """Move collection to a new parent."""
+
+    parent_id: int | None = Field(default=None, ge=1)
+    position: int | None = Field(default=None, ge=1)
+
+
+class CollectionItemMoveRequest(BaseModel):
+    """Move items to another collection."""
+
+    summary_ids: list[int] = Field(min_length=1)
+    target_collection_id: int
+    position: int | None = Field(default=None, ge=1)
+
+
+class CollectionShareRequest(BaseModel):
+    """Add collaborator."""
+
+    user_id: int
+    role: Literal["editor", "viewer"]
+
+
+class CollectionInviteRequest(BaseModel):
+    """Create invite token."""
+
+    role: Literal["editor", "viewer"]
+    expires_at: str | None = None
