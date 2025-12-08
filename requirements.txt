@@ -82,7 +82,7 @@ exceptiongroup==1.3.1
     # via anyio
 fakeredis==2.32.1
     # via bite-size-reader (pyproject.toml)
-fastapi==0.123.10
+fastapi==0.124.0
     # via bite-size-reader (pyproject.toml)
 filelock==3.20.0
     # via
@@ -180,9 +180,9 @@ murmurhash==1.0.15
     #   preshed
     #   spacy
     #   thinc
-networkx==3.4.2
+networkx==3.6
     # via torch
-numpy==2.2.6
+numpy==2.3.5
     # via
     #   blis
     #   chromadb
@@ -218,7 +218,7 @@ opentelemetry-sdk==1.39.0
     #   opentelemetry-exporter-otlp-proto-grpc
 opentelemetry-semantic-conventions==0.60b0
     # via opentelemetry-sdk
-orjson==3.11.4
+orjson==3.11.5
     # via
     #   bite-size-reader (pyproject.toml)
     #   chromadb
@@ -243,7 +243,7 @@ preshed==3.0.12
     # via
     #   spacy
     #   thinc
-protobuf==6.33.1
+protobuf==6.33.2
     # via
     #   googleapis-common-protos
     #   onnxruntime
@@ -256,7 +256,7 @@ pyasn1==0.6.1
     #   rsa
 pyasn1-modules==0.4.2
     # via google-auth
-pybase64==1.4.2
+pybase64==1.4.3
     # via chromadb
 pydantic==2.12.5
     # via
@@ -351,7 +351,7 @@ scikit-learn==1.7.2
     # via
     #   bite-size-reader (pyproject.toml)
     #   sentence-transformers
-scipy==1.15.3
+scipy==1.16.3
     # via
     #   scikit-learn
     #   sentence-transformers
@@ -462,7 +462,7 @@ typing-inspection==0.4.2
     #   pydantic-settings
 tzlocal==5.3.1
     # via dateparser
-urllib3==2.5.0
+urllib3==2.6.0
     # via
     #   courlan
     #   htmldate
@@ -494,7 +494,7 @@ wrapt==2.0.1
     # via smart-open
 youtube-transcript-api==1.2.3
     # via bite-size-reader (pyproject.toml)
-yt-dlp==2025.11.12
+yt-dlp==2025.12.8
     # via bite-size-reader (pyproject.toml)
 zipp==3.23.0
     # via importlib-metadata
