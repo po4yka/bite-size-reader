@@ -84,6 +84,52 @@ paths:
           $ref: '#/components/responses/TooManyRequestsError'
         '500':
           $ref: '#/components/responses/InternalServerError'
+  /v1/auth/logout:
+    post:
+      tags:
+      - Authentication
+      summary: Logout
+      description: Revoke the specified refresh token.
+      operationId: logout_v1_auth_logout_post
+      security:
+      - HTTPBearer: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RefreshTokenRequest'
+        required: true
+      responses:
+        '200':
+          description: Logout successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /v1/auth/sessions:
+    get:
+      tags:
+      - Authentication
+      summary: List Active Sessions
+      description: List all active refresh token sessions for the current user.
+      operationId: list_sessions_v1_auth_sessions_get
+      security:
+      - HTTPBearer: []
+      responses:
+        '200':
+          description: List of sessions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionListResponseEnvelope'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
   /v1/auth/me:
     get:
       tags:
@@ -3562,3 +3608,47 @@ components:
       - msg
       - type
       title: ValidationError
+
+    SessionInfo:
+      type: object
+      required:
+      - id
+      - created_at
+      properties:
+        id:
+          type: integer
+        client_id:
+          type: string
+          nullable: true
+        device_info:
+          type: string
+          nullable: true
+        ip_address:
+          type: string
+          nullable: true
+        last_used_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        is_current:
+          type: boolean
+          default: false
+    SessionListResponseEnvelope:
+      allOf:
+      - $ref: '#/components/schemas/BaseSuccessResponse'
+      - type: object
+        required:
+        - data
+        properties:
+          data:
+            type: object
+            required:
+            - sessions
+            properties:
+              sessions:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SessionInfo'

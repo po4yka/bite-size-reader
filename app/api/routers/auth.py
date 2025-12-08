@@ -48,7 +48,7 @@ from app.api.models.responses import (
 from app.config import AppConfig, Config, load_config
 from app.core.logging_utils import get_logger
 from app.core.time_utils import UTC
-from app.db.models import ClientSecret, User
+from app.db.models import ClientSecret, RefreshToken, User
 
 logger = get_logger(__name__)
 router = APIRouter()
@@ -440,9 +440,30 @@ def create_access_token(
     return create_token(user_id, "access", username, client_id)
 
 
-def create_refresh_token(user_id: int, client_id: str | None = None) -> str:
-    """Create JWT refresh token."""
-    return create_token(user_id, "refresh", client_id=client_id)
+def create_refresh_token(
+    user_id: int,
+    client_id: str | None = None,
+    device_info: str | None = None,
+    ip_address: str | None = None,
+) -> str:
+    """Create and persist JWT refresh token."""
+    token = create_token(user_id, "refresh", client_id=client_id)
+
+    # Persist token hash
+    token_hash = hashlib.sha256(token.encode()).hexdigest()
+    expires_at = datetime.now(UTC) + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
+
+    RefreshToken.create(
+        user=user_id,
+        token_hash=token_hash,
+        client_id=client_id,
+        device_info=device_info,
+        ip_address=ip_address,
+        expires_at=expires_at,
+        is_revoked=False,
+    )
+
+    return token
 
 
 def validate_client_id(client_id: str | None) -> bool:
@@ -1287,3 +1308,92 @@ async def unlink_telegram(user=Depends(get_current_user)):
     )
 
     return success_response(_link_status_payload(user_record))
+
+
+@router.post("/logout")
+async def logout(
+    request: RefreshTokenRequest,
+    _: dict = Depends(get_current_user),  # Require authentication (optional, but good for security)
+):
+    """
+    Logout by revoking the specific refresh token.
+    """
+    token = request.refresh_token
+    try:
+        # We don't verify signature here to allow logging out even if expired (as long as it's in DB)
+        # But for security, we should probably verify it's a valid token structure aimed at us.
+        # However, since we hash and look up, any garbage string won't be found anyway.
+        token_hash = hashlib.sha256(token.encode()).hexdigest()
+
+        # Find token in DB
+        refresh_token_record = RefreshToken.get_or_none(RefreshToken.token_hash == token_hash)
+
+        if refresh_token_record:
+            refresh_token_record.is_revoked = True
+            refresh_token_record.save()
+            logger.info("Revoked refresh token", extra={"token_id": refresh_token_record.id})
+
+    except Exception as e:
+        logger.warning(f"Logout failed: {e}")
+        # We still return success to the client
+
+    return success_response({"message": "Logged out successfully"})
+
+
+class SessionInfo(BaseModel):
+    id: int
+    client_id: str | None
+    device_info: str | None
+    ip_address: str | None
+    last_used_at: str | None
+    created_at: str
+    is_current: bool = False
+
+
+@router.get("/sessions")
+async def list_sessions(
+    current_user: dict = Depends(get_current_user),
+) -> dict:
+    """
+    List active sessions for the current user.
+    """
+    user_id = current_user["user_id"]
+    now = datetime.now(UTC)
+
+    sessions = (
+        RefreshToken.select()
+        .where(
+            (RefreshToken.user == user_id)
+            & (~RefreshToken.is_revoked)
+            & (RefreshToken.expires_at > now)
+        )
+        .order_by(RefreshToken.last_used_at.desc())
+    )
+
+    formatted_sessions = []
+    for s in sessions:
+        last_used = s.last_used_at
+        if last_used and hasattr(last_used, "isoformat"):
+            last_used = last_used.isoformat() + "Z"
+        elif last_used:
+            # Already a string or something else
+            last_used = str(last_used) + "Z"
+
+        created = s.created_at
+        if created and hasattr(created, "isoformat"):
+            created = created.isoformat() + "Z"
+        else:
+            created = str(created) + "Z"
+
+        formatted_sessions.append(
+            SessionInfo(
+                id=s.id,
+                client_id=s.client_id,
+                device_info=s.device_info,
+                ip_address=s.ip_address,
+                last_used_at=last_used,
+                created_at=created,
+            )
+        )
+
+    return success_response({"sessions": formatted_sessions})

@@ -435,6 +435,25 @@ class CollectionItem(BaseModel):
         )
 
 
+class RefreshToken(BaseModel):
+    """Store for refresh tokens to support revocation and session management."""
+
+    id = peewee.AutoField()
+    user = peewee.ForeignKeyField(User, backref="refresh_tokens", on_delete="CASCADE")
+    token_hash = peewee.TextField(index=True)
+    client_id = peewee.TextField(null=True)
+    device_info = peewee.TextField(null=True)
+    ip_address = peewee.TextField(null=True)
+    is_revoked = peewee.BooleanField(default=False)
+    expires_at = peewee.DateTimeField()
+    last_used_at = peewee.DateTimeField(default=_utcnow)
+    created_at = peewee.DateTimeField(default=_utcnow)
+
+    class Meta:
+        table_name = "refresh_tokens"
+        indexes = ((("user", "client_id"), False),)
+
+
 ALL_MODELS: tuple[type[BaseModel], ...] = (
     User,
     Chat,
@@ -450,9 +469,9 @@ ALL_MODELS: tuple[type[BaseModel], ...] = (
     VideoDownload,
     ClientSecret,
     Collection,
-    Collection,
     CollectionItem,
     UserDevice,
+    RefreshToken,
 )
 
 
