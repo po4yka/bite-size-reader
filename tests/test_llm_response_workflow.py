@@ -181,6 +181,65 @@ class LLMResponseWorkflowTests(unittest.IsolatedAsyncioTestCase):
         # llm_error callback is called twice: once for the error, once for all attempts failed
         assert self.llm_error_mock.await_count == 2
 
+    async def test_empty_summary_counts_attempts_and_models(self) -> None:
+        req_primary = LLMRequestConfig(
+            messages=self.base_messages,
+            response_format={"type": "json_object"},
+            max_tokens=256,
+            temperature=0.1,
+            top_p=1.0,
+            model_override="primary",
+        )
+        req_fallback = LLMRequestConfig(
+            messages=self.base_messages,
+            response_format={"type": "json_object"},
+            max_tokens=256,
+            temperature=0.1,
+            top_p=1.0,
+            model_override="fallback",
+        )
+
+        llm_empty_first = self._llm_response({})
+        llm_empty_second = self._llm_response({})
+        self.openrouter.chat = AsyncMock(side_effect=[llm_empty_first, llm_empty_second])
+
+        with (
+            unittest.mock.patch(
+                "app.adapters.content.llm_response_workflow.parse_summary_response",
+                return_value=SimpleNamespace(
+                    shaped={}, errors=["missing_summary_fields"], used_local_fix=False
+                ),
+            ),
+            unittest.mock.patch.object(
+                self.workflow,
+                "_handle_all_attempts_failed",
+                wraps=self.workflow._handle_all_attempts_failed,
+                new_callable=AsyncMock,
+            ) as fail_mock,
+        ):
+            summary = await self.workflow.execute_summary_workflow(
+                message=MagicMock(),
+                req_id=404,
+                correlation_id="empty",
+                interaction_config=self.interaction,
+                persistence=self.persistence,
+                repair_context=self.repair_context,
+                requests=[req_primary, req_fallback],
+                notifications=self.notifications,
+            )
+
+        assert summary is None
+        assert self.openrouter.chat.await_count == 2
+        assert self.db.async_insert_llm_call.await_count == 2
+        fail_mock.assert_awaited_once()
+        failed_attempts = fail_mock.await_args.args[5]
+        assert len(failed_attempts) == 2
+        models_tried = [cfg.model_override or llm.model for llm, cfg in failed_attempts]
+        assert models_tried == ["primary", "fallback"]
+        self.llm_error_mock.assert_awaited_once()
+        _llm_arg, details = self.llm_error_mock.await_args.args
+        assert "summary_fields_empty" in (details or "")
+
     def _llm_response(
         self,
         payload: dict[str, str],

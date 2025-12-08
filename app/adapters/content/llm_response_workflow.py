@@ -212,9 +212,8 @@ class LLMResponseWorkflow:
             if summary is not None:
                 return summary
 
-            # Track failed attempt for final error reporting
-            if llm.status != "ok":
-                failed_attempts.append((llm, attempt))
+            # Track failed attempt for final error reporting (including validation failures)
+            failed_attempts.append((llm, attempt))
 
         # All attempts failed - send consolidated error notification
         await self._handle_all_attempts_failed(
@@ -333,6 +332,7 @@ class LLMResponseWorkflow:
             )
 
         if shaped is None:
+            self._set_failure_context(llm, "summary_parse_failed")
             return None
 
         finalize_summary_texts(shaped)
@@ -342,6 +342,7 @@ class LLMResponseWorkflow:
                 "summary_fields_empty",
                 extra={"cid": correlation_id, "stage": "attempt"},
             )
+            self._set_failure_context(llm, "summary_fields_empty")
             return None
 
         return await self._finalize_success(
@@ -574,6 +575,7 @@ class LLMResponseWorkflow:
                 interaction_config,
                 notifications,
             )
+            self._set_failure_context(llm, "json_repair_failed")
             return None
 
     async def _handle_llm_error(
@@ -828,6 +830,26 @@ class LLMResponseWorkflow:
             if isinstance(value, str) and value.strip():
                 return True
         return False
+
+    def _set_failure_context(self, llm: Any, reason: str) -> None:
+        """Attach a human-readable failure reason to an LLM attempt."""
+        try:
+            if not getattr(llm, "error_text", None):
+                llm.error_text = reason
+        except Exception:
+            # Best-effort; llm may be a SimpleNamespace or MagicMock
+            pass
+
+        try:
+            context = getattr(llm, "error_context", None)
+            if context is None:
+                llm.error_context = {"message": reason}
+            elif isinstance(context, dict):
+                context.setdefault("message", reason)
+                llm.error_context = context
+        except Exception:
+            # Do not let context attachment break the workflow
+            pass
 
     async def _persist_llm_call(self, llm: Any, req_id: int, correlation_id: str | None) -> None:
         try:
