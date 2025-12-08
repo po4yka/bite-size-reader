@@ -64,12 +64,20 @@ check-lock:
 
 .PHONY: docker-build docker-build-no-cache docker-run docker-stop docker-restart
 .PHONY: docker-logs docker-shell docker-test docker-clean docker-size docker-deploy
+.PHONY: docker-build-mobile-api docker-build-mobile-api-no-cache docker-restart-mobile-api
+.PHONY: docker-rebuild-mobile-api docker-logs-mobile-api docker-shell-mobile-api
 
 docker-build:
 	DOCKER_BUILDKIT=1 docker build --tag bsr:latest --progress=plain .
 
 docker-build-no-cache:
 	DOCKER_BUILDKIT=1 docker build --no-cache --tag bsr:latest --progress=plain .
+
+docker-build-mobile-api:
+	DOCKER_BUILDKIT=1 docker compose build mobile-api
+
+docker-build-mobile-api-no-cache:
+	DOCKER_BUILDKIT=1 docker compose build --no-cache mobile-api
 
 docker-run:
 	docker compose up -d
@@ -85,11 +93,22 @@ docker-logs:
 docker-logs-tail:
 	docker compose logs --tail=100 -f bsr
 
+docker-logs-mobile-api:
+	docker compose logs -f mobile-api
+
 docker-shell:
 	docker compose exec bsr sh
 
 docker-shell-root:
 	docker compose exec -u root bsr sh
+
+docker-shell-mobile-api:
+	docker compose exec mobile-api sh
+
+docker-restart-mobile-api:
+	docker compose up -d mobile-api
+
+docker-rebuild-mobile-api: docker-build-mobile-api docker-restart-mobile-api
 
 docker-test:
 	DOCKER_BUILDKIT=1 docker build --target builder --tag bsr:test .
