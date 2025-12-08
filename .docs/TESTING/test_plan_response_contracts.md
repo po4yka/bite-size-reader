@@ -40,6 +40,8 @@
 - TC9: Summary shaping enriches TL;DR when TL;DR is highly similar (not identical) to summary_1000.
 - TC10: Prompt text (EN/RU) instructs: JSON-only (no Markdown/fences), distinct tiers (hook vs 3–5 sentence overview vs 2–3 paragraph TL;DR), no invented data/URLs/names, extractive quotes verbatim or empty, topic_tags lowercase without punctuation.
 - TC11: For non-Russian detected content when chosen summary language is not Russian, Telegram sends the original structured summary plus a second follow-up message with an adapted Russian translation; on translation failure, a notice is sent while the main summary still delivers.
+- TC12: HTTP 200 responses with missing required summary fields trigger preset retries (`schema_strict` → `schema_relaxed` → `json_object_guardrail` → `json_object_fallback`), and `models_tried`/`total_attempts` reflect every attempted preset+model.
+- TC13: Fallback models use `json_object_fallback` parameters (lower temperature/top_p) and succeed after primary structured attempts returned empty payloads.
 
 ## Non-Functional
 - Load: envelope helpers are allocation-light; pagination meta computed without N+1 queries.

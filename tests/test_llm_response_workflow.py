@@ -240,6 +240,44 @@ class LLMResponseWorkflowTests(unittest.IsolatedAsyncioTestCase):
         _llm_arg, details = self.llm_error_mock.await_args.args
         assert "summary_fields_empty" in (details or "")
 
+    async def test_process_attempt_exception_still_counts_attempt(self) -> None:
+        llm_response = self._llm_response({})
+        self.openrouter.chat = AsyncMock(return_value=llm_response)
+
+        with (
+            unittest.mock.patch.object(
+                self.workflow,
+                "_process_attempt",
+                new_callable=AsyncMock,
+                side_effect=ValueError("boom"),
+            ),
+            unittest.mock.patch.object(
+                self.workflow,
+                "_handle_all_attempts_failed",
+                wraps=self.workflow._handle_all_attempts_failed,
+                new_callable=AsyncMock,
+            ) as fail_mock,
+        ):
+            summary = await self.workflow.execute_summary_workflow(
+                message=MagicMock(),
+                req_id=505,
+                correlation_id="exception",
+                interaction_config=self.interaction,
+                persistence=self.persistence,
+                repair_context=self.repair_context,
+                requests=[self.request],
+                notifications=self.notifications,
+            )
+
+        assert summary is None
+        fail_mock.assert_awaited_once()
+        failed_attempts = fail_mock.await_args.args[5]
+        assert len(failed_attempts) == 1
+        llm_logged, cfg_logged = failed_attempts[0]
+        assert llm_logged.error_text == "summary_processing_exception"
+        assert cfg_logged.preset_name == self.request.preset_name
+        self.llm_error_mock.assert_awaited_once()
+
     def _llm_response(
         self,
         payload: dict[str, str],

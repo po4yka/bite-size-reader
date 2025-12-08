@@ -22,6 +22,7 @@ class LLMRequestConfig(BaseModel):
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
+    preset_name: str | None = None
     messages: list[dict[str, Any]]
     response_format: dict[str, Any]
     max_tokens: int | None = None
@@ -191,23 +192,43 @@ class LLMResponseWorkflow:
             ):
                 await notifications.completion(llm, attempt)
 
-            summary = await self._process_attempt(
-                message=message,
-                llm=llm,
-                req_id=req_id,
-                correlation_id=correlation_id,
-                interaction_config=interaction_config,
-                persistence=persistence,
-                repair_context=repair_context,
-                request_config=attempt,
-                notifications=notifications,
-                ensure_summary=ensure_summary,
-                on_success=on_success,
-                required_summary_fields=required_summary_fields,
-                is_last_attempt=is_last_attempt,
-                failed_attempts=failed_attempts,
-                defer_persistence=defer_persistence,
-            )
+            summary = None
+            try:
+                summary = await self._process_attempt(
+                    message=message,
+                    llm=llm,
+                    req_id=req_id,
+                    correlation_id=correlation_id,
+                    interaction_config=interaction_config,
+                    persistence=persistence,
+                    repair_context=repair_context,
+                    request_config=attempt,
+                    notifications=notifications,
+                    ensure_summary=ensure_summary,
+                    on_success=on_success,
+                    required_summary_fields=required_summary_fields,
+                    is_last_attempt=is_last_attempt,
+                    failed_attempts=failed_attempts,
+                    defer_persistence=defer_persistence,
+                )
+            except Exception as exc:  # pragma: no cover - defensive
+                logger.exception(
+                    "summary_attempt_processing_failed",
+                    extra={
+                        "cid": correlation_id,
+                        "preset": attempt.preset_name,
+                        "model": attempt.model_override,
+                        "error": str(exc),
+                    },
+                )
+                self._set_failure_context(llm, "summary_processing_exception")
+                try:
+                    context = getattr(llm, "error_context", None) or {}
+                    context.setdefault("message", "summary_processing_exception")
+                    context.setdefault("exception", str(exc))
+                    llm.error_context = context
+                except Exception:
+                    pass
 
             if summary is not None:
                 return summary
@@ -340,7 +361,12 @@ class LLMResponseWorkflow:
         if not self._summary_has_content(shaped, required_summary_fields):
             logger.warning(
                 "summary_fields_empty",
-                extra={"cid": correlation_id, "stage": "attempt"},
+                extra={
+                    "cid": correlation_id,
+                    "stage": "attempt",
+                    "preset": request_config.preset_name,
+                    "model": request_config.model_override,
+                },
             )
             self._set_failure_context(llm, "summary_fields_empty")
             return None
@@ -739,8 +765,11 @@ class LLMResponseWorkflow:
         models_tried: list[str] = []
 
         for llm, config in failed_attempts:
-            model_name = config.model_override or llm.model or "unknown"
-            models_tried.append(model_name)
+            model_name = config.model_override or getattr(llm, "model", None) or "unknown"
+            if config.preset_name:
+                models_tried.append(f"{model_name}:{config.preset_name}")
+            else:
+                models_tried.append(model_name)
 
             context = getattr(llm, "error_context", None) or {}
 

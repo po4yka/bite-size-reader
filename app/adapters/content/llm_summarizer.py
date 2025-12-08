@@ -172,44 +172,101 @@ class LLMSummarizer:
         if len(content_text) > max_chars and (self.cfg.openrouter.long_context_model or ""):
             model_override = self.cfg.openrouter.long_context_model
 
-        response_format = self._workflow.build_structured_response_format()
-        max_tokens = self._select_max_tokens(content_text)
+        base_model = model_override or self.cfg.openrouter.model
+
+        response_format_schema = self._workflow.build_structured_response_format()
+        response_format_json_object = self._workflow.build_structured_response_format(
+            mode="json_object"
+        )
+        max_tokens_schema = self._select_max_tokens(content_text)
+        max_tokens_json_object = self._select_max_tokens(user_content)
+
+        base_temperature = self.cfg.openrouter.temperature
+        base_top_p = self.cfg.openrouter.top_p if self.cfg.openrouter.top_p is not None else 0.9
+
+        def _clamp(value: float, min_value: float, max_value: float) -> float:
+            return max(min_value, min(max_value, value))
+
+        relaxed_temperature = self.cfg.openrouter.summary_temperature_relaxed or _clamp(
+            base_temperature + 0.15, 0.0, 0.8
+        )
+        relaxed_top_p = self.cfg.openrouter.summary_top_p_relaxed or _clamp(
+            (base_top_p or 0.9) + 0.03, 0.0, 0.97
+        )
+        json_temperature = self.cfg.openrouter.summary_temperature_json_fallback or _clamp(
+            base_temperature - 0.05, 0.0, 0.5
+        )
+        json_top_p = self.cfg.openrouter.summary_top_p_json_fallback or _clamp(
+            base_top_p, 0.0, 0.95
+        )
 
         self._last_llm_result = None
         self._last_summary_shaped = None
         self._last_insights = None
 
-        requests: list[LLMRequestConfig] = [
-            LLMRequestConfig(
-                messages=messages,
-                response_format=response_format,
-                max_tokens=max_tokens,
-                temperature=self.cfg.openrouter.temperature,
-                top_p=self.cfg.openrouter.top_p,
-                model_override=model_override,
-                silent=silent,
+        requests: list[LLMRequestConfig] = []
+
+        def _add_request(
+            *,
+            preset: str,
+            model_name: str,
+            response_format: dict[str, Any],
+            max_tokens: int | None,
+            temperature: float,
+            top_p: float | None,
+        ) -> None:
+            requests.append(
+                LLMRequestConfig(
+                    preset_name=preset,
+                    messages=messages,
+                    response_format=response_format,
+                    max_tokens=max_tokens,
+                    temperature=temperature,
+                    top_p=top_p,
+                    model_override=model_name,
+                    silent=silent,
+                )
             )
-        ]
+
+        _add_request(
+            preset="schema_strict",
+            model_name=base_model,
+            response_format=response_format_schema,
+            max_tokens=max_tokens_schema,
+            temperature=base_temperature,
+            top_p=base_top_p,
+        )
+
+        _add_request(
+            preset="schema_relaxed",
+            model_name=base_model,
+            response_format=response_format_schema,
+            max_tokens=max_tokens_schema,
+            temperature=relaxed_temperature,
+            top_p=relaxed_top_p,
+        )
+
+        _add_request(
+            preset="json_object_guardrail",
+            model_name=base_model,
+            response_format=response_format_json_object,
+            max_tokens=max_tokens_json_object,
+            temperature=json_temperature,
+            top_p=json_top_p,
+        )
 
         fallback_models = [
-            model
-            for model in self.cfg.openrouter.fallback_models
-            if model and model != (model_override or self.cfg.openrouter.model)
+            model for model in self.cfg.openrouter.fallback_models if model and model != base_model
         ]
         if fallback_models:
-            fallback_format = self._workflow.build_structured_response_format(mode="json_object")
-            fallback_tokens = self._select_max_tokens(user_content)
             for model_name in fallback_models:
-                requests.append(
-                    LLMRequestConfig(
-                        messages=messages,
-                        response_format=fallback_format,
-                        max_tokens=fallback_tokens,
-                        temperature=self.cfg.openrouter.temperature,
-                        top_p=self.cfg.openrouter.top_p,
-                        model_override=model_name,
-                        silent=silent,
-                    )
+                _add_request(
+                    preset="json_object_fallback",
+                    model_name=model_name,
+                    response_format=response_format_json_object,
+                    max_tokens=max_tokens_json_object,
+                    temperature=json_temperature,
+                    top_p=json_top_p,
                 )
 
         repair_context = LLMRepairContext(
@@ -322,7 +379,7 @@ class LLMSummarizer:
             summary, req_id, content_text, correlation_id, chosen_lang
         )
 
-        model_for_cache = model_override or self.cfg.openrouter.model
+        model_for_cache = base_model
         cached_summary = await self._get_cached_summary(
             url_hash, chosen_lang, model_for_cache, correlation_id
         )

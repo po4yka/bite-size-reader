@@ -72,3 +72,4 @@ Rules:
 - Extractive quotes must be verbatim spans from the content; leave empty array if none. `source_excerpt` in key_stats should be verbatim evidence when available.
 - Do not add extra keys, comments, or Markdown; do not change key order or naming.
 - Do NOT include Markdown, comments, or any wrapper text.
+- Before responding, self-check that summary_250, summary_1000, and tldr are all non-empty, mutually distinct in wording, and respect the stated length caps. If any are empty or duplicates, regenerate the JSON instead of returning blanks.

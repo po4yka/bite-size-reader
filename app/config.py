@@ -343,6 +343,18 @@ class OpenRouterConfig(BaseModel):
     long_context_model: str | None = Field(
         default="moonshotai/kimi-k2-thinking", validation_alias="OPENROUTER_LONG_CONTEXT_MODEL"
     )
+    summary_temperature_relaxed: float | None = Field(
+        default=None, validation_alias="OPENROUTER_SUMMARY_TEMPERATURE_RELAXED"
+    )
+    summary_top_p_relaxed: float | None = Field(
+        default=None, validation_alias="OPENROUTER_SUMMARY_TOP_P_RELAXED"
+    )
+    summary_temperature_json_fallback: float | None = Field(
+        default=None, validation_alias="OPENROUTER_SUMMARY_TEMPERATURE_JSON"
+    )
+    summary_top_p_json_fallback: float | None = Field(
+        default=None, validation_alias="OPENROUTER_SUMMARY_TOP_P_JSON"
+    )
     enable_structured_outputs: bool = Field(
         default=True, validation_alias="OPENROUTER_ENABLE_STRUCTURED_OUTPUTS"
     )
@@ -425,6 +437,21 @@ class OpenRouterConfig(BaseModel):
             raise ValueError(msg)
         return top_p
 
+    @field_validator("summary_top_p_relaxed", "summary_top_p_json_fallback", mode="before")
+    @classmethod
+    def _validate_summary_top_p(cls, value: Any) -> float | None:
+        if value in (None, ""):
+            return None
+        try:
+            parsed = float(str(value))
+        except ValueError as exc:
+            msg = "Summary top_p override must be a valid number"
+            raise ValueError(msg) from exc
+        if parsed < 0 or parsed > 1:
+            msg = "Summary top_p override must be between 0 and 1"
+            raise ValueError(msg)
+        return parsed
+
     @field_validator("temperature", mode="before")
     @classmethod
     def _validate_temperature(cls, value: Any) -> float:
@@ -439,6 +466,25 @@ class OpenRouterConfig(BaseModel):
             msg = "Temperature must be between 0 and 2"
             raise ValueError(msg)
         return temperature
+
+    @field_validator(
+        "summary_temperature_relaxed",
+        "summary_temperature_json_fallback",
+        mode="before",
+    )
+    @classmethod
+    def _validate_summary_temperatures(cls, value: Any) -> float | None:
+        if value in (None, ""):
+            return None
+        try:
+            parsed = float(str(value))
+        except ValueError as exc:
+            msg = "Summary temperature override must be a valid number"
+            raise ValueError(msg) from exc
+        if parsed < 0 or parsed > 2:
+            msg = "Summary temperature override must be between 0 and 2"
+            raise ValueError(msg)
+        return parsed
 
     @field_validator("structured_output_mode", mode="before")
     @classmethod

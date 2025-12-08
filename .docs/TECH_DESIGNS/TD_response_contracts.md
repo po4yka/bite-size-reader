@@ -49,6 +49,11 @@
   - `summary_250`: single-sentence hook (<=250 chars).
   - `summary_1000`: compact 3–5 sentence overview; must not reuse TL;DR sentences verbatim.
   - `tldr`: richest 2–3 paragraph narrative that expands on summary_1000 with extra detail/examples/stats; never identical to summary_1000.
+- LLM fallback presets for summaries:
+  - Primary model attempts (in order): `schema_strict` (structured JSON Schema, base temp/top_p), `schema_relaxed` (same schema with slightly higher temp/top_p), `json_object_guardrail` (json_object with lower temp/top_p to force structure).
+  - Fallback models: `json_object_fallback` with the guardrail parameters to maximize valid JSON emission even when structured schema fails.
+  - Empty/invalid structured payloads are counted as failed attempts, recorded with model+preset, and advance the retry cursor; `all_llm_attempts_failed` now reports every attempted combination.
+  - Optional overrides for preset tuning via env: `OPENROUTER_SUMMARY_TEMPERATURE_RELAXED`, `OPENROUTER_SUMMARY_TOP_P_RELAXED`, `OPENROUTER_SUMMARY_TEMPERATURE_JSON`, `OPENROUTER_SUMMARY_TOP_P_JSON`.
 - Prompt guardrails (EN/RU parity):
   - Role: structured summarization agent for Telegram; JSON-only, no Markdown/fences.
   - Explicit field guidance: distinct tiers, evidence-forward key_stats (with source_excerpt), extractive quotes verbatim or empty, no invented names/URLs/numbers, no placeholders like “N/A”.
