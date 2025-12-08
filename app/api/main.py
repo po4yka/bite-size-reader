@@ -5,6 +5,7 @@ Usage:
     uvicorn app.api.main:app --reload --host 0.0.0.0 --port 8000
 """
 
+from contextlib import asynccontextmanager
 from datetime import datetime
 
 import peewee
@@ -22,7 +23,15 @@ from app.api.error_handlers import (
 from app.api.exceptions import APIException
 from app.api.middleware import correlation_id_middleware, rate_limit_middleware
 from app.api.models.responses import success_response
-from app.api.routers import auth, requests, search, summaries, sync, user
+from app.api.routers import (
+    auth,
+    requests,
+    search,
+    summaries,
+    sync,
+    system,
+    user,
+)
 from app.config import Config
 from app.core.logging_utils import get_logger
 from app.core.time_utils import UTC
@@ -30,6 +39,20 @@ from app.db.database import Database
 from app.infrastructure.redis import close_redis
 
 logger = get_logger(__name__)
+_db: Database | None = None
+
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    try:
+        yield
+    finally:
+        await search_resources.shutdown_chroma_search_resources()
+        await close_redis()
+        if _db:
+            _db._database.close()
+            logger.info("database_closed")
+
 
 # FastAPI app instance
 app = FastAPI(
@@ -38,6 +61,7 @@ app = FastAPI(
     version="1.0.0",
     docs_url="/docs",
     redoc_url="/redoc",
+    lifespan=lifespan,
 )
 
 # CORS configuration
@@ -65,8 +89,18 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,  # Only specific origins
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],  # Explicit methods
-    allow_headers=["Authorization", "Content-Type", "X-Correlation-ID"],  # Specific headers
+    allow_methods=[
+        "GET",
+        "POST",
+        "PATCH",
+        "DELETE",
+        "OPTIONS",
+    ],  # Explicit methods
+    allow_headers=[
+        "Authorization",
+        "Content-Type",
+        "X-Correlation-ID",
+    ],  # Specific headers
     max_age=3600,  # Cache preflight for 1 hour
 )
 
@@ -81,6 +115,7 @@ app.include_router(requests.router, prefix="/v1/requests", tags=["Requests"])
 app.include_router(search.router, prefix="/v1", tags=["Search"])
 app.include_router(sync.router, prefix="/v1/sync", tags=["Sync"])
 app.include_router(user.router, prefix="/v1/user", tags=["User"])
+app.include_router(system.router, prefix="/v1/system", tags=["System"])
 
 
 @app.get("/")
@@ -111,7 +146,10 @@ async def health_check(request: Request):
 
 # Register exception handlers
 app.add_exception_handler(APIException, api_exception_handler)
-app.add_exception_handler(PydanticValidationError, validation_exception_handler)
+app.add_exception_handler(
+    PydanticValidationError,
+    validation_exception_handler,
+)
 app.add_exception_handler(peewee.DatabaseError, database_exception_handler)
 app.add_exception_handler(peewee.OperationalError, database_exception_handler)
 app.add_exception_handler(Exception, global_error_handler)
@@ -121,16 +159,10 @@ app.add_exception_handler(Exception, global_error_handler)
 DB_PATH = Config.get("DB_PATH", "/data/app.db")
 _db = Database(path=DB_PATH)
 _db._database.connect(reuse_if_open=True)
-logger.info("database_initialized", extra={"db_path": DB_PATH})
-
-
-@app.on_event("shutdown")
-async def shutdown_resources() -> None:
-    await search_resources.shutdown_chroma_search_resources()
-    await close_redis()
-    if _db:
-        _db._database.close()
-        logger.info("database_closed")
+logger.info(
+    "database_initialized",
+    extra={"db_path": DB_PATH},
+)
 
 
 if __name__ == "__main__":
@@ -139,7 +171,8 @@ if __name__ == "__main__":
     # Development server - bind to all interfaces for Docker/container access
     uvicorn.run(
         "app.api.main:app",
-        host="0.0.0.0",  # nosec B104 - intentional for development/Docker environments
+        # nosec B104 - intentional for development/Docker environments
+        host="0.0.0.0",
         port=8000,
         reload=True,
         log_level="info",

@@ -640,14 +640,21 @@ async def get_user_id_or_ip(request: Request) -> str:
     return f"ip:{ip}"
 
 # app/api/main.py
-@app.on_event("startup")
-async def startup():
-    await init_rate_limiter()
+from contextlib import asynccontextmanager
+from fastapi import FastAPI
 
-@app.on_event("shutdown")
-async def shutdown():
-    if redis_client:
-        await redis_client.close()
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    await init_rate_limiter()
+    try:
+        yield
+    finally:
+        if redis_client:
+            await redis_client.close()
+
+
+app = FastAPI(lifespan=lifespan)
 
 # Usage in routers
 from app.api.rate_limiter import get_user_id_or_ip, RateLimiter

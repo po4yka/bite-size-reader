@@ -424,13 +424,21 @@ The API includes basic in-memory rate limiting. For production:
 **Use Redis:**
 
 ```python
+from contextlib import asynccontextmanager
 from redis import Redis
 from fastapi_limiter import FastAPILimiter
+from fastapi import FastAPI
 
-@app.on_event("startup")
-async def startup():
+@asynccontextmanager
+async def lifespan(app: FastAPI):
     redis = Redis(host="localhost", port=6379, decode_responses=True)
     await FastAPILimiter.init(redis)
+    try:
+        yield
+    finally:
+        redis.close()
+
+app = FastAPI(lifespan=lifespan)
 ```
 
 **Apply limits:**
@@ -474,11 +482,16 @@ pip install prometheus-fastapi-instrumentator
 ```
 
 ```python
+from contextlib import asynccontextmanager
 from prometheus_fastapi_instrumentator import Instrumentator
+from fastapi import FastAPI
 
-@app.on_event("startup")
-async def startup():
+@asynccontextmanager
+async def lifespan(app: FastAPI):
     Instrumentator().instrument(app).expose(app)
+    yield
+
+app = FastAPI(lifespan=lifespan)
 ```
 
 Metrics available at: `http://localhost:8000/metrics`
