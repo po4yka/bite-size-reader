@@ -8,6 +8,7 @@ This guide explains how to prepare environments, configure secrets, and run the 
 - OpenRouter API key
 - Firecrawl API key
 - Docker (for containerized deployment)
+- (Optional) Redis for API rate limits/sync locks
 
 ## Telegram Setup
 1. Create a Telegram app to obtain `API_ID` and `API_HASH`:
@@ -28,40 +29,23 @@ This guide explains how to prepare environments, configure secrets, and run the 
 - Sign up: https://www.firecrawl.dev/
 - Create an API key and set `FIRECRAWL_API_KEY`.
 
-## Environment Variables
-Copy `.env.example` to `.env` and fill the values:
+## Environment Variables (essentials)
+Copy `.env.example` to `.env` and fill:
 
-- Telegram
-  - `API_ID` — numeric app id
-  - `API_HASH` — app hash
-  - `BOT_TOKEN` — bot token from BotFather
-  - `ALLOWED_USER_IDS` — comma‑separated user ids allowed to use the bot (strongly recommended)
-
-- OpenRouter
-  - `OPENROUTER_API_KEY` — API key
-  - `OPENROUTER_MODEL` — model id (e.g., `qwen/qwen3-max`)
-  - `OPENROUTER_HTTP_REFERER` — optional
-  - `OPENROUTER_X_TITLE` — optional
-
-- Firecrawl
-  - `FIRECRAWL_API_KEY` — API key
-
-- Runtime
-  - `DB_PATH` — default `/data/app.db`
-  - `LOG_LEVEL` — `INFO` (default), `DEBUG` for development
-  - `REQUEST_TIMEOUT_SEC` — default `60`
-  - `PREFERRED_LANG` — `auto|en|ru`
-  - `DEBUG_PAYLOADS` — `0|1`, logs request/response previews when `1` (do not enable in prod)
+- Telegram: `API_ID`, `API_HASH`, `BOT_TOKEN`, `ALLOWED_USER_IDS`
+- OpenRouter: `OPENROUTER_API_KEY`, `OPENROUTER_MODEL` (e.g., `qwen/qwen3-max`), optional `OPENROUTER_HTTP_REFERER`, `OPENROUTER_X_TITLE`
+- Firecrawl: `FIRECRAWL_API_KEY`
+- Runtime: `DB_PATH=/data/app.db`, `LOG_LEVEL=INFO|DEBUG`, `REQUEST_TIMEOUT_SEC=60`, `PREFERRED_LANG=auto|en|ru`, `DEBUG_PAYLOADS=0|1` (keep 0 in prod)
+- YouTube: `YOUTUBE_DOWNLOAD_ENABLED=true`, `YOUTUBE_PREFERRED_QUALITY=1080p`, `YOUTUBE_STORAGE_PATH=/data/videos`, size/retention knobs as needed
+- API (mobile): `JWT_SECRET_KEY` (>=32 chars), `API_HOST`, `API_PORT` (default 8000), optional `ALLOWED_CLIENT_IDS`
+- Redis (rate limit/sync, optional): `REDIS_ENABLED`, `REDIS_URL` or host/port/db, `REDIS_PREFIX=bsr`, `REDIS_REQUIRED=false`, `API_RATE_LIMIT_*` caps, `SYNC_DEFAULT_CHUNK_SIZE`, `SYNC_EXPIRY_HOURS`
 
 ## Local Development
-1. Create a virtual environment and install deps:
-   - `make venv` (or run `scripts/create_venv.sh`)
-   - `source .venv/bin/activate`
-   - `pip install -r requirements.txt -r requirements-dev.txt`
-2. Export env vars or populate `.env` and export it in your shell.
-3. Run tests: `make test`
-4. (Optional) Format & lint: `make format && make lint && make type`
-5. Run the bot: `python bot.py`
+1) Create venv & install: `make venv && source .venv/bin/activate && pip install -r requirements.txt -r requirements-dev.txt`
+2) Export env or use `.env`.
+3) Tests: `make test` (or `make lint`, `make format`, `make type` as needed).
+4) Run Telegram bot: `python bot.py`
+5) Run mobile API (optional): `uvicorn app.api.main:app --reload --host 0.0.0.0 --port 8000`
 
 How to use (no commands needed)
 - You can simply send a URL (or several URLs in one message) or forward a channel post — the bot will summarize it.
@@ -71,40 +55,42 @@ How to use (no commands needed)
   - `/summarize_forward` then forward a channel post
 
 ## Docker Deployment
-1. Generate lock files (recommended):
-   - With uv: `make lock-uv`
-   - Or pip-tools: `make lock-piptools`
-2. Build image: `docker build -t bite-size-reader .`
-3. Run container (mount persistent DB volume):
-   - `docker run --env-file .env -v $(pwd)/data:/data --name bsr --restart unless-stopped bite-size-reader`
+1) (Recommended) lock deps: `make lock-uv` (or `make lock-piptools`).
+2) Build: `docker build -t bite-size-reader .`
+3) Run:
+```
+docker run --env-file .env \
+  -v $(pwd)/data:/data \
+  -p 8000:8000 \  # expose API if needed
+  --name bsr --restart unless-stopped bite-size-reader
+```
 
 Notes
-- The SQLite DB lives at `/data/app.db` inside the container. Mount a host directory for persistence and backups. The bot also writes timestamped snapshots under `/data/backups` (configurable via `DB_BACKUP_*` settings).
-- Ensure `ALLOWED_USER_IDS` is set to prevent unauthorized use.
-- Keep `DEBUG_PAYLOADS=0` in production.
+- SQLite at `/data/app.db`; backups under `/data/backups`. Mount `/data` for durability.
+- Set `ALLOWED_USER_IDS`; keep `DEBUG_PAYLOADS=0` in prod.
+- If using mobile API, ensure `JWT_SECRET_KEY` is set and port 8000 exposed.
 
 ## Docker Compose (optional)
-Create `docker-compose.yml`:
-
+`docker-compose.yml`:
 ```
 services:
   bsr:
-    image: bite-size-reader:latest
     build: .
     env_file: .env
     volumes:
       - ./data:/data
+    ports:
+      - "8000:8000"   # expose FastAPI if desired
     restart: unless-stopped
 ```
-
 Run: `docker compose up -d --build`
 
 ## Security & Hardening
-- Access control: set `ALLOWED_USER_IDS`; reject non‑private chats.
-- Resource control: consider rate limits and concurrency caps for Firecrawl/LLM calls.
-- Secrets: store in `.env` or your secret manager (do not commit `.env`).
-- Logs: default JSON logs; correlation IDs included in error messages.
-- Container: run with least privileges; ensure volume permissions are restricted on the host.
+- Access control: set `ALLOWED_USER_IDS`; restrict `ALLOWED_CLIENT_IDS` for API if used.
+- Resource control: configure rate limits (`API_RATE_LIMIT_*`) and concurrency caps; prefer Redis.
+- Secrets: use `.env` or secret manager; never commit secrets.
+- Logs: JSON with correlation IDs; redact `Authorization`.
+- Container: least privilege; restrict `/data` permissions on host; HTTPS termination in front of API.
 
 ## Operations
 - Health: ensure the bot account stays unbanned and tokens valid.

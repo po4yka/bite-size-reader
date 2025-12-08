@@ -683,40 +683,60 @@ SPEC.md
 
 ## Mobile API (app/api)
 
-The project includes a RESTful API built with FastAPI to support mobile clients (iOS/Android).
+FastAPI `/v1` surface for mobile clients with typed envelopes, JWT auth, and Redis-backed limits/sync. OpenAPI is published at `docs/openapi/mobile_api.yaml` (`mobile_api.json` also available).
 
-### Authentication
-- **Method**: JWT (JSON Web Tokens).
-- **Login**: `/v1/auth/telegram-login` accepts Telegram Login Widget data, verifies HMAC-SHA256, and returns access/refresh tokens.
-- **Client ID**: All requests must include a valid `client_id`.
+```mermaid
+sequenceDiagram
+  participant App
+  participant API as FastAPI /v1
+  participant Pipeline as Router+UseCase
+  participant Extract as Firecrawl/YouTube
+  participant LLM as OpenRouter+Validator
+  participant DB as SQLite
+  App->>API: POST /requests (url|forward)
+  API->>Pipeline: normalize + dedupe
+  Pipeline->>Extract: fetch content
+  Extract->>LLM: chunks → summary JSON
+  LLM-->>Pipeline: contract-validated summary
+  Pipeline->>DB: persist request/crawl/llm_call/summary
+  Pipeline-->>API: envelope + correlation_id
+  API-->>App: response
+```
 
-### Endpoints
-- `POST /v1/auth/telegram-login`: Exchange Telegram auth for JWT.
-- `POST /v1/auth/refresh`: Refresh access token.
-- `GET /v1/summaries`: List summaries (pagination, filtering by lang/read status).
-- `GET /v1/summaries/{id}`: Get full summary details.
-- `PATCH /v1/summaries/{id}`: Update summary (e.g. mark as read).
-- `DELETE /v1/summaries/{id}`: Soft delete summary.
-- `POST /v1/requests`: Submit new URL or forward for processing.
-- `GET /v1/requests/{id}/status`: Poll processing status.
+### Contract
+- Envelopes only: `success`, `data` or `error`, `meta{timestamp,version}`, `correlation_id` echoed in headers and errors.
+- Errors standardized (401/403/404/409/410/422/429/500) with retry hints where applicable.
+- Auth: JWT via `POST /v1/auth/telegram-login` (Telegram login verification) and `POST /v1/auth/refresh`. Optional client gating via `ALLOWED_CLIENT_IDS`.
 
-### Data Model Additions for API
-- **User**: `preferences_json` for client-side settings.
-- **Summary**: `is_read`, `is_deleted`, `deleted_at` for state management.
+### Core endpoints
+- Summaries: `GET /v1/summaries`, `GET /v1/summaries/{id}`, `PATCH /v1/summaries/{id}` (`is_read`), `DELETE /v1/summaries/{id}` (soft delete).
+- Requests: `POST /v1/requests` (url|forward), `GET /v1/requests/{id}`, `GET /v1/requests/{id}/status`, `POST /v1/requests/{id}/retry`.
+- Search/Topics: `GET /v1/search`, `GET /v1/topics/trending`, `GET /v1/topics/related`.
+- URL utils: `GET /v1/urls/check-duplicate`.
+- User: `GET /v1/user/preferences`, `PATCH /v1/user/preferences`, `GET /v1/user/stats`.
 
-### Rate limiting and sync (Redis-backed)
-- **Redis config**: `REDIS_ENABLED` (default true), `REDIS_URL` or `REDIS_HOST`/`REDIS_PORT`/`REDIS_DB`, `REDIS_PASSWORD` (optional), `REDIS_PREFIX` (default `bsr`), `REDIS_REQUIRED` (fail fast if Redis is down), `REDIS_SOCKET_TIMEOUT` (default 5s).
-- **Content/LLM cache (Redis)**: `REDIS_CACHE_ENABLED` (default true), `REDIS_CACHE_TIMEOUT_SEC` (default 0.3s), `REDIS_FIRECRAWL_TTL_SECONDS` (default 6h), `REDIS_LLM_TTL_SECONDS` (default 2h), `SUMMARY_PROMPT_VERSION` (default `v1`). Keys: Firecrawl `bsr:fc:{route_version}:{url_hash}`, LLM `bsr:llm:{prompt_version}:{model}:{lang}:{url_hash}`; fail-open on Redis errors and only cache successful, non-low-value responses.
-- **API limits**: window `API_RATE_LIMIT_WINDOW_SECONDS` (default 60s), `API_RATE_LIMIT_COOLDOWN_MULTIPLIER` (default 2.0), `API_RATE_LIMIT_MAX_CONCURRENT_PER_USER` (default 3), per-path caps `API_RATE_LIMIT_SUMMARIES` (200), `API_RATE_LIMIT_REQUESTS` (10), `API_RATE_LIMIT_SEARCH` (50), and `API_RATE_LIMIT_DEFAULT` (100).
-- **Sync sessions**: stored in Redis with TTL; `SYNC_EXPIRY_HOURS` (default 1h) and `SYNC_DEFAULT_CHUNK_SIZE` (default 100, bounded 1..500). Fallback to in-process cache when Redis is disabled/unavailable (logs warning).
-- **Headers/behavior**: `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset`; 429 includes `Retry-After` and JSON error with `retry_after`. If Redis is required but unavailable, middleware returns 503 with code `RATE_LIMIT_BACKEND_UNAVAILABLE`.
+### Sync semantics
+- Full: `GET /v1/sync/full` returns session + chunk URLs (chunk_size 1..500).
+- Chunks: `GET /v1/sync/full/{sync_id}/chunk/{n}`.
+- Delta: `GET /v1/sync/delta?since=` returns `changes{created,updated,deleted}`, `sync_timestamp`, `has_more`, `next_since`.
+- Upload: `POST /v1/sync/upload-changes` returns applied changes and conflicts (server wins by default unless overridden by config).
+- Tombstones: deletes surface via `deleted` in delta; clients should persist tombstones.
 
-### Background processing (requests -> summaries)
-- **Wiring**: `app/di/background.py` builds `BackgroundProcessor` with `AppConfig`, shared DB, Firecrawl/OpenRouter clients, and Redis (via `app.infrastructure.redis.get_redis`). Called from `process_url_request` in `app/api/background_processor.py`.
-- **Idempotent lock**: Redis key `bsr:bg:req:{id}` (`REDIS_PREFIX` applied), `NX` with TTL `BACKGROUND_LOCK_TTL_MS` (default 300000 ms). Config: `BACKGROUND_REDIS_LOCK_ENABLED` (default true), `BACKGROUND_REDIS_LOCK_REQUIRED` (default false), `BACKGROUND_LOCK_SKIP_ON_HELD` (default true). Fallback to local lock if Redis unavailable (warning logged) or disabled.
-- **Retries**: exponential backoff with jitter for extraction and LLM (`BACKGROUND_RETRY_ATTEMPTS` default 3, `BACKGROUND_RETRY_BASE_DELAY_MS` 500, `BACKGROUND_RETRY_MAX_DELAY_MS` 5000, `BACKGROUND_RETRY_JITTER_RATIO` 0.2).
-- **Errors**: structured log extras `{error_type, error_code, error_stage, correlation_id}`; request status set to `error` on failure. Unknown request types raise validation StageError.
-- **Behavior**: skip processing when lock is held; no duplicate summaries when one already exists for the request; status transitions `pending` -> `processing` -> `success`/`error`.
+### Rate limiting & Redis
+- Defaults: summaries 200 rpm, requests 10 rpm, search 50 rpm, default 100 rpm; headers `X-RateLimit-*`, 429 with `Retry-After`.
+- Redis-backed limits and sync sessions; fallback to in-process if Redis disabled or unavailable (unless `REDIS_REQUIRED`/`API_RATE_LIMIT_REQUIRED`/`BACKGROUND_REDIS_LOCK_REQUIRED` are set).
+- Redis knobs: `REDIS_ENABLED`, `REDIS_URL` or host/port/db, `REDIS_PREFIX`, `REDIS_REQUIRED`, `REDIS_SOCKET_TIMEOUT`. Cache knobs: `REDIS_CACHE_ENABLED`, `REDIS_FIRECRAWL_TTL_SECONDS`, `REDIS_LLM_TTL_SECONDS`, `SUMMARY_PROMPT_VERSION`.
+
+### Data model notes (API-specific fields)
+- Users: `preferences_json`, `is_owner` flag, optional client metadata.
+- Summaries: `is_read`, `is_deleted`, `deleted_at`, `version`, `json_payload` (contract).
+- Requests: `status`, `route_version`, dedupe hash, forward metadata; linked crawl/video/LLM records as in core schema.
+
+### Background processing (requests → summaries)
+- `app/api/background_processor.py` uses `BackgroundProcessor` from `app/di/background.py` to run the same Firecrawl/YouTube → OpenRouter pipeline.
+- Idempotent Redis lock `bsr:bg:req:{id}` with TTL (`BACKGROUND_LOCK_TTL_MS`, default 300000); skips if held when `BACKGROUND_LOCK_SKIP_ON_HELD` is true.
+- Retries: exponential backoff (`BACKGROUND_RETRY_ATTEMPTS` default 3, `BACKGROUND_RETRY_BASE_DELAY_MS` 500, `BACKGROUND_RETRY_MAX_DELAY_MS` 5000, jitter 0.2).
+- Errors: structured logs `{error_type,error_code,error_stage,correlation_id}`; request status set to `error`; lock fallback to local if Redis down and not required.
 
 ## Future work
 
