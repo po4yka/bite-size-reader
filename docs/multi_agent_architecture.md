@@ -1,121 +1,64 @@
 # Multi-Agent Architecture
 
-## Overview
+Agents wrap extraction, summarization, and validation with structured results, retries, and observability.
 
-The Bite-Size Reader uses specialized agents for content processing, emphasizing separation of concerns, feedback loops, and composability.
+## Roles
+- **ContentExtractionAgent** — Firecrawl/YouTube fetch; persists crawl artifacts.
+- **SummarizationAgent** — OpenRouter call with self-correction loop; tracks tokens/cost/latency.
+- **ValidationAgent** — Enforces `summary_contract` (length caps, deduped tags/entities).
+- **AgentOrchestrator** — Coordinates extract → summarize → validate and returns final JSON.
+- All inherit `BaseAgent[TInput, TOutput]` with `success`, `output`, `error`, `metadata`.
 
-## Architecture
-
-### Agents
-
-- **ContentExtractionAgent**: Extracts content from URLs via Firecrawl
-- **SummarizationAgent**: Generates summaries with self-correction feedback loop
-- **ValidationAgent**: Enforces JSON contract compliance
-- **AgentOrchestrator**: Coordinates the full extraction → summarization → validation pipeline
-
-All agents inherit from `BaseAgent[TInput, TOutput]` for type safety and structured results.
-
-### Feedback Loop
-
-The `SummarizationAgent` implements self-correction:
-
-```
-Generate Summary → ValidationAgent → If Valid: Return
-                         ↓
-                    If Invalid
-                         ↓
-               Extract Error Details
-                         ↓
-            Retry with Error Feedback
-                         ↓
-                 (Up to 3 retries)
+```mermaid
+flowchart LR
+  In[Input (url|forward)] --> Extract["ContentExtractionAgent\n(Firecrawl/YouTube)"]
+  Extract --> Summ["SummarizationAgent\n(OpenRouter + feedback)"]
+  Summ --> Valid["ValidationAgent\n(summary_contract)"]
+  Valid --> Out[Summary JSON + telemetry]
 ```
 
-This reduces validation errors by 60-80%.
+## Feedback loop (summarization)
+```mermaid
+sequenceDiagram
+  participant Summ as SummarizationAgent
+  participant LLM as OpenRouter
+  participant Val as ValidationAgent
+  Summ->>LLM: generate draft summary
+  LLM-->>Summ: summary JSON
+  Summ->>Val: validate contract
+  alt valid
+    Val-->>Summ: ok
+    Summ-->>Summ: return success
+  else invalid
+    Val-->>Summ: errors + fields
+    Summ-->>LLM: retry with error feedback (up to 3)
+  end
+```
 
 ## Usage
-
-### Individual Agent
-
+- Extraction:
 ```python
-from app.agents import ContentExtractionAgent
-
 agent = ContentExtractionAgent(content_extractor, correlation_id="abc123")
-result = await agent.execute(ExtractionInput(
-    url="https://example.com/article",
-    correlation_id="abc123"
-))
-
-if result.success:
-    content = result.output.content_markdown
+result = await agent.execute(ExtractionInput(url="https://example.com", correlation_id="abc123"))
 ```
-
-### Full Pipeline via Orchestrator
-
+- Full pipeline:
 ```python
-from app.agents import AgentOrchestrator
-
-orchestrator = AgentOrchestrator(
-    content_extraction_agent=extraction_agent,
-    summarization_agent=summarization_agent,
-)
-
-result = await orchestrator.execute(OrchestratorInput(
-    url="https://example.com/article",
-    correlation_id="abc123"
-))
-
-if result.success:
-    summary = result.output.summary_json
+orchestrator = AgentOrchestrator(extraction_agent, summarization_agent)
+result = await orchestrator.execute(OrchestratorInput(url="https://example.com", correlation_id="abc123"))
 ```
+`result.output` carries validated summary JSON; `metadata` tracks attempts, latencies, tokens, cost.
 
-## Benefits
-
-- **Improved Quality**: Self-correction reduces validation errors
-- **Better Debugging**: Clear agent boundaries with structured results
-- **Easier Maintenance**: Single responsibility per agent
-- **Enhanced Observability**: Correlation ID tracking throughout pipeline
+## Integration
+- Used in `app/application/use_cases/summarize_url.py` and by the API background processor.
+- Wraps `ContentExtractor`/`LLMSummarizer`, adds retries, validation, and correlation-aware logging.
 
 ## Testing
-
-Agents can be tested independently:
-
-```python
-async def test_summarization_with_feedback():
-    """Test that summarization agent retries on validation errors."""
-    agent = SummarizationAgent(llm_summarizer, validation_agent)
-
-    result = await agent.execute(SummarizationInput(
-        content="Test content",
-        correlation_id="test-123"
-    ))
-
-    assert result.success
-    assert result.metadata.get("validation_attempts") > 1  # Retry happened
-```
-
-## Integration with Existing Code
-
-Agents are used in `app/application/use_cases/summarize_url.py`:
-
-```python
-# Extract content
-extraction_result = await content_extraction_agent.execute(extraction_input)
-
-# Summarize with feedback loop
-summarization_result = await summarization_agent.execute(summarization_input)
-```
-
-The agents wrap existing components (`ContentExtractor`, `LLMSummarizer`) while adding structured error handling and retry logic.
+- Unit: mock Firecrawl/LLM; assert retries and validation errors are surfaced.
+- Integration: orchestrator with fixtures; expect `validation_attempts > 1` when schema errors injected.
 
 ## Files
-
-- `app/agents/base_agent.py` - Base class and result types
-- `app/agents/content_extraction_agent.py` - URL extraction
-- `app/agents/summarization_agent.py` - LLM summarization with feedback
-- `app/agents/validation_agent.py` - JSON contract validation
-- `app/agents/orchestrator.py` - Full pipeline orchestration
-
----
-
-For implementation details, refer to the agent source files and the integration tests in `tests/integration/`.
+- `app/agents/base_agent.py`
+- `app/agents/content_extraction_agent.py`
+- `app/agents/summarization_agent.py`
+- `app/agents/validation_agent.py`
+- `app/agents/orchestrator.py`
