@@ -117,6 +117,44 @@ async def get_summaries(
     )
 
 
+@router.get("/by-url")
+async def get_summary_by_url(
+    url: str = Query(..., description="Original URL of the article"),
+    user=Depends(get_current_user),
+):
+    """Get a single summary (article) by its original URL."""
+    # Try to find request by input_url or normalized_url
+    # We join with Summary to ensure a summary actually exists
+    request_query = (
+        RequestModel.select(RequestModel.id)
+        .join(Summary)
+        .where(
+            (RequestModel.user_id == user["user_id"])
+            & ((RequestModel.input_url == url) | (RequestModel.normalized_url == url))
+            & (Summary.request == RequestModel.id)
+        )
+        .order_by(RequestModel.created_at.desc())
+        .limit(1)
+    )
+
+    request_record = request_query.first()
+
+    if not request_record:
+        # Try fuzzy match? Or maybe client sent a slightly different URL.
+        # For now, strict match or simple normalization is safer.
+        # Could check if url is missing scheme...
+        raise HTTPException(status_code=404, detail="Article not found")
+
+    # Reuse get_summary logic by ID
+    # We first need the summary ID
+    summary = Summary.select(Summary.id).where(Summary.request == request_record.id).first()
+    if not summary:
+        # Should overlap with query above, but safety check
+        raise HTTPException(status_code=404, detail="Summary not found")
+
+    return await get_summary(summary_id=summary.id, user=user)
+
+
 @router.get("/{summary_id}")
 async def get_summary(
     summary_id: int,
