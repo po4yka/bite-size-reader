@@ -1,0 +1,46 @@
+syntax = "proto3";
+
+package processing.v1;
+
+// Service definition
+service ProcessingService {
+  // Submits a URL for processing and streams back status updates
+  rpc SubmitUrl (SubmitUrlRequest) returns (stream ProcessingUpdate);
+}
+
+// Request to submit a URL
+message SubmitUrlRequest {
+  string url = 1;
+  string language = 2; // e.g., "en", "ru", "auto" - optional
+  bool force_refresh = 3; // If true, re-process even if exists
+}
+
+// Status enum matching Request status
+enum ProcessingStatus {
+  ProcessingStatus_UNSPECIFIED = 0;
+  ProcessingStatus_PENDING = 1;
+  ProcessingStatus_PROCESSING = 2;
+  ProcessingStatus_COMPLETED = 3;
+  ProcessingStatus_FAILED = 4;
+}
+
+// Processing stage
+enum ProcessingStage {
+  ProcessingStage_UNSPECIFIED = 0;
+  ProcessingStage_QUEUED = 1;
+  ProcessingStage_EXTRACTION = 2;
+  ProcessingStage_SUMMARIZATION = 3;
+  ProcessingStage_SAVING = 4;
+  ProcessingStage_DONE = 5;
+}
+
+// Progress update message
+message ProcessingUpdate {
+  int64 request_id = 1;
+  ProcessingStatus status = 2;
+  ProcessingStage stage = 3;
+  string message = 4; // log message or error description
+  float progress = 5; // 0.0 to 1.0 (estimated)
+  int64 summary_id = 6; // Set when completed
+  string error = 7; // Error details if failed
+}

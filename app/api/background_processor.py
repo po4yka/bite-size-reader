@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import random
 import time
 from dataclasses import dataclass
@@ -111,10 +112,16 @@ class BackgroundProcessor:
                         "correlation_id": request.correlation_id or correlation_id,
                     },
                 )
+                await self._publish_update(
+                    request_id, "COMPLETED", "DONE", "Already summarized", 1.0
+                )
                 return
 
             cid = request.correlation_id or correlation_id or f"bg-proc-{request_id}"
             await self._mark_status(request, "processing", cid)
+            await self._publish_update(
+                request_id, "PROCESSING", "QUEUED", "Processing started", 0.0
+            )
 
             logger.info(
                 "bg_processing_start",
@@ -127,13 +134,14 @@ class BackgroundProcessor:
             )
 
             if request.type == "url":
-                await self._process_url_type(request, processor_db, processor, cid)
+                await self._process_url_type(request_id, request, processor_db, processor, cid)
             elif request.type == "forward":
-                await self._process_forward_type(request, processor_db, processor, cid)
+                await self._process_forward_type(request_id, request, processor_db, processor, cid)
             else:
                 raise StageError("validation", ValueError(f"Unknown request type: {request.type}"))
 
             await self._mark_status(request, "success", cid)
+            await self._publish_update(request_id, "COMPLETED", "DONE", "Processing completed", 1.0)
 
             logger.info(
                 "bg_processing_success",
@@ -145,6 +153,14 @@ class BackgroundProcessor:
                 await self._mark_status(
                     request, "error", correlation_id or getattr(request, "correlation_id", None)
                 )
+            await self._publish_update(
+                request_id,
+                "FAILED",
+                exc.stage.upper(),
+                str(exc.original),
+                0.0,
+                error=str(exc.original),
+            )
             logger.error(
                 "bg_processing_failed",
                 exc_info=True,
@@ -160,6 +176,9 @@ class BackgroundProcessor:
                 await self._mark_status(
                     request, "error", correlation_id or getattr(request, "correlation_id", None)
                 )
+            await self._publish_update(
+                request_id, "FAILED", "UNKNOWN", str(exc), 0.0, error=str(exc)
+            )
             logger.error(
                 "bg_processing_failed",
                 exc_info=True,
@@ -290,6 +309,7 @@ class BackgroundProcessor:
 
     async def _process_url_type(
         self,
+        request_id: int,
         request: RequestModel,
         db: Database,
         url_processor: URLProcessor,
@@ -297,6 +317,9 @@ class BackgroundProcessor:
     ) -> None:
         normalized_url = normalize_url(request.input_url or "")
 
+        await self._publish_update(
+            request_id, "PROCESSING", "EXTRACTION", "Extracting content...", 0.2
+        )
         content_text, _content_source, _metadata = await self._run_stage(
             "extraction",
             correlation_id,
@@ -315,6 +338,9 @@ class BackgroundProcessor:
         lang = choose_language(self.cfg.runtime.preferred_lang, detected_lang)
         system_prompt = _get_system_prompt(lang)
 
+        await self._publish_update(
+            request_id, "PROCESSING", "SUMMARIZATION", "Summarizing content...", 0.5
+        )
         summary_json = await self._run_stage(
             "summarization",
             correlation_id,
@@ -331,6 +357,7 @@ class BackgroundProcessor:
                 "summarization", ValueError("Summary generation failed - no summary returned")
             )
 
+        await self._publish_update(request_id, "PROCESSING", "SAVING", "Saving summary...", 0.9)
         db.upsert_summary(
             request_id=request.id,
             lang=lang,
@@ -340,6 +367,7 @@ class BackgroundProcessor:
 
     async def _process_forward_type(
         self,
+        request_id: int,
         request: RequestModel,
         db: Database,
         url_processor: URLProcessor,
@@ -352,6 +380,9 @@ class BackgroundProcessor:
             lang = choose_language(self.cfg.runtime.preferred_lang, detected)
         system_prompt = _get_system_prompt(lang)
 
+        await self._publish_update(
+            request_id, "PROCESSING", "SUMMARIZATION", "Summarizing content...", 0.5
+        )
         summary_json = await self._run_stage(
             "summarization",
             correlation_id,
@@ -368,6 +399,7 @@ class BackgroundProcessor:
                 "summarization", ValueError("Summary generation failed - no summary returned")
             )
 
+        await self._publish_update(request_id, "PROCESSING", "SAVING", "Saving summary...", 0.9)
         db.upsert_summary(
             request_id=request.id,
             lang=lang,
@@ -443,6 +475,38 @@ class BackgroundProcessor:
                 "bg_request_status_save_failed",
                 exc_info=True,
                 extra={"request_id": request.id, "status": status, "error": str(exc)},
+            )
+
+    async def _publish_update(
+        self,
+        request_id: int,
+        status: str,
+        stage: str,
+        message: str,
+        progress: float,
+        error: str | None = None,
+    ) -> None:
+        """Publish status update to Redis Pub/Sub."""
+        if not self.redis:
+            return
+
+        payload = {
+            "request_id": request_id,
+            "status": status,
+            "stage": stage,
+            "message": message,
+            "progress": progress,
+            "error": error,
+            "timestamp": time.time(),
+        }
+        channel = f"processing:request:{request_id}"
+        try:
+            await self.redis.publish(channel, json.dumps(payload))
+        except Exception as exc:
+            logger.warning(
+                "bg_redis_publish_failed",
+                exc_info=True,
+                extra={"channel": channel, "error": str(exc)},
             )
 
     @staticmethod
