@@ -2,8 +2,6 @@ import logging
 
 import pytest
 
-# from fastapi.testclient import TestClient   <-- Removed
-# from app.api.main import app                <-- Removed
 from app.db.database import Database
 from app.db.models import Request, Summary, User
 
@@ -24,9 +22,6 @@ def db(tmp_path, monkeypatch):
 
     yield database
     database._database.close()
-
-
-# TestClient fixture removed
 
 
 @pytest.fixture

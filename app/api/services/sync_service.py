@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import uuid
-from collections.abc import Iterable
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
@@ -23,6 +22,8 @@ from app.db.models import CrawlResult, LLMCall, Request, Summary, User
 from app.infrastructure.redis import get_redis, redis_key
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable
+
     from app.api.models.requests import SyncApplyItem
     from app.config import AppConfig
 

@@ -6,13 +6,13 @@ import asyncio
 import json
 import logging
 from enum import Enum
-from pathlib import Path  # noqa: TC003
 from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
+    from pathlib import Path
 
     from app.agents.content_extraction_agent import ContentExtractionAgent
     from app.agents.summarization_agent import SummarizationAgent

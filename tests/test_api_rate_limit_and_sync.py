@@ -72,7 +72,7 @@ async def test_rate_limit_allows_then_blocks(monkeypatch):
     if headers2 is not None:
         assert headers2.get("Retry-After") in {"1", "0"}
     payload = getattr(second, "body", b"") or getattr(second, "content", b"")
-    if isinstance(payload, (bytes, bytearray)):
+    if isinstance(payload, bytes | bytearray):
         data = json.loads(payload)
     elif isinstance(payload, dict):
         data = payload
@@ -110,7 +110,7 @@ async def test_rate_limit_backend_required_returns_503(monkeypatch):
 
     assert getattr(resp, "status_code", None) == 503
     body = getattr(resp, "body", b"") or getattr(resp, "content", b"")
-    if isinstance(body, (bytes, bytearray)):
+    if isinstance(body, bytes | bytearray):
         data = json.loads(body)
     elif isinstance(body, dict):
         data = body

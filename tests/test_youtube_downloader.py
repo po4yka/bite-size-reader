@@ -8,6 +8,32 @@ from pathlib import Path
 from typing import TYPE_CHECKING, cast
 from unittest.mock import AsyncMock, MagicMock, patch
 
+try:
+    from youtube_transcript_api import YouTubeTranscriptApi
+    from youtube_transcript_api._errors import (
+        NoTranscriptFound,
+        TranscriptsDisabled,
+        VideoUnavailable,
+    )
+except ModuleNotFoundError:
+    # Provide lightweight stand-ins when the optional dependency isn't installed.
+    class NoTranscriptFound(Exception):  # type: ignore[no-redef]
+        pass
+
+    class TranscriptsDisabled(Exception):  # type: ignore[no-redef]
+        pass
+
+    class VideoUnavailable(Exception):  # type: ignore[no-redef]
+        pass
+
+    YouTubeTranscriptApi = MagicMock()
+    sys.modules["youtube_transcript_api"] = MagicMock(YouTubeTranscriptApi=YouTubeTranscriptApi)
+    sys.modules["youtube_transcript_api._errors"] = MagicMock(
+        NoTranscriptFound=NoTranscriptFound,
+        TranscriptsDisabled=TranscriptsDisabled,
+        VideoUnavailable=VideoUnavailable,
+    )
+
 from app.adapters.youtube.youtube_downloader import YouTubeDownloader
 
 if TYPE_CHECKING:
@@ -110,32 +136,6 @@ def test_auto_cleanup_storage_removes_old_files(tmp_path):
     assert not old_file.exists()
     assert new_file.exists()
 
-
-try:
-    from youtube_transcript_api import YouTubeTranscriptApi
-    from youtube_transcript_api._errors import (
-        NoTranscriptFound,
-        TranscriptsDisabled,
-        VideoUnavailable,
-    )
-except ModuleNotFoundError:
-    # Provide lightweight stand-ins when the optional dependency isn't installed.
-    class NoTranscriptFound(Exception):  # type: ignore[no-redef]
-        pass
-
-    class TranscriptsDisabled(Exception):  # type: ignore[no-redef]
-        pass
-
-    class VideoUnavailable(Exception):  # type: ignore[no-redef]
-        pass
-
-    YouTubeTranscriptApi = MagicMock()
-    sys.modules["youtube_transcript_api"] = MagicMock(YouTubeTranscriptApi=YouTubeTranscriptApi)
-    sys.modules["youtube_transcript_api._errors"] = MagicMock(
-        NoTranscriptFound=NoTranscriptFound,
-        TranscriptsDisabled=TranscriptsDisabled,
-        VideoUnavailable=VideoUnavailable,
-    )
 
 import yt_dlp  # noqa: E402
 

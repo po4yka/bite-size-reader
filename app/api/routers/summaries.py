@@ -94,6 +94,9 @@ async def get_summaries(
                 created_at=_isotime(summary.created_at),
                 confidence=json_payload.get("confidence", 0.0),
                 hallucination_risk=json_payload.get("hallucination_risk", "unknown"),
+                image_url=metadata.get("image")
+                or metadata.get("og:image")
+                or metadata.get("ogImage"),
             )
         )
 
@@ -155,6 +158,9 @@ async def get_summary(
             "author": metadata.get("author"),
             "published_at": metadata.get("published_at"),
             "http_status": crawl_result.http_status,
+            "image_url": metadata.get("image")
+            or metadata.get("og:image")
+            or metadata.get("ogImage"),
         }
 
     # Build processing info

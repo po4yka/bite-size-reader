@@ -1,4 +1,4 @@
-"""Backwards-compatible import shim for Firecrawl v2 client."""
+import httpx
 
 from app.adapters.external.firecrawl import (
     FIRECRAWL_BASE_URL,
@@ -34,4 +34,5 @@ __all__ = [
     "FirecrawlResult",
     "FirecrawlSearchItem",
     "FirecrawlSearchResult",
+    "httpx",
 ]

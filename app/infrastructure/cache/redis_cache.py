@@ -3,12 +3,13 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-from collections.abc import Iterable
 from typing import TYPE_CHECKING, Any
 
 from app.infrastructure.redis import get_redis, redis_key
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable
+
     from app.config import AppConfig
 
 logger = logging.getLogger(__name__)

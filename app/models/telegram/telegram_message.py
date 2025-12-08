@@ -3,8 +3,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -12,6 +11,9 @@ from app.models.telegram.telegram_chat import TelegramChat
 from app.models.telegram.telegram_entity import MessageEntity
 from app.models.telegram.telegram_enums import MediaType, MessageEntityType
 from app.models.telegram.telegram_user import TelegramUser
+
+if TYPE_CHECKING:
+    from datetime import datetime
 
 logger = logging.getLogger(__name__)
 

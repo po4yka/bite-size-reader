@@ -147,6 +147,35 @@ paths:
               schema:
                 $ref: '#/components/schemas/SuccessResponse'
 
+  /v1/proxy/image:
+    get:
+      summary: Proxy Image
+      description: Proxy an image from a remote URL to bypass CORS/hotlink protection.
+      operationId: proxyImage
+      parameters:
+      - name: url
+        in: query
+        required: true
+        schema:
+          type: string
+        description: URL of the image to proxy
+      tags:
+      - Proxy
+      responses:
+        200:
+          description: Image content stream
+          content:
+            image/*:
+              schema:
+                type: string
+                format: binary
+        400:
+          $ref: '#/components/responses/ValidationError'
+        404:
+          $ref: '#/components/responses/NotFoundError'
+        500:
+          $ref: '#/components/responses/InternalServerError'
+
   /v1/collections:
     get:
       summary: List collections
@@ -2353,6 +2382,9 @@ components:
         is_favorited:
           type: boolean
           default: false
+        image_url:
+          type: string
+          nullable: true
     SummaryStats:
       type: object
       required:
@@ -2416,6 +2448,9 @@ components:
               nullable: true
             http_status:
               type: integer
+              nullable: true
+            image_url:
+              type: string
               nullable: true
         processing:
           type: object

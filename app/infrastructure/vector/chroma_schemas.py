@@ -66,7 +66,7 @@ class ChromaMetadata(BaseModel):
     def _clean_list(cls, value: Any) -> list[str]:
         if value in (None, "", []):
             return []
-        if isinstance(value, (set, tuple)):
+        if isinstance(value, set | tuple):
             value = list(value)
         if not isinstance(value, list):
             return [str(value).strip()] if str(value).strip() else []
@@ -108,7 +108,7 @@ class ChromaQueryFilters(BaseModel):
     def _clean_tags(cls, value: Any) -> list[str]:
         if value in (None, "", []):
             return []
-        if isinstance(value, (set, tuple)):
+        if isinstance(value, set | tuple):
             value = list(value)
         if not isinstance(value, list):
             return [str(value).strip()] if str(value).strip() else []

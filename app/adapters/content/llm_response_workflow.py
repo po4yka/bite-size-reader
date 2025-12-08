@@ -4,8 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from collections.abc import Awaitable, Callable, Coroutine, Sequence
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, ConfigDict
 
@@ -13,6 +12,9 @@ from app.core.json_utils import extract_json
 from app.core.summary_contract import validate_and_shape_summary
 from app.db.user_interactions import async_safe_update_user_interaction
 from app.utils.json_validation import finalize_summary_texts, parse_summary_response
+
+if TYPE_CHECKING:
+    from collections.abc import Awaitable, Callable, Coroutine, Sequence
 
 logger = logging.getLogger(__name__)
 

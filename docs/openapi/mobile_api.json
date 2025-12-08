@@ -175,171 +175,6 @@
         }
       }
     },
-    "/v1/summaries/{summary_id}": {
-      "get": {
-        "tags": [
-          "Summaries"
-        ],
-        "summary": "Get Summary",
-        "description": "Get a single summary with full details.",
-        "operationId": "get_summary_v1_summaries__summary_id__get",
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "summary_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "title": "Summary Id"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Summary detail",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SummaryDetailResponseEnvelope"
-                }
-              }
-            }
-          },
-          "401": {
-            "$ref": "#/components/responses/UnauthorizedError"
-          },
-          "403": {
-            "$ref": "#/components/responses/ForbiddenError"
-          },
-          "404": {
-            "$ref": "#/components/responses/NotFoundError"
-          },
-          "422": {
-            "$ref": "#/components/responses/ValidationError"
-          },
-          "500": {
-            "$ref": "#/components/responses/InternalServerError"
-          }
-        }
-      },
-      "patch": {
-        "tags": [
-          "Summaries"
-        ],
-        "summary": "Update Summary",
-        "description": "Update summary metadata (e.g., mark as read).",
-        "operationId": "update_summary_v1_summaries__summary_id__patch",
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "summary_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "title": "Summary Id"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/UpdateSummaryRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Summary updated",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SummaryUpdateResponseEnvelope"
-                }
-              }
-            }
-          },
-          "401": {
-            "$ref": "#/components/responses/UnauthorizedError"
-          },
-          "403": {
-            "$ref": "#/components/responses/ForbiddenError"
-          },
-          "404": {
-            "$ref": "#/components/responses/NotFoundError"
-          },
-          "422": {
-            "$ref": "#/components/responses/ValidationError"
-          },
-          "500": {
-            "$ref": "#/components/responses/InternalServerError"
-          }
-        }
-      },
-      "delete": {
-        "tags": [
-          "Summaries"
-        ],
-        "summary": "Delete Summary",
-        "description": "Delete a summary (soft delete).",
-        "operationId": "delete_summary_v1_summaries__summary_id__delete",
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "summary_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "title": "Summary Id"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Summary deleted",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SummaryDeleteResponseEnvelope"
-                }
-              }
-            }
-          },
-          "401": {
-            "$ref": "#/components/responses/UnauthorizedError"
-          },
-          "403": {
-            "$ref": "#/components/responses/ForbiddenError"
-          },
-          "404": {
-            "$ref": "#/components/responses/NotFoundError"
-          },
-          "422": {
-            "$ref": "#/components/responses/ValidationError"
-          },
-          "500": {
-            "$ref": "#/components/responses/InternalServerError"
-          }
-        }
-      }
-    },
     "/v1/summaries/{summary_id}/favorite": {
       "post": {
         "summary": "Toggle favorite status",
@@ -372,6 +207,49 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/v1/proxy/image": {
+      "get": {
+        "summary": "Proxy Image",
+        "description": "Proxy an image from a remote URL to bypass CORS/hotlink protection.",
+        "operationId": "proxyImage",
+        "parameters": [
+          {
+            "name": "url",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "URL of the image to proxy"
+          }
+        ],
+        "tags": [
+          "Proxy"
+        ],
+        "responses": {
+          "200": {
+            "description": "Image content stream",
+            "content": {
+              "image/*": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundError"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
           }
         }
       }
@@ -1292,6 +1170,171 @@
           },
           "429": {
             "$ref": "#/components/responses/TooManyRequestsError"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      }
+    },
+    "/v1/summaries/{summary_id}": {
+      "get": {
+        "tags": [
+          "Summaries"
+        ],
+        "summary": "Get Summary",
+        "description": "Get a single summary with full details.",
+        "operationId": "get_summary_v1_summaries__summary_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "summary_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Summary Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Summary detail",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SummaryDetailResponseEnvelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenError"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundError"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "Summaries"
+        ],
+        "summary": "Update Summary",
+        "description": "Update summary metadata (e.g., mark as read).",
+        "operationId": "update_summary_v1_summaries__summary_id__patch",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "summary_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Summary Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateSummaryRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Summary updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SummaryUpdateResponseEnvelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenError"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundError"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Summaries"
+        ],
+        "summary": "Delete Summary",
+        "description": "Delete a summary (soft delete).",
+        "operationId": "delete_summary_v1_summaries__summary_id__delete",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "summary_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Summary Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Summary deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SummaryDeleteResponseEnvelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenError"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundError"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
           },
           "500": {
             "$ref": "#/components/responses/InternalServerError"
@@ -3610,6 +3653,10 @@
           "is_favorited": {
             "type": "boolean",
             "default": false
+          },
+          "image_url": {
+            "type": "string",
+            "nullable": true
           }
         }
       },
@@ -3705,6 +3752,10 @@
               },
               "http_status": {
                 "type": "integer",
+                "nullable": true
+              },
+              "image_url": {
+                "type": "string",
                 "nullable": true
               }
             }

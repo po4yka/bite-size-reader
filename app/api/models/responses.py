@@ -83,6 +83,7 @@ class SummaryCompact(BaseModel):
     created_at: str
     confidence: float
     hallucination_risk: str
+    image_url: str | None = None
 
 
 class SummaryDetail(BaseModel):

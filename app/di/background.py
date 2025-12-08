@@ -2,8 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from collections.abc import Callable
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from app.adapters.content.url_processor import URLProcessor
 from app.adapters.external.firecrawl_parser import FirecrawlClient
@@ -14,6 +13,9 @@ from app.config import AppConfig, load_config
 from app.core.logging_utils import get_logger
 from app.db.database import Database
 from app.infrastructure.redis import get_redis
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 logger = get_logger(__name__)
 

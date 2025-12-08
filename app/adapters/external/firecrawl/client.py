@@ -1072,13 +1072,13 @@ class FirecrawlClient:
         if not api_key.startswith("fc-"):
             msg = "API key must start with 'fc-'"
             raise ValueError(msg)
-        if not isinstance(timeout_sec, (int, float)) or timeout_sec <= 0 or timeout_sec > 300:
+        if not isinstance(timeout_sec, int | float) or timeout_sec <= 0 or timeout_sec > 300:
             msg = "Timeout must be positive and <=300s"
             raise ValueError(msg)
         if not isinstance(max_retries, int) or max_retries < 0 or max_retries > 10:
             msg = "Max retries must be between 0 and 10"
             raise ValueError(msg)
-        if not isinstance(backoff_base, (int, float)) or backoff_base < 0:
+        if not isinstance(backoff_base, int | float) or backoff_base < 0:
             msg = "Backoff base must be non-negative"
             raise ValueError(msg)
         if not isinstance(max_connections, int) or max_connections < 1 or max_connections > 100:
@@ -1092,7 +1092,7 @@ class FirecrawlClient:
             msg = "Max keepalive connections must be between 1 and 50"
             raise ValueError(msg)
         if (
-            not isinstance(keepalive_expiry, (int, float))
+            not isinstance(keepalive_expiry, int | float)
             or keepalive_expiry < 1.0
             or keepalive_expiry > 300.0
         ):

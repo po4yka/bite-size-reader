@@ -5,9 +5,8 @@ from __future__ import annotations
 import asyncio
 import random
 import time
-from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from app.adapters.content.url_processor import URLProcessor, _get_system_prompt
 from app.config import AppConfig, load_config
@@ -17,6 +16,9 @@ from app.core.url_utils import normalize_url
 from app.db.database import Database
 from app.db.models import Request as RequestModel
 from app.infrastructure.redis import get_redis, redis_key
+
+if TYPE_CHECKING:
+    from collections.abc import Awaitable, Callable
 
 logger = get_logger(__name__)
 

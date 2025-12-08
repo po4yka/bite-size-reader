@@ -3,13 +3,16 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Callable
+from typing import TYPE_CHECKING
 
 from app.config import ChromaConfig
 from app.core.logging_utils import get_logger
 from app.infrastructure.vector.chroma_store import ChromaVectorStore
 from app.services.chroma_vector_search_service import ChromaVectorSearchService
 from app.services.embedding_service import EmbeddingService
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 logger = get_logger(__name__)
 
