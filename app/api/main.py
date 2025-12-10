@@ -98,6 +98,7 @@ app.add_middleware(
         "PATCH",
         "DELETE",
         "OPTIONS",
+        "HEAD",
     ],  # Explicit methods
     allow_headers=[
         "Authorization",
