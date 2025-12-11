@@ -7,7 +7,7 @@ from __future__ import annotations
 import os
 from datetime import datetime
 from enum import Enum
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -138,28 +138,34 @@ class PaginationInfo(BaseModel):
     total: int
     limit: int
     offset: int
-    has_more: bool
+    has_more: bool = Field(alias="hasMore")
+
+    model_config = {"populate_by_name": True}
 
 
 class SummaryCompact(BaseModel):
     """Compact summary for list views."""
 
     id: int
-    request_id: int
+    request_id: int = Field(alias="requestId")
     title: str
     domain: str
     url: str
     tldr: str
-    summary_250: str
-    reading_time_min: int
-    topic_tags: list[str]
-    is_read: bool
-    is_favorited: bool = False
-    lang: str
-    created_at: str
+    summary_250: str = Field(alias="summary250")
+    reading_time_min: int = Field(alias="readingTimeMin")
+    topic_tags: list[str] = Field(alias="topicTags")
+    is_read: bool = Field(alias="isRead")
+    is_favorited: bool = Field(default=False, alias="isFavorited")
+    lang: Literal["en", "ru", "auto"]
+    created_at: str = Field(alias="createdAt")
     confidence: float
-    hallucination_risk: str
-    image_url: str | None = None
+    hallucination_risk: Literal["low", "medium", "high", "unknown"] = Field(
+        alias="hallucinationRisk"
+    )
+    image_url: str | None = Field(default=None, alias="imageUrl")
+
+    model_config = {"populate_by_name": True}
 
 
 class SummaryDetail(BaseModel):
@@ -174,18 +180,20 @@ class SummaryDetail(BaseModel):
 class SummaryContent(BaseModel):
     """Full article content for offline reading."""
 
-    summary_id: int
-    request_id: int | None = None
-    format: str
+    summary_id: int = Field(alias="summaryId")
+    request_id: int | None = Field(default=None, alias="requestId")
+    format: Literal["markdown", "text", "html"]
     content: str
-    content_type: str
-    lang: str | None = None
-    source_url: str | None = None
+    content_type: Literal["text/markdown", "text/plain", "text/html"] = Field(alias="contentType")
+    lang: Literal["en", "ru", "auto"] | None = None
+    source_url: str | None = Field(default=None, alias="sourceUrl")
     title: str | None = None
     domain: str | None = None
-    retrieved_at: str
-    size_bytes: int | None = None
-    checksum_sha256: str | None = None
+    retrieved_at: str = Field(alias="retrievedAt")
+    size_bytes: int | None = Field(default=None, alias="sizeBytes")
+    checksum_sha256: str | None = Field(default=None, alias="checksumSha256")
+
+    model_config = {"populate_by_name": True}
 
 
 class SummaryContentData(BaseModel):
@@ -203,24 +211,112 @@ class SummaryListResponse(BaseModel):
 
 
 class RequestStatus(BaseModel):
-    """Request processing status."""
+    """Request processing status with stage-dependent field availability.
 
-    request_id: int
-    status: str
-    stage: str  # RequestStage enum value: pending, crawling, processing, complete, failed
-    progress: dict[str, Any] | None = None
-    estimated_seconds_remaining: int | None = None
+    Field Availability by Stage:
+    ============================
+
+    PENDING (stage="pending"):
+        - request_id: always
+        - status: always
+        - stage: "pending"
+        - queuePosition: present (1-indexed position in queue)
+        - canRetry: false
+        - correlation_id: always
+        - updated_at: always
+        - progress: null
+        - estimated_seconds_remaining: null
+        - error_*: null
+
+    CRAWLING (stage="crawling"):
+        - request_id: always
+        - status: always
+        - stage: "crawling"
+        - progress: {current_step: 1, total_steps: 3, percentage: 33}
+        - estimated_seconds_remaining: ~8 seconds
+        - canRetry: false
+        - correlation_id: always
+        - updated_at: always
+        - queuePosition: null
+        - error_*: null
+
+    PROCESSING (stage="processing"):
+        - request_id: always
+        - status: always
+        - stage: "processing"
+        - progress: {current_step: 2-3, total_steps: 3, percentage: 66-90}
+        - estimated_seconds_remaining: ~8 seconds
+        - canRetry: false
+        - correlation_id: always
+        - updated_at: always
+        - queuePosition: null
+        - error_*: null
+
+    COMPLETE (stage="complete"):
+        - request_id: always
+        - status: always
+        - stage: "complete"
+        - canRetry: false
+        - correlation_id: always
+        - updated_at: always
+        - progress: null
+        - estimated_seconds_remaining: null
+        - queuePosition: null
+        - error_*: null
+
+    FAILED (stage="failed"):
+        - request_id: always
+        - status: always
+        - stage: "failed"
+        - error_message: present (human-readable error description)
+        - error_stage: present if known (e.g., "crawling", "summarization")
+        - error_type: present if known (e.g., "timeout", "rate_limit")
+        - canRetry: true (failed requests can be retried)
+        - correlation_id: always
+        - updated_at: always
+        - progress: null
+        - estimated_seconds_remaining: null
+        - queuePosition: null
+    """
+
+    request_id: int = Field(description="Unique request identifier")
+    status: str = Field(description="Raw database status value")
+    stage: RequestStage = Field(description="Processing stage enum value")
+    progress: dict[str, Any] | None = Field(
+        default=None,
+        description="Progress with current_step, total_steps, percentage",
+    )
+    estimated_seconds_remaining: int | None = Field(
+        default=None,
+        description="Estimated time to completion in seconds (crawling/processing only)",
+    )
     queue_position: int | None = Field(
         default=None,
         alias="queuePosition",
-        description="Position in queue (only present when stage=pending)",
+        description="1-indexed position in processing queue (pending only)",
     )
-    error_stage: str | None = None
-    error_type: str | None = None
-    error_message: str | None = None
-    can_retry: bool = Field(default=False, alias="canRetry")
-    correlation_id: str | None = None
-    updated_at: str
+    error_stage: str | None = Field(
+        default=None,
+        description="Stage where error occurred, e.g. 'crawling', 'summarization' (failed only)",
+    )
+    error_type: str | None = Field(
+        default=None,
+        description="Error classification e.g. timeout, rate_limit (failed only)",
+    )
+    error_message: str | None = Field(
+        default=None,
+        description="Human-readable error description (failed only)",
+    )
+    can_retry: bool = Field(
+        default=False,
+        alias="canRetry",
+        description="Whether request can be retried (true for failed, false otherwise)",
+    )
+    correlation_id: str | None = Field(
+        default=None,
+        description="Request correlation ID for debugging (always present)",
+    )
+    updated_at: str = Field(description="ISO 8601 timestamp of last status update (always present)")
 
     model_config = {"populate_by_name": True}
 
@@ -228,39 +324,47 @@ class RequestStatus(BaseModel):
 class SubmitRequestResponse(BaseModel):
     """Response for POST /requests."""
 
-    request_id: int
-    correlation_id: str
-    type: str
-    status: str
-    estimated_wait_seconds: int
-    created_at: str
-    is_duplicate: bool = False
+    request_id: int = Field(alias="requestId")
+    correlation_id: str = Field(alias="correlationId")
+    type: Literal["url", "forward"]
+    status: Literal["pending", "processing", "complete", "failed"]
+    estimated_wait_seconds: int = Field(alias="estimatedWaitSeconds")
+    created_at: str = Field(alias="createdAt")
+    is_duplicate: bool = Field(default=False, alias="isDuplicate")
+
+    model_config = {"populate_by_name": True}
 
 
 class TokenPair(BaseModel):
     """JWT token pair."""
 
-    access_token: str
-    refresh_token: str | None = None
-    expires_in: int
-    token_type: str = "Bearer"
+    access_token: str = Field(alias="accessToken")
+    refresh_token: str | None = Field(default=None, alias="refreshToken")
+    expires_in: int = Field(alias="expiresIn")
+    token_type: str = Field(default="Bearer", alias="tokenType")
+
+    model_config = {"populate_by_name": True}
 
 
 class AuthTokensResponse(BaseModel):
     """Authentication tokens payload."""
 
     tokens: TokenPair
-    session_id: int | None = None
+    session_id: int | None = Field(default=None, alias="sessionId")
+
+    model_config = {"populate_by_name": True}
 
 
 class UserInfo(BaseModel):
     """Basic user info."""
 
-    user_id: int
+    user_id: int = Field(alias="userId")
     username: str
-    client_id: str
-    is_owner: bool = False
-    created_at: str
+    client_id: str = Field(alias="clientId")
+    is_owner: bool = Field(default=False, alias="isOwner")
+    created_at: str = Field(alias="createdAt")
+
+    model_config = {"populate_by_name": True}
 
 
 class SubmitRequestData(BaseModel):
@@ -278,13 +382,15 @@ class RequestStatusData(BaseModel):
 class DuplicateCheckData(BaseModel):
     """Duplicate check response."""
 
-    is_duplicate: bool
-    normalized_url: str | None = None
-    dedupe_hash: str | None = None
-    request_id: int | None = None
-    summary_id: int | None = None
-    summarized_at: str | None = None
+    is_duplicate: bool = Field(alias="isDuplicate")
+    normalized_url: str | None = Field(default=None, alias="normalizedUrl")
+    dedupe_hash: str | None = Field(default=None, alias="dedupeHash")
+    request_id: int | None = Field(default=None, alias="requestId")
+    summary_id: int | None = Field(default=None, alias="summaryId")
+    summarized_at: str | None = Field(default=None, alias="summarizedAt")
     summary: dict[str, Any] | None = None
+
+    model_config = {"populate_by_name": True}
 
 
 class CollectionResponse(BaseModel):
@@ -293,15 +399,17 @@ class CollectionResponse(BaseModel):
     id: int
     name: str
     description: str | None = None
-    parent_id: int | None = None
+    parent_id: int | None = Field(default=None, alias="parentId")
     position: int | None = None
-    created_at: str
-    updated_at: str
-    server_version: int
-    is_shared: bool = False
-    share_count: int | None = None
-    item_count: int | None = None
+    created_at: str = Field(alias="createdAt")
+    updated_at: str = Field(alias="updatedAt")
+    server_version: int = Field(alias="serverVersion")
+    is_shared: bool = Field(default=False, alias="isShared")
+    share_count: int | None = Field(default=None, alias="shareCount")
+    item_count: int | None = Field(default=None, alias="itemCount")
     children: list[CollectionResponse] | None = None
+
+    model_config = {"populate_by_name": True}
 
 
 class CollectionListResponse(BaseModel):
@@ -314,10 +422,12 @@ class CollectionListResponse(BaseModel):
 class CollectionItem(BaseModel):
     """Collection item entry."""
 
-    collection_id: int
-    summary_id: int
+    collection_id: int = Field(alias="collectionId")
+    summary_id: int = Field(alias="summaryId")
     position: int | None = None
-    created_at: str
+    created_at: str = Field(alias="createdAt")
+
+    model_config = {"populate_by_name": True}
 
 
 class CollectionItemsResponse(BaseModel):
@@ -330,12 +440,14 @@ class CollectionItemsResponse(BaseModel):
 class CollectionAclEntry(BaseModel):
     """ACL entry for a collaborator."""
 
-    user_id: int | None = None
-    role: str
-    status: str
-    invited_by: int | None = None
-    created_at: str | None = None
-    updated_at: str | None = None
+    user_id: int | None = Field(default=None, alias="userId")
+    role: Literal["owner", "editor", "viewer"]
+    status: Literal["active", "pending", "revoked"]
+    invited_by: int | None = Field(default=None, alias="invitedBy")
+    created_at: str | None = Field(default=None, alias="createdAt")
+    updated_at: str | None = Field(default=None, alias="updatedAt")
+
+    model_config = {"populate_by_name": True}
 
 
 class CollectionAclResponse(BaseModel):
@@ -348,24 +460,30 @@ class CollectionInviteResponse(BaseModel):
     """Invite token response."""
 
     token: str
-    role: str
-    expires_at: str | None = None
+    role: Literal["editor", "viewer"]
+    expires_at: str | None = Field(default=None, alias="expiresAt")
+
+    model_config = {"populate_by_name": True}
 
 
 class CollectionMoveResponse(BaseModel):
     """Response for collection move."""
 
     id: int
-    parent_id: int | None
+    parent_id: int | None = Field(alias="parentId")
     position: int
-    server_version: int | None = None
-    updated_at: str
+    server_version: int | None = Field(default=None, alias="serverVersion")
+    updated_at: str = Field(alias="updatedAt")
+
+    model_config = {"populate_by_name": True}
 
 
 class CollectionItemsMoveResponse(BaseModel):
     """Response for moving collection items."""
 
-    moved_summary_ids: list[int]
+    moved_summary_ids: list[int] = Field(alias="movedSummaryIds")
+
+    model_config = {"populate_by_name": True}
 
 
 # Rebuild forward refs
@@ -375,18 +493,20 @@ CollectionResponse.model_rebuild()
 class SearchResult(BaseModel):
     """Search result payload."""
 
-    request_id: int
-    summary_id: int
+    request_id: int = Field(alias="requestId")
+    summary_id: int = Field(alias="summaryId")
     url: str | None
     title: str
     domain: str | None = None
     snippet: str | None = None
     tldr: str | None = None
-    published_at: str | None = None
-    created_at: str
-    relevance_score: float | None = None
-    topic_tags: list[str] | None = None
-    is_read: bool | None = None
+    published_at: str | None = Field(default=None, alias="publishedAt")
+    created_at: str = Field(alias="createdAt")
+    relevance_score: float | None = Field(default=None, alias="relevanceScore")
+    topic_tags: list[str] | None = Field(default=None, alias="topicTags")
+    is_read: bool | None = Field(default=None, alias="isRead")
+
+    model_config = {"populate_by_name": True}
 
 
 class SearchResultsData(BaseModel):
@@ -400,101 +520,119 @@ class SearchResultsData(BaseModel):
 class SyncSessionData(BaseModel):
     """Sync session metadata (aligned to OpenAPI)."""
 
-    session_id: str
-    expires_at: str
-    default_limit: int
-    max_limit: int
-    last_issued_since: int | None = None
+    session_id: str = Field(alias="sessionId")
+    expires_at: str = Field(alias="expiresAt")
+    default_limit: int = Field(alias="defaultLimit")
+    max_limit: int = Field(alias="maxLimit")
+    last_issued_since: int | None = Field(default=None, alias="lastIssuedSince")
+
+    model_config = {"populate_by_name": True}
 
 
 class SyncEntityEnvelope(BaseModel):
     """Envelope for a synced entity or tombstone."""
 
-    entity_type: str
+    entity_type: str = Field(alias="entityType")
     id: int | str
-    server_version: int
-    updated_at: str
-    deleted_at: str | None = None
+    server_version: int = Field(alias="serverVersion")
+    updated_at: str = Field(alias="updatedAt")
+    deleted_at: str | None = Field(default=None, alias="deletedAt")
     summary: dict[str, Any] | None = None
     request: dict[str, Any] | None = None
     preference: dict[str, Any] | None = None
     stat: dict[str, Any] | None = None
-    crawl_result: dict[str, Any] | None = None
-    llm_call: dict[str, Any] | None = None
+    crawl_result: dict[str, Any] | None = Field(default=None, alias="crawlResult")
+    llm_call: dict[str, Any] | None = Field(default=None, alias="llmCall")
+
+    model_config = {"populate_by_name": True}
 
 
 class FullSyncResponseData(BaseModel):
     """Response payload for full sync chunks."""
 
-    session_id: str
-    has_more: bool
-    next_since: int | None = None
+    session_id: str = Field(alias="sessionId")
+    has_more: bool = Field(alias="hasMore")
+    next_since: int | None = Field(default=None, alias="nextSince")
     items: list[SyncEntityEnvelope]
     pagination: PaginationInfo
+
+    model_config = {"populate_by_name": True}
 
 
 class DeltaSyncResponseData(BaseModel):
     """Response payload for delta sync."""
 
-    session_id: str
+    session_id: str = Field(alias="sessionId")
     since: int
-    has_more: bool
-    next_since: int | None = None
+    has_more: bool = Field(alias="hasMore")
+    next_since: int | None = Field(default=None, alias="nextSince")
     created: list[SyncEntityEnvelope]
     updated: list[SyncEntityEnvelope]
     deleted: list[SyncEntityEnvelope]
+
+    model_config = {"populate_by_name": True}
 
 
 class SyncApplyItemResult(BaseModel):
     """Result for a single applied change."""
 
-    entity_type: str
+    entity_type: str = Field(alias="entityType")
     id: int | str
-    status: str  # applied | conflict | invalid
-    server_version: int | None = None
-    server_snapshot: dict[str, Any] | None = None
-    error_code: str | None = None
+    status: Literal["applied", "conflict", "invalid"]
+    server_version: int | None = Field(default=None, alias="serverVersion")
+    server_snapshot: dict[str, Any] | None = Field(default=None, alias="serverSnapshot")
+    error_code: str | None = Field(default=None, alias="errorCode")
+
+    model_config = {"populate_by_name": True}
 
 
 class SyncApplyResponseData(BaseModel):
     """Upload local changes result (aligned to OpenAPI)."""
 
-    session_id: str
+    session_id: str = Field(alias="sessionId")
     results: list[SyncApplyItemResult]
     conflicts: list[SyncApplyItemResult] | None = None
-    has_more: bool | None = None
+    has_more: bool | None = Field(default=None, alias="hasMore")
+
+    model_config = {"populate_by_name": True}
 
 
 class PreferencesData(BaseModel):
     """User preferences payload."""
 
-    user_id: int
-    telegram_username: str | None = None
-    lang_preference: str | None = None
-    notification_settings: dict[str, Any] | None = None
-    app_settings: dict[str, Any] | None = None
+    user_id: int = Field(alias="userId")
+    telegram_username: str | None = Field(default=None, alias="telegramUsername")
+    lang_preference: str | None = Field(default=None, alias="langPreference")
+    notification_settings: dict[str, Any] | None = Field(default=None, alias="notificationSettings")
+    app_settings: dict[str, Any] | None = Field(default=None, alias="appSettings")
+
+    model_config = {"populate_by_name": True}
 
 
 class PreferencesUpdateResult(BaseModel):
     """Preferences update result."""
 
-    updated_fields: list[str]
-    updated_at: str
+    updated_fields: list[str] = Field(alias="updatedFields")
+    updated_at: str = Field(alias="updatedAt")
+
+    model_config = {"populate_by_name": True}
 
 
 class UserStatsData(BaseModel):
     """User statistics payload."""
 
-    total_summaries: int
-    unread_count: int
-    read_count: int
-    total_reading_time_min: int
-    average_reading_time_min: float
-    favorite_topics: list[dict[str, Any]]
-    favorite_domains: list[dict[str, Any]]
-    language_distribution: dict[str, int]
-    joined_at: str | None
-    last_summary_at: str | None
+    total_summaries: int = Field(alias="totalSummaries")
+    unread_count: int = Field(alias="unreadCount")
+    read_count: int = Field(alias="readCount")
+    total_reading_time_min: int = Field(alias="totalReadingTimeMin")
+    average_reading_time_min: float = Field(alias="averageReadingTimeMin")
+    favorite_topics: list[dict[str, Any]] = Field(alias="favoriteTopics")
+    favorite_domains: list[dict[str, Any]] = Field(alias="favoriteDomains")
+    language_distribution: dict[str, int] = Field(alias="languageDistribution")
+    joined_at: str | None = Field(default=None, alias="joinedAt")
+    last_summary_at: str | None = Field(default=None, alias="lastSummaryAt")
+
+    model_config = {"populate_by_name": True}
 
 
 def _coerce_pagination(pagination: BaseModel | dict[str, Any] | None) -> PaginationInfo | None:

@@ -1,8 +1,9 @@
 """Search and discovery endpoints."""
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Query
 
 from app.api.dependencies.search_resources import get_chroma_search_service
+from app.api.exceptions import ProcessingError
 from app.api.models.responses import SearchResult, SearchResultsData, success_response
 from app.api.routers.auth import get_current_user
 from app.core.logging_utils import get_logger
@@ -122,7 +123,7 @@ async def search_summaries(
 
     except Exception as e:
         logger.error(f"Search failed: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Search failed: {e!s}") from e
+        raise ProcessingError(f"Search failed: {e!s}") from e
 
 
 @router.get("/search/semantic")
@@ -229,7 +230,7 @@ async def semantic_search_summaries(
 
     except Exception as e:
         logger.error(f"Semantic search failed: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Semantic search failed: {e!s}") from e
+        raise ProcessingError(f"Semantic search failed: {e!s}") from e
 
 
 @router.get("/topics/trending")

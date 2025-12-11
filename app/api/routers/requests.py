@@ -4,11 +4,11 @@ Request submission and status endpoints.
 
 from datetime import datetime
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends
 from peewee import OperationalError
 
 from app.api.background_processor import process_url_request
-from app.api.exceptions import DuplicateResourceError
+from app.api.exceptions import DuplicateResourceError, ResourceNotFoundError, ValidationError
 from app.api.models.requests import SubmitForwardRequest, SubmitURLRequest
 from app.api.models.responses import (
     RequestStatus,
@@ -133,7 +133,7 @@ async def get_request(
             .first()
         )
         if request_obj is None:
-            raise HTTPException(status_code=404, detail="Request access denied") from err
+            raise ResourceNotFoundError("Request", request_id) from err
         result = {
             "request": request_obj,
             "crawl_result": None,
@@ -229,7 +229,7 @@ async def retry_request(
     try:
         new_request = RequestService.retry_failed_request(user["user_id"], request_id)
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
+        raise ValidationError(str(e)) from e
 
     # Schedule background processing
     background_tasks.add_task(process_url_request, new_request.id)

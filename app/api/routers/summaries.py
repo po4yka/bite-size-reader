@@ -7,7 +7,7 @@ Provides CRUD operations for summaries.
 from datetime import datetime
 from hashlib import sha256
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Query
 from peewee import OperationalError
 
 from app.api.exceptions import ResourceNotFoundError
@@ -148,14 +148,14 @@ async def get_summary_by_url(
         # Try fuzzy match? Or maybe client sent a slightly different URL.
         # For now, strict match or simple normalization is safer.
         # Could check if url is missing scheme...
-        raise HTTPException(status_code=404, detail="Article not found")
+        raise ResourceNotFoundError("Article", url)
 
     # Reuse get_summary logic by ID
     # We first need the summary ID
     summary = Summary.select(Summary.id).where(Summary.request == request_record.id).first()
     if not summary:
         # Should overlap with query above, but safety check
-        raise HTTPException(status_code=404, detail="Summary not found")
+        raise ResourceNotFoundError("Summary", f"request:{request_record.id}")
 
     return await get_summary(summary_id=summary.id, user=user)
 
@@ -181,7 +181,7 @@ async def get_summary(
             .first()
         )
         if summary is None:
-            raise HTTPException(status_code=404, detail="Summary access denied") from err
+            raise ResourceNotFoundError("Summary", summary_id) from err
 
     # Request is already loaded (eager loading in service)
     request = summary.request
@@ -253,16 +253,13 @@ async def get_summary_content(
     user=Depends(get_current_user),
 ):
     """Get full article content for offline reading."""
-    try:
-        summary = SummaryService.get_summary_by_id(user["user_id"], summary_id)
-    except ResourceNotFoundError:
-        raise HTTPException(status_code=404, detail="Summary not found") from None
+    summary = SummaryService.get_summary_by_id(user["user_id"], summary_id)
 
     request = summary.request
     crawl_result = CrawlResult.select().where(CrawlResult.request == request.id).first()
 
     if not crawl_result:
-        raise HTTPException(status_code=404, detail="Content not found")
+        raise ResourceNotFoundError("Content", summary_id)
 
     metadata = crawl_result.metadata_json or {}
     summary_metadata = (summary.json_payload or {}).get("metadata", {})
@@ -288,7 +285,7 @@ async def get_summary_content(
         content_type = "text/plain"
 
     if not content_source:
-        raise HTTPException(status_code=404, detail="Content not found")
+        raise ResourceNotFoundError("Content", summary_id)
 
     output_format = format or "markdown"
     content_value = content_source

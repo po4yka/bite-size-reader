@@ -39,6 +39,15 @@ except Exception:  # pragma: no cover - fallback for environments without compat
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.api.exceptions import (
+    AuthenticationError,
+    AuthorizationError,
+    ConfigurationError,
+    FeatureDisabledError,
+    ProcessingError,
+    ResourceNotFoundError,
+    ValidationError,
+)
 from app.api.models.responses import (
     AuthTokensResponse,
     TokenPair,
@@ -309,9 +318,8 @@ def verify_telegram_auth(
             f"Telegram auth expired for user {user_id}. Age: {age_seconds}s",
             extra={"user_id": user_id, "age_seconds": age_seconds},
         )
-        raise HTTPException(
-            status_code=401,
-            detail=f"Authentication expired ({age_seconds} seconds old). Please log in again.",
+        raise AuthenticationError(
+            f"Authentication expired ({age_seconds} seconds old). Please log in again."
         )
 
     if age_seconds < -60:  # Allow 1 minute clock skew
@@ -319,9 +327,7 @@ def verify_telegram_auth(
             f"Telegram auth timestamp in future for user {user_id}. Skew: {-age_seconds}s",
             extra={"user_id": user_id, "skew_seconds": -age_seconds},
         )
-        raise HTTPException(
-            status_code=401, detail="Authentication timestamp is in the future. Check device clock."
-        )
+        raise AuthenticationError("Authentication timestamp is in the future. Check device clock.")
 
     # Build data check string according to Telegram spec
     data_check_arr = [f"auth_date={auth_date}", f"id={user_id}"]
@@ -344,16 +350,14 @@ def verify_telegram_auth(
         bot_token = Config.get("BOT_TOKEN")
     except ValueError as err:
         logger.error("BOT_TOKEN not configured - cannot verify Telegram auth")
-        raise HTTPException(
-            status_code=500,
-            detail="Server misconfiguration: BOT_TOKEN is not set.",
+        raise ConfigurationError(
+            "Server misconfiguration: BOT_TOKEN is not set.", config_key="BOT_TOKEN"
         ) from err
 
     if not bot_token:
         logger.error("BOT_TOKEN is empty - cannot verify Telegram auth")
-        raise HTTPException(
-            status_code=500,
-            detail="Server misconfiguration: BOT_TOKEN is empty.",
+        raise ConfigurationError(
+            "Server misconfiguration: BOT_TOKEN is empty.", config_key="BOT_TOKEN"
         )
 
     # Compute secret key: SHA256(bot_token)
@@ -368,10 +372,7 @@ def verify_telegram_auth(
             f"Invalid Telegram auth hash for user {user_id}",
             extra={"user_id": user_id, "username": username},
         )
-        raise HTTPException(
-            status_code=401,
-            detail="Invalid authentication hash. Please try logging in again.",
-        )
+        raise AuthenticationError("Invalid authentication hash. Please try logging in again.")
 
     # Verify user is in whitelist
     allowed_ids = Config.get_allowed_user_ids()
@@ -380,10 +381,7 @@ def verify_telegram_auth(
             f"User {user_id} not in whitelist",
             extra={"user_id": user_id, "username": username},
         )
-        raise HTTPException(
-            status_code=403,
-            detail="User not authorized. Contact administrator to request access.",
-        )
+        raise AuthorizationError("User not authorized. Contact administrator to request access.")
 
     logger.info(
         f"Telegram auth verified for user {user_id}",
@@ -481,12 +479,13 @@ def validate_client_id(client_id: str | None) -> bool:
         True if valid
 
     Raises:
-        HTTPException: If client_id is invalid or not allowed
+        ValidationError: If client_id is missing or invalid format
+        AuthorizationError: If client_id is not in allowlist
     """
     if not client_id:
-        raise HTTPException(
-            status_code=401,
-            detail="Client ID is required. Please update your app to the latest version.",
+        raise ValidationError(
+            "Client ID is required. Please update your app to the latest version.",
+            details={"field": "client_id"},
         )
 
     # Validate format
@@ -495,20 +494,14 @@ def validate_client_id(client_id: str | None) -> bool:
             f"Invalid client ID format: {client_id}",
             extra={"client_id": client_id},
         )
-        raise HTTPException(
-            status_code=401,
-            detail="Invalid client ID format.",
-        )
+        raise ValidationError("Invalid client ID format.", details={"field": "client_id"})
 
     if len(client_id) > 100:
         logger.warning(
             f"Client ID too long: {client_id}",
             extra={"client_id": client_id, "length": len(client_id)},
         )
-        raise HTTPException(
-            status_code=401,
-            detail="Invalid client ID format.",
-        )
+        raise ValidationError("Invalid client ID format.", details={"field": "client_id"})
 
     # Check against allowlist
     allowed_client_ids = Config.get_allowed_client_ids()
@@ -523,17 +516,14 @@ def validate_client_id(client_id: str | None) -> bool:
             f"Client ID not in allowlist: {client_id}",
             extra={"client_id": client_id, "allowed_ids": list(allowed_client_ids)},
         )
-        raise HTTPException(
-            status_code=403,
-            detail="Client application not authorized. Please contact administrator.",
-        )
+        raise AuthorizationError("Client application not authorized. Please contact administrator.")
 
     return True
 
 
 def _ensure_secret_login_enabled() -> None:
     if not _get_auth_config().secret_login_enabled:
-        raise HTTPException(status_code=404, detail="Secret-key login is disabled")
+        raise FeatureDisabledError("secret-login", "Secret-key login is disabled")
 
 
 def _ensure_user_allowed(user_id: int) -> None:
@@ -543,16 +533,13 @@ def _ensure_user_allowed(user_id: int) -> None:
             "User not authorized for secret login",
             extra={"user_id": user_id},
         )
-        raise HTTPException(
-            status_code=403,
-            detail="User not authorized. Contact administrator to request access.",
-        )
+        raise AuthorizationError("User not authorized. Contact administrator to request access.")
 
 
 def _require_owner(user: dict) -> User:
     user_record = User.select().where(User.telegram_user_id == user["user_id"]).first()
     if not user_record or not user_record.is_owner:
-        raise HTTPException(status_code=403, detail="Owner permissions required")
+        raise AuthorizationError("Owner permissions required")
     return user_record
 
 
@@ -581,9 +568,9 @@ def _validate_secret_value(secret: str, *, context: str = "login") -> str:
     cleaned = secret.strip()
     length = len(cleaned)
     if length < cfg.secret_min_length or length > cfg.secret_max_length:
-        msg = "Invalid secret length"
-        status = 401 if context == "login" else 400
-        raise HTTPException(status_code=status, detail=msg)
+        if context == "login":
+            raise AuthenticationError("Invalid secret length")
+        raise ValidationError("Invalid secret length", details={"field": "secret"})
     return cleaned
 
 
@@ -649,7 +636,7 @@ def _check_expired(record: ClientSecret) -> None:
     if record.expires_at and record.expires_at < now:
         record.status = "expired"
         record.save()
-        raise HTTPException(status_code=401, detail="Secret has expired")
+        raise AuthenticationError("Secret has expired")
 
 
 def _handle_failed_attempt(record: ClientSecret) -> None:
@@ -701,7 +688,7 @@ def _build_secret_record(
 def _ensure_user(user_id: int) -> User:
     user = User.select().where(User.telegram_user_id == user_id).first()
     if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+        raise ResourceNotFoundError("User", user_id)
     return user
 
 
@@ -732,14 +719,32 @@ def _link_status_payload(user: User) -> TelegramLinkStatus:
     )
 
 
-def decode_token(token: str) -> dict:
-    """Decode and validate JWT token."""
+def decode_token(token: str, expected_type: str | None = None) -> dict:
+    """Decode and validate JWT token.
+
+    Args:
+        token: The JWT token string
+        expected_type: If provided, validates token type matches (access/refresh)
+
+    Raises:
+        TokenExpiredError: Token has expired (401)
+        TokenInvalidError: Token is malformed or signature invalid (401)
+        TokenWrongTypeError: Token type doesn't match expected (401)
+    """
+    from app.api.exceptions import TokenExpiredError, TokenInvalidError, TokenWrongTypeError
+
     try:
-        return jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-    except jwt.ExpiredSignatureError as err:
-        raise HTTPException(status_code=401, detail="Token has expired") from err
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+    except jwt.ExpiredSignatureError:
+        token_type = expected_type or "access"
+        raise TokenExpiredError(token_type) from None
     except jwt.InvalidTokenError as err:
-        raise HTTPException(status_code=401, detail="Invalid token") from err
+        raise TokenInvalidError(str(err)) from err
+
+    if expected_type and payload.get("type") != expected_type:
+        raise TokenWrongTypeError(expected=expected_type, received=payload.get("type", "unknown"))
+
+    return payload
 
 
 async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)) -> dict:
@@ -747,21 +752,25 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
     Dependency to get current authenticated user.
 
     Validates JWT token and returns user data.
-    """
-    token = credentials.credentials
-    payload = decode_token(token)
 
-    if payload.get("type") != "access":
-        raise HTTPException(status_code=401, detail="Invalid token type")
+    Raises:
+        TokenExpiredError: Access token has expired (401)
+        TokenInvalidError: Token is malformed (401)
+        TokenWrongTypeError: Not an access token (401)
+    """
+    from app.api.exceptions import TokenInvalidError
+
+    token = credentials.credentials
+    payload = decode_token(token, expected_type="access")
 
     user_id = payload.get("user_id")
     if not user_id:
-        raise HTTPException(status_code=401, detail="Invalid token payload")
+        raise TokenInvalidError("Missing user_id in token payload")
 
     # Verify user is still in whitelist
     allowed_ids = Config.get_allowed_user_ids()
     if user_id not in allowed_ids:
-        raise HTTPException(status_code=403, detail="User not authorized")
+        raise AuthorizationError("User not authorized")
 
     # Validate client_id from token
     client_id = payload.get("client_id")
@@ -822,10 +831,12 @@ async def telegram_login(login_data: TelegramLoginRequest):
         access_token = create_access_token(
             user.telegram_user_id, user.username, login_data.client_id
         )
-        refresh_token, session_id = create_refresh_token(user.telegram_user_id, login_data.client_id)
+        refresh_token, session_id = create_refresh_token(
+            user.telegram_user_id, login_data.client_id
+        )
 
         logger.info(
-            f"User {user.telegram_user_id} logged in successfully from client {login_data.client_id}",
+            f"User {user.telegram_user_id} logged in from client {login_data.client_id}",
             extra={
                 "user_id": user.telegram_user_id,
                 "username": user.username,
@@ -842,14 +853,17 @@ async def telegram_login(login_data: TelegramLoginRequest):
         )
         return success_response(AuthTokensResponse(tokens=tokens, session_id=session_id))
 
-    except HTTPException:
-        # Re-raise HTTP exceptions from verify_telegram_auth or validate_client_id
+    except (
+        AuthenticationError,
+        AuthorizationError,
+        ConfigurationError,
+        ValidationError,
+    ):
+        # Re-raise structured exceptions from verify_telegram_auth or validate_client_id
         raise
     except Exception as e:
         logger.error(f"Login failed for user {login_data.telegram_user_id}: {e}", exc_info=True)
-        raise HTTPException(
-            status_code=500, detail="Authentication failed. Please try again."
-        ) from e
+        raise ProcessingError("Authentication failed. Please try again.") from e
 
 
 @router.post("/secret-login")
@@ -862,7 +876,7 @@ async def secret_login(login_data: SecretLoginRequest):
 
     user = User.select().where(User.telegram_user_id == login_data.user_id).first()
     if not user:
-        raise HTTPException(status_code=404, detail="User not found for secret login")
+        raise ResourceNotFoundError("User", login_data.user_id)
 
     secret_record = (
         ClientSecret.select()
@@ -875,17 +889,17 @@ async def secret_login(login_data: SecretLoginRequest):
     )
 
     if not secret_record:
-        raise HTTPException(status_code=401, detail="Invalid credentials")
+        raise AuthenticationError("Invalid credentials")
 
     if secret_record.status == "revoked":
-        raise HTTPException(status_code=401, detail="Secret has been revoked")
+        raise AuthenticationError("Secret has been revoked")
 
     if secret_record.status == "locked":
         if secret_record.locked_until and secret_record.locked_until < now:
             secret_record.status = "active"
             _reset_failed_attempts(secret_record)
         else:
-            raise HTTPException(status_code=403, detail="Secret is temporarily locked")
+            raise AuthorizationError("Secret is temporarily locked")
 
     _check_expired(secret_record)
 
@@ -894,7 +908,7 @@ async def secret_login(login_data: SecretLoginRequest):
 
     if not hmac.compare_digest(expected_hash, secret_record.secret_hash):
         _handle_failed_attempt(secret_record)
-        raise HTTPException(status_code=401, detail="Invalid credentials")
+        raise AuthenticationError("Invalid credentials")
 
     _reset_failed_attempts(secret_record)
     secret_record.last_used_at = now
@@ -931,27 +945,48 @@ async def secret_login(login_data: SecretLoginRequest):
 async def refresh_access_token(refresh_data: RefreshTokenRequest):
     """
     Refresh an expired access token using a refresh token.
-    """
-    payload = decode_token(refresh_data.refresh_token)
 
-    if payload.get("type") != "refresh":
-        raise HTTPException(status_code=401, detail="Invalid token type")
+    Returns:
+        New access token on success
+
+    Raises:
+        TokenExpiredError: Refresh token has expired (401)
+        TokenInvalidError: Token is malformed (401)
+        TokenWrongTypeError: Not a refresh token (401)
+        TokenRevokedError: Refresh token was revoked (401)
+        ResourceNotFoundError: User not found (404)
+    """
+    from app.api.exceptions import ResourceNotFoundError, TokenInvalidError, TokenRevokedError
+
+    # Decode and validate refresh token
+    payload = decode_token(refresh_data.refresh_token, expected_type="refresh")
 
     user_id = payload.get("user_id")
     if not user_id:
-        raise HTTPException(status_code=401, detail="Invalid token payload")
+        raise TokenInvalidError("Missing user_id in token payload")
 
     # Validate client_id from refresh token
     client_id = payload.get("client_id")
     validate_client_id(client_id)
 
+    # Verify refresh token is not revoked
+    token_hash = hashlib.sha256(refresh_data.refresh_token.encode()).hexdigest()
+    refresh_token_record = RefreshToken.get_or_none(RefreshToken.token_hash == token_hash)
+    if refresh_token_record and refresh_token_record.is_revoked:
+        raise TokenRevokedError()
+
     # Get user
     user = User.select().where(User.telegram_user_id == user_id).first()
     if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+        raise ResourceNotFoundError("User", user_id)
 
     # Generate new access token with same client_id
     access_token = create_access_token(user.telegram_user_id, user.username, client_id)
+
+    logger.info(
+        "token_refreshed",
+        extra={"user_id": user_id, "client_id": client_id},
+    )
 
     tokens = TokenPair(
         access_token=access_token,
@@ -1007,7 +1042,7 @@ async def rotate_secret_key(
 
     record = ClientSecret.select().where(ClientSecret.id == key_id).first()
     if not record:
-        raise HTTPException(status_code=404, detail="Secret key not found")
+        raise ResourceNotFoundError("Secret key", key_id)
 
     _ensure_user_allowed(record.user_id)
     validate_client_id(record.client_id)
@@ -1055,7 +1090,7 @@ async def revoke_secret_key(
 
     record = ClientSecret.select().where(ClientSecret.id == key_id).first()
     if not record:
-        raise HTTPException(status_code=404, detail="Secret key not found")
+        raise ResourceNotFoundError("Secret key", key_id)
 
     _ensure_user_allowed(record.user_id)
     record.status = "revoked"
@@ -1148,7 +1183,7 @@ async def delete_account(user=Depends(get_current_user)):
         return success_response({"success": True})
     except Exception as e:
         logger.error(f"Failed to delete user {user_id}: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Failed to delete account") from e
+        raise ProcessingError("Failed to delete account") from e
 
 
 @router.post("/apple-login")
@@ -1266,13 +1301,13 @@ async def complete_telegram_link(
     user_record = _ensure_user(user["user_id"])
 
     if not user_record.link_nonce or not user_record.link_nonce_expires_at:
-        raise HTTPException(status_code=400, detail="Linking not initiated")
+        raise ValidationError("Linking not initiated", details={"field": "nonce"})
 
     now = _utcnow_naive()
     if payload.nonce != user_record.link_nonce:
-        raise HTTPException(status_code=400, detail="Invalid link nonce")
+        raise ValidationError("Invalid link nonce", details={"field": "nonce"})
     if user_record.link_nonce_expires_at < now:
-        raise HTTPException(status_code=400, detail="Link nonce expired")
+        raise ValidationError("Link nonce expired", details={"field": "nonce"})
 
     verify_telegram_auth(
         user_id=payload.telegram_user_id,
@@ -1336,9 +1371,7 @@ async def logout(
     """
     token = request.refresh_token
     try:
-        # We don't verify signature here to allow logging out even if expired (as long as it's in DB)
-        # But for security, we should probably verify it's a valid token structure aimed at us.
-        # However, since we hash and look up, any garbage string won't be found anyway.
+        # Allow logout even if token expired; we hash and look up so garbage won't be found
         token_hash = hashlib.sha256(token.encode()).hexdigest()
 
         # Find token in DB

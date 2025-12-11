@@ -5,9 +5,10 @@ import tempfile
 import time
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, Request
 from starlette.responses import FileResponse
 
+from app.api.exceptions import ProcessingError, ResourceNotFoundError
 from app.api.routers.auth import get_current_user
 from app.config import Config
 from app.core.logging_utils import get_logger
@@ -23,7 +24,7 @@ def _build_db_dump_response(request: Request, user: dict):
     db_path = Config.get("DB_PATH", "/data/app.db")
 
     if not os.path.exists(db_path):
-        raise HTTPException(status_code=404, detail="Database file not found")
+        raise ResourceNotFoundError("Database file", db_path)
 
     backup_dir = tempfile.gettempdir()
     backup_filename = "bite_size_reader_backup.sqlite"
@@ -70,13 +71,10 @@ def _build_db_dump_response(request: Request, user: dict):
                 except OSError:
                     pass
 
-            raise HTTPException(
-                status_code=500,
-                detail=f"Backup failed: {e!s}",
-            ) from e
+            raise ProcessingError(f"Backup failed: {e!s}") from e
 
     if not os.path.exists(backup_path):
-        raise HTTPException(status_code=404, detail="Backup file not found after generation")
+        raise ResourceNotFoundError("Backup file", backup_path)
 
     mtime = os.path.getmtime(backup_path)
     timestamp = datetime.fromtimestamp(mtime, tz=UTC).strftime("%Y%m%d_%H%M%S")

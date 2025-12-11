@@ -7,7 +7,11 @@ from typing import TYPE_CHECKING, Any
 
 from peewee import JOIN
 
-from app.api.exceptions import APIException, ErrorCode
+from app.api.exceptions import (
+    SyncSessionExpiredError,
+    SyncSessionForbiddenError,
+    SyncSessionNotFoundError,
+)
 from app.api.models.responses import (
     DeltaSyncResponseData,
     FullSyncResponseData,
@@ -70,37 +74,21 @@ class SyncService:
             ttl = await redis_client.ttl(key)
 
             if payload_raw is None or ttl == -2:
-                raise APIException(
-                    message="Sync session expired or not found",
-                    error_code=ErrorCode.SESSION_EXPIRED,
-                    status_code=410,
-                )
+                raise SyncSessionNotFoundError(session_id)
 
             payload = json.loads(payload_raw)
         else:
             payload = _sync_sessions.get(session_id)
             if not payload:
-                raise APIException(
-                    message="Sync session expired or not found",
-                    error_code=ErrorCode.SESSION_EXPIRED,
-                    status_code=410,
-                )
+                raise SyncSessionNotFoundError(session_id)
 
         if payload.get("user_id") != user_id or payload.get("client_id") != client_id:
-            raise APIException(
-                message="Sync session does not belong to this user/client",
-                error_code=ErrorCode.FORBIDDEN,
-                status_code=403,
-            )
+            raise SyncSessionForbiddenError()
 
         expires_raw = payload["expires_at"]
         expires_at = datetime.fromisoformat(expires_raw.replace("Z", "+00:00"))
         if datetime.now(UTC) >= expires_at:
-            raise APIException(
-                message="Sync session expired",
-                error_code=ErrorCode.SESSION_EXPIRED,
-                status_code=410,
-            )
+            raise SyncSessionExpiredError(session_id)
 
         return payload
 
