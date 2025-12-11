@@ -2019,21 +2019,27 @@ components:
       properties:
         correlation_id:
           type: string
+          description: Request correlation ID for debugging (always present, may be empty string).
         timestamp:
           type: string
           format: date-time
+          description: ISO 8601 response timestamp.
         version:
           type: string
+          description: API version string.
         build:
           type: string
           nullable: true
+          description: Build identifier (if available).
         pagination:
           $ref: '#/components/schemas/Pagination'
         debug:
           type: object
           nullable: true
+          description: Debug information (only in development mode).
     Pagination:
       type: object
+      description: Pagination metadata for list responses.
       required:
       - total
       - limit
@@ -2042,15 +2048,20 @@ components:
       properties:
         total:
           type: integer
+          description: Total number of items matching the query.
         limit:
           type: integer
+          description: Maximum items per page.
         offset:
           type: integer
+          description: Current offset from start.
         has_more:
           type: boolean
+          description: Whether more items are available.
         next_cursor:
           type: integer
           nullable: true
+          description: Cursor for next page (if using cursor-based pagination).
     BaseSuccessResponse:
       type: object
       required:
@@ -2064,32 +2075,81 @@ components:
           $ref: '#/components/schemas/Meta'
     ErrorObject:
       type: object
+      description: Structured error details for programmatic handling.
       required:
       - code
+      - errorType
       - message
+      - retryable
+      - correlation_id
       properties:
         code:
           type: string
+          description: Machine-readable error code for programmatic handling.
           enum:
+          # Client errors
           - VALIDATION_ERROR
           - UNAUTHORIZED
           - FORBIDDEN
           - NOT_FOUND
           - CONFLICT
           - RATE_LIMIT_EXCEEDED
-          - INTERNAL_ERROR
           - SESSION_EXPIRED
+          # Token/Auth errors
+          - TOKEN_EXPIRED
+          - TOKEN_INVALID
+          - TOKEN_REVOKED
+          - TOKEN_WRONG_TYPE
+          - REFRESH_RATE_LIMITED
+          # Sync errors
+          - SYNC_SESSION_EXPIRED
+          - SYNC_SESSION_NOT_FOUND
+          - SYNC_SESSION_FORBIDDEN
+          - SYNC_NO_CHANGES
+          - SYNC_CONFLICT
+          - SYNC_INVALID_ENTITY
+          - SYNC_ENTITY_NOT_FOUND
+          # Server errors
+          - INTERNAL_ERROR
+          - DATABASE_ERROR
+          - EXTERNAL_API_ERROR
+          - PROCESSING_ERROR
+          - AUTH_SERVICE_UNAVAILABLE
+          # Configuration errors
+          - CONFIGURATION_ERROR
+          - FEATURE_DISABLED
+        errorType:
+          type: string
+          description: Error category for client-side handling logic.
+          enum:
+          - authentication
+          - authorization
+          - validation
+          - not_found
+          - conflict
+          - rate_limit
+          - external_service
+          - sync
+          - internal
+          - configuration
         message:
           type: string
+          description: Human-readable error message.
+        retryable:
+          type: boolean
+          description: Whether the client should retry the request.
+          default: false
         details:
           type: object
           nullable: true
+          description: Additional error context (field errors, resource IDs, etc.).
         correlation_id:
           type: string
-          nullable: true
+          description: Request correlation ID for debugging (always present).
         retry_after:
           type: integer
           nullable: true
+          description: Seconds to wait before retrying (for rate limit errors).
     ErrorResponse:
       type: object
       required:
@@ -2160,6 +2220,7 @@ components:
             $ref: '#/components/schemas/AuthTokens'
     SecretLoginRequest:
       type: object
+      description: Request body for secret-key based authentication.
       required:
       - user_id
       - client_id
@@ -2167,17 +2228,20 @@ components:
       properties:
         user_id:
           type: integer
-          description: User ID (must be whitelisted)
+          description: User ID (must be whitelisted in ALLOWED_USER_IDS).
         client_id:
           type: string
           minLength: 1
           maxLength: 100
+          description: Client application identifier.
         secret:
           type: string
-          minLength: 1
+          minLength: 8
+          description: Secret key for authentication (minimum 8 characters).
         username:
           type: string
           nullable: true
+          description: Optional username to associate with the session.
     SecretKeyCreateRequest:
       type: object
       required:
@@ -2537,21 +2601,24 @@ components:
             $ref: '#/components/schemas/UserStats'
     DeviceRegistrationPayload:
       type: object
+      description: Request body for registering a device for push notifications.
       required:
         - token
         - platform
       properties:
         token:
           type: string
-          description: FCM or APNS device token
+          minLength: 1
+          maxLength: 500
+          description: FCM or APNS device token.
         platform:
           type: string
           enum: [ios, android]
-          description: Mobile platform
+          description: Mobile platform (must be 'ios' or 'android').
         device_id:
           type: string
           nullable: true
-          description: Unique device identifier
+          description: Unique device identifier (optional).
 
     SummaryPayload:
       type: object
@@ -2746,6 +2813,7 @@ components:
           default: false
     SummaryListItem:
       type: object
+      description: Compact summary representation for list views.
       required:
       - id
       - request_id
@@ -2758,46 +2826,68 @@ components:
       - is_read
       - lang
       - created_at
+      - confidence
+      - hallucination_risk
       properties:
         id:
           type: integer
+          description: Unique summary identifier.
         request_id:
           type: integer
+          description: Associated request ID.
         title:
           type: string
+          description: Article title.
         domain:
           type: string
           nullable: true
+          description: Source domain (e.g., example.com).
         url:
           type: string
+          description: Original article URL.
         tldr:
           type: string
+          description: Concise multi-sentence summary.
         summary_250:
           type: string
+          maxLength: 250
+          description: Short summary (maximum 250 characters).
         reading_time_min:
           type: integer
+          description: Estimated reading time in minutes.
         topic_tags:
           type: array
           items:
             type: string
+          description: Topic hashtags (e.g., #technology, #ai).
         is_read:
           type: boolean
+          description: Whether the user has marked this as read.
         lang:
           type: string
+          enum: [en, ru, auto]
+          description: Detected or preferred language.
         created_at:
           type: string
           format: date-time
+          description: ISO 8601 creation timestamp.
         confidence:
           type: number
+          minimum: 0
+          maximum: 1
+          description: LLM confidence score (0.0-1.0).
         hallucination_risk:
           type: string
-          nullable: true
+          enum: [low, medium, high, unknown]
+          description: Assessed hallucination risk level.
         is_favorited:
           type: boolean
           default: false
+          description: Whether the user has favorited this summary.
         image_url:
           type: string
           nullable: true
+          description: Featured image URL (if available).
     SummaryStats:
       type: object
       required:
@@ -4055,22 +4145,28 @@ components:
       properties:
         from_chat_id:
           type: integer
+          minimum: 1
+          description: Telegram chat ID where the message was forwarded from.
         from_message_id:
           type: integer
+          minimum: 1
+          description: Telegram message ID of the forwarded message.
         from_chat_title:
           anyOf:
           - type: string
           - type: 'null'
+          description: Title of the source chat (if available).
         forwarded_at:
           anyOf:
           - type: string
           - type: 'null'
+          description: ISO 8601 timestamp when message was forwarded.
       type: object
       required:
       - from_chat_id
       - from_message_id
       title: ForwardMetadata
-      description: Metadata for forwarded message.
+      description: Metadata for forwarded Telegram message.
     HTTPValidationError:
       properties:
         detail:
@@ -4119,11 +4215,13 @@ components:
           type: string
           const: url
           default: url
+          description: Request type (always 'url' for URL submissions).
         input_url:
           type: string
-          maxLength: 2083
+          maxLength: 2048
           minLength: 1
           format: uri
+          description: URL to summarize (must be http:// or https://).
         lang_preference:
           type: string
           enum:
@@ -4131,6 +4229,7 @@ components:
           - en
           - ru
           default: auto
+          description: Preferred language for the summary.
       type: object
       required:
       - input_url
