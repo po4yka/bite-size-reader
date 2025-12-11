@@ -89,7 +89,7 @@ APP_BUILD: str | None = os.getenv("APP_BUILD") or None
 class MetaInfo(BaseModel):
     """Metadata for all API responses."""
 
-    correlation_id: str | None = None
+    correlation_id: str = ""
     timestamp: str = Field(
         default_factory=lambda: datetime.now(UTC).isoformat().replace("+00:00", "Z")
     )
@@ -107,7 +107,7 @@ class ErrorDetail(BaseModel):
     message: str
     retryable: bool = False
     details: dict[str, Any] | None = None
-    correlation_id: str | None = None
+    correlation_id: str = ""
     retry_after: int | None = None
 
     model_config = {"populate_by_name": True}
@@ -146,24 +146,122 @@ class PaginationInfo(BaseModel):
 class SummaryCompact(BaseModel):
     """Compact summary for list views."""
 
-    id: int
-    request_id: int = Field(alias="requestId")
-    title: str
-    domain: str
-    url: str
-    tldr: str
-    summary_250: str = Field(alias="summary250")
-    reading_time_min: int = Field(alias="readingTimeMin")
-    topic_tags: list[str] = Field(alias="topicTags")
-    is_read: bool = Field(alias="isRead")
-    is_favorited: bool = Field(default=False, alias="isFavorited")
-    lang: Literal["en", "ru", "auto"]
-    created_at: str = Field(alias="createdAt")
-    confidence: float
-    hallucination_risk: Literal["low", "medium", "high", "unknown"] = Field(
-        alias="hallucinationRisk"
+    id: int = Field(description="Unique summary identifier")
+    request_id: int = Field(alias="requestId", description="Associated request ID")
+    title: str = Field(description="Article title")
+    domain: str = Field(description="Source domain (e.g., example.com)")
+    url: str = Field(description="Original article URL")
+    tldr: str = Field(description="Concise multi-sentence summary")
+    summary_250: str = Field(alias="summary250", description="Short summary (<=250 chars)")
+    reading_time_min: int = Field(
+        alias="readingTimeMin", description="Estimated reading time in minutes"
     )
-    image_url: str | None = Field(default=None, alias="imageUrl")
+    topic_tags: list[str] = Field(alias="topicTags", description="Topic hashtags")
+    is_read: bool = Field(alias="isRead", description="User read status")
+    is_favorited: bool = Field(
+        default=False, alias="isFavorited", description="User favorite status"
+    )
+    lang: Literal["en", "ru", "auto"] = Field(description="Detected or preferred language")
+    created_at: str = Field(alias="createdAt", description="ISO 8601 creation timestamp")
+    confidence: float = Field(description="LLM confidence score (0.0-1.0)")
+    hallucination_risk: Literal["low", "medium", "high", "unknown"] = Field(
+        alias="hallucinationRisk", description="Assessed hallucination risk level"
+    )
+    image_url: str | None = Field(
+        default=None, alias="imageUrl", description="Featured image URL (if available)"
+    )
+
+    model_config = {"populate_by_name": True}
+
+
+class SummaryDetailEntities(BaseModel):
+    """Entity breakdown for summary detail."""
+
+    people: list[str] = Field(default_factory=list)
+    organizations: list[str] = Field(default_factory=list)
+    locations: list[str] = Field(default_factory=list)
+
+    model_config = {"populate_by_name": True}
+
+
+class SummaryDetailReadability(BaseModel):
+    """Readability metrics."""
+
+    method: str
+    score: float
+    level: str
+
+    model_config = {"populate_by_name": True}
+
+
+class SummaryDetailKeyStat(BaseModel):
+    """Key statistic entry."""
+
+    label: str
+    value: float
+    unit: str
+    source_excerpt: str = Field(alias="sourceExcerpt")
+
+    model_config = {"populate_by_name": True}
+
+
+class SummaryDetailSummary(BaseModel):
+    """Summary content fields."""
+
+    summary_250: str = Field(alias="summary250")
+    summary_1000: str = Field(alias="summary1000")
+    tldr: str
+    key_ideas: list[str] = Field(alias="keyIdeas")
+    topic_tags: list[str] = Field(alias="topicTags")
+    entities: SummaryDetailEntities
+    estimated_reading_time_min: int = Field(alias="estimatedReadingTimeMin")
+    key_stats: list[SummaryDetailKeyStat] = Field(default_factory=list, alias="keyStats")
+    answered_questions: list[str] = Field(default_factory=list, alias="answeredQuestions")
+    readability: SummaryDetailReadability | None = None
+    seo_keywords: list[str] = Field(default_factory=list, alias="seoKeywords")
+
+    model_config = {"populate_by_name": True}
+
+
+class SummaryDetailRequest(BaseModel):
+    """Request metadata."""
+
+    id: str
+    type: str
+    url: str | None = None
+    normalized_url: str | None = Field(default=None, alias="normalizedUrl")
+    dedupe_hash: str | None = Field(default=None, alias="dedupeHash")
+    status: str
+    lang_detected: str | None = Field(default=None, alias="langDetected")
+    created_at: str = Field(alias="createdAt")
+    updated_at: str = Field(alias="updatedAt")
+
+    model_config = {"populate_by_name": True}
+
+
+class SummaryDetailSource(BaseModel):
+    """Source content metadata."""
+
+    url: str | None = None
+    title: str | None = None
+    domain: str | None = None
+    author: str | None = None
+    published_at: str | None = Field(default=None, alias="publishedAt")
+    word_count: int | None = Field(default=None, alias="wordCount")
+    content_type: str | None = Field(default=None, alias="contentType")
+
+    model_config = {"populate_by_name": True}
+
+
+class SummaryDetailProcessing(BaseModel):
+    """Processing metadata."""
+
+    model_used: str | None = Field(default=None, alias="modelUsed")
+    tokens_used: int | None = Field(default=None, alias="tokensUsed")
+    processing_time_ms: int | None = Field(default=None, alias="processingTimeMs")
+    crawl_time_ms: int | None = Field(default=None, alias="crawlTimeMs")
+    confidence: float | None = None
+    hallucination_risk: str | None = Field(default=None, alias="hallucinationRisk")
 
     model_config = {"populate_by_name": True}
 
@@ -171,10 +269,10 @@ class SummaryCompact(BaseModel):
 class SummaryDetail(BaseModel):
     """Full summary payload with related request/source/processing details."""
 
-    summary: dict[str, Any]
-    request: dict[str, Any]
-    source: dict[str, Any]
-    processing: dict[str, Any]
+    summary: SummaryDetailSummary
+    request: SummaryDetailRequest
+    source: SummaryDetailSource
+    processing: SummaryDetailProcessing
 
 
 class SummaryContent(BaseModel):
@@ -338,10 +436,14 @@ class SubmitRequestResponse(BaseModel):
 class TokenPair(BaseModel):
     """JWT token pair."""
 
-    access_token: str = Field(alias="accessToken")
-    refresh_token: str | None = Field(default=None, alias="refreshToken")
-    expires_in: int = Field(alias="expiresIn")
-    token_type: str = Field(default="Bearer", alias="tokenType")
+    access_token: str = Field(alias="accessToken", description="JWT access token")
+    refresh_token: str | None = Field(
+        default=None, alias="refreshToken", description="JWT refresh token (if available)"
+    )
+    expires_in: int = Field(alias="expiresIn", description="Token expiration time in seconds")
+    token_type: str = Field(
+        default="Bearer", alias="tokenType", description="Token type (always 'Bearer')"
+    )
 
     model_config = {"populate_by_name": True}
 
@@ -358,11 +460,13 @@ class AuthTokensResponse(BaseModel):
 class UserInfo(BaseModel):
     """Basic user info."""
 
-    user_id: int = Field(alias="userId")
-    username: str
-    client_id: str = Field(alias="clientId")
-    is_owner: bool = Field(default=False, alias="isOwner")
-    created_at: str = Field(alias="createdAt")
+    user_id: int = Field(alias="userId", description="Unique user identifier")
+    username: str = Field(description="Telegram username")
+    client_id: str = Field(alias="clientId", description="Client application identifier")
+    is_owner: bool = Field(default=False, alias="isOwner", description="Bot owner status")
+    created_at: str = Field(
+        alias="createdAt", description="ISO 8601 user registration timestamp"
+    )
 
     model_config = {"populate_by_name": True}
 
@@ -520,11 +624,17 @@ class SearchResultsData(BaseModel):
 class SyncSessionData(BaseModel):
     """Sync session metadata (aligned to OpenAPI)."""
 
-    session_id: str = Field(alias="sessionId")
-    expires_at: str = Field(alias="expiresAt")
-    default_limit: int = Field(alias="defaultLimit")
-    max_limit: int = Field(alias="maxLimit")
-    last_issued_since: int | None = Field(default=None, alias="lastIssuedSince")
+    session_id: str = Field(alias="sessionId", description="Unique sync session identifier")
+    expires_at: str = Field(
+        alias="expiresAt", description="ISO 8601 session expiration timestamp"
+    )
+    default_limit: int = Field(
+        alias="defaultLimit", description="Default page size for sync requests"
+    )
+    max_limit: int = Field(alias="maxLimit", description="Maximum allowed page size")
+    last_issued_since: int | None = Field(
+        default=None, alias="lastIssuedSince", description="Last issued 'since' value (if any)"
+    )
 
     model_config = {"populate_by_name": True}
 
@@ -618,6 +728,24 @@ class PreferencesUpdateResult(BaseModel):
     model_config = {"populate_by_name": True}
 
 
+class TopicStat(BaseModel):
+    """Topic statistics entry."""
+
+    topic: str
+    count: int
+
+    model_config = {"populate_by_name": True}
+
+
+class DomainStat(BaseModel):
+    """Domain statistics entry."""
+
+    domain: str
+    count: int
+
+    model_config = {"populate_by_name": True}
+
+
 class UserStatsData(BaseModel):
     """User statistics payload."""
 
@@ -626,8 +754,8 @@ class UserStatsData(BaseModel):
     read_count: int = Field(alias="readCount")
     total_reading_time_min: int = Field(alias="totalReadingTimeMin")
     average_reading_time_min: float = Field(alias="averageReadingTimeMin")
-    favorite_topics: list[dict[str, Any]] = Field(alias="favoriteTopics")
-    favorite_domains: list[dict[str, Any]] = Field(alias="favoriteDomains")
+    favorite_topics: list[TopicStat] = Field(alias="favoriteTopics")
+    favorite_domains: list[DomainStat] = Field(alias="favoriteDomains")
     language_distribution: dict[str, int] = Field(alias="languageDistribution")
     joined_at: str | None = Field(default=None, alias="joinedAt")
     last_summary_at: str | None = Field(default=None, alias="lastSummaryAt")
@@ -654,7 +782,7 @@ def build_meta(
     build: str | None = None,
 ) -> MetaInfo:
     """Construct meta with sensible defaults and context-aware correlation ID."""
-    corr = correlation_id or correlation_id_ctx.get()
+    corr = correlation_id or correlation_id_ctx.get() or ""
     pagination_model = _coerce_pagination(pagination)
     meta_kwargs: dict[str, Any] = {
         "correlation_id": corr,
@@ -755,8 +883,8 @@ def make_error(
     )
 
 
-def _ensure_error_detail(detail: ErrorDetail, correlation_id: str | None) -> ErrorDetail:
-    if detail.correlation_id or not correlation_id:
+def _ensure_error_detail(detail: ErrorDetail, correlation_id: str) -> ErrorDetail:
+    if detail.correlation_id:
         return detail
     detail_payload = detail.model_dump(by_alias=True)
     detail_payload["correlation_id"] = correlation_id
@@ -772,7 +900,7 @@ def error_response(
     build: str | None = None,
 ) -> dict[str, Any]:
     """Helper to build a standardized error response."""
-    corr = correlation_id or correlation_id_ctx.get()
+    corr = correlation_id or correlation_id_ctx.get() or ""
     normalized_detail = _ensure_error_detail(detail, corr)
     meta = build_meta(correlation_id=corr, debug=debug, version=version, build=build)
     return ErrorResponse(error=normalized_detail, meta=meta).model_dump(by_alias=True)

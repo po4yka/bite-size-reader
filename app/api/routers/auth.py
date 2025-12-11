@@ -185,7 +185,7 @@ class SecretLoginRequest(BaseModel):
 
     user_id: int
     client_id: str = Field(..., min_length=1, max_length=100)
-    secret: str
+    secret: str = Field(..., min_length=8)
     username: str | None = None
 
 

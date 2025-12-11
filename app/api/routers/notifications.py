@@ -1,4 +1,4 @@
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
@@ -14,8 +14,8 @@ class BaseResponse(BaseModel):
 
 
 class DeviceRegistrationPayload(BaseModel):
-    token: str = Field(..., description="FCM or APNS device token")
-    platform: str = Field(..., description="Platform: 'ios' or 'android'")
+    token: str = Field(..., min_length=1, max_length=500, description="FCM or APNS device token")
+    platform: Literal["ios", "android"] = Field(..., description="Platform: 'ios' or 'android'")
     device_id: str | None = Field(None, description="Unique device identifier (optional)")
 
     model_config = ConfigDict(extra="ignore")

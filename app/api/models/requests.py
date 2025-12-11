@@ -11,7 +11,7 @@ class SubmitURLRequest(BaseModel):
     """Request body for submitting a URL."""
 
     type: Literal["url"] = "url"
-    input_url: HttpUrl
+    input_url: HttpUrl = Field(..., max_length=2048)
     lang_preference: Literal["auto", "en", "ru"] = "auto"
 
     @field_validator("input_url")
@@ -27,8 +27,8 @@ class SubmitURLRequest(BaseModel):
 class ForwardMetadata(BaseModel):
     """Metadata for forwarded message."""
 
-    from_chat_id: int
-    from_message_id: int
+    from_chat_id: int = Field(..., ge=1)
+    from_message_id: int = Field(..., ge=1)
     from_chat_title: str | None = None
     forwarded_at: str | None = None
 
