@@ -445,15 +445,19 @@ def create_refresh_token(
     client_id: str | None = None,
     device_info: str | None = None,
     ip_address: str | None = None,
-) -> str:
-    """Create and persist JWT refresh token."""
+) -> tuple[str, int]:
+    """Create and persist JWT refresh token.
+
+    Returns:
+        Tuple of (token_string, session_id) where session_id is the refresh token record ID.
+    """
     token = create_token(user_id, "refresh", client_id=client_id)
 
     # Persist token hash
     token_hash = hashlib.sha256(token.encode()).hexdigest()
     expires_at = datetime.now(UTC) + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
 
-    RefreshToken.create(
+    refresh_token_record = RefreshToken.create(
         user=user_id,
         token_hash=token_hash,
         client_id=client_id,
@@ -463,7 +467,7 @@ def create_refresh_token(
         is_revoked=False,
     )
 
-    return token
+    return token, refresh_token_record.id
 
 
 def validate_client_id(client_id: str | None) -> bool:
@@ -818,7 +822,7 @@ async def telegram_login(login_data: TelegramLoginRequest):
         access_token = create_access_token(
             user.telegram_user_id, user.username, login_data.client_id
         )
-        refresh_token = create_refresh_token(user.telegram_user_id, login_data.client_id)
+        refresh_token, session_id = create_refresh_token(user.telegram_user_id, login_data.client_id)
 
         logger.info(
             f"User {user.telegram_user_id} logged in successfully from client {login_data.client_id}",
@@ -836,7 +840,7 @@ async def telegram_login(login_data: TelegramLoginRequest):
             expires_in=ACCESS_TOKEN_EXPIRE_MINUTES * 60,
             token_type="Bearer",
         )
-        return success_response(AuthTokensResponse(tokens=tokens))
+        return success_response(AuthTokensResponse(tokens=tokens, session_id=session_id))
 
     except HTTPException:
         # Re-raise HTTP exceptions from verify_telegram_auth or validate_client_id
@@ -902,7 +906,7 @@ async def secret_login(login_data: SecretLoginRequest):
         user.save()
 
     access_token = create_access_token(user.telegram_user_id, user.username, login_data.client_id)
-    refresh_token = create_refresh_token(user.telegram_user_id, login_data.client_id)
+    refresh_token, session_id = create_refresh_token(user.telegram_user_id, login_data.client_id)
 
     tokens = TokenPair(
         access_token=access_token,
@@ -913,10 +917,14 @@ async def secret_login(login_data: SecretLoginRequest):
 
     logger.info(
         "secret_login_success",
-        extra={"user_id": user.telegram_user_id, "client_id": login_data.client_id},
+        extra={
+            "user_id": user.telegram_user_id,
+            "client_id": login_data.client_id,
+            "session_id": session_id,
+        },
     )
 
-    return success_response(AuthTokensResponse(tokens=tokens))
+    return success_response(AuthTokensResponse(tokens=tokens, session_id=session_id))
 
 
 @router.post("/refresh")
@@ -1099,13 +1107,21 @@ async def get_current_user_info(user=Depends(get_current_user)):
     """Get current authenticated user information."""
     user_record = User.select().where(User.telegram_user_id == user["user_id"]).first()
 
+    # Ensure user record exists (create if missing - edge case for legacy tokens)
+    if not user_record:
+        user_record = User.create(
+            telegram_user_id=user["user_id"],
+            username=user.get("username"),
+            is_owner=False,
+        )
+
     return success_response(
         UserInfo(
             user_id=user["user_id"],
-            username=user.get("username"),
-            client_id=user.get("client_id"),
-            is_owner=user_record.is_owner if user_record else False,
-            created_at=user_record.created_at.isoformat() + "Z" if user_record else None,
+            username=user.get("username") or "",
+            client_id=user["client_id"],
+            is_owner=user_record.is_owner,
+            created_at=user_record.created_at.isoformat() + "Z",
         )
     )
 
@@ -1168,7 +1184,7 @@ async def apple_login(login_data: AppleLoginRequest):
 
     # Generate tokens
     access_token = create_access_token(user.telegram_user_id, user.username, login_data.client_id)
-    refresh_token = create_refresh_token(user.telegram_user_id, login_data.client_id)
+    refresh_token, session_id = create_refresh_token(user.telegram_user_id, login_data.client_id)
 
     tokens = TokenPair(
         access_token=access_token,
@@ -1177,7 +1193,7 @@ async def apple_login(login_data: AppleLoginRequest):
         token_type="Bearer",
     )
 
-    return success_response(AuthTokensResponse(tokens=tokens))
+    return success_response(AuthTokensResponse(tokens=tokens, session_id=session_id))
 
 
 @router.post("/google-login")
@@ -1212,7 +1228,7 @@ async def google_login(login_data: GoogleLoginRequest):
 
     # Generate tokens
     access_token = create_access_token(user.telegram_user_id, user.username, login_data.client_id)
-    refresh_token = create_refresh_token(user.telegram_user_id, login_data.client_id)
+    refresh_token, session_id = create_refresh_token(user.telegram_user_id, login_data.client_id)
 
     tokens = TokenPair(
         access_token=access_token,
@@ -1221,7 +1237,7 @@ async def google_login(login_data: GoogleLoginRequest):
         token_type="Bearer",
     )
 
-    return success_response(AuthTokensResponse(tokens=tokens))
+    return success_response(AuthTokensResponse(tokens=tokens, session_id=session_id))
 
 
 @router.post("/me/telegram/link")

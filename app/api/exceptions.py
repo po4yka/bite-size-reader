@@ -26,6 +26,43 @@ class ErrorCode(str, Enum):
     PROCESSING_ERROR = "PROCESSING_ERROR"
 
 
+class ErrorType(str, Enum):
+    """Categories of errors for client handling."""
+
+    AUTHENTICATION = "authentication"
+    AUTHORIZATION = "authorization"
+    VALIDATION = "validation"
+    NOT_FOUND = "not_found"
+    CONFLICT = "conflict"
+    RATE_LIMIT = "rate_limit"
+    EXTERNAL_SERVICE = "external_service"
+    INTERNAL = "internal"
+
+
+# Mapping from ErrorCode to ErrorType
+_ERROR_TYPE_MAP: dict[ErrorCode, ErrorType] = {
+    ErrorCode.VALIDATION_ERROR: ErrorType.VALIDATION,
+    ErrorCode.UNAUTHORIZED: ErrorType.AUTHENTICATION,
+    ErrorCode.FORBIDDEN: ErrorType.AUTHORIZATION,
+    ErrorCode.NOT_FOUND: ErrorType.NOT_FOUND,
+    ErrorCode.CONFLICT: ErrorType.CONFLICT,
+    ErrorCode.RATE_LIMIT_EXCEEDED: ErrorType.RATE_LIMIT,
+    ErrorCode.SESSION_EXPIRED: ErrorType.AUTHENTICATION,
+    ErrorCode.INTERNAL_ERROR: ErrorType.INTERNAL,
+    ErrorCode.DATABASE_ERROR: ErrorType.INTERNAL,
+    ErrorCode.EXTERNAL_API_ERROR: ErrorType.EXTERNAL_SERVICE,
+    ErrorCode.PROCESSING_ERROR: ErrorType.INTERNAL,
+}
+
+# Retryable error codes
+_RETRYABLE_CODES: set[ErrorCode] = {
+    ErrorCode.RATE_LIMIT_EXCEEDED,
+    ErrorCode.SESSION_EXPIRED,
+    ErrorCode.DATABASE_ERROR,
+    ErrorCode.EXTERNAL_API_ERROR,
+}
+
+
 class APIException(Exception):
     """Base exception for all API errors."""
 
@@ -35,12 +72,18 @@ class APIException(Exception):
         error_code: ErrorCode,
         status_code: int = 500,
         details: dict[str, Any] | None = None,
+        error_type: ErrorType | None = None,
+        retryable: bool | None = None,
+        retry_after: int | None = None,
     ):
         super().__init__(message)
         self.message = message
         self.error_code = error_code
         self.status_code = status_code
         self.details = details or {}
+        self.error_type = error_type or _ERROR_TYPE_MAP.get(error_code, ErrorType.INTERNAL)
+        self.retryable = retryable if retryable is not None else (error_code in _RETRYABLE_CODES)
+        self.retry_after = retry_after
 
 
 class ValidationError(APIException):
@@ -122,6 +165,7 @@ class RateLimitExceededError(APIException):
             error_code=ErrorCode.RATE_LIMIT_EXCEEDED,
             status_code=429,
             details=details,
+            retry_after=retry_after_seconds,
         )
 
 

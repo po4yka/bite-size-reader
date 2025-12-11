@@ -9,8 +9,8 @@ from fastapi import Request, status
 from fastapi.responses import JSONResponse, Response
 from pydantic import ValidationError as PydanticValidationError
 
-from app.api.exceptions import APIException, ErrorCode
-from app.api.models.responses import ErrorDetail, error_response
+from app.api.exceptions import APIException, ErrorCode, ErrorType
+from app.api.models.responses import error_response, make_error
 from app.config import load_config
 
 logger = logging.getLogger(__name__)
@@ -31,17 +31,22 @@ async def api_exception_handler(request: Request, exc: Exception) -> Response:
         extra={
             "correlation_id": correlation_id,
             "error_code": exc.error_code.value,
+            "error_type": exc.error_type.value,
             "status_code": exc.status_code,
+            "retryable": exc.retryable,
             "path": request.url.path,
         },
     )
 
-    detail = ErrorDetail(
+    detail = make_error(
         code=exc.error_code.value,
         message=exc.message,
-        details=exc.details,
-        correlation_id=correlation_id,
+        error_type=exc.error_type.value,
+        retryable=exc.retryable,
+        details=exc.details or None,
+        retry_after=exc.retry_after,
     )
+    detail.correlation_id = correlation_id
 
     return JSONResponse(
         status_code=exc.status_code, content=error_response(detail, correlation_id=correlation_id)
@@ -76,12 +81,14 @@ async def validation_exception_handler(request: Request, exc: Exception) -> Resp
         },
     )
 
-    detail = ErrorDetail(
+    detail = make_error(
         code=ErrorCode.VALIDATION_ERROR.value,
         message="Request validation failed",
+        error_type=ErrorType.VALIDATION,
+        retryable=False,
         details={"fields": formatted_errors},
-        correlation_id=correlation_id,
     )
+    detail.correlation_id = correlation_id
 
     return JSONResponse(
         status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -99,11 +106,13 @@ async def database_exception_handler(request: Request, exc: Exception) -> Respon
         extra={"correlation_id": correlation_id, "path": request.url.path},
     )
 
-    detail = ErrorDetail(
+    detail = make_error(
         code=ErrorCode.DATABASE_ERROR.value,
         message="Database temporarily unavailable",
-        correlation_id=correlation_id,
+        error_type=ErrorType.INTERNAL,
+        retryable=True,
     )
+    detail.correlation_id = correlation_id
 
     return JSONResponse(
         status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -127,11 +136,13 @@ async def global_exception_handler(request: Request, exc: Exception) -> Response
 
     message = str(exc) if debug_mode else "An internal server error occurred"
 
-    detail = ErrorDetail(
+    detail = make_error(
         code=ErrorCode.INTERNAL_ERROR.value,
         message=message,
-        correlation_id=correlation_id,
+        error_type=ErrorType.INTERNAL,
+        retryable=False,
     )
+    detail.correlation_id = correlation_id
 
     return JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

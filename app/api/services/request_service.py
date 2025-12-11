@@ -191,7 +191,10 @@ class RequestService:
             request_id: Request ID to check
 
         Returns:
-            Dictionary with status information
+            Dictionary with status information including:
+            - stage: One of pending, crawling, processing, complete, failed
+            - can_retry: Boolean indicating if request can be retried
+            - queue_position: Position in queue (only for pending requests)
 
         Raises:
             ResourceNotFoundError: If request not found or access denied
@@ -206,12 +209,14 @@ class RequestService:
             raise ResourceNotFoundError("Request", request_id)
 
         # Determine stage based on status and related records
-        stage = None
+        # Stage values: pending, crawling, processing, complete, failed
+        stage = "pending"  # Default
         progress = None
+        queue_position = None
         error_stage = None
         error_type = None
         error_message = None
-        can_retry = None
+        can_retry = False  # Explicit boolean, never None
 
         if request.status == "processing":
             crawl_result = CrawlResult.select().where(CrawlResult.request == request.id).first()
@@ -219,33 +224,55 @@ class RequestService:
             summary = Summary.select().where(Summary.request == request.id).first()
 
             if not crawl_result:
-                stage = "content_extraction"
-                progress = {"current_step": 1, "total_steps": 4, "percentage": 25}
-            elif llm_calls == 0:
-                stage = "llm_summarization"
-                progress = {"current_step": 2, "total_steps": 4, "percentage": 50}
-            elif not summary:
-                stage = "validation"
-                progress = {"current_step": 3, "total_steps": 4, "percentage": 75}
+                stage = "crawling"
+                progress = {"current_step": 1, "total_steps": 3, "percentage": 33}
+            elif llm_calls == 0 or not summary:
+                stage = "processing"
+                progress = {"current_step": 2, "total_steps": 3, "percentage": 66}
+            else:
+                stage = "processing"
+                progress = {"current_step": 3, "total_steps": 3, "percentage": 90}
+
         elif request.status == "pending":
             stage = "pending"
-        elif request.status == "success":
-            stage = "success"
+            # Calculate queue position: count pending requests created before this one
+            queue_position = (
+                RequestModel.select()
+                .where(
+                    (RequestModel.status == "pending")
+                    & (RequestModel.created_at < request.created_at)
+                )
+                .count()
+            ) + 1  # 1-indexed position
+
+        elif request.status in ("success", "ok"):
+            stage = "complete"
+
         elif request.status == "error":
+            stage = "failed"
             error_stage, error_type, error_message = RequestService._derive_error_details(
                 request.id
             )
             if not error_message:
                 error_message = "Request failed"
-            stage = error_stage or "error"
-            can_retry = True
+            can_retry = True  # Failed requests can be retried
+
+        elif request.status == "cancelled":
+            stage = "failed"
+            error_message = "Request was cancelled"
+            can_retry = True  # Cancelled requests can be retried
+
+        else:
+            # Unknown status - treat as pending
+            stage = "pending"
 
         return {
             "request_id": request.id,
             "status": request.status,
             "stage": stage,
             "progress": progress,
-            "estimated_seconds_remaining": 8 if request.status == "processing" else None,
+            "estimated_seconds_remaining": 8 if stage in ("crawling", "processing") else None,
+            "queue_position": queue_position,
             "error_stage": error_stage,
             "error_type": error_type,
             "error_message": error_message,

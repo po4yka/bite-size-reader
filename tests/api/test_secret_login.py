@@ -55,6 +55,8 @@ async def test_secret_login_success(tmp_path, monkeypatch: pytest.MonkeyPatch):
 
     tokens = response["data"]["tokens"]
     assert tokens["access_token"]
+    assert "session_id" in response["data"]
+    assert response["data"]["session_id"] is not None
     reloaded = ClientSecret.get_by_id(record.id)
     assert reloaded.last_used_at is not None
     assert reloaded.failed_attempts == 0

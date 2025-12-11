@@ -6,12 +6,81 @@ from __future__ import annotations
 
 import os
 from datetime import datetime
+from enum import Enum
 from typing import Any
 
 from pydantic import BaseModel, Field
 
 from app.api.context import correlation_id_ctx
 from app.core.time_utils import UTC
+
+
+class ErrorType(str, Enum):
+    """Categories of errors for client handling."""
+
+    AUTHENTICATION = "authentication"  # Auth failures, token issues
+    AUTHORIZATION = "authorization"  # Permission denied, access control
+    VALIDATION = "validation"  # Invalid input, schema errors
+    NOT_FOUND = "not_found"  # Resource doesn't exist
+    CONFLICT = "conflict"  # Duplicate, version mismatch
+    RATE_LIMIT = "rate_limit"  # Too many requests
+    EXTERNAL_SERVICE = "external_service"  # Firecrawl, OpenRouter failures
+    INTERNAL = "internal"  # Server errors, unexpected failures
+
+
+class ErrorCode(str, Enum):
+    """Structured error codes for programmatic handling."""
+
+    # Authentication errors
+    AUTH_TOKEN_EXPIRED = "AUTH_TOKEN_EXPIRED"
+    AUTH_TOKEN_INVALID = "AUTH_TOKEN_INVALID"
+    AUTH_SESSION_EXPIRED = "AUTH_SESSION_EXPIRED"
+    AUTH_CREDENTIALS_INVALID = "AUTH_CREDENTIALS_INVALID"
+    AUTH_SECRET_LOCKED = "AUTH_SECRET_LOCKED"
+    AUTH_SECRET_REVOKED = "AUTH_SECRET_REVOKED"
+
+    # Authorization errors
+    AUTHZ_USER_NOT_ALLOWED = "AUTHZ_USER_NOT_ALLOWED"
+    AUTHZ_CLIENT_NOT_ALLOWED = "AUTHZ_CLIENT_NOT_ALLOWED"
+    AUTHZ_OWNER_REQUIRED = "AUTHZ_OWNER_REQUIRED"
+    AUTHZ_ACCESS_DENIED = "AUTHZ_ACCESS_DENIED"
+
+    # Validation errors
+    VALIDATION_FAILED = "VALIDATION_FAILED"
+    VALIDATION_FIELD_REQUIRED = "VALIDATION_FIELD_REQUIRED"
+    VALIDATION_FIELD_INVALID = "VALIDATION_FIELD_INVALID"
+    VALIDATION_URL_INVALID = "VALIDATION_URL_INVALID"
+
+    # Resource errors
+    RESOURCE_NOT_FOUND = "RESOURCE_NOT_FOUND"
+    RESOURCE_ALREADY_EXISTS = "RESOURCE_ALREADY_EXISTS"
+    RESOURCE_VERSION_CONFLICT = "RESOURCE_VERSION_CONFLICT"
+
+    # Rate limiting
+    RATE_LIMIT_EXCEEDED = "RATE_LIMIT_EXCEEDED"
+
+    # External service errors
+    EXTERNAL_FIRECRAWL_ERROR = "EXTERNAL_FIRECRAWL_ERROR"
+    EXTERNAL_OPENROUTER_ERROR = "EXTERNAL_OPENROUTER_ERROR"
+    EXTERNAL_TELEGRAM_ERROR = "EXTERNAL_TELEGRAM_ERROR"
+    EXTERNAL_SERVICE_TIMEOUT = "EXTERNAL_SERVICE_TIMEOUT"
+    EXTERNAL_SERVICE_UNAVAILABLE = "EXTERNAL_SERVICE_UNAVAILABLE"
+
+    # Internal errors
+    INTERNAL_ERROR = "INTERNAL_ERROR"
+    INTERNAL_DATABASE_ERROR = "INTERNAL_DATABASE_ERROR"
+    INTERNAL_CONFIG_ERROR = "INTERNAL_CONFIG_ERROR"
+
+
+class RequestStage(str, Enum):
+    """Processing stages for request status polling."""
+
+    PENDING = "pending"  # Request queued, waiting to start
+    CRAWLING = "crawling"  # Fetching content from URL
+    PROCESSING = "processing"  # LLM summarization in progress
+    COMPLETE = "complete"  # Successfully finished
+    FAILED = "failed"  # Processing failed (check error fields)
+
 
 APP_VERSION = os.getenv("APP_VERSION", "1.0.0")
 APP_BUILD: str | None = os.getenv("APP_BUILD") or None
@@ -34,17 +103,24 @@ class ErrorDetail(BaseModel):
     """Error details aligned to API error envelope."""
 
     code: str
+    error_type: str = Field(default=ErrorType.INTERNAL.value, alias="errorType")
     message: str
+    retryable: bool = False
     details: dict[str, Any] | None = None
     correlation_id: str | None = None
     retry_after: int | None = None
 
+    model_config = {"populate_by_name": True}
+
 
 class SuccessResponse(BaseModel):
-    """Standard success response wrapper."""
+    """Standard success response wrapper.
+
+    When success=True, data is always present and non-null.
+    """
 
     success: bool = True
-    data: dict[str, Any] | Any
+    data: dict[str, Any]
     meta: MetaInfo = Field(default_factory=MetaInfo)
 
 
@@ -131,15 +207,22 @@ class RequestStatus(BaseModel):
 
     request_id: int
     status: str
-    stage: str | None = None
+    stage: str  # RequestStage enum value: pending, crawling, processing, complete, failed
     progress: dict[str, Any] | None = None
     estimated_seconds_remaining: int | None = None
+    queue_position: int | None = Field(
+        default=None,
+        alias="queuePosition",
+        description="Position in queue (only present when stage=pending)",
+    )
     error_stage: str | None = None
     error_type: str | None = None
     error_message: str | None = None
-    can_retry: bool | None = None
+    can_retry: bool = Field(default=False, alias="canRetry")
     correlation_id: str | None = None
     updated_at: str
+
+    model_config = {"populate_by_name": True}
 
 
 class SubmitRequestResponse(BaseModel):
@@ -167,16 +250,17 @@ class AuthTokensResponse(BaseModel):
     """Authentication tokens payload."""
 
     tokens: TokenPair
+    session_id: int | None = None
 
 
 class UserInfo(BaseModel):
     """Basic user info."""
 
     user_id: int
-    username: str | None = None
-    client_id: str | None = None
+    username: str
+    client_id: str
     is_owner: bool = False
-    created_at: str | None = None
+    created_at: str
 
 
 class SubmitRequestData(BaseModel):
@@ -466,10 +550,77 @@ def success_response(
     return SuccessResponse(data=payload, meta=meta).model_dump()
 
 
+def make_error(
+    code: str | ErrorCode,
+    message: str,
+    *,
+    error_type: str | ErrorType | None = None,
+    retryable: bool | None = None,
+    details: dict[str, Any] | None = None,
+    retry_after: int | None = None,
+) -> ErrorDetail:
+    """
+    Create an ErrorDetail with proper typing and defaults.
+
+    Args:
+        code: Error code (use ErrorCode enum for standard codes)
+        message: Human-readable error message
+        error_type: Error category (auto-inferred from code if not provided)
+        retryable: Whether client should retry (auto-inferred if not provided)
+        details: Additional error context
+        retry_after: Seconds to wait before retry (for rate limits)
+
+    Returns:
+        Properly typed ErrorDetail
+    """
+    code_str = code.value if isinstance(code, ErrorCode) else code
+
+    # Auto-infer error_type from code prefix if not provided
+    if error_type is None:
+        if code_str.startswith("AUTH_"):
+            error_type = ErrorType.AUTHENTICATION
+        elif code_str.startswith("AUTHZ_"):
+            error_type = ErrorType.AUTHORIZATION
+        elif code_str.startswith("VALIDATION_"):
+            error_type = ErrorType.VALIDATION
+        elif code_str.startswith("RESOURCE_NOT_FOUND"):
+            error_type = ErrorType.NOT_FOUND
+        elif code_str.startswith("RESOURCE_"):
+            error_type = ErrorType.CONFLICT
+        elif code_str.startswith("RATE_LIMIT"):
+            error_type = ErrorType.RATE_LIMIT
+        elif code_str.startswith("EXTERNAL_"):
+            error_type = ErrorType.EXTERNAL_SERVICE
+        else:
+            error_type = ErrorType.INTERNAL
+
+    error_type_str = error_type.value if isinstance(error_type, ErrorType) else error_type
+
+    # Auto-infer retryable if not provided
+    if retryable is None:
+        retryable = error_type_str in (
+            ErrorType.RATE_LIMIT.value,
+            ErrorType.EXTERNAL_SERVICE.value,
+        ) or code_str in (
+            ErrorCode.AUTH_SESSION_EXPIRED.value,
+            ErrorCode.EXTERNAL_SERVICE_TIMEOUT.value,
+            ErrorCode.EXTERNAL_SERVICE_UNAVAILABLE.value,
+        )
+
+    return ErrorDetail(
+        code=code_str,
+        error_type=error_type_str,
+        message=message,
+        retryable=retryable,
+        details=details,
+        retry_after=retry_after,
+    )
+
+
 def _ensure_error_detail(detail: ErrorDetail, correlation_id: str | None) -> ErrorDetail:
     if detail.correlation_id or not correlation_id:
         return detail
-    detail_payload = detail.model_dump()
+    detail_payload = detail.model_dump(by_alias=True)
     detail_payload["correlation_id"] = correlation_id
     return ErrorDetail(**detail_payload)
 
@@ -486,4 +637,4 @@ def error_response(
     corr = correlation_id or correlation_id_ctx.get()
     normalized_detail = _ensure_error_detail(detail, corr)
     meta = build_meta(correlation_id=corr, debug=debug, version=version, build=build)
-    return ErrorResponse(error=normalized_detail, meta=meta).model_dump()
+    return ErrorResponse(error=normalized_detail, meta=meta).model_dump(by_alias=True)
