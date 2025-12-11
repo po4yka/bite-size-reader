@@ -188,6 +188,8 @@ class SyncService:
 
     def _serialize_llm_call(self, call: LLMCall) -> SyncEntityEnvelope:
         deleted_at = call.deleted_at.isoformat() + "Z" if call.deleted_at else None
+        created_at = self._coerce_iso(call.created_at)
+        updated_at = self._coerce_iso(call.updated_at)
         payload = None
         if not call.is_deleted:
             payload = {
@@ -198,17 +200,28 @@ class SyncService:
                 "tokens_prompt": call.tokens_prompt,
                 "tokens_completion": call.tokens_completion,
                 "cost_usd": call.cost_usd,
-                "created_at": call.created_at.isoformat() + "Z",
+                "created_at": created_at,
             }
 
         return SyncEntityEnvelope(
             entity_type="llm_call",
             id=call.id,
             server_version=int(call.server_version or 0),
-            updated_at=call.updated_at.isoformat() + "Z",
+            updated_at=updated_at,
             deleted_at=deleted_at,
             llm_call=payload,
         )
+
+    def _coerce_iso(self, dt_value: Any) -> str:
+        """Safely convert datetime-ish values (including strings) to ISO 8601 Z form."""
+        if hasattr(dt_value, "isoformat") and not isinstance(dt_value, str):
+            return dt_value.isoformat() + "Z"
+        if isinstance(dt_value, str):
+            try:
+                return datetime.fromisoformat(dt_value.replace("Z", "+00:00")).isoformat() + "Z"
+            except Exception:
+                pass
+        return datetime.now(UTC).isoformat() + "Z"
 
     def _serialize_user(self, user: User) -> SyncEntityEnvelope:
         return SyncEntityEnvelope(

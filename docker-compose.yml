@@ -5,19 +5,15 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-
     container_name: bsr-bot
     init: true
-
     env_file:
       - .env
-
     volumes:
       - ./data:/data
       - /etc/localtime:/etc/localtime:ro
     tmpfs:
       - /tmp
-
     environment:
       - TEXTACY_ENABLED=1
       - DB_PATH=/data/app.db
@@ -26,38 +22,37 @@ services:
       - PYTHONDONTWRITEBYTECODE=1
       - MAX_CONCURRENT_CALLS=${MAX_CONCURRENT_CALLS:-4}
       - REQUEST_TIMEOUT_SEC=${REQUEST_TIMEOUT_SEC:-60}
-
     restart: unless-stopped
-
     deploy:
       resources:
         limits:
           memory: 2G
-          cpus: '1.0'
+          cpus: "1.0"
         reservations:
           memory: 512M
-          cpus: '0.25'
-
+          cpus: "0.25"
     healthcheck:
-      test: ["CMD", "python", "-c", "import sqlite3, os; conn = sqlite3.connect(os.getenv('DB_PATH', '/data/app.db'), timeout=5); conn.execute('SELECT 1').fetchone(); conn.close()"]
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import sqlite3, os; conn = sqlite3.connect(os.getenv('DB_PATH', '/data/app.db'), timeout=5); conn.execute('SELECT 1').fetchone(); conn.close()",
+        ]
       interval: 30s
       timeout: 10s
       retries: 5
       start_period: 60s
-
     depends_on:
       chroma:
         condition: service_healthy
-
     logging:
       driver: "json-file"
       options:
         max-size: "10m"
         max-file: "3"
-
     security_opt:
       - no-new-privileges:true
-
     stop_grace_period: 30s
 
   mobile-api:
@@ -74,6 +69,9 @@ services:
       - API_WORKERS=${API_WORKERS:-4}
       - DB_PATH=/data/app.db
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - REDIS_ENABLED=1
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
       - PYTHONUNBUFFERED=1
       - PYTHONDONTWRITEBYTECODE=1
     volumes:
@@ -81,6 +79,9 @@ services:
       - /etc/localtime:/etc/localtime:ro
     ports:
       - "18000:8000"
+    depends_on:
+      redis:
+        condition: service_healthy
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://localhost:8000/health || exit 1"]
@@ -88,6 +89,29 @@ services:
       timeout: 10s
       retries: 5
       start_period: 60s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    security_opt:
+      - no-new-privileges:true
+    stop_grace_period: 30s
+
+  redis:
+    image: redis:7-alpine
+    container_name: bsr-redis
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
     logging:
       driver: "json-file"
       options:
@@ -127,10 +151,10 @@ services:
       resources:
         limits:
           memory: 2G
-          cpus: '1.0'
+          cpus: "1.0"
         reservations:
           memory: 512M
-          cpus: '0.25'
+          cpus: "0.25"
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:8000/api/v2/heartbeat"]
       interval: 30s
@@ -142,3 +166,10 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
+    security_opt:
+      - no-new-privileges:true
+    stop_grace_period: 30s
+
+volumes:
+  chroma_data:
+  redis_data:
