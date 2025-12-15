@@ -10,7 +10,7 @@ from typing import Literal
 
 from peewee import IntegrityError
 
-from app.api.exceptions import ResourceNotFoundError
+from app.api.exceptions import AuthorizationError, ResourceNotFoundError
 from app.core.time_utils import UTC
 from app.db.models import (
     Collection,
@@ -52,7 +52,7 @@ class CollectionService:
     def _require_role(cls, collection: Collection, user_id: int, minimum: Role) -> Role:
         role = cls._get_role(collection, user_id)
         if role is None or ROLE_RANK[role] < ROLE_RANK[minimum]:
-            raise ResourceNotFoundError("Collection", collection.id)
+            raise AuthorizationError(f"Insufficient permissions for collection {collection.id}")
         return role
 
     # ---- queries ----

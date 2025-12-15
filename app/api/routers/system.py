@@ -1,6 +1,7 @@
 """System maintenance endpoints."""
 
 import os
+import sqlite3
 import tempfile
 import time
 from datetime import UTC, datetime
@@ -9,10 +10,9 @@ from fastapi import APIRouter, Depends, Request
 from starlette.responses import FileResponse
 
 from app.api.exceptions import ProcessingError, ResourceNotFoundError
-from app.api.routers.auth import get_current_user
+from app.api.routers.auth import _require_owner, get_current_user
 from app.config import Config
 from app.core.logging_utils import get_logger
-from app.db.database import Database
 
 logger = get_logger(__name__)
 
@@ -57,8 +57,14 @@ def _build_db_dump_response(request: Request, user: dict):
             if os.path.exists(temp_backup_path):
                 os.remove(temp_backup_path)
 
-            _db = Database(path=db_path)
-            _db._database.execute_sql(f"VACUUM INTO '{temp_backup_path}'")
+            # Use SQLite backup API instead of VACUUM INTO to avoid SQL injection
+            source_conn = sqlite3.connect(db_path)
+            backup_conn = sqlite3.connect(temp_backup_path)
+            try:
+                source_conn.backup(backup_conn)
+            finally:
+                backup_conn.close()
+                source_conn.close()
 
             os.replace(temp_backup_path, backup_path)
             logger.info(f"Created database backup at {backup_path} for user {user['user_id']}")
@@ -92,13 +98,20 @@ async def download_database(request: Request, user=Depends(get_current_user)):
     """
     Download a consistent snapshot of the SQLite database.
 
-    Uses VACUUM INTO to create a safe backup without locking the live database.
+    Uses SQLite backup API to create a safe backup without locking the live database.
     Supports interrupted downloads via Range header (handled by FileResponse).
+
+    Requires owner permissions.
     """
+    _require_owner(user)
     return _build_db_dump_response(request, user)
 
 
 @router.head("/db-dump")
 async def head_database(request: Request, user=Depends(get_current_user)):
-    """HEAD variant for clients that only need headers/ETag before downloading."""
+    """HEAD variant for clients that only need headers/ETag before downloading.
+
+    Requires owner permissions.
+    """
+    _require_owner(user)
     return _build_db_dump_response(request, user)

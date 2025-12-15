@@ -2,6 +2,10 @@
 Proxy endpoints for external resources.
 """
 
+import socket
+from ipaddress import ip_address, ip_network
+from urllib.parse import urlparse
+
 import httpx
 from fastapi import APIRouter, HTTPException, Query
 from starlette.responses import StreamingResponse
@@ -10,6 +14,48 @@ from app.core.logging_utils import get_logger
 
 logger = get_logger(__name__)
 router = APIRouter()
+
+# Private/internal IP ranges that should be blocked to prevent SSRF
+BLOCKED_NETWORKS = [
+    ip_network("10.0.0.0/8"),  # Private Class A
+    ip_network("172.16.0.0/12"),  # Private Class B
+    ip_network("192.168.0.0/16"),  # Private Class C
+    ip_network("127.0.0.0/8"),  # Loopback
+    ip_network("169.254.0.0/16"),  # Link-local / AWS metadata
+    ip_network("0.0.0.0/8"),  # Current network
+    ip_network("100.64.0.0/10"),  # Carrier-grade NAT
+    ip_network("192.0.0.0/24"),  # IETF Protocol Assignments
+    ip_network("192.0.2.0/24"),  # TEST-NET-1
+    ip_network("198.51.100.0/24"),  # TEST-NET-2
+    ip_network("203.0.113.0/24"),  # TEST-NET-3
+    ip_network("224.0.0.0/4"),  # Multicast
+    ip_network("240.0.0.0/4"),  # Reserved
+    ip_network("255.255.255.255/32"),  # Broadcast
+    ip_network("::1/128"),  # IPv6 loopback
+    ip_network("fc00::/7"),  # IPv6 private
+    ip_network("fe80::/10"),  # IPv6 link-local
+]
+
+
+def _is_url_safe(url: str) -> bool:
+    """
+    Check if URL resolves to a public IP address.
+
+    Returns False for private networks, localhost, and cloud metadata endpoints.
+    """
+    try:
+        hostname = urlparse(url).hostname
+        if not hostname:
+            return False
+
+        # Resolve hostname to IP
+        resolved_ip = ip_address(socket.gethostbyname(hostname))
+
+        # Check against blocked networks
+        return not any(resolved_ip in network for network in BLOCKED_NETWORKS)
+    except (socket.gaierror, ValueError, OSError):
+        # DNS resolution failed or invalid IP - block for safety
+        return False
 
 
 @router.get("/image")
@@ -23,6 +69,11 @@ async def proxy_image(url: str = Query(..., description="URL of the image to pro
     """
     if not url.startswith(("http://", "https://")):
         raise HTTPException(status_code=400, detail="Invalid URL scheme")
+
+    # SSRF protection: block requests to internal/private networks
+    if not _is_url_safe(url):
+        logger.warning(f"Blocked SSRF attempt to internal address: {url}")
+        raise HTTPException(status_code=403, detail="URL resolves to blocked address")
 
     try:
         # Use a real browser User-Agent to avoid getting blocked by some servers

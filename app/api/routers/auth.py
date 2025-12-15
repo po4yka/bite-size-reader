@@ -1205,6 +1205,15 @@ async def apple_login(login_data: AppleLoginRequest):
     # Validate client_id before creating tokens
     validate_client_id(login_data.client_id)
 
+    # Verify user is in whitelist
+    allowed_ids = Config.get_allowed_user_ids()
+    if apple_user_id not in allowed_ids:
+        logger.warning(
+            "User not authorized via Apple login",
+            extra={"user_id": apple_user_id},
+        )
+        raise AuthorizationError("User not authorized. Contact administrator to request access.")
+
     # Get or create user
     user, created = User.get_or_create(
         telegram_user_id=apple_user_id,
@@ -1248,6 +1257,15 @@ async def google_login(login_data: GoogleLoginRequest):
 
     # Validate client_id before creating tokens
     validate_client_id(login_data.client_id)
+
+    # Verify user is in whitelist
+    allowed_ids = Config.get_allowed_user_ids()
+    if google_user_id not in allowed_ids:
+        logger.warning(
+            "User not authorized via Google login",
+            extra={"user_id": google_user_id},
+        )
+        raise AuthorizationError("User not authorized. Contact administrator to request access.")
 
     # Get or create user
     user, created = User.get_or_create(

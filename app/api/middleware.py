@@ -1,7 +1,9 @@
 """FastAPI middleware for request processing."""
 
+import threading
 import time
 import uuid
+from collections import defaultdict
 from collections.abc import Callable
 
 from fastapi import Request
@@ -18,6 +20,44 @@ logger = get_logger(__name__)
 # Cached config for middleware usage
 _cfg: AppConfig | None = None
 _redis_warning_logged = False
+
+# In-memory rate limiting fallback when Redis is unavailable
+_local_rate_limits: dict[str, list[float]] = defaultdict(list)
+_local_rate_lock = threading.Lock()
+_local_cleanup_last = 0.0
+
+
+def _check_local_rate_limit(user_id: str, limit: int, window: int) -> tuple[bool, int]:
+    """
+    In-memory rate limit check.
+
+    Returns (allowed, remaining) tuple.
+    Thread-safe with automatic cleanup of old entries.
+    """
+    global _local_cleanup_last
+    now = time.time()
+    window_start = int(now // window) * window
+    key = f"{user_id}:{window_start}"
+
+    with _local_rate_lock:
+        # Periodic cleanup of stale entries (every 60 seconds)
+        if now - _local_cleanup_last > 60:
+            stale_keys = [
+                k for k in _local_rate_limits if int(k.split(":")[-1]) < window_start - window
+            ]
+            for k in stale_keys:
+                del _local_rate_limits[k]
+            _local_cleanup_last = now
+
+        requests = _local_rate_limits[key]
+        # Remove old entries outside current window
+        requests[:] = [ts for ts in requests if ts >= window_start]
+
+        if len(requests) >= limit:
+            return False, 0
+
+        requests.append(now)
+        return True, limit - len(requests)
 
 
 async def correlation_id_middleware(request: Request, call_next: Callable):
@@ -100,9 +140,47 @@ async def rate_limit_middleware(request: Request, call_next: Callable):
                 content=error_response(detail, correlation_id=correlation_id),
             )
 
+        # Use in-memory fallback rate limiting instead of bypassing
+        allowed, remaining = _check_local_rate_limit(str(user_id), bucket_limit, window)
+
+        if not allowed:
+            retry_after = max(
+                (window_start + window) - now, int(window * cfg.api_limits.cooldown_multiplier)
+            )
+            logger.info(
+                "rate_limit_exceeded_local",
+                extra={
+                    "user_id": user_id,
+                    "path": request.url.path,
+                    "limit": bucket_limit,
+                    "retry_after": retry_after,
+                    "correlation_id": correlation_id,
+                    "backend": "in-memory",
+                },
+            )
+            detail = make_error(
+                code="RATE_LIMIT_EXCEEDED",
+                message=f"Rate limit exceeded. Try again in {retry_after} seconds.",
+                error_type=ErrorType.RATE_LIMIT,
+                retryable=True,
+                details={"retry_after": retry_after},
+                retry_after=retry_after,
+            )
+            detail.correlation_id = correlation_id
+            return JSONResponse(
+                status_code=429,
+                content=error_response(detail, correlation_id=correlation_id),
+                headers={
+                    "X-RateLimit-Limit": str(bucket_limit),
+                    "X-RateLimit-Remaining": "0",
+                    "X-RateLimit-Reset": str(window_start + window),
+                    "Retry-After": str(retry_after),
+                },
+            )
+
         response = await call_next(request)
         response.headers["X-RateLimit-Limit"] = str(bucket_limit)
-        response.headers["X-RateLimit-Remaining"] = "unknown"
+        response.headers["X-RateLimit-Remaining"] = str(remaining)
         response.headers["X-RateLimit-Reset"] = str(window_start + window)
         return response
 
