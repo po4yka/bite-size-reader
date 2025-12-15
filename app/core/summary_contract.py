@@ -4,6 +4,15 @@ import difflib
 import re
 from typing import Any
 
+from app.types.summary_types import (
+    Entities,
+    KeyStat,
+    Metadata,
+    Readability,
+    SemanticChunk,
+    SummaryDict,
+)
+
 from .summary_schema import PydanticAvailable
 
 SummaryModelT: Any
@@ -11,7 +20,19 @@ if PydanticAvailable:
     from .summary_schema import SummaryModel as SummaryModelT
 
 
+# Legacy alias for backward compatibility
 SummaryJSON = dict[str, Any]
+
+# Re-export typed versions for stricter typing
+__all__ = [
+    "Entities",
+    "KeyStat",
+    "Metadata",
+    "Readability",
+    "SemanticChunk",
+    "SummaryDict",
+    "SummaryJSON",
+]
 
 
 def _compute_flesch_reading_ease(text: str) -> float:

@@ -103,14 +103,12 @@ class ErrorDetail(BaseModel):
     """Error details aligned to API error envelope."""
 
     code: str
-    error_type: str = Field(default=ErrorType.INTERNAL.value, alias="errorType")
+    error_type: str = Field(default=ErrorType.INTERNAL.value, serialization_alias="errorType")
     message: str
     retryable: bool = False
     details: dict[str, Any] | None = None
     correlation_id: str = ""
     retry_after: int | None = None
-
-    model_config = {"populate_by_name": True}
 
 
 class SuccessResponse(BaseModel):
@@ -138,40 +136,42 @@ class PaginationInfo(BaseModel):
     total: int
     limit: int
     offset: int
-    has_more: bool = Field(alias="hasMore")
-
-    model_config = {"populate_by_name": True}
+    has_more: bool = Field(serialization_alias="hasMore")
 
 
 class SummaryCompact(BaseModel):
     """Compact summary for list views."""
 
     id: int = Field(description="Unique summary identifier")
-    request_id: int = Field(alias="requestId", description="Associated request ID")
+    request_id: int = Field(serialization_alias="requestId", description="Associated request ID")
     title: str = Field(description="Article title")
     domain: str = Field(description="Source domain (e.g., example.com)")
     url: str = Field(description="Original article URL")
     tldr: str = Field(description="Concise multi-sentence summary")
-    summary_250: str = Field(alias="summary250", description="Short summary (<=250 chars)")
-    reading_time_min: int = Field(
-        alias="readingTimeMin", description="Estimated reading time in minutes"
+    summary_250: str = Field(
+        serialization_alias="summary250", description="Short summary (<=250 chars)"
     )
-    topic_tags: list[str] = Field(alias="topicTags", description="Topic hashtags")
-    is_read: bool = Field(alias="isRead", description="User read status")
+    reading_time_min: int = Field(
+        serialization_alias="readingTimeMin", description="Estimated reading time in minutes"
+    )
+    topic_tags: list[str] = Field(serialization_alias="topicTags", description="Topic hashtags")
+    is_read: bool = Field(serialization_alias="isRead", description="User read status")
     is_favorited: bool = Field(
-        default=False, alias="isFavorited", description="User favorite status"
+        default=False, serialization_alias="isFavorited", description="User favorite status"
     )
     lang: Literal["en", "ru", "auto"] = Field(description="Detected or preferred language")
-    created_at: str = Field(alias="createdAt", description="ISO 8601 creation timestamp")
+    created_at: str = Field(
+        serialization_alias="createdAt", description="ISO 8601 creation timestamp"
+    )
     confidence: float = Field(description="LLM confidence score (0.0-1.0)")
     hallucination_risk: Literal["low", "medium", "high", "unknown"] = Field(
-        alias="hallucinationRisk", description="Assessed hallucination risk level"
+        serialization_alias="hallucinationRisk", description="Assessed hallucination risk level"
     )
     image_url: str | None = Field(
-        default=None, alias="imageUrl", description="Featured image URL (if available)"
+        default=None,
+        serialization_alias="imageUrl",
+        description="Featured image URL (if available)",
     )
-
-    model_config = {"populate_by_name": True}
 
 
 class SummaryDetailEntities(BaseModel):
@@ -181,8 +181,6 @@ class SummaryDetailEntities(BaseModel):
     organizations: list[str] = Field(default_factory=list)
     locations: list[str] = Field(default_factory=list)
 
-    model_config = {"populate_by_name": True}
-
 
 class SummaryDetailReadability(BaseModel):
     """Readability metrics."""
@@ -191,8 +189,6 @@ class SummaryDetailReadability(BaseModel):
     score: float
     level: str
 
-    model_config = {"populate_by_name": True}
-
 
 class SummaryDetailKeyStat(BaseModel):
     """Key statistic entry."""
@@ -200,27 +196,27 @@ class SummaryDetailKeyStat(BaseModel):
     label: str
     value: float
     unit: str
-    source_excerpt: str = Field(alias="sourceExcerpt")
-
-    model_config = {"populate_by_name": True}
+    source_excerpt: str = Field(serialization_alias="sourceExcerpt")
 
 
 class SummaryDetailSummary(BaseModel):
     """Summary content fields."""
 
-    summary_250: str = Field(alias="summary250")
-    summary_1000: str = Field(alias="summary1000")
+    summary_250: str = Field(serialization_alias="summary250")
+    summary_1000: str = Field(serialization_alias="summary1000")
     tldr: str
-    key_ideas: list[str] = Field(alias="keyIdeas")
-    topic_tags: list[str] = Field(alias="topicTags")
+    key_ideas: list[str] = Field(serialization_alias="keyIdeas")
+    topic_tags: list[str] = Field(serialization_alias="topicTags")
     entities: SummaryDetailEntities
-    estimated_reading_time_min: int = Field(alias="estimatedReadingTimeMin")
-    key_stats: list[SummaryDetailKeyStat] = Field(default_factory=list, alias="keyStats")
-    answered_questions: list[str] = Field(default_factory=list, alias="answeredQuestions")
+    estimated_reading_time_min: int = Field(serialization_alias="estimatedReadingTimeMin")
+    key_stats: list[SummaryDetailKeyStat] = Field(
+        default_factory=list, serialization_alias="keyStats"
+    )
+    answered_questions: list[str] = Field(
+        default_factory=list, serialization_alias="answeredQuestions"
+    )
     readability: SummaryDetailReadability | None = None
-    seo_keywords: list[str] = Field(default_factory=list, alias="seoKeywords")
-
-    model_config = {"populate_by_name": True}
+    seo_keywords: list[str] = Field(default_factory=list, serialization_alias="seoKeywords")
 
 
 class SummaryDetailRequest(BaseModel):
@@ -229,14 +225,12 @@ class SummaryDetailRequest(BaseModel):
     id: str
     type: str
     url: str | None = None
-    normalized_url: str | None = Field(default=None, alias="normalizedUrl")
-    dedupe_hash: str | None = Field(default=None, alias="dedupeHash")
+    normalized_url: str | None = Field(default=None, serialization_alias="normalizedUrl")
+    dedupe_hash: str | None = Field(default=None, serialization_alias="dedupeHash")
     status: str
-    lang_detected: str | None = Field(default=None, alias="langDetected")
-    created_at: str = Field(alias="createdAt")
-    updated_at: str = Field(alias="updatedAt")
-
-    model_config = {"populate_by_name": True}
+    lang_detected: str | None = Field(default=None, serialization_alias="langDetected")
+    created_at: str = Field(serialization_alias="createdAt")
+    updated_at: str = Field(serialization_alias="updatedAt")
 
 
 class SummaryDetailSource(BaseModel):
@@ -246,24 +240,20 @@ class SummaryDetailSource(BaseModel):
     title: str | None = None
     domain: str | None = None
     author: str | None = None
-    published_at: str | None = Field(default=None, alias="publishedAt")
-    word_count: int | None = Field(default=None, alias="wordCount")
-    content_type: str | None = Field(default=None, alias="contentType")
-
-    model_config = {"populate_by_name": True}
+    published_at: str | None = Field(default=None, serialization_alias="publishedAt")
+    word_count: int | None = Field(default=None, serialization_alias="wordCount")
+    content_type: str | None = Field(default=None, serialization_alias="contentType")
 
 
 class SummaryDetailProcessing(BaseModel):
     """Processing metadata."""
 
-    model_used: str | None = Field(default=None, alias="modelUsed")
-    tokens_used: int | None = Field(default=None, alias="tokensUsed")
-    processing_time_ms: int | None = Field(default=None, alias="processingTimeMs")
-    crawl_time_ms: int | None = Field(default=None, alias="crawlTimeMs")
+    model_used: str | None = Field(default=None, serialization_alias="modelUsed")
+    tokens_used: int | None = Field(default=None, serialization_alias="tokensUsed")
+    processing_time_ms: int | None = Field(default=None, serialization_alias="processingTimeMs")
+    crawl_time_ms: int | None = Field(default=None, serialization_alias="crawlTimeMs")
     confidence: float | None = None
-    hallucination_risk: str | None = Field(default=None, alias="hallucinationRisk")
-
-    model_config = {"populate_by_name": True}
+    hallucination_risk: str | None = Field(default=None, serialization_alias="hallucinationRisk")
 
 
 class SummaryDetail(BaseModel):
@@ -278,20 +268,20 @@ class SummaryDetail(BaseModel):
 class SummaryContent(BaseModel):
     """Full article content for offline reading."""
 
-    summary_id: int = Field(alias="summaryId")
-    request_id: int | None = Field(default=None, alias="requestId")
+    summary_id: int = Field(serialization_alias="summaryId")
+    request_id: int | None = Field(default=None, serialization_alias="requestId")
     format: Literal["markdown", "text", "html"]
     content: str
-    content_type: Literal["text/markdown", "text/plain", "text/html"] = Field(alias="contentType")
+    content_type: Literal["text/markdown", "text/plain", "text/html"] = Field(
+        serialization_alias="contentType"
+    )
     lang: Literal["en", "ru", "auto"] | None = None
-    source_url: str | None = Field(default=None, alias="sourceUrl")
+    source_url: str | None = Field(default=None, serialization_alias="sourceUrl")
     title: str | None = None
     domain: str | None = None
-    retrieved_at: str = Field(alias="retrievedAt")
-    size_bytes: int | None = Field(default=None, alias="sizeBytes")
-    checksum_sha256: str | None = Field(default=None, alias="checksumSha256")
-
-    model_config = {"populate_by_name": True}
+    retrieved_at: str = Field(serialization_alias="retrievedAt")
+    size_bytes: int | None = Field(default=None, serialization_alias="sizeBytes")
+    checksum_sha256: str | None = Field(default=None, serialization_alias="checksumSha256")
 
 
 class SummaryContentData(BaseModel):
@@ -390,7 +380,7 @@ class RequestStatus(BaseModel):
     )
     queue_position: int | None = Field(
         default=None,
-        alias="queuePosition",
+        serialization_alias="queuePosition",
         description="1-indexed position in processing queue (pending only)",
     )
     error_stage: str | None = Field(
@@ -407,7 +397,7 @@ class RequestStatus(BaseModel):
     )
     can_retry: bool = Field(
         default=False,
-        alias="canRetry",
+        serialization_alias="canRetry",
         description="Whether request can be retried (true for failed, false otherwise)",
     )
     correlation_id: str | None = Field(
@@ -416,59 +406,59 @@ class RequestStatus(BaseModel):
     )
     updated_at: str = Field(description="ISO 8601 timestamp of last status update (always present)")
 
-    model_config = {"populate_by_name": True}
-
 
 class SubmitRequestResponse(BaseModel):
     """Response for POST /requests."""
 
-    request_id: int = Field(alias="requestId")
-    correlation_id: str = Field(alias="correlationId")
+    request_id: int = Field(serialization_alias="requestId")
+    correlation_id: str = Field(serialization_alias="correlationId")
     type: Literal["url", "forward"]
     status: Literal["pending", "processing", "complete", "failed"]
-    estimated_wait_seconds: int = Field(alias="estimatedWaitSeconds")
-    created_at: str = Field(alias="createdAt")
-    is_duplicate: bool = Field(default=False, alias="isDuplicate")
-
-    model_config = {"populate_by_name": True}
+    estimated_wait_seconds: int = Field(serialization_alias="estimatedWaitSeconds")
+    created_at: str = Field(serialization_alias="createdAt")
+    is_duplicate: bool = Field(default=False, serialization_alias="isDuplicate")
 
 
 class TokenPair(BaseModel):
     """JWT token pair."""
 
-    access_token: str = Field(alias="accessToken", description="JWT access token")
+    access_token: str = Field(serialization_alias="accessToken", description="JWT access token")
     refresh_token: str | None = Field(
-        default=None, alias="refreshToken", description="JWT refresh token (if available)"
+        default=None,
+        serialization_alias="refreshToken",
+        description="JWT refresh token (if available)",
     )
-    expires_in: int = Field(alias="expiresIn", description="Token expiration time in seconds")
+    expires_in: int = Field(
+        serialization_alias="expiresIn", description="Token expiration time in seconds"
+    )
     token_type: str = Field(
-        default="Bearer", alias="tokenType", description="Token type (always 'Bearer')"
+        default="Bearer",
+        serialization_alias="tokenType",
+        description="Token type (always 'Bearer')",
     )
-
-    model_config = {"populate_by_name": True}
 
 
 class AuthTokensResponse(BaseModel):
     """Authentication tokens payload."""
 
     tokens: TokenPair
-    session_id: int | None = Field(default=None, alias="sessionId")
-
-    model_config = {"populate_by_name": True}
+    session_id: int | None = Field(default=None, serialization_alias="sessionId")
 
 
 class UserInfo(BaseModel):
     """Basic user info."""
 
-    user_id: int = Field(alias="userId", description="Unique user identifier")
+    user_id: int = Field(serialization_alias="userId", description="Unique user identifier")
     username: str = Field(description="Telegram username")
-    client_id: str = Field(alias="clientId", description="Client application identifier")
-    is_owner: bool = Field(default=False, alias="isOwner", description="Bot owner status")
-    created_at: str = Field(
-        alias="createdAt", description="ISO 8601 user registration timestamp"
+    client_id: str = Field(
+        serialization_alias="clientId", description="Client application identifier"
     )
-
-    model_config = {"populate_by_name": True}
+    is_owner: bool = Field(
+        default=False, serialization_alias="isOwner", description="Bot owner status"
+    )
+    created_at: str = Field(
+        serialization_alias="createdAt", description="ISO 8601 user registration timestamp"
+    )
 
 
 class SubmitRequestData(BaseModel):
@@ -486,15 +476,13 @@ class RequestStatusData(BaseModel):
 class DuplicateCheckData(BaseModel):
     """Duplicate check response."""
 
-    is_duplicate: bool = Field(alias="isDuplicate")
-    normalized_url: str | None = Field(default=None, alias="normalizedUrl")
-    dedupe_hash: str | None = Field(default=None, alias="dedupeHash")
-    request_id: int | None = Field(default=None, alias="requestId")
-    summary_id: int | None = Field(default=None, alias="summaryId")
-    summarized_at: str | None = Field(default=None, alias="summarizedAt")
+    is_duplicate: bool = Field(serialization_alias="isDuplicate")
+    normalized_url: str | None = Field(default=None, serialization_alias="normalizedUrl")
+    dedupe_hash: str | None = Field(default=None, serialization_alias="dedupeHash")
+    request_id: int | None = Field(default=None, serialization_alias="requestId")
+    summary_id: int | None = Field(default=None, serialization_alias="summaryId")
+    summarized_at: str | None = Field(default=None, serialization_alias="summarizedAt")
     summary: dict[str, Any] | None = None
-
-    model_config = {"populate_by_name": True}
 
 
 class CollectionResponse(BaseModel):
@@ -503,17 +491,15 @@ class CollectionResponse(BaseModel):
     id: int
     name: str
     description: str | None = None
-    parent_id: int | None = Field(default=None, alias="parentId")
+    parent_id: int | None = Field(default=None, serialization_alias="parentId")
     position: int | None = None
-    created_at: str = Field(alias="createdAt")
-    updated_at: str = Field(alias="updatedAt")
-    server_version: int = Field(alias="serverVersion")
-    is_shared: bool = Field(default=False, alias="isShared")
-    share_count: int | None = Field(default=None, alias="shareCount")
-    item_count: int | None = Field(default=None, alias="itemCount")
+    created_at: str = Field(serialization_alias="createdAt")
+    updated_at: str = Field(serialization_alias="updatedAt")
+    server_version: int = Field(serialization_alias="serverVersion")
+    is_shared: bool = Field(default=False, serialization_alias="isShared")
+    share_count: int | None = Field(default=None, serialization_alias="shareCount")
+    item_count: int | None = Field(default=None, serialization_alias="itemCount")
     children: list[CollectionResponse] | None = None
-
-    model_config = {"populate_by_name": True}
 
 
 class CollectionListResponse(BaseModel):
@@ -526,12 +512,10 @@ class CollectionListResponse(BaseModel):
 class CollectionItem(BaseModel):
     """Collection item entry."""
 
-    collection_id: int = Field(alias="collectionId")
-    summary_id: int = Field(alias="summaryId")
+    collection_id: int = Field(serialization_alias="collectionId")
+    summary_id: int = Field(serialization_alias="summaryId")
     position: int | None = None
-    created_at: str = Field(alias="createdAt")
-
-    model_config = {"populate_by_name": True}
+    created_at: str = Field(serialization_alias="createdAt")
 
 
 class CollectionItemsResponse(BaseModel):
@@ -544,14 +528,12 @@ class CollectionItemsResponse(BaseModel):
 class CollectionAclEntry(BaseModel):
     """ACL entry for a collaborator."""
 
-    user_id: int | None = Field(default=None, alias="userId")
+    user_id: int | None = Field(default=None, serialization_alias="userId")
     role: Literal["owner", "editor", "viewer"]
     status: Literal["active", "pending", "revoked"]
-    invited_by: int | None = Field(default=None, alias="invitedBy")
-    created_at: str | None = Field(default=None, alias="createdAt")
-    updated_at: str | None = Field(default=None, alias="updatedAt")
-
-    model_config = {"populate_by_name": True}
+    invited_by: int | None = Field(default=None, serialization_alias="invitedBy")
+    created_at: str | None = Field(default=None, serialization_alias="createdAt")
+    updated_at: str | None = Field(default=None, serialization_alias="updatedAt")
 
 
 class CollectionAclResponse(BaseModel):
@@ -565,29 +547,23 @@ class CollectionInviteResponse(BaseModel):
 
     token: str
     role: Literal["editor", "viewer"]
-    expires_at: str | None = Field(default=None, alias="expiresAt")
-
-    model_config = {"populate_by_name": True}
+    expires_at: str | None = Field(default=None, serialization_alias="expiresAt")
 
 
 class CollectionMoveResponse(BaseModel):
     """Response for collection move."""
 
     id: int
-    parent_id: int | None = Field(alias="parentId")
+    parent_id: int | None = Field(serialization_alias="parentId")
     position: int
-    server_version: int | None = Field(default=None, alias="serverVersion")
-    updated_at: str = Field(alias="updatedAt")
-
-    model_config = {"populate_by_name": True}
+    server_version: int | None = Field(default=None, serialization_alias="serverVersion")
+    updated_at: str = Field(serialization_alias="updatedAt")
 
 
 class CollectionItemsMoveResponse(BaseModel):
     """Response for moving collection items."""
 
-    moved_summary_ids: list[int] = Field(alias="movedSummaryIds")
-
-    model_config = {"populate_by_name": True}
+    moved_summary_ids: list[int] = Field(serialization_alias="movedSummaryIds")
 
 
 # Rebuild forward refs
@@ -597,20 +573,18 @@ CollectionResponse.model_rebuild()
 class SearchResult(BaseModel):
     """Search result payload."""
 
-    request_id: int = Field(alias="requestId")
-    summary_id: int = Field(alias="summaryId")
+    request_id: int = Field(serialization_alias="requestId")
+    summary_id: int = Field(serialization_alias="summaryId")
     url: str | None
     title: str
     domain: str | None = None
     snippet: str | None = None
     tldr: str | None = None
-    published_at: str | None = Field(default=None, alias="publishedAt")
-    created_at: str = Field(alias="createdAt")
-    relevance_score: float | None = Field(default=None, alias="relevanceScore")
-    topic_tags: list[str] | None = Field(default=None, alias="topicTags")
-    is_read: bool | None = Field(default=None, alias="isRead")
-
-    model_config = {"populate_by_name": True}
+    published_at: str | None = Field(default=None, serialization_alias="publishedAt")
+    created_at: str = Field(serialization_alias="createdAt")
+    relevance_score: float | None = Field(default=None, serialization_alias="relevanceScore")
+    topic_tags: list[str] | None = Field(default=None, serialization_alias="topicTags")
+    is_read: bool | None = Field(default=None, serialization_alias="isRead")
 
 
 class SearchResultsData(BaseModel):
@@ -624,108 +598,100 @@ class SearchResultsData(BaseModel):
 class SyncSessionData(BaseModel):
     """Sync session metadata (aligned to OpenAPI)."""
 
-    session_id: str = Field(alias="sessionId", description="Unique sync session identifier")
+    session_id: str = Field(
+        serialization_alias="sessionId", description="Unique sync session identifier"
+    )
     expires_at: str = Field(
-        alias="expiresAt", description="ISO 8601 session expiration timestamp"
+        serialization_alias="expiresAt", description="ISO 8601 session expiration timestamp"
     )
     default_limit: int = Field(
-        alias="defaultLimit", description="Default page size for sync requests"
+        serialization_alias="defaultLimit", description="Default page size for sync requests"
     )
-    max_limit: int = Field(alias="maxLimit", description="Maximum allowed page size")
+    max_limit: int = Field(serialization_alias="maxLimit", description="Maximum allowed page size")
     last_issued_since: int | None = Field(
-        default=None, alias="lastIssuedSince", description="Last issued 'since' value (if any)"
+        default=None,
+        serialization_alias="lastIssuedSince",
+        description="Last issued 'since' value (if any)",
     )
-
-    model_config = {"populate_by_name": True}
 
 
 class SyncEntityEnvelope(BaseModel):
     """Envelope for a synced entity or tombstone."""
 
-    entity_type: str = Field(alias="entityType")
+    entity_type: str = Field(serialization_alias="entityType")
     id: int | str
-    server_version: int = Field(alias="serverVersion")
-    updated_at: str = Field(alias="updatedAt")
-    deleted_at: str | None = Field(default=None, alias="deletedAt")
+    server_version: int = Field(serialization_alias="serverVersion")
+    updated_at: str = Field(serialization_alias="updatedAt")
+    deleted_at: str | None = Field(default=None, serialization_alias="deletedAt")
     summary: dict[str, Any] | None = None
     request: dict[str, Any] | None = None
     preference: dict[str, Any] | None = None
     stat: dict[str, Any] | None = None
-    crawl_result: dict[str, Any] | None = Field(default=None, alias="crawlResult")
-    llm_call: dict[str, Any] | None = Field(default=None, alias="llmCall")
-
-    model_config = {"populate_by_name": True}
+    crawl_result: dict[str, Any] | None = Field(default=None, serialization_alias="crawlResult")
+    llm_call: dict[str, Any] | None = Field(default=None, serialization_alias="llmCall")
 
 
 class FullSyncResponseData(BaseModel):
     """Response payload for full sync chunks."""
 
-    session_id: str = Field(alias="sessionId")
-    has_more: bool = Field(alias="hasMore")
-    next_since: int | None = Field(default=None, alias="nextSince")
+    session_id: str = Field(serialization_alias="sessionId")
+    has_more: bool = Field(serialization_alias="hasMore")
+    next_since: int | None = Field(default=None, serialization_alias="nextSince")
     items: list[SyncEntityEnvelope]
     pagination: PaginationInfo
-
-    model_config = {"populate_by_name": True}
 
 
 class DeltaSyncResponseData(BaseModel):
     """Response payload for delta sync."""
 
-    session_id: str = Field(alias="sessionId")
+    session_id: str = Field(serialization_alias="sessionId")
     since: int
-    has_more: bool = Field(alias="hasMore")
-    next_since: int | None = Field(default=None, alias="nextSince")
+    has_more: bool = Field(serialization_alias="hasMore")
+    next_since: int | None = Field(default=None, serialization_alias="nextSince")
     created: list[SyncEntityEnvelope]
     updated: list[SyncEntityEnvelope]
     deleted: list[SyncEntityEnvelope]
-
-    model_config = {"populate_by_name": True}
 
 
 class SyncApplyItemResult(BaseModel):
     """Result for a single applied change."""
 
-    entity_type: str = Field(alias="entityType")
+    entity_type: str = Field(serialization_alias="entityType")
     id: int | str
     status: Literal["applied", "conflict", "invalid"]
-    server_version: int | None = Field(default=None, alias="serverVersion")
-    server_snapshot: dict[str, Any] | None = Field(default=None, alias="serverSnapshot")
-    error_code: str | None = Field(default=None, alias="errorCode")
-
-    model_config = {"populate_by_name": True}
+    server_version: int | None = Field(default=None, serialization_alias="serverVersion")
+    server_snapshot: dict[str, Any] | None = Field(
+        default=None, serialization_alias="serverSnapshot"
+    )
+    error_code: str | None = Field(default=None, serialization_alias="errorCode")
 
 
 class SyncApplyResponseData(BaseModel):
     """Upload local changes result (aligned to OpenAPI)."""
 
-    session_id: str = Field(alias="sessionId")
+    session_id: str = Field(serialization_alias="sessionId")
     results: list[SyncApplyItemResult]
     conflicts: list[SyncApplyItemResult] | None = None
-    has_more: bool | None = Field(default=None, alias="hasMore")
-
-    model_config = {"populate_by_name": True}
+    has_more: bool | None = Field(default=None, serialization_alias="hasMore")
 
 
 class PreferencesData(BaseModel):
     """User preferences payload."""
 
-    user_id: int = Field(alias="userId")
-    telegram_username: str | None = Field(default=None, alias="telegramUsername")
-    lang_preference: str | None = Field(default=None, alias="langPreference")
-    notification_settings: dict[str, Any] | None = Field(default=None, alias="notificationSettings")
-    app_settings: dict[str, Any] | None = Field(default=None, alias="appSettings")
-
-    model_config = {"populate_by_name": True}
+    user_id: int = Field(serialization_alias="userId")
+    telegram_username: str | None = Field(default=None, serialization_alias="telegramUsername")
+    lang_preference: str | None = Field(default=None, serialization_alias="langPreference")
+    notification_settings: dict[str, Any] | None = Field(
+        default=None, serialization_alias="notificationSettings"
+    )
+    app_settings: dict[str, Any] | None = Field(default=None, serialization_alias="appSettings")
 
 
 class PreferencesUpdateResult(BaseModel):
     """Preferences update result."""
 
-    updated_fields: list[str] = Field(alias="updatedFields")
-    updated_at: str = Field(alias="updatedAt")
-
-    model_config = {"populate_by_name": True}
+    updated_fields: list[str] = Field(serialization_alias="updatedFields")
+    updated_at: str = Field(serialization_alias="updatedAt")
 
 
 class TopicStat(BaseModel):
@@ -734,8 +700,6 @@ class TopicStat(BaseModel):
     topic: str
     count: int
 
-    model_config = {"populate_by_name": True}
-
 
 class DomainStat(BaseModel):
     """Domain statistics entry."""
@@ -743,24 +707,20 @@ class DomainStat(BaseModel):
     domain: str
     count: int
 
-    model_config = {"populate_by_name": True}
-
 
 class UserStatsData(BaseModel):
     """User statistics payload."""
 
-    total_summaries: int = Field(alias="totalSummaries")
-    unread_count: int = Field(alias="unreadCount")
-    read_count: int = Field(alias="readCount")
-    total_reading_time_min: int = Field(alias="totalReadingTimeMin")
-    average_reading_time_min: float = Field(alias="averageReadingTimeMin")
-    favorite_topics: list[TopicStat] = Field(alias="favoriteTopics")
-    favorite_domains: list[DomainStat] = Field(alias="favoriteDomains")
-    language_distribution: dict[str, int] = Field(alias="languageDistribution")
-    joined_at: str | None = Field(default=None, alias="joinedAt")
-    last_summary_at: str | None = Field(default=None, alias="lastSummaryAt")
-
-    model_config = {"populate_by_name": True}
+    total_summaries: int = Field(serialization_alias="totalSummaries")
+    unread_count: int = Field(serialization_alias="unreadCount")
+    read_count: int = Field(serialization_alias="readCount")
+    total_reading_time_min: int = Field(serialization_alias="totalReadingTimeMin")
+    average_reading_time_min: float = Field(serialization_alias="averageReadingTimeMin")
+    favorite_topics: list[TopicStat] = Field(serialization_alias="favoriteTopics")
+    favorite_domains: list[DomainStat] = Field(serialization_alias="favoriteDomains")
+    language_distribution: dict[str, int] = Field(serialization_alias="languageDistribution")
+    joined_at: str | None = Field(default=None, serialization_alias="joinedAt")
+    last_summary_at: str | None = Field(default=None, serialization_alias="lastSummaryAt")
 
 
 def _coerce_pagination(pagination: BaseModel | dict[str, Any] | None) -> PaginationInfo | None:
