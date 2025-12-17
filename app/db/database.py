@@ -2262,14 +2262,13 @@ class Database:
         )
         updated = 0
         for row in rows:
+            # Serialize JSON so SQLite binding does not receive a raw dict
+            new_openrouter_json = row.openrouter_response_json or row.response_json
+            new_openrouter_text = row.openrouter_response_text or row.response_text
             LLMCall.update(
                 {
-                    LLMCall.openrouter_response_text: peewee.fn.COALESCE(
-                        LLMCall.openrouter_response_text, row.response_text
-                    ),
-                    LLMCall.openrouter_response_json: peewee.fn.COALESCE(
-                        LLMCall.openrouter_response_json, row.response_json
-                    ),
+                    LLMCall.openrouter_response_text: new_openrouter_text,
+                    LLMCall.openrouter_response_json: new_openrouter_json,
                     LLMCall.response_text: None,
                     LLMCall.response_json: None,
                 }
