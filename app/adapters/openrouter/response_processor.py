@@ -204,12 +204,23 @@ class ResponseProcessor:
         if parsed is not None:
             try:
                 processed_text = json.dumps(parsed, ensure_ascii=False)
-                return True, processed_text
             except Exception:
-                return True, text_str
-        else:
-            # Invalid JSON with structured outputs
-            return False, text_str
+                processed_text = text_str
+
+            # Require essential summary fields to be present and non-empty
+            if isinstance(parsed, dict):
+                has_content = False
+                for key in ("summary_250", "summary_1000", "tldr"):
+                    value = parsed.get(key)
+                    if isinstance(value, str) and value.strip():
+                        has_content = True
+                        break
+                if not has_content:
+                    return False, processed_text
+
+            return True, processed_text
+        # Invalid JSON with structured outputs
+        return False, text_str
 
     def is_completion_truncated(self, data: dict) -> tuple[bool, str | None, str | None]:
         """Inspect response metadata and determine if the completion was truncated."""

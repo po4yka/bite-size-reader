@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, ConfigDict
@@ -370,6 +371,39 @@ class LLMResponseWorkflow:
                     "model": request_config.model_override,
                 },
             )
+
+            # Try one guided repair pass focused on filling summary fields
+            try:
+                repair_hint = SimpleNamespace(errors=["missing_summary_fields"])
+                repaired = await self._attempt_json_repair(
+                    message,
+                    llm,
+                    req_id,
+                    correlation_id,
+                    interaction_config,
+                    repair_context,
+                    request_config,
+                    notifications,
+                    parse_result=repair_hint,
+                )
+                if repaired and self._summary_has_content(repaired, required_summary_fields):
+                    return await self._finalize_success(
+                        repaired,
+                        llm,
+                        req_id,
+                        correlation_id,
+                        interaction_config,
+                        persistence,
+                        ensure_summary,
+                        on_success,
+                        defer_persistence,
+                    )
+            except Exception as exc:
+                logger.warning(
+                    "summary_repair_failed",
+                    extra={"cid": correlation_id, "error": str(exc)},
+                )
+
             self._set_failure_context(llm, "summary_fields_empty")
             return None
 
