@@ -9,6 +9,7 @@ from app.api.routers.auth import get_current_user
 from app.core.logging_utils import get_logger
 from app.db.models import Request as RequestModel, Summary, TopicSearchIndex
 from app.services.chroma_vector_search_service import ChromaVectorSearchService
+from app.services.topic_search_utils import ensure_mapping
 from app.services.trending_cache import get_trending_payload
 
 logger = get_logger(__name__)
@@ -65,8 +66,8 @@ async def search_summaries(
             if not summary:
                 continue
 
-            json_payload = summary.json_payload or {}
-            metadata = json_payload.get("metadata", {})
+            json_payload = ensure_mapping(summary.json_payload)
+            metadata = ensure_mapping(json_payload.get("metadata"))
 
             results.append(
                 {
@@ -170,8 +171,8 @@ async def semantic_search_summaries(
             if not summary:
                 continue
 
-            json_payload = summary.json_payload or {}
-            metadata = json_payload.get("metadata", {})
+            json_payload = ensure_mapping(summary.json_payload)
+            metadata = ensure_mapping(json_payload.get("metadata"))
 
             snippet = result.snippet or json_payload.get("summary_250") or json_payload.get("tldr")
 
@@ -278,11 +279,13 @@ async def get_related_summaries(
 
     matching_summaries = []
     for summary in summaries:
-        json_payload = summary.json_payload or {}
+        json_payload = ensure_mapping(summary.json_payload)
         topic_tags = json_payload.get("topic_tags", [])
+        if not isinstance(topic_tags, list):
+            topic_tags = []
 
-        if tag.lower() in [t.lower() for t in topic_tags]:
-            metadata = json_payload.get("metadata", {})
+        if tag.lower() in [t.lower() for t in topic_tags if isinstance(t, str)]:
+            metadata = ensure_mapping(json_payload.get("metadata"))
             matching_summaries.append(
                 {
                     "summary_id": summary.id,
@@ -349,8 +352,8 @@ async def check_duplicate(
     }
 
     if include_summary and summary:
-        json_payload = summary.json_payload or {}
-        metadata = json_payload.get("metadata", {})
+        json_payload = ensure_mapping(summary.json_payload)
+        metadata = ensure_mapping(json_payload.get("metadata"))
 
         response_data["summary"] = {
             "title": metadata.get("title", "Untitled"),

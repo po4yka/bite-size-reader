@@ -17,6 +17,7 @@ from app.api.routers.auth import get_current_user
 from app.core.logging_utils import get_logger
 from app.core.time_utils import UTC
 from app.db.models import Request as RequestModel, Summary, User
+from app.services.topic_search_utils import ensure_mapping
 
 logger = get_logger(__name__)
 router = APIRouter()
@@ -123,17 +124,18 @@ async def get_user_stats(user=Depends(get_current_user)):
     domain_counter = Counter()
 
     for summary in summaries:
-        json_payload = summary.json_payload or {}
-        total_reading_time += json_payload.get("estimated_reading_time_min", 0)
+        json_payload = ensure_mapping(summary.json_payload)
+        total_reading_time += json_payload.get("estimated_reading_time_min", 0) or 0
 
         # Count topic tags
         topic_tags = json_payload.get("topic_tags", [])
-        for tag in topic_tags:
-            if tag:
-                topic_counter[tag.lower()] += 1
+        if isinstance(topic_tags, list):
+            for tag in topic_tags:
+                if tag and isinstance(tag, str):
+                    topic_counter[tag.lower()] += 1
 
         # Count domains (from metadata or request URL)
-        metadata = json_payload.get("metadata", {})
+        metadata = ensure_mapping(json_payload.get("metadata"))
         domain = metadata.get("domain")
         if not domain and summary.request.normalized_url:
             # Extract domain from URL

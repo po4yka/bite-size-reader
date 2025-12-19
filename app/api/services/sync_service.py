@@ -121,7 +121,7 @@ class SyncService:
         )
 
     def _serialize_request(self, request: Request) -> SyncEntityEnvelope:
-        deleted_at = request.deleted_at.isoformat() + "Z" if request.deleted_at else None
+        deleted_at = self._coerce_iso(request.deleted_at) if request.deleted_at else None
         payload = None
         if not request.is_deleted:
             payload = {
@@ -131,19 +131,19 @@ class SyncService:
                 "input_url": request.input_url,
                 "normalized_url": request.normalized_url,
                 "correlation_id": request.correlation_id,
-                "created_at": request.created_at.isoformat() + "Z",
+                "created_at": self._coerce_iso(request.created_at),
             }
         return SyncEntityEnvelope(
             entity_type="request",
             id=request.id,
             server_version=int(request.server_version or 0),
-            updated_at=request.updated_at.isoformat() + "Z",
+            updated_at=self._coerce_iso(request.updated_at),
             deleted_at=deleted_at,
             request=payload,
         )
 
     def _serialize_summary(self, summary: Summary) -> SyncEntityEnvelope:
-        deleted_at = summary.deleted_at.isoformat() + "Z" if summary.deleted_at else None
+        deleted_at = self._coerce_iso(summary.deleted_at) if summary.deleted_at else None
         payload = None
         if not summary.is_deleted:
             payload = {
@@ -152,20 +152,20 @@ class SyncService:
                 "lang": summary.lang,
                 "is_read": summary.is_read,
                 "json_payload": summary.json_payload,
-                "created_at": summary.created_at.isoformat() + "Z",
+                "created_at": self._coerce_iso(summary.created_at),
             }
 
         return SyncEntityEnvelope(
             entity_type="summary",
             id=summary.id,
             server_version=int(summary.server_version or 0),
-            updated_at=summary.updated_at.isoformat() + "Z",
+            updated_at=self._coerce_iso(summary.updated_at),
             deleted_at=deleted_at,
             summary=payload,
         )
 
     def _serialize_crawl_result(self, crawl: CrawlResult) -> SyncEntityEnvelope:
-        deleted_at = crawl.deleted_at.isoformat() + "Z" if crawl.deleted_at else None
+        deleted_at = self._coerce_iso(crawl.deleted_at) if crawl.deleted_at else None
         payload = None
         if not crawl.is_deleted:
             payload = {
@@ -181,13 +181,13 @@ class SyncService:
             entity_type="crawl_result",
             id=crawl.id,
             server_version=int(crawl.server_version or 0),
-            updated_at=crawl.updated_at.isoformat() + "Z",
+            updated_at=self._coerce_iso(crawl.updated_at),
             deleted_at=deleted_at,
             crawl_result=payload,
         )
 
     def _serialize_llm_call(self, call: LLMCall) -> SyncEntityEnvelope:
-        deleted_at = call.deleted_at.isoformat() + "Z" if call.deleted_at else None
+        deleted_at = self._coerce_iso(call.deleted_at) if call.deleted_at else None
         created_at = self._coerce_iso(call.created_at)
         updated_at = self._coerce_iso(call.updated_at)
         payload = None

@@ -26,6 +26,7 @@ from app.core.html_utils import clean_markdown_article_text, html_to_text
 from app.core.logging_utils import get_logger
 from app.core.time_utils import UTC
 from app.db.models import CrawlResult, LLMCall, Request as RequestModel, Summary
+from app.services.topic_search_utils import ensure_mapping
 
 logger = get_logger(__name__)
 router = APIRouter()
@@ -79,8 +80,8 @@ async def get_summaries(
     summary_list: list[SummaryCompact] = []
     for summary in summaries:
         request = summary.request
-        json_payload = summary.json_payload or {}
-        metadata = json_payload.get("metadata", {})
+        json_payload = ensure_mapping(summary.json_payload)
+        metadata = ensure_mapping(json_payload.get("metadata"))
 
         summary_list.append(
             SummaryCompact(
@@ -261,8 +262,8 @@ async def get_summary_content(
     if not crawl_result:
         raise ResourceNotFoundError("Content", summary_id)
 
-    metadata = crawl_result.metadata_json or {}
-    summary_metadata = (summary.json_payload or {}).get("metadata", {})
+    metadata = ensure_mapping(crawl_result.metadata_json)
+    summary_metadata = ensure_mapping(ensure_mapping(summary.json_payload).get("metadata"))
     source_url = crawl_result.source_url or request.input_url or request.normalized_url
     title = metadata.get("title") or summary_metadata.get("title")
     domain = metadata.get("domain") or summary_metadata.get("domain")
