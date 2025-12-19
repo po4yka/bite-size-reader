@@ -765,7 +765,7 @@ def success_response(
     build: str | None = None,
 ) -> dict[str, Any]:
     """Helper to build a standardized success response."""
-    payload = data.model_dump() if isinstance(data, BaseModel) else data
+    payload = data.model_dump(by_alias=True) if isinstance(data, BaseModel) else data
     meta = build_meta(
         correlation_id=correlation_id,
         pagination=pagination,
@@ -773,7 +773,7 @@ def success_response(
         version=version,
         build=build,
     )
-    return SuccessResponse(data=payload, meta=meta).model_dump()
+    return SuccessResponse(data=payload, meta=meta).model_dump(by_alias=True)
 
 
 def make_error(

@@ -19,7 +19,9 @@ def test_success_response_includes_pagination_meta() -> None:
     pagination = {"total": 10, "limit": 5, "offset": 0, "has_more": True}
     resp = success_response({"items": []}, pagination=pagination)
 
-    assert resp["meta"]["pagination"] == pagination
+    # Pagination uses serialization aliases (hasMore instead of has_more)
+    expected_pagination = {"total": 10, "limit": 5, "offset": 0, "hasMore": True}
+    assert resp["meta"]["pagination"] == expected_pagination
     assert resp["success"] is True
 
 
