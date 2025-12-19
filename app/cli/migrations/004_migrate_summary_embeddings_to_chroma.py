@@ -11,7 +11,7 @@ if TYPE_CHECKING:
 
     from app.db.database import Database
 
-from app.config import ChromaConfig
+from app.config import load_config
 from app.infrastructure.vector.chroma_store import ChromaVectorStore
 from app.services.embedding_service import EmbeddingService
 
@@ -26,7 +26,8 @@ def upgrade(db: Database) -> None:
     verification) so operators can validate availability during rollout.
     """
 
-    chroma_cfg = ChromaConfig()
+    # Use full app config so environment overrides (e.g., CHROMA_HOST) are honored
+    chroma_cfg = load_config(allow_stub_telegram=True).vector_store
     embedding_service = EmbeddingService()
     vector_store = ChromaVectorStore(
         host=chroma_cfg.host,

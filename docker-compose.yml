@@ -68,6 +68,7 @@ services:
       - API_PORT=8000
       - API_WORKERS=${API_WORKERS:-4}
       - DB_PATH=/data/app.db
+      - CHROMA_HOST=http://chroma:8000
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - REDIS_ENABLED=1
       - REDIS_HOST=redis
@@ -81,6 +82,8 @@ services:
       - "18000:8000"
     depends_on:
       redis:
+        condition: service_healthy
+      chroma:
         condition: service_healthy
     restart: unless-stopped
     healthcheck:
