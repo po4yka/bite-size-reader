@@ -3,6 +3,7 @@ User preferences and statistics endpoints.
 """
 
 from datetime import datetime
+from typing import Any
 
 from fastapi import APIRouter, Depends
 
@@ -21,6 +22,28 @@ from app.services.topic_search_utils import ensure_mapping
 
 logger = get_logger(__name__)
 router = APIRouter()
+
+
+def _safe_isoformat(dt_value: Any) -> str | None:
+    """Safely convert datetime-ish values to ISO 8601 Z form.
+
+    Handles:
+    - datetime objects -> ISO string with Z suffix
+    - ISO strings -> normalized with Z suffix
+    - None/invalid -> None
+    """
+    if dt_value is None:
+        return None
+    if hasattr(dt_value, "isoformat") and not isinstance(dt_value, str):
+        return dt_value.isoformat() + "Z"
+    if isinstance(dt_value, str):
+        try:
+            # Try to parse and normalize the string
+            parsed = datetime.fromisoformat(dt_value.replace("Z", "+00:00"))
+            return parsed.isoformat() + "Z"
+        except (ValueError, AttributeError):
+            return dt_value if dt_value else None
+    return None
 
 
 @router.get("/preferences")
@@ -153,7 +176,7 @@ async def get_user_stats(user=Depends(get_current_user)):
     average_reading_time = total_reading_time / total_summaries if total_summaries > 0 else 0
 
     # Get top topics and domains
-    favorite_topics = [{"tag": tag, "count": count} for tag, count in topic_counter.most_common(10)]
+    favorite_topics = [{"topic": tag, "count": count} for tag, count in topic_counter.most_common(10)]
     favorite_domains = [
         {"domain": domain, "count": count} for domain, count in domain_counter.most_common(10)
     ]
@@ -172,7 +195,7 @@ async def get_user_stats(user=Depends(get_current_user)):
         .order_by(RequestModel.created_at.desc())
         .first()
     )
-    last_summary_at = last_summary.created_at.isoformat() + "Z" if last_summary else None
+    last_summary_at = _safe_isoformat(last_summary.created_at) if last_summary else None
 
     return success_response(
         UserStatsData(
@@ -184,7 +207,7 @@ async def get_user_stats(user=Depends(get_current_user)):
             favorite_topics=favorite_topics,
             favorite_domains=favorite_domains,
             language_distribution={"en": en_count, "ru": ru_count},
-            joined_at=user_record.created_at.isoformat() + "Z" if user_record else None,
+            joined_at=_safe_isoformat(user_record.created_at) if user_record else None,
             last_summary_at=last_summary_at,
         )
     )

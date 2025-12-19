@@ -11,3 +11,8 @@ app/models/telegram/telegram_entity.py
 app/models/telegram/telegram_enums.py
 app/models/telegram/telegram_user.py
 app/db/models.py
+# API routers and services
+app/api/services/sync_service.py
+app/api/routers/user.py
+app/api/routers/summaries.py
+app/api/routers/search.py
