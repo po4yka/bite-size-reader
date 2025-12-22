@@ -237,7 +237,7 @@ peewee==3.18.3
     # via bite-size-reader (pyproject.toml)
 pillow==12.0.0
     # via sentence-transformers
-posthog==5.4.0
+posthog==7.0.1
     # via chromadb
 preshed==3.0.12
     # via
