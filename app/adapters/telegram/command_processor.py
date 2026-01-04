@@ -1268,3 +1268,150 @@ class CommandProcessor:
         response_lines.append("\n💡 **Tip:** Use `/read <request_id>` to view full summaries")
 
         await self.response_formatter.safe_reply(message, "\n\n".join(response_lines))
+
+    async def handle_sync_karakeep_command(
+        self,
+        message: Any,
+        text: str,
+        uid: int,
+        correlation_id: str,
+        interaction_id: int,
+        start_time: float,
+    ) -> None:
+        """Handle /sync_karakeep command - sync articles with Karakeep."""
+        logger.info(
+            "command_sync_karakeep",
+            extra={"uid": uid, "cid": correlation_id, "text": text},
+        )
+
+        # Check if Karakeep is enabled
+        if not self.cfg.karakeep.enabled:
+            await self.response_formatter.safe_reply(
+                message,
+                "⚠️ Karakeep sync is not enabled.\n\n"
+                "Set `KARAKEEP_ENABLED=true` in your environment to enable.",
+            )
+            return
+
+        if not self.cfg.karakeep.api_key:
+            await self.response_formatter.safe_reply(
+                message,
+                "⚠️ Karakeep API key not configured.\n\nSet `KARAKEEP_API_KEY` in your environment.",
+            )
+            return
+
+        # Parse subcommand
+        parts = text.strip().split(maxsplit=1)
+        subcommand = parts[1].lower() if len(parts) > 1 else "run"
+
+        if subcommand == "status":
+            await self._handle_karakeep_status(message, uid, correlation_id)
+        elif subcommand in ("run", "sync"):
+            await self._handle_karakeep_sync(
+                message, uid, correlation_id, interaction_id, start_time
+            )
+        else:
+            await self.response_formatter.safe_reply(
+                message,
+                "📖 **Karakeep Sync Commands:**\n\n"
+                "`/sync_karakeep` - Run bidirectional sync\n"
+                "`/sync_karakeep status` - Show sync statistics\n",
+            )
+
+    async def _handle_karakeep_status(self, message: Any, uid: int, correlation_id: str) -> None:
+        """Show Karakeep sync status."""
+        from app.adapters.karakeep import KarakeepSyncService
+
+        try:
+            service = KarakeepSyncService(
+                api_url=self.cfg.karakeep.api_url,
+                api_key=self.cfg.karakeep.api_key,
+                sync_tag=self.cfg.karakeep.sync_tag,
+            )
+            status = await service.get_sync_status()
+
+            status_text = (
+                "📊 **Karakeep Sync Status**\n\n"
+                f"📤 BSR → Karakeep: {status['bsr_to_karakeep']} items\n"
+                f"📥 Karakeep → BSR: {status['karakeep_to_bsr']} items\n"
+                f"📈 Total synced: {status['total_synced']} items\n"
+            )
+            if status.get("last_sync_at"):
+                status_text += f"🕐 Last sync: {status['last_sync_at']}\n"
+
+            await self.response_formatter.safe_reply(message, status_text)
+
+        except Exception as exc:
+            logger.exception("karakeep_status_failed", extra={"cid": correlation_id})
+            await self.response_formatter.safe_reply(message, f"⚠️ Failed to get sync status: {exc}")
+
+    async def _handle_karakeep_sync(
+        self,
+        message: Any,
+        uid: int,
+        correlation_id: str,
+        interaction_id: int,
+        start_time: float,
+    ) -> None:
+        """Run Karakeep sync."""
+        from app.adapters.karakeep import KarakeepSyncService
+
+        # Send initial message
+        await self.response_formatter.safe_reply(message, "🔄 Starting Karakeep sync...")
+
+        try:
+            service = KarakeepSyncService(
+                api_url=self.cfg.karakeep.api_url,
+                api_key=self.cfg.karakeep.api_key,
+                sync_tag=self.cfg.karakeep.sync_tag,
+            )
+
+            result = await service.run_full_sync(user_id=uid)
+
+            # Format result message
+            result_text = (
+                "✅ **Karakeep Sync Complete**\n\n"
+                f"📤 **BSR → Karakeep:**\n"
+                f"   • Synced: {result.bsr_to_karakeep.items_synced}\n"
+                f"   • Skipped: {result.bsr_to_karakeep.items_skipped}\n"
+                f"   • Failed: {result.bsr_to_karakeep.items_failed}\n\n"
+                f"📥 **Karakeep → BSR:**\n"
+                f"   • Synced: {result.karakeep_to_bsr.items_synced}\n"
+                f"   • Skipped: {result.karakeep_to_bsr.items_skipped}\n"
+                f"   • Failed: {result.karakeep_to_bsr.items_failed}\n\n"
+                f"⏱ Duration: {result.total_duration_seconds:.1f}s"
+            )
+
+            # Add errors if any
+            all_errors = result.bsr_to_karakeep.errors + result.karakeep_to_bsr.errors
+            if all_errors:
+                result_text += f"\n\n⚠️ **Errors ({len(all_errors)}):**\n"
+                for err in all_errors[:5]:  # Show max 5 errors
+                    result_text += f"• {err[:100]}...\n" if len(err) > 100 else f"• {err}\n"
+
+            await self.response_formatter.safe_reply(message, result_text)
+
+            if interaction_id:
+                await async_safe_update_user_interaction(
+                    self.db,
+                    interaction_id=interaction_id,
+                    response_sent=True,
+                    response_type="karakeep_sync_complete",
+                    start_time=start_time,
+                    logger_=logger,
+                )
+
+        except Exception as exc:
+            logger.exception("karakeep_sync_failed", extra={"cid": correlation_id})
+            await self.response_formatter.safe_reply(message, f"❌ Karakeep sync failed: {exc}")
+            if interaction_id:
+                await async_safe_update_user_interaction(
+                    self.db,
+                    interaction_id=interaction_id,
+                    response_sent=True,
+                    response_type="karakeep_sync_error",
+                    error_occurred=True,
+                    error_message=str(exc)[:500],
+                    start_time=start_time,
+                    logger_=logger,
+                )

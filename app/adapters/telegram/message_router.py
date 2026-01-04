@@ -533,6 +533,12 @@ class MessageRouter:
             )
             return
 
+        if text.startswith("/sync_karakeep"):
+            await self.command_processor.handle_sync_karakeep_command(
+                message, text, uid, correlation_id, interaction_id, start_time
+            )
+            return
+
         # Handle forwarded messages before URL routing so forwards containing links aren't misclassified
         if (
             has_forward

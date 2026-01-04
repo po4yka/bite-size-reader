@@ -509,6 +509,26 @@ class RefreshToken(BaseModel):
         indexes = ((("user", "client_id"), False),)
 
 
+class KarakeepSync(BaseModel):
+    """Track synced items between BSR and Karakeep."""
+
+    id = peewee.AutoField()
+    bsr_summary_id = peewee.IntegerField(null=True)  # BSR summary ID (if synced from BSR)
+    karakeep_bookmark_id = peewee.TextField(null=True)  # Karakeep bookmark ID
+    url_hash = peewee.TextField(index=True)  # URL hash for deduplication
+    sync_direction = peewee.TextField()  # 'bsr_to_karakeep' or 'karakeep_to_bsr'
+    synced_at = peewee.DateTimeField(default=_utcnow)
+    created_at = peewee.DateTimeField(default=_utcnow)
+
+    class Meta:
+        table_name = "karakeep_sync"
+        indexes = (
+            (("url_hash",), False),
+            (("sync_direction",), False),
+            (("synced_at",), False),
+        )
+
+
 ALL_MODELS: tuple[type[BaseModel], ...] = (
     User,
     Chat,
@@ -529,6 +549,7 @@ ALL_MODELS: tuple[type[BaseModel], ...] = (
     CollectionInvite,
     UserDevice,
     RefreshToken,
+    KarakeepSync,
 )
 
 

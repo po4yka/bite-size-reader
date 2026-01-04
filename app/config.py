@@ -1077,6 +1077,64 @@ class SyncConfig(BaseModel):
         return parsed
 
 
+class KarakeepConfig(BaseModel):
+    """Karakeep integration configuration for bookmark synchronization."""
+
+    model_config = ConfigDict(frozen=True, populate_by_name=True)
+
+    enabled: bool = Field(default=False, validation_alias="KARAKEEP_ENABLED")
+    api_url: str = Field(
+        default="http://localhost:3000/api/v1",
+        validation_alias="KARAKEEP_API_URL",
+    )
+    api_key: str = Field(default="", validation_alias="KARAKEEP_API_KEY")
+    sync_tag: str = Field(default="bsr-synced", validation_alias="KARAKEEP_SYNC_TAG")
+    sync_interval_hours: int = Field(default=6, validation_alias="KARAKEEP_SYNC_INTERVAL_HOURS")
+
+    @field_validator("api_url", mode="before")
+    @classmethod
+    def _validate_api_url(cls, value: Any) -> str:
+        url = str(value or "http://localhost:3000/api/v1").strip()
+        if not url:
+            return "http://localhost:3000/api/v1"
+        return url.rstrip("/")
+
+    @field_validator("api_key", mode="before")
+    @classmethod
+    def _validate_api_key(cls, value: Any) -> str:
+        if value in (None, ""):
+            return ""
+        key = str(value).strip()
+        if len(key) > 500:
+            msg = "Karakeep API key appears to be too long"
+            raise ValueError(msg)
+        return key
+
+    @field_validator("sync_tag", mode="before")
+    @classmethod
+    def _validate_sync_tag(cls, value: Any) -> str:
+        tag = str(value or "bsr-synced").strip()
+        if not tag:
+            return "bsr-synced"
+        if len(tag) > 50:
+            msg = "Karakeep sync tag is too long"
+            raise ValueError(msg)
+        return tag
+
+    @field_validator("sync_interval_hours", mode="before")
+    @classmethod
+    def _validate_sync_interval(cls, value: Any) -> int:
+        try:
+            parsed = int(str(value if value not in (None, "") else 6))
+        except ValueError as exc:
+            msg = "Karakeep sync interval must be a valid integer"
+            raise ValueError(msg) from exc
+        if parsed < 1 or parsed > 168:
+            msg = "Karakeep sync interval must be between 1 and 168 hours"
+            raise ValueError(msg)
+        return parsed
+
+
 class DatabaseConfig(BaseModel):
     """Database operation limits and timeouts configuration."""
 
@@ -1454,6 +1512,7 @@ class AppConfig:
     auth: AuthConfig
     sync: SyncConfig
     background: BackgroundProcessorConfig
+    karakeep: KarakeepConfig
 
 
 class Settings(BaseSettings):
@@ -1486,6 +1545,7 @@ class Settings(BaseSettings):
     auth: AuthConfig = Field(default_factory=AuthConfig)
     sync: SyncConfig = Field(default_factory=SyncConfig)
     background: BackgroundProcessorConfig = Field(default_factory=BackgroundProcessorConfig)
+    karakeep: KarakeepConfig = Field(default_factory=KarakeepConfig)
 
     @model_validator(mode="before")
     @classmethod
@@ -1574,6 +1634,7 @@ class Settings(BaseSettings):
             auth=self.auth,
             sync=self.sync,
             background=self.background,
+            karakeep=self.karakeep,
         )
 
 
