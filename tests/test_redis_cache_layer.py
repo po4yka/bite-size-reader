@@ -47,6 +47,8 @@ def _dummy_cfg() -> SimpleNamespace:
         require_parameters=True,
         auto_fallback_structured=True,
         max_response_size_mb=10,
+        summary_temperature_relaxed=None,
+        summary_top_p_relaxed=None,
     )
     firecrawl_cfg = SimpleNamespace()
     return SimpleNamespace(

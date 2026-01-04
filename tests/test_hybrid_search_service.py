@@ -1,6 +1,7 @@
 """Tests for the HybridSearchService."""
 
 import unittest
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 from app.services.hybrid_search_service import HybridSearchService
@@ -18,6 +19,11 @@ class FakeVectorResult:
         self.source = "example.com"
         self.published_at = "2024-01-01"
         self.similarity_score = similarity_score
+
+
+def _wrap_vector_results(results: list[FakeVectorResult]) -> SimpleNamespace:
+    """Wrap results in a ChromaVectorSearchResults-like object."""
+    return SimpleNamespace(results=results, has_more=False)
 
 
 class TestHybridSearchService(unittest.IsolatedAsyncioTestCase):
@@ -46,20 +52,22 @@ class TestHybridSearchService(unittest.IsolatedAsyncioTestCase):
 
         # Mock vector service
         vector_service = AsyncMock()
-        vector_service.search.return_value = [
-            FakeVectorResult(
-                url="https://example.com/vec1",
-                title="Vector Result 1",
-                snippet="Vector snippet 1",
-                similarity_score=0.9,
-            ),
-            FakeVectorResult(
-                url="https://example.com/vec2",
-                title="Vector Result 2",
-                snippet="Vector snippet 2",
-                similarity_score=0.8,
-            ),
-        ]
+        vector_service.search.return_value = _wrap_vector_results(
+            [
+                FakeVectorResult(
+                    url="https://example.com/vec1",
+                    title="Vector Result 1",
+                    snippet="Vector snippet 1",
+                    similarity_score=0.9,
+                ),
+                FakeVectorResult(
+                    url="https://example.com/vec2",
+                    title="Vector Result 2",
+                    snippet="Vector snippet 2",
+                    similarity_score=0.8,
+                ),
+            ]
+        )
 
         # Create hybrid service
         hybrid_service = HybridSearchService(
@@ -102,14 +110,16 @@ class TestHybridSearchService(unittest.IsolatedAsyncioTestCase):
         ]
 
         vector_service = AsyncMock()
-        vector_service.search.return_value = [
-            FakeVectorResult(
-                url=overlap_url,
-                title="Overlapping Article",
-                snippet="Vector snippet",
-                similarity_score=0.95,
-            ),
-        ]
+        vector_service.search.return_value = _wrap_vector_results(
+            [
+                FakeVectorResult(
+                    url=overlap_url,
+                    title="Overlapping Article",
+                    snippet="Vector snippet",
+                    similarity_score=0.95,
+                ),
+            ]
+        )
 
         hybrid_service = HybridSearchService(
             fts_service=fts_service,
@@ -153,7 +163,7 @@ class TestHybridSearchService(unittest.IsolatedAsyncioTestCase):
         fts_service.find_articles.return_value = fts_results
 
         vector_service = AsyncMock()
-        vector_service.search.return_value = vector_results
+        vector_service.search.return_value = _wrap_vector_results(vector_results)
 
         # Limit to 5 results
         hybrid_service = HybridSearchService(
@@ -175,14 +185,16 @@ class TestHybridSearchService(unittest.IsolatedAsyncioTestCase):
         fts_service.find_articles.return_value = []
 
         vector_service = AsyncMock()
-        vector_service.search.return_value = [
-            FakeVectorResult(
-                url="https://example.com/vec1",
-                title="Vector Only",
-                snippet="Vector snippet",
-                similarity_score=0.9,
-            )
-        ]
+        vector_service.search.return_value = _wrap_vector_results(
+            [
+                FakeVectorResult(
+                    url="https://example.com/vec1",
+                    title="Vector Only",
+                    snippet="Vector snippet",
+                    similarity_score=0.9,
+                )
+            ]
+        )
 
         hybrid_service = HybridSearchService(
             fts_service=fts_service,
@@ -212,7 +224,7 @@ class TestHybridSearchService(unittest.IsolatedAsyncioTestCase):
         ]
 
         vector_service = AsyncMock()
-        vector_service.search.return_value = []
+        vector_service.search.return_value = _wrap_vector_results([])
 
         hybrid_service = HybridSearchService(
             fts_service=fts_service,
@@ -259,7 +271,7 @@ class TestHybridSearchService(unittest.IsolatedAsyncioTestCase):
         fts_service.find_articles.return_value = []
 
         vector_service = AsyncMock()
-        vector_service.search.return_value = []
+        vector_service.search.return_value = _wrap_vector_results([])
 
         # Mock query expansion service
         query_expansion = MagicMock()
@@ -307,14 +319,16 @@ class TestHybridSearchService(unittest.IsolatedAsyncioTestCase):
         ]
 
         vector_service = AsyncMock()
-        vector_service.search.return_value = [
-            FakeVectorResult(
-                url=overlap_url,
-                title="Top FTS",
-                snippet="Vector snippet",
-                similarity_score=0.5,  # Lower vector score
-            ),
-        ]
+        vector_service.search.return_value = _wrap_vector_results(
+            [
+                FakeVectorResult(
+                    url=overlap_url,
+                    title="Top FTS",
+                    snippet="Vector snippet",
+                    similarity_score=0.5,  # Lower vector score
+                ),
+            ]
+        )
 
         # FTS-heavy weighting
         hybrid_service = HybridSearchService(
@@ -338,7 +352,7 @@ class TestHybridSearchService(unittest.IsolatedAsyncioTestCase):
         fts_service.find_articles.return_value = []
 
         vector_service = AsyncMock()
-        vector_service.search.return_value = []
+        vector_service.search.return_value = _wrap_vector_results([])
 
         hybrid_service = HybridSearchService(
             fts_service=fts_service,

@@ -5,25 +5,9 @@ from typing import Any
 from unittest.mock import AsyncMock, patch
 
 from app.adapters.telegram.telegram_bot import TelegramBot
-from app.config import (
-    ApiLimitsConfig,
-    AppConfig,
-    AuthConfig,
-    BackgroundProcessorConfig,
-    ChromaConfig,
-    ContentLimitsConfig,
-    DatabaseConfig,
-    FirecrawlConfig,
-    OpenRouterConfig,
-    RedisConfig,
-    RuntimeConfig,
-    SyncConfig,
-    TelegramConfig,
-    TelegramLimitsConfig,
-    YouTubeConfig,
-)
 from app.db.database import Database
 from app.services.topic_search import TopicArticle
+from tests.conftest import make_test_app_config
 
 
 class FakeMessage:
@@ -60,37 +44,7 @@ class BotSpy(TelegramBot):
 def make_bot(tmp_path: str) -> BotSpy:
     db = Database(tmp_path)
     db.migrate()
-    cfg = AppConfig(
-        telegram=TelegramConfig(api_id=0, api_hash="", bot_token="", allowed_user_ids=(1, 42)),
-        firecrawl=FirecrawlConfig(api_key="fc-dummy-key"),
-        openrouter=OpenRouterConfig(
-            api_key="y",
-            model="m",
-            fallback_models=(),
-            http_referer=None,
-            x_title=None,
-            max_tokens=None,
-            top_p=None,
-            temperature=0.2,
-        ),
-        youtube=YouTubeConfig(),
-        runtime=RuntimeConfig(
-            db_path=tmp_path,
-            log_level="INFO",
-            request_timeout_sec=5,
-            preferred_lang="en",
-            debug_payloads=False,
-        ),
-        telegram_limits=TelegramLimitsConfig(),
-        database=DatabaseConfig(),
-        content_limits=ContentLimitsConfig(),
-        vector_store=ChromaConfig(),
-        redis=RedisConfig(enabled=False, cache_enabled=False, prefix="test"),
-        api_limits=ApiLimitsConfig(),
-        auth=AuthConfig(),
-        sync=SyncConfig(),
-        background=BackgroundProcessorConfig(),
-    )
+    cfg = make_test_app_config(db_path=tmp_path, allowed_user_ids=(1, 42))
     from app.adapters import telegram_bot as tbmod
 
     tbmod.Client = object

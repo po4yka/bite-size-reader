@@ -7,25 +7,9 @@ from unittest.mock import AsyncMock, patch
 
 from app.adapters.openrouter.openrouter_client import LLMCallResult
 from app.adapters.telegram.telegram_bot import TelegramBot
-from app.config import (
-    ApiLimitsConfig,
-    AppConfig,
-    AuthConfig,
-    BackgroundProcessorConfig,
-    ChromaConfig,
-    ContentLimitsConfig,
-    DatabaseConfig,
-    FirecrawlConfig,
-    OpenRouterConfig,
-    RedisConfig,
-    RuntimeConfig,
-    SyncConfig,
-    TelegramConfig,
-    TelegramLimitsConfig,
-    YouTubeConfig,
-)
 from app.core.url_utils import normalize_url, url_hash_sha256
 from app.db.database import Database
+from tests.conftest import make_test_app_config
 
 
 class FakeMessage:
@@ -141,37 +125,7 @@ class TestDedupeReuse(unittest.IsolatedAsyncioTestCase):
             )
 
             # Prepare config with temp DB
-            cfg = AppConfig(
-                telegram=TelegramConfig(api_id=0, api_hash="", bot_token="", allowed_user_ids=(1,)),
-                firecrawl=FirecrawlConfig(api_key="fc-dummy-key"),
-                openrouter=OpenRouterConfig(
-                    api_key="y",
-                    model="m",
-                    fallback_models=(),
-                    http_referer=None,
-                    x_title=None,
-                    max_tokens=1024,
-                    top_p=1.0,
-                    temperature=0.8,
-                ),
-                youtube=YouTubeConfig(),
-                runtime=RuntimeConfig(
-                    db_path=db_path,
-                    log_level="INFO",
-                    request_timeout_sec=5,
-                    preferred_lang="en",
-                    debug_payloads=False,
-                ),
-                telegram_limits=TelegramLimitsConfig(),
-                database=DatabaseConfig(),
-                content_limits=ContentLimitsConfig(),
-                vector_store=ChromaConfig(),
-                redis=RedisConfig(enabled=False, cache_enabled=False, prefix="test"),
-                api_limits=ApiLimitsConfig(),
-                auth=AuthConfig(),
-                sync=SyncConfig(),
-                background=BackgroundProcessorConfig(),
-            )
+            cfg = make_test_app_config(db_path=db_path, allowed_user_ids=(1,))
 
             # Avoid creating real Telegram client
             from app.adapters import telegram_bot as tbmod
@@ -237,37 +191,7 @@ class TestDedupeReuse(unittest.IsolatedAsyncioTestCase):
                 json_payload={"summary_250": "cached", "tldr": "cached"},
             )
 
-            cfg = AppConfig(
-                telegram=TelegramConfig(api_id=0, api_hash="", bot_token="", allowed_user_ids=(1,)),
-                firecrawl=FirecrawlConfig(api_key="fc-dummy-key"),
-                openrouter=OpenRouterConfig(
-                    api_key="y",
-                    model="m",
-                    fallback_models=(),
-                    http_referer=None,
-                    x_title=None,
-                    max_tokens=1024,
-                    top_p=1.0,
-                    temperature=0.8,
-                ),
-                youtube=YouTubeConfig(),
-                runtime=RuntimeConfig(
-                    db_path=db_path,
-                    log_level="INFO",
-                    request_timeout_sec=5,
-                    preferred_lang="en",
-                    debug_payloads=False,
-                ),
-                telegram_limits=TelegramLimitsConfig(),
-                database=DatabaseConfig(),
-                content_limits=ContentLimitsConfig(),
-                vector_store=ChromaConfig(),
-                redis=RedisConfig(enabled=False, cache_enabled=False, prefix="test"),
-                api_limits=ApiLimitsConfig(),
-                auth=AuthConfig(),
-                sync=SyncConfig(),
-                background=BackgroundProcessorConfig(),
-            )
+            cfg = make_test_app_config(db_path=db_path, allowed_user_ids=(1,))
 
             from app.adapters import telegram_bot as tbmod
 

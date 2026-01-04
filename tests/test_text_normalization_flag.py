@@ -11,24 +11,9 @@ from app.adapters.content.content_extractor import ContentExtractor
 from app.adapters.external.firecrawl.models import FirecrawlResult
 from app.adapters.telegram import forward_content_processor as fcp
 from app.adapters.telegram.forward_content_processor import ForwardContentProcessor
-from app.config import (
-    ApiLimitsConfig,
-    AppConfig,
-    AuthConfig,
-    BackgroundProcessorConfig,
-    ChromaConfig,
-    ContentLimitsConfig,
-    DatabaseConfig,
-    FirecrawlConfig,
-    OpenRouterConfig,
-    RedisConfig,
-    RuntimeConfig,
-    SyncConfig,
-    TelegramConfig,
-    TelegramLimitsConfig,
-    YouTubeConfig,
-)
+from app.config import AppConfig, RuntimeConfig, YouTubeConfig
 from app.core import html_utils
+from tests.conftest import make_test_app_config
 
 if TYPE_CHECKING:
     from app.adapters.external.response_formatter import ResponseFormatter
@@ -40,38 +25,14 @@ async def _dummy_sem():
 
 
 def _cfg(enable_textacy: bool) -> AppConfig:
-    return AppConfig(
-        telegram=TelegramConfig(
-            api_id=1,
-            api_hash="test_api_hash_placeholder_value",
-            bot_token="1000000:TESTTOKENPLACEHOLDER1234567890ABC",
-            allowed_user_ids=(1,),
-        ),
-        firecrawl=FirecrawlConfig(api_key="firecrawl-key"),
-        openrouter=OpenRouterConfig(api_key="openrouter-key"),
-        youtube=YouTubeConfig(enabled=False),
+    return make_test_app_config(
         runtime=RuntimeConfig(
             enable_textacy=enable_textacy,
             request_timeout_sec=5,
             preferred_lang="en",
             max_concurrent_calls=1,
         ),
-        telegram_limits=TelegramLimitsConfig(),
-        database=DatabaseConfig(),
-        content_limits=ContentLimitsConfig(),
-        vector_store=ChromaConfig(),
-        redis=RedisConfig(
-            enabled=False,
-            cache_enabled=False,
-            required=False,
-            prefix="test",
-            cache_timeout_sec=0.1,
-            firecrawl_ttl_seconds=0,
-        ),
-        api_limits=ApiLimitsConfig(),
-        auth=AuthConfig(),
-        sync=SyncConfig(),
-        background=BackgroundProcessorConfig(),
+        youtube=YouTubeConfig(enabled=False),
     )
 
 

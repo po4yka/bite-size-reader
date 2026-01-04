@@ -4,75 +4,13 @@ import unittest
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from app.adapters.telegram.telegram_bot import TelegramBot
-from app.config import AppConfig
 from app.db.database import Database
+from tests.conftest import make_test_app_config
 
 
 class TestJsonRepair(unittest.TestCase):
     def setUp(self):
-        telegram_cfg = MagicMock()
-        telegram_cfg.api_id = "123"
-        telegram_cfg.api_hash = "abc"
-        telegram_cfg.bot_token = "token"
-        telegram_cfg.allowed_user_ids = [1]
-
-        firecrawl_cfg = MagicMock()
-        firecrawl_cfg.api_key = "fc-key"
-        firecrawl_cfg.max_connections = 1
-        firecrawl_cfg.max_keepalive_connections = 1
-        firecrawl_cfg.keepalive_expiry = 1
-        firecrawl_cfg.credit_warning_threshold = 1
-        firecrawl_cfg.credit_critical_threshold = 1
-        firecrawl_cfg.max_response_size_mb = 50
-
-        openrouter_cfg = MagicMock()
-        openrouter_cfg.api_key = "sk-or-v1-abc"
-        openrouter_cfg.model = "model"
-        openrouter_cfg.fallback_models = []
-        openrouter_cfg.http_referer = "ref"
-        openrouter_cfg.x_title = "title"
-        openrouter_cfg.provider_order = []
-        openrouter_cfg.enable_stats = False
-        openrouter_cfg.max_tokens = 4096
-        openrouter_cfg.max_retries = 3
-        openrouter_cfg.temperature = 0.7
-        openrouter_cfg.top_p = 1.0
-        openrouter_cfg.enable_structured_outputs = True
-        openrouter_cfg.structured_output_mode = "json_schema"
-        openrouter_cfg.require_parameters = True
-        openrouter_cfg.auto_fallback_structured = True
-        openrouter_cfg.long_context_model = None
-
-        youtube_cfg = MagicMock()
-        youtube_cfg.enabled = True
-        youtube_cfg.storage_path = "/data/videos"
-        youtube_cfg.max_video_size_mb = 500
-        youtube_cfg.max_storage_gb = 100
-        youtube_cfg.auto_cleanup_enabled = True
-        youtube_cfg.cleanup_after_days = 30
-        youtube_cfg.preferred_quality = "1080p"
-        youtube_cfg.subtitle_languages = ["en", "ru"]
-
-        runtime_cfg = MagicMock()
-        runtime_cfg.log_level = "INFO"
-        runtime_cfg.db_path = ":memory:"
-        runtime_cfg.request_timeout_sec = 5
-        runtime_cfg.debug_payloads = False
-        runtime_cfg.log_truncate_length = 100
-        runtime_cfg.preferred_lang = "en"
-        runtime_cfg.max_concurrent_calls = 4
-
-        self.cfg = AppConfig(
-            telegram_cfg,
-            firecrawl_cfg,
-            openrouter_cfg,
-            youtube_cfg,
-            runtime_cfg,
-            MagicMock(),  # telegram_limits
-            MagicMock(),  # database
-            MagicMock(),  # content_limits
-            MagicMock(),  # vector_store
-        )
+        self.cfg = make_test_app_config(db_path=":memory:")
         self.db = MagicMock(spec=Database)
 
     @patch("app.adapters.telegram.bot_factory.OpenRouterClient")

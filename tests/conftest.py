@@ -11,6 +11,25 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from app.config import (
+    ApiLimitsConfig,
+    AppConfig,
+    AuthConfig,
+    BackgroundProcessorConfig,
+    ChromaConfig,
+    ContentLimitsConfig,
+    DatabaseConfig,
+    FirecrawlConfig,
+    KarakeepConfig,
+    OpenRouterConfig,
+    RedisConfig,
+    RuntimeConfig,
+    SyncConfig,
+    TelegramConfig,
+    TelegramLimitsConfig,
+    YouTubeConfig,
+)
+
 # Provide sane defaults for integration/API tests that expect these env vars.
 os.environ.setdefault("JWT_SECRET_KEY", "test-secret-key-32-characters-long-123456")
 # Bot token must be "digits:at-least-30-chars"
@@ -120,3 +139,59 @@ class MockSummaryRepository:
 def mock_summary_repository():
     """Provide a mock summary repository."""
     return MockSummaryRepository()
+
+
+def make_test_app_config(
+    db_path: str = "/tmp/test.db",
+    allowed_user_ids: tuple[int, ...] = (123456789,),
+    **overrides: Any,
+) -> AppConfig:
+    """Create a complete AppConfig for testing with all required fields.
+
+    Args:
+        db_path: Path to the test database file.
+        allowed_user_ids: Tuple of allowed Telegram user IDs.
+        **overrides: Override any nested config (e.g., telegram=TelegramConfig(...)).
+
+    Returns:
+        Complete AppConfig instance suitable for testing.
+    """
+    defaults: dict[str, Any] = {
+        "telegram": TelegramConfig(
+            api_id=12345,
+            api_hash="test_api_hash_placeholder_value___",
+            bot_token="123456789:test-token-secret-part-at-least-30-chars",
+            allowed_user_ids=allowed_user_ids,
+        ),
+        "firecrawl": FirecrawlConfig(api_key="fc-test-api-key-placeholder"),
+        "openrouter": OpenRouterConfig(
+            api_key="sk-or-test-api-key-placeholder",
+            model="test/model",
+            fallback_models=(),
+            http_referer=None,
+            x_title=None,
+            max_tokens=None,
+            top_p=None,
+            temperature=0.2,
+        ),
+        "youtube": YouTubeConfig(),
+        "runtime": RuntimeConfig(
+            db_path=db_path,
+            log_level="INFO",
+            request_timeout_sec=5,
+            preferred_lang="en",
+            debug_payloads=False,
+        ),
+        "telegram_limits": TelegramLimitsConfig(),
+        "database": DatabaseConfig(),
+        "content_limits": ContentLimitsConfig(),
+        "vector_store": ChromaConfig(),
+        "redis": RedisConfig(enabled=False),
+        "api_limits": ApiLimitsConfig(),
+        "auth": AuthConfig(),
+        "sync": SyncConfig(),
+        "background": BackgroundProcessorConfig(),
+        "karakeep": KarakeepConfig(),
+    }
+    defaults.update(overrides)
+    return AppConfig(**defaults)

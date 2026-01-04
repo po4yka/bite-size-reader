@@ -37,6 +37,7 @@ async def test_chroma_resource_manager_reuses_singleton_and_shuts_down():
             auth_token=None,
             environment="test",
             user_scope="user",
+            collection_version="v1",
         ),
     )
 

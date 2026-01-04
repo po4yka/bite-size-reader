@@ -6,57 +6,20 @@ from typing import TYPE_CHECKING, cast
 from unittest.mock import Mock
 
 from app.adapters.telegram.message_router import MessageRouter
-from app.config import (
-    AppConfig,
-    ChromaConfig,
-    ContentLimitsConfig,
-    DatabaseConfig,
-    FirecrawlConfig,
-    OpenRouterConfig,
-    RuntimeConfig,
-    TelegramConfig,
-    TelegramLimitsConfig,
-    YouTubeConfig,
-)
+from app.config import AppConfig  # noqa: TC001 - used for type annotation
 from app.db.database import Database
 from app.db.user_interactions import (
     async_safe_update_user_interaction,
     safe_update_user_interaction,
 )
+from tests.conftest import make_test_app_config
 
 if TYPE_CHECKING:
     from app.adapters.telegram.url_handler import URLHandler
 
 
 def _make_config() -> AppConfig:
-    return AppConfig(
-        telegram=TelegramConfig(
-            api_id=1,
-            api_hash="hash",
-            bot_token="123456789:ABCDEFGHIJKLMNOPQRSTUVWXYZ1234",
-            allowed_user_ids=(1,),
-        ),
-        firecrawl=FirecrawlConfig(api_key="firecrawl-key"),
-        openrouter=OpenRouterConfig(
-            api_key="openrouter-key",
-            model="test-model",
-            fallback_models=(),
-            http_referer=None,
-            x_title=None,
-        ),
-        youtube=YouTubeConfig(),
-        runtime=RuntimeConfig(
-            db_path=":memory:",
-            log_level="INFO",
-            request_timeout_sec=10,
-            preferred_lang="en",
-            debug_payloads=False,
-        ),
-        telegram_limits=TelegramLimitsConfig(),
-        database=DatabaseConfig(),
-        content_limits=ContentLimitsConfig(),
-        vector_store=ChromaConfig(),
-    )
+    return make_test_app_config(db_path=":memory:")
 
 
 def _make_db(tmp_path) -> Database:

@@ -6,19 +6,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 from app.adapters.external.response_formatter import ResponseFormatter
 from app.adapters.telegram.forward_content_processor import ForwardContentProcessor
-from app.config import (
-    AppConfig,
-    ChromaConfig,
-    ContentLimitsConfig,
-    DatabaseConfig,
-    FirecrawlConfig,
-    OpenRouterConfig,
-    RuntimeConfig,
-    TelegramConfig,
-    TelegramLimitsConfig,
-    YouTubeConfig,
-)
 from app.db.database import Database
+from tests.conftest import make_test_app_config
 
 
 class _ForwardMessage:
@@ -59,32 +48,7 @@ class TestForwardMessagePersistence(unittest.IsolatedAsyncioTestCase):
             db = Database(db_path)
             db.migrate()
 
-            cfg = AppConfig(
-                telegram=TelegramConfig(api_id=0, api_hash="", bot_token="", allowed_user_ids=(1,)),
-                firecrawl=FirecrawlConfig(api_key="fc-dummy-key"),
-                openrouter=OpenRouterConfig(
-                    api_key="or-dummy-key",
-                    model="deepseek/deepseek-v3.2",
-                    fallback_models=(),
-                    http_referer=None,
-                    x_title=None,
-                    max_tokens=1024,
-                    top_p=1.0,
-                    temperature=0.2,
-                ),
-                youtube=YouTubeConfig(),
-                runtime=RuntimeConfig(
-                    db_path=db_path,
-                    log_level="INFO",
-                    request_timeout_sec=5,
-                    preferred_lang="en",
-                    debug_payloads=False,
-                ),
-                telegram_limits=TelegramLimitsConfig(),
-                database=DatabaseConfig(),
-                content_limits=ContentLimitsConfig(),
-                vector_store=ChromaConfig(),
-            )
+            cfg = make_test_app_config(db_path=db_path, allowed_user_ids=(1,))
 
             formatter = MagicMock(spec=ResponseFormatter)
             formatter.send_forward_accepted_notification = AsyncMock()

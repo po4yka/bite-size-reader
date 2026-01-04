@@ -8,20 +8,9 @@ from unittest.mock import patch
 import pytest
 
 from app.adapters.telegram.telegram_bot import TelegramBot
-from app.config import (
-    AppConfig,
-    ChromaConfig,
-    ContentLimitsConfig,
-    DatabaseConfig,
-    FirecrawlConfig,
-    OpenRouterConfig,
-    RuntimeConfig,
-    TelegramConfig,
-    TelegramLimitsConfig,
-    YouTubeConfig,
-)
 from app.db.database import Database
 from app.models.telegram.telegram_models import ChatType, TelegramMessage, TelegramUser
+from tests.conftest import make_test_app_config
 
 
 class FakeMessage:
@@ -50,34 +39,7 @@ def make_bot(tmp_path: str, allowed_ids):
     """Create a test bot instance."""
     db = Database(tmp_path)
     db.migrate()
-    cfg = AppConfig(
-        telegram=TelegramConfig(
-            api_id=0, api_hash="", bot_token="", allowed_user_ids=tuple(allowed_ids)
-        ),
-        firecrawl=FirecrawlConfig(api_key="fc-dummy-key"),
-        openrouter=OpenRouterConfig(
-            api_key="or-dummy-key",
-            model="deepseek/deepseek-v3.2",
-            fallback_models=(),
-            http_referer=None,
-            x_title=None,
-            max_tokens=None,
-            top_p=None,
-            temperature=0.2,
-        ),
-        youtube=YouTubeConfig(),
-        runtime=RuntimeConfig(
-            db_path=tmp_path,
-            log_level="INFO",
-            request_timeout_sec=5,
-            preferred_lang="en",
-            debug_payloads=False,
-        ),
-        telegram_limits=TelegramLimitsConfig(),
-        database=DatabaseConfig(),
-        content_limits=ContentLimitsConfig(),
-        vector_store=ChromaConfig(),
-    )
+    cfg = make_test_app_config(db_path=tmp_path, allowed_user_ids=tuple(allowed_ids))
     from app.adapters import telegram_bot as tbmod
 
     tbmod.Client = object
