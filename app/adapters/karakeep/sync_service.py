@@ -187,6 +187,20 @@ class KarakeepSyncService:
         # Create bookmark
         bookmark = await client.create_bookmark(url=url, title=title, note=note)
 
+        # Sync read/favorite status
+        if summary.is_read or summary.is_favorited:
+            try:
+                await client.update_bookmark(
+                    bookmark.id,
+                    archived=summary.is_read if summary.is_read else None,
+                    favourited=summary.is_favorited if summary.is_favorited else None,
+                )
+            except Exception as e:
+                logger.warning(
+                    "karakeep_update_status_failed",
+                    extra={"bookmark_id": bookmark.id, "error": str(e)},
+                )
+
         # Attach tags
         tags = [self.sync_tag]
         if summary.json_payload:
@@ -389,6 +403,9 @@ class KarakeepSyncService:
             karakeep_result = SyncResult(direction="karakeep_to_bsr")
             karakeep_result.errors.append("Skipped: user_id required for Karakeep→BSR sync")
 
+        # Sync status updates for already-synced items
+        status_result = await self.sync_status_updates()
+
         total_duration = time.time() - start_time
         result = FullSyncResult(
             bsr_to_karakeep=bsr_result,
@@ -402,6 +419,8 @@ class KarakeepSyncService:
             extra={
                 "bsr_to_karakeep": bsr_result.items_synced,
                 "karakeep_to_bsr": karakeep_result.items_synced,
+                "status_updates_bsr_to_kk": status_result["bsr_to_karakeep_updated"],
+                "status_updates_kk_to_bsr": status_result["karakeep_to_bsr_updated"],
                 "total_duration": total_duration,
             },
         )
@@ -438,4 +457,114 @@ class KarakeepSyncService:
             "bsr_to_karakeep": bsr_to_karakeep,
             "karakeep_to_bsr": karakeep_to_bsr,
             "last_sync_at": last_sync.synced_at.isoformat() if last_sync else None,
+        }
+
+    async def sync_status_updates(self) -> dict[str, int | list[str]]:
+        """Sync read/favorite status for already-synced items.
+
+        This updates:
+        - BSR is_read → Karakeep archived
+        - BSR is_favorited → Karakeep favourited
+        - Karakeep archived → BSR is_read
+        - Karakeep favourited → BSR is_favorited
+
+        Returns:
+            Dict with update counts
+        """
+        from app.db.models import KarakeepSync, Summary, database_proxy
+
+        bsr_to_kk_updated = 0
+        kk_to_bsr_updated = 0
+        errors: list[str] = []
+
+        try:
+            async with KarakeepClient(self.api_url, self.api_key) as client:
+                # Get all Karakeep bookmarks for status lookup
+                karakeep_bookmarks = await client.get_all_bookmarks()
+                karakeep_by_id = {b.id: b for b in karakeep_bookmarks}
+
+                with database_proxy.atomic():
+                    # Get all synced items that have Karakeep bookmark IDs
+                    synced_items = KarakeepSync.select().where(
+                        KarakeepSync.karakeep_bookmark_id.is_null(False),
+                        KarakeepSync.bsr_summary_id.is_null(False),
+                    )
+
+                    for sync_record in synced_items:
+                        try:
+                            # Get BSR summary
+                            summary = Summary.get_or_none(Summary.id == sync_record.bsr_summary_id)
+                            if not summary:
+                                continue
+
+                            # Get Karakeep bookmark
+                            bookmark = karakeep_by_id.get(sync_record.karakeep_bookmark_id)
+                            if not bookmark:
+                                continue
+
+                            # Compare and sync status
+                            bsr_read = summary.is_read
+                            bsr_fav = summary.is_favorited
+                            kk_archived = bookmark.archived
+                            kk_fav = bookmark.favourited
+
+                            # Sync BSR → Karakeep (BSR is source of truth for items synced from BSR)
+                            if sync_record.sync_direction == "bsr_to_karakeep":
+                                if bsr_read != kk_archived or bsr_fav != kk_fav:
+                                    await client.update_bookmark(
+                                        bookmark.id,
+                                        archived=bsr_read,
+                                        favourited=bsr_fav,
+                                    )
+                                    bsr_to_kk_updated += 1
+                                    logger.debug(
+                                        "karakeep_status_synced_to_karakeep",
+                                        extra={
+                                            "bookmark_id": bookmark.id,
+                                            "archived": bsr_read,
+                                            "favourited": bsr_fav,
+                                        },
+                                    )
+
+                            # Sync Karakeep → BSR (Karakeep is source of truth for items synced from Karakeep)
+                            elif sync_record.sync_direction == "karakeep_to_bsr":
+                                if kk_archived != bsr_read or kk_fav != bsr_fav:
+                                    summary.is_read = kk_archived
+                                    summary.is_favorited = kk_fav
+                                    summary.save()
+                                    kk_to_bsr_updated += 1
+                                    logger.debug(
+                                        "karakeep_status_synced_to_bsr",
+                                        extra={
+                                            "summary_id": summary.id,
+                                            "is_read": kk_archived,
+                                            "is_favorited": kk_fav,
+                                        },
+                                    )
+
+                        except Exception as e:
+                            error_msg = f"Failed to sync status for {sync_record.id}: {e}"
+                            errors.append(error_msg)
+                            logger.warning(
+                                "karakeep_status_sync_item_failed",
+                                extra={"sync_id": sync_record.id, "error": str(e)},
+                            )
+
+        except Exception as e:
+            errors.append(f"Status sync failed: {e}")
+            logger.exception("karakeep_status_sync_failed")
+
+        logger.info(
+            "karakeep_status_sync_complete",
+            extra={
+                "bsr_to_karakeep": bsr_to_kk_updated,
+                "karakeep_to_bsr": kk_to_bsr_updated,
+                "errors": len(errors),
+            },
+        )
+
+        return {
+            "bsr_to_karakeep_updated": bsr_to_kk_updated,
+            "karakeep_to_bsr_updated": kk_to_bsr_updated,
+            "errors": errors,
         }
