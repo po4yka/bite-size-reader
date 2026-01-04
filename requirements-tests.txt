@@ -1,15 +1,15 @@
 # Minimal dependencies to run the unit test suite
-coverage==7.12.0
-fastapi==0.123.10
+coverage==7.13.1
+fastapi==0.128.0
 httpx[http2]==0.28.1
-json_repair==0.54.2
-orjson==3.11.4
+json_repair==0.55.0
+orjson==3.11.5
 peewee==3.18.3
 pyjwt==2.10.1
 pydantic==2.12.5
 pydantic-settings==2.12.0
-python-multipart==0.0.20
+python-multipart==0.0.21
 trafilatura==2.0.0
-uvicorn[standard]==0.38.0
-pytest==9.0.1
+uvicorn[standard]==0.40.0
+pytest==9.0.2
 pytest-asyncio==1.3.0

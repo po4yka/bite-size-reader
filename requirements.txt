@@ -180,9 +180,9 @@ murmurhash==1.0.15
     #   preshed
     #   spacy
     #   thinc
-networkx==3.4.2
+networkx==3.6.1
     # via torch
-numpy==2.2.6
+numpy==2.4.0
     # via
     #   blis
     #   chromadb
@@ -345,11 +345,11 @@ ru-core-news-sm @ https://github.com/explosion/spacy-models/releases/download/ru
     # via bite-size-reader (pyproject.toml)
 safetensors==0.7.0
     # via transformers
-scikit-learn==1.7.2
+scikit-learn==1.8.0
     # via
     #   bite-size-reader (pyproject.toml)
     #   sentence-transformers
-scipy==1.15.3
+scipy==1.16.3
     # via
     #   scikit-learn
     #   sentence-transformers
