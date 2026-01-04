@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from datetime import datetime  # noqa: TC003 - Pydantic needs this at runtime
+from typing import Any
 
 from pydantic import BaseModel
 
-if TYPE_CHECKING:
-    from datetime import datetime
-
-    from app.models.telegram.telegram_chat import TelegramChat
+from app.models.telegram.telegram_chat import (  # noqa: TC001 - Pydantic needs this at runtime
+    TelegramChat,
+)
 
 
 class ForwardInfo(BaseModel):

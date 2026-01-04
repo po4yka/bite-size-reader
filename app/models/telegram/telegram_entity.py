@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from pydantic import BaseModel, Field, field_validator
 
 from app.models.telegram.telegram_enums import MessageEntityType
-
-if TYPE_CHECKING:
-    from app.models.telegram.telegram_user import TelegramUser
+from app.models.telegram.telegram_user import (  # noqa: TC001 - Pydantic needs this at runtime
+    TelegramUser,
+)
 
 
 class MessageEntity(BaseModel):
