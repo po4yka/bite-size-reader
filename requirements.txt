@@ -235,7 +235,7 @@ packaging==25.0
     #   weasel
 peewee==3.18.3
     # via bite-size-reader (pyproject.toml)
-posthog==5.4.0
+posthog==7.4.2
     # via chromadb
 preshed==3.0.12
     # via
