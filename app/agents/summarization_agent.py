@@ -162,7 +162,6 @@ class SummarizationAgent(BaseAgent[SummarizationInput, SummarizationOutput]):
                 self.log_error(f"Summarization attempt {attempt} failed: {e}")
                 last_error = str(e)
                 corrections_applied.append(f"Attempt {attempt}: Exception - {e!s}")
-                print(f"DEBUG: corrections_applied in except block: {corrections_applied}")
 
         # All attempts exhausted
         self.log_error(
@@ -170,7 +169,6 @@ class SummarizationAgent(BaseAgent[SummarizationInput, SummarizationOutput]):
             f"Last error: {last_error}"
         )
 
-        print(f"DEBUG: corrections_applied: {corrections_applied}")
         return AgentResult.error_result(
             f"Summarization failed after {input_data.max_retries} attempts: {last_error}",
             attempts=input_data.max_retries,

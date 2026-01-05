@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import datetime as dt
+import logging
 from dataclasses import dataclass
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(slots=True)
@@ -114,8 +117,11 @@ class SearchFilters:
             from dateutil import parser  # type: ignore[import-untyped]
 
             return parser.parse(date_str)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(
+                "dateutil_parse_failed",
+                extra={"date_str": date_str, "error": str(e)},
+            )
 
         return None
 

@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import logging
 import re
 from functools import lru_cache
 from html import unescape
 from html.parser import HTMLParser
 from threading import Lock
+
+logger = logging.getLogger(__name__)
 
 try:
     import trafilatura
@@ -81,15 +84,22 @@ def html_to_text(html: str) -> str:
                 text = "\n".join(line.strip() for line in text.splitlines())
                 text = _collapse_blank_lines(text)
                 return text.strip()
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(
+                "trafilatura_extraction_failed",
+                extra={"error": str(e), "html_length": len(html)},
+            )
 
     # Fallback: lightweight HTML parsing
     parser = _TextExtractor()
     try:
         parser.feed(html)
         return parser.get_text()
-    except Exception:
+    except Exception as e:
+        logger.debug(
+            "html_parser_failed",
+            extra={"error": str(e), "html_length": len(html)},
+        )
         # Fallback: very naive strip
         import re
 

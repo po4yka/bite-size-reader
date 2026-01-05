@@ -9,7 +9,10 @@ import time
 from datetime import datetime, timedelta
 from typing import Any
 
+import httpx
 import jwt
+from jwt import PyJWKClient
+from jwt.exceptions import PyJWTError
 
 try:
     from fastapi import APIRouter, Depends, HTTPException
@@ -98,6 +101,166 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 60
 REFRESH_TOKEN_EXPIRE_DAYS = 30
 
 logger.info("JWT authentication initialized with secure secret")
+
+
+# OAuth provider public key URLs
+APPLE_KEYS_URL = "https://appleid.apple.com/auth/keys"
+GOOGLE_KEYS_URL = "https://www.googleapis.com/oauth2/v3/certs"
+APPLE_ISSUER = "https://appleid.apple.com"
+
+# Cache for JWKS clients (thread-safe, handles key rotation automatically)
+_apple_jwks_client: PyJWKClient | None = None
+_google_jwks_client: PyJWKClient | None = None
+
+
+def _get_apple_jwks_client() -> PyJWKClient:
+    """Get or create Apple JWKS client."""
+    global _apple_jwks_client
+    if _apple_jwks_client is None:
+        _apple_jwks_client = PyJWKClient(APPLE_KEYS_URL, cache_keys=True, lifespan=3600)
+    return _apple_jwks_client
+
+
+def _get_google_jwks_client() -> PyJWKClient:
+    """Get or create Google JWKS client."""
+    global _google_jwks_client
+    if _google_jwks_client is None:
+        _google_jwks_client = PyJWKClient(GOOGLE_KEYS_URL, cache_keys=True, lifespan=3600)
+    return _google_jwks_client
+
+
+def verify_apple_id_token(id_token: str, client_id: str) -> dict[str, Any]:
+    """Verify an Apple Sign-In ID token and return the claims.
+
+    Args:
+        id_token: The JWT token from Apple Sign-In
+        client_id: The expected audience (your app's bundle ID)
+
+    Returns:
+        Decoded token claims including 'sub' (user identifier)
+
+    Raises:
+        AuthenticationError: If token verification fails
+    """
+    try:
+        jwks_client = _get_apple_jwks_client()
+        signing_key = jwks_client.get_signing_key_from_jwt(id_token)
+
+        claims = jwt.decode(
+            id_token,
+            signing_key.key,
+            algorithms=["RS256"],
+            audience=client_id,
+            issuer=APPLE_ISSUER,
+            options={
+                "verify_exp": True,
+                "verify_iat": True,
+                "verify_aud": True,
+                "verify_iss": True,
+            },
+        )
+
+        logger.info(
+            "Apple token verified successfully",
+            extra={"sub": claims.get("sub"), "email": claims.get("email")},
+        )
+        return claims
+
+    except PyJWTError as e:
+        logger.warning(
+            "Apple token verification failed",
+            extra={"error": str(e), "error_type": type(e).__name__},
+        )
+        raise AuthenticationError(f"Invalid Apple ID token: {e}") from e
+    except Exception as e:
+        logger.error(
+            "Apple token verification error",
+            extra={"error": str(e), "error_type": type(e).__name__},
+            exc_info=True,
+        )
+        raise AuthenticationError("Failed to verify Apple ID token") from e
+
+
+def verify_google_id_token(id_token: str, client_id: str) -> dict[str, Any]:
+    """Verify a Google Sign-In ID token and return the claims.
+
+    Args:
+        id_token: The JWT token from Google Sign-In
+        client_id: The expected audience (your OAuth client ID)
+
+    Returns:
+        Decoded token claims including 'sub' (user identifier)
+
+    Raises:
+        AuthenticationError: If token verification fails
+    """
+    try:
+        jwks_client = _get_google_jwks_client()
+        signing_key = jwks_client.get_signing_key_from_jwt(id_token)
+
+        claims = jwt.decode(
+            id_token,
+            signing_key.key,
+            algorithms=["RS256"],
+            audience=client_id,
+            issuer=["https://accounts.google.com", "accounts.google.com"],
+            options={
+                "verify_exp": True,
+                "verify_iat": True,
+                "verify_aud": True,
+                "verify_iss": True,
+            },
+        )
+
+        # Additional Google-specific validation
+        if not claims.get("email_verified", False):
+            logger.warning(
+                "Google token has unverified email",
+                extra={"sub": claims.get("sub"), "email": claims.get("email")},
+            )
+            # Allow login but log warning - email verification is recommended
+
+        logger.info(
+            "Google token verified successfully",
+            extra={
+                "sub": claims.get("sub"),
+                "email": claims.get("email"),
+                "email_verified": claims.get("email_verified"),
+            },
+        )
+        return claims
+
+    except PyJWTError as e:
+        logger.warning(
+            "Google token verification failed",
+            extra={"error": str(e), "error_type": type(e).__name__},
+        )
+        raise AuthenticationError(f"Invalid Google ID token: {e}") from e
+    except Exception as e:
+        logger.error(
+            "Google token verification error",
+            extra={"error": str(e), "error_type": type(e).__name__},
+            exc_info=True,
+        )
+        raise AuthenticationError("Failed to verify Google ID token") from e
+
+
+def _derive_user_id_from_sub(provider: str, sub: str) -> int:
+    """Derive a consistent numeric user ID from an OAuth provider's 'sub' claim.
+
+    Args:
+        provider: Provider name (e.g., 'apple', 'google')
+        sub: The 'sub' (subject) claim from the ID token
+
+    Returns:
+        A consistent numeric user ID derived from the sub claim
+    """
+    # Combine provider and sub to ensure uniqueness across providers
+    combined = f"{provider}:{sub}"
+    # Use SHA256 to get a consistent hash, then take last 15 digits to stay within int range
+    hash_hex = hashlib.sha256(combined.encode()).hexdigest()
+    # Use modulo to keep within a reasonable range (positive int)
+    return int(hash_hex, 16) % 10**15
 
 
 def _get_cfg() -> AppConfig:
@@ -1188,43 +1351,57 @@ async def delete_account(user=Depends(get_current_user)):
 
 @router.post("/apple-login")
 async def apple_login(login_data: AppleLoginRequest):
-    """Exchange Apple authentication data for JWT tokens."""
-    # Placeholder for Apple ID token verification
-    # In a real implementation, verify the id_token with Apple's public keys
-    # or use a library like pyjwt to decode and verify claims (iss, aud, exp)
+    """Exchange Apple authentication data for JWT tokens.
 
+    Verifies the Apple ID token cryptographically using Apple's public keys,
+    then creates a session for the authenticated user.
+    """
     logger.info(f"Apple login attempt for client {login_data.client_id}")
 
-    # TODO: Implement actual Apple token verification
-    # For now, we'll assume the token is valid and extract a dummy user ID
-    # This is STRICTLY for development/demonstration since we don't have Apple credentials
-
-    # Mock user ID derivation (in prod, use 'sub' claim from id_token)
-    apple_user_id = int(hashlib.sha256(login_data.id_token.encode()).hexdigest(), 16) % 1000000
-
-    # Validate client_id before creating tokens
+    # Validate client_id before any processing
     validate_client_id(login_data.client_id)
 
-    # Verify user is in whitelist
+    # Verify the Apple ID token cryptographically
+    claims = verify_apple_id_token(login_data.id_token, login_data.client_id)
+
+    # Extract user identifier from verified claims
+    apple_sub = claims.get("sub")
+    if not apple_sub:
+        raise AuthenticationError("Apple ID token missing 'sub' claim")
+
+    # Derive consistent numeric user ID from the 'sub' claim
+    apple_user_id = _derive_user_id_from_sub("apple", apple_sub)
+
+    # Verify user is in whitelist (optional - can be removed for open registration)
     allowed_ids = Config.get_allowed_user_ids()
-    if apple_user_id not in allowed_ids:
+    if allowed_ids and apple_user_id not in allowed_ids:
         logger.warning(
             "User not authorized via Apple login",
-            extra={"user_id": apple_user_id},
+            extra={"user_id": apple_user_id, "apple_sub": apple_sub},
         )
         raise AuthorizationError("User not authorized. Contact administrator to request access.")
 
     # Get or create user
+    # Use email from claims if available, otherwise construct from name claims
+    display_name = None
+    if login_data.given_name or login_data.family_name:
+        name_parts = [login_data.given_name, login_data.family_name]
+        display_name = " ".join(p for p in name_parts if p)
+    email = claims.get("email")
+
     user, created = User.get_or_create(
         telegram_user_id=apple_user_id,
         defaults={
-            "username": f"apple_{apple_user_id}",
-            "is_owner": False,  # Default to non-owner for external auth
+            "username": display_name or email or f"apple_{apple_user_id}",
+            "is_owner": False,
         },
     )
 
     if created:
-        logger.info(f"Created new user via Apple login: {apple_user_id}")
+        logger.info(
+            f"Created new user via Apple login: {apple_user_id}",
+            extra={"email": email, "apple_sub": apple_sub},
+        )
 
     # Generate tokens
     access_token = create_access_token(user.telegram_user_id, user.username, login_data.client_id)
@@ -1242,42 +1419,53 @@ async def apple_login(login_data: AppleLoginRequest):
 
 @router.post("/google-login")
 async def google_login(login_data: GoogleLoginRequest):
-    """Exchange Google authentication data for JWT tokens."""
-    # Placeholder for Google ID token verification
-    # In a real implementation, verify using google-auth library:
-    # id_info = id_token.verify_oauth2_token(token, requests.Request(), client_id)
+    """Exchange Google authentication data for JWT tokens.
 
+    Verifies the Google ID token cryptographically using Google's public keys,
+    then creates a session for the authenticated user.
+    """
     logger.info(f"Google login attempt for client {login_data.client_id}")
 
-    # TODO: Implement actual Google token verification
-    # This is STRICTLY for development/demonstration
-
-    # Mock user ID derivation (in prod, use 'sub' claim from id_token)
-    google_user_id = int(hashlib.sha256(login_data.id_token.encode()).hexdigest(), 16) % 1000000
-
-    # Validate client_id before creating tokens
+    # Validate client_id before any processing
     validate_client_id(login_data.client_id)
 
-    # Verify user is in whitelist
+    # Verify the Google ID token cryptographically
+    claims = verify_google_id_token(login_data.id_token, login_data.client_id)
+
+    # Extract user identifier from verified claims
+    google_sub = claims.get("sub")
+    if not google_sub:
+        raise AuthenticationError("Google ID token missing 'sub' claim")
+
+    # Derive consistent numeric user ID from the 'sub' claim
+    google_user_id = _derive_user_id_from_sub("google", google_sub)
+
+    # Verify user is in whitelist (optional - can be removed for open registration)
     allowed_ids = Config.get_allowed_user_ids()
-    if google_user_id not in allowed_ids:
+    if allowed_ids and google_user_id not in allowed_ids:
         logger.warning(
             "User not authorized via Google login",
-            extra={"user_id": google_user_id},
+            extra={"user_id": google_user_id, "google_sub": google_sub},
         )
         raise AuthorizationError("User not authorized. Contact administrator to request access.")
 
     # Get or create user
+    email = claims.get("email")
+    name = claims.get("name")  # Google provides full name in 'name' claim
+
     user, created = User.get_or_create(
         telegram_user_id=google_user_id,
         defaults={
-            "username": f"google_{google_user_id}",
+            "username": name or email or f"google_{google_user_id}",
             "is_owner": False,
         },
     )
 
     if created:
-        logger.info(f"Created new user via Google login: {google_user_id}")
+        logger.info(
+            f"Created new user via Google login: {google_user_id}",
+            extra={"email": email, "google_sub": google_sub},
+        )
 
     # Generate tokens
     access_token = create_access_token(user.telegram_user_id, user.username, login_data.client_id)
