@@ -176,7 +176,9 @@ async def get_user_stats(user=Depends(get_current_user)):
     average_reading_time = total_reading_time / total_summaries if total_summaries > 0 else 0
 
     # Get top topics and domains
-    favorite_topics = [{"topic": tag, "count": count} for tag, count in topic_counter.most_common(10)]
+    favorite_topics = [
+        {"topic": tag, "count": count} for tag, count in topic_counter.most_common(10)
+    ]
     favorite_domains = [
         {"domain": domain, "count": count} for domain, count in domain_counter.most_common(10)
     ]

@@ -162,14 +162,30 @@ class BotFactory:
         # Determine topic search limit
         topic_search_max_results = BotFactory._get_topic_search_limit(cfg)
 
-        # Initialize vector store
-        vector_store = ChromaVectorStore(
-            host=cfg.vector_store.host,
-            auth_token=cfg.vector_store.auth_token,
-            environment=cfg.vector_store.environment,
-            user_scope=cfg.vector_store.user_scope,
-            collection_version=cfg.vector_store.collection_version,
-        )
+        # Initialize vector store with graceful degradation
+        # ChromaDB is optional - bot will function without vector search if unavailable
+        vector_store: ChromaVectorStore | None = None
+        try:
+            vector_store = ChromaVectorStore(
+                host=cfg.vector_store.host,
+                auth_token=cfg.vector_store.auth_token,
+                environment=cfg.vector_store.environment,
+                user_scope=cfg.vector_store.user_scope,
+                collection_version=cfg.vector_store.collection_version,
+                required=getattr(cfg.vector_store, "required", False),
+                connection_timeout=getattr(cfg.vector_store, "connection_timeout", 10.0),
+            )
+            if not vector_store.available:
+                logger.warning(
+                    "chroma_not_available_continuing",
+                    extra={"host": cfg.vector_store.host},
+                )
+        except Exception as e:
+            logger.warning(
+                "chroma_init_failed_continuing_without_vector_search",
+                extra={"error": str(e), "host": cfg.vector_store.host},
+            )
+            vector_store = None
 
         # Create search services
         topic_searcher = TopicSearchService(
@@ -191,21 +207,28 @@ class BotFactory:
             max_expansions=5,
             use_synonyms=True,
         )
-        chroma_vector_search_service = ChromaVectorSearchService(
-            vector_store=vector_store,
-            embedding_service=embedding_service,
-            default_top_k=topic_search_max_results * 2,
-        )
+
+        # ChromaVectorSearchService handles None vector_store gracefully
+        chroma_vector_search_service: ChromaVectorSearchService | None = None
+        if vector_store is not None:
+            chroma_vector_search_service = ChromaVectorSearchService(
+                vector_store=vector_store,
+                embedding_service=embedding_service,
+                default_top_k=topic_search_max_results * 2,
+            )
+
         reranking_service = OpenRouterRerankingService(
             client=clients.openrouter,
             top_k=topic_search_max_results * 2,
             timeout_sec=cfg.runtime.request_timeout_sec,
         )
+
+        # HybridSearchService can work with FTS-only when vector_service is None
         hybrid_search_service = HybridSearchService(
             fts_service=local_searcher,
             vector_service=chroma_vector_search_service,
-            fts_weight=0.4,
-            vector_weight=0.6,
+            fts_weight=1.0 if chroma_vector_search_service is None else 0.4,
+            vector_weight=0.0 if chroma_vector_search_service is None else 0.6,
             max_results=topic_search_max_results,
             query_expansion=query_expansion_service,
             reranking=reranking_service,

@@ -16,6 +16,43 @@ from app.models.telegram.telegram_user import TelegramUser
 logger = logging.getLogger(__name__)
 
 
+def _pyrogram_to_dict(obj: Any) -> dict[str, Any]:
+    """Convert a Pyrogram object to a dictionary, handling nested objects.
+
+    This function recursively converts nested Pyrogram objects (like ChatPhoto,
+    User, etc.) to dictionaries suitable for Pydantic model validation.
+
+    Args:
+        obj: A Pyrogram object or any object with __dict__ attribute
+
+    Returns:
+        A dictionary representation of the object with all nested objects converted
+    """
+    if obj is None:
+        return {}
+    if isinstance(obj, dict):
+        return obj
+    if not hasattr(obj, "__dict__"):
+        return {}
+
+    result: dict[str, Any] = {}
+    for key, value in obj.__dict__.items():
+        if value is None:
+            result[key] = None
+        elif isinstance(value, str | int | float | bool):
+            result[key] = value
+        elif isinstance(value, list):
+            result[key] = [
+                _pyrogram_to_dict(item) if hasattr(item, "__dict__") else item for item in value
+            ]
+        elif hasattr(value, "__dict__"):
+            # Recursively convert nested Pyrogram objects (e.g., ChatPhoto, User)
+            result[key] = _pyrogram_to_dict(value)
+        else:
+            result[key] = value
+    return result
+
+
 class TelegramMessage(BaseModel):
     """Comprehensive Telegram Message model."""
 
@@ -92,22 +129,26 @@ class TelegramMessage(BaseModel):
 
             # Extract user information
             from_user_data = getattr(message, "from_user", None)
-            from_user = TelegramUser.from_dict(from_user_data.__dict__) if from_user_data else None
+            from_user = (
+                TelegramUser.from_dict(_pyrogram_to_dict(from_user_data))
+                if from_user_data
+                else None
+            )
 
             # Extract chat information
             chat_data = getattr(message, "chat", None)
-            chat = TelegramChat.from_dict(chat_data.__dict__) if chat_data else None
+            chat = TelegramChat.from_dict(_pyrogram_to_dict(chat_data)) if chat_data else None
 
             # Extract text content
             text = getattr(message, "text", None)
             caption = getattr(message, "caption", None)
 
-            # Extract entities
+            # Extract entities using _pyrogram_to_dict for nested object handling
             entities = []
             entities_data = getattr(message, "entities", []) or []
             for entity in entities_data:
                 try:
-                    entity_dict = entity.__dict__ if hasattr(entity, "__dict__") else {}
+                    entity_dict = _pyrogram_to_dict(entity)
                     entities.append(MessageEntity.from_dict(entity_dict))
                 except Exception as e:
                     logger.warning("Failed to parse entity", extra={"error": str(e)})
@@ -116,7 +157,7 @@ class TelegramMessage(BaseModel):
             caption_entities_data = getattr(message, "caption_entities", []) or []
             for entity in caption_entities_data:
                 try:
-                    entity_dict = entity.__dict__ if hasattr(entity, "__dict__") else {}
+                    entity_dict = _pyrogram_to_dict(entity)
                     caption_entities.append(MessageEntity.from_dict(entity_dict))
                 except Exception as e:
                     logger.warning("Failed to parse caption entity", extra={"error": str(e)})
@@ -193,14 +234,16 @@ class TelegramMessage(BaseModel):
             successful_payment_dict = successful_payment.__dict__ if successful_payment else None
             story_dict = story.__dict__ if story else None
 
-            # Convert user objects
+            # Convert user objects using _pyrogram_to_dict to handle nested objects
             forward_from_user = (
-                TelegramUser.from_dict(forward_from.__dict__) if forward_from else None
+                TelegramUser.from_dict(_pyrogram_to_dict(forward_from)) if forward_from else None
             )
             forward_from_chat_obj = (
-                TelegramChat.from_dict(forward_from_chat.__dict__) if forward_from_chat else None
+                TelegramChat.from_dict(_pyrogram_to_dict(forward_from_chat))
+                if forward_from_chat
+                else None
             )
-            via_bot_user = TelegramUser.from_dict(via_bot.__dict__) if via_bot else None
+            via_bot_user = TelegramUser.from_dict(_pyrogram_to_dict(via_bot)) if via_bot else None
 
             # Convert reply message
             reply_to_message_dict = reply_to_message.__dict__ if reply_to_message else None

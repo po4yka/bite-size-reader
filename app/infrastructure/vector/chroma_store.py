@@ -17,7 +17,12 @@ logger = logging.getLogger(__name__)
 
 
 class ChromaVectorStore:
-    """Wrapper around Chroma client for note embeddings."""
+    """Wrapper around Chroma client for note embeddings.
+
+    Supports graceful degradation when ChromaDB is unavailable. When `required=False`
+    (default), the store will log warnings but not raise exceptions on connection
+    failures, allowing the application to continue without vector search functionality.
+    """
 
     def __init__(
         self,
@@ -27,45 +32,91 @@ class ChromaVectorStore:
         environment: str,
         user_scope: str,
         collection_version: str = "v1",
+        required: bool = False,
+        connection_timeout: float = 10.0,
     ) -> None:
         if not host:
             msg = "Chroma host must be provided"
             raise ValueError(msg)
 
         self._host = host
+        self._auth_token = auth_token
         self._environment = environment
         self._user_scope = user_scope
         self._collection_version = collection_version
+        self._required = required
+        self._connection_timeout = connection_timeout
+        self._available = False
+        self._client: Any = None
+        self._collection: Any = None
+        self._collection_name = self._build_collection_name(
+            environment, user_scope, collection_version
+        )
 
-        headers = {"Authorization": f"Bearer {auth_token}"} if auth_token else None
+        # Attempt initial connection
+        self._try_connect()
+
+    def _try_connect(self) -> bool:
+        """Attempt to connect to ChromaDB.
+
+        Returns:
+            True if connection successful, False otherwise.
+        """
+        headers = {"Authorization": f"Bearer {self._auth_token}"} if self._auth_token else None
         try:
-            self._client = chromadb.HttpClient(host=host, headers=headers)
-            self._collection_name = self._build_collection_name(
-                environment, user_scope, collection_version
-            )
+            self._client = chromadb.HttpClient(host=self._host, headers=headers)
+
+            # Test connection with heartbeat
+            self._client.heartbeat()
+
             self._collection = self._client.get_or_create_collection(
                 name=self._collection_name,
                 metadata={
-                    "environment": environment,
-                    "user_scope": user_scope,
-                    "version": collection_version,
+                    "environment": self._environment,
+                    "user_scope": self._user_scope,
+                    "version": self._collection_version,
                 },
             )
+            self._available = True
             logger.info(
                 "chroma_collection_initialized",
                 extra={
                     "collection": self._collection_name,
-                    "host": host,
-                    "environment": environment,
-                    "version": collection_version,
+                    "host": self._host,
+                    "environment": self._environment,
+                    "version": self._collection_version,
                 },
             )
+            return True
         except Exception as e:
             logger.error(
                 "chroma_initialization_failed",
-                extra={"host": host, "error": str(e)},
+                extra={
+                    "host": self._host,
+                    "error": str(e),
+                    "required": self._required,
+                },
             )
-            raise
+            self._available = False
+            if self._required:
+                raise
+            return False
+
+    @property
+    def available(self) -> bool:
+        """Check if ChromaDB is available and connected."""
+        return self._available
+
+    def ensure_available(self) -> bool:
+        """Ensure ChromaDB is available, attempting reconnect if needed.
+
+        Returns:
+            True if ChromaDB is available after this call.
+        """
+        if self._available:
+            return True
+        logger.info("chroma_reconnect_attempt", extra={"host": self._host})
+        return self._try_connect()
 
     @property
     def environment(self) -> str:
@@ -96,7 +147,18 @@ class ChromaVectorStore:
         metadatas: Sequence[dict[str, Any]],
         ids: Sequence[str] | None = None,
     ) -> None:
-        """Upsert note embeddings with associated metadata."""
+        """Upsert note embeddings with associated metadata.
+
+        When ChromaDB is unavailable and not required, this method logs a warning
+        and returns without raising an exception.
+        """
+        if not self._available:
+            logger.warning(
+                "chroma_upsert_skipped",
+                extra={"reason": "not_available", "count": len(vectors)},
+            )
+            return
+
         if len(vectors) != len(metadatas):
             msg = "Vectors and metadatas must have the same length"
             raise ValueError(msg)
@@ -132,7 +194,9 @@ class ChromaVectorStore:
                 "chroma_upsert_failed",
                 extra={"count": len(vectors), "error": str(e)},
             )
-            raise
+            if self._required:
+                raise
+            self._available = False
 
     @staticmethod
     def _extract_id(metadata: dict[str, Any]) -> str:
@@ -147,7 +211,18 @@ class ChromaVectorStore:
         filters: dict[str, Any] | None,
         top_k: int,
     ) -> dict[str, Any]:
-        """Query for most similar notes."""
+        """Query for most similar notes.
+
+        When ChromaDB is unavailable and not required, this method returns empty
+        results instead of raising an exception.
+        """
+        if not self._available:
+            logger.warning(
+                "chroma_query_skipped",
+                extra={"reason": "not_available", "top_k": top_k},
+            )
+            return {"ids": [[]], "distances": [[]], "metadatas": [[]]}
+
         if top_k <= 0:
             msg = "top_k must be positive"
             raise ValueError(msg)
@@ -174,10 +249,23 @@ class ChromaVectorStore:
                 "chroma_query_failed",
                 extra={"error": str(e)},
             )
-            raise
+            if self._required:
+                raise
+            self._available = False
+            return {"ids": [[]], "distances": [[]], "metadatas": [[]]}
 
     def delete_by_request_id(self, request_id: int | str) -> None:
-        """Delete embeddings associated with a specific request ID."""
+        """Delete embeddings associated with a specific request ID.
+
+        When ChromaDB is unavailable, logs a warning and returns.
+        """
+        if not self._available:
+            logger.warning(
+                "chroma_delete_skipped",
+                extra={"reason": "not_available", "request_id": request_id},
+            )
+            return
+
         try:
             self._collection.delete(where={"request_id": request_id})
         except ChromaError as e:
@@ -185,14 +273,19 @@ class ChromaVectorStore:
                 "chroma_delete_failed",
                 extra={"request_id": request_id, "error": str(e)},
             )
-            raise
+            if self._required:
+                raise
+            self._available = False
 
     def health_check(self) -> bool:
         """Check if ChromaDB is reachable and functioning."""
+        if not self._available or not self._client:
+            return False
         try:
             self._client.heartbeat()
             return True
         except Exception:
+            self._available = False
             return False
 
     def reset(self) -> None:

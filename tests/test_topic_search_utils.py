@@ -1,7 +1,5 @@
 """Tests for topic_search_utils ensure_mapping function."""
 
-import pytest
-
 from app.services.topic_search_utils import ensure_mapping
 
 
@@ -33,7 +31,7 @@ class TestEnsureMapping:
 
     def test_ensure_mapping_with_json_array_string(self):
         """Test ensure_mapping returns empty dict for JSON array (not object)."""
-        result = ensure_mapping('[1, 2, 3]')
+        result = ensure_mapping("[1, 2, 3]")
         assert result == {}  # Array is not a mapping
 
     def test_ensure_mapping_with_empty_string(self):

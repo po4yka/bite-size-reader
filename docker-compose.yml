@@ -46,6 +46,7 @@ services:
     depends_on:
       chroma:
         condition: service_healthy
+        required: false  # Allow bot to start without ChromaDB (graceful degradation)
     logging:
       driver: "json-file"
       options:
@@ -85,6 +86,7 @@ services:
         condition: service_healthy
       chroma:
         condition: service_healthy
+        required: false  # Allow API to start without ChromaDB (graceful degradation)
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://localhost:8000/health || exit 1"]
@@ -134,7 +136,7 @@ services:
     volumes:
       - ./chroma_data:/data
     ports:
-      - "8000:8000"
+      - "8001:8000"  # Host port 8001 to avoid conflict with Portainer on 8000
     environment:
       - IS_PERSISTENT=TRUE
       - COMPONENT=server

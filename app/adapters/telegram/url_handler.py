@@ -19,6 +19,14 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+# Timeout and retry configuration for URL processing
+URL_INITIAL_TIMEOUT_SEC = 120  # 2 minutes initial timeout per URL
+URL_MAX_TIMEOUT_SEC = 300  # 5 minutes max timeout after retries
+URL_MAX_RETRIES = 2  # Maximum number of retries per URL
+URL_BACKOFF_BASE = 1.0  # Base delay in seconds for exponential backoff
+URL_BACKOFF_MAX = 30.0  # Maximum backoff delay in seconds
+URL_MAX_CONCURRENT = 4  # Maximum concurrent URL processing
+
 
 class URLHandler:
     """Handles URL-related message processing and state management."""
@@ -342,64 +350,128 @@ class URLHandler:
             return
 
         # Use semaphore to limit concurrent processing (prevent overwhelming external APIs)
-        semaphore = asyncio.Semaphore(
-            min(3, len(urls))
-        )  # Max 3 concurrent URLs for user-initiated batches
+        # Adaptive concurrency: 2-4 concurrent based on batch size
+        max_concurrent = max(2, min(URL_MAX_CONCURRENT, len(urls)))
+        semaphore = asyncio.Semaphore(max_concurrent)
 
         async def process_single_url(
             url: str, progress_tracker: ProgressTracker
         ) -> tuple[str, bool, str]:
-            """Process a single URL and return (url, success, error_message)."""
+            """Process a single URL with retry and exponential backoff.
+
+            Returns:
+                Tuple of (url, success, error_message)
+            """
             async with semaphore:
                 per_link_cid = generate_correlation_id()
-                logger.debug(
-                    "processing_link_parallel",
-                    extra={"uid": uid, "url": url, "cid": per_link_cid},
-                )
+                last_error = ""
 
-                try:
-                    # Add timeout protection for individual URL processing
-                    await asyncio.wait_for(
-                        self.url_processor.handle_url_flow(
-                            message, url, correlation_id=per_link_cid
-                        ),
-                        timeout=600,  # 10 minute timeout per URL
+                for attempt in range(URL_MAX_RETRIES + 1):
+                    # Calculate timeout with exponential increase per retry
+                    current_timeout = min(
+                        URL_INITIAL_TIMEOUT_SEC * (1.5**attempt),
+                        URL_MAX_TIMEOUT_SEC,
                     )
 
-                    # Update progress after successful completion
-                    await progress_tracker.increment_and_update()
-
-                    return url, True, ""
-                except TimeoutError:
-                    error_msg = "Timeout processing URL after 10 minutes"
-                    logger.exception(
-                        "parallel_url_processing_timeout",
-                        extra={"url": url, "cid": per_link_cid, "error": error_msg, "uid": uid},
+                    logger.debug(
+                        "processing_link_parallel",
+                        extra={
+                            "uid": uid,
+                            "url": url,
+                            "cid": per_link_cid,
+                            "attempt": attempt + 1,
+                            "timeout_sec": current_timeout,
+                        },
                     )
-                    # Update progress even on timeout
-                    await progress_tracker.increment_and_update()
 
-                    return url, False, error_msg
-                except Exception as e:
-                    # Enhanced error handling with transient failure detection
-                    error_msg = str(e)
-                    transient_keywords = ["timeout", "connection", "network", "rate limit"]
-                    if any(keyword in error_msg.lower() for keyword in transient_keywords):
-                        logger.warning(
-                            "transient_error_detected",
-                            extra={"url": url, "cid": per_link_cid, "error": error_msg, "uid": uid},
+                    try:
+                        # Add timeout protection for individual URL processing
+                        await asyncio.wait_for(
+                            self.url_processor.handle_url_flow(
+                                message, url, correlation_id=per_link_cid
+                            ),
+                            timeout=current_timeout,
                         )
-                        # Could implement retry logic here in the future
 
-                    logger.exception(
-                        "parallel_url_processing_failed",
-                        extra={"url": url, "cid": per_link_cid, "error": error_msg, "uid": uid},
-                    )
+                        # Update progress after successful completion
+                        await progress_tracker.increment_and_update()
 
-                    # Update progress even on failure
-                    await progress_tracker.increment_and_update()
+                        return url, True, ""
 
-                    return url, False, error_msg
+                    except TimeoutError:
+                        last_error = f"Timeout after {int(current_timeout)}s (attempt {attempt + 1}/{URL_MAX_RETRIES + 1})"
+                        logger.warning(
+                            "url_processing_timeout_retry",
+                            extra={
+                                "url": url,
+                                "cid": per_link_cid,
+                                "attempt": attempt + 1,
+                                "timeout_sec": current_timeout,
+                                "uid": uid,
+                            },
+                        )
+
+                        # Apply backoff before retry
+                        if attempt < URL_MAX_RETRIES:
+                            backoff = min(URL_BACKOFF_BASE * (2**attempt), URL_BACKOFF_MAX)
+                            await asyncio.sleep(backoff)
+                            continue
+
+                    except Exception as e:
+                        last_error = str(e)
+                        transient_keywords = [
+                            "timeout",
+                            "connection",
+                            "network",
+                            "rate limit",
+                            "503",
+                            "502",
+                            "429",
+                        ]
+                        is_transient = any(kw in last_error.lower() for kw in transient_keywords)
+
+                        if is_transient and attempt < URL_MAX_RETRIES:
+                            backoff = min(URL_BACKOFF_BASE * (2**attempt), URL_BACKOFF_MAX)
+                            logger.warning(
+                                "transient_error_retry",
+                                extra={
+                                    "url": url,
+                                    "cid": per_link_cid,
+                                    "attempt": attempt + 1,
+                                    "error": last_error,
+                                    "backoff_sec": backoff,
+                                    "uid": uid,
+                                },
+                            )
+                            await asyncio.sleep(backoff)
+                            continue
+
+                        # Non-transient error or max retries exhausted
+                        logger.exception(
+                            "parallel_url_processing_failed",
+                            extra={
+                                "url": url,
+                                "cid": per_link_cid,
+                                "error": last_error,
+                                "attempt": attempt + 1,
+                                "uid": uid,
+                            },
+                        )
+                        break
+
+                # All retries exhausted
+                logger.error(
+                    "url_processing_all_retries_exhausted",
+                    extra={
+                        "url": url,
+                        "cid": per_link_cid,
+                        "total_attempts": URL_MAX_RETRIES + 1,
+                        "last_error": last_error,
+                        "uid": uid,
+                    },
+                )
+                await progress_tracker.increment_and_update()
+                return url, False, last_error
 
         # Send initial progress message with error handling
         try:

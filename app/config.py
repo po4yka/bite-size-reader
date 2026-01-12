@@ -1273,6 +1273,16 @@ class ChromaConfig(BaseModel):
         validation_alias="CHROMA_COLLECTION_VERSION",
         description="Collection version suffix to prevent bleed-over between schema changes",
     )
+    required: bool = Field(
+        default=False,
+        validation_alias="CHROMA_REQUIRED",
+        description="If true, fail startup when ChromaDB is unavailable. Default false for graceful degradation.",
+    )
+    connection_timeout: float = Field(
+        default=10.0,
+        validation_alias="CHROMA_CONNECTION_TIMEOUT",
+        description="Connection timeout in seconds for ChromaDB HTTP client",
+    )
 
     @field_validator("host", mode="before")
     @classmethod

@@ -658,6 +658,34 @@ class OpenRouterClient:
                                     "structured_output_mode_used", structured_output_mode_used
                                 )
 
+                                # Handle truncation recovery - increase max_tokens
+                                truncation_recovery = result.get("truncation_recovery")
+                                if truncation_recovery:
+                                    new_max = truncation_recovery.get("suggested_max_tokens")
+                                    if new_max and (
+                                        not request.max_tokens or new_max > request.max_tokens
+                                    ):
+                                        logger.info(
+                                            "truncation_recovery_increasing_max_tokens",
+                                            extra={
+                                                "model": model,
+                                                "original_max": request.max_tokens,
+                                                "new_max": new_max,
+                                                "attempt": attempt + 1,
+                                            },
+                                        )
+                                        # Create new request with increased max_tokens
+                                        request = ChatRequest(
+                                            messages=request.messages,
+                                            temperature=request.temperature,
+                                            max_tokens=new_max,
+                                            top_p=request.top_p,
+                                            stream=request.stream,
+                                            request_id=request.request_id,
+                                            response_format=request.response_format,
+                                            model_override=request.model_override,
+                                        )
+
                                 # Apply backoff
                                 if result.get("backoff_needed"):
                                     await self.error_handler.sleep_backoff(attempt)
@@ -736,9 +764,18 @@ class OpenRouterClient:
                                 continue
                             break  # Try next model
 
-                    # Break if structured output parse error (don't try other models)
+                    # On structured output parse error, try next model instead of breaking
+                    # Different models may have better JSON compliance
                     if structured_parse_error:
-                        break
+                        logger.info(
+                            "structured_parse_error_trying_next_model",
+                            extra={
+                                "model": model,
+                                "request_id": request_id,
+                                "models_remaining": len(models_to_try) - model_idx - 1,
+                            },
+                        )
+                        # Continue to next model instead of breaking
 
                     # Log fallback to next model
                     if model_idx < len(models_to_try) - 1:
@@ -908,6 +945,7 @@ class OpenRouterClient:
                     structured_output_mode_used=structured_output_mode_used,
                     headers=headers,
                     sanitized_messages=sanitized_messages,
+                    max_tokens=request.max_tokens,
                 )
 
             # Handle error responses
@@ -962,6 +1000,7 @@ class OpenRouterClient:
         structured_output_mode_used: str | None,
         headers: dict[str, str],
         sanitized_messages: list[dict[str, str]],
+        max_tokens: int | None = None,
     ) -> dict[str, Any]:
         """Handle successful API response."""
         # Extract response data
@@ -977,6 +1016,10 @@ class OpenRouterClient:
                 model, truncated_finish, truncated_native, request_id
             )
 
+            # Calculate increased max_tokens for truncation recovery
+            current_max = max_tokens or 8192
+            suggested_max = min(int(current_max * 1.5), 32768)  # Increase by 50%, cap at 32k
+
             # Handle truncation with structured output downgrade
             if rf_included and response_format_current:
                 if rf_mode_current == "json_schema":
@@ -988,6 +1031,10 @@ class OpenRouterClient:
                         "backoff_needed": True,
                         "structured_output_used": True,
                         "structured_output_mode_used": "json_object",
+                        "truncation_recovery": {
+                            "original_max_tokens": current_max,
+                            "suggested_max_tokens": suggested_max,
+                        },
                     }
                 if rf_mode_current == "json_object":
                     return {
@@ -998,6 +1045,10 @@ class OpenRouterClient:
                         "backoff_needed": True,
                         "structured_output_used": False,
                         "structured_output_mode_used": None,
+                        "truncation_recovery": {
+                            "original_max_tokens": current_max,
+                            "suggested_max_tokens": suggested_max,
+                        },
                     }
 
             if attempt < self.error_handler._max_retries:
@@ -1005,22 +1056,22 @@ class OpenRouterClient:
                     "success": False,
                     "should_retry": True,
                     "backoff_needed": True,
+                    "truncation_recovery": {
+                        "original_max_tokens": current_max,
+                        "suggested_max_tokens": suggested_max,
+                    },
                 }
 
-            # Handle truncation
-            if attempt < self.error_handler._max_retries:
-                # For other models, try again with backoff
-                return {
-                    "success": False,
-                    "should_retry": True,
-                    "backoff_needed": True,
-                }
-            # Final attempt with truncation
+            # Final attempt with truncation - include recovery info for caller
             return {
                 "success": False,
                 "error_text": "completion_truncated",
                 "response_text": text if isinstance(text, str) else None,
                 "should_try_next_model": True,
+                "truncation_recovery": {
+                    "original_max_tokens": current_max,
+                    "suggested_max_tokens": suggested_max,
+                },
             }
 
         # Validate structured output if expected
@@ -1029,8 +1080,15 @@ class OpenRouterClient:
                 text, rf_included, response_format_current
             )
             if not is_valid:
-                # Try fallback for invalid JSON
+                # Tiered fallback for invalid JSON:
+                # 1. json_schema -> json_object (simpler format)
+                # 2. json_object -> no structured output (let model respond freely)
+                # 3. If all fail, mark as parse error but allow trying next model
                 if rf_mode_current == "json_schema" and attempt < self.error_handler._max_retries:
+                    logger.warning(
+                        "structured_output_downgrading_json_schema_to_json_object",
+                        extra={"model": model, "attempt": attempt + 1},
+                    )
                     return {
                         "success": False,
                         "should_retry": True,
@@ -1039,13 +1097,27 @@ class OpenRouterClient:
                         "backoff_needed": True,
                     }
 
-                # Treat as structured output parse error
+                if rf_mode_current == "json_object" and attempt < self.error_handler._max_retries:
+                    # Downgrade to no structured output - let model respond freely
+                    logger.warning(
+                        "structured_output_disabling_after_json_object_failure",
+                        extra={"model": model, "attempt": attempt + 1},
+                    )
+                    return {
+                        "success": False,
+                        "should_retry": True,
+                        "new_rf_mode": None,
+                        "new_response_format": None,
+                        "backoff_needed": True,
+                    }
+
+                # All structured output modes exhausted - try next model
                 return {
                     "success": False,
                     "error_text": "structured_output_parse_error",
                     "response_text": processed_text or None,
                     "structured_parse_error": True,
-                    "should_try_next_model": False,  # Don't try other models for parse errors
+                    "should_try_next_model": True,  # Allow trying other models
                 }
             text = processed_text
 
