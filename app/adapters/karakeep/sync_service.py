@@ -5,8 +5,10 @@ from __future__ import annotations
 import hashlib
 import logging
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import TYPE_CHECKING
+
+import peewee
 
 from app.adapters.karakeep.client import KarakeepClient, KarakeepClientError
 from app.adapters.karakeep.models import FullSyncResult, SyncResult
@@ -16,6 +18,10 @@ if TYPE_CHECKING:
     from app.db.models import Summary
 
 logger = logging.getLogger(__name__)
+
+# Tag names for status tracking (instead of using archived field)
+TAG_BSR_READ = "bsr-read"
+TAG_BSR_SYNCED = "bsr-synced"
 
 
 def _url_hash(url: str) -> str:
@@ -65,6 +71,12 @@ class KarakeepSyncService:
 
         try:
             async with KarakeepClient(self.api_url, self.api_key) as client:
+                # Health check before proceeding
+                if not await client.health_check():
+                    result.errors.append("Karakeep API health check failed")
+                    logger.error("karakeep_sync_health_check_failed")
+                    return result
+
                 # Get existing Karakeep bookmarks for deduplication
                 karakeep_bookmarks = await client.get_all_bookmarks()
                 karakeep_urls = {b.url for b in karakeep_bookmarks if b.url}
@@ -103,13 +115,18 @@ class KarakeepSyncService:
                             result.items_skipped += 1
                             continue
                         if url in karakeep_urls:
-                            # Already in Karakeep, mark as synced
-                            KarakeepSync.create(
-                                bsr_summary_id=summary.id,
-                                url_hash=url_hash,
-                                sync_direction="bsr_to_karakeep",
-                                synced_at=datetime.utcnow(),
-                            )
+                            # Already in Karakeep, mark as synced (with unique constraint handling)
+                            try:
+                                KarakeepSync.create(
+                                    bsr_summary=summary,
+                                    url_hash=url_hash,
+                                    sync_direction="bsr_to_karakeep",
+                                    synced_at=datetime.now(timezone.utc),
+                                    bsr_modified_at=summary.updated_at,
+                                )
+                            except peewee.IntegrityError:
+                                # Record already exists (race condition), skip
+                                pass
                             result.items_skipped += 1
                             continue
 
@@ -159,6 +176,9 @@ class KarakeepSyncService:
         Args:
             client: Karakeep client
             summary: BSR summary to sync
+
+        Raises:
+            Exception: If sync fails after cleanup attempt
         """
         from app.db.models import CrawlResult, KarakeepSync
 
@@ -175,8 +195,11 @@ class KarakeepSyncService:
             crawl = CrawlResult.get_or_none(CrawlResult.request == summary.request)
             if crawl and crawl.metadata_json:
                 title = crawl.metadata_json.get("title")
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(
+                "karakeep_crawl_result_fetch_failed",
+                extra={"request_id": summary.request.id, "error": str(e)},
+            )
 
         # Get summary text for note
         if summary.json_payload:
@@ -187,47 +210,84 @@ class KarakeepSyncService:
         # Create bookmark
         bookmark = await client.create_bookmark(url=url, title=title, note=note)
 
-        # Sync read/favorite status
-        if summary.is_read or summary.is_favorited:
+        # Build tags list
+        tags = [TAG_BSR_SYNCED]
+
+        # Use 'bsr-read' tag for read status instead of archived field
+        if summary.is_read:
+            tags.append(TAG_BSR_READ)
+
+        # Sync favorite status (favourited has correct semantics)
+        if summary.is_favorited:
             try:
                 await client.update_bookmark(
                     bookmark.id,
-                    archived=summary.is_read if summary.is_read else None,
-                    favourited=summary.is_favorited if summary.is_favorited else None,
+                    favourited=True,
                 )
             except Exception as e:
                 logger.warning(
-                    "karakeep_update_status_failed",
+                    "karakeep_update_favourite_failed",
                     extra={"bookmark_id": bookmark.id, "error": str(e)},
                 )
 
-        # Attach tags
-        tags = [self.sync_tag]
+        # Add topic tags from summary
         if summary.json_payload:
             topic_tags = summary.json_payload.get("topic_tags", [])
-            # Clean hashtags
-            for tag in topic_tags[:5]:  # Limit to 5 tags
+            if len(topic_tags) > 5:
+                logger.debug(
+                    "karakeep_truncating_tags",
+                    extra={"count": len(topic_tags), "limit": 5},
+                )
+            # Clean hashtags and add
+            for tag in topic_tags[:5]:  # Limit to 5 topic tags
                 clean_tag = tag.lstrip("#").strip()
                 if clean_tag:
                     tags.append(clean_tag)
 
+        # Attach tags
         if tags:
             try:
                 await client.attach_tags(bookmark.id, tags)
             except Exception as e:
+                # Tag attachment failed - cleanup by deleting the bookmark
                 logger.warning(
-                    "karakeep_attach_tags_failed",
+                    "karakeep_attach_tags_failed_cleanup",
                     extra={"bookmark_id": bookmark.id, "error": str(e)},
                 )
+                try:
+                    await client.delete_bookmark(bookmark.id)
+                except Exception as cleanup_err:
+                    logger.error(
+                        "karakeep_cleanup_delete_failed",
+                        extra={"bookmark_id": bookmark.id, "error": str(cleanup_err)},
+                    )
+                raise  # Re-raise the original tag attachment error
 
-        # Mark as synced
-        KarakeepSync.create(
-            bsr_summary_id=summary.id,
-            karakeep_bookmark_id=bookmark.id,
-            url_hash=_url_hash(url),
-            sync_direction="bsr_to_karakeep",
-            synced_at=datetime.utcnow(),
-        )
+        # Mark as synced (with unique constraint handling)
+        try:
+            KarakeepSync.create(
+                bsr_summary=summary,
+                karakeep_bookmark_id=bookmark.id,
+                url_hash=_url_hash(url),
+                sync_direction="bsr_to_karakeep",
+                synced_at=datetime.now(timezone.utc),
+                bsr_modified_at=summary.updated_at,
+            )
+        except peewee.IntegrityError:
+            # Duplicate sync record - another sync beat us to it
+            # Delete the bookmark we just created to avoid orphans
+            logger.warning(
+                "karakeep_sync_record_duplicate_cleanup",
+                extra={"bookmark_id": bookmark.id, "summary_id": summary.id},
+            )
+            try:
+                await client.delete_bookmark(bookmark.id)
+            except Exception as cleanup_err:
+                logger.error(
+                    "karakeep_duplicate_cleanup_failed",
+                    extra={"bookmark_id": bookmark.id, "error": str(cleanup_err)},
+                )
+            raise
 
     async def sync_karakeep_to_bsr(
         self,
@@ -250,6 +310,12 @@ class KarakeepSyncService:
 
         try:
             async with KarakeepClient(self.api_url, self.api_key) as client:
+                # Health check before proceeding
+                if not await client.health_check():
+                    result.errors.append("Karakeep API health check failed")
+                    logger.error("karakeep_sync_health_check_failed")
+                    return result
+
                 # Get all Karakeep bookmarks
                 bookmarks = await client.get_all_bookmarks()
 
@@ -287,13 +353,17 @@ class KarakeepSyncService:
                     if normalized:
                         dedupe = hashlib.sha256(normalized.encode()).hexdigest()
                         if dedupe in existing_hashes:
-                            # Mark as synced since it exists
-                            KarakeepSync.create(
-                                karakeep_bookmark_id=bookmark.id,
-                                url_hash=url_hash,
-                                sync_direction="karakeep_to_bsr",
-                                synced_at=datetime.utcnow(),
-                            )
+                            # Mark as synced since it exists (with unique constraint handling)
+                            try:
+                                KarakeepSync.create(
+                                    karakeep_bookmark_id=bookmark.id,
+                                    url_hash=url_hash,
+                                    sync_direction="karakeep_to_bsr",
+                                    synced_at=datetime.now(timezone.utc),
+                                )
+                            except peewee.IntegrityError:
+                                # Record already exists
+                                pass
                             result.items_skipped += 1
                             continue
 
@@ -359,14 +429,22 @@ class KarakeepSyncService:
             dedupe_hash=dedupe_hash,
         )
 
-        # Mark as synced
-        KarakeepSync.create(
-            bsr_summary_id=None,  # Will be set when summary is created
-            karakeep_bookmark_id=bookmark.id,  # type: ignore[attr-defined]
-            url_hash=_url_hash(url),
-            sync_direction="karakeep_to_bsr",
-            synced_at=datetime.utcnow(),
-        )
+        # Mark as synced (with unique constraint handling)
+        try:
+            KarakeepSync.create(
+                bsr_summary=None,  # Will be set when summary is created
+                karakeep_bookmark_id=bookmark.id,  # type: ignore[attr-defined]
+                url_hash=_url_hash(url),
+                sync_direction="karakeep_to_bsr",
+                synced_at=datetime.now(timezone.utc),
+            )
+        except peewee.IntegrityError:
+            # Duplicate - another sync beat us to it
+            logger.warning(
+                "karakeep_submit_url_duplicate",
+                extra={"bookmark_id": bookmark.id, "url": url},  # type: ignore[attr-defined]
+            )
+            raise
 
         logger.info(
             "karakeep_url_submitted_to_bsr",
@@ -459,14 +537,167 @@ class KarakeepSyncService:
             "last_sync_at": last_sync.synced_at.isoformat() if last_sync else None,
         }
 
+    async def preview_sync(
+        self,
+        user_id: int | None = None,
+        limit: int | None = None,
+    ) -> dict:
+        """Preview what would be synced without making changes (dry-run).
+
+        Args:
+            user_id: Optional user ID filter
+            limit: Maximum items to preview per direction
+
+        Returns:
+            Dict with preview information
+        """
+        from app.db.models import KarakeepSync, Request, Summary, database_proxy
+
+        preview: dict = {
+            "bsr_to_karakeep": {
+                "would_sync": [],
+                "would_skip": 0,
+                "already_exists_in_karakeep": [],
+            },
+            "karakeep_to_bsr": {
+                "would_sync": [],
+                "would_skip": 0,
+                "already_exists_in_bsr": [],
+            },
+            "errors": [],
+        }
+
+        try:
+            async with KarakeepClient(self.api_url, self.api_key) as client:
+                # Health check
+                if not await client.health_check():
+                    preview["errors"].append("Karakeep API health check failed")
+                    return preview
+
+                # Get existing Karakeep bookmarks
+                karakeep_bookmarks = await client.get_all_bookmarks()
+                karakeep_urls = {b.url for b in karakeep_bookmarks if b.url}
+                karakeep_url_to_bookmark = {b.url: b for b in karakeep_bookmarks if b.url}
+
+                # Get already synced hashes
+                with database_proxy.atomic():
+                    synced_hashes_bsr = {
+                        s.url_hash
+                        for s in KarakeepSync.select(KarakeepSync.url_hash).where(
+                            KarakeepSync.sync_direction == "bsr_to_karakeep"
+                        )
+                    }
+                    synced_hashes_kk = {
+                        s.url_hash
+                        for s in KarakeepSync.select(KarakeepSync.url_hash).where(
+                            KarakeepSync.sync_direction == "karakeep_to_bsr"
+                        )
+                    }
+
+                    # BSR → Karakeep preview
+                    query = (
+                        Summary.select(Summary, Request)
+                        .join(Request)
+                        .where(
+                            Summary.is_deleted == False,  # noqa: E712
+                            Request.normalized_url.is_null(False),
+                        )
+                    )
+                    if user_id:
+                        query = query.where(Request.user_id == user_id)
+
+                    count = 0
+                    for summary in query:
+                        if limit and count >= limit:
+                            break
+                        url = summary.request.normalized_url
+                        if not url:
+                            continue
+                        url_hash = _url_hash(url)
+
+                        if url_hash in synced_hashes_bsr:
+                            preview["bsr_to_karakeep"]["would_skip"] += 1
+                            continue
+                        if url in karakeep_urls:
+                            preview["bsr_to_karakeep"]["already_exists_in_karakeep"].append({
+                                "summary_id": summary.id,
+                                "url": url,
+                                "karakeep_id": karakeep_url_to_bookmark[url].id,
+                            })
+                            preview["bsr_to_karakeep"]["would_skip"] += 1
+                            continue
+
+                        # Would be synced
+                        title = None
+                        if summary.json_payload:
+                            title = summary.json_payload.get("summary_250", "")[:100]
+                        preview["bsr_to_karakeep"]["would_sync"].append({
+                            "summary_id": summary.id,
+                            "url": url,
+                            "title": title,
+                            "is_read": summary.is_read,
+                            "is_favorited": summary.is_favorited,
+                        })
+                        count += 1
+
+                    # Karakeep → BSR preview
+                    existing_hashes = {
+                        r.dedupe_hash
+                        for r in Request.select(Request.dedupe_hash).where(
+                            Request.dedupe_hash.is_null(False)
+                        )
+                    }
+
+                    count = 0
+                    for bookmark in karakeep_bookmarks:
+                        if limit and count >= limit:
+                            break
+                        if not bookmark.url:
+                            continue
+                        url_hash = _url_hash(bookmark.url)
+
+                        if url_hash in synced_hashes_kk:
+                            preview["karakeep_to_bsr"]["would_skip"] += 1
+                            continue
+
+                        normalized = normalize_url(bookmark.url)
+                        if normalized:
+                            dedupe = hashlib.sha256(normalized.encode()).hexdigest()
+                            if dedupe in existing_hashes:
+                                preview["karakeep_to_bsr"]["already_exists_in_bsr"].append({
+                                    "karakeep_id": bookmark.id,
+                                    "url": bookmark.url,
+                                })
+                                preview["karakeep_to_bsr"]["would_skip"] += 1
+                                continue
+
+                        # Would be synced
+                        preview["karakeep_to_bsr"]["would_sync"].append({
+                            "karakeep_id": bookmark.id,
+                            "url": bookmark.url,
+                            "title": bookmark.title,
+                            "archived": bookmark.archived,
+                            "favourited": bookmark.favourited,
+                        })
+                        count += 1
+
+        except KarakeepClientError as e:
+            preview["errors"].append(f"Karakeep client error: {e}")
+        except Exception as e:
+            preview["errors"].append(f"Unexpected error: {e}")
+
+        return preview
+
     async def sync_status_updates(self) -> dict[str, int | list[str]]:
         """Sync read/favorite status for already-synced items.
 
         This updates:
-        - BSR is_read → Karakeep archived
+        - BSR is_read → Karakeep 'bsr-read' tag
         - BSR is_favorited → Karakeep favourited
-        - Karakeep archived → BSR is_read
+        - Karakeep 'bsr-read' tag → BSR is_read
         - Karakeep favourited → BSR is_favorited
+
+        Uses timestamp-based conflict resolution when both have been modified.
 
         Returns:
             Dict with update counts
@@ -479,6 +710,16 @@ class KarakeepSyncService:
 
         try:
             async with KarakeepClient(self.api_url, self.api_key) as client:
+                # Health check
+                if not await client.health_check():
+                    errors.append("Karakeep API health check failed")
+                    logger.error("karakeep_status_sync_health_check_failed")
+                    return {
+                        "bsr_to_karakeep_updated": 0,
+                        "karakeep_to_bsr_updated": 0,
+                        "errors": errors,
+                    }
+
                 # Get all Karakeep bookmarks for status lookup
                 karakeep_bookmarks = await client.get_all_bookmarks()
                 karakeep_by_id = {b.id: b for b in karakeep_bookmarks}
@@ -502,42 +743,92 @@ class KarakeepSyncService:
                             if not bookmark:
                                 continue
 
-                            # Compare and sync status
-                            bsr_read = summary.is_read
-                            bsr_fav = summary.is_favorited
-                            kk_archived = bookmark.archived
+                            # Determine read status from Karakeep tags (not archived field)
+                            kk_has_read_tag = any(
+                                t.name == TAG_BSR_READ for t in (bookmark.tags or [])
+                            )
                             kk_fav = bookmark.favourited
 
-                            # Sync BSR → Karakeep (BSR is source of truth for items synced from BSR)
-                            if sync_record.sync_direction == "bsr_to_karakeep":
-                                if bsr_read != kk_archived or bsr_fav != kk_fav:
+                            bsr_read = summary.is_read
+                            bsr_fav = summary.is_favorited
+
+                            # Determine source of truth based on sync direction and timestamps
+                            bsr_is_source = sync_record.sync_direction == "bsr_to_karakeep"
+
+                            # Use timestamps for conflict resolution if both timestamps exist
+                            if sync_record.bsr_modified_at and sync_record.karakeep_modified_at:
+                                # Check which was modified more recently
+                                if summary.updated_at > sync_record.bsr_modified_at:
+                                    # BSR was updated after last sync
+                                    bsr_is_source = True
+                                # Note: We can't easily detect Karakeep modifications
+                                # without storing bookmark modification timestamps
+
+                            if bsr_is_source:
+                                # Sync BSR → Karakeep
+                                needs_update = False
+                                tags_to_add: list[str] = []
+                                tags_to_remove: list[str] = []
+
+                                # Handle read status via tags
+                                if bsr_read and not kk_has_read_tag:
+                                    tags_to_add.append(TAG_BSR_READ)
+                                    needs_update = True
+                                elif not bsr_read and kk_has_read_tag:
+                                    # Find and remove the tag
+                                    for tag in bookmark.tags or []:
+                                        if tag.name == TAG_BSR_READ:
+                                            tags_to_remove.append(tag.id)
+                                            needs_update = True
+                                            break
+
+                                # Handle favourite status
+                                if bsr_fav != kk_fav:
                                     await client.update_bookmark(
                                         bookmark.id,
-                                        archived=bsr_read,
                                         favourited=bsr_fav,
                                     )
+                                    needs_update = True
+
+                                # Apply tag changes
+                                if tags_to_add:
+                                    await client.attach_tags(bookmark.id, tags_to_add)
+                                for tag_id in tags_to_remove:
+                                    await client.detach_tag(bookmark.id, tag_id)
+
+                                if needs_update:
+                                    # Update sync record timestamps
+                                    sync_record.bsr_modified_at = summary.updated_at
+                                    sync_record.karakeep_modified_at = datetime.now(timezone.utc)
+                                    sync_record.save()
                                     bsr_to_kk_updated += 1
                                     logger.debug(
                                         "karakeep_status_synced_to_karakeep",
                                         extra={
                                             "bookmark_id": bookmark.id,
-                                            "archived": bsr_read,
+                                            "read_tag": bsr_read,
                                             "favourited": bsr_fav,
                                         },
                                     )
 
-                            # Sync Karakeep → BSR (Karakeep is source of truth for items synced from Karakeep)
-                            elif sync_record.sync_direction == "karakeep_to_bsr":
-                                if kk_archived != bsr_read or kk_fav != bsr_fav:
-                                    summary.is_read = kk_archived
+                            else:
+                                # Sync Karakeep → BSR
+                                if kk_has_read_tag != bsr_read or kk_fav != bsr_fav:
+                                    summary.is_read = kk_has_read_tag
                                     summary.is_favorited = kk_fav
                                     summary.save()
+
+                                    # Update sync record timestamps
+                                    sync_record.bsr_modified_at = datetime.now(timezone.utc)
+                                    sync_record.karakeep_modified_at = datetime.now(timezone.utc)
+                                    sync_record.save()
+
                                     kk_to_bsr_updated += 1
                                     logger.debug(
                                         "karakeep_status_synced_to_bsr",
                                         extra={
                                             "summary_id": summary.id,
-                                            "is_read": kk_archived,
+                                            "is_read": kk_has_read_tag,
                                             "is_favorited": kk_fav,
                                         },
                                     )

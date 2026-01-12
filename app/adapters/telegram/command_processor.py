@@ -9,7 +9,7 @@ import json
 import logging
 import time
 from collections.abc import Callable, Mapping
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, ClassVar
 
 from app.adapters.telegram.task_manager import UserTaskManager
 from app.config import AppConfig
@@ -18,6 +18,9 @@ from app.core.url_utils import extract_all_urls
 from app.db.user_interactions import async_safe_update_user_interaction
 from app.services.topic_search import LocalTopicSearchService, TopicSearchService
 from app.services.topic_search_utils import ensure_mapping
+
+# Rate limiting for Karakeep sync (5 minutes cooldown)
+KARAKEEP_SYNC_COOLDOWN_SECONDS = 300
 
 if TYPE_CHECKING:
     from app.adapters.content.url_processor import URLProcessor
@@ -33,6 +36,9 @@ logger = logging.getLogger(__name__)
 
 class CommandProcessor:
     """Handles bot command processing."""
+
+    # Class-level rate limiting for Karakeep sync
+    _karakeep_last_sync: ClassVar[dict[int, float]] = {}
 
     def __init__(
         self,
@@ -1356,8 +1362,27 @@ class CommandProcessor:
         """Run Karakeep sync."""
         from app.adapters.karakeep import KarakeepSyncService
 
+        # Rate limiting check
+        last_sync = self._karakeep_last_sync.get(uid)
+        if last_sync is not None:
+            elapsed = time.time() - last_sync
+            if elapsed < KARAKEEP_SYNC_COOLDOWN_SECONDS:
+                remaining = int(KARAKEEP_SYNC_COOLDOWN_SECONDS - elapsed)
+                minutes = remaining // 60
+                seconds = remaining % 60
+                await self.response_formatter.safe_reply(
+                    message,
+                    f"Please wait {minutes}m {seconds}s before syncing again.\n\n"
+                    f"Use `/sync_karakeep status` to check current sync statistics.",
+                )
+                logger.info(
+                    "karakeep_sync_rate_limited",
+                    extra={"uid": uid, "remaining_seconds": remaining, "cid": correlation_id},
+                )
+                return
+
         # Send initial message
-        await self.response_formatter.safe_reply(message, "🔄 Starting Karakeep sync...")
+        await self.response_formatter.safe_reply(message, "Starting Karakeep sync...")
 
         try:
             service = KarakeepSyncService(
@@ -1367,6 +1392,9 @@ class CommandProcessor:
             )
 
             result = await service.run_full_sync(user_id=uid)
+
+            # Update rate limit timestamp
+            self._karakeep_last_sync[uid] = time.time()
 
             # Format result message
             result_text = (

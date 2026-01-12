@@ -605,6 +605,18 @@ class YouTubeConfig(BaseModel):
             msg = f"{info.field_name.replace('_', ' ')} must be a valid integer"
             raise ValueError(msg) from exc
 
+    @field_validator("preferred_quality", mode="before")
+    @classmethod
+    def _validate_preferred_quality(cls, value: Any) -> str:
+        if value in (None, ""):
+            return "1080p"
+        valid_qualities = {"1080p", "720p", "480p", "360p", "240p"}
+        value_str = str(value).lower().strip()
+        if value_str not in valid_qualities:
+            msg = f"preferred_quality must be one of: {', '.join(sorted(valid_qualities))}"
+            raise ValueError(msg)
+        return value_str
+
 
 class TelegramLimitsConfig(BaseModel):
     """Telegram message and URL limits configuration."""
@@ -1026,6 +1038,7 @@ class SyncConfig(BaseModel):
             raise ValueError(msg) from exc
         if parsed <= 0 or parsed > 168:
             msg = "Sync expiry hours must be between 1 and 168"
+            raise ValueError(msg)
         return parsed
 
     @field_validator("default_limit", mode="before")

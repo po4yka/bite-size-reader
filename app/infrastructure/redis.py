@@ -39,10 +39,8 @@ async def get_redis(cfg: AppConfig) -> aioredis.Redis | None:
     if not cfg.redis.enabled:
         return None
 
-    if _client:
-        return _client
-
     async with _lock:
+        # Check inside lock to avoid race condition with close_redis
         if _client:
             return _client
 

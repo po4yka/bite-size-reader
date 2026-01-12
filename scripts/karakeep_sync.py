@@ -76,18 +76,62 @@ async def run_sync(
             },
         )
 
-        if dry_run:
-            logger.info("DRY RUN - no changes will be made")
-            # TODO: Implement dry-run logic
-            return 0
-
-        # Create sync service and run
+        # Create sync service
         service = KarakeepSyncService(
             api_url=cfg.karakeep.api_url,
             api_key=cfg.karakeep.api_key,
             sync_tag=cfg.karakeep.sync_tag,
         )
 
+        if dry_run:
+            logger.info("DRY RUN - no changes will be made")
+            preview = await service.preview_sync(user_id=user_id, limit=limit)
+
+            print("\n=== Karakeep Sync Preview (DRY RUN) ===\n")
+
+            # BSR → Karakeep
+            bsr_to_kk = preview["bsr_to_karakeep"]
+            print("BSR -> Karakeep:")
+            print(f"  Would sync: {len(bsr_to_kk['would_sync'])} items")
+            print(f"  Would skip: {bsr_to_kk['would_skip']} (already synced)")
+            print(f"  Already in Karakeep: {len(bsr_to_kk['already_exists_in_karakeep'])}")
+            if bsr_to_kk["would_sync"]:
+                print("\n  Items that would be synced:")
+                for item in bsr_to_kk["would_sync"][:10]:
+                    title = item.get("title", "")[:50] or "(no title)"
+                    print(f"    - [#{item['summary_id']}] {title}...")
+                    print(f"      URL: {item['url'][:60]}...")
+                if len(bsr_to_kk["would_sync"]) > 10:
+                    print(f"    ... and {len(bsr_to_kk['would_sync']) - 10} more")
+
+            print()
+
+            # Karakeep → BSR
+            kk_to_bsr = preview["karakeep_to_bsr"]
+            print("Karakeep -> BSR:")
+            print(f"  Would sync: {len(kk_to_bsr['would_sync'])} items")
+            print(f"  Would skip: {kk_to_bsr['would_skip']} (already synced)")
+            print(f"  Already in BSR: {len(kk_to_bsr['already_exists_in_bsr'])}")
+            if kk_to_bsr["would_sync"]:
+                print("\n  Items that would be synced:")
+                for item in kk_to_bsr["would_sync"][:10]:
+                    title = (item.get("title") or "(no title)")[:50]
+                    print(f"    - [{item['karakeep_id']}] {title}")
+                    print(f"      URL: {item['url'][:60]}...")
+                if len(kk_to_bsr["would_sync"]) > 10:
+                    print(f"    ... and {len(kk_to_bsr['would_sync']) - 10} more")
+
+            # Errors
+            if preview["errors"]:
+                print(f"\nErrors ({len(preview['errors'])}):")
+                for err in preview["errors"]:
+                    print(f"  - {err}")
+
+            print("\n=== End of Preview ===")
+            print("Run without --dry-run to execute the sync.")
+            return 0
+
+        # Run actual sync (service already created above)
         result = await service.run_full_sync(user_id=user_id, limit=limit)
 
         # Log results

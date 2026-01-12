@@ -59,8 +59,11 @@ class ErrorHandler:
             try:
                 retry_seconds = int(retry_after)
                 await asyncio.sleep(retry_seconds)
-            except (ValueError, TypeError):
-                pass
+            except (ValueError, TypeError) as e:
+                self._logger.warning(
+                    "invalid_retry_after_header",
+                    extra={"retry_after": retry_after, "error": str(e)},
+                )
 
     def should_downgrade_response_format(
         self,

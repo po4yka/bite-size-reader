@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import difflib
+import logging
 import re
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 from app.types.summary_types import (
     Entities,
@@ -965,8 +968,8 @@ def validate_and_shape_summary(payload: SummaryJSON) -> SummaryJSON:
                 p["seo_keywords"] = terms[:10]
             if not p.get("topic_tags") and terms:
                 p["topic_tags"] = _hash_tagify(terms)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("keyword_extraction_failed", extra={"error": str(e)})
 
     # Handle new fields with defaults
     p.setdefault("metadata", {})
@@ -1088,7 +1091,8 @@ def validate_and_shape_summary(payload: SummaryJSON) -> SummaryJSON:
             if hasattr(model, "model_dump"):
                 return model.model_dump()
             return model.dict()
-        except Exception:
+        except Exception as e:
+            logger.debug("pydantic_validation_fallback", extra={"error": str(e)})
             return p
     return p
 
@@ -1178,8 +1182,8 @@ def get_summary_json_schema() -> dict[str, Any]:
                 _enforce_no_additional_props(schema)
                 _enforce_required_all(schema)
                 return schema
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("pydantic_schema_generation_failed", extra={"error": str(e)})
 
     # Static fallback schema
     return {
