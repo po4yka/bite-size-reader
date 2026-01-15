@@ -139,6 +139,11 @@ class TelegramBot:
         # Sync dependencies (in case they were updated)
         self._sync_client_dependencies()
 
+        # Initialize scheduler for background tasks (e.g., Karakeep sync)
+        from app.services.scheduler import SchedulerService
+
+        self._scheduler = SchedulerService(cfg=self.cfg, db=self.db)
+
     def _sem(self) -> asyncio.Semaphore:
         """Lazy-create a semaphore when an event loop is running.
 
@@ -164,12 +169,18 @@ class TelegramBot:
                 extra={"interval_minutes": interval},
             )
 
+        # Start background scheduler for periodic tasks (e.g., Karakeep sync)
+        await self._scheduler.start()
+
         try:
             await self.telegram_client.start(
                 self.message_handler.handle_message,
                 self.message_handler.handle_callback_query,
             )
         finally:
+            # Stop scheduler gracefully
+            await self._scheduler.stop()
+
             if backup_task is not None:
                 backup_task.cancel()
                 with contextlib.suppress(asyncio.CancelledError):

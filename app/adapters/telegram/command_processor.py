@@ -1345,6 +1345,13 @@ class CommandProcessor:
             if status.get("last_sync_at"):
                 status_text += f"🕐 Last sync: {status['last_sync_at']}\n"
 
+            # Add auto-sync configuration info
+            status_text += "\n**Auto Sync:**\n"
+            if self.cfg.karakeep.auto_sync_enabled:
+                status_text += f"✅ Enabled (every {self.cfg.karakeep.sync_interval_hours} hours)\n"
+            else:
+                status_text += "❌ Disabled\n"
+
             await self.response_formatter.safe_reply(message, status_text)
 
         except Exception as exc:

@@ -1103,6 +1103,7 @@ class KarakeepConfig(BaseModel):
     api_key: str = Field(default="", validation_alias="KARAKEEP_API_KEY")
     sync_tag: str = Field(default="bsr-synced", validation_alias="KARAKEEP_SYNC_TAG")
     sync_interval_hours: int = Field(default=6, validation_alias="KARAKEEP_SYNC_INTERVAL_HOURS")
+    auto_sync_enabled: bool = Field(default=True, validation_alias="KARAKEEP_AUTO_SYNC_ENABLED")
 
     @field_validator("api_url", mode="before")
     @classmethod

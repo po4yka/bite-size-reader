@@ -157,6 +157,8 @@ dependencies = [
   "fakeredis>=2.32.1",
   "torch>=2.9.1",
   "transformers>=4.57.3",
+  # Background task scheduling
+  "apscheduler>=3.10.0,<4.0.0",
 ]
 
 [project.optional-dependencies]
