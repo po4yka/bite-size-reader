@@ -19,8 +19,7 @@ from app.adapters.karakeep.models import (
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
-
-    from typing_extensions import Self
+    from typing import Self
 
 logger = logging.getLogger(__name__)
 
@@ -61,9 +60,7 @@ def _is_retryable_error(exc: Exception) -> bool:
         return exc.response.status_code in RETRYABLE_STATUS_CODES
     if isinstance(exc, (httpx.ConnectError, httpx.TimeoutException)):
         return True
-    if isinstance(exc, KarakeepRetryableError):
-        return True
-    return False
+    return isinstance(exc, KarakeepRetryableError)
 
 
 def _calculate_delay(attempt: int, base_delay: float, max_delay: float, jitter: float) -> float:

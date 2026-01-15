@@ -4,8 +4,6 @@ import sys
 from datetime import datetime
 from unittest.mock import MagicMock
 
-import pytest
-
 # Mock redis before importing sync_service
 sys.modules["redis"] = MagicMock()
 sys.modules["redis.asyncio"] = MagicMock()
