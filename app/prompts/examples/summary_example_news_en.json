@@ -1,0 +1,154 @@
+{
+  "content_type": "news",
+  "description": "Example summary for a news article about tech regulation",
+  "input_snippet": "The European Union announced sweeping new regulations targeting major technology companies operating in the region. The Digital Markets Act (DMA) will come into force in March, requiring platforms with over 45 million EU users to comply with strict interoperability and data portability rules...",
+  "expected_output": {
+    "summary_250": "The EU's Digital Markets Act takes effect in March, requiring tech giants with 45M+ users to enable interoperability and data portability, marking the bloc's most aggressive tech regulation yet.",
+    "summary_1000": "The European Union has enacted the Digital Markets Act (DMA), set to take effect in March, targeting major technology platforms with more than 45 million EU users. The regulation mandates strict interoperability requirements, forcing messaging platforms to work with competitors. Companies must also enable data portability, allowing users to transfer their data seamlessly. Non-compliance carries fines up to 10% of global annual revenue. Industry analysts predict significant operational changes for Apple, Google, Meta, and Amazon.",
+    "tldr": "The European Union is implementing its most comprehensive tech regulation to date with the Digital Markets Act (DMA), effective March.\n\nMajor platforms (45M+ EU users) must comply with interoperability mandates, meaning messaging apps like WhatsApp must communicate with Signal or Telegram. Data portability rules require platforms to let users export and transfer their information freely.\n\nPenalties for violations reach 10% of global annual revenue—potentially billions for the largest companies. Apple, Google, Meta, and Amazon face the most significant compliance burdens. Industry experts expect the regulation to reshape platform business models across Europe.",
+    "key_ideas": [
+      "DMA requires interoperability between competing messaging platforms",
+      "Data portability mandates give users control over their information",
+      "Fines can reach 10% of global annual revenue for non-compliance",
+      "Apple, Google, Meta, and Amazon are primary targets",
+      "Regulation takes effect March 2024"
+    ],
+    "topic_tags": ["#eu-regulation", "#digital-markets-act", "#tech-policy", "#antitrust", "#data-portability"],
+    "entities": {
+      "people": [],
+      "organizations": ["European Union", "Apple", "Google", "Meta", "Amazon"],
+      "locations": ["Europe", "Brussels"]
+    },
+    "estimated_reading_time_min": 4,
+    "source_type": "news",
+    "temporal_freshness": "recent",
+    "key_stats": [
+      {
+        "label": "User threshold for DMA compliance",
+        "value": 45000000,
+        "unit": "users",
+        "source_excerpt": "platforms with over 45 million EU users"
+      },
+      {
+        "label": "Maximum fine percentage",
+        "value": 10,
+        "unit": "% of global revenue",
+        "source_excerpt": "fines up to 10% of global annual revenue"
+      }
+    ],
+    "answered_questions": [
+      "What is the Digital Markets Act?",
+      "When does the DMA take effect?",
+      "Which companies are affected by the DMA?",
+      "What are the penalties for non-compliance?"
+    ],
+    "readability": {
+      "method": "Flesch-Kincaid",
+      "score": 45.2,
+      "level": "Difficult"
+    },
+    "seo_keywords": ["digital markets act", "eu tech regulation", "dma compliance", "tech antitrust", "interoperability rules", "data portability", "platform regulation", "eu gdpr"],
+    "metadata": {
+      "title": "EU's Digital Markets Act to Transform Tech Industry",
+      "canonical_url": null,
+      "domain": "example.com",
+      "author": "Tech Policy Desk",
+      "published_at": "2024-02-15",
+      "last_updated": null
+    },
+    "extractive_quotes": [
+      {
+        "text": "platforms with over 45 million EU users to comply with strict interoperability and data portability rules",
+        "source_span": "paragraph 1"
+      }
+    ],
+    "highlights": [
+      "DMA targets platforms with 45M+ EU users",
+      "Messaging apps must enable cross-platform communication",
+      "Users can transfer data between competing services",
+      "Fines reach 10% of global annual revenue",
+      "Apple, Google, Meta, Amazon face biggest changes"
+    ],
+    "questions_answered": [
+      {
+        "question": "What triggers DMA compliance requirements?",
+        "answer": "Having more than 45 million monthly active users in the EU"
+      },
+      {
+        "question": "What is the maximum penalty for violations?",
+        "answer": "Up to 10% of global annual revenue"
+      }
+    ],
+    "categories": ["technology", "regulation", "policy", "european union"],
+    "topic_taxonomy": [
+      {"label": "Technology Policy", "score": 0.95, "path": "Politics/Regulation/Tech"},
+      {"label": "EU Legislation", "score": 0.88, "path": "Politics/European Union"},
+      {"label": "Antitrust", "score": 0.82, "path": "Business/Competition"}
+    ],
+    "hallucination_risk": "low",
+    "confidence": 0.92,
+    "forwarded_post_extras": null,
+    "key_points_to_remember": [
+      "DMA effective March 2024",
+      "45M user threshold triggers compliance",
+      "10% revenue penalty for violations",
+      "Interoperability and data portability are core requirements"
+    ],
+    "insights": {
+      "topic_overview": "The DMA represents the EU's most aggressive attempt to regulate Big Tech, building on GDPR's data protection framework with competition-focused mandates.",
+      "new_facts": [
+        {
+          "fact": "The DMA is the first regulation to mandate messaging interoperability at scale",
+          "why_it_matters": "Could fundamentally change how messaging platforms compete and retain users",
+          "source_hint": "EU regulatory framework analysis",
+          "confidence": 0.85
+        },
+        {
+          "fact": "Similar legislation is being considered in the US and UK",
+          "why_it_matters": "May signal global regulatory convergence on platform governance",
+          "source_hint": "Comparative policy research",
+          "confidence": 0.72
+        }
+      ],
+      "open_questions": [
+        "How will end-to-end encryption be maintained across interoperable platforms?",
+        "Will smaller EU tech companies gain market share?",
+        "How will platforms handle security across interconnected systems?"
+      ],
+      "suggested_sources": [
+        "European Commission DMA official documentation",
+        "Competition policy research from Bruegel think tank"
+      ],
+      "expansion_topics": [
+        "GDPR enforcement trends",
+        "US antitrust actions against Big Tech",
+        "Platform liability under DSA"
+      ],
+      "next_exploration": [
+        "Monitor initial enforcement actions post-March",
+        "Track platform compliance strategies",
+        "Analyze impact on EU startup ecosystem"
+      ],
+      "caution": "Enforcement details and specific compliance timelines may evolve"
+    },
+    "article_id": "eu-dma-2024-02-15",
+    "query_expansion_keywords": [
+      "digital markets act", "dma regulation", "eu tech law", "platform interoperability",
+      "messaging app rules", "data portability eu", "big tech regulation", "gatekeeper platforms",
+      "eu antitrust", "tech competition law", "apple eu compliance", "google dma",
+      "meta interoperability", "amazon marketplace rules", "european commission tech",
+      "platform regulation 2024", "tech antitrust enforcement", "user data rights"
+    ],
+    "semantic_boosters": [
+      "The Digital Markets Act mandates interoperability between competing messaging platforms in the EU.",
+      "Platforms with over 45 million EU users must comply with strict data portability requirements.",
+      "Non-compliance with DMA carries fines up to 10% of global annual revenue.",
+      "Apple, Google, Meta, and Amazon face significant operational changes under the new rules.",
+      "The regulation marks the EU's most aggressive tech industry intervention since GDPR.",
+      "Messaging apps will be required to enable cross-platform communication for the first time.",
+      "Users gain the right to transfer their data seamlessly between competing services.",
+      "The DMA takes effect in March 2024 with immediate compliance requirements."
+    ],
+    "semantic_chunks": []
+  }
+}

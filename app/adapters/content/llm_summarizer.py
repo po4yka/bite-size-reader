@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import asyncio
+import hashlib
 import json
 import logging
 import re
+from collections import Counter
 from typing import TYPE_CHECKING, Any
 from urllib.parse import urlparse
 
@@ -40,6 +43,68 @@ logger = logging.getLogger(__name__)
 
 
 _STRING_LIST_SPLITTER_RE = re.compile(r"[\n\r•;]+")
+_SIMPLE_KEYWORD_STOP_WORDS = {
+    "this",
+    "that",
+    "with",
+    "from",
+    "have",
+    "they",
+    "what",
+    "been",
+    "will",
+    "would",
+    "there",
+    "their",
+    "about",
+    "which",
+    "when",
+    "make",
+    "like",
+    "time",
+    "just",
+    "know",
+    "take",
+    "into",
+    "year",
+    "some",
+    "could",
+    "them",
+    "other",
+    "than",
+    "then",
+    "look",
+    "only",
+    "come",
+    "over",
+    "also",
+    "back",
+    "after",
+    "work",
+    "first",
+    "well",
+    "even",
+    "want",
+    "because",
+    "these",
+    "give",
+    "most",
+    "very",
+    "есть",
+    "это",
+    "как",
+    "что",
+    "все",
+    "для",
+    "она",
+    "оно",
+    "при",
+    "так",
+    "его",
+    "или",
+    "еще",
+    "уже",
+}
 
 
 class LLMSummarizer:
@@ -153,24 +218,37 @@ class LLMSummarizer:
             await self._handle_empty_content_error(message, req_id, correlation_id, interaction_id)
             return None
 
+        content_for_summary = content_text
+        model_override = None
+        if len(content_text) > max_chars:
+            if self.cfg.openrouter.long_context_model or "":
+                model_override = self.cfg.openrouter.long_context_model
+            else:
+                content_for_summary = self._truncate_content_text(content_text, max_chars)
+                logger.info(
+                    "summary_content_truncated",
+                    extra={
+                        "cid": correlation_id,
+                        "original_len": len(content_text),
+                        "truncated_len": len(content_for_summary),
+                        "max_chars": max_chars,
+                    },
+                )
+
         user_content = (
             f"Analyze the following content and output ONLY a valid JSON object that matches the system contract exactly. "
             f"Respond in {'Russian' if chosen_lang == LANG_RU else 'English'}. Do NOT include any text outside the JSON.\n\n"
-            f"CONTENT START\n{content_text}\nCONTENT END"
+            f"CONTENT START\n{content_for_summary}\nCONTENT END"
         )
 
-        self._log_llm_content_validation(content_text, system_prompt, user_content, correlation_id)
+        self._log_llm_content_validation(
+            content_for_summary, system_prompt, user_content, correlation_id
+        )
 
         messages = [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_content},
         ]
-
-        # If we have a long-context model configured and content exceeds threshold,
-        # prefer a single-pass summary using that model (avoids chunking multi-calls).
-        model_override = None
-        if len(content_text) > max_chars and (self.cfg.openrouter.long_context_model or ""):
-            model_override = self.cfg.openrouter.long_context_model
 
         base_model = model_override or self.cfg.openrouter.model
 
@@ -178,7 +256,7 @@ class LLMSummarizer:
         response_format_json_object = self._workflow.build_structured_response_format(
             mode="json_object"
         )
-        max_tokens_schema = self._select_max_tokens(content_text)
+        max_tokens_schema = self._select_max_tokens(content_for_summary)
         max_tokens_json_object = self._select_max_tokens(user_content)
 
         base_temperature = self.cfg.openrouter.temperature
@@ -463,6 +541,24 @@ class LLMSummarizer:
         if not content_text or not content_text.strip():
             raise ValueError("Content text is empty or contains only whitespace")
 
+        content_for_summary = content_text
+        model_override = None
+        max_chars_threshold = 50000
+        if len(content_text) > max_chars_threshold:
+            if self.cfg.openrouter.long_context_model or "":
+                model_override = self.cfg.openrouter.long_context_model
+            else:
+                content_for_summary = self._truncate_content_text(content_text, max_chars_threshold)
+                logger.info(
+                    "summarize_pure_truncated",
+                    extra={
+                        "cid": correlation_id,
+                        "original_len": len(content_text),
+                        "truncated_len": len(content_for_summary),
+                        "max_chars": max_chars_threshold,
+                    },
+                )
+
         # Build user prompt with optional feedback
         user_content = (
             f"Analyze the following content and output ONLY a valid JSON object that matches the system contract exactly. "
@@ -472,9 +568,11 @@ class LLMSummarizer:
         if feedback_instructions:
             user_content += f"{feedback_instructions}\n\n"
 
-        user_content += f"CONTENT START\n{content_text}\nCONTENT END"
+        user_content += f"CONTENT START\n{content_for_summary}\nCONTENT END"
 
-        self._log_llm_content_validation(content_text, system_prompt, user_content, correlation_id)
+        self._log_llm_content_validation(
+            content_for_summary, system_prompt, user_content, correlation_id
+        )
 
         messages = [
             {"role": "system", "content": system_prompt},
@@ -483,22 +581,13 @@ class LLMSummarizer:
 
         # Select response format and max tokens
         response_format = self._workflow.build_structured_response_format()
-        max_tokens = self._select_max_tokens(content_text)
-
-        # Determine if we should use long-context model
-        # (assuming max_chars threshold similar to existing logic)
-        model_override = None
-        max_chars_threshold = 50000  # reasonable default
-        if len(content_text) > max_chars_threshold and (
-            self.cfg.openrouter.long_context_model or ""
-        ):
-            model_override = self.cfg.openrouter.long_context_model
+        max_tokens = self._select_max_tokens(content_for_summary)
 
         logger.info(
             "summarize_pure_start",
             extra={
                 "cid": correlation_id,
-                "content_len": len(content_text),
+                "content_len": len(content_for_summary),
                 "lang": chosen_lang,
                 "has_feedback": bool(feedback_instructions),
                 "model": model_override or self.cfg.openrouter.model,
@@ -633,6 +722,7 @@ class LLMSummarizer:
         topics: list[str] | None,
         tags: list[str] | None,
         correlation_id: str | None,
+        url_hash: str | None = None,
     ) -> dict[str, Any] | None:
         """Generate a standalone article based on extracted topics and tags.
 
@@ -642,6 +732,8 @@ class LLMSummarizer:
         """
         topics = [str(t).strip() for t in (topics or []) if str(t).strip()]
         tags = [str(t).strip() for t in (tags or []) if str(t).strip()]
+
+        topics_key = self._build_topics_cache_key(topics, tags)
 
         system_prompt = self._build_article_system_prompt(chosen_lang)
         user_prompt = self._build_article_user_prompt(topics, tags, chosen_lang)
@@ -666,6 +758,17 @@ class LLMSummarizer:
                     if model and model not in candidate_models
                 ]
             )
+            if url_hash and topics_key:
+                for model_name in candidate_models:
+                    cached = await self._get_cached_custom_article(
+                        url_hash, chosen_lang, model_name, topics_key, correlation_id
+                    )
+                    if cached:
+                        logger.info(
+                            "custom_article_cache_hit",
+                            extra={"cid": correlation_id, "model": model_name},
+                        )
+                        return cached
 
             max_tokens = self._select_insights_max_tokens(" ".join(topics + tags))
 
@@ -710,6 +813,14 @@ class LLMSummarizer:
                             },
                         )
                         continue
+                    if url_hash and topics_key:
+                        await self._write_custom_article_cache(
+                            url_hash,
+                            model_name,
+                            chosen_lang,
+                            topics_key,
+                            article,
+                        )
                     return article
 
             logger.warning("custom_article_generation_exhausted", extra={"cid": correlation_id})
@@ -728,8 +839,30 @@ class LLMSummarizer:
         *,
         req_id: int,
         correlation_id: str | None = None,
+        url_hash: str | None = None,
+        source_lang: str | None = None,
     ) -> str | None:
         """Translate a shaped summary to fluent Russian for Telegram delivery."""
+        source_lang = source_lang or summary.get("language") or "auto"
+
+        candidate_models: list[str] = [self.cfg.openrouter.model]
+        fallback_models = getattr(self.cfg.openrouter, "fallback_models", []) or []
+        candidate_models.extend(
+            [model for model in fallback_models if model and model not in candidate_models]
+        )
+
+        if url_hash:
+            for model_name in candidate_models:
+                cached = await self._get_cached_translation(
+                    url_hash, source_lang, model_name, correlation_id
+                )
+                if cached:
+                    logger.info(
+                        "translation_cache_hit",
+                        extra={"cid": correlation_id, "model": model_name},
+                    )
+                    return cached
+
         summary_json = json.dumps(summary, ensure_ascii=False, indent=2)
 
         system_prompt = (
@@ -749,12 +882,6 @@ class LLMSummarizer:
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt},
         ]
-
-        candidate_models: list[str] = [self.cfg.openrouter.model]
-        fallback_models = getattr(self.cfg.openrouter, "fallback_models", []) or []
-        candidate_models.extend(
-            [model for model in fallback_models if model and model not in candidate_models]
-        )
 
         max_tokens = 900
 
@@ -785,6 +912,10 @@ class LLMSummarizer:
 
                 candidate = (llm.response_text or "").strip()
                 if candidate:
+                    if url_hash:
+                        await self._write_translation_cache(
+                            url_hash, model_name, source_lang, candidate
+                        )
                     return candidate
 
                 logger.warning(
@@ -1160,6 +1291,17 @@ class LLMSummarizer:
             },
         )
 
+    @staticmethod
+    def _truncate_content_text(content_text: str, max_chars: int) -> str:
+        if len(content_text) <= max_chars:
+            return content_text
+        snippet = content_text[:max_chars]
+        for sep in ("\n\n", "\n", ". ", "? ", "! "):
+            idx = snippet.rfind(sep)
+            if idx > max_chars * 0.6:
+                return snippet[: idx + len(sep)].strip()
+        return snippet.strip()
+
     async def _ensure_summary_metadata(
         self,
         summary: dict[str, Any],
@@ -1248,7 +1390,7 @@ class LLMSummarizer:
             )
 
         # Enrich with RAG-optimized fields for retrieval
-        return self._enrich_with_rag_fields(
+        return await self._enrich_with_rag_fields(
             summary,
             content_text=content_text,
             chosen_lang=chosen_lang,
@@ -1520,7 +1662,7 @@ class LLMSummarizer:
         except Exception:
             return None
 
-    def _enrich_with_rag_fields(
+    async def _enrich_with_rag_fields(
         self,
         summary: dict[str, Any],
         *,
@@ -1560,7 +1702,7 @@ class LLMSummarizer:
             not summary.get("query_expansion_keywords")
             or len(summary["query_expansion_keywords"]) < 20
         ):
-            summary["query_expansion_keywords"] = self._generate_query_expansion_keywords(
+            summary["query_expansion_keywords"] = await self._generate_query_expansion_keywords(
                 summary, content_text or base_text
             )
         else:
@@ -1620,6 +1762,163 @@ class LLMSummarizer:
             parts=("llm", self._prompt_version, model_name, chosen_lang or "auto", url_hash),
         )
 
+    @staticmethod
+    def _hash_cache_key(value: str) -> str:
+        return hashlib.sha256(value.encode("utf-8")).hexdigest()[:16]
+
+    def _build_topics_cache_key(self, topics: list[str], tags: list[str]) -> str:
+        normalized = sorted(
+            {
+                item.strip().lower()
+                for item in (topics + tags)
+                if isinstance(item, str) and item.strip()
+            }
+        )
+        if not normalized:
+            return ""
+        return self._hash_cache_key("|".join(normalized))
+
+    async def _get_cached_insights(
+        self,
+        url_hash: str | None,
+        chosen_lang: str | None,
+        model_name: str,
+        correlation_id: str | None,
+    ) -> dict[str, Any] | None:
+        if not url_hash or not self._cache.enabled:
+            return None
+
+        lang_key = chosen_lang or "auto"
+        cached = await self._cache.get_json(
+            "llm", "insights", self._prompt_version, model_name, lang_key, url_hash
+        )
+        if not isinstance(cached, dict):
+            return None
+        if not self._insights_has_content(cached):
+            logger.debug(
+                "insights_cache_missing_fields",
+                extra={"cid": correlation_id, "lang": lang_key, "model": model_name},
+            )
+            return None
+        return cached
+
+    async def _write_insights_cache(
+        self, url_hash: str, model_name: str, chosen_lang: str, insights: dict[str, Any]
+    ) -> None:
+        if not self._cache.enabled:
+            return
+        if not insights or not isinstance(insights, dict):
+            return
+
+        await self._cache.set_json(
+            value=insights,
+            ttl_seconds=getattr(self.cfg.redis, "llm_ttl_seconds", 7_200),
+            parts=(
+                "llm",
+                "insights",
+                self._prompt_version,
+                model_name,
+                chosen_lang or "auto",
+                url_hash,
+            ),
+        )
+
+    async def _get_cached_translation(
+        self,
+        url_hash: str | None,
+        source_lang: str | None,
+        model_name: str,
+        correlation_id: str | None,
+    ) -> str | None:
+        if not url_hash or not self._cache.enabled:
+            return None
+
+        lang_key = source_lang or "auto"
+        cached = await self._cache.get_json(
+            "llm", "translation_ru", self._prompt_version, model_name, lang_key, url_hash
+        )
+        if isinstance(cached, str) and cached.strip():
+            return cached
+
+        logger.debug(
+            "translation_cache_miss",
+            extra={"cid": correlation_id, "lang": lang_key, "model": model_name},
+        )
+        return None
+
+    async def _write_translation_cache(
+        self, url_hash: str, model_name: str, source_lang: str, translation: str
+    ) -> None:
+        if not self._cache.enabled:
+            return
+        if not translation or not isinstance(translation, str):
+            return
+
+        await self._cache.set_json(
+            value=translation,
+            ttl_seconds=getattr(self.cfg.redis, "llm_ttl_seconds", 7_200),
+            parts=(
+                "llm",
+                "translation_ru",
+                self._prompt_version,
+                model_name,
+                source_lang or "auto",
+                url_hash,
+            ),
+        )
+
+    async def _get_cached_custom_article(
+        self,
+        url_hash: str | None,
+        chosen_lang: str | None,
+        model_name: str,
+        topics_key: str,
+        correlation_id: str | None,
+    ) -> dict[str, Any] | None:
+        if not url_hash or not topics_key or not self._cache.enabled:
+            return None
+
+        lang_key = chosen_lang or "auto"
+        cached = await self._cache.get_json(
+            "llm",
+            "custom_article",
+            self._prompt_version,
+            model_name,
+            lang_key,
+            url_hash,
+            topics_key,
+        )
+        if not isinstance(cached, dict):
+            return None
+        return cached
+
+    async def _write_custom_article_cache(
+        self,
+        url_hash: str,
+        model_name: str,
+        chosen_lang: str,
+        topics_key: str,
+        article: dict[str, Any],
+    ) -> None:
+        if not self._cache.enabled:
+            return
+        if not topics_key or not isinstance(article, dict):
+            return
+
+        await self._cache.set_json(
+            value=article,
+            ttl_seconds=getattr(self.cfg.redis, "llm_ttl_seconds", 7_200),
+            parts=(
+                "llm",
+                "custom_article",
+                self._prompt_version,
+                model_name,
+                chosen_lang or "auto",
+                url_hash,
+                topics_key,
+            ),
+        )
+
     def _build_cache_stub(self, model_name: str) -> Any:
         """LLM stub used when summary is served from cache."""
         return type(
@@ -1634,7 +1933,35 @@ class LLMSummarizer:
             },
         )()
 
-    def _generate_query_expansion_keywords(
+    async def _extract_keywords_tfidf_async(self, content_text: str, topn: int) -> list[str]:
+        if not content_text.strip():
+            return []
+        try:
+            return await asyncio.to_thread(_extract_keywords_tfidf, content_text, topn=topn)
+        except Exception as exc:  # pragma: no cover - defensive
+            raise_if_cancelled(exc)
+            logger.warning("tfidf_async_failed", extra={"error": str(exc)})
+            return []
+
+    def _extract_keywords_simple(self, text: str, topn: int = 8) -> list[str]:
+        if not text or not text.strip():
+            return []
+        words = re.findall(r"\b\w+\b", text.lower())
+        candidates: list[str] = []
+        for word in words:
+            if len(word) < 4 or word in _SIMPLE_KEYWORD_STOP_WORDS:
+                continue
+            if word.isdigit():
+                continue
+            if not any(ch.isalpha() for ch in word):
+                continue
+            candidates.append(word)
+        if not candidates:
+            return []
+        counts = Counter(candidates)
+        return [term for term, _ in counts.most_common(topn)]
+
+    async def _generate_query_expansion_keywords(
         self, summary: dict[str, Any], content_text: str
     ) -> list[str]:
         seeds: list[str] = []
@@ -1646,7 +1973,8 @@ class LLMSummarizer:
         topic_tags = summary.get("topic_tags") or []
         seeds.extend([str(t).strip().lstrip("#") for t in topic_tags if str(t).strip()])
 
-        tfidf_terms = _extract_keywords_tfidf(content_text or "", topn=40)
+        tfidf_source = (content_text or "")[:20000]
+        tfidf_terms = await self._extract_keywords_tfidf_async(tfidf_source, topn=40)
         seeds.extend(tfidf_terms)
 
         deduped: list[str] = []
@@ -1708,7 +2036,7 @@ class LLMSummarizer:
                 break
 
             local_summary = self._extract_local_summary(chunk_text)
-            local_keywords = _extract_keywords_tfidf(chunk_text, topn=8)
+            local_keywords = self._extract_keywords_simple(chunk_text, topn=8)
 
             chunks.append(
                 {
@@ -1739,6 +2067,46 @@ class LLMSummarizer:
         """Return the most recent LLM call result for summarization."""
         return self._last_llm_result
 
+    def _build_insights_source_text(self, content_text: str, summary: dict[str, Any] | None) -> str:
+        parts: list[str] = []
+        if isinstance(summary, dict):
+            tldr = summary.get("tldr")
+            if isinstance(tldr, str) and tldr.strip():
+                parts.append(f"TLDR:\n{tldr.strip()}")
+
+            summary_1000 = summary.get("summary_1000")
+            if isinstance(summary_1000, str) and summary_1000.strip():
+                parts.append(f"SUMMARY:\n{summary_1000.strip()}")
+
+            summary_250 = summary.get("summary_250")
+            if isinstance(summary_250, str) and summary_250.strip():
+                parts.append(f"SUMMARY_250:\n{summary_250.strip()}")
+
+            key_ideas = self._coerce_string_list(summary.get("key_ideas"))
+            if key_ideas:
+                parts.append("KEY IDEAS:\n- " + "\n- ".join(key_ideas[:8]))
+
+            topic_tags = self._coerce_string_list(summary.get("topic_tags"))
+            if topic_tags:
+                parts.append("TOPIC TAGS:\n" + ", ".join(topic_tags[:12]))
+
+            key_stats = self._coerce_string_list(summary.get("key_stats"))
+            if key_stats:
+                parts.append("KEY STATS:\n- " + "\n- ".join(key_stats[:6]))
+
+        assembled = "\n\n".join(parts).strip()
+        return assembled or content_text
+
+    def _truncate_insights_text(self, content_text: str, max_chars: int = 12000) -> str:
+        if len(content_text) <= max_chars:
+            return content_text
+        truncated = self._truncate_content_text(content_text, max_chars)
+        logger.info(
+            "insights_source_truncated",
+            extra={"original_len": len(content_text), "truncated_len": len(truncated)},
+        )
+        return truncated
+
     async def generate_additional_insights(
         self,
         message: Any,
@@ -1748,6 +2116,7 @@ class LLMSummarizer:
         req_id: int,
         correlation_id: str | None,
         summary: dict[str, Any] | None = None,
+        url_hash: str | None = None,
     ) -> dict[str, Any] | None:
         """Call OpenRouter to obtain additional researched insights for the article."""
         if not content_text.strip():
@@ -1782,8 +2151,35 @@ class LLMSummarizer:
                 self._last_insights = insights_payload
                 return insights_payload
 
+        candidate_models: list[str] = [self.cfg.openrouter.model]
+        candidate_models.extend(
+            [
+                model
+                for model in self.cfg.openrouter.fallback_models
+                if model and model not in candidate_models
+            ]
+        )
+
+        if url_hash:
+            for model_name in candidate_models:
+                cached = await self._get_cached_insights(
+                    url_hash, chosen_lang, model_name, correlation_id
+                )
+                if cached:
+                    logger.info(
+                        "insights_cache_hit",
+                        extra={"cid": correlation_id, "model": model_name},
+                    )
+                    self._last_summary_shaped = summary_candidate or {}
+                    self._last_insights = cached
+                    if isinstance(summary_candidate, dict):
+                        summary_candidate.setdefault("insights", cached)
+                    return cached
+
         system_prompt = self._build_insights_system_prompt(chosen_lang)
-        user_prompt = self._build_insights_user_prompt(content_text, chosen_lang)
+        source_text = self._build_insights_source_text(content_text, summary_candidate)
+        content_for_insights = self._truncate_insights_text(source_text)
+        user_prompt = self._build_insights_user_prompt(content_for_insights, chosen_lang)
 
         messages = [
             {"role": "system", "content": system_prompt},
@@ -1797,22 +2193,13 @@ class LLMSummarizer:
             if primary_format.get("type") != "json_object":
                 response_formats.append({"type": "json_object"})
 
-            candidate_models: list[str] = [self.cfg.openrouter.model]
-            candidate_models.extend(
-                [
-                    model
-                    for model in self.cfg.openrouter.fallback_models
-                    if model and model not in candidate_models
-                ]
-            )
-
             for model_name in candidate_models:
                 for response_format in response_formats:
                     async with self._sem():
                         llm = await self.openrouter.chat(
                             messages,
                             temperature=self.cfg.openrouter.temperature,
-                            max_tokens=self._select_insights_max_tokens(content_text),
+                            max_tokens=self._select_insights_max_tokens(content_for_insights),
                             top_p=self.cfg.openrouter.top_p,
                             request_id=req_id,
                             response_format=response_format,
@@ -1864,6 +2251,10 @@ class LLMSummarizer:
                         self._last_summary_shaped = {}
                     self._last_insights = insights
                     self._last_summary_shaped.setdefault("insights", insights)
+                    if url_hash:
+                        await self._write_insights_cache(
+                            url_hash, model_name, chosen_lang, insights
+                        )
                     return insights
 
             self._last_insights = None

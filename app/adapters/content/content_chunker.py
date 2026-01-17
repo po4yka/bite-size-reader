@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 from typing import TYPE_CHECKING, Any
@@ -103,7 +104,13 @@ class ContentChunker:
             )
             try:
                 sentences = split_sentences(content_text, "ru" if chosen_lang == LANG_RU else "en")
-                chunks = chunk_sentences(sentences, max_chars=2000)
+                chunk_size = max(4000, min(12000, max_chars // 10))
+                chunk_size = min(chunk_size, max_chars)
+                chunks = chunk_sentences(sentences, max_chars=chunk_size)
+                logger.info(
+                    "chunking_chunk_size",
+                    extra={"chunk_size": chunk_size, "chunks": len(chunks)},
+                )
             except Exception as exc:
                 raise_if_cancelled(exc)
                 chunks = None
@@ -121,7 +128,7 @@ class ContentChunker:
         """Process chunks and aggregate summaries."""
         chunk_summaries: list[dict[str, Any]] = []
 
-        for idx, chunk in enumerate(chunks, start=1):
+        async def _process_chunk(idx: int, chunk: str) -> dict[str, Any] | None:
             messages = [
                 {"role": "system", "content": system_prompt},
                 {
@@ -146,32 +153,59 @@ class ContentChunker:
                     request_id=req_id,
                     response_format=response_format_cf,
                 )
-            if resp.status == "ok":
-                # Prefer parsed payload
-                parsed: dict[str, Any] | None = None
+            if resp.status != "ok":
+                logger.warning(
+                    "chunk_summary_llm_error",
+                    extra={
+                        "cid": correlation_id,
+                        "status": resp.status,
+                        "error": resp.error_text,
+                        "chunk_index": idx,
+                    },
+                )
+                return None
+
+            # Prefer parsed payload
+            parsed: dict[str, Any] | None = None
+            try:
+                if resp.response_json and isinstance(resp.response_json, dict):
+                    ch = resp.response_json.get("choices") or []
+                    if ch and isinstance(ch[0], dict):
+                        msg0 = ch[0].get("message") or {}
+                        p = msg0.get("parsed")
+                        if p is not None:
+                            parsed = p if isinstance(p, dict) else None
+            except Exception as exc:
+                raise_if_cancelled(exc)
+                parsed = None
+            try:
+                if parsed is None and (resp.response_text or "").strip():
+                    parsed = json.loads((resp.response_text or "").strip().strip("` "))
+            except Exception as exc:
+                raise_if_cancelled(exc)
+                parsed = None
+            if parsed is not None:
                 try:
-                    if resp.response_json and isinstance(resp.response_json, dict):
-                        ch = resp.response_json.get("choices") or []
-                        if ch and isinstance(ch[0], dict):
-                            msg0 = ch[0].get("message") or {}
-                            p = msg0.get("parsed")
-                            if p is not None:
-                                parsed = p if isinstance(p, dict) else None
+                    return validate_and_shape_summary(parsed)
                 except Exception as exc:
                     raise_if_cancelled(exc)
-                    parsed = None
-                try:
-                    if parsed is None and (resp.response_text or "").strip():
-                        parsed = json.loads((resp.response_text or "").strip().strip("` "))
-                except Exception as exc:
-                    raise_if_cancelled(exc)
-                    parsed = None
-                if parsed is not None:
-                    try:
-                        shaped_chunk = validate_and_shape_summary(parsed)
-                        chunk_summaries.append(shaped_chunk)
-                    except Exception as exc:
-                        raise_if_cancelled(exc)
+            return None
+
+        tasks = [
+            asyncio.create_task(_process_chunk(idx, chunk))
+            for idx, chunk in enumerate(chunks, start=1)
+        ]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        for result in results:
+            if isinstance(result, BaseException):
+                raise_if_cancelled(result)
+                logger.error(
+                    "chunk_summary_processing_failed",
+                    extra={"cid": correlation_id, "error": str(result)},
+                )
+                continue
+            if isinstance(result, dict):
+                chunk_summaries.append(result)
 
         # Aggregate chunk summaries into final
         if chunk_summaries:

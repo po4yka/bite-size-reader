@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import difflib
+import re
 from typing import Any
 
 from pydantic import BaseModel, Field
@@ -173,6 +175,30 @@ class ValidationAgent(BaseAgent[ValidationInput, ValidationOutput]):
                 elif reading_time < 1:
                     warnings.append(f"estimated_reading_time_min very low: {reading_time}")
 
+            # Classification fields validation (NEW)
+            valid_source_types = {"news", "blog", "research", "opinion", "tutorial", "reference"}
+            if "source_type" in summary:
+                source_type = str(summary["source_type"]).lower()
+                if source_type not in valid_source_types:
+                    errors.append(
+                        f"source_type must be one of: {', '.join(sorted(valid_source_types))}. "
+                        f"Got: '{summary['source_type']}'"
+                    )
+
+            valid_freshness = {"breaking", "recent", "evergreen"}
+            if "temporal_freshness" in summary:
+                freshness = str(summary["temporal_freshness"]).lower()
+                if freshness not in valid_freshness:
+                    errors.append(
+                        f"temporal_freshness must be one of: {', '.join(sorted(valid_freshness))}. "
+                        f"Got: '{summary['temporal_freshness']}'"
+                    )
+
+            # Cross-field validation: summary distinctness
+            cross_field_issues = self._validate_summary_distinctness(summary)
+            errors.extend(cross_field_issues["errors"])
+            warnings.extend(cross_field_issues["warnings"])
+
             # If there are errors, return error result with details
             if errors:
                 error_message = self._format_validation_errors(errors)
@@ -227,3 +253,87 @@ class ValidationAgent(BaseAgent[ValidationInput, ValidationOutput]):
             formatted += f"{idx}. {error}\n"
 
         return formatted.strip()
+
+    def _validate_summary_distinctness(self, summary: dict[str, Any]) -> dict[str, list[str]]:
+        """Validate that summary_250, summary_1000, and tldr are meaningfully distinct.
+
+        Checks:
+        - No excessive similarity between summary levels
+        - No exact sentence duplication across levels
+        - tldr should be longer than summary_1000
+
+        Args:
+            summary: The summary dictionary to validate
+
+        Returns:
+            Dictionary with 'errors' and 'warnings' lists
+        """
+        errors: list[str] = []
+        warnings: list[str] = []
+
+        summary_250 = str(summary.get("summary_250", "")).strip()
+        summary_1000 = str(summary.get("summary_1000", "")).strip()
+        tldr = str(summary.get("tldr", "")).strip()
+
+        if not (summary_250 and summary_1000 and tldr):
+            return {"errors": errors, "warnings": warnings}
+
+        # Check similarity using difflib
+        def similarity_ratio(a: str, b: str) -> float:
+            return difflib.SequenceMatcher(None, a.lower(), b.lower()).ratio()
+
+        # Check for high similarity
+        sim_250_1000 = similarity_ratio(summary_250, summary_1000)
+        sim_1000_tldr = similarity_ratio(summary_1000, tldr)
+        sim_250_tldr = similarity_ratio(summary_250, tldr)
+
+        if sim_250_1000 > 0.85:
+            warnings.append(
+                f"summary_250 and summary_1000 are very similar ({sim_250_1000:.0%}). "
+                "Consider making them more distinct."
+            )
+
+        if sim_1000_tldr > 0.90:
+            errors.append(
+                f"summary_1000 and tldr are too similar ({sim_1000_tldr:.0%}). "
+                "tldr should expand on summary_1000 with additional details."
+            )
+
+        if sim_250_tldr > 0.80:
+            warnings.append(
+                f"summary_250 and tldr are quite similar ({sim_250_tldr:.0%}). "
+                "Consider making them more distinct."
+            )
+
+        # Check for exact sentence overlap
+        def extract_sentences(text: str) -> set[str]:
+            sentences = re.split(r"[.!?]+", text)
+            return {s.strip().lower() for s in sentences if len(s.strip()) > 20}
+
+        sentences_250 = extract_sentences(summary_250)
+        sentences_1000 = extract_sentences(summary_1000)
+        sentences_tldr = extract_sentences(tldr)
+
+        overlap_250_1000 = sentences_250 & sentences_1000
+        overlap_1000_tldr = sentences_1000 & sentences_tldr
+
+        if overlap_250_1000:
+            warnings.append(
+                f"Found {len(overlap_250_1000)} identical sentence(s) "
+                "between summary_250 and summary_1000."
+            )
+
+        if len(overlap_1000_tldr) > 2:
+            warnings.append(
+                f"Found {len(overlap_1000_tldr)} identical sentence(s) "
+                "between summary_1000 and tldr. tldr should use different phrasing."
+            )
+
+        # Check that tldr is longer than summary_1000
+        if len(tldr) <= len(summary_1000):
+            warnings.append(
+                f"tldr ({len(tldr)} chars) should be longer than "
+                f"summary_1000 ({len(summary_1000)} chars)."
+            )
+
+        return {"errors": errors, "warnings": warnings}

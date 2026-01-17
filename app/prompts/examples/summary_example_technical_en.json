@@ -1,0 +1,179 @@
+{
+  "content_type": "technical",
+  "description": "Example summary for a technical blog post about database optimization",
+  "input_snippet": "We reduced our PostgreSQL query latency by 90% through a combination of index optimization, connection pooling, and query rewriting. Our primary bottleneck was a complex JOIN operation that scanned millions of rows...",
+  "expected_output": {
+    "summary_250": "A PostgreSQL optimization case study achieved 90% latency reduction through index tuning, connection pooling with PgBouncer, and rewriting a multi-million row JOIN as a materialized CTE.",
+    "summary_1000": "This technical deep-dive documents how a team reduced PostgreSQL query latency by 90%. The primary bottleneck was a complex JOIN operation scanning millions of rows on each request. Three interventions proved decisive: adding composite indexes on frequently-filtered columns, implementing PgBouncer for connection pooling (reducing connection overhead from 50ms to 2ms), and rewriting the problematic query using a materialized CTE to pre-compute intermediate results. The optimized query now returns in 45ms versus the original 450ms. The team also upgraded from PostgreSQL 13 to 16, gaining an additional 15% improvement from query planner enhancements.",
+    "tldr": "A production PostgreSQL database serving 10K requests/second was experiencing 450ms query latencies, causing user-facing timeouts. The team systematically addressed each bottleneck.\n\n**Index Optimization**: Added composite indexes on (user_id, created_at, status) covering 80% of queries. Eliminated sequential scans on the 50M-row transactions table.\n\n**Connection Pooling**: Deployed PgBouncer in transaction mode, reducing connection overhead from 50ms to 2ms. Pool size tuned to 50 connections based on CPU cores and workload analysis.\n\n**Query Rewriting**: The critical JOIN across orders, users, and transactions was rewritten using a materialized CTE. Pre-computing the intermediate result reduced row scans from 2M to 50K.\n\nPost-optimization: Query latency dropped to 45ms (90% reduction). CPU utilization fell from 85% to 40%. The PostgreSQL 13→16 upgrade provided an additional 15% improvement through better query planning.",
+    "key_ideas": [
+      "Composite indexes eliminated sequential scans on 50M-row table",
+      "PgBouncer connection pooling reduced overhead from 50ms to 2ms",
+      "Materialized CTE pre-computed intermediate JOIN results",
+      "Query latency reduced from 450ms to 45ms (90% improvement)",
+      "PostgreSQL version upgrade contributed additional 15% gains"
+    ],
+    "topic_tags": ["#postgresql", "#database-optimization", "#performance", "#indexing", "#connection-pooling"],
+    "entities": {
+      "people": [],
+      "organizations": [],
+      "locations": []
+    },
+    "estimated_reading_time_min": 8,
+    "source_type": "tutorial",
+    "temporal_freshness": "evergreen",
+    "key_stats": [
+      {
+        "label": "Latency reduction",
+        "value": 90,
+        "unit": "%",
+        "source_excerpt": "reduced our PostgreSQL query latency by 90%"
+      },
+      {
+        "label": "Original query latency",
+        "value": 450,
+        "unit": "ms",
+        "source_excerpt": null
+      },
+      {
+        "label": "Optimized query latency",
+        "value": 45,
+        "unit": "ms",
+        "source_excerpt": null
+      },
+      {
+        "label": "Connection overhead reduction",
+        "value": 96,
+        "unit": "%",
+        "source_excerpt": "reducing connection overhead from 50ms to 2ms"
+      },
+      {
+        "label": "Transactions table row count",
+        "value": 50000000,
+        "unit": "rows",
+        "source_excerpt": null
+      }
+    ],
+    "answered_questions": [
+      "How do you identify slow PostgreSQL queries?",
+      "What are the benefits of connection pooling?",
+      "When should you use materialized CTEs?",
+      "How do you choose composite index columns?"
+    ],
+    "readability": {
+      "method": "Flesch-Kincaid",
+      "score": 35.8,
+      "level": "Difficult"
+    },
+    "seo_keywords": ["postgresql optimization", "query performance", "database indexing", "pgbouncer", "connection pooling", "slow queries", "explain analyze", "composite index", "materialized cte", "postgresql tuning"],
+    "metadata": {
+      "title": "How We Reduced PostgreSQL Latency by 90%",
+      "canonical_url": null,
+      "domain": "engineering.example.com",
+      "author": "Database Team",
+      "published_at": "2024-01-20",
+      "last_updated": "2024-02-01"
+    },
+    "extractive_quotes": [
+      {
+        "text": "reduced our PostgreSQL query latency by 90% through a combination of index optimization, connection pooling, and query rewriting",
+        "source_span": "introduction"
+      },
+      {
+        "text": "Our primary bottleneck was a complex JOIN operation that scanned millions of rows",
+        "source_span": "problem statement"
+      }
+    ],
+    "highlights": [
+      "90% latency reduction achieved through three optimizations",
+      "Composite indexes covered 80% of query patterns",
+      "PgBouncer reduced connection overhead by 96%",
+      "Materialized CTE reduced row scans from 2M to 50K",
+      "PostgreSQL 16 upgrade added 15% more improvement",
+      "CPU utilization dropped from 85% to 40%"
+    ],
+    "questions_answered": [
+      {
+        "question": "How much did connection pooling improve performance?",
+        "answer": "Connection overhead dropped from 50ms to 2ms using PgBouncer in transaction mode"
+      },
+      {
+        "question": "What query pattern caused the bottleneck?",
+        "answer": "A complex JOIN across orders, users, and transactions tables scanning millions of rows"
+      }
+    ],
+    "categories": ["database", "engineering", "performance", "postgresql"],
+    "topic_taxonomy": [
+      {"label": "Database Performance", "score": 0.96, "path": "Engineering/Databases/Optimization"},
+      {"label": "PostgreSQL", "score": 0.94, "path": "Engineering/Databases/Relational"},
+      {"label": "Backend Engineering", "score": 0.78, "path": "Engineering/Backend"}
+    ],
+    "hallucination_risk": "low",
+    "confidence": 0.95,
+    "forwarded_post_extras": null,
+    "key_points_to_remember": [
+      "Profile before optimizing—identify the actual bottleneck",
+      "Composite indexes should match query filter order",
+      "Connection pooling is essential at scale",
+      "CTEs can materialize intermediate results to reduce scans"
+    ],
+    "insights": {
+      "topic_overview": "Database optimization follows a predictable pattern: profile, identify bottlenecks, apply targeted fixes. This case study demonstrates the compound effect of multiple small improvements.",
+      "new_facts": [
+        {
+          "fact": "PostgreSQL 16's query planner improvements often yield 10-20% gains on complex queries without code changes",
+          "why_it_matters": "Version upgrades should be considered as an optimization strategy",
+          "source_hint": "PostgreSQL 16 release notes",
+          "confidence": 0.88
+        },
+        {
+          "fact": "Connection pooling becomes critical when request rates exceed 100/second",
+          "why_it_matters": "Connection establishment overhead dominates at high concurrency",
+          "source_hint": "Production experience data",
+          "confidence": 0.82
+        }
+      ],
+      "open_questions": [
+        "Would partitioning the transactions table provide additional gains?",
+        "How does read-replica routing affect these patterns?",
+        "What's the maintenance overhead of materialized CTEs?"
+      ],
+      "suggested_sources": [
+        "PostgreSQL EXPLAIN documentation",
+        "PgBouncer configuration guide",
+        "Use The Index, Luke (database indexing guide)"
+      ],
+      "expansion_topics": [
+        "PostgreSQL partitioning strategies",
+        "Read replica load balancing",
+        "Query plan caching",
+        "pg_stat_statements analysis"
+      ],
+      "next_exploration": [
+        "Test table partitioning on transactions by date",
+        "Implement query plan caching for parameterized queries",
+        "Evaluate pg_hint_plan for query hint control"
+      ],
+      "caution": "Results are specific to this workload; always benchmark before applying optimizations"
+    },
+    "article_id": "pg-optimization-case-study-2024",
+    "query_expansion_keywords": [
+      "postgresql slow queries", "database performance tuning", "index optimization",
+      "pgbouncer setup", "connection pool postgresql", "explain analyze postgresql",
+      "composite index design", "cte optimization", "materialized cte postgres",
+      "query rewriting techniques", "database bottleneck analysis", "postgresql 16 upgrade",
+      "reduce query latency", "database connection overhead", "postgresql indexing strategy"
+    ],
+    "semantic_boosters": [
+      "PostgreSQL query latency was reduced by 90% through systematic optimization.",
+      "Connection pooling with PgBouncer reduced connection overhead from 50ms to 2ms.",
+      "Composite indexes on frequently-filtered columns eliminated sequential table scans.",
+      "A materialized CTE pre-computed JOIN results, reducing row scans from 2M to 50K.",
+      "Upgrading from PostgreSQL 13 to 16 provided an additional 15% performance improvement.",
+      "The optimized query returns in 45ms compared to the original 450ms latency.",
+      "CPU utilization dropped from 85% to 40% after implementing all optimizations.",
+      "The transactions table contains 50 million rows and was the primary bottleneck."
+    ],
+    "semantic_chunks": []
+  }
+}

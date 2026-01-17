@@ -5,18 +5,17 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
-from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.agents.base_agent import AgentResult, BaseAgent
+from app.prompts.manager import get_prompt_manager
 
 if TYPE_CHECKING:
     from app.adapters.content.llm_summarizer import LLMSummarizer
 
 logger = logging.getLogger(__name__)
-_PROMPT_DIR = Path(__file__).parent.parent / "prompts"
 
 
 class SummarizationInput(BaseModel):
@@ -218,18 +217,20 @@ class SummarizationAgent(BaseAgent[SummarizationInput, SummarizationOutput]):
     def _get_system_prompt(self, lang: str) -> str:
         """Load and cache the system prompt for the given language.
 
+        Uses the unified PromptManager for prompt loading, caching, and
+        optional few-shot example injection.
+
         Args:
             lang: Language code ('en' or 'ru')
 
         Returns:
-            System prompt text
+            System prompt text with optional examples
         """
-        fname = "summary_system_ru.txt" if lang == "ru" else "summary_system_en.txt"
-        path = _PROMPT_DIR / fname
         try:
-            return path.read_text(encoding="utf-8").strip()
+            manager = get_prompt_manager()
+            return manager.get_system_prompt(lang, include_examples=True, num_examples=2)
         except Exception as e:
-            self.log_warning(f"Failed to load system prompt from {path}: {e}")
+            self.log_warning(f"Failed to load system prompt via PromptManager: {e}")
             return "You are a precise assistant that returns only a strict JSON object matching the provided schema."
 
     def _build_correction_prompt(self, errors: list[str]) -> str:

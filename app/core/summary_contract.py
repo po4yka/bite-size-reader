@@ -5,8 +5,6 @@ import logging
 import re
 from typing import Any
 
-logger = logging.getLogger(__name__)
-
 from app.types.summary_types import (
     Entities,
     KeyStat,
@@ -17,6 +15,8 @@ from app.types.summary_types import (
 )
 
 from .summary_schema import PydanticAvailable
+
+logger = logging.getLogger(__name__)
 
 SummaryModelT: Any
 if PydanticAvailable:
@@ -984,6 +984,17 @@ def validate_and_shape_summary(payload: SummaryJSON) -> SummaryJSON:
     p.setdefault("key_points_to_remember", [])
     p["insights"] = _shape_insights(p.get("insights"))
 
+    # Classification fields (new)
+    valid_source_types = {"news", "blog", "research", "opinion", "tutorial", "reference"}
+    source_type = str(p.get("source_type", "")).strip().lower()
+    p["source_type"] = source_type if source_type in valid_source_types else "blog"
+
+    valid_freshness = {"breaking", "recent", "evergreen"}
+    temporal_freshness = str(p.get("temporal_freshness", "")).strip().lower()
+    p["temporal_freshness"] = (
+        temporal_freshness if temporal_freshness in valid_freshness else "evergreen"
+    )
+
     # Validate and clean new fields
     if not isinstance(p["confidence"], int | float) or not (0.0 <= p["confidence"] <= 1.0):
         p["confidence"] = 1.0
@@ -1261,6 +1272,14 @@ def get_summary_json_schema() -> dict[str, Any]:
                 },
             },
             "article_id": {"type": ["string", "null"]},
+            "source_type": {
+                "type": "string",
+                "enum": ["news", "blog", "research", "opinion", "tutorial", "reference"],
+            },
+            "temporal_freshness": {
+                "type": "string",
+                "enum": ["breaking", "recent", "evergreen"],
+            },
             "metadata": {
                 "type": "object",
                 "additionalProperties": False,
@@ -1393,6 +1412,8 @@ def get_summary_json_schema() -> dict[str, Any]:
             "answered_questions",
             "readability",
             "seo_keywords",
+            "source_type",
+            "temporal_freshness",
             "metadata",
             "extractive_quotes",
             "highlights",

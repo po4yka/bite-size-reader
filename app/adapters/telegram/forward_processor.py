@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Coroutine, Mapping
 from typing import TYPE_CHECKING, Any
 
 from app.adapters.telegram.forward_content_processor import ForwardContentProcessor
@@ -88,43 +89,78 @@ class ForwardProcessor:
                     dict(forward_shaped) if isinstance(forward_shaped, dict) else None
                 )
 
-                # Generate a standalone article similar to the URL flow
-                try:
-                    await self._maybe_generate_custom_article(
+                self._schedule_background_task(
+                    self._maybe_generate_custom_article(
                         message,
                         summary_payload,
                         chosen_lang,
                         req_id,
                         correlation_id,
-                    )
-                except Exception as exc:
-                    logger.warning(
-                        "custom_article_generation_failed_for_forward",
-                        extra={"error": str(exc), "cid": correlation_id, "req_id": req_id},
-                    )
+                    ),
+                    correlation_id,
+                    "custom_article_forward",
+                )
 
-                # Generate and send additional research insights (same as URL processing)
-                try:
-                    # Get the content text from the content processor
-                    content_text = await self._get_forward_content_text(message, req_id)
-                    if content_text:
-                        await self._handle_additional_insights(
-                            message,
-                            content_text,
-                            chosen_lang,
-                            req_id,
-                            correlation_id,
-                            summary=summary_payload,
-                        )
-                except Exception as exc:
-                    logger.warning(
-                        "insights_generation_failed_for_forward",
-                        extra={"error": str(exc), "cid": correlation_id, "req_id": req_id},
-                    )
+                self._schedule_background_task(
+                    self._run_forward_insights(
+                        message,
+                        chosen_lang,
+                        req_id,
+                        correlation_id,
+                        summary_payload,
+                    ),
+                    correlation_id,
+                    "additional_insights_forward",
+                )
 
         except Exception as e:
             # Handle unexpected errors
             logger.exception("forward_flow_error", extra={"error": str(e), "cid": correlation_id})
+
+    def _schedule_background_task(
+        self, coro: Coroutine[Any, Any, Any], correlation_id: str | None, label: str
+    ) -> asyncio.Task[Any] | None:
+        try:
+            task: asyncio.Task[Any] = asyncio.create_task(coro)
+        except RuntimeError as exc:
+            logger.error(
+                "background_task_schedule_failed",
+                extra={"cid": correlation_id, "label": label, "error": str(exc)},
+            )
+            return None
+
+        def _log_task_error(t: asyncio.Task) -> None:
+            if t.cancelled():
+                return
+            exc = t.exception()
+            if exc:
+                logger.warning(
+                    "background_task_failed",
+                    extra={"cid": correlation_id, "label": label, "error": str(exc)},
+                )
+
+        task.add_done_callback(_log_task_error)
+        return task
+
+    async def _run_forward_insights(
+        self,
+        message: Any,
+        chosen_lang: str,
+        req_id: int,
+        correlation_id: str | None,
+        summary_payload: dict[str, Any] | None,
+    ) -> None:
+        content_text = await self._get_forward_content_text(message, req_id)
+        if not content_text:
+            return
+        await self._handle_additional_insights(
+            message,
+            content_text,
+            chosen_lang,
+            req_id,
+            correlation_id,
+            summary=summary_payload,
+        )
 
     async def _maybe_reply_with_cached_summary(
         self,

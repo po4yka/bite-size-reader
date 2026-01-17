@@ -80,6 +80,26 @@ if PydanticAvailable:
         language: str | None = None
         topics: list[str] = Field(default_factory=list)
 
+    from enum import Enum
+    from typing import Literal
+
+    class SourceType(str, Enum):
+        """Content type classification."""
+
+        NEWS = "news"
+        BLOG = "blog"
+        RESEARCH = "research"
+        OPINION = "opinion"
+        TUTORIAL = "tutorial"
+        REFERENCE = "reference"
+
+    class TemporalFreshness(str, Enum):
+        """Content timeliness classification."""
+
+        BREAKING = "breaking"
+        RECENT = "recent"
+        EVERGREEN = "evergreen"
+
     class SummaryModel(BaseModel):
         summary_250: str = Field(max_length=250)
         summary_1000: str = Field(max_length=1000)
@@ -96,6 +116,12 @@ if PydanticAvailable:
         semantic_boosters: list[str] = Field(default_factory=list)
         semantic_chunks: list[SemanticChunk] = Field(default_factory=list)
         article_id: str | None = None
+
+        # Classification fields
+        source_type: Literal["news", "blog", "research", "opinion", "tutorial", "reference"] = (
+            Field(default="blog")
+        )
+        temporal_freshness: Literal["breaking", "recent", "evergreen"] = Field(default="evergreen")
 
         # New fields
         metadata: Metadata = Field(default_factory=Metadata)

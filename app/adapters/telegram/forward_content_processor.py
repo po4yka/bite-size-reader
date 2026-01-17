@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any
 from app.adapters.telegram.message_persistence import MessagePersistence
 from app.core.html_utils import normalize_text
 from app.core.lang import choose_language, detect_language
+from app.prompts.manager import get_prompt_manager
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -195,14 +196,20 @@ class ForwardContentProcessor:
                 )
 
     async def _load_system_prompt(self, lang: str) -> str:
-        """Load system prompt file based on language."""
-        from pathlib import Path
+        """Load system prompt file based on language using PromptManager.
 
-        base = Path(__file__).resolve().parents[1] / "prompts"
-        fname = "summary_system_ru.txt" if lang == "ru" else "summary_system_en.txt"
-        path = base / fname
+        Uses the unified PromptManager for prompt loading, caching, validation,
+        and optional few-shot example injection.
+
+        Args:
+            lang: Language code ('en' or 'ru')
+
+        Returns:
+            System prompt text with optional examples
+        """
         try:
-            return path.read_text(encoding="utf-8").strip()
+            manager = get_prompt_manager()
+            return manager.get_system_prompt(lang, include_examples=True, num_examples=2)
         except Exception:
             # Fallback inline prompt
             return "You are a precise assistant that returns only a strict JSON object matching the provided schema."
