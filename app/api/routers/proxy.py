@@ -37,6 +37,16 @@ BLOCKED_NETWORKS = [
 ]
 
 
+def _resolve_host_ips(hostname: str) -> list[str]:
+    """Resolve hostname to IP addresses (IPv4/IPv6)."""
+    addresses: list[str] = []
+    for info in socket.getaddrinfo(hostname, None, proto=socket.IPPROTO_TCP):
+        addr = str(info[4][0])
+        if addr not in addresses:
+            addresses.append(addr)
+    return addresses
+
+
 def _is_url_safe(url: str) -> bool:
     """
     Check if URL resolves to a public IP address.
@@ -48,11 +58,19 @@ def _is_url_safe(url: str) -> bool:
         if not hostname:
             return False
 
-        # Resolve hostname to IP
-        resolved_ip = ip_address(socket.gethostbyname(hostname))
+        if hostname.lower() in ("localhost", "localhost.localdomain"):
+            return False
 
-        # Check against blocked networks
-        return not any(resolved_ip in network for network in BLOCKED_NETWORKS)
+        # Resolve hostname to IPs (IPv4/IPv6) and check against blocked networks
+        resolved_ips = _resolve_host_ips(hostname)
+        if not resolved_ips:
+            return False
+
+        for resolved in resolved_ips:
+            ip_obj = ip_address(resolved)
+            if any(ip_obj in network for network in BLOCKED_NETWORKS):
+                return False
+        return True
     except (socket.gaierror, ValueError, OSError):
         # DNS resolution failed or invalid IP - block for safety
         return False
@@ -70,28 +88,47 @@ async def proxy_image(url: str = Query(..., description="URL of the image to pro
     if not url.startswith(("http://", "https://")):
         raise HTTPException(status_code=400, detail="Invalid URL scheme")
 
-    # SSRF protection: block requests to internal/private networks
-    if not _is_url_safe(url):
-        logger.warning(f"Blocked SSRF attempt to internal address: {url}")
-        raise HTTPException(status_code=403, detail="URL resolves to blocked address")
-
     try:
         # Use a real browser User-Agent to avoid getting blocked by some servers
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
         }
 
-        async with httpx.AsyncClient(follow_redirects=True, timeout=10.0) as client:
-            req = client.build_request("GET", url, headers=headers)
-            resp = await client.send(req, stream=True)
+        async with httpx.AsyncClient(follow_redirects=False, timeout=10.0) as client:
+            max_redirects = 5
+            current_url = url
+            for _ in range(max_redirects + 1):
+                # SSRF protection: block requests to internal/private networks
+                if not _is_url_safe(current_url):
+                    logger.warning(f"Blocked SSRF attempt to internal address: {current_url}")
+                    raise HTTPException(status_code=403, detail="URL resolves to blocked address")
+
+                req = client.build_request("GET", current_url, headers=headers)
+                resp = await client.send(req, stream=True)
+
+                if resp.status_code in {301, 302, 303, 307, 308}:
+                    location = resp.headers.get("location")
+                    await resp.aclose()
+                    if not location:
+                        raise HTTPException(
+                            status_code=502, detail="Upstream redirect missing location"
+                        )
+                    next_url = str(httpx.URL(current_url).join(location))
+                    if not next_url.startswith(("http://", "https://")):
+                        raise HTTPException(status_code=400, detail="Invalid redirect URL scheme")
+                    current_url = next_url
+                    continue
+                break
+            else:
+                raise HTTPException(status_code=502, detail="Too many redirects")
 
             if resp.status_code >= 400:
-                logger.warning(f"Failed to fetch image: {url} - Status: {resp.status_code}")
+                logger.warning(f"Failed to fetch image: {current_url} - Status: {resp.status_code}")
                 raise HTTPException(status_code=404, detail="Image not found or inaccessible")
 
             content_type = resp.headers.get("content-type", "")
             if not content_type.startswith("image/"):
-                logger.warning(f"URL is not an image: {url} - Type: {content_type}")
+                logger.warning(f"URL is not an image: {current_url} - Type: {content_type}")
                 raise HTTPException(status_code=400, detail="URL does not point to an image")
 
             return StreamingResponse(

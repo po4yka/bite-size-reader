@@ -15,7 +15,6 @@ from app.core.lang import choose_language, detect_language
 from app.core.logging_utils import get_logger
 from app.core.url_utils import normalize_url
 from app.db.database import Database
-from app.db.models import Request as RequestModel
 from app.infrastructure.redis import get_redis, redis_key
 
 if TYPE_CHECKING:
@@ -89,14 +88,14 @@ class BackgroundProcessor:
     ) -> None:
         """Process a request by id."""
         processor_db, processor = self._maybe_override_db(db_path)
-        request: RequestModel | None = None
+        request: dict[str, Any] | None = None
 
         lock_handle = await self._acquire_lock(request_id, correlation_id)
         if lock_handle is None:
             return
 
         try:
-            request = RequestModel.get_or_none(RequestModel.id == request_id)
+            request = await processor_db.async_get_request_by_id(request_id)
             if not request:
                 logger.error(
                     "bg_request_not_found",
@@ -104,12 +103,12 @@ class BackgroundProcessor:
                 )
                 return
 
-            if self._has_existing_summary(processor_db, request_id):
+            if await self._has_existing_summary(processor_db, request_id):
                 logger.info(
                     "bg_request_already_summarized",
                     extra={
                         "request_id": request_id,
-                        "correlation_id": request.correlation_id or correlation_id,
+                        "correlation_id": request.get("correlation_id") or correlation_id,
                     },
                 )
                 await self._publish_update(
@@ -117,8 +116,8 @@ class BackgroundProcessor:
                 )
                 return
 
-            cid = request.correlation_id or correlation_id or f"bg-proc-{request_id}"
-            await self._mark_status(request, "processing", cid)
+            cid = request.get("correlation_id") or correlation_id or f"bg-proc-{request_id}"
+            await self._mark_status(processor_db, request_id, "processing", cid)
             await self._publish_update(
                 request_id, "PROCESSING", "QUEUED", "Processing started", 0.0
             )
@@ -127,31 +126,40 @@ class BackgroundProcessor:
                 "bg_processing_start",
                 extra={
                     "correlation_id": cid,
-                    "request_id": request.id,
-                    "type": request.type,
-                    "url": request.input_url,
+                    "request_id": request_id,
+                    "type": request.get("type"),
+                    "url": request.get("input_url"),
                 },
             )
 
-            if request.type == "url":
+            if request.get("type") == "url":
                 await self._process_url_type(request_id, request, processor_db, processor, cid)
-            elif request.type == "forward":
+            elif request.get("type") == "forward":
                 await self._process_forward_type(request_id, request, processor_db, processor, cid)
             else:
-                raise StageError("validation", ValueError(f"Unknown request type: {request.type}"))
+                raise StageError(
+                    "validation", ValueError(f"Unknown request type: {request.get('type')}")
+                )
 
-            await self._mark_status(request, "success", cid)
+            await self._mark_status(processor_db, request_id, "success", cid)
             await self._publish_update(request_id, "COMPLETED", "DONE", "Processing completed", 1.0)
 
             logger.info(
                 "bg_processing_success",
-                extra={"correlation_id": cid, "request_id": request.id, "type": request.type},
+                extra={
+                    "correlation_id": cid,
+                    "request_id": request_id,
+                    "type": request.get("type"),
+                },
             )
         except StageError as exc:
             error_payload = self._build_error_payload(exc.stage, exc.original)
             if request:
                 await self._mark_status(
-                    request, "error", correlation_id or getattr(request, "correlation_id", None)
+                    processor_db,
+                    request_id,
+                    "error",
+                    correlation_id or request.get("correlation_id"),
                 )
             await self._publish_update(
                 request_id,
@@ -174,7 +182,10 @@ class BackgroundProcessor:
             error_payload = self._build_error_payload("unknown", exc)
             if request:
                 await self._mark_status(
-                    request, "error", correlation_id or getattr(request, "correlation_id", None)
+                    processor_db,
+                    request_id,
+                    "error",
+                    correlation_id or request.get("correlation_id"),
                 )
             await self._publish_update(
                 request_id, "FAILED", "UNKNOWN", str(exc), 0.0, error=str(exc)
@@ -310,12 +321,12 @@ class BackgroundProcessor:
     async def _process_url_type(
         self,
         request_id: int,
-        request: RequestModel,
+        request: dict[str, Any],
         db: Database,
         url_processor: URLProcessor,
         correlation_id: str,
     ) -> None:
-        normalized_url = normalize_url(request.input_url or "")
+        normalized_url = normalize_url(request.get("input_url") or "")
 
         await self._publish_update(
             request_id, "PROCESSING", "EXTRACTION", "Extracting content...", 0.2
@@ -334,7 +345,7 @@ class BackgroundProcessor:
                 "extraction", ValueError("Content extraction failed - no content returned")
             )
 
-        detected_lang = request.lang_detected or detect_language(content_text)
+        detected_lang = request.get("lang_detected") or detect_language(content_text)
         lang = choose_language(self.cfg.runtime.preferred_lang, detected_lang)
         system_prompt = _get_system_prompt(lang)
 
@@ -358,8 +369,8 @@ class BackgroundProcessor:
             )
 
         await self._publish_update(request_id, "PROCESSING", "SAVING", "Saving summary...", 0.9)
-        db.upsert_summary(
-            request_id=request.id,
+        await db.async_upsert_summary(
+            request_id=request_id,
             lang=lang,
             json_payload=summary_json,
             is_read=False,
@@ -368,14 +379,14 @@ class BackgroundProcessor:
     async def _process_forward_type(
         self,
         request_id: int,
-        request: RequestModel,
+        request: dict[str, Any],
         db: Database,
         url_processor: URLProcessor,
         correlation_id: str,
     ) -> None:
-        lang = request.lang_detected or "auto"
+        lang = request.get("lang_detected") or "auto"
         if lang == "auto":
-            content_text = request.content_text or ""
+            content_text = request.get("content_text") or ""
             detected = detect_language(content_text)
             lang = choose_language(self.cfg.runtime.preferred_lang, detected)
         system_prompt = _get_system_prompt(lang)
@@ -387,7 +398,7 @@ class BackgroundProcessor:
             "summarization",
             correlation_id,
             lambda: url_processor.llm_summarizer.summarize_content_pure(
-                content_text=request.content_text or "",
+                content_text=request.get("content_text") or "",
                 chosen_lang=lang,
                 system_prompt=system_prompt,
                 correlation_id=correlation_id,
@@ -400,8 +411,8 @@ class BackgroundProcessor:
             )
 
         await self._publish_update(request_id, "PROCESSING", "SAVING", "Saving summary...", 0.9)
-        db.upsert_summary(
-            request_id=request.id,
+        await db.async_upsert_summary(
+            request_id=request_id,
             lang=lang,
             json_payload=summary_json,
             is_read=False,
@@ -456,25 +467,24 @@ class BackgroundProcessor:
             raise last_error
         raise RuntimeError("Retry loop exited without result or error")
 
-    def _has_existing_summary(self, db: Database, request_id: int) -> bool:
+    async def _has_existing_summary(self, db: Database, request_id: int) -> bool:
         try:
-            return bool(db.get_summary_by_request(request_id))
+            return bool(await db.async_get_summary_by_request(request_id))
         except Exception:
             return False
 
     async def _mark_status(
-        self, request: RequestModel, status: str, correlation_id: str | None
+        self, db: Database, request_id: int, status: str, correlation_id: str | None
     ) -> None:
-        request.status = status
-        if correlation_id:
-            request.correlation_id = correlation_id
         try:
-            request.save()
+            await db.async_update_request_status_with_correlation(
+                request_id, status, correlation_id
+            )
         except Exception as exc:  # pragma: no cover - defensive
             logger.warning(
                 "bg_request_status_save_failed",
                 exc_info=True,
-                extra={"request_id": request.id, "status": status, "error": str(exc)},
+                extra={"request_id": request_id, "status": status, "error": str(exc)},
             )
 
     async def _publish_update(

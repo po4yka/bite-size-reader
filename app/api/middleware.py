@@ -101,13 +101,36 @@ def _resolve_limit(path: str, cfg: AppConfig) -> int:
     return limits.default_limit
 
 
+def _get_user_id_from_auth_header(request: Request) -> str | None:
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.lower().startswith("bearer "):
+        return None
+    token = auth_header.split(" ", 1)[1].strip()
+    if not token:
+        return None
+    try:
+        from app.api.routers.auth import decode_token
+
+        payload = decode_token(token, expected_type="access")
+    except Exception:
+        return None
+    user_id = payload.get("user_id")
+    if isinstance(user_id, int):
+        return str(user_id)
+    if isinstance(user_id, str) and user_id.isdigit():
+        return user_id
+    return None
+
+
 async def rate_limit_middleware(request: Request, call_next: Callable):
     """Redis-backed rate limiting middleware with graceful fallback."""
     cfg = _get_cfg()
     correlation_id = getattr(request.state, "correlation_id", None)
 
-    # Identify actor
-    user_id = getattr(request.state, "user_id", None) or request.client.host
+    # Identify actor (prefer authenticated user ID, fallback to client host)
+    user_id = getattr(request.state, "user_id", None) or _get_user_id_from_auth_header(request)
+    if not user_id:
+        user_id = request.client.host if request.client and request.client.host else "unknown"
     bucket_limit = _resolve_limit(request.url.path, cfg)
     window = cfg.api_limits.window_seconds
     now = int(time.time())

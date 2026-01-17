@@ -929,9 +929,9 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
     if not user_id:
         raise TokenInvalidError("Missing user_id in token payload")
 
-    # Verify user is still in whitelist
+    # Verify user is still in whitelist when configured
     allowed_ids = Config.get_allowed_user_ids()
-    if user_id not in allowed_ids:
+    if allowed_ids and user_id not in allowed_ids:
         raise AuthorizationError("User not authorized")
 
     # Validate client_id from token
@@ -1134,7 +1134,9 @@ async def refresh_access_token(refresh_data: RefreshTokenRequest):
     # Verify refresh token is not revoked
     token_hash = hashlib.sha256(refresh_data.refresh_token.encode()).hexdigest()
     refresh_token_record = RefreshToken.get_or_none(RefreshToken.token_hash == token_hash)
-    if refresh_token_record and refresh_token_record.is_revoked:
+    if not refresh_token_record:
+        raise TokenInvalidError("Refresh token is not recognized")
+    if refresh_token_record.is_revoked:
         raise TokenRevokedError()
 
     # Get user
@@ -1142,7 +1144,9 @@ async def refresh_access_token(refresh_data: RefreshTokenRequest):
     if not user:
         raise ResourceNotFoundError("User", user_id)
 
-    # Generate new access token with same client_id
+    # Update session metadata and generate new access token with same client_id
+    refresh_token_record.last_used_at = datetime.now(UTC)
+    refresh_token_record.save()
     access_token = create_access_token(user.telegram_user_id, user.username, client_id)
 
     logger.info(

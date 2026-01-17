@@ -5,6 +5,7 @@ Usage:
     uvicorn app.api.main:app --reload --host 0.0.0.0 --port 8000
 """
 
+import os
 from contextlib import asynccontextmanager
 from datetime import datetime
 
@@ -35,7 +36,7 @@ from app.api.routers import (
     system,
     user,
 )
-from app.config import Config
+from app.config import Config, DatabaseConfig
 from app.core.logging_utils import get_logger
 from app.core.time_utils import UTC
 from app.db.database import Database
@@ -165,7 +166,29 @@ app.add_exception_handler(Exception, global_error_handler)
 
 # Initialize database proxy eagerly so Peewee models can be used immediately
 DB_PATH = Config.get("DB_PATH", "/data/app.db")
-_db = Database(path=DB_PATH)
+db_cfg = DatabaseConfig(
+    **{
+        key: value
+        for key, value in {
+            "operation_timeout": os.getenv("DB_OPERATION_TIMEOUT"),
+            "max_retries": os.getenv("DB_MAX_RETRIES"),
+            "json_max_size": os.getenv("DB_JSON_MAX_SIZE"),
+            "json_max_depth": os.getenv("DB_JSON_MAX_DEPTH"),
+            "json_max_array_length": os.getenv("DB_JSON_MAX_ARRAY_LENGTH"),
+            "json_max_dict_keys": os.getenv("DB_JSON_MAX_DICT_KEYS"),
+        }.items()
+        if value not in (None, "")
+    }
+)
+_db = Database(
+    path=DB_PATH,
+    operation_timeout=db_cfg.operation_timeout,
+    max_retries=db_cfg.max_retries,
+    json_max_size=db_cfg.json_max_size,
+    json_max_depth=db_cfg.json_max_depth,
+    json_max_array_length=db_cfg.json_max_array_length,
+    json_max_dict_keys=db_cfg.json_max_dict_keys,
+)
 _db._database.connect(reuse_if_open=True)
 logger.info(
     "database_initialized",

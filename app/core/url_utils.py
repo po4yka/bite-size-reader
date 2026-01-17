@@ -113,6 +113,7 @@ def _validate_url_input(url: str) -> None:
     # SSRF Protection: Validate hostname and IP addresses
     # Import here to avoid circular dependencies
     import ipaddress
+    import socket
 
     try:
         # Parse URL to extract hostname for IP validation
@@ -180,6 +181,27 @@ def _validate_url_input(url: str) -> None:
                 for pattern in suspicious_patterns:
                     if hostname_lower.endswith(pattern):
                         msg = f"Suspicious domain pattern: {pattern}"
+                        raise ValueError(msg)
+
+                # Resolve hostname to IPs and block if any resolve to private ranges
+                try:
+                    resolved = socket.getaddrinfo(hostname, None, proto=socket.IPPROTO_TCP)
+                except OSError:
+                    resolved = []
+                for info in resolved:
+                    try:
+                        ip_candidate = ipaddress.ip_address(info[4][0])
+                    except ValueError:
+                        continue
+                    if (
+                        ip_candidate.is_private
+                        or ip_candidate.is_loopback
+                        or ip_candidate.is_link_local
+                        or ip_candidate.is_multicast
+                        or ip_candidate.is_reserved
+                        or ip_candidate.is_unspecified
+                    ):
+                        msg = f"Hostname resolves to blocked IP address: {ip_candidate}"
                         raise ValueError(msg)
 
     except ValueError:

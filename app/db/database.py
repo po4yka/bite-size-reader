@@ -1258,6 +1258,27 @@ class Database:
             operation_name="update_request_status",
         )
 
+    def update_request_status_with_correlation(
+        self, request_id: int, status: str, correlation_id: str | None
+    ) -> None:
+        update_map: dict[Any, Any] = {Request.status: status}
+        if correlation_id:
+            update_map[Request.correlation_id] = correlation_id
+        with self._database.connection_context():
+            Request.update(update_map).where(Request.id == request_id).execute()
+
+    async def async_update_request_status_with_correlation(
+        self, request_id: int, status: str, correlation_id: str | None
+    ) -> None:
+        """Asynchronously update request status and correlation_id together."""
+        await self._safe_db_operation(
+            self.update_request_status_with_correlation,
+            request_id,
+            status,
+            correlation_id,
+            operation_name="update_request_status_with_correlation",
+        )
+
     def update_request_correlation_id(self, request_id: int, correlation_id: str) -> None:
         with self._database.connection_context():
             Request.update({Request.correlation_id: correlation_id}).where(
