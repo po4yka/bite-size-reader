@@ -290,7 +290,7 @@ class URLProcessor:
                     correlation_id,
                 )
                 if summary_json:
-                    summary_json = await self.llm_summarizer._enrich_with_rag_fields(
+                    summary_json = await self.llm_summarizer.enrich_summary_rag_fields(
                         summary_json,
                         content_text=content_text,
                         chosen_lang=chosen_lang,
