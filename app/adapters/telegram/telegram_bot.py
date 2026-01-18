@@ -13,52 +13,31 @@ from typing import TYPE_CHECKING, Any, cast
 from app.adapters.telegram import telegram_client as telegram_client_module
 from app.core.logging_utils import generate_correlation_id, setup_json_logging
 from app.core.time_utils import UTC
+from app.infrastructure.persistence.sqlite.repositories.audit_log_repository import (
+    SqliteAuditLogRepositoryAdapter,
+)
+
+try:
+    from pyrogram import Client, filters
+except ImportError:
+    Client = object
+    filters = None
 
 if TYPE_CHECKING:
     from app.adapters.content.url_processor import URLProcessor
     from app.config import AppConfig
-    from app.db.database import Database
+    from app.db.session import DatabaseSessionManager
 
 logger = logging.getLogger(__name__)
 
-# Expose pyrogram compatibility shims for test monkeypatching. Tests set
-# ``Client``/``filters`` on this module to avoid importing real Pyrogram
-# objects. We forward those assignments to the telegram_client module inside
-# ``__post_init__``.
-Client: Any = getattr(telegram_client_module, "Client", object)
-filters: Any = getattr(telegram_client_module, "filters", None)
 
-
-class _URLProcessorEntrypoint:
-    """Proxy that routes URL handling through the bot hook for tests."""
-
-    def __init__(self, bot: TelegramBot) -> None:
-        self._bot = bot
-
-    async def handle_url_flow(
-        self,
-        message: Any,
-        url_text: str,
-        *,
-        correlation_id: str | None = None,
-        interaction_id: int | None = None,
-        silent: bool = False,
-    ) -> None:
-        await self._bot._handle_url_flow(
-            message,
-            url_text,
-            correlation_id=correlation_id,
-            interaction_id=interaction_id,
-            silent=silent,
-        )
-
-
+# ...
 @dataclass
 class TelegramBot:
     """Refactored Telegram bot using modular components."""
 
     cfg: AppConfig
-    db: Database
+    db: DatabaseSessionManager
 
     def __post_init__(self) -> None:
         """Initialize bot components using factory pattern."""
@@ -81,6 +60,8 @@ class TelegramBot:
         # Initialize semaphore for concurrency control
         self._ext_sem_size = max(1, self.cfg.runtime.max_concurrent_calls)
         self._ext_sem_obj: asyncio.Semaphore | None = None
+
+        self.audit_repo = SqliteAuditLogRepositoryAdapter(self.db)
 
         # Create external clients using factory
         from app.adapters.telegram.bot_factory import BotFactory
@@ -157,9 +138,8 @@ class TelegramBot:
     async def start(self) -> None:
         """Start the bot."""
         backup_enabled, interval, retention, backup_dir = self._get_backup_settings()
-        backup_task: asyncio.Task[None] | None = None
         if backup_enabled and interval > 0:
-            backup_task = asyncio.create_task(
+            self._backup_task = asyncio.create_task(
                 self._run_backup_loop(interval, retention, backup_dir),
                 name="db_backup_loop",
             )
@@ -181,17 +161,40 @@ class TelegramBot:
             # Stop scheduler gracefully
             await self._scheduler.stop()
 
-            if backup_task is not None:
-                backup_task.cancel()
+            if hasattr(self, "_backup_task") and self._backup_task is not None:
+                self._backup_task.cancel()
                 with contextlib.suppress(asyncio.CancelledError):
-                    await backup_task
+                    await self._backup_task
 
     def _audit(self, level: str, event: str, details: dict) -> None:
-        """Audit log helper."""
+        """Audit log helper (background async)."""
+        if not hasattr(self, "audit_repo"):
+            return
+
+        async def _do_audit() -> None:
+            try:
+                await self.audit_repo.async_insert_audit_log(
+                    log_level=level, event_type=event, details=details
+                )
+            except Exception as e:
+                logger.warning("audit_persist_failed", extra={"error": str(e), "event": event})
+
         try:
-            self.db.insert_audit_log(level=level, event=event, details_json=details)
-        except Exception as e:
-            logger.exception("audit_persist_failed", extra={"error": str(e), "event": event})
+            task = asyncio.create_task(_do_audit())
+            # Keep a set of strong references to tasks to avoid them being GC'd
+            if not hasattr(self, "_audit_tasks"):
+                self._audit_tasks: set[asyncio.Task] = set()
+            self._audit_tasks.add(task)
+            task.add_done_callback(self._audit_tasks.discard)
+        except RuntimeError:
+            pass
+
+    def _mask_path(self, path: str) -> str:
+        """Mask home directory in paths for logging."""
+        try:
+            return str(path).replace(str(Path.home()), "~")
+        except Exception:
+            return path
 
     def _sync_client_dependencies(self) -> None:
         """Ensure helper components reference the active external clients."""
@@ -261,7 +264,7 @@ class TelegramBot:
             extra={
                 "interval_minutes": interval_minutes,
                 "retention": retention,
-                "backup_dir": self.db._mask_path(str(backup_directory)),
+                "backup_dir": self._mask_path(str(backup_directory)),
             },
         )
 
@@ -364,7 +367,7 @@ class TelegramBot:
 
         logger.info(
             "db_backup_created",
-            extra={"backup_path": self.db._mask_path(str(created_path))},
+            extra={"backup_path": self._mask_path(str(created_path))},
         )
 
     def _resolve_backup_dir(self, override: str | None) -> Path:
@@ -402,7 +405,7 @@ class TelegramBot:
         except OSError as exc:
             logger.warning(
                 "db_backup_list_failed",
-                extra={"backup_dir": self.db._mask_path(str(backup_directory)), "error": str(exc)},
+                extra={"backup_dir": self._mask_path(str(backup_directory)), "error": str(exc)},
             )
             return
 
@@ -412,7 +415,7 @@ class TelegramBot:
             except OSError as exc:
                 logger.warning(
                     "db_backup_remove_failed",
-                    extra={"backup_path": self.db._mask_path(str(obsolete)), "error": str(exc)},
+                    extra={"backup_path": self._mask_path(str(obsolete)), "error": str(exc)},
                 )
 
     # ---- Compatibility helpers expected by tests (typed stubs) ----
@@ -561,9 +564,9 @@ class TelegramBot:
             message, correlation_id=correlation_id, interaction_id=interaction_id
         )
 
-    def _persist_message_snapshot(self, request_id: int, message: Any) -> None:
+    async def _persist_message_snapshot(self, request_id: int, message: Any) -> None:
         """Persist a Telegram message snapshot for legacy tests."""
-        self.url_processor.message_persistence.persist_message_snapshot(request_id, message)
+        await self.url_processor.message_persistence.persist_message_snapshot(request_id, message)
 
     async def _on_message(self, message: Any) -> None:
         """Entry point used by tests; delegate to message handler."""
@@ -583,3 +586,28 @@ class TelegramBot:
                 self.response_formatter._safe_reply_func = value
             else:
                 self.response_formatter._reply_json_func = value
+
+
+class _URLProcessorEntrypoint:
+    """Entrypoint for URL processing used to route requests back through the bot instance."""
+
+    def __init__(self, bot: TelegramBot) -> None:
+        self.bot = bot
+
+    async def handle_url_flow(
+        self,
+        message: Any,
+        url_text: str,
+        *,
+        correlation_id: str | None = None,
+        interaction_id: int | None = None,
+        silent: bool = False,
+    ) -> None:
+        """Process a URL message via the URL processor pipeline via the bot instance."""
+        await self.bot._handle_url_flow(
+            message,
+            url_text,
+            correlation_id=correlation_id,
+            interaction_id=interaction_id,
+            silent=silent,
+        )

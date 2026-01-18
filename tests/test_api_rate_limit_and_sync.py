@@ -121,9 +121,14 @@ async def test_rate_limit_backend_required_returns_503(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_sync_session_stored_in_redis(monkeypatch):
+    from unittest.mock import MagicMock
+
     redis_client = fakeredis.aioredis.FakeRedis(decode_responses=True)
     cfg = DummyCfg(limit=1, window_seconds=1)
-    svc = SyncService(cfg)
+
+    # Create a mock session manager since SyncService now requires it
+    mock_session_manager = MagicMock()
+    svc = SyncService(cfg, mock_session_manager)
 
     async def fake_get_redis(_: DummyCfg):
         return redis_client

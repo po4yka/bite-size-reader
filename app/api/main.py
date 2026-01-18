@@ -39,11 +39,11 @@ from app.api.routers import (
 from app.config import Config, DatabaseConfig
 from app.core.logging_utils import get_logger
 from app.core.time_utils import UTC
-from app.db.database import Database
+from app.db.session import DatabaseSessionManager
 from app.infrastructure.redis import close_redis
 
 logger = get_logger(__name__)
-_db: Database | None = None
+_db: DatabaseSessionManager | None = None
 
 
 @asynccontextmanager
@@ -54,7 +54,7 @@ async def lifespan(_: FastAPI):
         await search_resources.shutdown_chroma_search_resources()
         await close_redis()
         if _db:
-            _db._database.close()
+            _db.database.close()
             logger.info("database_closed")
 
 
@@ -180,7 +180,7 @@ db_cfg = DatabaseConfig(
         if value not in (None, "")
     }
 )
-_db = Database(
+_db = DatabaseSessionManager(
     path=DB_PATH,
     operation_timeout=db_cfg.operation_timeout,
     max_retries=db_cfg.max_retries,
@@ -189,7 +189,7 @@ _db = Database(
     json_max_array_length=db_cfg.json_max_array_length,
     json_max_dict_keys=db_cfg.json_max_dict_keys,
 )
-_db._database.connect(reuse_if_open=True)
+_db.database.connect(reuse_if_open=True)
 logger.info(
     "database_initialized",
     extra={"db_path": DB_PATH},

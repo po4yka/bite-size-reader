@@ -9,64 +9,36 @@ from pathlib import Path
 from typing import Any
 
 from app.config import ChromaConfig
-from app.db.database import Database
-from app.db.models import Summary
+from app.db.session import DatabaseSessionManager
+from app.infrastructure.persistence.sqlite.repositories.embedding_repository import (
+    SqliteEmbeddingRepositoryAdapter,
+)
 from app.infrastructure.vector.chroma_store import ChromaVectorStore
 from app.services.embedding_service import EmbeddingService
+from app.services.metadata_builder import MetadataBuilder
 from app.services.summary_embedding_generator import SummaryEmbeddingGenerator
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-)
 logger = logging.getLogger(__name__)
 
 
-def _fetch_summaries(db: Database, limit: int | None) -> list[dict[str, Any]]:
-    from app.db.models import Request
+def _fetch_summaries(db: DatabaseSessionManager, limit: int | None) -> list[dict[str, Any]]:
+    from app.db.models import Request, Summary, model_to_dict
 
     def _query() -> list[dict[str, Any]]:
-        query = (
-            Summary.select(
-                Summary.id,
-                Summary.request,
-                Summary.json_payload,
-                Summary.lang,
-                Request.lang_detected,
-                Request.normalized_url,
-                Request.input_url,
-            )
-            .join(Request)
-            .order_by(Summary.created_at.desc())
-        )
-
+        query = Summary.select(Summary, Request).join(Request).order_by(Summary.created_at.desc())
         if limit:
             query = query.limit(limit)
 
-        results: list[dict[str, Any]] = []
+        results = []
         for row in query:
-            results.append(
-                {
-                    "id": row.id,
-                    "request_id": row.request.id if hasattr(row.request, "id") else row.request,
-                    "json_payload": row.json_payload,
-                    "lang": row.lang,
-                    "lang_detected": row.request.lang_detected
-                    if hasattr(row.request, "lang_detected")
-                    else None,
-                    "request": {
-                        "normalized_url": row.request.normalized_url
-                        if hasattr(row.request, "normalized_url")
-                        else None,
-                        "input_url": row.request.input_url
-                        if hasattr(row.request, "input_url")
-                        else None,
-                    },
-                }
-            )
+            item = model_to_dict(row)
+            if item:
+                item["request_id"] = row.request.id
+                item["request"] = model_to_dict(row.request)
+                results.append(item)
         return results
 
-    with db._database.connection_context():
+    with db.database.connection_context():
         return _query()
 
 
@@ -78,19 +50,16 @@ async def backfill_chroma_store(
     force: bool = False,
     batch_size: int = 50,
 ) -> None:
-    logger.info(
-        "Starting Chroma backfill",
-        extra={
-            "db_path": db_path,
-            "limit": limit,
-            "force": force,
-            "batch_size": batch_size,
-        },
-    )
+    logger.info("Initializing backfill", extra={"db_path": db_path, "limit": limit})
 
-    db = Database(path=db_path)
+    db = DatabaseSessionManager(path=db_path)
+    embedding_repo = SqliteEmbeddingRepositoryAdapter(db)
     embedding_service = EmbeddingService()
     generator = SummaryEmbeddingGenerator(db=db, embedding_service=embedding_service)
+
+    summaries = _fetch_summaries(db, limit)
+    logger.info("Found %d summaries to process", len(summaries))
+
     vector_store = ChromaVectorStore(
         host=chroma_cfg.host,
         auth_token=chroma_cfg.auth_token,
@@ -99,34 +68,20 @@ async def backfill_chroma_store(
         collection_version=chroma_cfg.collection_version,
     )
 
-    summaries = _fetch_summaries(db, limit)
-
-    if not summaries:
-        logger.info("No summaries found for backfill")
-        return
-
-    pending_vectors: list[list[float]] = []
-    pending_metadata: list[dict[str, Any]] = []
-
     processed = 0
     deleted = 0
     skipped = 0
+    pending_vectors = []
+    pending_metadata = []
 
-    from app.services.metadata_builder import MetadataBuilder
-
-    for idx, summary in enumerate(summaries, 1):
-        summary_id = summary["id"]
-        request_id = summary["request_id"]
+    for summary in summaries:
+        summary_id = summary.get("id")
+        request_id = summary.get("request_id")
         payload = summary.get("json_payload")
-        language = summary.get("lang") or summary.get("lang_detected")
+        language = summary.get("lang")
 
-        logger.info(
-            "Processing %d/%d: summary_id=%d request_id=%d",
-            idx,
-            len(summaries),
-            summary_id,
-            request_id,
-        )
+        if not summary_id or not request_id:
+            continue
 
         if not payload:
             logger.info(
@@ -137,7 +92,7 @@ async def backfill_chroma_store(
             deleted += 1
             continue
 
-        existing = await db.async_get_summary_embedding(summary_id)
+        existing = await embedding_repo.async_get_summary_embedding(summary_id)
         if not existing or force:
             await generator.generate_embedding_for_summary(
                 summary_id=summary_id,
@@ -145,13 +100,10 @@ async def backfill_chroma_store(
                 language=language,
                 force=force,
             )
-            existing = await db.async_get_summary_embedding(summary_id)
+            existing = await embedding_repo.async_get_summary_embedding(summary_id)
 
         if not existing:
-            logger.warning(
-                "Skipping summary without embedding",
-                extra={"request_id": request_id, "summary_id": summary_id},
-            )
+            logger.warning("No embedding found or generated", extra={"summary_id": summary_id})
             skipped += 1
             continue
 

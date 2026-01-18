@@ -11,7 +11,6 @@ from app.services.topic_search import TopicArticle
 if TYPE_CHECKING:
     from app.services.chroma_vector_search_service import (
         ChromaVectorSearchResult,
-        ChromaVectorSearchService,
     )
     from app.services.query_expansion_service import QueryExpansionService
     from app.services.search_filters import SearchFilters
@@ -40,7 +39,7 @@ class HybridSearchService:
     def __init__(
         self,
         fts_service: LocalTopicSearchService,
-        vector_service: ChromaVectorSearchService,
+        vector_service: Any,
         *,
         fts_weight: float = 0.4,
         vector_weight: float = 0.6,

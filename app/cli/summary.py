@@ -22,7 +22,10 @@ from app.adapters.telegram.command_processor import CommandProcessor
 from app.config import AppConfig, load_config
 from app.core.logging_utils import generate_correlation_id, setup_json_logging
 from app.core.url_utils import extract_all_urls
-from app.db.database import Database
+from app.db.session import DatabaseSessionManager
+from app.infrastructure.persistence.sqlite.repositories.audit_log_repository import (
+    SqliteAuditLogRepositoryAdapter,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -251,14 +254,23 @@ def _prepare_config(args: argparse.Namespace) -> AppConfig:
     return cfg
 
 
-def _build_audit(db: Database) -> Callable[[str, str, dict[str, Any]], None]:
+_audit_tasks: set[asyncio.Task] = set()
+
+
+def _build_audit(db: DatabaseSessionManager) -> Callable[[str, str, dict[str, Any]], None]:
     """Create an audit callback compatible with bot components."""
+    repo = SqliteAuditLogRepositoryAdapter(db)
 
     def audit(level: str, event: str, details: dict[str, Any]) -> None:
         try:
             payload: dict[str, Any]
             payload = details if isinstance(details, dict) else {"details": str(details)}
-            db.insert_audit_log(level=level, event=event, details_json=payload)
+            # Using fire-and-forget task for CLI audit
+            task = asyncio.create_task(
+                repo.async_insert_audit_log(log_level=level, event_type=event, details=payload)
+            )
+            _audit_tasks.add(task)
+            task.add_done_callback(_audit_tasks.discard)
         except Exception:
             logger.exception("audit_log_failed", extra={"event": event})
 
@@ -272,7 +284,7 @@ async def run_summary_cli(args: argparse.Namespace) -> None:
 
     setup_json_logging(cfg.runtime.log_level)
 
-    db = Database(
+    db = DatabaseSessionManager(
         path=cfg.runtime.db_path,
         operation_timeout=cfg.database.operation_timeout,
         max_retries=cfg.database.max_retries,

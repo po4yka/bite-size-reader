@@ -76,7 +76,6 @@ ignore = [
   "ASYNC109", # async timeout parameter - trio-specific, not relevant
   "B008",    # function call in argument defaults - standard FastAPI pattern
   "PLW0603", # global statement - needed for asyncio semaphore initialization
-  "UP047",   # generic type parameters - TypeVar still widely used in codebase
   "SIM103",  # return condition directly - sometimes if/return is clearer
 ]
 

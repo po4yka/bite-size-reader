@@ -22,33 +22,24 @@ from __future__ import annotations
 
 import logging
 import sys
-from pathlib import Path
 
-from app.db.database import Database
+from app.db.session import DatabaseSessionManager
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-)
 logger = logging.getLogger(__name__)
 
 
 def main() -> int:
-    """Run database migrations."""
-    # Determine database path
-    db_path = "/data/app.db"
-    if len(sys.argv) > 1:
-        db_path = sys.argv[1]
+    """Main entry point."""
+    db_path = sys.argv[1] if len(sys.argv) > 1 else "/data/app.db"
 
-    logger.info("Starting database migration for: %s", db_path)
-
-    # Check if database file exists (skip for :memory:)
-    if db_path != ":memory:" and not Path(db_path).exists():
-        logger.warning("Database file does not exist, will be created: %s", db_path)
+    logging.basicConfig(
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        level=logging.INFO,
+    )
 
     # Initialize database and run migrations
     try:
-        db = Database(path=db_path)
+        db = DatabaseSessionManager(path=db_path)
 
         # Phase 1: Run base migration (create tables)
         logger.info("Phase 1: Creating base schema...")

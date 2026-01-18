@@ -3,15 +3,17 @@
 from __future__ import annotations
 
 import logging
-from datetime import UTC, datetime
+from datetime import datetime
 from typing import TYPE_CHECKING
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 
+from app.core.time_utils import UTC
+
 if TYPE_CHECKING:
     from app.config import AppConfig
-    from app.db.database import Database
+    from app.db.session import DatabaseSessionManager
 
 logger = logging.getLogger(__name__)
 
@@ -19,12 +21,12 @@ logger = logging.getLogger(__name__)
 class SchedulerService:
     """Manages background scheduled tasks like Karakeep sync."""
 
-    def __init__(self, cfg: AppConfig, db: Database) -> None:
+    def __init__(self, cfg: AppConfig, db: DatabaseSessionManager) -> None:
         """Initialize scheduler service.
 
         Args:
             cfg: Application configuration
-            db: Database instance
+            db: DatabaseSessionManager instance
         """
         self.cfg = cfg
         self.db = db
@@ -85,15 +87,20 @@ class SchedulerService:
     async def _run_karakeep_sync(self) -> None:
         """Execute scheduled Karakeep sync."""
         from app.adapters.karakeep import KarakeepSyncService
+        from app.infrastructure.persistence.sqlite.repositories.karakeep_sync_repository import (
+            SqliteKarakeepSyncRepositoryAdapter,
+        )
 
         correlation_id = f"scheduled_{datetime.now(UTC).strftime('%Y%m%d_%H%M%S')}"
         logger.info("scheduled_karakeep_sync_starting", extra={"cid": correlation_id})
 
         try:
+            karakeep_repo = SqliteKarakeepSyncRepositoryAdapter(self.db)
             service = KarakeepSyncService(
                 api_url=self.cfg.karakeep.api_url,
                 api_key=self.cfg.karakeep.api_key,
                 sync_tag=self.cfg.karakeep.sync_tag,
+                repository=karakeep_repo,
             )
 
             # Get default user ID from allowed users

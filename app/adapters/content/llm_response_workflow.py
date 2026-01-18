@@ -12,10 +12,24 @@ from pydantic import BaseModel, ConfigDict
 from app.core.json_utils import extract_json
 from app.core.summary_contract import validate_and_shape_summary
 from app.db.user_interactions import async_safe_update_user_interaction
+from app.infrastructure.persistence.sqlite.repositories.llm_repository import (
+    SqliteLLMRepositoryAdapter,
+)
+from app.infrastructure.persistence.sqlite.repositories.request_repository import (
+    SqliteRequestRepositoryAdapter,
+)
+from app.infrastructure.persistence.sqlite.repositories.summary_repository import (
+    SqliteSummaryRepositoryAdapter,
+)
+from app.infrastructure.persistence.sqlite.repositories.user_repository import (
+    SqliteUserRepositoryAdapter,
+)
 from app.utils.json_validation import finalize_summary_texts, parse_summary_response
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable, Coroutine, Sequence
+
+    from app.db.session import DatabaseSessionManager
 
 logger = logging.getLogger(__name__)
 
@@ -94,7 +108,7 @@ class LLMResponseWorkflow:
         self,
         *,
         cfg: Any,
-        db: Any,  # SummaryRepository & RequestRepository & LLMCallRepository
+        db: DatabaseSessionManager,  # SummaryRepository & RequestRepository & LLMCallRepository
         openrouter: Any,
         response_formatter: Any,
         audit_func: Callable[[str, str, dict[str, Any]], None],
@@ -104,7 +118,7 @@ class LLMResponseWorkflow:
 
         Args:
             cfg: Application configuration.
-            db: Database implementation providing summary, request, and LLM call repositories.
+            db: DatabaseSessionManager providing summary, request, and LLM call repositories.
             openrouter: LLM client for making API calls.
             response_formatter: Formatter for messages.
             audit_func: Function for audit logging.
@@ -117,6 +131,10 @@ class LLMResponseWorkflow:
         self.response_formatter = response_formatter
         self._audit = audit_func
         self._sem = sem
+        self.summary_repo = SqliteSummaryRepositoryAdapter(db)
+        self.request_repo = SqliteRequestRepositoryAdapter(db)
+        self.llm_repo = SqliteLLMRepositoryAdapter(db)
+        self.user_repo = SqliteUserRepositoryAdapter(db)
 
     def _schedule_background_task(
         self, coro: Coroutine[Any, Any, Any], label: str, correlation_id: str | None
@@ -336,7 +354,7 @@ class LLMResponseWorkflow:
                 )
             else:
                 # Just update database status, don't send notifications yet
-                await self.db.async_update_request_status(req_id, "error")
+                await self.request_repo.async_update_request_status(req_id, "error")
             return None
 
         parse_result = parse_summary_response(llm.response_json, llm.response_text)
@@ -473,7 +491,7 @@ class LLMResponseWorkflow:
         if interaction_config.interaction_id and interaction_config.success_kwargs:
             try:
                 await async_safe_update_user_interaction(
-                    self.db,
+                    self.user_repo,
                     interaction_id=interaction_config.interaction_id,
                     logger_=logger,
                     **interaction_config.success_kwargs,
@@ -515,14 +533,14 @@ class LLMResponseWorkflow:
         correlation_id: str | None,
     ) -> None:
         try:
-            new_version = await self.db.async_upsert_summary(
+            new_version = await self.summary_repo.async_upsert_summary(
                 request_id=req_id,
                 lang=persistence.lang,
                 json_payload=summary,
                 insights_json=insights_json,
                 is_read=persistence.is_read,
             )
-            await self.db.async_update_request_status(req_id, "ok")
+            await self.request_repo.async_update_request_status(req_id, "ok")
             self._audit("INFO", "summary_upserted", {"request_id": req_id, "version": new_version})
         except Exception as exc:
             logger.exception(
@@ -650,7 +668,7 @@ class LLMResponseWorkflow:
         notifications: LLMWorkflowNotifications | None,
         is_final_error: bool = False,
     ) -> None:
-        await self.db.async_update_request_status(req_id, "error")
+        await self.request_repo.async_update_request_status(req_id, "error")
 
         error_parts: list[str] = []
         context = getattr(llm, "error_context", None) or {}
@@ -707,7 +725,7 @@ class LLMResponseWorkflow:
             try:
                 kwargs = interaction_config.llm_error_builder(llm, error_details)
                 await async_safe_update_user_interaction(
-                    self.db,
+                    self.user_repo,
                     interaction_id=interaction_config.interaction_id,
                     logger_=logger,
                     **kwargs,
@@ -726,7 +744,7 @@ class LLMResponseWorkflow:
         interaction_config: LLMInteractionConfig,
         notifications: LLMWorkflowNotifications | None,
     ) -> None:
-        await self.db.async_update_request_status(req_id, "error")
+        await self.request_repo.async_update_request_status(req_id, "error")
 
         if notifications and notifications.repair_failure:
             try:
@@ -740,7 +758,7 @@ class LLMResponseWorkflow:
         if interaction_config.interaction_id and interaction_config.repair_failure_kwargs:
             try:
                 await async_safe_update_user_interaction(
-                    self.db,
+                    self.user_repo,
                     interaction_id=interaction_config.interaction_id,
                     logger_=logger,
                     **interaction_config.repair_failure_kwargs,
@@ -759,7 +777,7 @@ class LLMResponseWorkflow:
         interaction_config: LLMInteractionConfig,
         notifications: LLMWorkflowNotifications | None,
     ) -> None:
-        await self.db.async_update_request_status(req_id, "error")
+        await self.request_repo.async_update_request_status(req_id, "error")
 
         if notifications and notifications.parsing_failure:
             try:
@@ -773,7 +791,7 @@ class LLMResponseWorkflow:
         if interaction_config.interaction_id and interaction_config.parsing_failure_kwargs:
             try:
                 await async_safe_update_user_interaction(
-                    self.db,
+                    self.user_repo,
                     interaction_id=interaction_config.interaction_id,
                     logger_=logger,
                     **interaction_config.parsing_failure_kwargs,
@@ -794,7 +812,7 @@ class LLMResponseWorkflow:
         failed_attempts: list[tuple[Any, LLMRequestConfig]],
     ) -> None:
         """Handle the case when all LLM attempts have failed."""
-        await self.db.async_update_request_status(req_id, "error")
+        await self.request_repo.async_update_request_status(req_id, "error")
 
         # Collect error details from all failed attempts
         error_details_list: list[str] = []
@@ -878,7 +896,7 @@ class LLMResponseWorkflow:
                 last_llm = failed_attempts[-1][0] if failed_attempts else None
                 kwargs = interaction_config.llm_error_builder(last_llm, comprehensive_details)
                 await async_safe_update_user_interaction(
-                    self.db,
+                    self.user_repo,
                     interaction_id=interaction_config.interaction_id,
                     logger_=logger,
                     **kwargs,
@@ -918,7 +936,7 @@ class LLMResponseWorkflow:
 
     async def _persist_llm_call(self, llm: Any, req_id: int, correlation_id: str | None) -> None:
         try:
-            await self.db.async_insert_llm_call(
+            await self.llm_repo.async_insert_llm_call(
                 request_id=req_id,
                 provider="openrouter",
                 model=llm.model or self.cfg.openrouter.model,

@@ -10,13 +10,16 @@ from app.adapters.telegram.command_processor import CommandProcessor
 from app.adapters.telegram.message_router import MessageRouter
 from app.adapters.telegram.task_manager import UserTaskManager
 from app.adapters.telegram.url_handler import URLHandler
+from app.infrastructure.persistence.sqlite.repositories.audit_log_repository import (
+    SqliteAuditLogRepositoryAdapter,
+)
 
 if TYPE_CHECKING:
     from app.adapters.content.url_processor import URLProcessor
     from app.adapters.external.response_formatter import ResponseFormatter
     from app.adapters.telegram.forward_processor import ForwardProcessor
     from app.config import AppConfig
-    from app.db.database import Database
+    from app.db.session import DatabaseSessionManager
     from app.services.hybrid_search_service import HybridSearchService
     from app.services.topic_search import LocalTopicSearchService, TopicSearchService
 
@@ -29,7 +32,7 @@ class MessageHandler:
     def __init__(
         self,
         cfg: AppConfig,
-        db: Database,
+        db: DatabaseSessionManager,
         response_formatter: ResponseFormatter,
         url_processor: URLProcessor,
         forward_processor: ForwardProcessor,
@@ -40,6 +43,7 @@ class MessageHandler:
     ) -> None:
         self.cfg = cfg
         self.db = db
+        self.audit_repo = SqliteAuditLogRepositoryAdapter(db)
 
         # Initialize components
         self.task_manager = UserTaskManager()
@@ -137,8 +141,23 @@ class MessageHandler:
         await self.message_router.handle_multi_confirm_response(message, uid, "no")
 
     def _audit(self, level: str, event: str, details: dict) -> None:
-        """Audit log helper."""
+        """Audit log helper (background async)."""
+        import asyncio
+
+        async def _do_audit() -> None:
+            try:
+                await self.audit_repo.async_insert_audit_log(
+                    log_level=level, event_type=event, details=details
+                )
+            except Exception as e:
+                logger.warning("audit_persist_failed", extra={"error": str(e), "event": event})
+
         try:
-            self.db.insert_audit_log(level=level, event=event, details_json=details)
-        except Exception as e:
-            logger.exception("audit_persist_failed", extra={"error": str(e), "event": event})
+            loop = asyncio.get_running_loop()
+            task = loop.create_task(_do_audit())
+            if not hasattr(self, "_audit_tasks"):
+                self._audit_tasks: set[asyncio.Task] = set()
+            self._audit_tasks.add(task)
+            task.add_done_callback(self._audit_tasks.discard)
+        except RuntimeError:
+            pass

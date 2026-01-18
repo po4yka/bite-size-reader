@@ -15,11 +15,12 @@ if TYPE_CHECKING:
 
     from app.adapters.external.response_formatter import ResponseFormatter
     from app.config import AppConfig
-    from app.db.database import Database
+    from app.db.session import DatabaseSessionManager
 
 logger = logging.getLogger(__name__)
 
-# Route versioning constants
+
+# Forward processing route version
 FORWARD_ROUTE_VERSION = 1
 
 
@@ -29,7 +30,7 @@ class ForwardContentProcessor:
     def __init__(
         self,
         cfg: AppConfig,
-        db: Database,
+        db: DatabaseSessionManager,
         response_formatter: ResponseFormatter,
         audit_func: Callable[[str, str, dict], None],
     ) -> None:
@@ -56,12 +57,14 @@ class ForwardContentProcessor:
             pass
 
         # Create request with content text
-        req_id = self._create_forward_request(message, correlation_id, prompt)
+        req_id = await self._create_forward_request(message, correlation_id, prompt)
 
         # Language detection and choice
         detected = detect_language(text)
         try:
-            self.db.update_request_lang_detected(req_id, detected)
+            await self.message_persistence.request_repo.async_update_request_lang_detected(
+                req_id, detected
+            )
         except Exception as e:
             logger.exception("persist_lang_detected_error", extra={"error": str(e)})
 
@@ -79,11 +82,11 @@ class ForwardContentProcessor:
 
         return req_id, prompt, chosen_lang, system_prompt
 
-    def _create_forward_request(
+    async def _create_forward_request(
         self, message: Any, correlation_id: str | None, content_text: str | None = None
     ) -> int:
         """Create forward request in database."""
-        self._upsert_sender_metadata(message)
+        await self._upsert_sender_metadata(message)
 
         chat_obj = getattr(message, "chat", None)
         chat_id_raw = getattr(chat_obj, "id", 0) if chat_obj is not None else None
@@ -105,7 +108,9 @@ class ForwardContentProcessor:
 
         existing_req: dict | None = None
         if fwd_from_chat_id is not None and fwd_from_msg_id is not None:
-            existing_req = self.db.get_request_by_forward(fwd_from_chat_id, fwd_from_msg_id)
+            existing_req = await self.message_persistence.request_repo.async_get_request_by_forward(
+                fwd_from_chat_id, fwd_from_msg_id
+            )
 
         if existing_req is not None:
             req_id = int(existing_req["id"])
@@ -121,7 +126,9 @@ class ForwardContentProcessor:
             )
             if correlation_id:
                 try:
-                    self.db.update_request_correlation_id(req_id, correlation_id)
+                    await self.message_persistence.request_repo.async_update_request_correlation_id(
+                        req_id, correlation_id
+                    )
                 except Exception as exc:
                     logger.exception(
                         "persist_cid_error",
@@ -129,7 +136,7 @@ class ForwardContentProcessor:
                     )
             return req_id
 
-        req_id = self.db.create_request(
+        req_id = await self.message_persistence.request_repo.async_create_request(
             type_="forward",
             status="pending",
             correlation_id=correlation_id,
@@ -144,13 +151,13 @@ class ForwardContentProcessor:
 
         # Snapshot telegram message
         try:
-            self._persist_message_snapshot(req_id, message)
+            await self._persist_message_snapshot(req_id, message)
         except Exception as e:
             logger.exception("snapshot_error", extra={"error": str(e)})
 
         return req_id
 
-    def _upsert_sender_metadata(self, message: Any) -> None:
+    async def _upsert_sender_metadata(self, message: Any) -> None:
         """Persist sender user/chat metadata for the interaction."""
 
         def _coerce_int(value: Any) -> int | None:
@@ -166,7 +173,7 @@ class ForwardContentProcessor:
             chat_title = getattr(chat_obj, "title", None)
             chat_username = getattr(chat_obj, "username", None)
             try:
-                self.db.upsert_chat(
+                await self.message_persistence.user_repo.async_upsert_chat(
                     chat_id=chat_id,
                     type_=str(chat_type) if chat_type is not None else None,
                     title=str(chat_title) if isinstance(chat_title, str) else None,
@@ -185,7 +192,7 @@ class ForwardContentProcessor:
         if user_id is not None:
             username = getattr(from_user_obj, "username", None)
             try:
-                self.db.upsert_user(
+                await self.message_persistence.user_repo.async_upsert_user(
                     telegram_user_id=user_id,
                     username=str(username) if isinstance(username, str) else None,
                 )
@@ -214,6 +221,6 @@ class ForwardContentProcessor:
             # Fallback inline prompt
             return "You are a precise assistant that returns only a strict JSON object matching the provided schema."
 
-    def _persist_message_snapshot(self, request_id: int, message: Any) -> None:
+    async def _persist_message_snapshot(self, request_id: int, message: Any) -> None:
         """Persist message snapshot to database."""
-        self.message_persistence.persist_message_snapshot(request_id, message)
+        await self.message_persistence.persist_message_snapshot(request_id, message)

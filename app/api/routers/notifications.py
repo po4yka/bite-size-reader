@@ -4,7 +4,10 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.api.routers.auth import get_current_user
-from app.db.models import User, UserDevice, _utcnow
+from app.db.models import database_proxy
+from app.infrastructure.persistence.sqlite.repositories.device_repository import (
+    SqliteDeviceRepositoryAdapter,
+)
 
 router = APIRouter()
 
@@ -30,30 +33,16 @@ async def register_device(
     Register or update a device token for push notifications.
     """
     user_id = user_data["user_id"]
-    user = User.get_or_none(User.telegram_user_id == user_id)
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+    device_repo = SqliteDeviceRepositoryAdapter(database_proxy)
 
-    # Check if this token exists
-    device = UserDevice.get_or_none(UserDevice.token == payload.token)
-
-    if device:
-        # Update existing device info
-        device.user = user
-        device.platform = payload.platform
-        device.device_id = payload.device_id
-        device.last_seen_at = _utcnow()
-        device.is_active = True
-        device.save()
-    else:
-        # Create new device record
-        UserDevice.create(
-            user=user,
+    try:
+        await device_repo.async_upsert_device(
+            user_id=user_id,
             token=payload.token,
             platform=payload.platform,
             device_id=payload.device_id,
-            is_active=True,
-            last_seen_at=_utcnow(),
         )
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail="User not found") from exc
 
     return BaseResponse(status="ok")

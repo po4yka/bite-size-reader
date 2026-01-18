@@ -5,7 +5,7 @@ import logging
 
 from app.adapters.telegram.telegram_bot import TelegramBot
 from app.config import load_config
-from app.db.database import Database
+from app.db.session import DatabaseSessionManager
 
 # Use uvloop for better async performance if available
 try:
@@ -23,7 +23,7 @@ async def main() -> None:
         logging.getLogger(__name__).warning(
             "db_path_not_in_data_volume", extra={"db_path": cfg.runtime.db_path}
         )
-    db = Database(
+    db = DatabaseSessionManager(
         path=cfg.runtime.db_path,
         operation_timeout=cfg.database.operation_timeout,
         max_retries=cfg.database.max_retries,

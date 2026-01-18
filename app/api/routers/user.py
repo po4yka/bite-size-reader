@@ -17,7 +17,13 @@ from app.api.models.responses import (
 from app.api.routers.auth import get_current_user
 from app.core.logging_utils import get_logger
 from app.core.time_utils import UTC
-from app.db.models import Request as RequestModel, Summary, User
+from app.db.models import database_proxy
+from app.infrastructure.persistence.sqlite.repositories.summary_repository import (
+    SqliteSummaryRepositoryAdapter,
+)
+from app.infrastructure.persistence.sqlite.repositories.user_repository import (
+    SqliteUserRepositoryAdapter,
+)
 from app.services.topic_search_utils import ensure_mapping
 
 logger = get_logger(__name__)
@@ -38,7 +44,6 @@ def _safe_isoformat(dt_value: Any) -> str | None:
         return dt_value.isoformat() + "Z"
     if isinstance(dt_value, str):
         try:
-            # Try to parse and normalize the string
             parsed = datetime.fromisoformat(dt_value.replace("Z", "+00:00"))
             return parsed.isoformat() + "Z"
         except (ValueError, AttributeError):
@@ -49,7 +54,8 @@ def _safe_isoformat(dt_value: Any) -> str | None:
 @router.get("/preferences")
 async def get_user_preferences(user=Depends(get_current_user)):
     """Get user preferences."""
-    user_record = User.select().where(User.telegram_user_id == user["user_id"]).first()
+    user_repo = SqliteUserRepositoryAdapter(database_proxy)
+    user_record = await user_repo.async_get_user_by_telegram_id(user["user_id"])
 
     # Default preferences
     default_preferences = {
@@ -59,8 +65,8 @@ async def get_user_preferences(user=Depends(get_current_user)):
     }
 
     # Get stored preferences or use defaults
-    if user_record and user_record.preferences_json:
-        preferences = {**default_preferences, **user_record.preferences_json}
+    if user_record and user_record.get("preferences_json"):
+        preferences = {**default_preferences, **user_record["preferences_json"]}
     else:
         preferences = default_preferences
 
@@ -81,15 +87,17 @@ async def update_user_preferences(
     user=Depends(get_current_user),
 ):
     """Update user preferences."""
+    user_repo = SqliteUserRepositoryAdapter(database_proxy)
 
     # Get or create user record
-    user_record, _created = User.get_or_create(
-        telegram_user_id=user["user_id"],
-        defaults={"username": user.get("username"), "is_owner": False},
+    user_record, _created = await user_repo.async_get_or_create_user(
+        user["user_id"],
+        username=user.get("username"),
+        is_owner=False,
     )
 
     # Get current preferences or start with empty dict
-    current_prefs = user_record.preferences_json or {}
+    current_prefs = user_record.get("preferences_json") or {}
 
     # Update preferences
     updated_fields = []
@@ -112,8 +120,7 @@ async def update_user_preferences(
         updated_fields.extend([f"app_settings.{k}" for k in preferences.app_settings])
 
     # Save to database
-    user_record.preferences_json = current_prefs
-    user_record.save()
+    await user_repo.async_update_user_preferences(user["user_id"], current_prefs)
 
     return success_response(
         PreferencesUpdateResult(
@@ -127,27 +134,29 @@ async def update_user_preferences(
 async def get_user_stats(user=Depends(get_current_user)):
     """Get user statistics."""
     from collections import Counter
+    from urllib.parse import urlparse
 
-    # Query summaries for this user only (with JOIN to filter by user_id)
-    user_summaries_query = (
-        Summary.select(Summary, RequestModel)
-        .join(RequestModel)
-        .where(RequestModel.user_id == user["user_id"])
+    user_repo = SqliteUserRepositoryAdapter(database_proxy)
+    summary_repo = SqliteSummaryRepositoryAdapter(database_proxy)
+
+    # Get user summaries with pagination (using a large limit for stats)
+    summaries_list, total_summaries, unread_count = await summary_repo.async_get_user_summaries(
+        user_id=user["user_id"],
+        limit=10000,  # Large limit for stats
+        offset=0,
     )
 
-    # Get summary counts
-    total_summaries = user_summaries_query.count()
-    unread_count = user_summaries_query.switch(Summary).where(~Summary.is_read).count()
-    read_count = user_summaries_query.switch(Summary).where(Summary.is_read).count()
+    read_count = total_summaries - unread_count
 
-    # Get reading time, favorite topics, and domains
-    summaries = list(user_summaries_query)
+    # Calculate reading time, favorite topics, and domains
     total_reading_time = 0
-    topic_counter = Counter()
-    domain_counter = Counter()
+    topic_counter: Counter = Counter()
+    domain_counter: Counter = Counter()
+    en_count = 0
+    ru_count = 0
 
-    for summary in summaries:
-        json_payload = ensure_mapping(summary.json_payload)
+    for summary in summaries_list:
+        json_payload = ensure_mapping(summary.get("json_payload"))
         total_reading_time += json_payload.get("estimated_reading_time_min", 0) or 0
 
         # Count topic tags
@@ -160,18 +169,27 @@ async def get_user_stats(user=Depends(get_current_user)):
         # Count domains (from metadata or request URL)
         metadata = ensure_mapping(json_payload.get("metadata"))
         domain = metadata.get("domain")
-        if not domain and summary.request.normalized_url:
-            # Extract domain from URL
-            from urllib.parse import urlparse
 
-            try:
-                parsed = urlparse(summary.request.normalized_url)
-                domain = parsed.netloc
-            except Exception:
-                pass
+        # Try to get domain from request data if available
+        request_data = summary.get("request") or {}
+        if isinstance(request_data, dict):
+            normalized_url = request_data.get("normalized_url")
+            if not domain and normalized_url:
+                try:
+                    parsed = urlparse(normalized_url)
+                    domain = parsed.netloc
+                except Exception:
+                    pass
 
         if domain:
             domain_counter[domain] += 1
+
+        # Language distribution
+        lang = summary.get("lang", "")
+        if lang == "en":
+            en_count += 1
+        elif lang == "ru":
+            ru_count += 1
 
     average_reading_time = total_reading_time / total_summaries if total_summaries > 0 else 0
 
@@ -183,21 +201,17 @@ async def get_user_stats(user=Depends(get_current_user)):
         {"domain": domain, "count": count} for domain, count in domain_counter.most_common(10)
     ]
 
-    # Language distribution
-    en_count = user_summaries_query.switch(Summary).where(Summary.lang == "en").count()
-    ru_count = user_summaries_query.switch(Summary).where(Summary.lang == "ru").count()
+    # Get user record
+    user_record = await user_repo.async_get_user_by_telegram_id(user["user_id"])
 
-    # Get user record and last summary timestamp
-    user_record = User.select().where(User.telegram_user_id == user["user_id"]).first()
-
-    # Get most recent summary timestamp
-    last_summary = (
-        RequestModel.select()
-        .where(RequestModel.user_id == user["user_id"])
-        .order_by(RequestModel.created_at.desc())
-        .first()
-    )
-    last_summary_at = _safe_isoformat(last_summary.created_at) if last_summary else None
+    # Get most recent summary timestamp from summaries_list
+    last_summary_at = None
+    if summaries_list:
+        # Summaries are sorted by created_at desc
+        first_summary = summaries_list[0]
+        request_data = first_summary.get("request") or {}
+        if isinstance(request_data, dict):
+            last_summary_at = _safe_isoformat(request_data.get("created_at"))
 
     return success_response(
         UserStatsData(
@@ -209,7 +223,7 @@ async def get_user_stats(user=Depends(get_current_user)):
             favorite_topics=favorite_topics,
             favorite_domains=favorite_domains,
             language_distribution={"en": en_count, "ru": ru_count},
-            joined_at=_safe_isoformat(user_record.created_at) if user_record else None,
+            joined_at=_safe_isoformat(user_record.get("created_at")) if user_record else None,
             last_summary_at=last_summary_at,
         )
     )

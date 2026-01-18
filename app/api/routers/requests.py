@@ -45,7 +45,7 @@ async def submit_request(
         input_url = str(request_data.input_url)
 
         # Check for duplicate using service
-        duplicate_info = RequestService.check_duplicate_url(user["user_id"], input_url)
+        duplicate_info = await RequestService.check_duplicate_url(user["user_id"], input_url)
         if duplicate_info:
             return success_response(
                 {
@@ -59,7 +59,7 @@ async def submit_request(
 
         # Create new request using service
         try:
-            new_request = RequestService.create_url_request(
+            new_request = await RequestService.create_url_request(
                 user_id=user["user_id"],
                 input_url=input_url,
                 lang_preference=request_data.lang_preference,
@@ -90,7 +90,7 @@ async def submit_request(
 
     # Handle forward request
     # Create new forward request using service
-    new_request = RequestService.create_forward_request(
+    new_request = await RequestService.create_forward_request(
         user_id=user["user_id"],
         content_text=request_data.content_text,
         from_chat_id=request_data.forward_metadata.from_chat_id,
@@ -121,7 +121,7 @@ async def get_request(
     """Get details about a specific request."""
     # Use service layer to get request with authorization
     try:
-        result = RequestService.get_request_by_id(user["user_id"], request_id)
+        result = await RequestService.get_request_by_id(user["user_id"], request_id)
     except (AttributeError, OperationalError) as err:
         if isinstance(err, AttributeError) and "uninitialized Proxy" not in str(err):
             raise
@@ -198,7 +198,7 @@ async def get_request_status(
 ):
     """Poll for real-time processing status."""
     # Use service layer to get status
-    status_info = RequestService.get_request_status(user["user_id"], request_id)
+    status_info = await RequestService.get_request_status(user["user_id"], request_id)
 
     status_payload = RequestStatus(
         request_id=status_info["request_id"],
@@ -227,7 +227,7 @@ async def retry_request(
     """Retry a failed request. Processes asynchronously in the background."""
     # Use service layer to create retry request
     try:
-        new_request = RequestService.retry_failed_request(user["user_id"], request_id)
+        new_request = await RequestService.retry_failed_request(user["user_id"], request_id)
     except ValueError as e:
         raise ValidationError(str(e)) from e
 

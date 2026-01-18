@@ -35,7 +35,7 @@ import peewee
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from app.db.database import Database
+    from app.db.session import DatabaseSessionManager
 
 logger = logging.getLogger(__name__)
 
@@ -58,11 +58,11 @@ class MigrationError(Exception):
 class MigrationRunner:
     """Manages database schema migrations with version tracking."""
 
-    def __init__(self, db: Database):
+    def __init__(self, db: DatabaseSessionManager):
         """Initialize migration runner.
 
         Args:
-            db: Database instance to run migrations against
+            db: DatabaseSessionManager instance to run migrations against
         """
         self.db = db
         self._ensure_migration_table()
@@ -70,10 +70,10 @@ class MigrationRunner:
     def _ensure_migration_table(self) -> None:
         """Create migration history table if it doesn't exist."""
         # Bind MigrationHistory to the database proxy
-        MigrationHistory._meta.database = self.db._database
+        MigrationHistory._meta.database = self.db.database
 
         # Create table outside of transaction to ensure it persists
-        self.db._database.create_tables([MigrationHistory], safe=True)
+        self.db.database.create_tables([MigrationHistory], safe=True)
         logger.debug("Migration history table ensured")
 
     def get_applied_migrations(self) -> set[str]:
@@ -167,11 +167,11 @@ class MigrationRunner:
         module = importlib.import_module(module_name)
 
         # Get upgrade function
-        upgrade_fn: Callable[[Database], None] = module.upgrade
+        upgrade_fn: Callable[[DatabaseSessionManager], None] = module.upgrade
 
         # Run migration in transaction
         try:
-            with self.db._database.atomic():
+            with self.db.database.atomic():
                 # Execute upgrade
                 upgrade_fn(self.db)
 
@@ -184,7 +184,7 @@ class MigrationRunner:
                 logger.info(f"✓ Migration {migration_name} completed successfully")
 
         except Exception as e:
-            logger.exception(f"✗ Migration {migration_name} failed")
+            logger.error(f"✗ Migration {migration_name} failed")
             raise MigrationError(f"Migration {migration_name} failed: {e}") from e
 
     def run_pending(self, dry_run: bool = False) -> int:
@@ -231,7 +231,7 @@ class MigrationRunner:
             MigrationError: If rollback fails or migration not found
         """
         # Check if migration was applied
-        with self.db._database.connection_context():
+        with self.db.database.connection_context():
             history = MigrationHistory.get_or_none(
                 MigrationHistory.migration_name == migration_name
             )
@@ -252,11 +252,11 @@ class MigrationRunner:
         module = importlib.import_module(module_name)
 
         # Get downgrade function
-        downgrade_fn: Callable[[Database], None] = module.downgrade
+        downgrade_fn: Callable[[DatabaseSessionManager], None] = module.downgrade
 
         # Run rollback in transaction
         try:
-            with self.db._database.atomic():
+            with self.db.database.atomic():
                 # Execute downgrade
                 downgrade_fn(self.db)
 
@@ -299,7 +299,7 @@ class MigrationRunner:
             }
 
             if is_applied:
-                with self.db._database.connection_context():
+                with self.db.database.connection_context():
                     history = MigrationHistory.get(MigrationHistory.migration_name == name)
                     migration_info["applied_at"] = history.applied_at.isoformat()
 
@@ -312,7 +312,7 @@ def main() -> int:
     """CLI entry point for migration runner."""
     import sys
 
-    from app.db.database import Database
+    from app.db.session import DatabaseSessionManager
 
     if len(sys.argv) < 2:
         print("Usage: python -m app.cli.migrations.migration_runner <command> [args]")
@@ -334,7 +334,7 @@ def main() -> int:
 
     logger.info(f"Using database: {db_path}")
 
-    db = Database(path=db_path)
+    db = DatabaseSessionManager(path=db_path)
     runner = MigrationRunner(db)
 
     try:

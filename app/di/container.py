@@ -14,14 +14,32 @@ from app.application.use_cases.summarize_url import SummarizeUrlUseCase
 from app.domain.services.summary_validator import SummaryValidator
 from app.infrastructure.messaging.event_bus import EventBus
 from app.infrastructure.messaging.event_handlers import wire_event_handlers
+from app.infrastructure.persistence.sqlite.repositories.auth_repository import (
+    SqliteAuthRepositoryAdapter,
+)
+from app.infrastructure.persistence.sqlite.repositories.collection_repository import (
+    SqliteCollectionRepositoryAdapter,
+)
 from app.infrastructure.persistence.sqlite.repositories.crawl_result_repository import (
     SqliteCrawlResultRepositoryAdapter,
+)
+from app.infrastructure.persistence.sqlite.repositories.device_repository import (
+    SqliteDeviceRepositoryAdapter,
+)
+from app.infrastructure.persistence.sqlite.repositories.karakeep_sync_repository import (
+    SqliteKarakeepSyncRepositoryAdapter,
 )
 from app.infrastructure.persistence.sqlite.repositories.request_repository import (
     SqliteRequestRepositoryAdapter,
 )
 from app.infrastructure.persistence.sqlite.repositories.summary_repository import (
     SqliteSummaryRepositoryAdapter,
+)
+from app.infrastructure.persistence.sqlite.repositories.topic_search_repository import (
+    SqliteTopicSearchRepositoryAdapter,
+)
+from app.infrastructure.persistence.sqlite.repositories.user_repository import (
+    SqliteUserRepositoryAdapter,
 )
 
 
@@ -96,6 +114,12 @@ class Container:
         self._summary_repo: SqliteSummaryRepositoryAdapter | None = None
         self._request_repo: SqliteRequestRepositoryAdapter | None = None
         self._crawl_result_repo: SqliteCrawlResultRepositoryAdapter | None = None
+        self._user_repo: SqliteUserRepositoryAdapter | None = None
+        self._topic_search_repo: SqliteTopicSearchRepositoryAdapter | None = None
+        self._karakeep_sync_repo: SqliteKarakeepSyncRepositoryAdapter | None = None
+        self._auth_repo: SqliteAuthRepositoryAdapter | None = None
+        self._collection_repo: SqliteCollectionRepositoryAdapter | None = None
+        self._device_repo: SqliteDeviceRepositoryAdapter | None = None
         self._summary_validator: SummaryValidator | None = None
 
         # Lazy-initialized use cases
@@ -153,6 +177,72 @@ class Container:
         if self._crawl_result_repo is None:
             self._crawl_result_repo = SqliteCrawlResultRepositoryAdapter(self._database)
         return self._crawl_result_repo
+
+    def user_repository(self) -> SqliteUserRepositoryAdapter:
+        """Get or create the user repository.
+
+        Returns:
+            User repository adapter wrapping the database.
+
+        """
+        if self._user_repo is None:
+            self._user_repo = SqliteUserRepositoryAdapter(self._database)
+        return self._user_repo
+
+    def topic_search_repository(self) -> SqliteTopicSearchRepositoryAdapter:
+        """Get or create the topic search repository.
+
+        Returns:
+            Topic search repository adapter wrapping the database.
+
+        """
+        if self._topic_search_repo is None:
+            self._topic_search_repo = SqliteTopicSearchRepositoryAdapter(self._database)
+        return self._topic_search_repo
+
+    def karakeep_sync_repository(self) -> SqliteKarakeepSyncRepositoryAdapter:
+        """Get or create the Karakeep sync repository.
+
+        Returns:
+            Karakeep sync repository adapter wrapping the database.
+
+        """
+        if self._karakeep_sync_repo is None:
+            self._karakeep_sync_repo = SqliteKarakeepSyncRepositoryAdapter(self._database)
+        return self._karakeep_sync_repo
+
+    def auth_repository(self) -> SqliteAuthRepositoryAdapter:
+        """Get or create the auth repository.
+
+        Returns:
+            Auth repository adapter for RefreshToken and ClientSecret operations.
+
+        """
+        if self._auth_repo is None:
+            self._auth_repo = SqliteAuthRepositoryAdapter(self._database)
+        return self._auth_repo
+
+    def collection_repository(self) -> SqliteCollectionRepositoryAdapter:
+        """Get or create the collection repository.
+
+        Returns:
+            Collection repository adapter for Collection operations.
+
+        """
+        if self._collection_repo is None:
+            self._collection_repo = SqliteCollectionRepositoryAdapter(self._database)
+        return self._collection_repo
+
+    def device_repository(self) -> SqliteDeviceRepositoryAdapter:
+        """Get or create the device repository.
+
+        Returns:
+            Device repository adapter for UserDevice operations.
+
+        """
+        if self._device_repo is None:
+            self._device_repo = SqliteDeviceRepositoryAdapter(self._database)
+        return self._device_repo
 
     def summary_validator(self) -> SummaryValidator:
         """Get or create the summary validator.
@@ -270,4 +360,5 @@ class Container:
             webhook_url=self._webhook_url,
             embedding_generator=self._embedding_generator,
             vector_store=self._vector_store,
+            summary_repository=self.summary_repository(),
         )

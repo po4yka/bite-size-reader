@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+from collections.abc import Mapping
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
@@ -19,11 +20,17 @@ from youtube_transcript_api._errors import NoTranscriptFound, TranscriptsDisable
 from app.core.async_utils import raise_if_cancelled
 from app.core.lang import detect_language
 from app.core.url_utils import extract_youtube_video_id, normalize_url, url_hash_sha256
+from app.infrastructure.persistence.sqlite.repositories.request_repository import (
+    SqliteRequestRepositoryAdapter,
+)
+from app.infrastructure.persistence.sqlite.repositories.video_download_repository import (
+    SqliteVideoDownloadRepositoryAdapter,
+)
 
 if TYPE_CHECKING:
     from app.adapters.external.response_formatter import ResponseFormatter
     from app.config import AppConfig
-    from app.db.database import Database
+    from app.db.session import DatabaseSessionManager
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +41,7 @@ class YouTubeDownloader:
     def __init__(
         self,
         cfg: AppConfig,
-        db: Database,
+        db: DatabaseSessionManager,
         response_formatter: ResponseFormatter,
         audit_func: Callable[[str, str, dict], None],
     ) -> None:
@@ -42,6 +49,8 @@ class YouTubeDownloader:
         self.db = db
         self.response_formatter = response_formatter
         self._audit = audit_func
+        self.video_repo = SqliteVideoDownloadRepositoryAdapter(db)
+        self.request_repo = SqliteRequestRepositoryAdapter(db)
 
         # Create storage directory
         self.storage_path = Path(cfg.youtube.storage_path)
@@ -81,9 +90,9 @@ class YouTubeDownloader:
         norm = normalize_url(url)
         dedupe = url_hash_sha256(norm)
 
-        # Check for existing request
-        existing_req = await self.db.async_get_request_by_dedupe_hash(dedupe)
-        if existing_req and isinstance(existing_req, dict):
+        # Fetch existing request by dedupe hash
+        existing_req = await self.request_repo.async_get_request_by_dedupe_hash(dedupe)
+        if isinstance(existing_req, Mapping):
             req_id = int(existing_req["id"])
             logger.info(
                 "youtube_dedupe_hit",
@@ -91,19 +100,21 @@ class YouTubeDownloader:
             )
         else:
             # Create new request
-            req_id = self._create_video_request(message, url, norm, dedupe, correlation_id)
+            req_id = await self._create_video_request(message, url, norm, dedupe, correlation_id)
 
         # Check for existing download
-        existing_download = self.db.get_video_download_by_request(req_id)
-        if existing_download and existing_download.status == "completed":
+        existing_download = await self.video_repo.async_get_video_download_by_request(req_id)
+        if existing_download and existing_download.get("status") == "completed":
             logger.info(
                 "youtube_video_already_downloaded",
                 extra={"video_id": video_id, "request_id": req_id, "cid": correlation_id},
             )
             metadata = self._build_metadata_dict(existing_download)
-            transcript_text = existing_download.transcript_text or ""
-            transcript_source = existing_download.transcript_source or "cached"
-            detected_lang = existing_download.subtitle_language or detect_language(transcript_text)
+            transcript_text = existing_download.get("transcript_text") or ""
+            transcript_source = existing_download.get("transcript_source") or "cached"
+            detected_lang = existing_download.get("subtitle_language") or detect_language(
+                transcript_text
+            )
             combined_text = self._combine_metadata_and_transcript(metadata, transcript_text)
 
             if not combined_text.strip():
@@ -129,14 +140,14 @@ class YouTubeDownloader:
                 metadata,
             )
 
-        # Create video download record
-        download_id = self.db.create_video_download(
+        # 1. Create initial download record
+        download_id = await self.video_repo.async_create_video_download(
             request_id=req_id, video_id=video_id, status="pending"
         )
 
         try:
-            # Update status to downloading
-            self.db.update_video_download_status(
+            # 2. Update status to downloading
+            await self.video_repo.async_update_video_download_status(
                 download_id, "downloading", download_started_at=datetime.now(UTC)
             )
 
@@ -180,7 +191,7 @@ class YouTubeDownloader:
                     transcript_text = vtt_text
                     transcript_lang = vtt_lang or transcript_lang
                     transcript_source = "vtt"
-                    auto_generated = True
+                    _ = auto_generated  # Mark as used/shadowed if we switch to VTT
                     logger.info(
                         "youtube_transcript_vtt_fallback_success",
                         extra={
@@ -201,13 +212,8 @@ class YouTubeDownloader:
             combined_text = self._combine_metadata_and_transcript(video_metadata, transcript_text)
 
             # Update database with complete metadata
-            self.db.update_video_download(
+            await self.video_repo.async_update_video_download(
                 download_id,
-                status="completed",
-                video_file_path=video_metadata["video_file_path"],
-                subtitle_file_path=video_metadata.get("subtitle_file_path"),
-                metadata_file_path=video_metadata.get("metadata_file_path"),
-                thumbnail_file_path=video_metadata.get("thumbnail_file_path"),
                 title=video_metadata.get("title"),
                 channel=video_metadata.get("channel"),
                 channel_id=video_metadata.get("channel_id"),
@@ -220,16 +226,11 @@ class YouTubeDownloader:
                 video_codec=video_metadata.get("vcodec"),
                 audio_codec=video_metadata.get("acodec"),
                 format_id=video_metadata.get("format_id"),
-                transcript_text=transcript_text,
-                transcript_source=transcript_source,
-                subtitle_language=transcript_lang or detected_lang,
-                auto_generated=auto_generated,
-                download_completed_at=datetime.now(UTC),
             )
 
             # Update request status
-            self.db.update_request_status(req_id, "ok")
-            self.db.update_request_lang_detected(req_id, detected_lang)
+            await self.request_repo.async_update_request_status(req_id, "ok")
+            await self.request_repo.async_update_request_lang_detected(req_id, detected_lang)
 
             # Notify user: download complete
             if not silent:
@@ -257,9 +258,11 @@ class YouTubeDownloader:
 
         except Exception as e:
             raise_if_cancelled(e)
-            # Update status to error
-            self.db.update_video_download_status(download_id, "error", error_text=str(e))
-            self.db.update_request_status(req_id, "error")
+            if download_id:
+                await self.video_repo.async_update_video_download_status(
+                    download_id, "error", error_text=str(e)
+                )
+            await self.request_repo.async_update_request_status(req_id, "error")
 
             self._audit(
                 "ERROR",
@@ -630,7 +633,7 @@ class YouTubeDownloader:
                 "format_id": metadata.get("format_id"),
             }
 
-    def _create_video_request(
+    async def _create_video_request(
         self, message: Any, url: str, norm: str, dedupe: str, correlation_id: str | None
     ) -> int:
         """Create a new request in the database for YouTube video."""
@@ -645,7 +648,7 @@ class YouTubeDownloader:
         msg_id_raw = getattr(message, "id", getattr(message, "message_id", 0))
         input_message_id = int(msg_id_raw) if msg_id_raw is not None else None
 
-        req_id = self.db.create_request(
+        req_id = await self.request_repo.async_create_request(
             type_="url",
             status="pending",
             correlation_id=correlation_id,

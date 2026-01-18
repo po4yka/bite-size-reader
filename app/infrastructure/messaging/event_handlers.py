@@ -9,6 +9,15 @@ from typing import Any
 
 from app.domain.events.request_events import RequestCompleted, RequestFailed
 from app.domain.events.summary_events import SummaryCreated, SummaryMarkedAsRead
+from app.infrastructure.persistence.sqlite.repositories.audit_log_repository import (
+    SqliteAuditLogRepositoryAdapter,
+)
+from app.infrastructure.persistence.sqlite.repositories.summary_repository import (
+    SqliteSummaryRepositoryAdapter,
+)
+from app.infrastructure.persistence.sqlite.repositories.topic_search_repository import (
+    SqliteTopicSearchRepositoryAdapter,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -20,15 +29,22 @@ class EmbeddingGenerationEventHandler:
     generates embeddings for semantic search.
     """
 
-    def __init__(self, embedding_generator: Any, vector_store: Any | None = None) -> None:
+    def __init__(
+        self,
+        embedding_generator: Any,
+        summary_repository: SqliteSummaryRepositoryAdapter,
+        vector_store: Any | None = None,
+    ) -> None:
         """Initialize the handler.
 
         Args:
             embedding_generator: SummaryEmbeddingGenerator instance.
+            summary_repository: Repository for summary retrieval.
             vector_store: Optional ChromaVectorStore for syncing embeddings.
 
         """
         self._generator = embedding_generator
+        self._summary_repo = summary_repository
         self._vector_store = vector_store
 
     async def on_summary_created(self, event: SummaryCreated) -> None:
@@ -91,17 +107,16 @@ class EmbeddingGenerationEventHandler:
         if not self._vector_store:
             return
 
-        db = getattr(self._generator, "db", None)
         embedding_service = getattr(self._generator, "embedding_service", None)
 
-        if db is None or embedding_service is None:
+        if embedding_service is None:
             logger.warning(
                 "vector_store_sync_unavailable",
                 extra={"request_id": request_id, "reason": "missing_dependencies"},
             )
             return
 
-        summary = await db.async_get_summary_by_request(request_id)
+        summary = await self._summary_repo.async_get_summary_by_request(request_id)
         if not summary:
             logger.info(
                 "vector_store_delete_missing_summary",
@@ -218,10 +233,13 @@ class SearchIndexEventHandler:
         """Initialize the handler.
 
         Args:
-            database: Database instance with FTS methods.
+            database: Database instance (session manager) or repository.
 
         """
-        self._db = database
+        if isinstance(database, SqliteTopicSearchRepositoryAdapter):
+            self._repo = database
+        else:
+            self._repo = SqliteTopicSearchRepositoryAdapter(database)
 
     async def on_summary_created(self, event: SummaryCreated) -> None:
         """Update search index when a new summary is created.
@@ -242,7 +260,7 @@ class SearchIndexEventHandler:
         try:
             # Rebuild search index for this request
             # This ensures the new summary is searchable
-            await self._db.async_rebuild_topic_index_for_request(event.request_id)
+            await self._repo.async_refresh_index(event.request_id)
 
             logger.debug(
                 "search_index_updated",
@@ -399,10 +417,13 @@ class AuditLogEventHandler:
         """Initialize the handler.
 
         Args:
-            database: Database instance with audit log methods.
+            database: Database instance or repository.
 
         """
-        self._db = database
+        if isinstance(database, SqliteAuditLogRepositoryAdapter):
+            self._repo = database
+        else:
+            self._repo = SqliteAuditLogRepositoryAdapter(database)
 
     async def on_summary_created(self, event: SummaryCreated) -> None:
         """Audit log summary creation.
@@ -412,7 +433,7 @@ class AuditLogEventHandler:
 
         """
         try:
-            await self._db.async_insert_audit_log(
+            await self._repo.async_insert_audit_log(
                 log_level="INFO",
                 event_type="summary_created",
                 details={
@@ -437,7 +458,7 @@ class AuditLogEventHandler:
 
         """
         try:
-            await self._db.async_insert_audit_log(
+            await self._repo.async_insert_audit_log(
                 log_level="INFO",
                 event_type="request_completed",
                 details={
@@ -460,7 +481,7 @@ class AuditLogEventHandler:
 
         """
         try:
-            await self._db.async_insert_audit_log(
+            await self._repo.async_insert_audit_log(
                 log_level="ERROR",
                 event_type="request_failed",
                 details={
@@ -926,6 +947,7 @@ def wire_event_handlers(
     webhook_url: str | None = None,
     embedding_generator: Any | None = None,
     vector_store: Any | None = None,
+    summary_repository: Any | None = None,
 ) -> None:
     """Wire up all event handlers to the event bus.
 
@@ -943,6 +965,7 @@ def wire_event_handlers(
         webhook_url: Optional webhook URL to send events to.
         embedding_generator: Optional SummaryEmbeddingGenerator for vector embeddings.
         vector_store: Optional ChromaVectorStore for note embeddings.
+        summary_repository: Optional repository for summary operations.
 
     Example:
         ```python
@@ -957,6 +980,7 @@ def wire_event_handlers(
             cache_service=redis_client,
             webhook_url="https://example.com/webhooks",
             embedding_generator=embedding_gen,
+            summary_repository=summary_repo,
         )
 
         # Now when events are published, all handlers are called
@@ -974,8 +998,8 @@ def wire_event_handlers(
     cache_handler = CacheInvalidationEventHandler(cache_service)
     webhook_handler = WebhookEventHandler(webhook_client, webhook_url)
     embedding_handler = (
-        EmbeddingGenerationEventHandler(embedding_generator, vector_store)
-        if embedding_generator
+        EmbeddingGenerationEventHandler(embedding_generator, summary_repository, vector_store)
+        if embedding_generator and summary_repository
         else None
     )
 

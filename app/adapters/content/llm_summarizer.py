@@ -30,6 +30,15 @@ from app.core.lang import LANG_RU
 from app.core.summary_contract import _cap_text, _extract_keywords_tfidf, _normalize_whitespace
 from app.db.user_interactions import async_safe_update_user_interaction
 from app.infrastructure.cache.redis_cache import RedisCache
+from app.infrastructure.persistence.sqlite.repositories.crawl_result_repository import (
+    SqliteCrawlResultRepositoryAdapter,
+)
+from app.infrastructure.persistence.sqlite.repositories.request_repository import (
+    SqliteRequestRepositoryAdapter,
+)
+from app.infrastructure.persistence.sqlite.repositories.summary_repository import (
+    SqliteSummaryRepositoryAdapter,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -37,73 +46,40 @@ if TYPE_CHECKING:
     from app.adapters.external.response_formatter import ResponseFormatter
     from app.adapters.openrouter.openrouter_client import OpenRouterClient
     from app.config import AppConfig
-    from app.db.database import Database
+    from app.db.session import DatabaseSessionManager
 
 logger = logging.getLogger(__name__)
 
 
-_STRING_LIST_SPLITTER_RE = re.compile(r"[\n\r•;]+")
+# Regex for splitting comma/semicolon/newline separated strings
+_STRING_LIST_SPLITTER_RE = re.compile(r"[,;|\n]+")
+
+# Simple stop words for keyword extraction
 _SIMPLE_KEYWORD_STOP_WORDS = {
-    "this",
-    "that",
+    "and",
+    "the",
     "with",
     "from",
-    "have",
+    "that",
+    "this",
     "they",
-    "what",
     "been",
-    "will",
-    "would",
-    "there",
+    "have",
+    "were",
     "their",
-    "about",
-    "which",
-    "when",
-    "make",
-    "like",
-    "time",
-    "just",
-    "know",
-    "take",
-    "into",
-    "year",
+    "will",
     "some",
-    "could",
-    "them",
-    "other",
-    "than",
-    "then",
-    "look",
-    "only",
-    "come",
-    "over",
-    "also",
-    "back",
-    "after",
-    "work",
-    "first",
-    "well",
-    "even",
-    "want",
-    "because",
-    "these",
-    "give",
-    "most",
-    "very",
+    "который",
+    "через",
+    "между",
+    "после",
+    "перед",
+    "было",
+    "были",
     "есть",
-    "это",
-    "как",
-    "что",
-    "все",
-    "для",
-    "она",
-    "оно",
-    "при",
-    "так",
-    "его",
-    "или",
-    "еще",
-    "уже",
+    "будет",
+    "этого",
+    "чтобы",
 }
 
 
@@ -170,7 +146,7 @@ class LLMSummarizer:
     def __init__(
         self,
         cfg: AppConfig,
-        db: Database,
+        db: DatabaseSessionManager,
         openrouter: OpenRouterClient,
         response_formatter: ResponseFormatter,
         audit_func: Callable[[str, str, dict], None],
@@ -182,6 +158,9 @@ class LLMSummarizer:
         self.response_formatter = response_formatter
         self._audit = audit_func
         self._sem = sem
+        self.summary_repo = SqliteSummaryRepositoryAdapter(db)
+        self.request_repo = SqliteRequestRepositoryAdapter(db)
+        self.crawl_result_repo = SqliteCrawlResultRepositoryAdapter(db)
         self._workflow = LLMResponseWorkflow(
             cfg=cfg,
             db=db,
@@ -1249,7 +1228,7 @@ class LLMSummarizer:
                 "content_source": "unknown",
             },
         )
-        await self.db.async_update_request_status(req_id, "error")
+        await self.request_repo.async_update_request_status(req_id, "error")
         await self.response_formatter.send_error_notification(
             message, "empty_content", correlation_id
         )
@@ -1322,7 +1301,7 @@ class LLMSummarizer:
         if not missing_fields:
             return summary
 
-        firecrawl_flat = self._load_firecrawl_metadata(req_id)
+        firecrawl_flat = await self._load_firecrawl_metadata(req_id)
         if firecrawl_flat:
             filled_from_crawl = self._apply_firecrawl_metadata(
                 metadata, missing_fields, firecrawl_flat, correlation_id
@@ -1331,7 +1310,7 @@ class LLMSummarizer:
 
         request_row: dict[str, Any] | None = None
         try:
-            request_row = self.db.get_request_by_id(req_id)
+            request_row = await self.request_repo.async_get_request_by_id(req_id)
         except Exception as exc:
             raise_if_cancelled(exc)
             logger.exception(
@@ -1420,10 +1399,10 @@ class LLMSummarizer:
                 break
         return filled
 
-    def _load_firecrawl_metadata(self, req_id: int) -> dict[str, str]:
+    async def _load_firecrawl_metadata(self, req_id: int) -> dict[str, str]:
         """Load and flatten Firecrawl metadata for a request."""
         try:
-            crawl_row = self.db.get_crawl_result_by_request(req_id)
+            crawl_row = await self.crawl_result_repo.async_get_crawl_result_by_request(req_id)
         except Exception as exc:
             raise_if_cancelled(exc)
             logger.exception("firecrawl_lookup_failed", extra={"error": str(exc)})
@@ -1435,17 +1414,22 @@ class LLMSummarizer:
         parsed: Any = None
         metadata_raw = crawl_row.get("metadata_json")
         if metadata_raw:
-            try:
-                parsed = json.loads(metadata_raw)
-            except Exception as exc:
-                raise_if_cancelled(exc)
-                logger.debug("firecrawl_metadata_parse_error", extra={"error": str(exc)})
+            if isinstance(metadata_raw, dict):
+                parsed = metadata_raw
+            else:
+                try:
+                    parsed = json.loads(metadata_raw)
+                except Exception as exc:
+                    raise_if_cancelled(exc)
+                    logger.debug("firecrawl_metadata_parse_error", extra={"error": str(exc)})
 
         if parsed is None:
             raw_payload = crawl_row.get("raw_response_json")
             if raw_payload:
                 try:
-                    payload = json.loads(raw_payload)
+                    payload = (
+                        raw_payload if isinstance(raw_payload, dict) else json.loads(raw_payload)
+                    )
                     if isinstance(payload, dict):
                         data_block = payload.get("data")
                         if isinstance(data_block, dict):
@@ -2125,10 +2109,12 @@ class LLMSummarizer:
         summary_candidate = summary or self._last_summary_shaped
         if summary_candidate is None:
             try:
-                row = self.db.get_summary_by_request(req_id)
+                row = await self.summary_repo.async_get_summary_by_request(req_id)
                 json_payload = row.get("json_payload") if row else None
                 if json_payload:
-                    summary_candidate = json.loads(json_payload)
+                    summary_candidate = (
+                        json_payload if isinstance(json_payload, dict) else json.loads(json_payload)
+                    )
             except Exception as exc:
                 raise_if_cancelled(exc)
                 logger.debug(

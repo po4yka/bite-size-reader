@@ -1,21 +1,17 @@
-from __future__ import annotations
-
 import asyncio
 import logging
-from typing import TYPE_CHECKING, Any
+from collections.abc import Callable
+from typing import Any
 
 from app.adapters.content.url_processor import URLProcessor
-from app.adapters.external.firecrawl_parser import FirecrawlClient
+from app.adapters.external.firecrawl_client import FirecrawlClient
 from app.adapters.external.response_formatter import ResponseFormatter
 from app.adapters.openrouter.openrouter_client import OpenRouterClient
 from app.api.background_processor import BackgroundProcessor
 from app.config import AppConfig, load_config
 from app.core.logging_utils import get_logger
-from app.db.database import Database
+from app.db.session import DatabaseSessionManager
 from app.infrastructure.redis import get_redis
-
-if TYPE_CHECKING:
-    from collections.abc import Callable
 
 logger = get_logger(__name__)
 
@@ -23,7 +19,7 @@ logger = get_logger(__name__)
 async def build_background_processor(
     cfg: AppConfig | None = None,
     *,
-    db: Database | None = None,
+    db: DatabaseSessionManager | None = None,
     firecrawl: FirecrawlClient | None = None,
     openrouter: OpenRouterClient | None = None,
     response_formatter: ResponseFormatter | None = None,
@@ -36,7 +32,7 @@ async def build_background_processor(
     cfg = cfg or load_config()
 
     if db is None:
-        db = Database(
+        db = DatabaseSessionManager(
             path=cfg.runtime.db_path,
             operation_timeout=cfg.database.operation_timeout,
             max_retries=cfg.database.max_retries,

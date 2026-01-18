@@ -15,6 +15,9 @@ from app.core.async_utils import raise_if_cancelled
 from app.core.lang import LANG_RU, choose_language
 from app.core.url_utils import normalize_url, url_hash_sha256
 from app.db.user_interactions import async_safe_update_user_interaction
+from app.infrastructure.persistence.sqlite.repositories.summary_repository import (
+    SqliteSummaryRepositoryAdapter,
+)
 from app.prompts.manager import get_prompt_manager
 
 if TYPE_CHECKING:
@@ -24,7 +27,7 @@ if TYPE_CHECKING:
     from app.adapters.external.response_formatter import ResponseFormatter
     from app.adapters.openrouter.openrouter_client import OpenRouterClient
     from app.config import AppConfig
-    from app.db.database import Database
+    from app.db.session import DatabaseSessionManager
 
 logger = logging.getLogger(__name__)
 
@@ -62,7 +65,7 @@ class URLProcessor:
     def __init__(
         self,
         cfg: AppConfig,
-        db: Database,
+        db: DatabaseSessionManager,
         firecrawl: FirecrawlClient,
         openrouter: OpenRouterClient,
         response_formatter: ResponseFormatter,
@@ -73,6 +76,7 @@ class URLProcessor:
         self.db = db
         self.response_formatter = response_formatter
         self._audit = audit_func
+        self.summary_repo = SqliteSummaryRepositoryAdapter(db)
 
         # Initialize modular components
         self.content_extractor = ContentExtractor(
@@ -399,12 +403,16 @@ class URLProcessor:
             norm = normalize_url(url_text)
             dedupe_hash = url_hash_sha256(norm)
 
-            request_row = self.db.get_request_by_dedupe_hash(dedupe_hash)
+            request_row = (
+                await self.message_persistence.request_repo.async_get_request_by_dedupe_hash(
+                    dedupe_hash
+                )
+            )
             request_id = request_row.get("id") if isinstance(request_row, dict) else None
             if not isinstance(request_id, int):
                 return False
 
-            cached = self.db.get_summary_by_request(request_id)
+            cached = await self.summary_repo.async_get_summary_by_request(request_id)
             payload = cached.get("json_payload") if isinstance(cached, dict) else None
             if isinstance(payload, str):
                 try:
@@ -455,13 +463,13 @@ class URLProcessor:
     ) -> None:
         """Persist summary to database."""
         try:
-            new_version = await self.db.async_upsert_summary(
+            new_version = await self.summary_repo.async_upsert_summary(
                 request_id=req_id,
                 lang=chosen_lang,
                 json_payload=summary_json,
                 is_read=not silent,
             )
-            await self.db.async_update_request_status(req_id, "ok")
+            await self.message_persistence.request_repo.async_update_request_status(req_id, "ok")
             self._audit("INFO", "summary_upserted", {"request_id": req_id, "version": new_version})
 
             if interaction_id:
@@ -653,7 +661,7 @@ class URLProcessor:
                     logger.info("insights_generated_silently", extra={"cid": correlation_id})
 
                 try:
-                    self.db.update_summary_insights(req_id, insights)
+                    await self.summary_repo.async_update_summary_insights(req_id, insights)
                     logger.debug(
                         "insights_persisted", extra={"cid": correlation_id, "request_id": req_id}
                     )

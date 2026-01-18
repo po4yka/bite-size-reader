@@ -103,7 +103,7 @@ async def download_database(request: Request, user=Depends(get_current_user)):
 
     Requires owner permissions.
     """
-    _require_owner(user)
+    await _require_owner(user)
     return _build_db_dump_response(request, user)
 
 
@@ -113,5 +113,5 @@ async def head_database(request: Request, user=Depends(get_current_user)):
 
     Requires owner permissions.
     """
-    _require_owner(user)
+    await _require_owner(user)
     return _build_db_dump_response(request, user)

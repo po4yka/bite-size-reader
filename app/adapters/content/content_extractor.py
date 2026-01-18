@@ -17,12 +17,14 @@ import httpx
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.adapters.external.firecrawl_parser import FirecrawlClient, FirecrawlResult
+from app.adapters.telegram.message_persistence import MessagePersistence
 from app.config import AppConfig
 from app.core.async_utils import raise_if_cancelled
 from app.core.html_utils import clean_markdown_article_text, html_to_text, normalize_text
 from app.core.lang import detect_language
 from app.core.url_utils import normalize_url, url_hash_sha256
-from app.db.database import Database
+from app.db.session import DatabaseSessionManager
+from app.db.utils import prepare_json_payload
 from app.infrastructure.cache.redis_cache import RedisCache
 
 if TYPE_CHECKING:
@@ -71,7 +73,7 @@ class ContentExtractor:
     def __init__(
         self,
         cfg: AppConfig,
-        db: Database,
+        db: DatabaseSessionManager,
         firecrawl: FirecrawlClient,
         response_formatter: ResponseFormatter,
         audit_func: Callable[[str, str, dict], None],
@@ -84,6 +86,7 @@ class ContentExtractor:
         self._audit = audit_func
         self._sem = sem
         self._cache = RedisCache(cfg)
+        self.message_persistence = MessagePersistence(db)
 
     def _schedule_crawl_persistence(
         self, req_id: int, crawl: FirecrawlResult, correlation_id: str | None
@@ -118,28 +121,12 @@ class ContentExtractor:
     ) -> None:
         """Persist crawl result with error logging."""
         try:
-            details_payload = Database._prepare_json_payload(crawl.response_details)
-            self.db.insert_crawl_result(
+            await self.message_persistence.crawl_repo.async_insert_crawl_result(
                 request_id=req_id,
-                source_url=crawl.source_url,
-                endpoint=crawl.endpoint,
-                http_status=crawl.http_status,
-                status=crawl.status,
-                options_json=crawl.options_json,
-                correlation_id=crawl.correlation_id,
-                content_markdown=crawl.content_markdown,
-                content_html=crawl.content_html,
-                structured_json=crawl.structured_json,
+                success=crawl.response_success,
+                markdown=crawl.content_markdown,
+                error=crawl.error_text,
                 metadata_json=crawl.metadata_json,
-                links_json=crawl.links_json,
-                screenshots_paths_json=None,
-                firecrawl_success=crawl.response_success,
-                firecrawl_error_code=crawl.response_error_code,
-                firecrawl_error_message=crawl.response_error_message,
-                firecrawl_details_json=details_payload,
-                raw_response_json=None,
-                latency_ms=crawl.latency_ms,
-                error_text=crawl.error_text,
             )
         except Exception as e:  # noqa: BLE001
             raise_if_cancelled(e)
@@ -321,7 +308,9 @@ class ContentExtractor:
         # Language detection
         detected = detect_language(content_text or "")
         try:
-            self.db.update_request_lang_detected(req_id, detected)
+            await self.message_persistence.request_repo.async_update_request_lang_detected(
+                req_id, detected
+            )
         except Exception as e:  # noqa: BLE001
             raise_if_cancelled(e)
             logger.error("persist_lang_detected_error", extra={"error": str(e)})
@@ -339,13 +328,13 @@ class ContentExtractor:
         Returns:
             Request ID (either existing or newly created)
         """
-        self._upsert_sender_metadata(message)
+        await self._upsert_sender_metadata(message)
 
         # Optimistic approach: Try to create first, handle collision if it occurs
         # This is more efficient than always checking first (avoids extra DB query)
         try:
             # Attempt to create new request
-            req_id = self._create_new_request(message, url_text, norm, dedupe, correlation_id)
+            req_id = await self._create_new_request(message, url_text, norm, dedupe, correlation_id)
 
             # If we get here, creation succeeded (new URL)
             self._audit(
@@ -369,10 +358,9 @@ class ContentExtractor:
             )
 
             # Fetch existing request by dedupe hash
-            existing_req = await self.db.async_get_request_by_dedupe_hash(dedupe)
-            if not isinstance(existing_req, Mapping):
-                getter = getattr(self.db, "get_request_by_dedupe_hash", None)
-                existing_req = getter(dedupe) if callable(getter) else None
+            existing_req = (
+                await self.message_persistence.request_repo.async_get_request_by_dedupe_hash(dedupe)
+            )
 
             if isinstance(existing_req, Mapping):
                 existing_req = dict(existing_req)
@@ -393,7 +381,9 @@ class ContentExtractor:
                 # Update correlation ID for the existing request
                 if correlation_id:
                     try:
-                        self.db.update_request_correlation_id(req_id, correlation_id)
+                        await self.message_persistence.request_repo.async_update_request_correlation_id(
+                            req_id, correlation_id
+                        )
                     except Exception as e:  # noqa: BLE001
                         logger.error(
                             "persist_cid_error", extra={"error": str(e), "cid": correlation_id}
@@ -412,7 +402,7 @@ class ContentExtractor:
             )
             raise create_error
 
-    def _create_new_request(
+    async def _create_new_request(
         self, message: Any, url_text: str, norm: str, dedupe: str, correlation_id: str | None
     ) -> int:
         """Create a new request in the database."""
@@ -433,7 +423,7 @@ class ContentExtractor:
         msg_id_raw = getattr(message, "id", getattr(message, "message_id", 0))
         input_message_id = safe_message_id(msg_id_raw, field_name="message_id")
 
-        req_id = self.db.create_request(
+        req_id = await self.message_persistence.request_repo.async_create_request(
             type_="url",
             status="pending",
             correlation_id=correlation_id,
@@ -449,14 +439,14 @@ class ContentExtractor:
 
         # Snapshot telegram message (only on first request for this URL)
         try:
-            self._persist_message_snapshot(req_id, message)
+            await self._persist_message_snapshot(req_id, message)
         except Exception as e:  # noqa: BLE001
             raise_if_cancelled(e)
             logger.error("snapshot_error", extra={"error": str(e), "cid": correlation_id})
 
         return req_id
 
-    def _upsert_sender_metadata(self, message: Any) -> None:
+    async def _upsert_sender_metadata(self, message: Any) -> None:
         """Persist sender user/chat metadata for the interaction."""
         from app.core.validation import safe_telegram_chat_id, safe_telegram_user_id
 
@@ -468,7 +458,7 @@ class ContentExtractor:
             chat_title = getattr(chat_obj, "title", None)
             chat_username = getattr(chat_obj, "username", None)
             try:
-                self.db.upsert_chat(
+                await self.message_persistence.user_repo.async_upsert_chat(
                     chat_id=chat_id,
                     type_=str(chat_type) if chat_type is not None else None,
                     title=str(chat_title) if isinstance(chat_title, str) else None,
@@ -486,7 +476,7 @@ class ContentExtractor:
         if user_id is not None:
             username = getattr(from_user_obj, "username", None)
             try:
-                self.db.upsert_user(
+                await self.message_persistence.user_repo.async_upsert_user(
                     telegram_user_id=user_id,
                     username=str(username) if isinstance(username, str) else None,
                 )
@@ -507,10 +497,9 @@ class ContentExtractor:
         silent: bool = False,
     ) -> tuple[str, str]:
         """Extract content from Firecrawl or reuse existing crawl result."""
-        existing_crawl = await self.db.async_get_crawl_result_by_request(req_id)
-        if not isinstance(existing_crawl, Mapping):
-            getter = getattr(self.db, "get_crawl_result_by_request", None)
-            existing_crawl = getter(req_id) if callable(getter) else None
+        existing_crawl = (
+            await self.message_persistence.crawl_repo.async_get_crawl_result_by_request(req_id)
+        )
 
         if isinstance(existing_crawl, Mapping):
             existing_crawl = dict(existing_crawl)
@@ -926,7 +915,7 @@ class ContentExtractor:
         silent: bool = False,
     ) -> None:
         """Handle Firecrawl extraction errors."""
-        await self.db.async_update_request_status(req_id, "error")
+        await self.message_persistence.request_repo.async_update_request_status(req_id, "error")
         # Provide a precise, user-visible stage and context
         detail_lines = []
         url_line = crawl.source_url or "unknown"
@@ -1084,157 +1073,9 @@ class ContentExtractor:
 
         return content_text, content_source
 
-    def _persist_message_snapshot(self, request_id: int, message: Any) -> None:
+    async def _persist_message_snapshot(self, request_id: int, message: Any) -> None:
         """Persist message snapshot to database."""
-        # Security: Validate request_id
-        if not isinstance(request_id, int) or request_id <= 0:
-            raise ValueError("Invalid request_id")
-
-        # Security: Validate message object
-        if message is None:
-            raise ValueError("Message cannot be None")
-
-        # Extract basic fields with best-effort approach
-        msg_id_raw = getattr(message, "id", getattr(message, "message_id", 0))
-        msg_id = int(msg_id_raw) if msg_id_raw is not None else None
-
-        chat_obj = getattr(message, "chat", None)
-        chat_id_raw = getattr(chat_obj, "id", 0) if chat_obj is not None else None
-        chat_id = int(chat_id_raw) if chat_id_raw is not None else None
-
-        def _to_epoch(val: Any) -> int | None:
-            try:
-                from datetime import datetime
-
-                if isinstance(val, datetime):
-                    return int(val.timestamp())
-                if val is None:
-                    return None
-                # Some libraries expose pyrogram types with .timestamp or int-like
-                if hasattr(val, "timestamp"):
-                    try:
-                        ts_val = getattr(val, "timestamp")
-                        if callable(ts_val):
-                            return int(ts_val())
-                    except (AttributeError, TypeError, ValueError):
-                        pass
-                return int(val)  # may raise if not int-like
-            except (TypeError, ValueError, AttributeError):
-                return None
-
-        date_ts = _to_epoch(
-            getattr(message, "date", None) or getattr(message, "forward_date", None)
-        )
-        text_full = getattr(message, "text", None) or getattr(message, "caption", "") or None
-
-        entities_obj = list(getattr(message, "entities", []) or [])
-        entities_obj.extend(list(getattr(message, "caption_entities", []) or []))
-        try:
-
-            def _ent_to_dict(e: Any) -> dict:
-                if hasattr(e, "to_dict"):
-                    try:
-                        entity_dict = e.to_dict()
-                        # Check if the result is actually serializable (not a MagicMock)
-                        if isinstance(entity_dict, dict):
-                            return entity_dict
-                    except (AttributeError, TypeError, RuntimeError):
-                        pass
-                return getattr(e, "__dict__", {})
-
-            entities_json = [_ent_to_dict(e) for e in entities_obj]
-        except (AttributeError, TypeError, ValueError):
-            entities_json = None
-
-        media_type = None
-        media_file_ids: list[str] = []
-        # Detect common media types and collect file_ids
-        try:
-            if getattr(message, "photo", None) is not None:
-                media_type = "photo"
-                photo = getattr(message, "photo")
-                fid = getattr(photo, "file_id", None)
-                if fid:
-                    media_file_ids.append(fid)
-            elif getattr(message, "video", None) is not None:
-                media_type = "video"
-                fid = getattr(getattr(message, "video"), "file_id", None)
-                if fid:
-                    media_file_ids.append(fid)
-            elif getattr(message, "document", None) is not None:
-                media_type = "document"
-                fid = getattr(getattr(message, "document"), "file_id", None)
-                if fid:
-                    media_file_ids.append(fid)
-            elif getattr(message, "audio", None) is not None:
-                media_type = "audio"
-                fid = getattr(getattr(message, "audio"), "file_id", None)
-                if fid:
-                    media_file_ids.append(fid)
-            elif getattr(message, "voice", None) is not None:
-                media_type = "voice"
-                fid = getattr(getattr(message, "voice"), "file_id", None)
-                if fid:
-                    media_file_ids.append(fid)
-            elif getattr(message, "animation", None) is not None:
-                media_type = "animation"
-                fid = getattr(getattr(message, "animation"), "file_id", None)
-                if fid:
-                    media_file_ids.append(fid)
-            elif getattr(message, "sticker", None) is not None:
-                media_type = "sticker"
-                fid = getattr(getattr(message, "sticker"), "file_id", None)
-                if fid:
-                    media_file_ids.append(fid)
-        except (AttributeError, TypeError):
-            pass
-
-        # Filter out non-string values (like MagicMock objects) from media_file_ids
-        valid_media_file_ids = [fid for fid in media_file_ids if isinstance(fid, str)]
-        media_file_ids_json = valid_media_file_ids or None
-
-        # Forward info
-        fwd_chat = getattr(message, "forward_from_chat", None)
-        fwd_chat_id_raw = getattr(fwd_chat, "id", 0) if fwd_chat is not None else None
-        forward_from_chat_id = int(fwd_chat_id_raw) if fwd_chat_id_raw is not None else None
-        forward_from_chat_type = getattr(fwd_chat, "type", None)
-        forward_from_chat_title = getattr(fwd_chat, "title", None)
-
-        fwd_msg_id_raw = getattr(message, "forward_from_message_id", 0)
-        forward_from_message_id = int(fwd_msg_id_raw) if fwd_msg_id_raw is not None else None
-        forward_date_ts = _to_epoch(getattr(message, "forward_date", None))
-
-        # Raw JSON if possible
-        raw_json = None
-        try:
-            if hasattr(message, "to_dict"):
-                message_dict = message.to_dict()
-                # Check if the result is actually serializable (not a MagicMock)
-                if isinstance(message_dict, dict):
-                    raw_json = message_dict
-                else:
-                    raw_json = None
-            else:
-                raw_json = None
-        except (AttributeError, TypeError, RuntimeError):
-            raw_json = None
-
-        self.db.insert_telegram_message(
-            request_id=request_id,
-            message_id=msg_id,
-            chat_id=chat_id,
-            date_ts=date_ts,
-            text_full=text_full,
-            entities_json=entities_json,
-            media_type=media_type,
-            media_file_ids_json=media_file_ids_json,
-            forward_from_chat_id=forward_from_chat_id,
-            forward_from_chat_type=forward_from_chat_type,
-            forward_from_chat_title=forward_from_chat_title,
-            forward_from_message_id=forward_from_message_id,
-            forward_date_ts=forward_date_ts,
-            telegram_raw_json=raw_json,
-        )
+        await self.message_persistence.persist_message_snapshot(request_id, message)
 
     async def _extract_youtube_content(
         self,

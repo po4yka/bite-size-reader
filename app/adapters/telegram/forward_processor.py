@@ -11,12 +11,21 @@ from typing import TYPE_CHECKING, Any
 from app.adapters.telegram.forward_content_processor import ForwardContentProcessor
 from app.adapters.telegram.forward_summarizer import ForwardSummarizer
 from app.db.user_interactions import async_safe_update_user_interaction
+from app.infrastructure.persistence.sqlite.repositories.request_repository import (
+    SqliteRequestRepositoryAdapter,
+)
+from app.infrastructure.persistence.sqlite.repositories.summary_repository import (
+    SqliteSummaryRepositoryAdapter,
+)
+from app.infrastructure.persistence.sqlite.repositories.user_repository import (
+    SqliteUserRepositoryAdapter,
+)
 
 if TYPE_CHECKING:
     from app.adapters.external.response_formatter import ResponseFormatter
     from app.adapters.openrouter.openrouter_client import OpenRouterClient
     from app.config import AppConfig
-    from app.db.database import Database
+    from app.db.session import DatabaseSessionManager
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +36,7 @@ class ForwardProcessor:
     def __init__(
         self,
         cfg: AppConfig,
-        db: Database,
+        db: DatabaseSessionManager,
         openrouter: OpenRouterClient,
         response_formatter: ResponseFormatter,
         audit_func: Callable[[str, str, dict], None],
@@ -35,6 +44,9 @@ class ForwardProcessor:
     ) -> None:
         self.cfg = cfg
         self.db = db
+        self.summary_repo = SqliteSummaryRepositoryAdapter(db)
+        self.request_repo = SqliteRequestRepositoryAdapter(db)
+        self.user_repo = SqliteUserRepositoryAdapter(db)
         self.response_formatter = response_formatter
         self._audit = audit_func
 
@@ -171,7 +183,7 @@ class ForwardProcessor:
         interaction_id: int | None,
     ) -> bool:
         """Return True if a cached summary exists for the forward request."""
-        summary_row = await self.db.async_get_summary_by_request(req_id)
+        summary_row = await self.summary_repo.async_get_summary_by_request(req_id)
         if not summary_row:
             return False
 
@@ -187,11 +199,11 @@ class ForwardProcessor:
         await self.response_formatter.send_cached_summary_notification(message)
         await self.response_formatter.send_forward_summary_response(message, shaped)
 
-        await self.db.async_update_request_status(req_id, "ok")
+        await self.request_repo.async_update_request_status(req_id, "ok")
 
         if interaction_id:
             await async_safe_update_user_interaction(
-                self.db,
+                self.user_repo,
                 interaction_id=interaction_id,
                 response_sent=True,
                 response_type="summary",
@@ -210,7 +222,7 @@ class ForwardProcessor:
         """Extract the content text for a forward message."""
         try:
             # Get the request details to extract the content
-            request_row = await self.db.async_get_summary_by_request(req_id)
+            request_row = await self.summary_repo.async_get_summary_by_request(req_id)
             if not request_row:
                 return None
 
@@ -333,7 +345,7 @@ class ForwardProcessor:
                 summary_payload = dict(summary)
             if summary_payload is None:
                 try:
-                    row = await self.db.async_get_summary_by_request(req_id)
+                    row = await self.summary_repo.async_get_summary_by_request(req_id)
                     json_payload = row.get("json_payload") if row else None
                     if json_payload:
                         summary_payload = json.loads(json_payload)
@@ -378,7 +390,7 @@ class ForwardProcessor:
                 logger.info("insights_message_sent_for_forward", extra={"cid": correlation_id})
 
                 try:
-                    self.db.update_summary_insights(req_id, insights)
+                    await self.summary_repo.async_update_summary_insights(req_id, insights)
                     logger.debug(
                         "insights_persisted_for_forward",
                         extra={"cid": correlation_id, "request_id": req_id},

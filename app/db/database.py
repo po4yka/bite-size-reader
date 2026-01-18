@@ -5,7 +5,6 @@ import contextlib
 import datetime as dt
 import json
 import logging
-import re
 import sqlite3
 from collections.abc import Iterable, Iterator, Mapping, Sequence
 from contextlib import AbstractAsyncContextManager
@@ -14,10 +13,11 @@ from pathlib import Path
 from typing import Any
 
 import peewee
-from peewee import JOIN, fn
+from peewee import fn
 from playhouse.sqlite_ext import SqliteExtDatabase
 
 from app.core.time_utils import UTC
+from app.db.database_diagnostics import DatabaseDiagnostics
 from app.db.models import (
     ALL_MODELS,
     AuditLog,
@@ -28,19 +28,15 @@ from app.db.models import (
     Summary,
     SummaryEmbedding,
     TelegramMessage,
-    TopicSearchIndex,
     User,
     UserInteraction,
     database_proxy,
     model_to_dict,
 )
 from app.db.rw_lock import AsyncRWLock
-from app.services.topic_search_utils import (
-    TopicSearchDocument,
-    build_topic_search_document,
-    ensure_mapping,
-    tokenize,
-)
+from app.db.topic_search_index import TopicSearchIndexManager
+from app.db.video_downloads import VideoDownloadManager
+from app.services.topic_search_utils import ensure_mapping, tokenize
 from app.services.trending_cache import clear_trending_cache
 
 JSONValue = Mapping[str, Any] | Sequence[Any] | str | None
@@ -62,10 +58,6 @@ DB_JSON_MAX_ARRAY_LENGTH = 10_000
 DB_JSON_MAX_DICT_KEYS = 1_000
 
 
-class TopicSearchIndexRebuiltError(RuntimeError):
-    """Raised to signal that the topic search index was rebuilt mid-operation."""
-
-
 class RowSqliteDatabase(SqliteExtDatabase):
     """SQLite database subclass that configures the row factory for dict-like access."""
 
@@ -82,9 +74,10 @@ class Database:
     path: str
     _logger: logging.Logger = logging.getLogger(__name__)
     _database: peewee.SqliteDatabase = field(init=False)
-    _topic_search_index_reset_in_progress: bool = field(default=False, init=False)
-    _topic_search_index_delete_warned: bool = field(default=False, init=False)
     _rw_lock: AsyncRWLock = field(init=False)
+    _diagnostics: DatabaseDiagnostics = field(init=False)
+    _topic_search: TopicSearchIndexManager = field(init=False)
+    _video_downloads: VideoDownloadManager = field(init=False)
 
     # Configuration values (can be set via database_config parameter or use module defaults)
     operation_timeout: float = field(default=DB_OPERATION_TIMEOUT)
@@ -110,6 +103,9 @@ class Database:
         # Initialize read-write lock for thread-safe database access
         # This allows multiple concurrent readers OR one exclusive writer
         self._rw_lock = AsyncRWLock()
+        self._diagnostics = DatabaseDiagnostics(self, self._database, self._logger)
+        self._topic_search = TopicSearchIndexManager(self._database, self._logger)
+        self._video_downloads = VideoDownloadManager(self._logger)
 
     async def _safe_db_operation(
         self,
@@ -155,7 +151,12 @@ class Database:
 
                 async def _run_with_lock(context: AbstractAsyncContextManager[Any]) -> Any:
                     async with context:
-                        return await asyncio.to_thread(operation, *args, **kwargs)
+
+                        def _op_wrapper() -> Any:
+                            with self._database.connection_context():
+                                return operation(*args, **kwargs)
+
+                        return await asyncio.to_thread(_op_wrapper)
 
                 return await asyncio.wait_for(_run_with_lock(lock_context), timeout=timeout)
 
@@ -579,88 +580,7 @@ class Database:
             return cursor.fetchone()
 
     def get_database_overview(self) -> dict[str, Any]:
-        overview: dict[str, Any] = {
-            "tables": {},
-            "errors": [],
-            "tables_truncated": None,
-        }
-
-        try:
-            with self._database.connection_context():
-                tables = {}
-                for table in sorted(self._database.get_tables()):
-                    try:
-                        tables[table] = self._count_table_rows(table)
-                    except peewee.DatabaseError as exc:
-                        overview["errors"].append(f"Failed to count rows for table '{table}'")
-                        self._logger.exception(
-                            "db_table_count_failed",
-                            extra={"table": table, "error": str(exc)},
-                        )
-                overview["tables"] = tables
-
-                if "requests" in tables:
-                    try:
-                        status_rows = list(
-                            Request.select(Request.status, fn.COUNT(Request.id).alias("cnt"))
-                            .group_by(Request.status)
-                            .dicts()
-                        )
-                        overview["requests_by_status"] = {
-                            str(row["status"] or "unknown"): int(row["cnt"]) for row in status_rows
-                        }
-                    except peewee.DatabaseError as exc:
-                        overview["errors"].append("Failed to aggregate request statuses")
-                        self._logger.exception(
-                            "db_requests_status_failed", extra={"error": str(exc)}
-                        )
-
-                    overview["last_request_at"] = self._fetch_single_value(
-                        "SELECT created_at FROM requests ORDER BY created_at DESC LIMIT 1"
-                    )
-
-                if "summaries" in tables:
-                    overview["last_summary_at"] = self._fetch_single_value(
-                        "SELECT created_at FROM summaries ORDER BY created_at DESC LIMIT 1"
-                    )
-
-                if "audit_logs" in tables:
-                    overview["last_audit_at"] = self._fetch_single_value(
-                        "SELECT ts FROM audit_logs ORDER BY ts DESC LIMIT 1"
-                    )
-        except peewee.DatabaseError as exc:
-            overview["errors"].append("Failed to query database overview")
-            self._logger.exception("db_overview_failed", extra={"error": str(exc)})
-
-        tables = overview.get("tables")
-        if isinstance(tables, dict):
-            overview["total_requests"] = int(tables.get("requests", 0))
-            overview["total_summaries"] = int(tables.get("summaries", 0))
-        else:
-            overview["total_requests"] = 0
-            overview["total_summaries"] = 0
-
-        if not overview["errors"]:
-            overview.pop("errors")
-        if not overview.get("tables_truncated"):
-            overview.pop("tables_truncated", None)
-        return overview
-
-    def _fetch_single_value(self, sql: str) -> Any:
-        row = self.fetchone(sql)
-        return row[0] if row else None
-
-    def _count_table_rows(self, table_name: str) -> int:
-        """Return the number of rows in the given table using Peewee queries."""
-        model = next(
-            (model for model in ALL_MODELS if model._meta.table_name == table_name),
-            None,
-        )
-        if model is not None:
-            return model.select().count()
-
-        dynamic_table = peewee.Table(table_name)
-        return dynamic_table.select().count(self._database)
+        return self._diagnostics.get_database_overview()
 
     def _mask_path(self, path: str) -> str:
         try:
@@ -686,232 +606,10 @@ class Database:
         required_fields: Iterable[str] | None = None,
         limit: int | None = None,
     ) -> dict[str, Any]:
-        overview = self.get_database_overview()
-        required_default = [
-            "summary_250",
-            "summary_1000",
-            "tldr",
-            "key_ideas",
-            "topic_tags",
-            "entities",
-            "estimated_reading_time_min",
-            "key_stats",
-            "answered_questions",
-            "readability",
-            "seo_keywords",
-            "metadata",
-            "extractive_quotes",
-            "highlights",
-            "questions_answered",
-            "categories",
-            "topic_taxonomy",
-            "hallucination_risk",
-            "confidence",
-            "forwarded_post_extras",
-            "key_points_to_remember",
-        ]
-        required = list(dict.fromkeys(required_fields or required_default))
-
-        posts: dict[str, Any] = {
-            "required_fields": required,
-            "checked": 0,
-            "with_summary": 0,
-            "missing_summary": [],
-            "missing_fields": [],
-            "errors": [],
-            "links": {
-                "total_links": 0,
-                "posts_with_links": 0,
-                "missing_data": [],
-            },
-            "reprocess": [],
-        }
-
-        limit_clause = None
-        if isinstance(limit, int) and limit > 0:
-            limit_clause = limit
-
-        query = (
-            Request.select(
-                Request.id.alias("request_id"),
-                Request.type.alias("request_type"),
-                Request.status.alias("request_status"),
-                Request.input_url,
-                Request.normalized_url,
-                Request.fwd_from_chat_id,
-                Request.fwd_from_msg_id,
-                Summary.json_payload.alias("summary_json"),
-                CrawlResult.links_json.alias("links_json"),
-                CrawlResult.status.alias("crawl_status"),
-            )
-            .join(Summary, JOIN.LEFT_OUTER, on=(Summary.request == Request.id))
-            .switch(Request)
-            .join(CrawlResult, JOIN.LEFT_OUTER, on=(CrawlResult.request == Request.id))
-            .order_by(Request.id.desc())
+        return self._diagnostics.verify_processing_integrity(
+            required_fields=required_fields,
+            limit=limit,
         )
-
-        if limit_clause is not None:
-            query = query.limit(limit_clause)
-
-        rows = list(query.dicts())
-        posts["checked"] = len(rows)
-        posts["links"]["posts_with_links"] = len(rows)
-
-        reprocess_map: dict[int, dict[str, Any]] = {}
-
-        def _coerce_int(value: Any) -> int | None:
-            try:
-                return int(value) if value is not None else None
-            except (TypeError, ValueError):
-                return None
-
-        def queue_reprocess(request_id: int, reason: str) -> None:
-            if row_type == "forward":
-                return
-            entry = reprocess_map.get(request_id)
-            if entry is None:
-                entry = {
-                    "request_id": request_id,
-                    "type": row_type,
-                    "status": row_status,
-                    "source": self._describe_request_source(row),
-                    "normalized_url": (
-                        str(row.get("normalized_url"))
-                        if isinstance(row.get("normalized_url"), str) and row.get("normalized_url")
-                        else None
-                    ),
-                    "input_url": (
-                        str(row.get("input_url"))
-                        if isinstance(row.get("input_url"), str) and row.get("input_url")
-                        else None
-                    ),
-                    "fwd_from_chat_id": _coerce_int(row.get("fwd_from_chat_id")),
-                    "fwd_from_msg_id": _coerce_int(row.get("fwd_from_msg_id")),
-                    "reasons": set(),
-                }
-                reprocess_map[request_id] = entry
-            entry["reasons"].add(reason)
-
-        for row in rows:
-            request_id = int(row["request_id"])
-            row_type = str(row.get("request_type") or "unknown")
-            row_status = str(row.get("request_status") or "unknown")
-            summary_raw = row.get("summary_json")
-            links_raw = row.get("links_json")
-
-            summary_payload, summary_error = self._decode_json_field(summary_raw)
-            if summary_payload is not None:
-                posts["with_summary"] += 1
-            else:
-                posts["missing_summary"].append(
-                    {
-                        "request_id": request_id,
-                        "status": row.get("request_status"),
-                        "request_type": row.get("request_type"),
-                        "source": self._describe_request_source(row),
-                    }
-                )
-                queue_reprocess(request_id, "missing_summary")
-
-            missing_fields: list[str] = []
-            if summary_error:
-                posts["errors"].append(
-                    {
-                        "request_id": request_id,
-                        "error": summary_error,
-                    }
-                )
-                queue_reprocess(request_id, "invalid_summary_json")
-                missing_fields = required[:]
-            elif summary_payload is not None:
-                if isinstance(summary_payload, Mapping):
-                    for field in required:
-                        value = summary_payload.get(field)
-                        if value is None:
-                            missing_fields.append(field)
-                            continue
-                        if isinstance(value, str) and not value.strip():
-                            missing_fields.append(field)
-                else:
-                    missing_fields = required[:]
-            if missing_fields:
-                if row.get("request_type") != "forward":
-                    missing_fields = [
-                        field for field in missing_fields if field != "forwarded_post_extras"
-                    ]
-                if missing_fields:
-                    posts["missing_fields"].append(
-                        {
-                            "request_id": request_id,
-                            "missing": missing_fields,
-                            "status": row.get("request_status"),
-                            "source": self._describe_request_source(row),
-                        }
-                    )
-                    queue_reprocess(request_id, "missing_fields")
-
-            links_count, has_links, links_error = self._count_links_entries(links_raw)
-            posts["links"]["total_links"] += links_count
-            if not has_links:
-                reason = links_error or "absent_links_json"
-                posts["links"]["missing_data"].append(
-                    {
-                        "request_id": request_id,
-                        "reason": reason,
-                        "status": row.get("request_status"),
-                        "source": self._describe_request_source(row),
-                    }
-                )
-                queue_reprocess(request_id, "missing_links")
-
-        if reprocess_map:
-            reprocess_entries: list[dict[str, Any]] = []
-            for request_id, data in sorted(reprocess_map.items()):
-                reasons = data.get("reasons")
-                entry = dict(data)
-                entry["request_id"] = request_id
-                entry["reasons"] = sorted(reasons) if isinstance(reasons, set) else []
-                reprocess_entries.append(entry)
-            posts["reprocess"] = reprocess_entries
-
-        return {"overview": overview, "posts": posts}
-
-    def _describe_request_source(self, row: Mapping[str, Any]) -> str:
-        input_url = row.get("input_url")
-        normalized_url = row.get("normalized_url")
-        fwd_chat_id = row.get("fwd_from_chat_id")
-        fwd_msg_id = row.get("fwd_from_msg_id")
-        if input_url:
-            return str(input_url)
-        if normalized_url:
-            return str(normalized_url)
-        if fwd_chat_id and fwd_msg_id:
-            return f"forward:{fwd_chat_id}:{fwd_msg_id}"
-        return "unknown"
-
-    def _count_links_entries(self, links_json: Any) -> tuple[int, bool, str | None]:
-        parsed, error = self._decode_json_field(links_json)
-        if error:
-            return 0, False, error
-        if parsed is None:
-            return 0, False, None
-        if isinstance(parsed, list):
-            if not parsed:
-                return 1, True, None
-            return len(parsed), True, None
-        if isinstance(parsed, Mapping):
-            if not parsed:
-                return 1, True, None
-            total = 0
-            for value in parsed.values():
-                if isinstance(value, list):
-                    total += len(value)
-                elif value is not None:
-                    total += 1
-            if total == 0:
-                total = 1
-            return total, True, None
-        return 0, False, "unsupported_links_type"
 
     def get_request_by_dedupe_hash(self, dedupe_hash: str) -> dict[str, Any] | None:
         request = Request.get_or_none(Request.dedupe_hash == dedupe_hash)
@@ -1474,7 +1172,7 @@ class Database:
             version=version,
             is_read=is_read,
         )
-        self._refresh_topic_search_index(request_id)
+        self._topic_search.refresh_index(request_id)
         clear_trending_cache()
         return summary.id
 
@@ -1498,7 +1196,7 @@ class Database:
                 version=1,
                 is_read=is_read if is_read is not None else False,
             )
-            self._refresh_topic_search_index(request_id)
+            self._topic_search.refresh_index(request_id)
             clear_trending_cache()
             return summary.version
         except peewee.IntegrityError:
@@ -1516,7 +1214,7 @@ class Database:
             query.execute()
             updated = Summary.get_or_none(Summary.request == request_id)
             version_val = updated.version if updated else 0
-            self._refresh_topic_search_index(request_id)
+            self._topic_search.refresh_index(request_id)
             clear_trending_cache()
             return version_val
 
@@ -1714,7 +1412,7 @@ class Database:
         fetch_limit: int | None = limit
         if topic_query:
             candidate_limit = max(limit * 5, 25)
-            topic_request_ids = self._find_topic_search_request_ids(
+            topic_request_ids = self._topic_search.find_request_ids(
                 topic_query, candidate_limit=candidate_limit
             )
             if topic_request_ids:
@@ -1777,84 +1475,6 @@ class Database:
             operation_name="get_unread_summaries",
             read_only=True,
         )
-
-    @staticmethod
-    def _sanitize_fts_term(term: str) -> str:
-        sanitized = re.sub(r"[^\w-]+", " ", term)
-        return re.sub(r"\s+", " ", sanitized).strip()
-
-    def _find_topic_search_request_ids(
-        self, topic: str, *, candidate_limit: int
-    ) -> list[int] | None:
-        terms = tokenize(topic)
-
-        if not terms:
-            sanitized = self._sanitize_fts_term(topic.casefold())
-            if not sanitized:
-                return None
-            fts_query = f'"{sanitized}"*'
-        else:
-            sanitized_terms = [self._sanitize_fts_term(term) for term in terms]
-            sanitized_terms = [term for term in sanitized_terms if term]
-            if not sanitized_terms:
-                return None
-            phrase = self._sanitize_fts_term(" ".join(terms))
-            components: list[str] = []
-            wildcard_terms = [f'"{term}"*' for term in sanitized_terms]
-            if wildcard_terms:
-                components.append(" AND ".join(wildcard_terms))
-            if phrase:
-                components.append(f'"{phrase}"')
-            fts_query = " OR ".join(component for component in components if component)
-            if not fts_query:
-                return None
-
-        sql = (
-            "SELECT rowid FROM topic_search_index "
-            "WHERE topic_search_index MATCH ? "
-            "ORDER BY bm25(topic_search_index) ASC "
-            "LIMIT ?"
-        )
-
-        try:
-            with self._database.connection_context():
-                cursor = self._database.execute_sql(sql, (fts_query, candidate_limit))
-                rows = list(cursor)
-        except Exception as exc:
-            self._logger.warning("topic_search_index_lookup_failed", extra={"error": str(exc)})
-            return None
-
-        request_ids: list[int] = []
-        seen: set[int] = set()
-        for row in rows:
-            value: Any | None = None
-            if isinstance(row, Mapping):
-                value = row.get("rowid") or row.get("request_id")
-            elif hasattr(row, "keys"):
-                try:
-                    value = row["rowid"]
-                except (KeyError, TypeError, IndexError):
-                    try:
-                        value = row["request_id"]
-                    except (KeyError, TypeError, IndexError):
-                        value = None
-            if value is None:
-                try:
-                    value = row[0]
-                except (KeyError, TypeError, IndexError):
-                    value = None
-            if value is None:
-                continue
-            try:
-                request_id = int(value)
-            except (TypeError, ValueError):
-                continue
-            if request_id in seen:
-                continue
-            request_ids.append(request_id)
-            seen.add(request_id)
-
-        return request_ids
 
     def get_unread_summary_by_request_id(self, request_id: int) -> dict[str, Any] | None:
         summary = (
@@ -1928,7 +1548,7 @@ class Database:
         self._migrate_openrouter_response_payloads()
         self._migrate_firecrawl_raw_payload()
         self._coerce_json_columns()
-        self._ensure_topic_search_index()
+        self._topic_search.ensure_index()
 
     def _ensure_column(self, table: str, column: str, coltype: str) -> None:
         if table not in self._database.get_tables():
@@ -1970,194 +1590,6 @@ class Database:
                 continue
             for column in columns:
                 self._coerce_json_column(table, column)
-
-    def _ensure_topic_search_index(self) -> None:
-        table_name = TopicSearchIndex._meta.table_name
-        with self._database.connection_context():
-            tables = set(self._database.get_tables())
-            if table_name not in tables:
-                TopicSearchIndex.create_table()
-                self._rebuild_topic_search_index()
-                return
-            try:
-                summary_count = Summary.select().where(Summary.json_payload.is_null(False)).count()
-                index_count = TopicSearchIndex.select().count()
-            except peewee.DatabaseError as exc:  # pragma: no cover - defensive path
-                self._logger.warning("topic_search_index_count_failed", extra={"error": str(exc)})
-                summary_count = -1
-                index_count = -2
-
-            if summary_count < 0 or index_count != summary_count:
-                try:
-                    self._rebuild_topic_search_index()
-                except TopicSearchIndexRebuiltError:
-                    return
-
-    def _refresh_topic_search_index(self, request_id: int) -> None:
-        try:
-            with self._database.connection_context():
-                summary = (
-                    Summary.select(Summary, Request)
-                    .join(Request)
-                    .where((Summary.request == request_id) & (Summary.json_payload.is_null(False)))
-                    .first()
-                )
-                if not summary:
-                    self._remove_topic_search_index_entry(request_id)
-                    return
-
-                payload = ensure_mapping(summary.json_payload)
-                if not payload:
-                    self._remove_topic_search_index_entry(request_id)
-                    return
-
-                request_data = {
-                    "normalized_url": getattr(summary.request, "normalized_url", None),
-                    "input_url": getattr(summary.request, "input_url", None),
-                    "content_text": getattr(summary.request, "content_text", None),
-                }
-                document = build_topic_search_document(
-                    request_id=request_id,
-                    payload=payload,
-                    request_data=request_data,
-                )
-                if not document:
-                    self._remove_topic_search_index_entry(request_id)
-                    return
-
-                try:
-                    self._write_topic_search_index(document)
-                except TopicSearchIndexRebuiltError:
-                    return
-        except Exception as exc:
-            self._logger.warning(
-                "topic_search_index_refresh_failed",
-                extra={"request_id": request_id, "error": str(exc)},
-            )
-
-    def _write_topic_search_index(self, document: TopicSearchDocument) -> None:
-        self._delete_topic_search_index_row(document.request_id)
-        self._database.execute_sql(
-            """
-            INSERT INTO topic_search_index(
-                rowid, request_id, url, title, snippet, source, published_at, body, tags
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                document.request_id,
-                str(document.request_id),
-                document.url or "",
-                document.title or "",
-                document.snippet or "",
-                document.source or "",
-                document.published_at or "",
-                document.body,
-                document.tags_text or "",
-            ),
-        )
-
-    def _remove_topic_search_index_entry(self, request_id: int) -> None:
-        self._delete_topic_search_index_row(request_id)
-
-    def _rebuild_topic_search_index(self) -> None:
-        with self._database.connection_context():
-            self._clear_topic_search_index()
-            rows = (
-                Summary.select(Summary, Request)
-                .join(Request)
-                .where(Summary.json_payload.is_null(False))
-            )
-            rebuilt = 0
-            try:
-                for row in rows.iterator():
-                    payload = ensure_mapping(row.json_payload)
-                    if not payload:
-                        continue
-                    request_data = {
-                        "normalized_url": getattr(row.request, "normalized_url", None),
-                        "input_url": getattr(row.request, "input_url", None),
-                        "content_text": getattr(row.request, "content_text", None),
-                    }
-                    document = build_topic_search_document(
-                        request_id=row.request.id,
-                        payload=payload,
-                        request_data=request_data,
-                    )
-                    if not document:
-                        continue
-                    self._write_topic_search_index(document)
-                    rebuilt += 1
-            except TopicSearchIndexRebuiltError:
-                return
-        if rebuilt:
-            self._logger.info("topic_search_index_rebuilt", extra={"rows": rebuilt})
-
-    def _clear_topic_search_index(self) -> None:
-        """Remove all rows from the topic search FTS index."""
-        self._database.execute_sql(
-            "INSERT INTO topic_search_index(topic_search_index) VALUES ('delete-all')"
-        )
-
-    def _delete_topic_search_index_row(self, rowid: int) -> None:
-        """Remove a single row from the topic search FTS index."""
-        try:
-            self._database.execute_sql(
-                "DELETE FROM topic_search_index WHERE rowid = ?",
-                (rowid,),
-            )
-        except peewee.DatabaseError as exc:
-            message = str(exc)
-            if "malformed" in message.lower():
-                self._handle_topic_search_index_error(exc, rowid)
-                return
-
-            self._log_topic_search_delete_fallback(rowid, message)
-
-    def _log_topic_search_delete_fallback(self, rowid: int, message: str) -> None:
-        """Log degraded delete path, but only warn once to avoid noise."""
-        log_extra = {"rowid": rowid, "error": message}
-        if not self._topic_search_index_delete_warned:
-            self._topic_search_index_delete_warned = True
-            self._logger.warning("topic_search_index_delete_failed_primary", extra=log_extra)
-        else:  # pragma: no cover - logging noise suppression
-            self._logger.debug("topic_search_index_delete_failed_primary", extra=log_extra)
-
-    def _handle_topic_search_index_error(self, exc: peewee.DatabaseError, rowid: int) -> None:
-        """Handle unrecoverable FTS errors by rebuilding the index."""
-        message = str(exc)
-        self._logger.error(
-            "topic_search_index_delete_failed",
-            extra={"rowid": rowid, "error": message},
-        )
-        if "malformed" not in message.lower():
-            raise exc
-
-        self._reset_topic_search_index()
-        raise TopicSearchIndexRebuiltError from exc
-
-    def _reset_topic_search_index(self) -> None:
-        """Drop and rebuild the topic search index to recover from corruption."""
-        if self._topic_search_index_reset_in_progress:
-            return
-
-        self._topic_search_index_reset_in_progress = True
-        try:
-            self._logger.warning("topic_search_index_resetting_due_to_error")
-            with self._database.connection_context():
-                with contextlib.suppress(peewee.DatabaseError):
-                    TopicSearchIndex.drop_table(safe=True)
-                TopicSearchIndex.create_table()
-            try:
-                self._rebuild_topic_search_index()
-            except TopicSearchIndexRebuiltError:
-                return
-        except peewee.DatabaseError as reset_exc:  # pragma: no cover - defensive
-            self._logger.exception(
-                "topic_search_index_reset_failed",
-                extra={"error": str(reset_exc)},
-            )
-        finally:
-            self._topic_search_index_reset_in_progress = False
 
     def _coerce_json_column(self, table: str, column: str) -> None:
         model = next((m for m in ALL_MODELS if m._meta.table_name == table), None)
@@ -2303,31 +1735,15 @@ class Database:
 
     def create_video_download(self, request_id: int, video_id: str, status: str = "pending") -> int:
         """Create a new video download record."""
-        from app.db.models import VideoDownload
-
-        download = VideoDownload.create(request_id=request_id, video_id=video_id, status=status)
-        self._logger.info(
-            "video_download_created", extra={"download_id": download.id, "video_id": video_id}
-        )
-        return download.id
+        return self._video_downloads.create_video_download(request_id, video_id, status=status)
 
     def get_video_download_by_request(self, request_id: int):
         """Get video download by request ID."""
-        from app.db.models import VideoDownload
-
-        try:
-            return VideoDownload.get(VideoDownload.request_id == request_id)
-        except VideoDownload.DoesNotExist:
-            return None
+        return self._video_downloads.get_video_download_by_request(request_id)
 
     def get_video_download_by_id(self, download_id: int):
         """Get video download by ID."""
-        from app.db.models import VideoDownload
-
-        try:
-            return VideoDownload.get_by_id(download_id)
-        except VideoDownload.DoesNotExist:
-            return None
+        return self._video_downloads.get_video_download_by_id(download_id)
 
     def update_video_download_status(
         self,
@@ -2337,25 +1753,16 @@ class Database:
         download_started_at=None,
     ) -> None:
         """Update video download status."""
-        from app.db.models import VideoDownload
-
-        update_data = {"status": status}
-        if error_text is not None:
-            update_data["error_text"] = error_text
-        if download_started_at is not None:
-            update_data["download_started_at"] = download_started_at
-
-        VideoDownload.update(**update_data).where(VideoDownload.id == download_id).execute()
-        self._logger.debug(
-            "video_download_status_updated", extra={"download_id": download_id, "status": status}
+        self._video_downloads.update_video_download_status(
+            download_id,
+            status,
+            error_text=error_text,
+            download_started_at=download_started_at,
         )
 
     def update_video_download(self, download_id: int, **kwargs) -> None:
         """Update video download with arbitrary fields."""
-        from app.db.models import VideoDownload
-
-        VideoDownload.update(**kwargs).where(VideoDownload.id == download_id).execute()
-        self._logger.debug("video_download_updated", extra={"download_id": download_id})
+        self._video_downloads.update_video_download(download_id, **kwargs)
 
     # ================================================================
 

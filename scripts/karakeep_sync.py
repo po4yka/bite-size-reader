@@ -47,7 +47,10 @@ async def run_sync(
     """
     from app.adapters.karakeep import KarakeepSyncService
     from app.config import load_config
-    from app.db.database import Database
+    from app.db.session import DatabaseSessionManager
+    from app.infrastructure.persistence.sqlite.repositories.karakeep_sync_repository import (
+        SqliteKarakeepSyncRepositoryAdapter,
+    )
 
     try:
         # Load configuration
@@ -61,9 +64,8 @@ async def run_sync(
             logger.error("Karakeep API key not configured. Set KARAKEEP_API_KEY.")
             return 1
 
-        # Initialize database
-        db = Database(cfg.runtime.db_path)
-        db.connect()
+        # Initialize database session
+        db = DatabaseSessionManager(cfg.runtime.db_path)
         db.migrate()
 
         logger.info(
@@ -76,11 +78,13 @@ async def run_sync(
             },
         )
 
-        # Create sync service
+        # Create sync service with repository
+        karakeep_repo = SqliteKarakeepSyncRepositoryAdapter(db)
         service = KarakeepSyncService(
             api_url=cfg.karakeep.api_url,
             api_key=cfg.karakeep.api_key,
             sync_tag=cfg.karakeep.sync_tag,
+            repository=karakeep_repo,
         )
 
         if dry_run:

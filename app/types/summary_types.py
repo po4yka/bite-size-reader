@@ -6,7 +6,12 @@ replacing generic dict[str, Any] with structured types.
 
 from __future__ import annotations
 
-from typing import NotRequired, TypedDict
+from typing import TypedDict
+
+try:
+    from typing import NotRequired
+except ImportError:
+    from typing import NotRequired
 
 
 class KeyStat(TypedDict):

@@ -24,7 +24,9 @@ class TestSyncServiceCoerceIso:
         mock_cfg.sync.min_limit = 1
         mock_cfg.sync.max_limit = 500
         mock_cfg.redis.prefix = "test"
-        return SyncService(mock_cfg)
+
+        mock_session_manager = MagicMock()
+        return SyncService(mock_cfg, mock_session_manager)
 
     def test_coerce_iso_with_datetime(self):
         """Test _coerce_iso with proper datetime object."""
@@ -78,26 +80,30 @@ class TestSyncServiceSerialization:
         mock_cfg.sync.min_limit = 1
         mock_cfg.sync.max_limit = 500
         mock_cfg.redis.prefix = "test"
-        return SyncService(mock_cfg)
+
+        mock_session_manager = MagicMock()
+        return SyncService(mock_cfg, mock_session_manager)
 
     def test_serialize_request_with_none_dates(self):
         """Test _serialize_request handles None datetime fields."""
         service = self._get_sync_service()
 
-        mock_request = MagicMock()
-        mock_request.id = 1
-        mock_request.type = "url"
-        mock_request.status = "completed"
-        mock_request.input_url = "http://test.com"
-        mock_request.normalized_url = "http://test.com"
-        mock_request.correlation_id = "test-123"
-        mock_request.server_version = 1000
-        mock_request.is_deleted = False
-        mock_request.created_at = None  # None datetime
-        mock_request.updated_at = None  # None datetime
-        mock_request.deleted_at = None
+        # Use dict instead of MagicMock since serialization now expects dicts
+        request_dict = {
+            "id": 1,
+            "type": "url",
+            "status": "completed",
+            "input_url": "http://test.com",
+            "normalized_url": "http://test.com",
+            "correlation_id": "test-123",
+            "server_version": 1000,
+            "is_deleted": False,
+            "created_at": None,  # None datetime
+            "updated_at": None,  # None datetime
+            "deleted_at": None,
+        }
 
-        envelope = service._serialize_request(mock_request)
+        envelope = service._serialize_request(request_dict)
 
         assert envelope.entity_type == "request"
         assert envelope.id == 1
@@ -108,50 +114,71 @@ class TestSyncServiceSerialization:
         """Test _serialize_summary handles None datetime fields."""
         service = self._get_sync_service()
 
-        mock_request = MagicMock()
-        mock_request.id = 1
+        # Use dict instead of MagicMock since serialization now expects dicts
+        summary_dict = {
+            "id": 1,
+            "request": 1,  # Flattened to just the ID
+            "lang": "en",
+            "is_read": False,
+            "json_payload": {"title": "Test"},
+            "server_version": 1000,
+            "is_deleted": False,
+            "created_at": None,  # None datetime
+            "updated_at": None,  # None datetime
+            "deleted_at": None,
+        }
 
-        mock_summary = MagicMock()
-        mock_summary.id = 1
-        mock_summary.request = mock_request
-        mock_summary.lang = "en"
-        mock_summary.is_read = False
-        mock_summary.json_payload = {"title": "Test"}
-        mock_summary.server_version = 1000
-        mock_summary.is_deleted = False
-        mock_summary.created_at = None  # None datetime
-        mock_summary.updated_at = None  # None datetime
-        mock_summary.deleted_at = None
-
-        envelope = service._serialize_summary(mock_summary)
+        envelope = service._serialize_summary(summary_dict)
 
         assert envelope.entity_type == "summary"
         assert envelope.id == 1
         # Should not raise - _coerce_iso handles None
         assert envelope.updated_at is not None
 
+    def test_serialize_summary_with_request_dict(self):
+        """Test _serialize_summary handles request as dict."""
+        service = self._get_sync_service()
+
+        summary_dict = {
+            "id": 1,
+            "request": {"id": 42, "type": "url"},  # Request as dict
+            "lang": "en",
+            "is_read": False,
+            "json_payload": {"title": "Test"},
+            "server_version": 1000,
+            "is_deleted": False,
+            "created_at": None,
+            "updated_at": None,
+            "deleted_at": None,
+        }
+
+        envelope = service._serialize_summary(summary_dict)
+
+        assert envelope.entity_type == "summary"
+        assert envelope.id == 1
+        assert envelope.summary["request_id"] == 42
+
     def test_serialize_crawl_result_with_none_dates(self):
         """Test _serialize_crawl_result handles None datetime fields."""
         service = self._get_sync_service()
 
-        mock_request = MagicMock()
-        mock_request.id = 1
+        # Use dict instead of MagicMock since serialization now expects dicts
+        crawl_dict = {
+            "id": 1,
+            "request": 1,  # Flattened to just the ID
+            "source_url": "http://test.com",
+            "endpoint": "firecrawl",
+            "http_status": 200,
+            "metadata_json": {},
+            "latency_ms": 100,
+            "server_version": 1000,
+            "is_deleted": False,
+            "created_at": None,
+            "updated_at": None,  # None datetime
+            "deleted_at": None,
+        }
 
-        mock_crawl = MagicMock()
-        mock_crawl.id = 1
-        mock_crawl.request = mock_request
-        mock_crawl.source_url = "http://test.com"
-        mock_crawl.endpoint = "firecrawl"
-        mock_crawl.http_status = 200
-        mock_crawl.metadata_json = {}
-        mock_crawl.latency_ms = 100
-        mock_crawl.server_version = 1000
-        mock_crawl.is_deleted = False
-        mock_crawl.created_at = None
-        mock_crawl.updated_at = None  # None datetime
-        mock_crawl.deleted_at = None
-
-        envelope = service._serialize_crawl_result(mock_crawl)
+        envelope = service._serialize_crawl_result(crawl_dict)
 
         assert envelope.entity_type == "crawl_result"
         assert envelope.id == 1
@@ -162,27 +189,47 @@ class TestSyncServiceSerialization:
         """Test _serialize_llm_call handles None datetime fields."""
         service = self._get_sync_service()
 
-        mock_request = MagicMock()
-        mock_request.id = 1
+        # Use dict instead of MagicMock since serialization now expects dicts
+        call_dict = {
+            "id": 1,
+            "request": 1,  # Flattened to just the ID
+            "provider": "openrouter",
+            "model": "gpt-4",
+            "status": "completed",
+            "tokens_prompt": 100,
+            "tokens_completion": 50,
+            "cost_usd": 0.01,
+            "server_version": 1000,
+            "is_deleted": False,
+            "created_at": None,  # None datetime
+            "updated_at": None,  # None datetime
+            "deleted_at": None,
+        }
 
-        mock_call = MagicMock()
-        mock_call.id = 1
-        mock_call.request = mock_request
-        mock_call.provider = "openrouter"
-        mock_call.model = "gpt-4"
-        mock_call.status = "completed"
-        mock_call.tokens_prompt = 100
-        mock_call.tokens_completion = 50
-        mock_call.cost_usd = 0.01
-        mock_call.server_version = 1000
-        mock_call.is_deleted = False
-        mock_call.created_at = None  # None datetime
-        mock_call.updated_at = None  # None datetime
-        mock_call.deleted_at = None
-
-        envelope = service._serialize_llm_call(mock_call)
+        envelope = service._serialize_llm_call(call_dict)
 
         assert envelope.entity_type == "llm_call"
         assert envelope.id == 1
         # Should not raise - _coerce_iso handles None
         assert envelope.updated_at is not None
+
+    def test_serialize_user_with_none_dates(self):
+        """Test _serialize_user handles None datetime fields."""
+        service = self._get_sync_service()
+
+        user_dict = {
+            "telegram_user_id": 123456,
+            "username": "testuser",
+            "is_owner": True,
+            "preferences_json": {"theme": "dark"},
+            "server_version": 1000,
+            "created_at": None,
+            "updated_at": None,
+        }
+
+        envelope = service._serialize_user(user_dict)
+
+        assert envelope.entity_type == "user"
+        assert envelope.id == 123456
+        assert envelope.updated_at is not None
+        assert envelope.preference["username"] == "testuser"

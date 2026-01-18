@@ -1,10 +1,12 @@
 """Summary service - business logic for summary operations."""
 
-from peewee import Case, fn
+from typing import Any
 
 from app.api.exceptions import ResourceNotFoundError
 from app.core.logging_utils import get_logger
-from app.db.models import Request as RequestModel, Summary
+from app.infrastructure.persistence.sqlite.repositories.summary_repository import (
+    SqliteSummaryRepositoryAdapter,
+)
 
 logger = get_logger(__name__)
 
@@ -13,7 +15,7 @@ class SummaryService:
     """Service for summary-related business logic."""
 
     @staticmethod
-    def get_user_summaries(
+    async def get_user_summaries(
         user_id: int,
         limit: int = 20,
         offset: int = 0,
@@ -23,7 +25,7 @@ class SummaryService:
         start_date: str | None = None,
         end_date: str | None = None,
         sort: str = "created_at_desc",
-    ) -> tuple[list[Summary], int, int]:
+    ) -> tuple[list[dict[str, Any]], int, int]:
         """
         Get paginated summaries for a user with filtering.
 
@@ -44,61 +46,24 @@ class SummaryService:
         Raises:
             ValueError: If invalid sort parameter
         """
-        # Build query with eager loading and user authorization
-        query = (
-            Summary.select(Summary, RequestModel)
-            .join(RequestModel)
-            .where(RequestModel.user_id == user_id)
+        from app.db.models import database_proxy
+
+        repo = SqliteSummaryRepositoryAdapter(database_proxy)
+
+        return await repo.async_get_user_summaries(
+            user_id=user_id,
+            limit=limit,
+            offset=offset,
+            is_read=is_read,
+            is_favorited=is_favorited,
+            lang=lang,
+            start_date=start_date,
+            end_date=end_date,
+            sort=sort,
         )
-
-        # Apply filters
-        if is_read is not None:
-            query = query.where(Summary.is_read == is_read)
-
-        if is_favorited is not None:
-            query = query.where(Summary.is_favorited == is_favorited)
-
-        # Exclude deleted summaries
-        query = query.where(Summary.is_deleted == False)  # noqa: E712
-
-        if lang:
-            query = query.where(Summary.lang == lang)
-
-        if start_date:
-            query = query.where(Summary.created_at >= start_date)
-
-        if end_date:
-            query = query.where(Summary.created_at <= end_date)
-
-        # Apply sorting
-        if sort == "created_at_desc":
-            query = query.order_by(RequestModel.created_at.desc())
-        elif sort == "created_at_asc":
-            query = query.order_by(RequestModel.created_at.asc())
-        else:
-            raise ValueError(f"Invalid sort parameter: {sort}")
-
-        # Get paginated results
-        summaries = list(query.limit(limit).offset(offset))
-
-        # Get stats with single aggregation query
-        stats_query = (
-            Summary.select(
-                fn.COUNT(Summary.id).alias("total"),
-                fn.SUM(Case(None, [(~Summary.is_read, 1)], 0)).alias("unread"),
-            )
-            .join(RequestModel)
-            .where((RequestModel.user_id == user_id) & (Summary.is_deleted == False))  # noqa: E712
-            .first()
-        )
-
-        total_summaries = stats_query.total if stats_query else 0
-        unread_count = stats_query.unread if stats_query and stats_query.unread else 0
-
-        return summaries, total_summaries, unread_count
 
     @staticmethod
-    def get_summary_by_id(user_id: int, summary_id: int) -> Summary:
+    async def get_summary_by_id(user_id: int, summary_id: int) -> dict[str, Any]:
         """
         Get a single summary by ID with authorization check.
 
@@ -107,29 +72,27 @@ class SummaryService:
             summary_id: Summary ID to retrieve
 
         Returns:
-            Summary instance
+            Summary dictionary
 
         Raises:
             ResourceNotFoundError: If summary not found or access denied
         """
-        summary = (
-            Summary.select(Summary, RequestModel)
-            .join(RequestModel)
-            .where(
-                (Summary.id == summary_id)
-                & (RequestModel.user_id == user_id)
-                & (Summary.is_deleted == False)  # noqa: E712
-            )
-            .first()
-        )
+        from app.db.models import database_proxy
 
-        if not summary:
+        repo = SqliteSummaryRepositoryAdapter(database_proxy)
+
+        summary = await repo.async_get_summary_by_id(summary_id)
+
+        # Check authorization (repo returns request data joined)
+        if not summary or summary.get("user_id") != user_id or summary.get("is_deleted"):
             raise ResourceNotFoundError("Summary", summary_id)
 
         return summary
 
     @staticmethod
-    def update_summary(user_id: int, summary_id: int, is_read: bool | None = None) -> Summary:
+    async def update_summary(
+        user_id: int, summary_id: int, is_read: bool | None = None
+    ) -> dict[str, Any]:
         """
         Update a summary's properties.
 
@@ -139,41 +102,36 @@ class SummaryService:
             is_read: New read status (if provided)
 
         Returns:
-            Updated Summary instance
+            Updated Summary dictionary
 
         Raises:
             ResourceNotFoundError: If summary not found or access denied
         """
-        # Get with authorization check
-        summary = (
-            Summary.select()
-            .join(RequestModel)
-            .where(
-                (Summary.id == summary_id)
-                & (RequestModel.user_id == user_id)
-                & (Summary.is_deleted == False)  # noqa: E712
-            )
-            .first()
-        )
+        from app.db.models import database_proxy
 
-        if not summary:
+        repo = SqliteSummaryRepositoryAdapter(database_proxy)
+
+        # Get with authorization check
+        summary = await repo.async_get_summary_by_id(summary_id)
+        if not summary or summary.get("user_id") != user_id or summary.get("is_deleted"):
             raise ResourceNotFoundError("Summary", summary_id)
 
         # Update fields
         if is_read is not None:
-            summary.is_read = is_read
-
-        summary.save()
+            if is_read:
+                await repo.async_mark_summary_as_read(summary_id)
+            else:
+                await repo.async_mark_summary_as_unread(summary_id)
 
         logger.info(
             f"Summary {summary_id} updated by user {user_id}",
             extra={"summary_id": summary_id, "user_id": user_id, "is_read": is_read},
         )
 
-        return summary
+        return await repo.async_get_summary_by_id(summary_id)
 
     @staticmethod
-    def delete_summary(user_id: int, summary_id: int) -> None:
+    async def delete_summary(user_id: int, summary_id: int) -> None:
         """
         Delete (soft delete) a summary.
 
@@ -184,29 +142,16 @@ class SummaryService:
         Raises:
             ResourceNotFoundError: If summary not found or access denied
         """
-        # Get with authorization check
-        summary = (
-            Summary.select()
-            .join(RequestModel)
-            .where(
-                (Summary.id == summary_id)
-                & (RequestModel.user_id == user_id)
-                & (Summary.is_deleted == False)  # noqa: E712
-            )
-            .first()
-        )
+        from app.db.models import database_proxy
 
-        if not summary:
+        repo = SqliteSummaryRepositoryAdapter(database_proxy)
+
+        # Get with authorization check
+        summary = await repo.async_get_summary_by_id(summary_id)
+        if not summary or summary.get("user_id") != user_id or summary.get("is_deleted"):
             raise ResourceNotFoundError("Summary", summary_id)
 
-        # Soft delete
-        from datetime import datetime
-
-        from app.core.time_utils import UTC
-
-        summary.is_deleted = True
-        summary.deleted_at = datetime.now(UTC)
-        summary.save()
+        await repo.async_soft_delete_summary(summary_id)
 
         logger.info(
             f"Summary {summary_id} soft-deleted by user {user_id}",
@@ -214,7 +159,7 @@ class SummaryService:
         )
 
     @staticmethod
-    def toggle_favorite(user_id: int, summary_id: int) -> bool:
+    async def toggle_favorite(user_id: int, summary_id: int) -> bool:
         """
         Toggle favorite status of a summary.
 
@@ -228,30 +173,24 @@ class SummaryService:
         Raises:
             ResourceNotFoundError: If summary not found or access denied
         """
-        summary = (
-            Summary.select()
-            .join(RequestModel)
-            .where(
-                (Summary.id == summary_id)
-                & (RequestModel.user_id == user_id)
-                & (Summary.is_deleted == False)  # noqa: E712
-            )
-            .first()
-        )
+        from app.db.models import database_proxy
 
-        if not summary:
+        repo = SqliteSummaryRepositoryAdapter(database_proxy)
+
+        # Get with authorization check
+        summary = await repo.async_get_summary_by_id(summary_id)
+        if not summary or summary.get("user_id") != user_id or summary.get("is_deleted"):
             raise ResourceNotFoundError("Summary", summary_id)
 
-        summary.is_favorited = not summary.is_favorited
-        summary.save()
+        new_status = await repo.async_toggle_favorite(summary_id)
 
         logger.info(
-            f"Summary {summary_id} favorite status toggled to {summary.is_favorited} by user {user_id}",
+            f"Summary {summary_id} favorite status toggled to {new_status} by user {user_id}",
             extra={
                 "summary_id": summary_id,
                 "user_id": user_id,
-                "is_favorited": summary.is_favorited,
+                "is_favorited": new_status,
             },
         )
 
-        return summary.is_favorited
+        return new_status

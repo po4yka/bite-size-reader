@@ -16,6 +16,21 @@ from app.config import AppConfig
 from app.core.logging_utils import generate_correlation_id
 from app.core.url_utils import extract_all_urls
 from app.db.user_interactions import async_safe_update_user_interaction
+from app.infrastructure.persistence.sqlite.repositories.karakeep_sync_repository import (
+    SqliteKarakeepSyncRepositoryAdapter,
+)
+from app.infrastructure.persistence.sqlite.repositories.llm_repository import (
+    SqliteLLMRepositoryAdapter,
+)
+from app.infrastructure.persistence.sqlite.repositories.request_repository import (
+    SqliteRequestRepositoryAdapter,
+)
+from app.infrastructure.persistence.sqlite.repositories.summary_repository import (
+    SqliteSummaryRepositoryAdapter,
+)
+from app.infrastructure.persistence.sqlite.repositories.user_repository import (
+    SqliteUserRepositoryAdapter,
+)
 from app.services.topic_search import LocalTopicSearchService, TopicSearchService
 from app.services.topic_search_utils import ensure_mapping
 
@@ -26,7 +41,7 @@ if TYPE_CHECKING:
     from app.adapters.content.url_processor import URLProcessor
     from app.adapters.external.response_formatter import ResponseFormatter
     from app.adapters.telegram.url_handler import URLHandler
-    from app.db.database import Database
+    from app.db.session import DatabaseSessionManager
     from app.services.embedding_service import EmbeddingService
     from app.services.hybrid_search_service import HybridSearchService
     from app.services.vector_search_service import VectorSearchService
@@ -44,7 +59,7 @@ class CommandProcessor:
         self,
         cfg: AppConfig,
         response_formatter: ResponseFormatter,
-        db: Database,
+        db: DatabaseSessionManager,
         url_processor: URLProcessor,
         audit_func: Callable[[str, str, dict], None],
         url_handler: URLHandler | None = None,
@@ -57,6 +72,10 @@ class CommandProcessor:
         self.cfg = cfg
         self.response_formatter = response_formatter
         self.db = db
+        self.user_repo = SqliteUserRepositoryAdapter(db)
+        self.summary_repo = SqliteSummaryRepositoryAdapter(db)
+        self.request_repo = SqliteRequestRepositoryAdapter(db)
+        self.llm_repo = SqliteLLMRepositoryAdapter(db)
         self.url_processor = url_processor
         self.url_handler: URLHandler | None = url_handler
         self._audit = audit_func
@@ -106,7 +125,7 @@ class CommandProcessor:
         await self.response_formatter.send_welcome(message)
         if interaction_id:
             await async_safe_update_user_interaction(
-                self.db,
+                self.user_repo,
                 interaction_id=interaction_id,
                 response_sent=True,
                 response_type="welcome",
@@ -133,7 +152,7 @@ class CommandProcessor:
         await self.response_formatter.send_help(message)
         if interaction_id:
             await async_safe_update_user_interaction(
-                self.db,
+                self.user_repo,
                 interaction_id=interaction_id,
                 response_sent=True,
                 response_type="help",
@@ -167,7 +186,7 @@ class CommandProcessor:
             )
             if interaction_id:
                 await async_safe_update_user_interaction(
-                    self.db,
+                    self.user_repo,
                     interaction_id=interaction_id,
                     response_sent=True,
                     response_type="dbinfo_error",
@@ -181,7 +200,7 @@ class CommandProcessor:
         await self.response_formatter.send_db_overview(message, overview)
         if interaction_id:
             await async_safe_update_user_interaction(
-                self.db,
+                self.user_repo,
                 interaction_id=interaction_id,
                 response_sent=True,
                 response_type="dbinfo",
@@ -215,7 +234,7 @@ class CommandProcessor:
             )
             if interaction_id:
                 await async_safe_update_user_interaction(
-                    self.db,
+                    self.user_repo,
                     interaction_id=interaction_id,
                     response_sent=True,
                     response_type="dbverify_error",
@@ -302,7 +321,7 @@ class CommandProcessor:
 
         if interaction_id:
             await async_safe_update_user_interaction(
-                self.db,
+                self.user_repo,
                 interaction_id=interaction_id,
                 response_sent=True,
                 response_type="dbverify",
@@ -417,7 +436,7 @@ class CommandProcessor:
             await self.response_formatter.safe_reply(message, unavailable_message)
             if interaction_id:
                 await async_safe_update_user_interaction(
-                    self.db,
+                    self.user_repo,
                     interaction_id=interaction_id,
                     response_sent=True,
                     response_type=f"{response_prefix}_disabled",
@@ -433,7 +452,7 @@ class CommandProcessor:
             await self.response_formatter.safe_reply(message, usage)
             if interaction_id:
                 await async_safe_update_user_interaction(
-                    self.db,
+                    self.user_repo,
                     interaction_id=interaction_id,
                     response_sent=True,
                     response_type=f"{response_prefix}_usage",
@@ -488,7 +507,7 @@ class CommandProcessor:
             await self.response_formatter.safe_reply(message, invalid)
             if interaction_id:
                 await async_safe_update_user_interaction(
-                    self.db,
+                    self.user_repo,
                     interaction_id=interaction_id,
                     response_sent=True,
                     response_type=f"{response_prefix}_invalid",
@@ -501,7 +520,7 @@ class CommandProcessor:
             await self.response_formatter.safe_reply(message, error_message)
             if interaction_id:
                 await async_safe_update_user_interaction(
-                    self.db,
+                    self.user_repo,
                     interaction_id=interaction_id,
                     response_sent=True,
                     response_type=f"{response_prefix}_error",
@@ -516,7 +535,7 @@ class CommandProcessor:
             await self.response_formatter.safe_reply(message, empty_message.format(topic=topic))
             if interaction_id:
                 await async_safe_update_user_interaction(
-                    self.db,
+                    self.user_repo,
                     interaction_id=interaction_id,
                     response_sent=True,
                     response_type=f"{response_prefix}_empty",
@@ -533,7 +552,7 @@ class CommandProcessor:
         )
         if interaction_id:
             await async_safe_update_user_interaction(
-                self.db,
+                self.user_repo,
                 interaction_id=interaction_id,
                 response_sent=True,
                 response_type=f"{response_prefix}_results",
@@ -559,7 +578,7 @@ class CommandProcessor:
             )
             if interaction_id:
                 await async_safe_update_user_interaction(
-                    self.db,
+                    self.user_repo,
                     interaction_id=interaction_id,
                     response_sent=True,
                     response_type="error",
@@ -592,7 +611,7 @@ class CommandProcessor:
         await self.response_formatter.safe_reply(message, f"Processing {len(urls)} links...")
         if interaction_id:
             await async_safe_update_user_interaction(
-                self.db,
+                self.user_repo,
                 interaction_id=interaction_id,
                 response_sent=True,
                 response_type="processing",
@@ -655,7 +674,7 @@ class CommandProcessor:
             logger.debug("awaiting_multi_confirm", extra={"uid": uid, "count": len(urls)})
             if interaction_id:
                 await async_safe_update_user_interaction(
-                    self.db,
+                    self.user_repo,
                     interaction_id=interaction_id,
                     response_sent=True,
                     response_type="confirmation",
@@ -676,7 +695,7 @@ class CommandProcessor:
             logger.debug("awaiting_url", extra={"uid": uid})
             if interaction_id:
                 await async_safe_update_user_interaction(
-                    self.db,
+                    self.user_repo,
                     interaction_id=interaction_id,
                     response_sent=True,
                     response_type="awaiting_url",
@@ -752,7 +771,7 @@ class CommandProcessor:
                 else "cancel_none"
             )
             await async_safe_update_user_interaction(
-                self.db,
+                self.user_repo,
                 interaction_id=interaction_id,
                 response_sent=True,
                 response_type=response_type,
@@ -880,9 +899,9 @@ class CommandProcessor:
                     )
             else:
                 # Fallback to direct database access if container not available
-                unread_summaries = self.db.get_unread_summaries(
-                    user_id=uid,
-                    chat_id=chat_id,
+                unread_summaries = await self.summary_repo.async_get_unread_summaries(
+                    uid=uid,
+                    cid=chat_id,
                     limit=limit,
                     topic=topic,
                 )
@@ -933,7 +952,7 @@ class CommandProcessor:
 
             if interaction_id:
                 await async_safe_update_user_interaction(
-                    self.db,
+                    self.user_repo,
                     interaction_id=interaction_id,
                     response_sent=True,
                     response_type="unread_list",
@@ -949,7 +968,7 @@ class CommandProcessor:
             )
             if interaction_id:
                 await async_safe_update_user_interaction(
-                    self.db,
+                    self.user_repo,
                     interaction_id=interaction_id,
                     response_sent=True,
                     response_type="error",
@@ -1001,7 +1020,7 @@ class CommandProcessor:
                 return
 
             # Get the unread summary
-            summary = self.db.get_unread_summary_by_request_id(request_id)
+            summary = await self.summary_repo.async_get_unread_summary_by_request_id(request_id)
             if not summary:
                 await self.response_formatter.safe_reply(
                     message, f"❌ Article with ID `{request_id}` not found or already read."
@@ -1040,10 +1059,10 @@ class CommandProcessor:
                     await event_bus.publish(event)
                 else:
                     # Fallback to direct database access if summary_id not available
-                    self.db.mark_summary_as_read(request_id)
+                    await self.summary_repo.async_mark_summary_as_read(request_id)
             else:
                 # Fallback to direct database access if container not available
-                self.db.mark_summary_as_read(request_id)
+                await self.summary_repo.async_mark_summary_as_read(request_id)
 
             # Send the article
             input_url = summary.get("input_url", "Unknown URL")
@@ -1055,7 +1074,9 @@ class CommandProcessor:
             if shaped:
                 # Try to resolve model used for this request to avoid 'unknown' in header
                 try:
-                    model_name = self.db.get_latest_llm_model_by_request_id(request_id)
+                    model_name = await self.llm_repo.async_get_latest_llm_model_by_request_id(
+                        request_id
+                    )
                 except Exception:
                     model_name = None
                 llm_stub = type("LLMStub", (), {"model": model_name})()
@@ -1073,7 +1094,7 @@ class CommandProcessor:
 
             if interaction_id:
                 await async_safe_update_user_interaction(
-                    self.db,
+                    self.user_repo,
                     interaction_id=interaction_id,
                     response_sent=True,
                     response_type="read_article",
@@ -1090,7 +1111,7 @@ class CommandProcessor:
             )
             if interaction_id:
                 await async_safe_update_user_interaction(
-                    self.db,
+                    self.user_repo,
                     interaction_id=interaction_id,
                     response_sent=True,
                     response_type="error",
@@ -1131,7 +1152,7 @@ class CommandProcessor:
             )
             if interaction_id:
                 await async_safe_update_user_interaction(
-                    self.db,
+                    self.user_repo,
                     interaction_id=interaction_id,
                     response_sent=True,
                     response_type="search_disabled",
@@ -1160,7 +1181,7 @@ class CommandProcessor:
             await self.response_formatter.safe_reply(message, usage_msg)
             if interaction_id:
                 await async_safe_update_user_interaction(
-                    self.db,
+                    self.user_repo,
                     interaction_id=interaction_id,
                     response_sent=True,
                     response_type="search_usage",
@@ -1204,7 +1225,7 @@ class CommandProcessor:
 
             if interaction_id:
                 await async_safe_update_user_interaction(
-                    self.db,
+                    self.user_repo,
                     interaction_id=interaction_id,
                     response_sent=True,
                     response_type="search_results",
@@ -1220,7 +1241,7 @@ class CommandProcessor:
             )
             if interaction_id:
                 await async_safe_update_user_interaction(
-                    self.db,
+                    self.user_repo,
                     interaction_id=interaction_id,
                     response_sent=True,
                     response_type="search_error",
@@ -1329,10 +1350,12 @@ class CommandProcessor:
         from app.adapters.karakeep import KarakeepSyncService
 
         try:
+            karakeep_repo = SqliteKarakeepSyncRepositoryAdapter(self.db)
             service = KarakeepSyncService(
                 api_url=self.cfg.karakeep.api_url,
                 api_key=self.cfg.karakeep.api_key,
                 sync_tag=self.cfg.karakeep.sync_tag,
+                repository=karakeep_repo,
             )
             status = await service.get_sync_status()
 
@@ -1392,10 +1415,12 @@ class CommandProcessor:
         await self.response_formatter.safe_reply(message, "Starting Karakeep sync...")
 
         try:
+            karakeep_repo = SqliteKarakeepSyncRepositoryAdapter(self.db)
             service = KarakeepSyncService(
                 api_url=self.cfg.karakeep.api_url,
                 api_key=self.cfg.karakeep.api_key,
                 sync_tag=self.cfg.karakeep.sync_tag,
+                repository=karakeep_repo,
             )
 
             result = await service.run_full_sync(user_id=uid)
@@ -1428,7 +1453,7 @@ class CommandProcessor:
 
             if interaction_id:
                 await async_safe_update_user_interaction(
-                    self.db,
+                    self.user_repo,
                     interaction_id=interaction_id,
                     response_sent=True,
                     response_type="karakeep_sync_complete",
@@ -1441,7 +1466,7 @@ class CommandProcessor:
             await self.response_formatter.safe_reply(message, f"❌ Karakeep sync failed: {exc}")
             if interaction_id:
                 await async_safe_update_user_interaction(
-                    self.db,
+                    self.user_repo,
                     interaction_id=interaction_id,
                     response_sent=True,
                     response_type="karakeep_sync_error",

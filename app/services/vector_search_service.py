@@ -9,9 +9,12 @@ from typing import TYPE_CHECKING, Any
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.core.lang import detect_language
+from app.infrastructure.persistence.sqlite.repositories.embedding_repository import (
+    SqliteEmbeddingRepositoryAdapter,
+)
 
 if TYPE_CHECKING:
-    from app.db.database import Database
+    from app.db.session import DatabaseSessionManager
     from app.services.embedding_service import EmbeddingService
     from app.services.search_filters import SearchFilters
 
@@ -38,7 +41,7 @@ class VectorSearchService:
 
     def __init__(
         self,
-        db: Database,
+        db: DatabaseSessionManager | Any,
         embedding_service: EmbeddingService,
         *,
         max_results: int = 25,
@@ -47,7 +50,7 @@ class VectorSearchService:
         """Initialize vector search service.
 
         Args:
-            db: Database instance
+            db: DatabaseSessionManager instance or session
             embedding_service: Service for generating embeddings
             max_results: Maximum number of results to return
             min_similarity: Minimum similarity threshold (0.0-1.0)
@@ -60,6 +63,7 @@ class VectorSearchService:
             raise ValueError(msg)
 
         self._db = db
+        self._repo = SqliteEmbeddingRepositoryAdapter(db)
         self._embedding_service = embedding_service
         self._max_results = max_results
         self._min_similarity = min_similarity
@@ -145,79 +149,64 @@ class VectorSearchService:
             List of dicts with keys: request_id, summary_id, embedding,
                 url, title, snippet, source, published_at
         """
-        from app.db.models import Request, Summary, SummaryEmbedding
+        rows = await self._repo.async_get_all_embeddings()
+        results = []
 
-        def _query() -> list[dict[str, Any]]:
-            results = []
+        for row in rows:
+            try:
+                # Deserialize embedding
+                embedding = self._embedding_service.deserialize_embedding(row["embedding_blob"])
 
-            with self._db._database.connection_context():
-                query = (
-                    SummaryEmbedding.select(SummaryEmbedding, Summary, Request)
-                    .join(Summary)
-                    .join(Request)
+                # Extract metadata from summary payload
+                payload = row["json_payload"] or {}
+                metadata = payload.get("metadata", {}) if isinstance(payload, dict) else {}
+
+                # Build URL
+                url = (
+                    metadata.get("canonical_url")
+                    or metadata.get("url")
+                    or row.get("normalized_url")
+                    or row.get("input_url")
                 )
 
-                for row in query:
-                    try:
-                        # Deserialize embedding
-                        embedding = self._embedding_service.deserialize_embedding(
-                            row.embedding_blob
-                        )
+                # Extract title
+                title = metadata.get("title") or payload.get("title")
 
-                        # Extract metadata from summary payload
-                        payload = row.summary.json_payload or {}
-                        metadata = payload.get("metadata", {}) if isinstance(payload, dict) else {}
+                # Extract snippet
+                snippet = (
+                    payload.get("summary_250") or payload.get("tldr") or payload.get("summary_1000")
+                )
+                if snippet and len(snippet) > 300:
+                    snippet = snippet[:297] + "..."
 
-                        # Build URL
-                        url = (
-                            metadata.get("canonical_url")
-                            or metadata.get("url")
-                            or row.summary.request.normalized_url
-                            or row.summary.request.input_url
-                        )
+                # Extract source and published date
+                source = metadata.get("domain") or metadata.get("source")
+                published_at = (
+                    metadata.get("published_at")
+                    or metadata.get("published")
+                    or metadata.get("last_updated")
+                )
 
-                        # Extract title
-                        title = metadata.get("title") or payload.get("title")
+                results.append(
+                    {
+                        "request_id": row["request_id"],
+                        "summary_id": row["summary_id"],
+                        "embedding": embedding,
+                        "url": url,
+                        "title": title or url,
+                        "snippet": snippet,
+                        "source": source,
+                        "published_at": published_at,
+                    }
+                )
+            except (ValueError, KeyError, AttributeError, TypeError):
+                logger.exception(
+                    "failed_to_process_embedding_row",
+                    extra={"summary_id": row.get("summary_id")},
+                )
+                continue
 
-                        # Extract snippet
-                        snippet = (
-                            payload.get("summary_250")
-                            or payload.get("tldr")
-                            or payload.get("summary_1000")
-                        )
-                        if snippet and len(snippet) > 300:
-                            snippet = snippet[:297] + "..."
-
-                        # Extract source and published date
-                        source = metadata.get("domain") or metadata.get("source")
-                        published_at = (
-                            metadata.get("published_at")
-                            or metadata.get("published")
-                            or metadata.get("last_updated")
-                        )
-
-                        results.append(
-                            {
-                                "request_id": row.summary.request.id,
-                                "summary_id": row.summary.id,
-                                "embedding": embedding,
-                                "url": url,
-                                "title": title or url,
-                                "snippet": snippet,
-                                "source": source,
-                                "published_at": published_at,
-                            }
-                        )
-                    except (ValueError, KeyError, AttributeError, TypeError):
-                        logger.exception(
-                            "failed_to_process_embedding_row",
-                            extra={"summary_id": row.summary.id},
-                        )
-                        continue
-
-            return results
-
-        return await asyncio.to_thread(_query)
+        return results
 
     def _compute_similarities(
         self,

@@ -5,8 +5,6 @@ import uuid
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
-from peewee import JOIN
-
 from app.api.exceptions import (
     SyncSessionExpiredError,
     SyncSessionForbiddenError,
@@ -22,7 +20,21 @@ from app.api.models.responses import (
 )
 from app.core.logging_utils import get_logger
 from app.core.time_utils import UTC
-from app.db.models import CrawlResult, LLMCall, Request, Summary, User
+from app.infrastructure.persistence.sqlite.repositories.crawl_result_repository import (
+    SqliteCrawlResultRepositoryAdapter,
+)
+from app.infrastructure.persistence.sqlite.repositories.llm_repository import (
+    SqliteLLMRepositoryAdapter,
+)
+from app.infrastructure.persistence.sqlite.repositories.request_repository import (
+    SqliteRequestRepositoryAdapter,
+)
+from app.infrastructure.persistence.sqlite.repositories.summary_repository import (
+    SqliteSummaryRepositoryAdapter,
+)
+from app.infrastructure.persistence.sqlite.repositories.user_repository import (
+    SqliteUserRepositoryAdapter,
+)
 from app.infrastructure.redis import get_redis, redis_key
 
 if TYPE_CHECKING:
@@ -30,6 +42,7 @@ if TYPE_CHECKING:
 
     from app.api.models.requests import SyncApplyItem
     from app.config import AppConfig
+    from app.db.session import DatabaseSessionManager
 
 logger = get_logger(__name__)
 
@@ -40,8 +53,16 @@ _redis_warning_logged = False
 class SyncService:
     """Sync protocol service implementing sessions, delta/full retrieval, and apply."""
 
-    def __init__(self, cfg: AppConfig) -> None:
+    def __init__(self, cfg: AppConfig, session_manager: DatabaseSessionManager) -> None:
         self.cfg = cfg
+        self._session_manager = session_manager
+
+        # Initialize repositories
+        self._user_repo = SqliteUserRepositoryAdapter(session_manager)
+        self._request_repo = SqliteRequestRepositoryAdapter(session_manager)
+        self._summary_repo = SqliteSummaryRepositoryAdapter(session_manager)
+        self._crawl_repo = SqliteCrawlResultRepositoryAdapter(session_manager)
+        self._llm_repo = SqliteLLMRepositoryAdapter(session_manager)
 
     def _resolve_limit(self, requested: int | None) -> int:
         return max(
@@ -120,93 +141,122 @@ class SyncService:
             last_issued_since=0,
         )
 
-    def _serialize_request(self, request: Request) -> SyncEntityEnvelope:
-        deleted_at = self._coerce_iso(request.deleted_at) if request.deleted_at else None
+    def _serialize_request(self, request: dict[str, Any]) -> SyncEntityEnvelope:
+        """Serialize a request dict to SyncEntityEnvelope."""
+        deleted_at = (
+            self._coerce_iso(request.get("deleted_at")) if request.get("deleted_at") else None
+        )
         payload = None
-        if not request.is_deleted:
+        if not request.get("is_deleted"):
             payload = {
-                "id": request.id,
-                "type": request.type,
-                "status": request.status,
-                "input_url": request.input_url,
-                "normalized_url": request.normalized_url,
-                "correlation_id": request.correlation_id,
-                "created_at": self._coerce_iso(request.created_at),
+                "id": request.get("id"),
+                "type": request.get("type"),
+                "status": request.get("status"),
+                "input_url": request.get("input_url"),
+                "normalized_url": request.get("normalized_url"),
+                "correlation_id": request.get("correlation_id"),
+                "created_at": self._coerce_iso(request.get("created_at")),
             }
         return SyncEntityEnvelope(
             entity_type="request",
-            id=request.id,
-            server_version=int(request.server_version or 0),
-            updated_at=self._coerce_iso(request.updated_at),
+            id=request.get("id"),
+            server_version=int(request.get("server_version") or 0),
+            updated_at=self._coerce_iso(request.get("updated_at")),
             deleted_at=deleted_at,
             request=payload,
         )
 
-    def _serialize_summary(self, summary: Summary) -> SyncEntityEnvelope:
-        deleted_at = self._coerce_iso(summary.deleted_at) if summary.deleted_at else None
+    def _serialize_summary(self, summary: dict[str, Any]) -> SyncEntityEnvelope:
+        """Serialize a summary dict to SyncEntityEnvelope."""
+        deleted_at = (
+            self._coerce_iso(summary.get("deleted_at")) if summary.get("deleted_at") else None
+        )
         payload = None
-        if not summary.is_deleted:
+        if not summary.get("is_deleted"):
+            # Handle request as either dict or int (already flattened)
+            request_val = summary.get("request")
+            request_id = (
+                request_val
+                if isinstance(request_val, int)
+                else (request_val.get("id") if isinstance(request_val, dict) else None)
+            )
             payload = {
-                "id": summary.id,
-                "request_id": summary.request.id,
-                "lang": summary.lang,
-                "is_read": summary.is_read,
-                "json_payload": summary.json_payload,
-                "created_at": self._coerce_iso(summary.created_at),
+                "id": summary.get("id"),
+                "request_id": request_id,
+                "lang": summary.get("lang"),
+                "is_read": summary.get("is_read"),
+                "json_payload": summary.get("json_payload"),
+                "created_at": self._coerce_iso(summary.get("created_at")),
             }
 
         return SyncEntityEnvelope(
             entity_type="summary",
-            id=summary.id,
-            server_version=int(summary.server_version or 0),
-            updated_at=self._coerce_iso(summary.updated_at),
+            id=summary.get("id"),
+            server_version=int(summary.get("server_version") or 0),
+            updated_at=self._coerce_iso(summary.get("updated_at")),
             deleted_at=deleted_at,
             summary=payload,
         )
 
-    def _serialize_crawl_result(self, crawl: CrawlResult) -> SyncEntityEnvelope:
-        deleted_at = self._coerce_iso(crawl.deleted_at) if crawl.deleted_at else None
+    def _serialize_crawl_result(self, crawl: dict[str, Any]) -> SyncEntityEnvelope:
+        """Serialize a crawl result dict to SyncEntityEnvelope."""
+        deleted_at = self._coerce_iso(crawl.get("deleted_at")) if crawl.get("deleted_at") else None
         payload = None
-        if not crawl.is_deleted:
+        if not crawl.get("is_deleted"):
+            # Handle request as either dict or int (already flattened)
+            request_val = crawl.get("request")
+            request_id = (
+                request_val
+                if isinstance(request_val, int)
+                else (request_val.get("id") if isinstance(request_val, dict) else None)
+            )
             payload = {
-                "request_id": crawl.request.id,
-                "source_url": crawl.source_url,
-                "endpoint": crawl.endpoint,
-                "http_status": crawl.http_status,
-                "metadata": crawl.metadata_json,
-                "latency_ms": crawl.latency_ms,
+                "request_id": request_id,
+                "source_url": crawl.get("source_url"),
+                "endpoint": crawl.get("endpoint"),
+                "http_status": crawl.get("http_status"),
+                "metadata": crawl.get("metadata_json"),
+                "latency_ms": crawl.get("latency_ms"),
             }
 
         return SyncEntityEnvelope(
             entity_type="crawl_result",
-            id=crawl.id,
-            server_version=int(crawl.server_version or 0),
-            updated_at=self._coerce_iso(crawl.updated_at),
+            id=crawl.get("id"),
+            server_version=int(crawl.get("server_version") or 0),
+            updated_at=self._coerce_iso(crawl.get("updated_at")),
             deleted_at=deleted_at,
             crawl_result=payload,
         )
 
-    def _serialize_llm_call(self, call: LLMCall) -> SyncEntityEnvelope:
-        deleted_at = self._coerce_iso(call.deleted_at) if call.deleted_at else None
-        created_at = self._coerce_iso(call.created_at)
-        updated_at = self._coerce_iso(call.updated_at)
+    def _serialize_llm_call(self, call: dict[str, Any]) -> SyncEntityEnvelope:
+        """Serialize an LLM call dict to SyncEntityEnvelope."""
+        deleted_at = self._coerce_iso(call.get("deleted_at")) if call.get("deleted_at") else None
+        created_at = self._coerce_iso(call.get("created_at"))
+        updated_at = self._coerce_iso(call.get("updated_at"))
         payload = None
-        if not call.is_deleted:
+        if not call.get("is_deleted"):
+            # Handle request as either dict or int (already flattened)
+            request_val = call.get("request")
+            request_id = (
+                request_val
+                if isinstance(request_val, int)
+                else (request_val.get("id") if isinstance(request_val, dict) else None)
+            )
             payload = {
-                "request_id": call.request.id,
-                "provider": call.provider,
-                "model": call.model,
-                "status": call.status,
-                "tokens_prompt": call.tokens_prompt,
-                "tokens_completion": call.tokens_completion,
-                "cost_usd": call.cost_usd,
+                "request_id": request_id,
+                "provider": call.get("provider"),
+                "model": call.get("model"),
+                "status": call.get("status"),
+                "tokens_prompt": call.get("tokens_prompt"),
+                "tokens_completion": call.get("tokens_completion"),
+                "cost_usd": call.get("cost_usd"),
                 "created_at": created_at,
             }
 
         return SyncEntityEnvelope(
             entity_type="llm_call",
-            id=call.id,
-            server_version=int(call.server_version or 0),
+            id=call.get("id"),
+            server_version=int(call.get("server_version") or 0),
             updated_at=updated_at,
             deleted_at=deleted_at,
             llm_call=payload,
@@ -223,49 +273,53 @@ class SyncService:
                 pass
         return datetime.now(UTC).isoformat() + "Z"
 
-    def _serialize_user(self, user: User) -> SyncEntityEnvelope:
+    def _serialize_user(self, user: dict[str, Any]) -> SyncEntityEnvelope:
+        """Serialize a user dict to SyncEntityEnvelope."""
+        updated_at = user.get("updated_at")
+        created_at = user.get("created_at")
         return SyncEntityEnvelope(
             entity_type="user",
-            id=user.telegram_user_id,
-            server_version=int(user.server_version or 0),
-            updated_at=user.updated_at.isoformat() + "Z",
+            id=user.get("telegram_user_id"),
+            server_version=int(user.get("server_version") or 0),
+            updated_at=self._coerce_iso(updated_at),
             preference={
-                "username": user.username,
-                "is_owner": user.is_owner,
-                "preferences": user.preferences_json,
-                "created_at": user.created_at.isoformat() + "Z",
+                "username": user.get("username"),
+                "is_owner": user.get("is_owner"),
+                "preferences": user.get("preferences_json"),
+                "created_at": self._coerce_iso(created_at),
             },
         )
 
-    def _collect_records(self, user_id: int) -> list[SyncEntityEnvelope]:
+    async def _collect_records(self, user_id: int) -> list[SyncEntityEnvelope]:
+        """Collect all sync records for a user using repository adapters."""
         records: list[SyncEntityEnvelope] = []
 
-        user = User.select().where(User.telegram_user_id == user_id).first()
+        # Get user data
+        user = await self._user_repo.async_get_user_by_telegram_id(user_id)
         if user:
             records.append(self._serialize_user(user))
 
-        for request in Request.select().where(Request.user_id == user_id):
+        # Get all requests for user
+        requests = await self._request_repo.async_get_all_for_user(user_id)
+        for request in requests:
             records.append(self._serialize_request(request))
 
-        for summary in (
-            Summary.select(Summary, Request).join(Request).where(Request.user_id == user_id)
-        ):
+        # Get all summaries for user
+        summaries = await self._summary_repo.async_get_all_for_user(user_id)
+        for summary in summaries:
             records.append(self._serialize_summary(summary))
 
-        for crawl in (
-            CrawlResult.select(CrawlResult, Request)
-            .join(Request, JOIN.INNER)
-            .where(Request.user_id == user_id)
-        ):
+        # Get all crawl results for user
+        crawl_results = await self._crawl_repo.async_get_all_for_user(user_id)
+        for crawl in crawl_results:
             records.append(self._serialize_crawl_result(crawl))
 
-        for call in (
-            LLMCall.select(LLMCall, Request)
-            .join(Request, JOIN.INNER)
-            .where(Request.user_id == user_id)
-        ):
+        # Get all LLM calls for user
+        llm_calls = await self._llm_repo.async_get_all_for_user(user_id)
+        for call in llm_calls:
             records.append(self._serialize_llm_call(call))
 
+        # Sort by server_version and id for consistent ordering
         records.sort(key=lambda r: (r.server_version, str(r.id)))
         return records
 
@@ -283,7 +337,7 @@ class SyncService:
     ) -> FullSyncResponseData:
         session = await self._load_session(session_id, user_id, client_id)
         resolved_limit = self._resolve_limit(limit or session.get("chunk_limit"))
-        records = self._collect_records(user_id)
+        records = await self._collect_records(user_id)
         page, has_more, next_since = self._paginate_records(records, since=0, limit=resolved_limit)
         return self._build_full(session_id, page, has_more, next_since, resolved_limit)
 
@@ -292,7 +346,7 @@ class SyncService:
     ) -> DeltaSyncResponseData:
         session = await self._load_session(session_id, user_id, client_id)
         resolved_limit = self._resolve_limit(limit or session.get("chunk_limit"))
-        records = self._collect_records(user_id)
+        records = await self._collect_records(user_id)
         page, has_more, next_since = self._paginate_records(
             records, since=since, limit=resolved_limit
         )
@@ -364,7 +418,7 @@ class SyncService:
                 invalid += 1
                 continue
 
-            result = self._apply_summary_change(change, user_id)
+            result = await self._apply_summary_change(change, user_id)
             results.append(result)
             if result.status == "applied":
                 applied += 1
@@ -382,13 +436,21 @@ class SyncService:
             has_more=None,
         )
 
-    def _apply_summary_change(self, change: SyncApplyItem, user_id: int) -> SyncApplyItemResult:
-        summary = (
-            Summary.select(Summary, Request)
-            .join(Request)
-            .where((Summary.id == change.id) & (Request.user_id == user_id))
-            .first()
-        )
+    async def _apply_summary_change(
+        self, change: SyncApplyItem, user_id: int
+    ) -> SyncApplyItemResult:
+        """Apply a change to a summary using repository methods."""
+        try:
+            summary_id = int(change.id)
+        except (ValueError, TypeError):
+            return SyncApplyItemResult(
+                entity_type=change.entity_type,
+                id=change.id,
+                status="invalid",
+                error_code="INVALID_ID",
+            )
+
+        summary = await self._summary_repo.async_get_summary_for_sync_apply(summary_id, user_id)
 
         if not summary:
             return SyncApplyItemResult(
@@ -398,7 +460,7 @@ class SyncService:
                 error_code="NOT_FOUND",
             )
 
-        current_version = int(summary.server_version or 0)
+        current_version = int(summary.get("server_version") or 0)
         if change.last_seen_version < current_version:
             snapshot = self._serialize_summary(summary).model_dump()
             return SyncApplyItemResult(
@@ -422,17 +484,27 @@ class SyncService:
                 server_version=current_version,
             )
 
-        if change.action == "delete":
-            summary.is_deleted = True
-            summary.deleted_at = datetime.now(UTC)
-        elif "is_read" in payload:
-            summary.is_read = bool(payload["is_read"])
+        # Apply the change using repository
+        is_deleted = None
+        deleted_at = None
+        is_read = None
 
-        summary.save()
+        if change.action == "delete":
+            is_deleted = True
+            deleted_at = datetime.now(UTC)
+        elif "is_read" in payload:
+            is_read = bool(payload["is_read"])
+
+        new_version = await self._summary_repo.async_apply_sync_change(
+            summary_id,
+            is_deleted=is_deleted,
+            deleted_at=deleted_at,
+            is_read=is_read,
+        )
 
         return SyncApplyItemResult(
             entity_type=change.entity_type,
             id=change.id,
             status="applied",
-            server_version=int(summary.server_version or 0),
+            server_version=new_version,
         )

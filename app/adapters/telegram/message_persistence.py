@@ -5,8 +5,18 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any
 
+from app.infrastructure.persistence.sqlite.repositories.crawl_result_repository import (
+    SqliteCrawlResultRepositoryAdapter,
+)
+from app.infrastructure.persistence.sqlite.repositories.request_repository import (
+    SqliteRequestRepositoryAdapter,
+)
+from app.infrastructure.persistence.sqlite.repositories.user_repository import (
+    SqliteUserRepositoryAdapter,
+)
+
 if TYPE_CHECKING:
-    from app.db.database import Database
+    from app.db.session import DatabaseSessionManager
 
 logger = logging.getLogger(__name__)
 
@@ -14,10 +24,13 @@ logger = logging.getLogger(__name__)
 class MessagePersistence:
     """Handles message snapshots and database operations."""
 
-    def __init__(self, db: Database) -> None:
-        self.db = db
+    def __init__(self, db: DatabaseSessionManager | Any) -> None:
+        self.db = db  # Keep reference for legacy access if needed
+        self.request_repo = SqliteRequestRepositoryAdapter(db)
+        self.user_repo = SqliteUserRepositoryAdapter(db)
+        self.crawl_repo = SqliteCrawlResultRepositoryAdapter(db)
 
-    def persist_message_snapshot(self, request_id: int, message: Any) -> None:
+    async def persist_message_snapshot(self, request_id: int, message: Any) -> None:
         """Persist message snapshot to database."""
         # Security: Validate request_id
         if not isinstance(request_id, int) or request_id <= 0:
@@ -42,7 +55,7 @@ class MessagePersistence:
             chat_title = getattr(chat_obj, "title", None)
             chat_username = getattr(chat_obj, "username", None)
             try:
-                self.db.upsert_chat(
+                await self.user_repo.async_upsert_chat(
                     chat_id=chat_id,
                     type_=str(chat_type) if chat_type is not None else None,
                     title=str(chat_title) if isinstance(chat_title, str) else None,
@@ -60,7 +73,7 @@ class MessagePersistence:
         if user_id is not None:
             username = getattr(from_user_obj, "username", None)
             try:
-                self.db.upsert_user(
+                await self.user_repo.async_upsert_user(
                     telegram_user_id=user_id,
                     username=str(username) if isinstance(username, str) else None,
                 )
@@ -87,7 +100,7 @@ class MessagePersistence:
         # Raw JSON if possible
         raw_json = self._extract_raw_json(message)
 
-        self.db.insert_telegram_message(
+        await self.request_repo.async_insert_telegram_message(
             request_id=request_id,
             message_id=msg_id,
             chat_id=chat_id,

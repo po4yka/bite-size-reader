@@ -9,7 +9,12 @@ import grpc
 
 from app.api.background_processor import process_url_request
 from app.core.url_utils import compute_dedupe_hash, normalize_url
-from app.db.models import Request
+from app.infrastructure.persistence.sqlite.repositories.request_repository import (
+    SqliteRequestRepositoryAdapter,
+)
+from app.infrastructure.persistence.sqlite.repositories.summary_repository import (
+    SqliteSummaryRepositoryAdapter,
+)
 from app.infrastructure.redis import get_redis
 from app.protos import (
     processing_pb2 as _processing_pb2,
@@ -24,7 +29,7 @@ if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
 
     from app.config import AppConfig
-    from app.db.database import Database
+    from app.db.session import DatabaseSessionManager
 
 logger = logging.getLogger(__name__)
 
@@ -33,9 +38,11 @@ _background_tasks: set[asyncio.Task] = set()
 
 
 class ProcessingService(processing_pb2_grpc.ProcessingServiceServicer):
-    def __init__(self, cfg: AppConfig, db: Database):
+    def __init__(self, cfg: AppConfig, db: DatabaseSessionManager):
         self.cfg = cfg
         self.db = db
+        self.request_repo = SqliteRequestRepositoryAdapter(db)
+        self.summary_repo = SqliteSummaryRepositoryAdapter(db)
 
     async def SubmitUrl(  # noqa: N802
         self,
@@ -52,59 +59,46 @@ class ProcessingService(processing_pb2_grpc.ProcessingServiceServicer):
 
         # Check for existing request if force_refresh is False
         if not request.force_refresh:
-            existing = Request.get_or_none(Request.dedupe_hash == dedupe_hash)
-            if existing and existing.status == "success":
+            existing = await self.request_repo.async_get_request_by_dedupe_hash(dedupe_hash)
+            if existing and existing.get("status") == "success":
                 # Check for existing summary
-                from app.db.models import Summary
-
-                summary = Summary.get_or_none(Summary.request == existing)
+                summary = await self.summary_repo.async_get_summary_by_request(existing["id"])
                 if summary:
                     yield processing_pb2.ProcessingUpdate(
-                        request_id=existing.id,
+                        request_id=existing["id"],
                         status=processing_pb2.ProcessingStatus.ProcessingStatus_COMPLETED,
                         stage=processing_pb2.ProcessingStage.ProcessingStage_DONE,
                         message="Already processed",
                         progress=1.0,
-                        summary_id=summary.id,
+                        summary_id=summary["id"],
                     )
                     return
 
-        # Create new request
+        # Create or update request
         try:
-            req_model = Request.create(
-                type="url",
-                input_url=url,
-                normalized_url=normalized,
-                dedupe_hash=dedupe_hash
-                if not request.force_refresh
-                else None,  # Allow duplicates if forced? Or update existing?
-                # Ideally if forced, we might want to create a new one or reset the old one.
-                # For simplicity, if force_refresh, we ignore dedupe logic or we just create a new one (duplicate hash constraint might fail though).
-                # If unique constraint on dedupe_hash exists, we must handle it.
-                # Request model has `dedupe_hash = peewee.TextField(null=True, unique=True)`
-                # So if force_refresh is true, we should probably NULL the dedupe hash of the new request
-                # OR we accept that we can't have two active requests for same URL?
-                # Logic in `routers/requests.py` usually checks first.
-                # Let's assume for now we just create a new request and maybe suffix dedupe hash or just leave it null if forced.
-            )
-            # If force_refresh is True, we might want to bypass dedupe check.
-            # But the UNIQUE constraint is in DB.
-            # If we want to re-process, maybe we should reuse the existing request ID or delete the old one?
-            # Safe bet: if exists, reuse it and reset status.
-
             if request.force_refresh:
-                existing = Request.get_or_none(Request.dedupe_hash == dedupe_hash)
+                existing = await self.request_repo.async_get_request_by_dedupe_hash(dedupe_hash)
                 if existing:
-                    existing.status = "pending"
-                    existing.save()
-                    req_model = existing
-
+                    request_id = int(existing["id"])
+                    await self.request_repo.async_update_request_status(request_id, "pending")
+                else:
+                    request_id = await self.request_repo.async_create_request(
+                        type_="url",
+                        input_url=url,
+                        normalized_url=normalized,
+                        dedupe_hash=dedupe_hash,
+                    )
+            else:
+                request_id = await self.request_repo.async_create_request(
+                    type_="url",
+                    input_url=url,
+                    normalized_url=normalized,
+                    dedupe_hash=dedupe_hash,
+                )
         except Exception as e:
-            logger.error(f"Failed to create request: {e}")
-            await context.abort(grpc.StatusCode.INTERNAL, "Failed to create request")
+            logger.error(f"Failed to handle request: {e}")
+            await context.abort(grpc.StatusCode.INTERNAL, "Failed to handle request")
             return
-
-        request_id = req_model.id
 
         # Start background processing
         task = asyncio.create_task(process_url_request(request_id))
@@ -166,11 +160,9 @@ class ProcessingService(processing_pb2_grpc.ProcessingServiceServicer):
                 # If completed, try to fetch summary ID if not in payload (payload doesn't have it yet, maybe I should add it to BG processor payload?)
                 # I didn't add summary_id to payload in BG processor. I can fetch it from DB if status is COMPLETED.
                 if update.status == processing_pb2.ProcessingStatus.ProcessingStatus_COMPLETED:
-                    from app.db.models import Summary
-
-                    summary = Summary.get_or_none(Summary.request_id == request_id)
+                    summary = await self.summary_repo.async_get_summary_by_request(request_id)
                     if summary:
-                        update.summary_id = summary.id
+                        update.summary_id = summary["id"]
 
                 yield update
 

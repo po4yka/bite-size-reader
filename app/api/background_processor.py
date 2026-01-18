@@ -14,7 +14,13 @@ from app.config import AppConfig, load_config
 from app.core.lang import choose_language, detect_language
 from app.core.logging_utils import get_logger
 from app.core.url_utils import normalize_url
-from app.db.database import Database
+from app.db.session import DatabaseSessionManager
+from app.infrastructure.persistence.sqlite.repositories.request_repository import (
+    SqliteRequestRepositoryAdapter,
+)
+from app.infrastructure.persistence.sqlite.repositories.summary_repository import (
+    SqliteSummaryRepositoryAdapter,
+)
 from app.infrastructure.redis import get_redis, redis_key
 
 if TYPE_CHECKING:
@@ -55,7 +61,7 @@ class BackgroundProcessor:
         self,
         *,
         cfg: AppConfig,
-        db: Database,
+        db: DatabaseSessionManager,
         url_processor: URLProcessor,
         redis: Any | None,
         semaphore: asyncio.Semaphore,
@@ -63,6 +69,8 @@ class BackgroundProcessor:
     ) -> None:
         self.cfg = cfg
         self.db = db
+        self.summary_repo = SqliteSummaryRepositoryAdapter(db)
+        self.request_repo = SqliteRequestRepositoryAdapter(db)
         self.url_processor = url_processor
         self.redis = redis
         self._sem = semaphore
@@ -95,7 +103,12 @@ class BackgroundProcessor:
             return
 
         try:
-            request = await processor_db.async_get_request_by_id(request_id)
+            repo = (
+                self.request_repo
+                if processor_db == self.db
+                else SqliteRequestRepositoryAdapter(processor_db)
+            )
+            request = await repo.async_get_request_by_id(request_id)
             if not request:
                 logger.error(
                     "bg_request_not_found",
@@ -202,11 +215,13 @@ class BackgroundProcessor:
         finally:
             await self._release_lock(lock_handle)
 
-    def _maybe_override_db(self, db_path: str | None) -> tuple[Database, URLProcessor]:
+    def _maybe_override_db(
+        self, db_path: str | None
+    ) -> tuple[DatabaseSessionManager, URLProcessor]:
         if not db_path:
             return self.db, self.url_processor
 
-        override_db = Database(
+        override_db = DatabaseSessionManager(
             path=db_path,
             operation_timeout=self.cfg.database.operation_timeout,
             max_retries=self.cfg.database.max_retries,
@@ -322,7 +337,7 @@ class BackgroundProcessor:
         self,
         request_id: int,
         request: dict[str, Any],
-        db: Database,
+        db: DatabaseSessionManager,
         url_processor: URLProcessor,
         correlation_id: str,
     ) -> None:
@@ -369,7 +384,8 @@ class BackgroundProcessor:
             )
 
         await self._publish_update(request_id, "PROCESSING", "SAVING", "Saving summary...", 0.9)
-        await db.async_upsert_summary(
+        repo = self.summary_repo if db == self.db else SqliteSummaryRepositoryAdapter(db)
+        await repo.async_upsert_summary(
             request_id=request_id,
             lang=lang,
             json_payload=summary_json,
@@ -380,7 +396,7 @@ class BackgroundProcessor:
         self,
         request_id: int,
         request: dict[str, Any],
-        db: Database,
+        db: DatabaseSessionManager,
         url_processor: URLProcessor,
         correlation_id: str,
     ) -> None:
@@ -411,7 +427,8 @@ class BackgroundProcessor:
             )
 
         await self._publish_update(request_id, "PROCESSING", "SAVING", "Saving summary...", 0.9)
-        await db.async_upsert_summary(
+        repo = self.summary_repo if db == self.db else SqliteSummaryRepositoryAdapter(db)
+        await repo.async_upsert_summary(
             request_id=request_id,
             lang=lang,
             json_payload=summary_json,
@@ -467,17 +484,19 @@ class BackgroundProcessor:
             raise last_error
         raise RuntimeError("Retry loop exited without result or error")
 
-    async def _has_existing_summary(self, db: Database, request_id: int) -> bool:
+    async def _has_existing_summary(self, db: DatabaseSessionManager, request_id: int) -> bool:
+        repo = self.summary_repo if db == self.db else SqliteSummaryRepositoryAdapter(db)
         try:
-            return bool(await db.async_get_summary_by_request(request_id))
+            return bool(await repo.async_get_summary_by_request(request_id))
         except Exception:
             return False
 
     async def _mark_status(
-        self, db: Database, request_id: int, status: str, correlation_id: str | None
+        self, db: DatabaseSessionManager, request_id: int, status: str, correlation_id: str | None
     ) -> None:
+        repo = self.request_repo if db == self.db else SqliteRequestRepositoryAdapter(db)
         try:
-            await db.async_update_request_status_with_correlation(
+            await repo.async_update_request_status_with_correlation(
                 request_id, status, correlation_id
             )
         except Exception as exc:  # pragma: no cover - defensive
@@ -560,4 +579,12 @@ async def process_url_request(
     request_id: int, db_path: str | None = None, correlation_id: str | None = None
 ) -> None:
     processor = await _get_default_processor()
-    await processor.process(request_id, correlation_id=correlation_id, db_path=db_path)
+    task = asyncio.create_task(
+        processor.process(request_id, correlation_id=correlation_id, db_path=db_path)
+    )
+    # Background processing tasks - store reference if needed or use fire-and-forget safely
+    if not hasattr(processor, "_processing_tasks"):
+        processor._processing_tasks = set()  # type: ignore[attr-defined]
+    tasks = processor._processing_tasks  # type: ignore[attr-defined]
+    tasks.add(task)
+    task.add_done_callback(tasks.discard)

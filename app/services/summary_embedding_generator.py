@@ -5,10 +5,19 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any
 
+from app.infrastructure.persistence.sqlite.repositories.embedding_repository import (
+    SqliteEmbeddingRepositoryAdapter,
+)
+from app.infrastructure.persistence.sqlite.repositories.request_repository import (
+    SqliteRequestRepositoryAdapter,
+)
+from app.infrastructure.persistence.sqlite.repositories.summary_repository import (
+    SqliteSummaryRepositoryAdapter,
+)
 from app.services.embedding_service import EmbeddingService, prepare_text_for_embedding
 
 if TYPE_CHECKING:
-    from app.db.database import Database
+    from app.db.session import DatabaseSessionManager
 
 logger = logging.getLogger(__name__)
 
@@ -18,16 +27,19 @@ class SummaryEmbeddingGenerator:
 
     def __init__(
         self,
-        db: Database,
+        db: DatabaseSessionManager | Any,
         embedding_service: EmbeddingService | None = None,
         model_version: str = "1.0",
     ) -> None:
         self._db = db
+        self.embedding_repo = SqliteEmbeddingRepositoryAdapter(db)
+        self.request_repo = SqliteRequestRepositoryAdapter(db)
+        self.summary_repo = SqliteSummaryRepositoryAdapter(db)
         self._embedding_service = embedding_service or EmbeddingService()
         self._model_version = model_version
 
     @property
-    def db(self) -> Database:
+    def db(self) -> DatabaseSessionManager | Any:
         """Expose the underlying database instance."""
 
         return self._db
@@ -62,7 +74,7 @@ class SummaryEmbeddingGenerator:
 
         # Check if embedding already exists
         if not force:
-            existing = await self._db.async_get_summary_embedding(summary_id)
+            existing = await self.embedding_repo.async_get_summary_embedding(summary_id)
             if existing and existing.get("model_name") == model_name:
                 logger.debug(
                     "embedding_already_exists",
@@ -105,7 +117,7 @@ class SummaryEmbeddingGenerator:
             embedding_blob = self._embedding_service.serialize_embedding(embedding)
             dimensions = len(embedding)
 
-            await self._db.async_create_or_update_summary_embedding(
+            await self.embedding_repo.async_create_or_update_summary_embedding(
                 summary_id=summary_id,
                 embedding_blob=embedding_blob,
                 model_name=model_name,
@@ -149,7 +161,7 @@ class SummaryEmbeddingGenerator:
             True if embedding was generated, False if skipped or failed
         """
         # Fetch request to get language
-        request = await self._db.async_get_request_by_id(request_id)
+        request = await self.request_repo.async_get_request_by_id(request_id)
         if not request:
             logger.warning(
                 "no_request_found",
@@ -161,7 +173,7 @@ class SummaryEmbeddingGenerator:
         language = request.get("lang_detected")
 
         # Fetch summary
-        summary = await self._db.async_get_summary_by_request(request_id)
+        summary = await self.summary_repo.async_get_summary_by_request(request_id)
         if not summary:
             logger.warning(
                 "no_summary_for_request",

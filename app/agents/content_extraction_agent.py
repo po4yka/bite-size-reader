@@ -8,10 +8,16 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from app.agents.base_agent import AgentResult, BaseAgent
 from app.core.url_utils import normalize_url, url_hash_sha256
+from app.infrastructure.persistence.sqlite.repositories.crawl_result_repository import (
+    SqliteCrawlResultRepositoryAdapter,
+)
+from app.infrastructure.persistence.sqlite.repositories.request_repository import (
+    SqliteRequestRepositoryAdapter,
+)
 
 if TYPE_CHECKING:
     from app.adapters.content.content_extractor import ContentExtractor
-    from app.db.database import Database
+    from app.db.session import DatabaseSessionManager
 
 
 class ExtractionInput(BaseModel):
@@ -48,19 +54,21 @@ class ContentExtractionAgent(BaseAgent[ExtractionInput, ExtractionOutput]):
     def __init__(
         self,
         content_extractor: ContentExtractor,
-        db: Database,
+        db: DatabaseSessionManager,
         correlation_id: str | None = None,
     ):
         """Initialize the content extraction agent.
 
         Args:
             content_extractor: The content extractor component to use
-            db: Database instance for querying crawl results
+            db: DatabaseSessionManager instance for querying crawl results
             correlation_id: Optional correlation ID for tracing
         """
         super().__init__(name="ContentExtractionAgent", correlation_id=correlation_id)
         self.content_extractor = content_extractor
         self.db = db
+        self.request_repo = SqliteRequestRepositoryAdapter(db)
+        self.crawl_result_repo = SqliteCrawlResultRepositoryAdapter(db)
 
     async def execute(self, input_data: ExtractionInput) -> AgentResult[ExtractionOutput]:
         """Extract content from the given URL.
@@ -146,18 +154,12 @@ class ContentExtractionAgent(BaseAgent[ExtractionInput, ExtractionOutput]):
         # Compute dedupe hash to check for existing crawl
         dedupe_hash = url_hash_sha256(url)
 
-        existing_req = await self.db.async_get_request_by_dedupe_hash(dedupe_hash)
-        if not existing_req:
-            # Fallback to sync method if async not available
-            existing_req = self.db.get_request_by_dedupe_hash(dedupe_hash)
+        existing_req = await self.request_repo.async_get_request_by_dedupe_hash(dedupe_hash)
 
         if existing_req:
             req_id = existing_req["id"]
 
-            crawl_result = await self.db.async_get_crawl_result_by_request(req_id)
-            if not crawl_result:
-                # Fallback to sync method
-                crawl_result = self.db.get_crawl_result_by_request(req_id)
+            crawl_result = await self.crawl_result_repo.async_get_crawl_result_by_request(req_id)
 
             if crawl_result:
                 self.log_info(f"Found existing crawl result (ID: {crawl_result.get('id')})")

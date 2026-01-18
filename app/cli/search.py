@@ -70,10 +70,10 @@ async def search_fts(db_path: str, query: str, max_results: int = 10) -> list:
     Returns:
         List of search results
     """
-    from app.db.database import Database
+    from app.db.session import DatabaseSessionManager
     from app.services.topic_search import LocalTopicSearchService
 
-    db = Database(path=db_path)
+    db = DatabaseSessionManager(path=db_path)
     service = LocalTopicSearchService(db=db, max_results=max_results)
 
     return await service.find_articles(query)
@@ -91,12 +91,12 @@ async def search_vector(db_path: str, query: str, max_results: int = 10, filters
     Returns:
         List of search results
     """
-    from app.db.database import Database
+    from app.db.session import DatabaseSessionManager
     from app.services.embedding_service import EmbeddingService
     from app.services.topic_search import TopicArticle
     from app.services.vector_search_service import VectorSearchService
 
-    db = Database(path=db_path)
+    db = DatabaseSessionManager(path=db_path)
     embedding_service = EmbeddingService()
     service = VectorSearchService(
         db=db,
@@ -141,7 +141,7 @@ async def search_hybrid(
     Returns:
         List of search results
     """
-    from app.db.database import Database
+    from app.db.session import DatabaseSessionManager
     from app.services.embedding_service import EmbeddingService
     from app.services.hybrid_search_service import HybridSearchService
     from app.services.query_expansion_service import QueryExpansionService
@@ -149,7 +149,7 @@ async def search_hybrid(
     from app.services.topic_search import LocalTopicSearchService
     from app.services.vector_search_service import VectorSearchService
 
-    db = Database(path=db_path)
+    db = DatabaseSessionManager(path=db_path)
 
     # Initialize FTS service
     fts_service = LocalTopicSearchService(db=db, max_results=max_results)

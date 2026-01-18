@@ -2,28 +2,21 @@
 
 from __future__ import annotations
 
-import asyncio
 import logging
-import re
 from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, ConfigDict
 
-from app.db.models import Request, Summary
-from app.services.topic_search_utils import (
-    build_snippet,
-    clean_snippet,
-    compose_search_body,
-    ensure_mapping,
-    normalize_text,
-    tokenize,
+from app.infrastructure.persistence.sqlite.repositories.topic_search_repository import (
+    SqliteTopicSearchRepositoryAdapter,
 )
+from app.services.topic_search_utils import clean_snippet, tokenize
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterable, Sequence
+    from collections.abc import Callable, Iterable
 
     from app.adapters.external.firecrawl_parser import FirecrawlClient, FirecrawlSearchItem
-    from app.db.database import Database
+    from app.db.session import DatabaseSessionManager
 
 logger = logging.getLogger(__name__)
 
@@ -151,7 +144,7 @@ class LocalTopicSearchService:
 
     def __init__(
         self,
-        db: Database,
+        db: DatabaseSessionManager | Any,
         *,
         max_results: int,
         audit_func: Callable[[str, str, dict[str, Any]], None] | None = None,
@@ -164,7 +157,13 @@ class LocalTopicSearchService:
             msg = "max_results must be 25 or fewer"
             raise ValueError(msg)
 
-        self._db = db
+        # Initialize repository
+        if isinstance(db, SqliteTopicSearchRepositoryAdapter):
+            self._repo = db
+        else:
+            # Assume db matches the interface needed by base repository (DatabaseSessionManager or Database)
+            self._repo = SqliteTopicSearchRepositoryAdapter(db)
+
         self._max_results = max_results
         self._max_scan = (
             max(200, max_results * 40) if max_scan is None else max(max_scan, max_results)
@@ -181,7 +180,7 @@ class LocalTopicSearchService:
             raise ValueError(msg)
 
         try:
-            articles = await asyncio.to_thread(self._search_sync, query)
+            articles = await self._search_async(query)
         except (RuntimeError, ValueError, OSError):
             logger.exception(
                 "local_topic_search_failed", extra={"cid": correlation_id, "topic": query}
@@ -204,190 +203,38 @@ class LocalTopicSearchService:
 
         return articles
 
-    def _search_sync(self, query: str) -> list[TopicArticle]:
+    async def _search_async(self, query: str) -> list[TopicArticle]:
+        """Execute search using repository asynchronously."""
         terms = tokenize(query)
         normalized_query = query.casefold()
 
-        articles = self._search_via_index(query, terms)
+        # Phase 1: Search via FTS index
+        docs = await self._repo.async_search_documents(query, limit=self._max_results)
+        articles = [self._doc_to_article(doc) for doc in docs]
+
         if len(articles) >= self._max_results:
             return articles[: self._max_results]
 
+        # Phase 2: Fallback scan if needed
         remaining = self._max_results - len(articles)
-        if remaining <= 0:
-            return articles
-
         seen_urls = {article.url for article in articles}
-        fallback_articles = self._scan_summaries(
+
+        fallback_docs = await self._repo.async_scan_documents(
             terms=terms,
             normalized_query=normalized_query,
             seen_urls=seen_urls,
             limit=remaining,
+            max_scan=self._max_scan,
         )
-        articles.extend(fallback_articles)
+
+        articles.extend(self._doc_to_article(doc) for doc in fallback_docs)
         return articles[: self._max_results]
 
-    def _search_via_index(self, query: str, terms: Sequence[str]) -> list[TopicArticle]:
-        if not terms:
-            sanitized = self._sanitize_fts_term(query.casefold())
-            if not sanitized:
-                return []
-            fts_query = f'"{sanitized}"*'
-        else:
-            sanitized_terms = [self._sanitize_fts_term(term) for term in terms]
-            sanitized_terms = [term for term in sanitized_terms if term]
-            if not sanitized_terms:
-                return []
-            phrase = self._sanitize_fts_term(" ".join(terms))
-            wildcard_terms = [f'"{term}"*' for term in sanitized_terms]
-            components = [" AND ".join(wildcard_terms)]
-            if phrase:
-                components.append(f'"{phrase}"')
-            fts_query = " OR ".join(component for component in components if component)
-
-        candidate_limit = max(self._max_results * 5, 25)
-        sql = (
-            "SELECT rowid, url, title, snippet, source, published_at "
-            "FROM topic_search_index "
-            "WHERE topic_search_index MATCH ? "
-            "ORDER BY bm25(topic_search_index) ASC "
-            "LIMIT ?"
+    def _doc_to_article(self, doc: Any) -> TopicArticle:
+        return TopicArticle(
+            title=doc.title,
+            url=doc.url,
+            snippet=doc.snippet,
+            source=doc.source,
+            published_at=doc.published_at,
         )
-
-        articles: list[TopicArticle] = []
-        seen_urls: set[str] = set()
-
-        try:
-            with self._db._database.connection_context():
-                cursor = self._db._database.execute_sql(sql, (fts_query, candidate_limit))
-                rows = list(cursor)
-        except Exception as exc:
-            logger.warning("local_topic_search_index_query_failed", extra={"error": str(exc)})
-            return []
-
-        for row in rows:
-            url = normalize_text(self._row_value(row, 1, "url"))
-            if not url or url in seen_urls:
-                continue
-
-            title = normalize_text(self._row_value(row, 2, "title")) or url
-            snippet = clean_snippet(self._row_value(row, 3, "snippet"))
-            source = normalize_text(self._row_value(row, 4, "source"))
-            published = normalize_text(self._row_value(row, 5, "published_at"))
-
-            articles.append(
-                TopicArticle(
-                    title=title,
-                    url=url,
-                    snippet=snippet,
-                    source=source,
-                    published_at=published,
-                )
-            )
-            seen_urls.add(url)
-            if len(articles) >= self._max_results:
-                break
-
-        return articles
-
-    def _scan_summaries(
-        self,
-        *,
-        terms: Sequence[str],
-        normalized_query: str,
-        seen_urls: set[str],
-        limit: int,
-    ) -> list[TopicArticle]:
-        if limit <= 0:
-            return []
-
-        articles: list[TopicArticle] = []
-
-        with self._db._database.connection_context():
-            query = (
-                Summary.select(Summary, Request)
-                .join(Request)
-                .where(Summary.json_payload.is_null(False))
-                .order_by(Summary.created_at.desc())
-            )
-            if self._max_scan:
-                query = query.limit(self._max_scan)
-
-            for row in query:
-                payload = ensure_mapping(row.json_payload)
-                metadata = ensure_mapping(payload.get("metadata"))
-
-                url = (
-                    normalize_text(metadata.get("canonical_url"))
-                    or normalize_text(metadata.get("url"))
-                    or normalize_text(getattr(row.request, "normalized_url", None))
-                    or normalize_text(getattr(row.request, "input_url", None))
-                )
-                if not url or url in seen_urls:
-                    continue
-
-                title = (
-                    normalize_text(metadata.get("title"))
-                    or normalize_text(payload.get("title"))
-                    or url
-                )
-
-                haystack, _ = compose_search_body(
-                    title=title,
-                    payload=payload,
-                    metadata=metadata,
-                    content_text=getattr(row.request, "content_text", None),
-                )
-
-                if not self._matches(terms, normalized_query, haystack):
-                    continue
-
-                snippet = build_snippet(payload)
-                source = normalize_text(metadata.get("domain") or metadata.get("source"))
-                published = normalize_text(
-                    metadata.get("published_at")
-                    or metadata.get("published")
-                    or metadata.get("last_updated")
-                )
-
-                articles.append(
-                    TopicArticle(
-                        title=title,
-                        url=url,
-                        snippet=snippet,
-                        source=source,
-                        published_at=published,
-                    )
-                )
-
-                seen_urls.add(url)
-                if len(articles) >= limit:
-                    break
-
-        return articles
-
-    @staticmethod
-    def _matches(terms: Sequence[str], normalized_query: str, haystack: str) -> bool:
-        if not haystack:
-            return False
-        if not terms:
-            return normalized_query in haystack
-        return all(term in haystack for term in terms)
-
-    @staticmethod
-    def _sanitize_fts_term(term: str) -> str:
-        sanitized = re.sub(r"[^\w-]+", " ", term)
-        return re.sub(r"\s+", " ", sanitized).strip()
-
-    @staticmethod
-    def _row_value(row: Any, index: int, key: str) -> Any:
-        if isinstance(row, dict):
-            return row.get(key)
-        if hasattr(row, "keys"):
-            try:
-                return row[key]
-            except (KeyError, TypeError, IndexError):  # pragma: no cover - defensive fallback
-                pass
-        try:
-            return row[index]
-        except (KeyError, TypeError, IndexError):  # pragma: no cover - defensive fallback
-            return None

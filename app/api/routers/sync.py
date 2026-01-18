@@ -2,6 +2,7 @@
 
 from fastapi import APIRouter, Depends, Query
 
+from app.api.dependencies.database import get_session_manager
 from app.api.models.requests import SyncApplyRequest, SyncSessionRequest
 from app.api.models.responses import (
     DeltaSyncResponseData,
@@ -13,6 +14,7 @@ from app.api.routers.auth import get_current_user
 from app.api.services.sync_service import SyncService
 from app.config import AppConfig, load_config
 from app.core.logging_utils import get_logger
+from app.db.session import DatabaseSessionManager
 
 logger = get_logger(__name__)
 router = APIRouter()
@@ -27,13 +29,25 @@ def _get_cfg() -> AppConfig:
     return _cfg
 
 
+def _get_sync_service(
+    cfg: AppConfig | None = None,
+    session_manager: DatabaseSessionManager | None = None,
+) -> SyncService:
+    """Create a SyncService instance with proper dependencies."""
+    if cfg is None:
+        cfg = _get_cfg()
+    if session_manager is None:
+        session_manager = get_session_manager()
+    return SyncService(cfg, session_manager)
+
+
 @router.post("/sessions")
 async def create_sync_session(
     body: SyncSessionRequest | None = None,
     user=Depends(get_current_user),
 ) -> dict:
     """Create or resume a sync session."""
-    svc = SyncService(_get_cfg())
+    svc = _get_sync_service()
     session = await svc.start_session(
         user_id=user["user_id"],
         client_id=user.get("client_id"),
@@ -57,7 +71,7 @@ async def full_sync(
 ) -> dict:
     """Fetch full sync data in bounded chunks."""
     cfg = _get_cfg()
-    svc = SyncService(cfg)
+    svc = _get_sync_service(cfg)
     page: FullSyncResponseData = await svc.get_full(
         session_id=session_id,
         user_id=user["user_id"],
@@ -76,7 +90,7 @@ async def delta_sync(
 ) -> dict:
     """Fetch delta sync (created/updated/deleted) since a cursor."""
     cfg = _get_cfg()
-    svc = SyncService(cfg)
+    svc = _get_sync_service(cfg)
     page: DeltaSyncResponseData = await svc.get_delta(
         session_id=session_id,
         user_id=user["user_id"],
@@ -99,7 +113,7 @@ async def apply_changes(
     user=Depends(get_current_user),
 ) -> dict:
     """Apply client-side changes with conflict detection."""
-    svc = SyncService(_get_cfg())
+    svc = _get_sync_service()
     result: SyncApplyResponseData = await svc.apply_changes(
         session_id=payload.session_id,
         user_id=user["user_id"],

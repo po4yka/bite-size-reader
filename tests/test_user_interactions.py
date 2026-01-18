@@ -7,10 +7,16 @@ from unittest.mock import Mock
 
 from app.adapters.telegram.message_router import MessageRouter
 from app.config import AppConfig  # noqa: TC001 - used for type annotation
-from app.db.database import Database
+from app.db.session import DatabaseSessionManager
 from app.db.user_interactions import (
     async_safe_update_user_interaction,
     safe_update_user_interaction,
+)
+from app.infrastructure.persistence.sqlite.repositories.request_repository import (
+    SqliteRequestRepositoryAdapter,
+)
+from app.infrastructure.persistence.sqlite.repositories.user_repository import (
+    SqliteUserRepositoryAdapter,
 )
 from tests.conftest import make_test_app_config
 
@@ -22,8 +28,8 @@ def _make_config() -> AppConfig:
     return make_test_app_config(db_path=":memory:")
 
 
-def _make_db(tmp_path) -> Database:
-    db = Database(str(tmp_path / "interactions.db"))
+def _make_db(tmp_path) -> DatabaseSessionManager:
+    db = DatabaseSessionManager(str(tmp_path / "interactions.db"))
     db.migrate()
     return db
 
@@ -43,20 +49,22 @@ def test_message_router_logs_interaction(tmp_path) -> None:
         audit_func=lambda *args, **kwargs: None,
     )
 
-    interaction_id = router._log_user_interaction(
-        user_id=42,
-        chat_id=99,
-        message_id=7,
-        interaction_type="command",
-        command="/start",
-        input_text="hello",
-        input_url=None,
-        has_forward=True,
-        forward_from_chat_id=555,
-        forward_from_chat_title="Forwarded",
-        forward_from_message_id=321,
-        media_type="text",
-        correlation_id="cid-123",
+    interaction_id = asyncio.run(
+        router._log_user_interaction(
+            user_id=42,
+            chat_id=99,
+            message_id=7,
+            interaction_type="command",
+            command="/start",
+            input_text="hello",
+            input_url=None,
+            has_forward=True,
+            forward_from_chat_id=555,
+            forward_from_chat_title="Forwarded",
+            forward_from_message_id=321,
+            media_type="text",
+            correlation_id="cid-123",
+        )
     )
 
     assert interaction_id > 0
@@ -73,25 +81,31 @@ def test_message_router_logs_interaction(tmp_path) -> None:
 
 def test_safe_update_user_interaction_updates_interaction(tmp_path) -> None:
     db = _make_db(tmp_path)
+    user_repo = SqliteUserRepositoryAdapter(db)
+    request_repo = SqliteRequestRepositoryAdapter(db)
 
     # Create a request first (required for foreign key constraint)
-    request_id = db.create_request(
-        type_="url",
-        status="ok",
-        correlation_id="test-corr-id",
-        user_id=7,
-        chat_id=11,
-        normalized_url="https://example.com",
+    request_id = asyncio.run(
+        request_repo.async_create_request(
+            type_="url",
+            status="ok",
+            correlation_id="test-corr-id",
+            user_id=7,
+            chat_id=11,
+            normalized_url="https://example.com",
+        )
     )
 
-    interaction_id = db.insert_user_interaction(
-        user_id=7,
-        interaction_type="command",
-        chat_id=11,
-        message_id=22,
-        command="/help",
-        input_text="help",
-        structured_output_enabled=True,
+    interaction_id = asyncio.run(
+        user_repo.async_insert_user_interaction(
+            user_id=7,
+            interaction_type="command",
+            chat_id=11,
+            message_id=22,
+            command="/help",
+            input_text="help",
+            structured_output_enabled=True,
+        )
     )
 
     safe_update_user_interaction(
@@ -104,6 +118,12 @@ def test_safe_update_user_interaction_updates_interaction(tmp_path) -> None:
         processing_time_ms=1234,
         request_id=request_id,
     )
+
+    # Wait for background task if any (safe_update_user_interaction might spawn one)
+    # But since it's sync helper in test, it might be tricky.
+    # The sync helper uses loop.create_task if loop is running.
+    # In this test, no loop is running in the main thread during safe_update_user_interaction call?
+    # Wait, safe_update_user_interaction has loop detection.
 
     row = db.fetchone(
         "SELECT response_sent, response_type, error_occurred, error_message, processing_time_ms, request_id "
@@ -122,30 +142,36 @@ def test_safe_update_user_interaction_updates_interaction(tmp_path) -> None:
 
 def test_async_safe_update_user_interaction_updates_interaction(tmp_path) -> None:
     db = _make_db(tmp_path)
+    user_repo = SqliteUserRepositoryAdapter(db)
+    request_repo = SqliteRequestRepositoryAdapter(db)
 
     # Create a request first (required for foreign key constraint)
-    request_id = db.create_request(
-        type_="url",
-        status="ok",
-        correlation_id="test-async-corr-id",
-        user_id=13,
-        chat_id=44,
-        normalized_url="https://example.org",
+    request_id = asyncio.run(
+        request_repo.async_create_request(
+            type_="url",
+            status="ok",
+            correlation_id="test-async-corr-id",
+            user_id=13,
+            chat_id=44,
+            normalized_url="https://example.org",
+        )
     )
 
-    interaction_id = db.insert_user_interaction(
-        user_id=13,
-        interaction_type="url",
-        chat_id=44,
-        message_id=55,
-        command="/summary",
-        input_text="go",
-        structured_output_enabled=False,
+    interaction_id = asyncio.run(
+        user_repo.async_insert_user_interaction(
+            user_id=13,
+            interaction_type="url",
+            chat_id=44,
+            message_id=55,
+            command="/summary",
+            input_text="go",
+            structured_output_enabled=False,
+        )
     )
 
     asyncio.run(
         async_safe_update_user_interaction(
-            db,
+            user_repo,
             interaction_id=interaction_id,
             response_sent=True,
             response_type="summary",

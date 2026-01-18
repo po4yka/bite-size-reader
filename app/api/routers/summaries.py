@@ -6,9 +6,9 @@ Provides CRUD operations for summaries.
 
 from datetime import datetime
 from hashlib import sha256
+from typing import Any
 
 from fastapi import APIRouter, Depends, Query
-from peewee import OperationalError
 
 from app.api.exceptions import ResourceNotFoundError
 from app.api.models.requests import UpdateSummaryRequest
@@ -25,18 +25,45 @@ from app.api.services import SummaryService
 from app.core.html_utils import clean_markdown_article_text, html_to_text
 from app.core.logging_utils import get_logger
 from app.core.time_utils import UTC
-from app.db.models import CrawlResult, LLMCall, Request as RequestModel, Summary
+from app.db.models import database_proxy
+from app.infrastructure.persistence.sqlite.repositories.crawl_result_repository import (
+    SqliteCrawlResultRepositoryAdapter,
+)
+from app.infrastructure.persistence.sqlite.repositories.llm_repository import (
+    SqliteLLMRepositoryAdapter,
+)
+from app.infrastructure.persistence.sqlite.repositories.request_repository import (
+    SqliteRequestRepositoryAdapter,
+)
+from app.infrastructure.persistence.sqlite.repositories.summary_repository import (
+    SqliteSummaryRepositoryAdapter,
+)
 from app.services.topic_search_utils import ensure_mapping
 
 logger = get_logger(__name__)
 router = APIRouter()
 
 
-def _isotime(dt) -> str:
+def _isotime(dt: Any) -> str:
     """Safely convert datetime to ISO string."""
     if hasattr(dt, "isoformat"):
         return dt.isoformat() + "Z"
     return str(dt)
+
+
+def _get_repos() -> tuple[
+    SqliteSummaryRepositoryAdapter,
+    SqliteRequestRepositoryAdapter,
+    SqliteCrawlResultRepositoryAdapter,
+    SqliteLLMRepositoryAdapter,
+]:
+    """Get repository adapters."""
+    return (
+        SqliteSummaryRepositoryAdapter(database_proxy),
+        SqliteRequestRepositoryAdapter(database_proxy),
+        SqliteCrawlResultRepositoryAdapter(database_proxy),
+        SqliteLLMRepositoryAdapter(database_proxy),
+    )
 
 
 @router.get("")
@@ -64,7 +91,7 @@ async def get_summaries(
     - sort: Sort order (created_at_desc/created_at_asc)
     """
     # Use service layer for business logic
-    summaries, total, unread_count = SummaryService.get_user_summaries(
+    summaries, total, unread_count = await SummaryService.get_user_summaries(
         user_id=user["user_id"],
         limit=limit,
         offset=offset,
@@ -76,28 +103,39 @@ async def get_summaries(
         sort=sort,
     )
 
-    # Build response
+    # Build response from dictionary data
     summary_list: list[SummaryCompact] = []
-    for summary in summaries:
-        request = summary.request
-        json_payload = ensure_mapping(summary.json_payload)
+    for summary_dict in summaries:
+        # Extract request data from the joined dict
+        request_data = summary_dict.get("request") or {}
+        if isinstance(request_data, int):
+            # If request is just an ID, we need to get request data separately
+            request_id = request_data
+            input_url = ""
+            normalized_url = ""
+        else:
+            request_id = request_data.get("id", summary_dict.get("request_id"))
+            input_url = request_data.get("input_url", "")
+            normalized_url = request_data.get("normalized_url", "")
+
+        json_payload = ensure_mapping(summary_dict.get("json_payload"))
         metadata = ensure_mapping(json_payload.get("metadata"))
 
         summary_list.append(
             SummaryCompact(
-                id=summary.id,
-                request_id=request.id,
+                id=summary_dict.get("id"),
+                request_id=request_id,
                 title=metadata.get("title", "Untitled"),
                 domain=metadata.get("domain", ""),
-                url=request.input_url or request.normalized_url or "",
+                url=input_url or normalized_url or "",
                 tldr=json_payload.get("tldr", ""),
                 summary_250=json_payload.get("summary_250", ""),
                 reading_time_min=json_payload.get("estimated_reading_time_min", 0),
                 topic_tags=json_payload.get("topic_tags", []),
-                is_read=summary.is_read,
-                is_favorited=getattr(summary, "is_favorited", False),
-                lang=summary.lang or "auto",
-                created_at=_isotime(summary.created_at),
+                is_read=summary_dict.get("is_read", False),
+                is_favorited=summary_dict.get("is_favorited", False),
+                lang=summary_dict.get("lang") or "auto",
+                created_at=_isotime(summary_dict.get("created_at")),
                 confidence=json_payload.get("confidence", 0.0),
                 hallucination_risk=json_payload.get("hallucination_risk", "unknown"),
                 image_url=metadata.get("image")
@@ -129,36 +167,22 @@ async def get_summary_by_url(
     user=Depends(get_current_user),
 ):
     """Get a single summary (article) by its original URL."""
-    # Try to find request by input_url or normalized_url
-    # We join with Summary to ensure a summary actually exists
-    request_query = (
-        RequestModel.select(RequestModel.id)
-        .join(Summary)
-        .where(
-            (RequestModel.user_id == user["user_id"])
-            & ((RequestModel.input_url == url) | (RequestModel.normalized_url == url))
-            & (Summary.request == RequestModel.id)
-        )
-        .order_by(RequestModel.created_at.desc())
-        .limit(1)
+    summary_repo, request_repo, _, _ = _get_repos()
+
+    # Find request ID by URL (with summary join)
+    request_id = await request_repo.async_get_request_id_by_url_with_summary(
+        user_id=user["user_id"], url=url
     )
 
-    request_record = request_query.first()
-
-    if not request_record:
-        # Try fuzzy match? Or maybe client sent a slightly different URL.
-        # For now, strict match or simple normalization is safer.
-        # Could check if url is missing scheme...
+    if not request_id:
         raise ResourceNotFoundError("Article", url)
 
-    # Reuse get_summary logic by ID
-    # We first need the summary ID
-    summary = Summary.select(Summary.id).where(Summary.request == request_record.id).first()
-    if not summary:
-        # Should overlap with query above, but safety check
-        raise ResourceNotFoundError("Summary", f"request:{request_record.id}")
+    # Get summary ID by request ID
+    summary_id = await summary_repo.async_get_summary_id_by_request(request_id)
+    if not summary_id:
+        raise ResourceNotFoundError("Summary", f"request:{request_id}")
 
-    return await get_summary(summary_id=summary.id, user=user)
+    return await get_summary(summary_id=summary_id, user=user)
 
 
 @router.get("/{summary_id}")
@@ -167,41 +191,35 @@ async def get_summary(
     user=Depends(get_current_user),
 ):
     """Get a single summary with full details."""
-    # Use service layer - it handles authorization and returns summary
-    try:
-        summary = SummaryService.get_summary_by_id(user["user_id"], summary_id)
-    except (AttributeError, OperationalError) as err:
-        if isinstance(err, AttributeError) and "uninitialized Proxy" not in str(err):
-            raise
-        if isinstance(err, OperationalError) and isinstance(Summary, type):
-            raise
-        summary = (
-            Summary.select(Summary, RequestModel)
-            .join(RequestModel)
-            .where((Summary.id == summary_id) & (RequestModel.user_id == user["user_id"]))
-            .first()
-        )
-        if summary is None:
-            raise ResourceNotFoundError("Summary", summary_id) from err
+    _, request_repo, crawl_repo, llm_repo = _get_repos()
 
-    # Request is already loaded (eager loading in service)
-    request = summary.request
+    # Use service layer - it handles authorization and returns summary dict
+    summary = await SummaryService.get_summary_by_id(user["user_id"], summary_id)
 
-    # Load crawl result and LLM calls
-    crawl_result = CrawlResult.select().where(CrawlResult.request == request.id).first()
-    llm_calls = list(LLMCall.select().where(LLMCall.request == request.id))
+    # Extract request data from the summary dict
+    request_data = summary.get("request") or {}
+    if isinstance(request_data, int):
+        # If request is just an ID, fetch the full request data
+        request_id = request_data
+        request_data = await request_repo.async_get_request_by_id(request_id) or {}
+    else:
+        request_id = request_data.get("id", summary.get("request_id"))
+
+    # Load crawl result and LLM calls via repositories
+    crawl_result = await crawl_repo.async_get_crawl_result_by_request(request_id)
+    llm_calls = await llm_repo.async_get_llm_calls_by_request(request_id)
 
     # Build source metadata
     source = {}
     if crawl_result:
-        metadata = crawl_result.metadata_json or {}
+        metadata = crawl_result.get("metadata_json") or {}
         source = {
-            "url": crawl_result.source_url,
+            "url": crawl_result.get("source_url"),
             "title": metadata.get("title"),
             "domain": metadata.get("domain"),
             "author": metadata.get("author"),
             "published_at": metadata.get("published_at"),
-            "http_status": crawl_result.http_status,
+            "http_status": crawl_result.get("http_status"),
             "image_url": metadata.get("image")
             or metadata.get("og:image")
             or metadata.get("ogImage"),
@@ -212,34 +230,35 @@ async def get_summary(
     if llm_calls:
         latest_call = llm_calls[-1]
         processing = {
-            "model": latest_call.model,
-            "tokens_used": (latest_call.tokens_prompt or 0) + (latest_call.tokens_completion or 0),
-            "cost_usd": latest_call.cost_usd,
-            "latency_ms": sum(call.latency_ms or 0 for call in llm_calls),
-            "crawl_latency_ms": crawl_result.latency_ms if crawl_result else None,
-            "llm_latency_ms": latest_call.latency_ms,
+            "model": latest_call.get("model"),
+            "tokens_used": (latest_call.get("tokens_prompt") or 0)
+            + (latest_call.get("tokens_completion") or 0),
+            "cost_usd": latest_call.get("cost_usd"),
+            "latency_ms": sum(call.get("latency_ms") or 0 for call in llm_calls),
+            "crawl_latency_ms": crawl_result.get("latency_ms") if crawl_result else None,
+            "llm_latency_ms": latest_call.get("latency_ms"),
         }
 
     return success_response(
         SummaryDetail(
             summary={
-                "id": summary.id,
-                "request_id": request.id,
-                "lang": summary.lang,
-                "is_read": summary.is_read,
-                "is_favorited": getattr(summary, "is_favorited", False),
-                "version": summary.version,
-                "created_at": _isotime(summary.created_at),
-                "json_payload": summary.json_payload,
+                "id": summary.get("id"),
+                "request_id": request_id,
+                "lang": summary.get("lang"),
+                "is_read": summary.get("is_read"),
+                "is_favorited": summary.get("is_favorited", False),
+                "version": summary.get("version"),
+                "created_at": _isotime(summary.get("created_at")),
+                "json_payload": summary.get("json_payload"),
             },
             request={
-                "id": request.id,
-                "type": request.type,
-                "status": request.status,
-                "input_url": request.input_url,
-                "normalized_url": request.normalized_url,
-                "correlation_id": request.correlation_id,
-                "created_at": _isotime(request.created_at),
+                "id": request_data.get("id"),
+                "type": request_data.get("type"),
+                "status": request_data.get("status"),
+                "input_url": request_data.get("input_url"),
+                "normalized_url": request_data.get("normalized_url"),
+                "correlation_id": request_data.get("correlation_id"),
+                "created_at": _isotime(request_data.get("created_at")),
             },
             source=source,
             processing=processing,
@@ -254,17 +273,30 @@ async def get_summary_content(
     user=Depends(get_current_user),
 ):
     """Get full article content for offline reading."""
-    summary = SummaryService.get_summary_by_id(user["user_id"], summary_id)
+    _, request_repo, crawl_repo, _ = _get_repos()
 
-    request = summary.request
-    crawl_result = CrawlResult.select().where(CrawlResult.request == request.id).first()
+    summary = await SummaryService.get_summary_by_id(user["user_id"], summary_id)
+
+    # Extract request data
+    request_data = summary.get("request") or {}
+    if isinstance(request_data, int):
+        request_id = request_data
+        request_data = await request_repo.async_get_request_by_id(request_id) or {}
+    else:
+        request_id = request_data.get("id", summary.get("request_id"))
+
+    crawl_result = await crawl_repo.async_get_crawl_result_by_request(request_id)
 
     if not crawl_result:
         raise ResourceNotFoundError("Content", summary_id)
 
-    metadata = ensure_mapping(crawl_result.metadata_json)
-    summary_metadata = ensure_mapping(ensure_mapping(summary.json_payload).get("metadata"))
-    source_url = crawl_result.source_url or request.input_url or request.normalized_url
+    metadata = ensure_mapping(crawl_result.get("metadata_json"))
+    summary_metadata = ensure_mapping(ensure_mapping(summary.get("json_payload")).get("metadata"))
+    source_url = (
+        crawl_result.get("source_url")
+        or request_data.get("input_url")
+        or request_data.get("normalized_url")
+    )
     title = metadata.get("title") or summary_metadata.get("title")
     domain = metadata.get("domain") or summary_metadata.get("domain")
 
@@ -272,16 +304,16 @@ async def get_summary_content(
     source_format = None
     content_type = None
 
-    if crawl_result.content_markdown:
-        content_source = crawl_result.content_markdown
+    if crawl_result.get("content_markdown"):
+        content_source = crawl_result.get("content_markdown")
         source_format = "markdown"
         content_type = "text/markdown"
-    elif crawl_result.content_html:
-        content_source = crawl_result.content_html
+    elif crawl_result.get("content_html"):
+        content_source = crawl_result.get("content_html")
         source_format = "html"
         content_type = "text/html"
-    elif request.content_text:
-        content_source = request.content_text
+    elif request_data.get("content_text"):
+        content_source = request_data.get("content_text")
         source_format = "text"
         content_type = "text/plain"
 
@@ -315,20 +347,18 @@ async def get_summary_content(
     checksum = sha256(content_value.encode("utf-8")).hexdigest() if content_value else None
     size_bytes = len(content_value.encode("utf-8")) if content_value else None
     retrieved_dt = (
-        getattr(crawl_result, "updated_at", None)
-        or getattr(crawl_result, "created_at", None)
-        or datetime.now(UTC)
+        crawl_result.get("updated_at") or crawl_result.get("created_at") or datetime.now(UTC)
     )
 
     return success_response(
         SummaryContentData(
             content=SummaryContent(
-                summary_id=summary.id,
-                request_id=request.id if request else None,
+                summary_id=summary.get("id"),
+                request_id=request_id,
                 format=output_format,
                 content=content_value,
                 content_type=content_mime,
-                lang=summary.lang,
+                lang=summary.get("lang"),
                 source_url=source_url,
                 title=title,
                 domain=domain,
@@ -348,7 +378,7 @@ async def update_summary(
 ):
     """Update summary metadata (e.g., mark as read)."""
     # Use service layer
-    SummaryService.update_summary(
+    await SummaryService.update_summary(
         user_id=user["user_id"],
         summary_id=summary_id,
         is_read=update.is_read,
@@ -370,7 +400,7 @@ async def delete_summary(
 ):
     """Delete a summary (soft delete)."""
     # Use service layer
-    SummaryService.delete_summary(user_id=user["user_id"], summary_id=summary_id)
+    await SummaryService.delete_summary(user_id=user["user_id"], summary_id=summary_id)
 
     return success_response(
         {
@@ -386,5 +416,7 @@ async def toggle_favorite(
     user=Depends(get_current_user),
 ):
     """Toggle the favorite status of a summary."""
-    is_favorited = SummaryService.toggle_favorite(user_id=user["user_id"], summary_id=summary_id)
+    is_favorited = await SummaryService.toggle_favorite(
+        user_id=user["user_id"], summary_id=summary_id
+    )
     return success_response({"success": True, "is_favorited": is_favorited})

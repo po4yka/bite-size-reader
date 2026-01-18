@@ -1,12 +1,22 @@
 """Request service - business logic for request operations."""
 
 from datetime import datetime
+from typing import Any
 
 from app.api.exceptions import DuplicateResourceError, ResourceNotFoundError
 from app.core.logging_utils import get_logger
 from app.core.time_utils import UTC
 from app.core.url_utils import compute_dedupe_hash, normalize_url
-from app.db.models import CrawlResult, LLMCall, Request as RequestModel, Summary
+from app.db.models import LLMCall, Request as RequestModel
+from app.infrastructure.persistence.sqlite.repositories.crawl_result_repository import (
+    SqliteCrawlResultRepositoryAdapter,
+)
+from app.infrastructure.persistence.sqlite.repositories.request_repository import (
+    SqliteRequestRepositoryAdapter,
+)
+from app.infrastructure.persistence.sqlite.repositories.summary_repository import (
+    SqliteSummaryRepositoryAdapter,
+)
 
 logger = get_logger(__name__)
 
@@ -15,7 +25,7 @@ class RequestService:
     """Service for request-related business logic."""
 
     @staticmethod
-    def check_duplicate_url(user_id: int, url: str) -> dict | None:
+    async def check_duplicate_url(user_id: int, url: str) -> dict | None:
         """
         Check if a URL has already been summarized by this user.
 
@@ -26,30 +36,33 @@ class RequestService:
         Returns:
             Dictionary with duplicate info if found, None otherwise
         """
+        from app.db.models import database_proxy
+
+        request_repo = SqliteRequestRepositoryAdapter(database_proxy)
+        summary_repo = SqliteSummaryRepositoryAdapter(database_proxy)
+
         normalized = normalize_url(url)
         dedupe_hash = compute_dedupe_hash(normalized)
 
-        existing = (
-            RequestModel.select()
-            .where((RequestModel.dedupe_hash == dedupe_hash) & (RequestModel.user_id == user_id))
-            .first()
-        )
+        existing = await request_repo.async_get_request_by_dedupe_hash(dedupe_hash)
 
-        if not existing:
+        if not existing or existing.get("user_id") != user_id:
             return None
 
-        summary = Summary.select().where(Summary.request == existing.id).first()
+        summary = await summary_repo.async_get_summary_by_request(existing["id"])
 
         return {
-            "existing_request_id": existing.id,
-            "existing_summary_id": summary.id if summary else None,
-            "summarized_at": existing.created_at.isoformat() + "Z",
+            "existing_request_id": existing["id"],
+            "existing_summary_id": summary["id"] if summary else None,
+            "summarized_at": existing["created_at"].isoformat() + "Z"
+            if hasattr(existing["created_at"], "isoformat")
+            else str(existing["created_at"]),
         }
 
     @staticmethod
-    def create_url_request(
+    async def create_url_request(
         user_id: int, input_url: str, lang_preference: str = "auto"
-    ) -> RequestModel:
+    ) -> Any:
         """
         Create a new URL request.
 
@@ -59,16 +72,20 @@ class RequestService:
             lang_preference: Language preference (auto, en, ru)
 
         Returns:
-            Created RequestModel instance
+            Created Request object (dict or model)
 
         Raises:
             DuplicateResourceError: If URL already exists for this user
         """
+        from app.db.models import database_proxy
+
+        request_repo = SqliteRequestRepositoryAdapter(database_proxy)
+
         normalized = normalize_url(input_url)
         dedupe_hash = compute_dedupe_hash(normalized)
 
         # Check for duplicates
-        duplicate_info = RequestService.check_duplicate_url(user_id, input_url)
+        duplicate_info = await RequestService.check_duplicate_url(user_id, input_url)
         if duplicate_info:
             raise DuplicateResourceError(
                 "This URL was already summarized",
@@ -78,8 +95,8 @@ class RequestService:
         # Create request
         correlation_id = f"api-{user_id}-{int(datetime.now(UTC).timestamp())}"
 
-        new_request = RequestModel.create(
-            type="url",
+        request_id = await request_repo.async_create_request(
+            type_="url",
             status="pending",
             correlation_id=correlation_id,
             user_id=user_id,
@@ -89,25 +106,30 @@ class RequestService:
             lang_detected=lang_preference,
         )
 
+        new_request = await request_repo.async_get_request_by_id(request_id)
+
         logger.info(
-            f"URL request created: {new_request.id}",
+            f"URL request created: {request_id}",
             extra={
-                "request_id": new_request.id,
+                "request_id": request_id,
                 "user_id": user_id,
                 "correlation_id": correlation_id,
             },
         )
 
-        return new_request
+        # Return as object-like for backward compatibility if possible, or update caller
+        from types import SimpleNamespace
+
+        return SimpleNamespace(**new_request) if new_request else None
 
     @staticmethod
-    def create_forward_request(
+    async def create_forward_request(
         user_id: int,
         content_text: str,
         from_chat_id: int,
         from_message_id: int,
         lang_preference: str = "auto",
-    ) -> RequestModel:
+    ) -> Any:
         """
         Create a new forward message request.
 
@@ -119,12 +141,16 @@ class RequestService:
             lang_preference: Language preference
 
         Returns:
-            Created RequestModel instance
+            Created Request object (dict or model)
         """
+        from app.db.models import database_proxy
+
+        request_repo = SqliteRequestRepositoryAdapter(database_proxy)
+
         correlation_id = f"api-{user_id}-{int(datetime.now(UTC).timestamp())}"
 
-        new_request = RequestModel.create(
-            type="forward",
+        request_id = await request_repo.async_create_request(
+            type_="forward",
             status="pending",
             correlation_id=correlation_id,
             user_id=user_id,
@@ -134,19 +160,23 @@ class RequestService:
             lang_detected=lang_preference,
         )
 
+        new_request = await request_repo.async_get_request_by_id(request_id)
+
         logger.info(
-            f"Forward request created: {new_request.id}",
+            f"Forward request created: {request_id}",
             extra={
-                "request_id": new_request.id,
+                "request_id": request_id,
                 "user_id": user_id,
                 "correlation_id": correlation_id,
             },
         )
 
-        return new_request
+        from types import SimpleNamespace
+
+        return SimpleNamespace(**new_request) if new_request else None
 
     @staticmethod
-    def get_request_by_id(user_id: int, request_id: int) -> dict:
+    async def get_request_by_id(user_id: int, request_id: int) -> dict:
         """
         Get request details with authorization check.
 
@@ -160,29 +190,34 @@ class RequestService:
         Raises:
             ResourceNotFoundError: If request not found or access denied
         """
-        request = (
-            RequestModel.select()
-            .where((RequestModel.id == request_id) & (RequestModel.user_id == user_id))
-            .first()
-        )
+        from app.db.models import database_proxy
 
-        if not request:
+        request_repo = SqliteRequestRepositoryAdapter(database_proxy)
+        crawl_repo = SqliteCrawlResultRepositoryAdapter(database_proxy)
+        summary_repo = SqliteSummaryRepositoryAdapter(database_proxy)
+
+        request = await request_repo.async_get_request_by_id(request_id)
+
+        if not request or request.get("user_id") != user_id:
             raise ResourceNotFoundError("Request", request_id)
 
         # Load related data
-        crawl_result = CrawlResult.select().where(CrawlResult.request == request.id).first()
-        llm_calls = list(LLMCall.select().where(LLMCall.request == request.id))
-        summary = Summary.select().where(Summary.request == request.id).first()
+        crawl_result = await crawl_repo.async_get_crawl_result_by_request(request_id)
+        # For llm_calls we don't have a direct repo method for list, we'll keep Peewee for now or add it
+        llm_calls = list(LLMCall.select().where(LLMCall.request == request_id))
+        summary = await summary_repo.async_get_summary_by_request(request_id)
+
+        from types import SimpleNamespace
 
         return {
-            "request": request,
-            "crawl_result": crawl_result,
+            "request": SimpleNamespace(**request),
+            "crawl_result": SimpleNamespace(**crawl_result) if crawl_result else None,
             "llm_calls": llm_calls,
-            "summary": summary,
+            "summary": SimpleNamespace(**summary) if summary else None,
         }
 
     @staticmethod
-    def get_request_status(user_id: int, request_id: int) -> dict:
+    async def get_request_status(user_id: int, request_id: int) -> dict:
         """
         Get processing status for a request.
 
@@ -199,15 +234,18 @@ class RequestService:
         Raises:
             ResourceNotFoundError: If request not found or access denied
         """
-        request = (
-            RequestModel.select()
-            .where((RequestModel.id == request_id) & (RequestModel.user_id == user_id))
-            .first()
-        )
+        from app.db.models import database_proxy
 
-        if not request:
+        request_repo = SqliteRequestRepositoryAdapter(database_proxy)
+        crawl_repo = SqliteCrawlResultRepositoryAdapter(database_proxy)
+        summary_repo = SqliteSummaryRepositoryAdapter(database_proxy)
+
+        request = await request_repo.async_get_request_by_id(request_id)
+
+        if not request or request.get("user_id") != user_id:
             raise ResourceNotFoundError("Request", request_id)
 
+        status = request.get("status")
         # Determine stage based on status and related records
         # Stage values: pending, crawling, processing, complete, failed
         stage = "pending"  # Default
@@ -218,46 +256,47 @@ class RequestService:
         error_message = None
         can_retry = False  # Explicit boolean, never None
 
-        if request.status == "processing":
-            crawl_result = CrawlResult.select().where(CrawlResult.request == request.id).first()
-            llm_calls = LLMCall.select().where(LLMCall.request == request.id).count()
-            summary = Summary.select().where(Summary.request == request.id).first()
+        if status == "processing":
+            crawl_result = await crawl_repo.async_get_crawl_result_by_request(request_id)
+            # Count llm calls via Peewee for now
+            llm_calls_count = LLMCall.select().where(LLMCall.request == request_id).count()
+            summary = await summary_repo.async_get_summary_by_request(request_id)
 
             if not crawl_result:
                 stage = "crawling"
                 progress = {"current_step": 1, "total_steps": 3, "percentage": 33}
-            elif llm_calls == 0 or not summary:
+            elif llm_calls_count == 0 or not summary:
                 stage = "processing"
                 progress = {"current_step": 2, "total_steps": 3, "percentage": 66}
             else:
                 stage = "processing"
                 progress = {"current_step": 3, "total_steps": 3, "percentage": 90}
 
-        elif request.status == "pending":
+        elif status == "pending":
             stage = "pending"
-            # Calculate queue position: count pending requests created before this one
+            # Calculate queue position
             queue_position = (
                 RequestModel.select()
                 .where(
                     (RequestModel.status == "pending")
-                    & (RequestModel.created_at < request.created_at)
+                    & (RequestModel.created_at < request.get("created_at"))
                 )
                 .count()
             ) + 1  # 1-indexed position
 
-        elif request.status in ("success", "ok"):
+        elif status in ("success", "ok"):
             stage = "complete"
 
-        elif request.status == "error":
+        elif status == "error":
             stage = "failed"
-            error_stage, error_type, error_message = RequestService._derive_error_details(
-                request.id
+            error_stage, error_type, error_message = await RequestService._derive_error_details(
+                request_id
             )
             if not error_message:
                 error_message = "Request failed"
             can_retry = True  # Failed requests can be retried
 
-        elif request.status == "cancelled":
+        elif status == "cancelled":
             stage = "failed"
             error_message = "Request was cancelled"
             can_retry = True  # Cancelled requests can be retried
@@ -267,8 +306,8 @@ class RequestService:
             stage = "pending"
 
         return {
-            "request_id": request.id,
-            "status": request.status,
+            "request_id": request_id,
+            "status": status,
             "stage": stage,
             "progress": progress,
             "estimated_seconds_remaining": 8 if stage in ("crawling", "processing") else None,
@@ -277,11 +316,11 @@ class RequestService:
             "error_type": error_type,
             "error_message": error_message,
             "can_retry": can_retry,
-            "correlation_id": request.correlation_id,
+            "correlation_id": request.get("correlation_id"),
         }
 
     @staticmethod
-    def retry_failed_request(user_id: int, request_id: int) -> RequestModel:
+    async def retry_failed_request(user_id: int, request_id: int) -> Any:
         """
         Retry a failed request by creating a new one.
 
@@ -290,60 +329,69 @@ class RequestService:
             request_id: Original request ID to retry
 
         Returns:
-            New RequestModel instance
+            Created Request object (dict or model)
 
         Raises:
             ResourceNotFoundError: If request not found or access denied
             ValueError: If request is not in error status
         """
-        original_request = (
-            RequestModel.select()
-            .where((RequestModel.id == request_id) & (RequestModel.user_id == user_id))
-            .first()
-        )
+        from app.db.models import database_proxy
 
-        if not original_request:
+        request_repo = SqliteRequestRepositoryAdapter(database_proxy)
+
+        original_request = await request_repo.async_get_request_by_id(request_id)
+
+        if not original_request or original_request.get("user_id") != user_id:
             raise ResourceNotFoundError("Request", request_id)
 
-        if original_request.status != "error":
+        if original_request.get("status") != "error":
             raise ValueError("Only failed requests can be retried")
 
         # Create new request with retry correlation ID
-        correlation_id = f"{original_request.correlation_id}-retry-1"
+        correlation_id = f"{original_request.get('correlation_id')}-retry-1"
 
-        new_request = RequestModel.create(
-            type=original_request.type,
+        new_request_id = await request_repo.async_create_request(
+            type_=original_request.get("type"),
             status="pending",
             correlation_id=correlation_id,
             user_id=user_id,
-            input_url=original_request.input_url,
-            normalized_url=original_request.normalized_url,
-            dedupe_hash=original_request.dedupe_hash,
-            content_text=original_request.content_text,
-            fwd_from_chat_id=original_request.fwd_from_chat_id,
-            fwd_from_msg_id=original_request.fwd_from_msg_id,
-            lang_detected=original_request.lang_detected,
+            input_url=original_request.get("input_url"),
+            normalized_url=original_request.get("normalized_url"),
+            dedupe_hash=original_request.get("dedupe_hash"),
+            content_text=original_request.get("content_text"),
+            fwd_from_chat_id=original_request.get("fwd_from_chat_id"),
+            fwd_from_msg_id=original_request.get("fwd_from_msg_id"),
+            lang_detected=original_request.get("lang_detected"),
         )
 
+        new_request = await request_repo.async_get_request_by_id(new_request_id)
+
         logger.info(
-            f"Retry request created: {new_request.id} (original: {request_id})",
+            f"Retry request created: {new_request_id} (original: {request_id})",
             extra={
-                "new_request_id": new_request.id,
+                "new_request_id": new_request_id,
                 "original_request_id": request_id,
                 "user_id": user_id,
             },
         )
 
-        return new_request
+        from types import SimpleNamespace
+
+        return SimpleNamespace(**new_request) if new_request else None
 
     @staticmethod
-    def _derive_error_details(
+    async def _derive_error_details(
         request_id: int,
     ) -> tuple[str | None, str | None, str | None]:
         """
         Infer error stage/type/message from persisted artifacts.
         Prefers LLM errors (later stage) over crawl errors.
         """
+        from app.db.models import database_proxy
+
+        crawl_repo = SqliteCrawlResultRepositoryAdapter(database_proxy)
+
+        # For llm_calls we don't have a direct repo method for latest, we'll use Peewee for now
         latest_llm = (
             LLMCall.select()
             .where(LLMCall.request == request_id)
@@ -364,18 +412,15 @@ class RequestService:
                 message or "LLM summarization failed",
             )
 
-        latest_crawl = (
-            CrawlResult.select()
-            .where(CrawlResult.request == request_id)
-            .order_by(CrawlResult.updated_at.desc())
-            .first()
-        )
-        if latest_crawl and (latest_crawl.status == "error" or latest_crawl.error_text):
+        latest_crawl = await crawl_repo.async_get_crawl_result_by_request(request_id)
+        if latest_crawl and (
+            latest_crawl.get("status") == "error" or latest_crawl.get("error_text")
+        ):
             return (
                 "content_extraction",
-                latest_crawl.firecrawl_error_code or "EXTRACTION_FAILED",
-                latest_crawl.error_text
-                or latest_crawl.firecrawl_error_message
+                latest_crawl.get("firecrawl_error_code") or "EXTRACTION_FAILED",
+                latest_crawl.get("error_text")
+                or latest_crawl.get("firecrawl_error_message")
                 or "Content extraction failed",
             )
 

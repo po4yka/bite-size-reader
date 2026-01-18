@@ -2,18 +2,25 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import time
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from .database import Database
+    from app.db.session import DatabaseSessionManager
+    from app.infrastructure.persistence.sqlite.repositories.user_repository import (
+        SqliteUserRepositoryAdapter,
+    )
 
 logger = logging.getLogger(__name__)
 
 
+_update_tasks: set[asyncio.Task] = set()
+
+
 def safe_update_user_interaction(
-    db: Database,
+    db: DatabaseSessionManager | Any,
     *,
     interaction_id: int | None,
     logger_: logging.Logger | None = None,
@@ -22,38 +29,8 @@ def safe_update_user_interaction(
     updates: dict[str, Any] | None = None,
     **fields: Any,
 ) -> None:
-    """Safely update an interaction record.
-
-    This helper wraps :meth:`Database.update_user_interaction`, ensuring that
-    ``interaction_id`` is valid before attempting to persist the update and
-    capturing any exceptions as warnings.  When ``start_time`` is provided and
-    ``processing_time_ms`` is omitted, the helper automatically calculates the
-    latency using either ``end_time`` or the current time.
-
-    Parameters
-    ----------
-    db:
-        The database instance used to persist the interaction update.
-    interaction_id:
-        The primary key of the interaction to update. If ``None`` or ``<= 0``
-        the call is ignored.
-    logger_:
-        Optional logger used for warning output. Falls back to this module's
-        logger when omitted.
-    start_time:
-        Optional start timestamp (in seconds). When provided and
-        ``processing_time_ms`` is not explicitly set, the helper computes the
-        latency automatically.
-    end_time:
-        Optional end timestamp. Defaults to ``time.time()`` when ``start_time``
-        is provided without an explicit end time.
-    updates:
-        Optional mapping passed straight through to
-        :meth:`Database.update_user_interaction`.
-    **fields:
-        Individual field overrides that mirror the database method signature.
-
-    """
+    """Sync helper for updating user interaction (legacy, prefer async version)."""
+    # This helper is legacy and should be avoided in async code
     prepared = _prepare_interaction_update(
         interaction_id,
         updates=updates,
@@ -68,11 +45,40 @@ def safe_update_user_interaction(
     payload, update_mapping = prepared
 
     try:
-        db.update_user_interaction(
-            interaction_id=interaction_id,
-            updates=update_mapping,
-            **payload,
-        )
+        if hasattr(db, "update_user_interaction"):
+            db.update_user_interaction(
+                interaction_id,
+                updates=update_mapping,
+                **payload,
+            )
+            return
+
+        if hasattr(db, "async_update_user_interaction"):
+            coro = db.async_update_user_interaction(
+                interaction_id=interaction_id,
+                updates=update_mapping,
+                **payload,
+            )
+        else:
+            from app.infrastructure.persistence.sqlite.repositories.user_repository import (
+                SqliteUserRepositoryAdapter,
+            )
+
+            user_repo = SqliteUserRepositoryAdapter(db)
+            coro = user_repo.async_update_user_interaction(
+                interaction_id=interaction_id,
+                updates=update_mapping,
+                **payload,
+            )
+
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            asyncio.run(coro)
+        else:
+            task = loop.create_task(coro)
+            _update_tasks.add(task)
+            task.add_done_callback(_update_tasks.discard)
     except Exception as exc:
         log = logger_ if logger_ is not None else logger
         log.warning(
@@ -82,7 +88,7 @@ def safe_update_user_interaction(
 
 
 async def async_safe_update_user_interaction(
-    db: Database,
+    user_repo: SqliteUserRepositoryAdapter | Any,
     *,
     interaction_id: int | None,
     logger_: logging.Logger | None = None,
@@ -106,7 +112,7 @@ async def async_safe_update_user_interaction(
     payload, update_mapping = prepared
 
     try:
-        await db.async_update_user_interaction(
+        await user_repo.async_update_user_interaction(
             interaction_id=interaction_id,
             updates=update_mapping,
             **payload,

@@ -26,7 +26,7 @@ if TYPE_CHECKING:
 
     from app.adapters.telegram.telegram_bot import TelegramBot
     from app.config import AppConfig
-    from app.db.database import Database
+    from app.db.session import DatabaseSessionManager
 
 logger = logging.getLogger(__name__)
 
@@ -123,7 +123,7 @@ class BotFactory:
     @staticmethod
     def create_components(
         cfg: AppConfig,
-        db: Database,
+        db: DatabaseSessionManager,
         clients: ExternalClients,
         audit_func: Callable[[str, str, dict], None],
         safe_reply_func: Callable,
@@ -296,7 +296,7 @@ class BotFactory:
         )
 
     @staticmethod
-    def create_bot(cfg: AppConfig, db: Database) -> TelegramBot:
+    def create_bot(cfg: AppConfig, db: DatabaseSessionManager) -> TelegramBot:
         """Create a fully initialized TelegramBot instance.
 
         This is the main entry point for creating a bot with all dependencies.

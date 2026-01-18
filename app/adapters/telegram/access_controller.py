@@ -8,13 +8,16 @@ import time
 from typing import TYPE_CHECKING, Any
 
 from app.db.user_interactions import async_safe_update_user_interaction
+from app.infrastructure.persistence.sqlite.repositories.user_repository import (
+    SqliteUserRepositoryAdapter,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
     from app.adapters.external.response_formatter import ResponseFormatter
     from app.config import AppConfig
-    from app.db.database import Database
+    from app.db.session import DatabaseSessionManager
 
 logger = logging.getLogger(__name__)
 
@@ -25,12 +28,13 @@ class AccessController:
     def __init__(
         self,
         cfg: AppConfig,
-        db: Database,
+        db: DatabaseSessionManager,
         response_formatter: ResponseFormatter,
         audit_func: Callable[[str, str, dict], None],
     ) -> None:
         self.cfg = cfg
         self.db = db
+        self.user_repo = SqliteUserRepositoryAdapter(db)
         self.response_formatter = response_formatter
         self._audit = audit_func
 
@@ -138,7 +142,7 @@ class AccessController:
 
         if interaction_id:
             await async_safe_update_user_interaction(
-                self.db,
+                self.user_repo,
                 interaction_id=interaction_id,
                 response_sent=True,
                 response_type="error",

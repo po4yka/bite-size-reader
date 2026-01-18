@@ -56,6 +56,7 @@ class RerankingService:
         *,
         text_field: str = "snippet",
         title_field: str = "title",
+        id_field: str | None = None,
         score_field: str = "rerank_score",
     ) -> list[dict[str, Any]]:
         """Re-rank results using cross-encoder.
@@ -65,11 +66,13 @@ class RerankingService:
             results: List of result dictionaries
             text_field: Field name containing result text for scoring
             title_field: Field name containing result title
+            id_field: Optional field name for result ID
             score_field: Field name to store re-ranking score
 
         Returns:
             Re-ranked results with score_field added, sorted by relevance
         """
+        _ = id_field  # Not used in local cross-encoder model for scoring
         if not query or not results:
             return results
 

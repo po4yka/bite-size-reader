@@ -9,23 +9,27 @@ from typing import TYPE_CHECKING, Any
 from app.core.logging_utils import generate_correlation_id
 from app.core.url_utils import extract_all_urls
 from app.db.user_interactions import async_safe_update_user_interaction
+from app.infrastructure.persistence.sqlite.repositories.user_repository import (
+    SqliteUserRepositoryAdapter,
+)
 from app.utils.message_formatter import format_completion_message, format_progress_message
 from app.utils.progress_tracker import ProgressTracker
 
 if TYPE_CHECKING:
     from app.adapters.content.url_processor import URLProcessor
     from app.adapters.external.response_formatter import ResponseFormatter
-    from app.db.database import Database
+    from app.db.session import DatabaseSessionManager
 
 logger = logging.getLogger(__name__)
 
-# Timeout and retry configuration for URL processing
-URL_INITIAL_TIMEOUT_SEC = 120  # 2 minutes initial timeout per URL
-URL_MAX_TIMEOUT_SEC = 300  # 5 minutes max timeout after retries
-URL_MAX_RETRIES = 2  # Maximum number of retries per URL
-URL_BACKOFF_BASE = 1.0  # Base delay in seconds for exponential backoff
-URL_BACKOFF_MAX = 30.0  # Maximum backoff delay in seconds
-URL_MAX_CONCURRENT = 4  # Maximum concurrent URL processing
+
+# URL processing configuration
+URL_MAX_CONCURRENT = 4
+URL_MAX_RETRIES = 3
+URL_INITIAL_TIMEOUT_SEC = 30.0
+URL_MAX_TIMEOUT_SEC = 180.0
+URL_BACKOFF_BASE = 2.0
+URL_BACKOFF_MAX = 60.0
 
 
 class URLHandler:
@@ -33,11 +37,12 @@ class URLHandler:
 
     def __init__(
         self,
-        db: Database,
+        db: DatabaseSessionManager,
         response_formatter: ResponseFormatter,
         url_processor: URLProcessor,
     ) -> None:
         self.db = db
+        self.user_repo = SqliteUserRepositoryAdapter(db)
         self.response_formatter = response_formatter
         self.url_processor = url_processor
 
@@ -189,7 +194,7 @@ class URLHandler:
                 )
                 if interaction_id:
                     await async_safe_update_user_interaction(
-                        self.db,
+                        self.user_repo,
                         interaction_id=interaction_id,
                         response_sent=True,
                         response_type="confirmation_missing",
@@ -208,7 +213,7 @@ class URLHandler:
                 )
                 if interaction_id:
                     await async_safe_update_user_interaction(
-                        self.db,
+                        self.user_repo,
                         interaction_id=interaction_id,
                         response_sent=True,
                         response_type="confirmation_invalid",
@@ -223,7 +228,7 @@ class URLHandler:
             )
             if interaction_id:
                 await async_safe_update_user_interaction(
-                    self.db,
+                    self.user_repo,
                     interaction_id=interaction_id,
                     response_sent=True,
                     response_type="processing",
@@ -241,7 +246,7 @@ class URLHandler:
             await self.response_formatter.safe_reply(message, "Cancelled.")
             if interaction_id:
                 await async_safe_update_user_interaction(
-                    self.db,
+                    self.user_repo,
                     interaction_id=interaction_id,
                     response_sent=True,
                     response_type="cancelled",
@@ -330,7 +335,7 @@ class URLHandler:
         logger.debug("awaiting_multi_confirm", extra={"uid": uid, "count": len(urls)})
         if interaction_id:
             await async_safe_update_user_interaction(
-                self.db,
+                self.user_repo,
                 interaction_id=interaction_id,
                 response_sent=True,
                 response_type="confirmation",

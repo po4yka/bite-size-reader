@@ -21,7 +21,7 @@ if TYPE_CHECKING:
     from app.adapters.external.response_formatter import ResponseFormatter
     from app.adapters.openrouter.openrouter_client import OpenRouterClient
     from app.config import AppConfig
-    from app.db.database import Database
+    from app.db.session import DatabaseSessionManager
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +32,7 @@ class ForwardSummarizer:
     def __init__(
         self,
         cfg: AppConfig,
-        db: Database,
+        db: DatabaseSessionManager,
         openrouter: OpenRouterClient,
         response_formatter: ResponseFormatter,
         audit_func: Callable[[str, str, dict], None],

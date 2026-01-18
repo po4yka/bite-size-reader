@@ -8,7 +8,7 @@ import grpc
 from app.api.dependencies import search_resources
 from app.config import load_config
 from app.core.logging_utils import get_logger
-from app.db.database import Database
+from app.db.session import DatabaseSessionManager
 from app.grpc.service import ProcessingService
 from app.infrastructure.redis import close_redis
 from app.protos import processing_pb2_grpc
@@ -20,7 +20,7 @@ async def serve():
     cfg = load_config()
 
     # Initialize DB
-    db = Database(
+    db = DatabaseSessionManager(
         path=cfg.database.path,
         operation_timeout=cfg.database.operation_timeout,
         max_retries=cfg.database.max_retries,
@@ -29,10 +29,7 @@ async def serve():
         json_max_array_length=cfg.database.json_max_array_length,
         json_max_dict_keys=cfg.database.json_max_dict_keys,
     )
-    # The Database class handles connection on init via proxy or lazily?
-    # app/api/main.py does explicit connect: _db._database.connect(reuse_if_open=True)
-    # Let's do the same to be safe, though Peewee usually auto-connects.
-    db._database.connect(reuse_if_open=True)
+    db.database.connect(reuse_if_open=True)
     logger.info("database_initialized", extra={"db_path": cfg.database.path})
 
     server = grpc.aio.server(futures.ThreadPoolExecutor(max_workers=10))
@@ -41,8 +38,6 @@ async def serve():
     processing_pb2_grpc.add_ProcessingServiceServicer_to_server(service, server)
 
     listen_addr = "[::]:50051"
-    # Could make port configurable via env vars if needed
-
     server.add_insecure_port(listen_addr)
     logger.info(f"Starting gRPC server on {listen_addr}")
 
@@ -54,7 +49,7 @@ async def serve():
         await server.stop(5)
         await search_resources.shutdown_chroma_search_resources()
         await close_redis()
-        db._database.close()
+        db.database.close()
         logger.info("Shutdown complete")
 
     loop = asyncio.get_event_loop()
