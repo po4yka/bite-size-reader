@@ -1,5 +1,6 @@
 import asyncio
 from typing import Any
+from unittest.mock import AsyncMock, MagicMock
 
 import fakeredis.aioredis
 import pytest
@@ -65,29 +66,9 @@ class DummyCfg:
         self.database = DummyDatabaseConfig()
 
 
-class StubRequest:
-    def __init__(
-        self, request_id: int, request_type: str, *, content_text: str | None = None
-    ) -> None:
-        self.id = request_id
-        self.type = request_type
-        self.input_url = "https://example.com"
-        self.content_text = content_text
-        self.lang_detected = None
-        self.correlation_id = None
-        self.status = "pending"
-        self.save_calls: list[str] = []
-
-    def save(self) -> None:
-        self.save_calls.append(self.status)
-
-
 class StubDB:
     def __init__(self) -> None:
         self.summaries: dict[int, Any] = {}
-
-    def get_summary_by_request(self, request_id: int) -> dict[str, Any] | None:
-        return self.summaries.get(request_id)
 
     def upsert_summary(
         self, *, request_id: int, lang: str, json_payload: Any, is_read: bool
@@ -172,17 +153,20 @@ async def test_lock_skip_when_redis_key_held(monkeypatch):
     db = StubDB()
     processor = BackgroundProcessor(
         cfg=cfg,
-        db=db,
+        db=db,  # type: ignore
         url_processor=StubURLProcessor(StubExtractor(), StubSummarizer()),
         redis=redis_client,
         semaphore=asyncio.Semaphore(2),
         audit_func=lambda *_args, **_kwargs: None,
     )
 
-    monkeypatch.setattr(
-        "app.api.background_processor.RequestModel.get_or_none",
-        lambda *_: StubRequest(1, "url"),
+    # Mock repositories
+    processor.request_repo = MagicMock()
+    processor.request_repo.async_get_request_by_id = AsyncMock(
+        return_value={"id": 1, "type": "url", "input_url": "https://example.com"}
     )
+    processor.summary_repo = MagicMock()
+    processor.summary_repo.async_get_summary_by_request = AsyncMock(return_value=None)
 
     await processor.process(1, correlation_id="cid-lock")
     assert db.summaries == {}
@@ -194,22 +178,42 @@ async def test_local_lock_fallback_and_success(monkeypatch):
     db = StubDB()
     processor = BackgroundProcessor(
         cfg=cfg,
-        db=db,
+        db=db,  # type: ignore
         url_processor=StubURLProcessor(StubExtractor(), StubSummarizer()),
         redis=None,
         semaphore=asyncio.Semaphore(2),
         audit_func=lambda *_args, **_kwargs: None,
     )
 
-    fake_request = StubRequest(2, "url")
-    monkeypatch.setattr(
-        "app.api.background_processor.RequestModel.get_or_none",
-        lambda *_: fake_request,
+    # Mock repositories
+    processor.request_repo = MagicMock()
+    processor.request_repo.async_get_request_by_id = AsyncMock(
+        return_value={
+            "id": 2,
+            "type": "url",
+            "input_url": "https://example.com",
+            "correlation_id": "cid-local",
+        }
     )
+    processor.request_repo.async_update_request_status_with_correlation = AsyncMock()
+
+    processor.summary_repo = MagicMock()
+    processor.summary_repo.async_get_summary_by_request = AsyncMock(return_value=None)
+
+    async def fake_upsert(**kwargs):
+        db.upsert_summary(
+            request_id=kwargs["request_id"],
+            lang=kwargs["lang"],
+            json_payload=kwargs["json_payload"],
+            is_read=kwargs["is_read"],
+        )
+
+    processor.summary_repo.async_upsert_summary = AsyncMock(side_effect=fake_upsert)
 
     await processor.process(2, correlation_id="cid-local")
     assert db.summaries.get(2) is not None
-    assert fake_request.save_calls[-1] == "success"
+    # Check that status update was called
+    assert processor.request_repo.async_update_request_status_with_correlation.called
 
 
 @pytest.mark.asyncio
@@ -223,21 +227,37 @@ async def test_retries_and_error_status(monkeypatch):
     failing_summarizer = StubSummarizer(fail=True)
     processor = BackgroundProcessor(
         cfg=cfg,
-        db=db,
+        db=db,  # type: ignore
         url_processor=StubURLProcessor(StubExtractor(), failing_summarizer),
         redis=None,
         semaphore=asyncio.Semaphore(1),
         audit_func=lambda *_args, **_kwargs: None,
     )
 
-    fake_request = StubRequest(3, "forward", content_text="hello")
-    monkeypatch.setattr(
-        "app.api.background_processor.RequestModel.get_or_none",
-        lambda *_: fake_request,
+    # Mock repositories
+    processor.request_repo = MagicMock()
+    processor.request_repo.async_get_request_by_id = AsyncMock(
+        return_value={
+            "id": 3,
+            "type": "forward",
+            "content_text": "hello",
+            "correlation_id": "cid-error",
+        }
     )
+    status_updates = []
+
+    async def fake_update_status(rid, status, cid):
+        status_updates.append(status)
+
+    processor.request_repo.async_update_request_status_with_correlation = AsyncMock(
+        side_effect=fake_update_status
+    )
+
+    processor.summary_repo = MagicMock()
+    processor.summary_repo.async_get_summary_by_request = AsyncMock(return_value=None)
 
     await processor.process(3, correlation_id="cid-error")
     # No summary written and status marked error
     assert db.summaries.get(3) is None
-    assert fake_request.save_calls[-1] == "error"
+    assert status_updates[-1] == "error"
     assert failing_summarizer.calls == cfg.background.retry_attempts

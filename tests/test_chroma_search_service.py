@@ -9,7 +9,7 @@ mock_chromadb.errors.ChromaError = Exception
 sys.modules["chromadb"] = mock_chromadb
 sys.modules["chromadb.errors"] = mock_chromadb.errors
 
-from app.services.chroma_vector_search_service import ChromaVectorSearchService  # noqa: E402
+from app.services.chroma_vector_search_service import ChromaVectorSearchService
 
 
 @pytest.mark.asyncio

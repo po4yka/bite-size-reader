@@ -5,7 +5,7 @@ from app.db.models import CrawlResult, Request, Summary
 
 
 @pytest.fixture
-def summary_with_content(user_factory, monkeypatch):
+def summary_with_content(db, user_factory, monkeypatch):
     user = user_factory()
     monkeypatch.setenv("ALLOWED_USER_IDS", str(user.telegram_user_id))
     monkeypatch.setenv("REDIS_ENABLED", "0")
@@ -41,12 +41,12 @@ def test_get_summary_content_markdown(client, summary_with_content):
     assert response.status_code == 200
     payload = response.json()
     content = payload["data"]["content"]
-    assert content["summary_id"] == summary.id
+    assert content["summaryId"] == summary.id
     assert content["format"] == "markdown"
-    assert content["content_type"] == "text/markdown"
+    assert content["contentType"] == "text/markdown"
     assert "Body text." in content["content"]
-    assert content["checksum_sha256"]
-    assert content["size_bytes"] > 0
+    assert content["checksumSha256"]
+    assert content["sizeBytes"] > 0
 
 
 def test_get_summary_content_text_format(client, summary_with_content):
@@ -62,7 +62,7 @@ def test_get_summary_content_text_format(client, summary_with_content):
     assert response.status_code == 200
     content = response.json()["data"]["content"]
     assert content["format"] == "text"
-    assert content["content_type"] == "text/plain"
+    assert content["contentType"] == "text/plain"
     assert "Body text." in content["content"]
 
 

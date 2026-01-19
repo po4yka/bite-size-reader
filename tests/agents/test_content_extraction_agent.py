@@ -17,6 +17,7 @@ class TestContentExtractionAgent(unittest.IsolatedAsyncioTestCase):
 
         self.mock_content_extractor = MagicMock()
         self.mock_db = MagicMock()
+        self.mock_db._safe_db_operation = AsyncMock()
 
         self.agent = ContentExtractionAgent(
             content_extractor=self.mock_content_extractor,

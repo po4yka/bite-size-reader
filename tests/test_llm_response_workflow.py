@@ -9,7 +9,7 @@ sys.modules.setdefault("peewee", MagicMock())
 sys.modules.setdefault("playhouse", MagicMock())
 sys.modules.setdefault("playhouse.sqlite_ext", MagicMock())
 
-from app.adapters.content.llm_response_workflow import (  # noqa: E402
+from app.adapters.content.llm_response_workflow import (
     LLMInteractionConfig,
     LLMRepairContext,
     LLMRequestConfig,
@@ -38,10 +38,6 @@ class LLMResponseWorkflowTests(unittest.IsolatedAsyncioTestCase):
         self.cfg.openrouter.structured_output_mode = "json_object"
 
         self.db = MagicMock()
-        self.db.async_upsert_summary = AsyncMock(return_value=1)
-        self.db.async_update_request_status = AsyncMock()
-        self.db.async_insert_llm_call = AsyncMock()
-
         self.response_formatter = MagicMock()
         self.openrouter = MagicMock()
 
@@ -53,6 +49,16 @@ class LLMResponseWorkflowTests(unittest.IsolatedAsyncioTestCase):
             audit_func=lambda *args, **kwargs: None,
             sem=lambda: _DummySemaphore(),
         )
+
+        # Mock repositories directly to avoid model/proxy issues
+        self.workflow.request_repo = MagicMock()
+        self.workflow.request_repo.async_update_request_status = AsyncMock()
+
+        self.workflow.summary_repo = MagicMock()
+        self.workflow.summary_repo.async_upsert_summary = AsyncMock(return_value=1)
+
+        self.workflow.llm_repo = MagicMock()
+        self.workflow.llm_repo.async_insert_llm_call = AsyncMock(return_value=1)
 
         self.base_messages = [
             {"role": "system", "content": "System"},
@@ -117,12 +123,12 @@ class LLMResponseWorkflowTests(unittest.IsolatedAsyncioTestCase):
             )
 
         assert summary is not None
-        self.db.async_upsert_summary.assert_awaited_once()
-        _args, kwargs = self.db.async_upsert_summary.await_args
+        self.workflow.summary_repo.async_upsert_summary.assert_awaited_once()
+        _args, kwargs = self.workflow.summary_repo.async_upsert_summary.await_args
         assert kwargs["request_id"] == 101
         assert kwargs["lang"] == "en"
-        self.db.async_update_request_status.assert_awaited_once_with(101, "ok")
-        self.db.async_insert_llm_call.assert_awaited_once()
+        self.workflow.request_repo.async_update_request_status.assert_awaited_once_with(101, "ok")
+        self.workflow.llm_repo.async_insert_llm_call.assert_awaited_once()
         self.completion_mock.assert_awaited_once()
         self.llm_error_mock.assert_not_awaited()
 
@@ -156,8 +162,8 @@ class LLMResponseWorkflowTests(unittest.IsolatedAsyncioTestCase):
         assert summary is not None
         assert self.openrouter.chat.await_count == 2
         self.repair_failure_mock.assert_not_awaited()
-        self.db.async_upsert_summary.assert_awaited_once()
-        assert self.db.async_insert_llm_call.await_count >= 1
+        self.workflow.summary_repo.async_upsert_summary.assert_awaited_once()
+        assert self.workflow.llm_repo.async_insert_llm_call.await_count >= 1
 
     async def test_execute_handles_llm_error(self) -> None:
         llm_error = self._llm_response({}, status="error", error_text="boom", text=None)
@@ -175,9 +181,9 @@ class LLMResponseWorkflowTests(unittest.IsolatedAsyncioTestCase):
         )
 
         assert summary is None
-        self.db.async_upsert_summary.assert_not_awaited()
-        self.db.async_update_request_status.assert_awaited_with(303, "error")
-        self.db.async_insert_llm_call.assert_awaited_once()
+        self.workflow.summary_repo.async_upsert_summary.assert_not_awaited()
+        self.workflow.request_repo.async_update_request_status.assert_awaited_with(303, "error")
+        self.workflow.llm_repo.async_insert_llm_call.assert_awaited_once()
         # llm_error callback is called twice: once for the error, once for all attempts failed
         assert self.llm_error_mock.await_count == 2
 
@@ -201,7 +207,14 @@ class LLMResponseWorkflowTests(unittest.IsolatedAsyncioTestCase):
 
         llm_empty_first = self._llm_response({})
         llm_empty_second = self._llm_response({})
-        self.openrouter.chat = AsyncMock(side_effect=[llm_empty_first, llm_empty_second])
+        self.openrouter.chat = AsyncMock(
+            side_effect=[
+                llm_empty_first,  # Primary request
+                llm_empty_first,  # Primary repair
+                llm_empty_second,  # Fallback request
+                llm_empty_second,  # Fallback repair
+            ]
+        )
 
         with (
             unittest.mock.patch(
@@ -229,8 +242,8 @@ class LLMResponseWorkflowTests(unittest.IsolatedAsyncioTestCase):
             )
 
         assert summary is None
-        assert self.openrouter.chat.await_count == 2
-        assert self.db.async_insert_llm_call.await_count == 2
+        assert self.openrouter.chat.await_count == 4
+        assert self.workflow.llm_repo.async_insert_llm_call.await_count == 2
         fail_mock.assert_awaited_once()
         failed_attempts = fail_mock.await_args.args[5]
         assert len(failed_attempts) == 2

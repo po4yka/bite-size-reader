@@ -58,22 +58,28 @@ class MigrationError(Exception):
 class MigrationRunner:
     """Manages database schema migrations with version tracking."""
 
-    def __init__(self, db: DatabaseSessionManager):
+    def __init__(self, db: DatabaseSessionManager | Any):
         """Initialize migration runner.
 
         Args:
-            db: DatabaseSessionManager instance to run migrations against
+            db: DatabaseSessionManager or Database instance to run migrations against
         """
         self.db = db
         self._ensure_migration_table()
 
     def _ensure_migration_table(self) -> None:
         """Create migration history table if it doesn't exist."""
+        # Handle both DatabaseSessionManager (db.database) and legacy Database (db._database)
+        db_instance = getattr(self.db, "database", getattr(self.db, "_database", None))
+        if db_instance is None:
+            msg = "Provided db object does not have a database instance"
+            raise TypeError(msg)
+
         # Bind MigrationHistory to the database proxy
-        MigrationHistory._meta.database = self.db.database
+        MigrationHistory._meta.database = db_instance
 
         # Create table outside of transaction to ensure it persists
-        self.db.database.create_tables([MigrationHistory], safe=True)
+        db_instance.create_tables([MigrationHistory], safe=True)
         logger.debug("Migration history table ensured")
 
     def get_applied_migrations(self) -> set[str]:
@@ -170,8 +176,9 @@ class MigrationRunner:
         upgrade_fn: Callable[[DatabaseSessionManager], None] = module.upgrade
 
         # Run migration in transaction
+        db_instance = getattr(self.db, "database", getattr(self.db, "_database", None))
         try:
-            with self.db.database.atomic():
+            with db_instance.atomic():
                 # Execute upgrade
                 upgrade_fn(self.db)
 
@@ -255,8 +262,9 @@ class MigrationRunner:
         downgrade_fn: Callable[[DatabaseSessionManager], None] = module.downgrade
 
         # Run rollback in transaction
+        db_instance = getattr(self.db, "database", getattr(self.db, "_database", None))
         try:
-            with self.db.database.atomic():
+            with db_instance.atomic():
                 # Execute downgrade
                 downgrade_fn(self.db)
 

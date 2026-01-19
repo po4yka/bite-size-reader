@@ -74,6 +74,8 @@ def _firecrawl_result(markdown: str | None, html: str | None) -> FirecrawlResult
 async def test_low_value_content_triggers_failure() -> None:
     db = MagicMock()
     db.async_update_request_status = AsyncMock()
+    # Fix for _execute awaiting _safe_db_operation
+    db._safe_db_operation = AsyncMock()
     response_formatter = MagicMock()
     response_formatter.send_firecrawl_start_notification = AsyncMock()
     response_formatter.send_error_notification = AsyncMock()

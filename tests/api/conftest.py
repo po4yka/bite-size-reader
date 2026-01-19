@@ -1,3 +1,4 @@
+import importlib
 import logging
 import sys
 from unittest.mock import MagicMock
@@ -5,7 +6,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from app.db.database import Database
-from app.db.models import Request, Summary, User
+from app.db.models import Request, Summary, User, database_proxy
 
 # Mock chromadb to avoid Pydantic V2 compatibility issues in tests
 sys.modules["chromadb"] = MagicMock()
@@ -22,6 +23,7 @@ def db(tmp_path, monkeypatch):
     # Set config to avoid production DB usage
     monkeypatch.setenv("DB_PATH", str(tmp_path / "test.db"))
     monkeypatch.setenv("JWT_SECRET_KEY", "test-secret-at-least-32-chars-long-string")
+    monkeypatch.setenv("REDIS_ENABLED", "0")  # Disable Redis for tests
 
     db_path = tmp_path / "test.db"
     database = Database(str(db_path))
@@ -36,10 +38,16 @@ def client(db):
     try:
         from fastapi.testclient import TestClient
     except ImportError:
-        # Fallback if specific test env issues, but should not happen now
         from starlette.testclient import TestClient
 
+    import app.api.main
+
+    importlib.reload(app.api.main)
     from app.api.main import app
+
+    # Force proxy to point to the migrated database instance from db fixture
+    # This fixes OperationalError: no such table when app re-initializes DB
+    database_proxy.initialize(db._database)
 
     return TestClient(app)
 
@@ -79,13 +87,41 @@ def summary_factory(user_factory):
             type="url",
         )
 
+        # Full payload to satisfy API response models
+        full_payload = {
+            "summary_250": "Short summary",
+            "summary_1000": "Long summary",
+            "tldr": "TLDR",
+            "key_ideas": ["Idea 1", "Idea 2"],
+            "topic_tags": ["tag1", "tag2"],
+            "entities": {"people": ["Person"], "organizations": ["Org"], "locations": ["Loc"]},
+            "estimated_reading_time_min": 5,
+            "key_stats": [{"label": "Stat", "value": 10, "unit": "%", "sourceExcerpt": "source"}],
+            "answered_questions": ["Q1?"],
+            "readability": {"method": "FK", "score": 50.0, "level": "Easy"},
+            "seo_keywords": ["keyword"],
+            "metadata": {
+                "title": "Test Title",
+                "domain": "example.com",
+                "author": "Author",
+                "published_at": "2023-01-01",
+            },
+            "confidence": 0.9,
+            "hallucination_risk": "low",
+        }
+
+        # Merge with provided payload if any
+        if kwargs.get("json_payload"):
+            full_payload.update(kwargs["json_payload"])
+
+        kwargs["json_payload"] = full_payload
+
         # Defaults
         params = {
             "request": req.id,
             "lang": "en",
             "is_read": False,
             "version": 1,
-            "json_payload": None,
         }
         params.update(kwargs)
 

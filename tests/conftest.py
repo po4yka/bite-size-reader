@@ -42,6 +42,17 @@ os.environ.setdefault("OPENROUTER_API_KEY", "test_openrouter_key")
 
 
 @pytest.fixture(autouse=True)
+def manage_database_proxy():
+    """Save and restore database proxy after each test."""
+    from app.db.models import database_proxy
+
+    old_obj = database_proxy.obj
+    yield
+    if database_proxy.obj is not old_obj:
+        database_proxy.initialize(old_obj)
+
+
+@pytest.fixture(autouse=True)
 def mock_chroma_client():
     """Mock ChromaDB client to prevent connection attempts."""
     # Avoid importing the real chromadb package (pydantic v1 dependency) during tests.

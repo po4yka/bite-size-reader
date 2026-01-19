@@ -88,6 +88,7 @@ def _recreate_llm_calls_table(db: Database) -> None:
         CREATE TABLE llm_calls_new (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             request_id INTEGER NOT NULL,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             provider TEXT,
             model TEXT,
             endpoint TEXT,
@@ -107,6 +108,9 @@ def _recreate_llm_calls_table(db: Database) -> None:
             structured_output_mode TEXT,
             error_context_json TEXT,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            server_version INTEGER,
+            is_deleted INTEGER DEFAULT 0,
+            deleted_at DATETIME,
             FOREIGN KEY (request_id) REFERENCES requests(id) ON DELETE CASCADE
         )
     """)
@@ -196,6 +200,7 @@ def downgrade(db: Database) -> None:
         CREATE TABLE llm_calls_old (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             request_id INTEGER,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             provider TEXT,
             model TEXT,
             endpoint TEXT,
@@ -215,6 +220,9 @@ def downgrade(db: Database) -> None:
             structured_output_mode TEXT,
             error_context_json TEXT,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            server_version INTEGER,
+            is_deleted INTEGER DEFAULT 0,
+            deleted_at DATETIME,
             FOREIGN KEY (request_id) REFERENCES requests(id) ON DELETE SET NULL
         )
     """)

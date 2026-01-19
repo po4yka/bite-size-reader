@@ -4,7 +4,7 @@ from collections.abc import Callable
 from typing import Any
 
 from app.adapters.content.url_processor import URLProcessor
-from app.adapters.external.firecrawl_client import FirecrawlClient
+from app.adapters.external.firecrawl import FirecrawlClient
 from app.adapters.external.response_formatter import ResponseFormatter
 from app.adapters.openrouter.openrouter_client import OpenRouterClient
 from app.api.background_processor import BackgroundProcessor

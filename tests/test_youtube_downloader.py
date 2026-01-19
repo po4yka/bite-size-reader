@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import os
 import sys
 import unittest
@@ -137,7 +138,7 @@ def test_auto_cleanup_storage_removes_old_files(tmp_path):
     assert new_file.exists()
 
 
-import yt_dlp  # noqa: E402
+import yt_dlp
 
 
 class TestYouTubeDownloader(unittest.IsolatedAsyncioTestCase):
@@ -152,6 +153,22 @@ class TestYouTubeDownloader(unittest.IsolatedAsyncioTestCase):
         self.cfg.youtube.cleanup_after_days = 30
 
         self.db = MagicMock()
+
+        # Fix for SqliteBaseRepository waiting for _safe_db_operation
+        async def mock_safe_db_op(
+            operation,
+            *args,
+            timeout=None,
+            operation_name="op",
+            read_only=False,
+            **kwargs,
+        ):
+            if asyncio.iscoroutinefunction(operation):
+                return await operation(*args, **kwargs)
+            return operation(*args, **kwargs)
+
+        self.db._safe_db_operation = AsyncMock(side_effect=mock_safe_db_op)
+
         self.db.async_get_request_by_dedupe_hash = AsyncMock(return_value=None)
         self.db.get_video_download_by_request = MagicMock(return_value=None)
         self.db.create_request = MagicMock(return_value=123)
@@ -173,6 +190,23 @@ class TestYouTubeDownloader(unittest.IsolatedAsyncioTestCase):
                 db=self.db,
                 response_formatter=self.response_formatter,
                 audit_func=self.audit_func,
+            )
+
+            # Mock repositories to avoid DB interaction
+            self.downloader.request_repo = MagicMock()
+            self.downloader.request_repo.async_get_request_by_dedupe_hash = AsyncMock(
+                return_value=None
+            )
+            self.downloader.request_repo.async_create_request = AsyncMock(return_value=123)
+            self.downloader.request_repo.async_update_request_status = AsyncMock()
+            self.downloader.request_repo.async_update_request_lang_detected = AsyncMock()
+
+            self.downloader.video_repo = MagicMock()
+            self.downloader.video_repo.async_create_video_download = AsyncMock(return_value=456)
+            self.downloader.video_repo.async_update_video_download = AsyncMock()
+            self.downloader.video_repo.async_update_video_download_status = AsyncMock()
+            self.downloader.video_repo.async_get_video_download_by_request = AsyncMock(
+                return_value=None
             )
 
     def _create_mock_message(self, chat_id: int = 1, user_id: int = 1, msg_id: int = 100):
@@ -507,12 +541,23 @@ class TestVideoDownload(TestYouTubeDownloader):
         self.assertIn(video_id, ydl_opts["outtmpl"])
         self.assertIn(str(output_path), ydl_opts["outtmpl"])
 
-    def test_deduplication_existing_request(self):
-        self.db.async_get_request_by_dedupe_hash = AsyncMock(
+    async def test_deduplication_existing_request(self):
+        # We need to mock the repo method that is called by the downloader
+        self.downloader.request_repo.async_get_request_by_dedupe_hash = AsyncMock(
             return_value={"id": 789, "status": "ok"}
         )
 
+        # Mock existing download as a dict that also supports attribute access for _build_metadata_dict
+        # Or better, just make _build_metadata_dict work with dicts.
+        # For now, let's use a MagicMock that behaves like a dict for .get()
         existing_download = MagicMock()
+        existing_download.get.side_effect = lambda k: {
+            "status": "completed",
+            "transcript_text": "Existing transcript",
+            "transcript_source": "cached",
+            "subtitle_language": "en",
+        }.get(k)
+
         existing_download.status = "completed"
         existing_download.transcript_text = "Existing transcript"
         existing_download.transcript_source = "cached"
@@ -531,7 +576,9 @@ class TestVideoDownload(TestYouTubeDownloader):
         existing_download.subtitle_file_path = None
         existing_download.thumbnail_file_path = None
 
-        self.db.get_video_download_by_request = MagicMock(return_value=existing_download)
+        self.downloader.video_repo.async_get_video_download_by_request = AsyncMock(
+            return_value=existing_download
+        )
 
         message = self._create_mock_message()
 
@@ -547,26 +594,20 @@ class TestVideoDownload(TestYouTubeDownloader):
                     "app.adapters.youtube.youtube_downloader.url_hash_sha256", return_value="abc123"
                 ):
                     with patch.object(self.downloader, "_check_storage_limits", return_value=None):
+                        (
+                            req_id,
+                            transcript,
+                            source,
+                            _lang,
+                            _metadata,
+                        ) = await self.downloader.download_and_extract(
+                            message, "https://www.youtube.com/watch?v=test_video", "cid"
+                        )
 
-                        async def run_test():
-                            (
-                                req_id,
-                                transcript,
-                                source,
-                                _lang,
-                                _metadata,
-                            ) = await self.downloader.download_and_extract(
-                                message, "https://www.youtube.com/watch?v=test_video", "cid"
-                            )
-
-                            self.assertEqual(req_id, 789)
-                            self.assertIn("Existing transcript", transcript)
-                            self.assertTrue(transcript.startswith("Title: Test"))
-                            self.assertEqual(source, "cached")
-
-                        import asyncio
-
-                        asyncio.run(run_test())
+                        self.assertEqual(req_id, 789)
+                        self.assertIn("Existing transcript", transcript)
+                        self.assertTrue(transcript.startswith("Title: Test"))
+                        self.assertEqual(source, "cached")
 
 
 class TestErrorHandling(TestYouTubeDownloader):
@@ -689,23 +730,18 @@ class TestErrorHandling(TestYouTubeDownloader):
             error_msg = str(ctx.exception).lower()
             self.assertTrue("not found" in error_msg or "failed to extract" in error_msg)
 
-    def test_invalid_video_id_error(self):
+    async def test_invalid_video_id_error(self):
         with patch(
             "app.adapters.youtube.youtube_downloader.extract_youtube_video_id", return_value=None
         ):
             message = self._create_mock_message()
 
-            async def run_test():
-                with self.assertRaises(ValueError) as ctx:
-                    await self.downloader.download_and_extract(
-                        message, "https://example.com/not-youtube", "cid"
-                    )
+            with self.assertRaises(ValueError) as ctx:
+                await self.downloader.download_and_extract(
+                    message, "https://example.com/not-youtube", "cid"
+                )
 
-                self.assertIn("Invalid YouTube URL", str(ctx.exception))
-
-            import asyncio
-
-            asyncio.run(run_test())
+            self.assertIn("Invalid YouTube URL", str(ctx.exception))
 
 
 class TestStorageManagement(TestYouTubeDownloader):
@@ -860,10 +896,10 @@ class TestMetadataExtraction(TestYouTubeDownloader):
                         message, "https://www.youtube.com/watch?v=test_video", "cid"
                     )
 
-        self.db.create_request.assert_called_once()
-        self.db.create_video_download.assert_called_once()
-        self.db.update_video_download.assert_called_once()
-        self.db.update_request_status.assert_called()
+        self.downloader.request_repo.async_create_request.assert_called_once()
+        self.downloader.video_repo.async_create_video_download.assert_called_once()
+        self.downloader.video_repo.async_update_video_download.assert_called_once()
+        self.downloader.request_repo.async_update_request_status.assert_called()
 
     def test_build_metadata_dict(self):
         mock_download = MagicMock()

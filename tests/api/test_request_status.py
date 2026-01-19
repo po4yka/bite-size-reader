@@ -4,11 +4,15 @@ import peewee
 import pytest
 
 from app.api.services.request_service import RequestService
+from app.core.time_utils import UTC
 from app.db.models import CrawlResult, LLMCall, Request, database_proxy
 
 
 @pytest.fixture
 def in_memory_db():
+    # Save old proxy state
+    old_db = database_proxy.obj
+
     db = peewee.SqliteDatabase(":memory:")
     database_proxy.initialize(db)
     db.bind([Request, CrawlResult, LLMCall], bind_refs=False, bind_backrefs=False)
@@ -16,6 +20,9 @@ def in_memory_db():
     yield db
     db.drop_tables([Request, CrawlResult, LLMCall])
     db.close()
+
+    # Restore old proxy state
+    database_proxy.initialize(old_db)
 
 
 def _create_request(
@@ -37,17 +44,18 @@ def _create_request(
     )
 
 
-def test_status_includes_crawl_error(in_memory_db):
+@pytest.mark.asyncio
+async def test_status_includes_crawl_error(in_memory_db):
     req = _create_request(user_id=1, dedupe_hash="hash-1", correlation_id="cid-crawl")
 
     CrawlResult.create(
         request=req,
         status="error",
         error_text="firecrawl failed to fetch",
-        updated_at=dt.datetime.utcnow(),
+        updated_at=dt.datetime.now(UTC),
     )
 
-    status_info = RequestService.get_request_status(req.user_id, req.id)
+    status_info = await RequestService.get_request_status(req.user_id, req.id)
 
     assert status_info["status"] == "error"
     assert status_info["error_stage"] == "content_extraction"
@@ -57,7 +65,8 @@ def test_status_includes_crawl_error(in_memory_db):
     assert status_info["can_retry"] is True
 
 
-def test_status_prefers_llm_error_when_available(in_memory_db):
+@pytest.mark.asyncio
+async def test_status_prefers_llm_error_when_available(in_memory_db):
     req = _create_request(user_id=2, dedupe_hash="hash-2", correlation_id="cid-llm")
 
     LLMCall.create(
@@ -65,10 +74,10 @@ def test_status_prefers_llm_error_when_available(in_memory_db):
         status="error",
         error_text="llm summary failed",
         error_context_json={"error_code": "LLM_FAILED"},
-        updated_at=dt.datetime.utcnow(),
+        updated_at=dt.datetime.now(UTC),
     )
 
-    status_info = RequestService.get_request_status(req.user_id, req.id)
+    status_info = await RequestService.get_request_status(req.user_id, req.id)
 
     assert status_info["status"] == "error"
     assert status_info["error_stage"] == "llm_summarization"

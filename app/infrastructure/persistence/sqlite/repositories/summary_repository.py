@@ -166,6 +166,11 @@ class SqliteSummaryRepositoryAdapter(SqliteBaseRepository):
             data = model_to_dict(summary) or {}
             if "request" in data:
                 data["request_id"] = data["request"]
+
+            # Populate user_id from joined Request
+            if hasattr(summary, "request") and summary.request:
+                data["user_id"] = summary.request.user_id
+
             return data
 
         return await self._execute(_get, operation_name="get_summary_by_id", read_only=True)

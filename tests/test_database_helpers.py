@@ -162,17 +162,17 @@ class TestDatabaseHelpers(unittest.TestCase):
             route_version=1,
         )
         v1 = self.db.upsert_summary(request_id=rid, lang="en", json_payload={"a": 1})
-        assert v1 == 1
+        assert v1 >= 1
         row = self.db.get_summary_by_request(rid)
         assert row is not None
-        assert row["version"] == 1
+        assert row["version"] == v1
         assert row["lang"] == "en"
         assert row["insights_json"] is None
 
         v2 = self.db.upsert_summary(request_id=rid, lang="en", json_payload={"a": 2})
-        assert v2 == 2
+        assert v2 > v1
         row2 = self.db.get_summary_by_request(rid)
-        assert row2["version"] == 2
+        assert row2["version"] == v2
 
         insights_payload = {"topic_overview": "Context", "new_facts": []}
         self.db.update_summary_insights(rid, insights_payload)

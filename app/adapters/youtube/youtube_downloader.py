@@ -848,8 +848,25 @@ class YouTubeDownloader:
             return header
         return transcript_text
 
-    def _build_metadata_dict(self, download) -> dict:
-        """Build metadata dictionary from VideoDownload model."""
+    def _build_metadata_dict(self, download: dict | Any) -> dict:
+        """Build metadata dictionary from VideoDownload model or dict."""
+        if isinstance(download, dict):
+            return {
+                "video_id": download.get("video_id"),
+                "title": download.get("title"),
+                "channel": download.get("channel"),
+                "channel_id": download.get("channel_id"),
+                "duration": download.get("duration_sec"),
+                "resolution": download.get("resolution"),
+                "file_size": download.get("file_size_bytes"),
+                "upload_date": download.get("upload_date"),
+                "view_count": download.get("view_count"),
+                "like_count": download.get("like_count"),
+                "video_file_path": download.get("video_file_path"),
+                "subtitle_file_path": download.get("subtitle_file_path"),
+                "thumbnail_file_path": download.get("thumbnail_file_path"),
+            }
+
         return {
             "video_id": download.video_id,
             "title": download.title,

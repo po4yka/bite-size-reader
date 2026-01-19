@@ -141,8 +141,8 @@ def test_phase2_migration():
         try:
             # Try to insert URL request without normalized_url
             db._database.execute_sql("""
-                INSERT INTO requests (type, status, correlation_id, user_id, created_at, route_version)
-                VALUES ('url', 'ok', 'test-invalid-url', 123456789, datetime('now'), 1)
+                INSERT INTO requests (type, status, correlation_id, user_id, created_at, updated_at, server_version, route_version)
+                VALUES ('url', 'ok', 'test-invalid-url', 123456789, datetime('now'), datetime('now'), 1, 1)
             """)
             print("✗ CHECK constraint NOT enforced for URL requests")
             pytest.fail("URL request CHECK constraint not enforced")
@@ -158,8 +158,8 @@ def test_phase2_migration():
         try:
             # Try to insert forward request without fwd_from_chat_id
             db._database.execute_sql("""
-                INSERT INTO requests (type, status, correlation_id, user_id, fwd_from_msg_id, created_at, route_version)
-                VALUES ('forward', 'ok', 'test-invalid-forward', 123456789, 999, datetime('now'), 1)
+                INSERT INTO requests (type, status, correlation_id, user_id, fwd_from_msg_id, created_at, updated_at, server_version, route_version)
+                VALUES ('forward', 'ok', 'test-invalid-forward', 123456789, 999, datetime('now'), datetime('now'), 1, 1)
             """)
             print("✗ CHECK constraint NOT enforced for forward requests")
             pytest.fail("Forward request CHECK constraint not enforced")
@@ -175,14 +175,14 @@ def test_phase2_migration():
 
         # Valid URL request
         db._database.execute_sql("""
-            INSERT INTO requests (type, status, correlation_id, user_id, normalized_url, created_at, route_version)
-            VALUES ('url', 'ok', 'test-valid-url', 123456789, 'https://valid.com', datetime('now'), 1)
+            INSERT INTO requests (type, status, correlation_id, user_id, normalized_url, created_at, updated_at, server_version, route_version, is_deleted)
+            VALUES ('url', 'ok', 'test-valid-url', 123456789, 'https://valid.com', datetime('now'), datetime('now'), 1, 1, 0)
         """)
 
         # Valid forward request
         db._database.execute_sql("""
-            INSERT INTO requests (type, status, correlation_id, user_id, fwd_from_chat_id, fwd_from_msg_id, created_at, route_version)
-            VALUES ('forward', 'ok', 'test-valid-forward', 123456789, -100123456789, 999, datetime('now'), 1)
+            INSERT INTO requests (type, status, correlation_id, user_id, fwd_from_chat_id, fwd_from_msg_id, created_at, updated_at, server_version, route_version, is_deleted)
+            VALUES ('forward', 'ok', 'test-valid-forward', 123456789, -100123456789, 999, datetime('now'), datetime('now'), 1, 1, 0)
         """)
 
         result = db.fetchone(
@@ -201,8 +201,8 @@ def test_phase2_migration():
 
         # Create a request with an LLM call
         db._database.execute_sql("""
-            INSERT INTO requests (type, status, correlation_id, user_id, normalized_url, created_at, route_version)
-            VALUES ('url', 'ok', 'test-cascade', 123456789, 'https://cascade.com', datetime('now'), 1)
+            INSERT INTO requests (type, status, correlation_id, user_id, normalized_url, created_at, updated_at, server_version, route_version, is_deleted)
+            VALUES ('url', 'ok', 'test-cascade', 123456789, 'https://cascade.com', datetime('now'), datetime('now'), 1, 1, 0)
         """)
 
         result = db.fetchone("SELECT id FROM requests WHERE correlation_id = 'test-cascade'")

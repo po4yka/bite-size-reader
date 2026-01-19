@@ -49,6 +49,8 @@ def _dummy_cfg() -> SimpleNamespace:
         max_response_size_mb=10,
         summary_temperature_relaxed=None,
         summary_top_p_relaxed=None,
+        summary_temperature_json_fallback=None,
+        summary_top_p_json_fallback=None,
     )
     firecrawl_cfg = SimpleNamespace()
     return SimpleNamespace(
@@ -173,8 +175,8 @@ async def test_llm_summarizer_uses_cached_summary(monkeypatch):
         "topic_tags": [],
     }
 
-    summarizer._get_cached_summary = AsyncMock(return_value=cached_summary)
-    summarizer._write_summary_cache = AsyncMock()
+    summarizer._cache_helper.get_cached_summary = AsyncMock(return_value=cached_summary)
+    summarizer._cache_helper.write_summary_cache = AsyncMock()
 
     async def _finalize_success(*args, **kwargs):
         return cached_summary

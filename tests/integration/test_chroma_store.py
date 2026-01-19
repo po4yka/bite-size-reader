@@ -11,10 +11,10 @@ mock_chromadb.errors.ChromaError = Exception
 sys.modules["chromadb"] = mock_chromadb
 sys.modules["chromadb.errors"] = mock_chromadb.errors
 
-from app.config import ChromaConfig  # noqa: E402
+from app.config import ChromaConfig
 
 # Now we can import the store
-from app.infrastructure.vector.chroma_store import ChromaVectorStore  # noqa: E402
+from app.infrastructure.vector.chroma_store import ChromaVectorStore
 
 # Use a unique collection name for testing to avoid conflicts
 TEST_ENV = "test_integration"

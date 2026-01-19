@@ -8,7 +8,7 @@ sys.modules.setdefault("peewee", MagicMock())
 sys.modules.setdefault("playhouse", MagicMock())
 sys.modules.setdefault("playhouse.sqlite_ext", MagicMock())
 
-from app.adapters.telegram.forward_summarizer import ForwardSummarizer  # noqa: E402
+from app.adapters.telegram.forward_summarizer import ForwardSummarizer
 
 
 class ForwardSummarizerTests(unittest.IsolatedAsyncioTestCase):

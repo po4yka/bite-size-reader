@@ -80,7 +80,7 @@ def _calculate_delay(attempt: int, base_delay: float, max_delay: float, jitter: 
     return delay + jitter_amount
 
 
-async def retry_with_backoff(
+async def retry_with_backoff[T](
     func: Callable[[], Awaitable[T]],
     *,
     max_retries: int = DEFAULT_MAX_RETRIES,
