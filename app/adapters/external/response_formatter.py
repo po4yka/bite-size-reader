@@ -1,27 +1,45 @@
-# ruff: noqa: E501
+"""Response formatting facade.
+
+This module provides the ResponseFormatter class, which serves as a facade for
+the decomposed formatting components. It maintains backward compatibility with
+existing code while delegating to specialized components:
+
+- DataFormatterImpl: Stateless data formatting (bytes, metrics, stats)
+- MessageValidatorImpl: Security validation (content safety, URL validation, rate limiting)
+- ResponseSenderImpl: Core Telegram sending (safe_reply, edit_message, reply_json)
+- TextProcessorImpl: Text processing (chunking, sanitization, slugify)
+- NotificationFormatterImpl: Status notifications (20+ notification methods)
+- SummaryPresenterImpl: Summary presentation (structured summaries, translations)
+- DatabasePresenterImpl: Database UI (overview, verification, search results)
+
+All public methods are delegated to the appropriate component while maintaining
+the original API signatures for backward compatibility.
+"""
+
 from __future__ import annotations
 
-import html
-import io
-import json
-import logging
-import math
-import re
-import unicodedata
-from collections.abc import Awaitable, Callable, Sequence
-from datetime import datetime, timezone
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from app.api.models.responses import success_response
-from app.utils.retry_utils import retry_telegram_operation
+from app.adapters.external.formatting.data_formatter import DataFormatterImpl
+from app.adapters.external.formatting.database_presenter import DatabasePresenterImpl
+from app.adapters.external.formatting.message_validator import MessageValidatorImpl
+from app.adapters.external.formatting.notification_formatter import NotificationFormatterImpl
+from app.adapters.external.formatting.response_sender import ResponseSenderImpl
+from app.adapters.external.formatting.summary_presenter import SummaryPresenterImpl
+from app.adapters.external.formatting.text_processor import TextProcessorImpl
 
-logger = logging.getLogger(__name__)
+if TYPE_CHECKING:
+    from collections.abc import Awaitable, Callable, Sequence
+
+    from app.services.topic_search import TopicArticle
 
 
 class ResponseFormatter:
-    """Handles message formatting and replies to Telegram users."""
+    """Handles message formatting and replies to Telegram users.
 
-    # flake8: noqa
+    This class is a facade that delegates to specialized components for different
+    concerns while maintaining backward compatibility with existing code.
+    """
 
     def __init__(
         self,
@@ -30,10 +48,15 @@ class ResponseFormatter:
         telegram_client: Any = None,
         telegram_limits: Any = None,
     ) -> None:
-        # Optional callbacks allow the TelegramBot compatibility layer to
-        # intercept replies during unit tests without duplicating formatter
-        # logic. The callbacks are expected to be awaitable and accept the
-        # same arguments as ``safe_reply`` / ``reply_json`` respectively.
+        """Initialize the ResponseFormatter facade.
+
+        Args:
+            safe_reply_func: Optional callback for test compatibility.
+            reply_json_func: Optional callback for test compatibility.
+            telegram_client: Optional Telegram client for message operations.
+            telegram_limits: Optional limits configuration object.
+        """
+        # Store original references for backward compatibility
         self._safe_reply_func = safe_reply_func
         self._reply_json_func = reply_json_func
         self._telegram_client = telegram_client
@@ -51,1734 +74,116 @@ class ResponseFormatter:
             self.MAX_BATCH_URLS = 200
             self.MIN_MESSAGE_INTERVAL_MS = 100
 
-        self._last_message_time: float = 0.0
+        # Initialize components
+        self._data_formatter = DataFormatterImpl()
 
-        # Error notification deduplication
+        self._message_validator = MessageValidatorImpl(
+            min_message_interval_ms=self.MIN_MESSAGE_INTERVAL_MS
+        )
+
+        self._response_sender = ResponseSenderImpl(
+            self._message_validator,
+            max_message_chars=self.MAX_MESSAGE_CHARS,
+            safe_reply_func=safe_reply_func,
+            reply_json_func=reply_json_func,
+            telegram_client=telegram_client,
+        )
+
+        self._text_processor = TextProcessorImpl(
+            self._response_sender,
+            max_message_chars=self.MAX_MESSAGE_CHARS,
+        )
+
+        self._notification_formatter = NotificationFormatterImpl(
+            self._response_sender,
+            self._data_formatter,
+            safe_reply_func=safe_reply_func,
+        )
+
+        self._summary_presenter = SummaryPresenterImpl(
+            self._response_sender,
+            self._text_processor,
+            self._data_formatter,
+        )
+
+        self._database_presenter = DatabasePresenterImpl(
+            self._response_sender,
+            self._data_formatter,
+        )
+
+        # Expose internal state for backward compatibility with existing code
+        self._last_message_time: float = 0.0
         self._notified_error_ids: set[str] = set()
 
-    def _is_safe_content(self, text: str) -> tuple[bool, str]:
-        """Validate content for security issues."""
-        import re
-
-        # Check for suspicious patterns
-        suspicious_patterns = [
-            r"<script[^>]*>.*?</script>",
-            r"javascript:",
-            r"vbscript:",
-            r"on\w+\s*=",
-            r"alert\(",
-            r"confirm\(",
-            r"prompt\(",
-        ]
-
-        for pattern in suspicious_patterns:
-            if re.search(pattern, text, re.IGNORECASE):
-                return False, f"Suspicious script content detected: {pattern}"
-
-        # Check for dangerous control characters (non-printable ASCII except common ones)
-        # Allow: \n (10), \r (13), \t (9) - these are common in text formatting
-        dangerous_control_chars = [
-            0,  # Null
-            1,  # Start of Heading
-            2,  # Start of Text
-            3,  # End of Text
-            4,  # End of Transmission
-            5,  # Enquiry
-            6,  # Acknowledge
-            7,  # Bell
-            8,  # Backspace
-            11,  # Vertical Tab
-            12,  # Form Feed
-            14,  # Shift Out
-            15,  # Shift In
-            16,  # Data Link Escape
-            17,  # Device Control 1
-            18,  # Device Control 2
-            19,  # Device Control 3
-            20,  # Device Control 4
-            21,  # Negative Acknowledge
-            22,  # Synchronous Idle
-            23,  # End of Transmission Block
-            24,  # Cancel
-            25,  # End of Medium
-            26,  # Substitute
-            27,  # Escape
-            28,  # File Separator
-            29,  # Group Separator
-            30,  # Record Separator
-            31,  # Unit Separator
-        ]
-        dangerous_chars = sum(1 for c in text if ord(c) in dangerous_control_chars)
-        if dangerous_chars > 0:
-            return False, f"Dangerous control characters detected: {dangerous_chars} found"
-
-        # Check for extremely long lines (potential buffer overflow)
-        # Replace newlines with spaces for length checking
-        text_for_length_check = text.replace("\n", " ").replace("\r", " ").replace("\t", " ")
-        if len(text_for_length_check) > 10000:  # Very long content is suspicious
-            return False, f"Content too long: {len(text_for_length_check)} characters"
-
-        return True, ""
-
-    def _validate_url(self, url: str) -> tuple[bool, str]:
-        """Validate URL for security using consolidated validation from url_utils.
-
-        This method wraps the comprehensive _validate_url_input() function from
-        app/core/url_utils.py, which provides:
-        - Length limits (RFC 2616)
-        - Dangerous content patterns
-        - Scheme validation (only http/https)
-        - SSRF protection (private IPs, loopback, link-local, etc.)
-        - Suspicious domain patterns
-        - Control characters and null bytes
-
-        Returns:
-            tuple[bool, str]: (is_valid, error_message)
-        """
-        from app.core.url_utils import _validate_url_input
-
-        try:
-            # Use consolidated validation from url_utils
-            _validate_url_input(url)
-            return True, ""
-        except ValueError as e:
-            # Validation failed - return error message
-            return False, str(e)
-
-    async def _check_rate_limit(self) -> bool:
-        """Ensure replies respect the minimum delay between Telegram messages."""
-        import asyncio
-        import time
-
-        current_time = time.time() * 1000  # Convert to milliseconds
-        elapsed = current_time - self._last_message_time
-
-        if elapsed < self.MIN_MESSAGE_INTERVAL_MS:
-            await asyncio.sleep((self.MIN_MESSAGE_INTERVAL_MS - elapsed) / 1000)
-            current_time = time.time() * 1000
-            self._last_message_time = current_time
-            return False
-
-        self._last_message_time = current_time
-        return True
-
-    def create_inline_keyboard(self, buttons: list[dict[str, str]]) -> Any:
-        """Create an inline keyboard markup from button definitions.
-
-        Args:
-            buttons: List of button dictionaries with 'text' and 'callback_data' keys.
-                    Each button dict should have 'text' (display text) and 'callback_data' (data sent when clicked).
-
-        Returns:
-            InlineKeyboardMarkup object or None if pyrogram is not available.
-
-        Example:
-            buttons = [
-                {"text": "✅ Yes", "callback_data": "confirm_yes"},
-                {"text": "❌ No", "callback_data": "confirm_no"}
-            ]
-            keyboard = create_inline_keyboard(buttons)
-        """
-        try:
-            from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
-
-            # Create button rows - each button gets its own row for better mobile UX
-            keyboard_buttons = [
-                [InlineKeyboardButton(btn["text"], callback_data=btn["callback_data"])]
-                for btn in buttons
-            ]
-            return InlineKeyboardMarkup(keyboard_buttons)
-        except ImportError:
-            logger.warning("pyrogram_not_available_for_inline_keyboard")
-            return None
-        except Exception as e:  # noqa: BLE001
-            logger.error("failed_to_create_inline_keyboard", extra={"error": str(e)})
-            return None
-
-    async def send_help(self, message: Any) -> None:
-        """Send help message to user."""
-        help_text = (
-            "🤖 **Bite-Size Reader**\n\n"
-            "📋 **Available Commands:**\n"
-            "• `/start` — Welcome message and instructions\n"
-            "• `/help` — Show this help message\n"
-            "• `/summarize <URL>` — Summarize a URL\n"
-            "• `/summarize_all <URLs>` — Summarize multiple URLs from one message\n"
-            "• `/findweb <topic>` — Search the web (Firecrawl) for recent articles\n"
-            "• `/finddb <topic>` — Search your saved Bite-Size Reader library\n"
-            "• `/find <topic>` — Alias for `/findweb`\n"
-            "• `/cancel` — Cancel any pending URL or multi-link requests\n"
-            "• `/unread [topic] [limit]` — Show unread articles optionally filtered by topic\n"
-            "• `/read <ID>` — Mark article as read and view it\n"
-            "• `/dbinfo` — Show database overview\n\n"
-            "• `/dbverify` — Verify stored posts and required fields\n\n"
-            "💡 **Usage Tips:**\n"
-            "• Send URLs directly (commands are optional)\n"
-            "• Forward channel posts to summarize them\n"
-            "• Send `/summarize` and then a URL in the next message\n"
-            "• Upload a .txt file with URLs (one per line) for batch processing\n"
-            "• Multiple links in one message are supported\n"
-            "• Use `/unread [topic] [limit]` to see saved articles by topic\n\n"
-            "⚡ **Features:**\n"
-            "• Structured JSON output with schema validation\n"
-            "• Intelligent model fallbacks for better reliability\n"
-            "• Automatic content optimization based on model capabilities\n"
-            "• Silent batch processing for uploaded files\n"
-            "• Progress tracking for multiple URLs"
-        )
-        await self.safe_reply(message, help_text)
-
-    async def send_welcome(self, message: Any) -> None:
-        """Send welcome message to user."""
-        welcome = (
-            "Welcome to Bite-Size Reader!\n\n"
-            "What I do:\n"
-            "- Summarize articles from URLs using Firecrawl + OpenRouter.\n"
-            "- Summarize forwarded channel posts.\n"
-            "- Generate structured JSON summaries with reliable results.\n\n"
-            "How to use:\n"
-            "- Send a URL directly, or use /summarize <URL>.\n"
-            "- You can also send /summarize and then the URL in the next message.\n"
-            "- For forwarded posts, use /summarize_forward and then forward a channel post.\n"
-            '- Multiple links in one message are supported: I will ask "Process N links?" or use /summarize_all to process immediately.\n'
-            "- /dbinfo shares a quick snapshot of the internal database so you can monitor storage.\n\n"
-            "Notes:\n"
-            "- I reply with a strict JSON object using advanced schema validation.\n"
-            "- Intelligent model selection and fallbacks ensure high success rates.\n"
-            "- Errors include an Error ID you can reference in logs."
-        )
-        await self.safe_reply(message, welcome)
-
-    async def send_db_overview(self, message: Any, overview: dict[str, object]) -> None:
-        """Send an overview of the database state."""
-        lines = ["📚 Database Overview"]
-
-        path_display = overview.get("path_display") or overview.get("path")
-        if isinstance(path_display, str) and path_display:
-            lines.append(f"Path: `{path_display}`")
-
-        size_bytes = overview.get("db_size_bytes")
-        if isinstance(size_bytes, int) and size_bytes >= 0:
-            pretty_size = self._format_bytes(size_bytes)
-            lines.append(f"Size: {pretty_size} ({size_bytes:,} bytes)")
-
-        table_counts = overview.get("tables")
-        if isinstance(table_counts, dict) and table_counts:
-            lines.append("")
-            lines.append("Tables:")
-            for name in sorted(table_counts):
-                lines.append(f"- {name}: {table_counts[name]}")
-            truncated = overview.get("tables_truncated")
-            if isinstance(truncated, int) and truncated > 0:
-                lines.append(f"- ...and {truncated} more (not displayed)")
-
-        total_requests = overview.get("total_requests")
-        total_summaries = overview.get("total_summaries")
-        totals: list[str] = []
-        if isinstance(total_requests, int):
-            totals.append(f"Requests: {total_requests}")
-        if isinstance(total_summaries, int):
-            totals.append(f"Summaries: {total_summaries}")
-        if totals:
-            lines.append("")
-            lines.append("Totals: " + ", ".join(totals))
-
-        statuses = overview.get("requests_by_status")
-        if isinstance(statuses, dict) and statuses:
-            lines.append("")
-            lines.append("Requests by status:")
-            for status in sorted(statuses):
-                label = status or "unknown"
-                lines.append(f"- {label}: {statuses[status]}")
-
-        last_request = overview.get("last_request_at")
-        last_summary = overview.get("last_summary_at")
-        last_audit = overview.get("last_audit_at")
-        timeline_parts: list[str] = []
-        if isinstance(last_request, str) and last_request:
-            timeline_parts.append(f"Last request: {last_request}")
-        if isinstance(last_summary, str) and last_summary:
-            timeline_parts.append(f"Last summary: {last_summary}")
-        if isinstance(last_audit, str) and last_audit:
-            timeline_parts.append(f"Last audit log: {last_audit}")
-        if timeline_parts:
-            lines.append("")
-            lines.extend(timeline_parts)
-
-        errors = overview.get("errors")
-        if isinstance(errors, list) and errors:
-            lines.append("")
-            lines.append("Warnings:")
-            for err in errors[:5]:
-                lines.append(f"- {err}")
-
-        await self.safe_reply(message, "\n".join(lines))
-
-    async def send_topic_search_results(
-        self,
-        message: Any,
-        *,
-        topic: str,
-        articles: Sequence[TopicArticle],
-        source: str = "online",
-    ) -> None:
-        """Send a formatted list of topic search results to the user."""
-
-        topic_display = " ".join((topic or "").split())
-        if not topic_display:
-            topic_display = "your topic"
-        if len(topic_display) > 120:
-            topic_display = topic_display[:117].rstrip() + "..."
-
-        source_key = (source or "").lower()
-        if source_key == "library":
-            header_icon = "🗄️"
-            header_label = "Saved library results"
-        elif source_key == "online":
-            header_icon = "🌐"
-            header_label = "Online search results"
-        else:
-            header_icon = "🔎"
-            header_label = "Search results"
-
-        lines: list[str] = [f"{header_icon} {header_label} for: {topic_display}"]
-
-        for idx, article in enumerate(articles, start=1):
-            title = article.title.strip() if article.title else article.url
-            if len(title) > 180:
-                title = title[:177].rstrip() + "..."
-
-            lines.append(f"{idx}. {title}")
-            lines.append(f"   🔗 {article.url}")
-
-            details: list[str] = []
-            if article.source:
-                details.append(article.source)
-            if article.published_at:
-                details.append(article.published_at)
-            if details:
-                lines.append(f"   🗞️ {' · '.join(details)}")
-
-            if article.snippet:
-                lines.append(f"   📝 {article.snippet}")
-
-            lines.append("")
-
-        if lines and not lines[-1]:
-            lines.pop()
-
-        lines.append("")
-        if source_key == "library":
-            lines.append(
-                "Tip: Send `/summarize <URL>` to refresh an article or `/read <request_id>` for saved summaries."
-            )
-        else:
-            lines.append(
-                "Tip: Send `/summarize <URL>` for a detailed summary of any article above."
-            )
-
-        await self.safe_reply(message, "\n".join(lines))
-
-    async def send_db_verification(self, message: Any, verification: dict[str, Any]) -> None:
-        """Send database verification summary highlighting missing fields."""
-
-        lines = ["🧪 Database Verification"]
-        overview = verification.get("overview") if isinstance(verification, dict) else {}
-        if isinstance(overview, dict):
-            path_display = overview.get("path_display") or overview.get("path")
-            if isinstance(path_display, str) and path_display:
-                lines.append(f"Path: `{path_display}`")
-
-            size_bytes = overview.get("db_size_bytes")
-            if isinstance(size_bytes, int) and size_bytes >= 0:
-                lines.append(f"Size: {self._format_bytes(size_bytes)} ({size_bytes:,} bytes)")
-
-            table_counts = overview.get("tables")
-            if isinstance(table_counts, dict) and table_counts:
-                lines.append("")
-                lines.append("Tables:")
-                for name in sorted(table_counts):
-                    lines.append(f"- {name}: {table_counts[name]}")
-
-            statuses = overview.get("requests_by_status")
-            if isinstance(statuses, dict) and statuses:
-                lines.append("")
-                lines.append("Request statuses:")
-                for status in sorted(statuses):
-                    lines.append(f"- {status or 'unknown'}: {statuses[status]}")
-
-        posts = verification.get("posts") if isinstance(verification, dict) else {}
-        if isinstance(posts, dict):
-            required_fields = posts.get("required_fields")
-            if isinstance(required_fields, list) and required_fields:
-                preview = ", ".join(str(f) for f in required_fields[:8])
-                if len(required_fields) > 8:
-                    preview += ", …"
-                lines.append("")
-                lines.append(f"Fields checked: {preview}")
-
-            checked = posts.get("checked")
-            with_summary = posts.get("with_summary")
-            if isinstance(checked, int) and checked > 0:
-                lines.append("")
-                summary_line = f"Posts checked: {checked}"
-                if isinstance(with_summary, int):
-                    summary_line += f" · With summary: {with_summary}"
-                lines.append(summary_line)
-
-            missing_summary = posts.get("missing_summary") or []
-            if missing_summary:
-                lines.append("⚠️ Missing summaries: {0}".format(len(missing_summary)))
-                for entry in missing_summary[:5]:
-                    rid = entry.get("request_id")
-                    rtype = entry.get("type")
-                    status = entry.get("status")
-                    source = entry.get("source")
-                    lines.append(f"  • #{rid} ({rtype} – {status}) {source}")
-                remaining = len(missing_summary) - min(len(missing_summary), 5)
-                if remaining > 0:
-                    lines.append(f"  • … {remaining} more")
-
-            missing_fields = posts.get("missing_fields") or []
-            if missing_fields:
-                lines.append("")
-                lines.append("⚠️ Missing fields detected: {0}".format(len(missing_fields)))
-                for entry in missing_fields[:5]:
-                    rid = entry.get("request_id")
-                    rtype = entry.get("type")
-                    status = entry.get("status")
-                    source = entry.get("source")
-                    missing = entry.get("missing") or []
-                    missing_preview = ", ".join(str(f) for f in missing[:6])
-                    if len(missing) > 6:
-                        missing_preview += ", …"
-                    lines.append(f"  • #{rid} ({rtype} – {status}) {source} → {missing_preview}")
-                remaining = len(missing_fields) - min(len(missing_fields), 5)
-                if remaining > 0:
-                    lines.append(f"  • … {remaining} more")
-
-            links_info = posts.get("links") or {}
-            if isinstance(links_info, dict):
-                total_links = links_info.get("total_links")
-                posts_with_links = links_info.get("posts_with_links")
-                missing_links = links_info.get("missing_data") or []
-                lines.append("")
-                lines.append("Link coverage:")
-                if isinstance(total_links, int):
-                    lines.append(f"- Total captured links: {total_links}")
-                if isinstance(posts_with_links, int):
-                    lines.append(f"- Posts with link data: {posts_with_links}")
-                if missing_links:
-                    lines.append(f"- Missing link data: {len(missing_links)}")
-                    for entry in missing_links[:5]:
-                        rid = entry.get("request_id")
-                        reason = entry.get("reason")
-                        source = entry.get("source")
-                        lines.append(f"  • #{rid} ({reason}) {source}")
-                    remaining = len(missing_links) - min(len(missing_links), 5)
-                    if remaining > 0:
-                        lines.append(f"  • … {remaining} more")
-
-            errors = posts.get("errors") or []
-            if errors:
-                lines.append("")
-                lines.append("Warnings:")
-                for err in errors[:5]:
-                    lines.append(f"- {err}")
-                if len(errors) > 5:
-                    lines.append(f"- … {len(errors) - 5} more")
-
-            reprocess_entries = posts.get("reprocess") or []
-            if reprocess_entries:
-                lines.append("")
-                lines.append(f"🔄 Reprocess queue: {len(reprocess_entries)} posts")
-                for entry in reprocess_entries[:5]:
-                    rid = entry.get("request_id")
-                    reason_list = entry.get("reasons") or []
-                    reasons = ", ".join(reason_list[:4]) if reason_list else "unknown"
-                    if reason_list and len(reason_list) > 4:
-                        reasons += ", …"
-                    source = (
-                        entry.get("normalized_url") or entry.get("input_url") or entry.get("source")
-                    )
-                    lines.append(f"  • #{rid} → {source} ({reasons})")
-                remaining = len(reprocess_entries) - min(len(reprocess_entries), 5)
-                if remaining > 0:
-                    lines.append(f"  • … {remaining} more")
-
-            if missing_summary or missing_fields or errors:
-                lines.append("")
-                lines.append("Please reprocess the affected posts to regenerate missing data.")
-
-        await self.safe_reply(message, "\n".join(lines))
-
-    async def send_db_reprocess_start(
-        self,
-        message: Any,
-        *,
-        url_targets: list[dict[str, Any]],
-        skipped: list[dict[str, Any]],
-    ) -> None:
-        """Notify the user that reprocessing of missing posts has started."""
-
-        lines = ["🚀 Starting automated reprocessing"]
-
-        if url_targets:
-            lines.append(f"Processing {len(url_targets)} URL posts...")
-            for entry in url_targets[:5]:
-                rid = entry.get("request_id")
-                url = entry.get("url")
-                reasons = entry.get("reasons") or []
-                reasons_text = ", ".join(reasons[:4]) if reasons else "missing data"
-                if len(reasons) > 4:
-                    reasons_text += ", …"
-                lines.append(f"  • #{rid} {url} ({reasons_text})")
-            if len(url_targets) > 5:
-                lines.append(f"  • … {len(url_targets) - 5} more URLs")
-        else:
-            lines.append("No URL posts available for automatic reprocessing.")
-
-        if skipped:
-            lines.append("")
-            lines.append(
-                f"Skipped {len(skipped)} posts that require manual attention (e.g., forwards)."
-            )
-
-        await self.safe_reply(message, "\n".join(lines))
-
-    async def send_db_reprocess_complete(
-        self,
-        message: Any,
-        *,
-        url_targets: list[dict[str, Any]],
-        failures: list[dict[str, Any]],
-        skipped: list[dict[str, Any]],
-    ) -> None:
-        """Summarize the outcome of the automated reprocessing."""
-
-        total = len(url_targets)
-        failed = len(failures)
-        successful = total - failed
-
-        status_icon = "✅" if failed == 0 else "⚠️"
-        lines = [f"{status_icon} Reprocessing complete"]
-        lines.append(f"Processed {successful}/{total} URL posts.")
-
-        if failures:
-            lines.append("Failures:")
-            for entry in failures[:5]:
-                rid = entry.get("request_id")
-                url = entry.get("url")
-                error = entry.get("error") or "unknown error"
-                lines.append(f"  • #{rid} {url}: {error}")
-            if failed > 5:
-                lines.append(f"  • … {failed - 5} more failures")
-
-        if skipped:
-            lines.append("")
-            lines.append(f"Skipped {len(skipped)} posts that could not be retried automatically.")
-
-        await self.safe_reply(message, "\n".join(lines))
-
-    async def send_structured_summary_response(
-        self, message: Any, summary_shaped: dict[str, Any], llm: Any, chunks: int | None = None
-    ) -> None:
-        """Send summary where each top-level JSON field is a separate message,
-        then attach the full JSON as a .json document with a descriptive filename."""
-        try:
-            # Optional short header
-            try:
-                method = f"Chunked ({chunks} parts)" if chunks else "Single-pass"
-                model_name = getattr(llm, "model", None)
-                header = (
-                    f"🎉 Summary Ready\n🧠 Model: {model_name or 'unknown'}\n🔧 Method: {method}"
-                )
-                await self.safe_reply(message, header)
-            except Exception:
-                pass
-
-            # Combined first message: TL;DR, Tags, Entities, Reading Time, Key Stats, Readability, SEO
-            combined_lines: list[str] = []
-
-            tl_dr = str(summary_shaped.get("summary_250", "")).strip()
-            if tl_dr:
-                tl_dr_clean = self._sanitize_summary_text(tl_dr)
-                combined_lines.extend(["📋 TL;DR:", tl_dr_clean, ""])
-
-            tags = [
-                str(t).strip() for t in (summary_shaped.get("topic_tags") or []) if str(t).strip()
-            ]
-            if tags:
-                combined_lines.append("🏷️ Tags: " + " ".join(tags))
-                combined_lines.append("")
-
-            entities = summary_shaped.get("entities") or {}
-            if isinstance(entities, dict):
-                people = [str(x).strip() for x in (entities.get("people") or []) if str(x).strip()]
-                orgs = [
-                    str(x).strip() for x in (entities.get("organizations") or []) if str(x).strip()
-                ]
-                locs = [str(x).strip() for x in (entities.get("locations") or []) if str(x).strip()]
-                ent_parts: list[str] = []
-                if people:
-                    ent_parts.append("👤 " + ", ".join(people[:10]))
-                if orgs:
-                    ent_parts.append("🏢 " + ", ".join(orgs[:10]))
-                if locs:
-                    ent_parts.append("🌍 " + ", ".join(locs[:10]))
-                if ent_parts:
-                    combined_lines.append("🧭 Entities: " + " | ".join(ent_parts))
-                    combined_lines.append("")
-
-            reading_time = summary_shaped.get("estimated_reading_time_min")
-            if reading_time:
-                combined_lines.append(f"⏱️ Reading time: ~{reading_time} min")
-                combined_lines.append("")
-
-            key_stats = summary_shaped.get("key_stats") or []
-            if isinstance(key_stats, list) and key_stats:
-                ks_lines = self._format_key_stats(key_stats[:10])
-                if ks_lines:
-                    combined_lines.append("📈 Key Stats:")
-                    combined_lines.extend(ks_lines)
-                    combined_lines.append("")
-
-            readability = summary_shaped.get("readability") or {}
-            readability_line = self._format_readability(readability)
-            if readability_line:
-                combined_lines.append(f"🧮 Readability — {readability_line}")
-                combined_lines.append("")
-
-            seo = [
-                str(x).strip() for x in (summary_shaped.get("seo_keywords") or []) if str(x).strip()
-            ]
-            if seo:
-                combined_lines.append("🔎 SEO Keywords: " + ", ".join(seo[:20]))
-                combined_lines.append("")
-
-            metadata = summary_shaped.get("metadata") or {}
-            if isinstance(metadata, dict):
-                meta_parts = []
-                if metadata.get("title"):
-                    meta_parts.append(f"📰 {metadata['title']}")
-                if metadata.get("author"):
-                    meta_parts.append(f"✍️ {metadata['author']}")
-                if metadata.get("domain"):
-                    meta_parts.append(f"🌐 {metadata['domain']}")
-                if meta_parts:
-                    combined_lines.extend(meta_parts)
-                    combined_lines.append("")
-
-            # Categories & Topic Taxonomy
-            categories = [
-                str(c).strip() for c in (summary_shaped.get("categories") or []) if str(c).strip()
-            ]
-            if categories:
-                combined_lines.append("📁 Categories: " + ", ".join(categories[:10]))
-                combined_lines.append("")
-
-            # Confidence & Risk
-            confidence = summary_shaped.get("confidence", 1.0)
-            risk = summary_shaped.get("hallucination_risk", "low")
-            if isinstance(confidence, int | float) and confidence < 1.0:
-                combined_lines.append(f"🎯 Confidence: {confidence:.1%}")
-            if risk != "low":
-                risk_emoji = "⚠️" if risk == "med" else "🚨"
-                combined_lines.append(f"{risk_emoji} Hallucination risk: {risk}")
-            if confidence < 1.0 or risk != "low":
-                combined_lines.append("")
-
-            if combined_lines:
-                # Remove trailing empty lines
-                while combined_lines and not combined_lines[-1]:
-                    combined_lines.pop()
-                await self._send_long_text(message, "\n".join(combined_lines))
-
-            # Send separated summary fields (summary_250, summary_500, tldr, ...)
-            summary_fields = [
-                k
-                for k in summary_shaped.keys()
-                if (k.startswith("summary_") and k.split("_", 1)[1].isdigit() or k == "tldr")
-            ]
-
-            def _key_num(k: str) -> int:
-                if k == "tldr":
-                    return 10_000
-                try:
-                    return int(k.split("_", 1)[1])
-                except Exception:
-                    return 0
-
-            for key in sorted(summary_fields, key=_key_num):
-                content = str(summary_shaped.get(key, "")).strip()
-                if content:
-                    content = self._sanitize_summary_text(content)
-                    if key == "tldr":
-                        label = "🧾 TL;DR"
-                    else:
-                        label = f"🧾 Summary {key.split('_', 1)[1]}"
-                    await self._send_labelled_text(
-                        message,
-                        label,
-                        content,
-                    )
-
-            # Key ideas as separate messages
-            ideas = [
-                str(x).strip() for x in (summary_shaped.get("key_ideas") or []) if str(x).strip()
-            ]
-            if ideas:
-                chunk: list[str] = []
-                for idea in ideas:
-                    chunk.append(f"• {idea}")
-                    if sum(len(c) + 1 for c in chunk) > 3000:
-                        await self._send_long_text(message, "💡 Key Ideas:\n" + "\n".join(chunk))
-                        chunk = []
-                if chunk:
-                    await self._send_long_text(message, "💡 Key Ideas:\n" + "\n".join(chunk))
-
-            # Send new field messages
-            await self._send_new_field_messages(message, summary_shaped)
-
-            # Finally attach full JSON as a document with a descriptive filename
-            await self.reply_json(message, summary_shaped)
-
-        except Exception:
-            # Fallback to simpler format
-            try:
-                tl_dr = str(summary_shaped.get("summary_250", "")).strip()
-                if tl_dr:
-                    await self.safe_reply(message, f"📋 TL;DR:\n{tl_dr}")
-            except Exception:
-                pass
-
-            await self.reply_json(message, summary_shaped)
-
-    async def send_russian_translation(
-        self, message: Any, translated_text: str, correlation_id: str | None = None
-    ) -> None:
-        """Send the adapted Russian translation as a follow-up message."""
-        if not translated_text or not translated_text.strip():
-            logger.warning("russian_translation_empty", extra={"cid": correlation_id})
-            return
-
-        cleaned = self._sanitize_summary_text(translated_text.strip())
-        header = "🇷🇺 Перевод резюме"
-        if correlation_id:
-            header += f"\n🆔 Correlation ID: `{correlation_id}`"
-
-        await self.safe_reply(message, header)
-        await self._send_long_text(message, cleaned)
-
-    async def send_additional_insights_message(
-        self, message: Any, insights: dict[str, Any], correlation_id: str | None = None
-    ) -> None:
-        """Send follow-up message summarizing additional research insights."""
-        try:
-            header = "🔍 Additional Research Highlights"
-            if correlation_id:
-                header += f"\n🆔 Correlation ID: `{correlation_id}`"
-            await self.safe_reply(message, header)
-
-            sections_sent = False
-
-            overview = insights.get("topic_overview")
-            if isinstance(overview, str) and overview.strip():
-                sections_sent = True
-                await self._send_long_text(
-                    message,
-                    "🧭 Overview:\n" + self._sanitize_summary_text(overview.strip()),
-                )
-
-            facts_section: list[str] = []
-            facts = insights.get("new_facts")
-            if isinstance(facts, list):
-                for idx, fact in enumerate(facts[:5], start=1):
-                    if not isinstance(fact, dict):
-                        continue
-                    fact_text = str(fact.get("fact", "")).strip()
-                    if not fact_text:
-                        continue
-                    fact_lines = [f"{idx}. {self._sanitize_summary_text(fact_text)}"]
-
-                    why_matters = str(fact.get("why_it_matters", "")).strip()
-                    if why_matters:
-                        fact_lines.append(
-                            f"   • Why it matters: {self._sanitize_summary_text(why_matters)}"
-                        )
-
-                    source_hint = str(fact.get("source_hint", "")).strip()
-                    if source_hint:
-                        fact_lines.append(
-                            f"   • Source hint: {self._sanitize_summary_text(source_hint)}"
-                        )
-
-                    confidence = fact.get("confidence")
-                    if confidence is not None:
-                        try:
-                            conf_val = float(confidence)
-                            fact_lines.append(f"   • Confidence: {conf_val:.0%}")
-                        except Exception:
-                            fact_lines.append(
-                                f"   • Confidence: {self._sanitize_summary_text(str(confidence))}"
-                            )
-
-                    facts_section.append("\n".join(fact_lines))
-            if facts_section:
-                sections_sent = True
-                await self._send_long_text(
-                    message, "📌 Fresh Facts:\n" + "\n\n".join(facts_section)
-                )
-
-            def _clean_list(items: list[Any]) -> list[str]:
-                cleaned: list[str] = []
-                for item in items:
-                    text = str(item).strip()
-                    if not text:
-                        continue
-                    cleaned.append(self._sanitize_summary_text(text))
-                return cleaned
-
-            open_questions = insights.get("open_questions")
-            if isinstance(open_questions, list):
-                questions = _clean_list(open_questions)[:5]
-                if questions:
-                    sections_sent = True
-                    await self._send_long_text(
-                        message, "❓ Open Questions:\n" + "\n".join(f"- {q}" for q in questions)
-                    )
-
-            suggested_sources = insights.get("suggested_sources")
-            if isinstance(suggested_sources, list):
-                sources = _clean_list(suggested_sources)[:5]
-                if sources:
-                    sections_sent = True
-                    await self._send_long_text(
-                        message, "🔗 Suggested Follow-up:\n" + "\n".join(f"- {s}" for s in sources)
-                    )
-
-            expansion = insights.get("expansion_topics")
-            if isinstance(expansion, list):
-                exp_clean = _clean_list(expansion)[:8]
-                if exp_clean:
-                    sections_sent = True
-                    await self._send_long_text(
-                        message,
-                        "🧠 Expansion Topics (beyond the article):\n"
-                        + "\n".join(f"- {item}" for item in exp_clean),
-                    )
-
-            next_steps = insights.get("next_exploration")
-            if isinstance(next_steps, list):
-                nxt_clean = _clean_list(next_steps)[:8]
-                if nxt_clean:
-                    sections_sent = True
-                    await self._send_long_text(
-                        message,
-                        "🚀 What to explore next:\n" + "\n".join(f"- {step}" for step in nxt_clean),
-                    )
-
-            caution = insights.get("caution")
-            if isinstance(caution, str) and caution.strip():
-                sections_sent = True
-                await self._send_long_text(
-                    message,
-                    "⚠️ Caveats:\n" + self._sanitize_summary_text(caution.strip()),
-                )
-
-            if not sections_sent:
-                await self.safe_reply(message, "No additional research insights were available.")
-
-        except Exception as exc:  # pragma: no cover - defensive
-            logger.error("insights_message_error", extra={"error": str(exc)})
-
-    async def send_custom_article(self, message: Any, article: dict[str, Any]) -> None:
-        """Send the custom generated article with a nice header and downloadable JSON."""
-        try:
-            title = str(article.get("title", "")).strip() or "Custom Article"
-            subtitle = str(article.get("subtitle", "") or "").strip()
-            body = str(article.get("article_markdown", "")).strip()
-
-            raw_highlights = article.get("highlights")
-            if isinstance(raw_highlights, list):
-                highlights = [str(x).strip() for x in raw_highlights if str(x).strip()]
-            elif isinstance(raw_highlights, str):
-                highlights = [
-                    part.strip(" -•\t")
-                    for part in re.split(r"[\n\r•;]+", raw_highlights)
-                    if part.strip()
-                ]
-            elif raw_highlights is None:
-                highlights = []
-            else:
-                highlights = [str(raw_highlights).strip()] if str(raw_highlights).strip() else []
-
-            header_lines: list[str] = []
-            title_html = html.escape(title)
-            header_lines.append(f"<b>📝 {title_html}</b>")
-            if subtitle:
-                subtitle_html = html.escape(subtitle)
-                header_lines.append(f"<i>{subtitle_html}</i>")
-
-            await self.safe_reply(message, "\n".join(header_lines), parse_mode="HTML")
-
-            if body:
-                await self._send_long_text(message, body)
-
-            if highlights:
-                await self._send_long_text(
-                    message, "⭐ Key Highlights:\n" + "\n".join([f"• {h}" for h in highlights[:10]])
-                )
-
-            await self.reply_json(message, article)
-        except Exception:
-            pass
-
-    async def send_forward_summary_response(
-        self, message: Any, forward_shaped: dict[str, Any]
-    ) -> None:
-        """Send forward summary with per-field messages, then attach full JSON file."""
-        try:
-            await self.safe_reply(message, "🎉 Forward Summary Ready")
-
-            combined_lines: list[str] = []
-            tl_dr = str(forward_shaped.get("summary_250", "")).strip()
-            if tl_dr:
-                tl_dr_clean = self._sanitize_summary_text(tl_dr)
-                combined_lines.extend(["📋 TL;DR:", tl_dr_clean, ""])
-
-            tags = [
-                str(t).strip() for t in (forward_shaped.get("topic_tags") or []) if str(t).strip()
-            ]
-            if tags:
-                combined_lines.append("🏷️ Tags: " + " ".join(tags))
-                combined_lines.append("")
-
-            entities = forward_shaped.get("entities") or {}
-            if isinstance(entities, dict):
-                people = [str(x).strip() for x in (entities.get("people") or []) if str(x).strip()]
-                orgs = [
-                    str(x).strip() for x in (entities.get("organizations") or []) if str(x).strip()
-                ]
-                locs = [str(x).strip() for x in (entities.get("locations") or []) if str(x).strip()]
-                ent_parts: list[str] = []
-                if people:
-                    ent_parts.append("👤 " + ", ".join(people[:10]))
-                if orgs:
-                    ent_parts.append("🏢 " + ", ".join(orgs[:10]))
-                if locs:
-                    ent_parts.append("🌍 " + ", ".join(locs[:10]))
-                if ent_parts:
-                    combined_lines.append("🧭 Entities: " + " | ".join(ent_parts))
-                    combined_lines.append("")
-
-            reading_time = forward_shaped.get("estimated_reading_time_min")
-            if reading_time:
-                combined_lines.append(f"⏱️ Reading time: ~{reading_time} min")
-                combined_lines.append("")
-
-            key_stats = forward_shaped.get("key_stats") or []
-            if isinstance(key_stats, list) and key_stats:
-                ks_lines = self._format_key_stats(key_stats[:10])
-                if ks_lines:
-                    combined_lines.append("📈 Key Stats:")
-                    combined_lines.extend(ks_lines)
-                    combined_lines.append("")
-
-            readability = forward_shaped.get("readability") or {}
-            readability_line = self._format_readability(readability)
-            if readability_line:
-                combined_lines.append(f"🧮 Readability — {readability_line}")
-                combined_lines.append("")
-
-            seo = [
-                str(x).strip() for x in (forward_shaped.get("seo_keywords") or []) if str(x).strip()
-            ]
-            if seo:
-                combined_lines.append("🔎 SEO Keywords: " + ", ".join(seo[:20]))
-                combined_lines.append("")
-
-            # Metadata for forward posts
-            metadata = forward_shaped.get("metadata") or {}
-            if isinstance(metadata, dict):
-                meta_parts = []
-                if metadata.get("title"):
-                    meta_parts.append(f"📰 {metadata['title']}")
-                if metadata.get("author"):
-                    meta_parts.append(f"✍️ {metadata['author']}")
-                if meta_parts:
-                    combined_lines.extend(meta_parts)
-                    combined_lines.append("")
-
-            # Categories & Risk for forwards
-            categories = [
-                str(c).strip() for c in (forward_shaped.get("categories") or []) if str(c).strip()
-            ]
-            if categories:
-                combined_lines.append("📁 Categories: " + ", ".join(categories[:10]))
-                combined_lines.append("")
-
-            confidence = forward_shaped.get("confidence", 1.0)
-            risk = forward_shaped.get("hallucination_risk", "low")
-            if isinstance(confidence, int | float) and confidence < 1.0:
-                combined_lines.append(f"🎯 Confidence: {confidence:.1%}")
-            if risk != "low":
-                risk_emoji = "⚠️" if risk == "med" else "🚨"
-                combined_lines.append(f"{risk_emoji} Hallucination risk: {risk}")
-            if confidence < 1.0 or risk != "low":
-                combined_lines.append("")
-
-            if combined_lines:
-                # Remove trailing empty lines
-                while combined_lines and not combined_lines[-1]:
-                    combined_lines.pop()
-                await self._send_long_text(message, "\n".join(combined_lines))
-
-            # Separated summary fields
-            summary_fields = [
-                k
-                for k in forward_shaped.keys()
-                if k.startswith("summary_") and k.split("_", 1)[1].isdigit()
-            ]
-
-            def _key_num_f(k: str) -> int:
-                try:
-                    return int(k.split("_", 1)[1])
-                except Exception:
-                    return 0
-
-            for key in sorted(summary_fields, key=_key_num_f):
-                content = str(forward_shaped.get(key, "")).strip()
-                if content:
-                    content = self._sanitize_summary_text(content)
-                    await self._send_labelled_text(
-                        message,
-                        f"🧾 Summary {key.split('_', 1)[1]}",
-                        content,
-                    )
-
-            ideas = [
-                str(x).strip() for x in (forward_shaped.get("key_ideas") or []) if str(x).strip()
-            ]
-            if ideas:
-                await self._send_long_text(
-                    message, "💡 Key Ideas:\n" + "\n".join([f"• {i}" for i in ideas])
-                )
-
-            # Send new field messages for forwards
-            await self._send_new_field_messages(message, forward_shaped)
-        except Exception:
-            pass
-
-        await self.reply_json(message, forward_shaped)
-
-    async def reply_json(
-        self, message: Any, obj: dict, *, correlation_id: str | None = None, success: bool = True
-    ) -> None:
-        """Reply with JSON object, using file upload for large content."""
-        if success and isinstance(obj, dict) and obj.get("success") in (True, False):
-            payload = obj
-        elif success:
-            payload = success_response(obj, correlation_id=correlation_id)
-        else:
-            payload = obj
-
-        if self._reply_json_func is not None:
-            await self._reply_json_func(message, payload)
-            return
-
-        pretty = json.dumps(payload, ensure_ascii=False, indent=2)
-        # Prefer sending as a document always to avoid size limits
-        try:
-            bio = io.BytesIO(pretty.encode("utf-8"))
-            bio.name = self._build_json_filename(obj)
-            msg_any: Any = message
-            await msg_any.reply_document(bio, caption="📊 Full Summary JSON attached")
-            return
-        except Exception as e:  # noqa: BLE001
-            logger.error("reply_document_failed", extra={"error": str(e)})
-        await self.safe_reply(message, f"```json\n{pretty}\n```")
+    def __setattr__(self, name: str, value: Any) -> None:
+        """Intercept attribute assignments to propagate telegram_client to components."""
+        super().__setattr__(name, value)
+        # Propagate telegram_client changes to response sender for backward compatibility
+        # with tests that set _telegram_client after initialization
+        if name == "_telegram_client" and hasattr(self, "_response_sender"):
+            self._response_sender._telegram_client = value
+
+    # =========================================================================
+    # ResponseSender delegation (core Telegram sending)
+    # =========================================================================
 
     async def safe_reply(
         self, message: Any, text: str, *, parse_mode: str | None = None, reply_markup: Any = None
     ) -> None:
         """Safely reply to a message with comprehensive security checks."""
-        # Input validation
-        if not text or not text.strip():
-            logger.warning("safe_reply_empty_text", extra={"parse_mode": parse_mode is not None})
-            return
-
-        # Security content check
-        is_safe, error_msg = self._is_safe_content(text)
-        if not is_safe:
-            logger.warning(
-                "safe_reply_unsafe_content_blocked",
-                extra={"error": error_msg, "text_length": len(text), "text_preview": text[:100]},
-            )
-            # Send safe error message instead
-            safe_text = "❌ Message blocked for security reasons."
-            text = safe_text
-
-        # Length check
-        if len(text) > self.MAX_MESSAGE_CHARS:
-            logger.warning(
-                "safe_reply_message_too_long",
-                extra={"length": len(text), "max": self.MAX_MESSAGE_CHARS},
-            )
-            # Truncate if too long
-            text = text[: self.MAX_MESSAGE_CHARS - 10] + "..."
-
-        # Rate limiting check
-        if not await self._check_rate_limit():
-            logger.warning("safe_reply_rate_limited", extra={"text_length": len(text)})
-
-        if self._safe_reply_func is not None:
-            kwargs = {}
-            if parse_mode is not None:
-                kwargs["parse_mode"] = parse_mode
-            if reply_markup is not None:
-                kwargs["reply_markup"] = reply_markup
-            await self._safe_reply_func(message, text, **kwargs)
-            return
-
-        try:
-            msg_any: Any = message
-            kwargs = {}
-            if parse_mode:
-                kwargs["parse_mode"] = parse_mode
-            if reply_markup:
-                kwargs["reply_markup"] = reply_markup
-            await msg_any.reply_text(text, **kwargs)
-            try:
-                logger.debug(
-                    "reply_text_sent",
-                    extra={"length": len(text), "has_buttons": reply_markup is not None},
-                )
-            except Exception:
-                pass
-        except Exception as e:  # noqa: BLE001
-            logger.error("reply_failed", extra={"error": str(e), "text_length": len(text)})
+        await self._response_sender.safe_reply(
+            message, text, parse_mode=parse_mode, reply_markup=reply_markup
+        )
 
     async def safe_reply_with_id(
         self, message: Any, text: str, *, parse_mode: str | None = None
     ) -> int | None:
-        """Safely reply to a message and return the message ID for progress tracking with security checks."""
-        # Input validation
-        if not text or not text.strip():
-            logger.warning(
-                "safe_reply_with_id_empty_text", extra={"parse_mode": parse_mode is not None}
-            )
-            return None
-
-        # Security content check
-        is_safe, error_msg = self._is_safe_content(text)
-        if not is_safe:
-            logger.warning(
-                "safe_reply_with_id_unsafe_content_blocked",
-                extra={"error": error_msg, "text_length": len(text), "text_preview": text[:100]},
-            )
-            # Send safe error message instead
-            safe_text = "❌ Message blocked for security reasons."
-            text = safe_text
-
-        # Length check
-        if len(text) > self.MAX_MESSAGE_CHARS:
-            logger.warning(
-                "safe_reply_with_id_message_too_long",
-                extra={"length": len(text), "max": self.MAX_MESSAGE_CHARS},
-            )
-            # Truncate if too long
-            text = text[: self.MAX_MESSAGE_CHARS - 10] + "..."
-
-        # Rate limiting check
-        if not await self._check_rate_limit():
-            logger.warning("safe_reply_with_id_rate_limited", extra={"text_length": len(text)})
-
-        if self._safe_reply_func is not None:
-            # When a custom reply function is provided (e.g., compatibility layer),
-            # we still want to obtain a Telegram message_id for progress updates.
-            # If a Telegram client is available, prefer sending via the client so
-            # that we can return the created message_id and enable edits.
-            try:
-                client = getattr(getattr(self, "_telegram_client", None), "client", None)
-                chat = getattr(message, "chat", None)
-                chat_id = getattr(chat, "id", None) if chat is not None else None
-                if client is not None and chat_id is not None and hasattr(client, "send_message"):
-                    logger.debug(
-                        "reply_with_client_for_id",
-                        extra={
-                            "text_length": len(text),
-                            "has_parse_mode": parse_mode is not None,
-                            "chat_id": chat_id,
-                        },
-                    )
-
-                    # Define send operation for retry logic
-                    async def do_send() -> Any:
-                        if parse_mode is not None:
-                            return await client.send_message(
-                                chat_id=chat_id, text=text, parse_mode=parse_mode
-                            )
-                        else:
-                            return await client.send_message(chat_id=chat_id, text=text)
-
-                    # Retry the send operation with exponential backoff
-                    sent, success = await retry_telegram_operation(
-                        do_send, operation_name="send_message_with_id"
-                    )
-
-                    if success and sent is not None:
-                        message_id = getattr(sent, "message_id", None)
-                        if message_id is None:
-                            message_id = getattr(sent, "id", None)
-                        logger.debug(
-                            "reply_with_id_result",
-                            extra={
-                                "message_id": message_id,
-                                "sent_message_type": type(sent).__name__,
-                            },
-                        )
-                        return message_id
-                    else:
-                        logger.warning(
-                            "reply_with_id_retry_failed",
-                            extra={"chat_id": chat_id, "text_length": len(text)},
-                        )
-                        return None
-            except Exception as e:  # noqa: BLE001
-                # Fall back to the custom function if direct client send failed
-                logger.warning("reply_with_client_failed_fallback_custom", extra={"error": str(e)})
-
-            logger.debug(
-                "reply_with_custom_function",
-                extra={"text_length": len(text), "has_parse_mode": parse_mode is not None},
-            )
-            kwargs = {"parse_mode": parse_mode} if parse_mode is not None else {}
-            await self._safe_reply_func(message, text, **kwargs)
-            logger.warning("reply_with_id_no_message_id", extra={"reason": "custom_reply_function"})
-            return None  # Can't get message ID from custom function
-
-        try:
-            msg_any: Any = message
-
-            # Define reply operation for retry logic
-            async def do_reply() -> Any:
-                if parse_mode:
-                    return await msg_any.reply_text(text, parse_mode=parse_mode)
-                else:
-                    return await msg_any.reply_text(text)
-
-            # Retry the reply operation with exponential backoff
-            sent_message, success = await retry_telegram_operation(
-                do_reply, operation_name="reply_text_with_id"
-            )
-
-            if success and sent_message is not None:
-                try:
-                    logger.debug("reply_text_sent", extra={"length": len(text)})
-                except Exception:
-                    pass
-
-                message_id = getattr(sent_message, "message_id", None)
-                logger.debug(
-                    "reply_with_id_result",
-                    extra={
-                        "message_id": message_id,
-                        "sent_message_type": type(sent_message).__name__,
-                    },
-                )
-                return message_id
-            else:
-                logger.warning(
-                    "reply_text_retry_failed",
-                    extra={"text_length": len(text)},
-                )
-                return None
-        except Exception as e:  # noqa: BLE001
-            logger.error("reply_failed", extra={"error": str(e), "text_length": len(text)})
-            return None
+        """Safely reply to a message and return the message ID."""
+        return await self._response_sender.safe_reply_with_id(message, text, parse_mode=parse_mode)
 
     async def edit_message(self, chat_id: int, message_id: int, text: str) -> bool:
-        """Edit an existing message in Telegram with security checks.
+        """Edit an existing message in Telegram with security checks."""
+        return await self._response_sender.edit_message(chat_id, message_id, text)
 
-        Args:
-            chat_id: The chat ID where the message exists
-            message_id: The message ID to edit
-            text: The new text content
+    async def reply_json(
+        self, message: Any, obj: dict, *, correlation_id: str | None = None, success: bool = True
+    ) -> None:
+        """Reply with JSON object, using file upload for large content."""
+        await self._response_sender.reply_json(
+            message, obj, correlation_id=correlation_id, success=success
+        )
 
-        Returns:
-            True if the message was successfully edited, False otherwise
-        """
-        try:
-            # Input validation
-            if not text or not text.strip():
-                logger.warning(
-                    "edit_message_empty_text", extra={"chat_id": chat_id, "message_id": message_id}
-                )
-                return False
+    def create_inline_keyboard(self, buttons: list[dict[str, str]]) -> Any:
+        """Create an inline keyboard markup from button definitions."""
+        return self._response_sender.create_inline_keyboard(buttons)
 
-            # Security content check
-            is_safe, error_msg = self._is_safe_content(text)
-            if not is_safe:
-                logger.warning(
-                    "edit_message_unsafe_content_blocked",
-                    extra={
-                        "error": error_msg,
-                        "chat_id": chat_id,
-                        "message_id": message_id,
-                        "text_preview": text[:100],
-                    },
-                )
-                return False
+    # =========================================================================
+    # NotificationFormatter delegation (status notifications)
+    # =========================================================================
 
-            # Length check
-            if len(text) > self.MAX_MESSAGE_CHARS:
-                logger.warning(
-                    "edit_message_too_long",
-                    extra={
-                        "length": len(text),
-                        "max": self.MAX_MESSAGE_CHARS,
-                        "chat_id": chat_id,
-                        "message_id": message_id,
-                    },
-                )
-                return False
+    async def send_help(self, message: Any) -> None:
+        """Send help message to user."""
+        await self._notification_formatter.send_help(message)
 
-            # Rate limiting check
-            if not await self._check_rate_limit():
-                logger.warning(
-                    "edit_message_rate_limited",
-                    extra={"chat_id": chat_id, "message_id": message_id},
-                )
-                # Continue despite rate limit warning, but note it
-                # This maintains backward compatibility
-
-            logger.debug(
-                "edit_message_attempt",
-                extra={
-                    "chat_id": chat_id,
-                    "message_id": message_id,
-                    "has_telegram_client": self._telegram_client is not None,
-                    "telegram_client_has_client": (
-                        hasattr(self._telegram_client, "client") if self._telegram_client else False
-                    ),
-                    "client": self._telegram_client.client if self._telegram_client else None,
-                },
-            )
-
-            if self._telegram_client and hasattr(self._telegram_client, "client"):
-                client = self._telegram_client.client
-                if client and hasattr(client, "edit_message_text"):
-                    # Validate inputs before making the API call
-                    if not isinstance(chat_id, int) or not isinstance(message_id, int):
-                        logger.warning(
-                            "edit_message_invalid_params",
-                            extra={
-                                "chat_id": chat_id,
-                                "message_id": message_id,
-                                "text_length": len(text),
-                            },
-                        )
-                        return False
-
-                    # Define API call for retry logic
-                    async def do_edit() -> None:
-                        await client.edit_message_text(
-                            chat_id=chat_id, message_id=message_id, text=text
-                        )
-
-                    # Retry the API call with exponential backoff
-                    _, success = await retry_telegram_operation(
-                        do_edit, operation_name="edit_message"
-                    )
-
-                    if success:
-                        logger.debug(
-                            "edit_message_success",
-                            extra={"chat_id": chat_id, "message_id": message_id},
-                        )
-                        return True
-                    else:
-                        logger.warning(
-                            "edit_message_retry_failed",
-                            extra={"chat_id": chat_id, "message_id": message_id},
-                        )
-                        return False
-                else:
-                    logger.warning(
-                        "edit_message_no_client_method",
-                        extra={"chat_id": chat_id, "message_id": message_id},
-                    )
-                    return False
-            else:
-                logger.warning(
-                    "edit_message_no_telegram_client",
-                    extra={"chat_id": chat_id, "message_id": message_id},
-                )
-                return False
-        except Exception as e:
-            logger.warning(
-                "edit_message_failed",
-                extra={"error": str(e), "chat_id": chat_id, "message_id": message_id},
-            )
-            return False
+    async def send_welcome(self, message: Any) -> None:
+        """Send welcome message to user."""
+        await self._notification_formatter.send_welcome(message)
 
     async def send_url_accepted_notification(
         self, message: Any, norm: str, correlation_id: str, *, silent: bool = False
     ) -> None:
         """Send URL accepted notification."""
-        if silent:
-            return
-
-        try:
-            from urllib.parse import urlparse
-
-            url_domain = urlparse(norm).netloc if norm else "unknown"
-            await self.safe_reply(
-                message,
-                f"✅ **Request Accepted**\n"
-                f"🌐 Domain: `{url_domain}`\n"
-                f"🔗 URL: `{norm[:60]}{'...' if len(norm) > 60 else ''}`\n"
-                f"📋 Status: Fetching content...\n"
-                f"🤖 Structured output with smart fallbacks",
-            )
-        except Exception:
-            pass
-
-    def _slugify(self, text: str, *, max_len: int = 60) -> str:
-        """Create a filesystem-friendly slug from text."""
-        text = text.strip().lower()
-        # Replace non-word characters with hyphens
-        text = re.sub(r"[^\w\-\s]", "", text)
-        text = re.sub(r"[\s_]+", "-", text)
-        text = re.sub(r"-+", "-", text).strip("-")
-        if len(text) > max_len:
-            text = text[:max_len].rstrip("-")
-        return text or "summary"
-
-    async def _send_long_text(self, message: Any, text: str) -> None:
-        """Send text, splitting into multiple messages if too long for Telegram."""
-        for chunk in self._chunk_text(text, max_len=self.MAX_MESSAGE_CHARS):
-            if chunk:
-                await self.safe_reply(message, chunk)
-
-    async def _send_labelled_text(self, message: Any, label: str, body: str) -> None:
-        """Send labelled text, splitting into continuation messages when needed."""
-        body = body.strip()
-        if not body:
-            return
-        label_clean = label.rstrip(":")
-        primary_title = f"{label_clean}:"
-        chunk_limit = max(200, self.MAX_MESSAGE_CHARS - len(primary_title) - 20)
-        chunks = self._chunk_text(body, max_len=chunk_limit)
-        if not chunks:
-            return
-
-        await self.safe_reply(message, f"{primary_title}\n{chunks[0]}")
-        for idx, chunk in enumerate(chunks[1:], start=2):
-            continuation_title = f"{label_clean} (cont. {idx}):"
-            await self.safe_reply(message, f"{continuation_title}\n{chunk}")
-
-    def _build_json_filename(self, obj: dict) -> str:
-        """Build a descriptive filename for the JSON attachment."""
-        # Prefer SEO keywords; fallback to first words of TL;DR
-        seo = obj.get("seo_keywords") or []
-        base: str | None = None
-        if isinstance(seo, list) and seo:
-            base = "-".join(self._slugify(str(x)) for x in seo[:3] if str(x).strip())
-        if not base:
-            tl = str(obj.get("summary_250", "")).strip()
-            if tl:
-                # Use first 6 words
-                words = re.findall(r"\w+", tl)[:6]
-                base = self._slugify("-".join(words))
-        if not base:
-            base = "summary"
-        timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-        return f"{base}-{timestamp}.json"
-
-    def _format_bytes(self, size: int) -> str:
-        """Convert byte count into a human-readable string."""
-        units = ["B", "KB", "MB", "GB", "TB"]
-        value = float(size)
-        for unit in units:
-            if value < 1024 or unit == units[-1]:
-                if unit == "B":
-                    return f"{int(value)} {unit}"
-                return f"{value:.1f} {unit}"
-            value /= 1024
-        return f"{value:.1f} TB"
-
-    def _format_metric_value(self, value: Any) -> str | None:
-        """Format metric values, trimming insignificant decimals and booleans."""
-
-        if value is None:
-            return None
-        if isinstance(value, bool):
-            return "Yes" if value else "No"
-        if isinstance(value, int):
-            return str(value)
-        if isinstance(value, float):
-            if math.isnan(value) or math.isinf(value):
-                return str(value)
-            if value.is_integer():
-                return str(int(value))
-            return f"{value:.2f}".rstrip("0").rstrip(".")
-        return str(value).strip()
-
-    def _format_key_stats(self, key_stats: list[dict[str, Any]]) -> list[str]:
-        """Render key statistics into bullet-point lines."""
-
-        formatted: list[str] = []
-        for entry in key_stats:
-            if not isinstance(entry, dict):
-                continue
-
-            label = str(entry.get("label", "")).strip()
-            if not label:
-                continue
-
-            value_text = self._format_metric_value(entry.get("value"))
-            unit = str(entry.get("unit", "")).strip()
-            source_excerpt = str(entry.get("source_excerpt", "")).strip()
-
-            detail_parts: list[str] = []
-            if value_text is not None:
-                if unit:
-                    detail_parts.append(f"{value_text} {unit}".strip())
-                else:
-                    detail_parts.append(value_text)
-            elif unit:
-                detail_parts.append(unit)
-
-            if source_excerpt:
-                detail_parts.append(f"Source: {source_excerpt}")
-
-            if detail_parts:
-                formatted.append(f"• {label}: " + " — ".join(detail_parts))
-            else:
-                formatted.append(f"• {label}")
-
-        return formatted
-
-    def _format_readability(self, readability: Any) -> str | None:
-        """Create a reader-friendly readability summary line."""
-
-        if not isinstance(readability, dict):
-            return None
-
-        method_raw = str(readability.get("method", "")).strip()
-        method_display = method_raw[:1].upper() + method_raw[1:] if method_raw else ""
-
-        score = self._format_metric_value(readability.get("score"))
-        level_raw = str(readability.get("level", "")).strip()
-        level_display = level_raw[:1].upper() + level_raw[1:] if level_raw else ""
-
-        detail_parts: list[str] = []
-        if score is not None:
-            detail_parts.append(f"Score: {score}")
-        if level_display:
-            detail_parts.append(f"Level: {level_display}")
-
-        details = " • ".join(detail_parts)
-        if method_display and details:
-            return f"{method_display} • {details}"
-        if method_display:
-            return method_display
-        return details or None
-
-    def _chunk_text(self, text: str, *, max_len: int) -> list[str]:
-        """Split text into chunks respecting Telegram's message length limit."""
-        text = text.strip()
-        if not text:
-            return []
-
-        chunks: list[str] = []
-        remaining = text
-        while len(remaining) > max_len:
-            split_idx = self._find_split_index(remaining, max_len)
-            chunk = remaining[:split_idx].rstrip("\n")
-            if not chunk:
-                chunk = remaining[:max_len]
-                split_idx = max_len
-            chunks.append(chunk)
-            remaining = remaining[split_idx:]
-            remaining = remaining.lstrip(" \n\r")
-        if remaining:
-            chunks.append(remaining)
-        return chunks
-
-    def _find_split_index(self, text: str, limit: int) -> int:
-        """Find a sensible split index before the limit."""
-        min_split = max(20, limit // 4)
-        delimiters = [
-            "\n\n",
-            "\n",
-            ". ",
-            "! ",
-            "? ",
-            "; ",
-            ": ",
-            ", ",
-            " ",
-        ]
-        for delim in delimiters:
-            idx = text.rfind(delim, 0, limit)
-            if idx >= min_split:
-                return min(limit, idx + len(delim))
-        return limit
-
-    def _sanitize_summary_text(self, text: str) -> str:
-        """Normalize and clean summary text for safe sending.
-
-        - Normalize to NFC
-        - Remove control characters
-        - Drop trailing isolated CJK run (1-3 chars) that looks like a stray token
-        """
-        try:
-            s = unicodedata.normalize("NFC", text)
-        except Exception:
-            s = text
-        # Remove control and non-printable chars
-        s = "".join(ch for ch in s if unicodedata.category(ch)[0] != "C")
-
-        # If string ends with 1-3 CJK chars and preceding 15 chars have no CJK, drop the tail
-        tail_match = re.search(r"([\u4E00-\u9FFF]{1,3})$", s)
-        if tail_match:
-            start = max(0, len(s) - 20)
-            window = s[start : len(s) - len(tail_match.group(1))]
-            if not re.search(r"[\u4E00-\u9FFF]", window):
-                s = s[: -len(tail_match.group(1))].rstrip("-—")
-
-        s = s.strip()
-
-        if s and s[-1] not in ".!?…":
-            last_sentence_end = max(s.rfind("."), s.rfind("!"), s.rfind("?"), s.rfind("…"))
-            if last_sentence_end != -1 and last_sentence_end >= len(s) // 3:
-                s = s[: last_sentence_end + 1].rstrip()
-            else:
-                s = s.rstrip("-—")
-                if s and s[-1] not in ".!?…":
-                    s = s + "."
-
-        return s
-
-    async def _send_new_field_messages(self, message: Any, shaped: dict[str, Any]) -> None:
-        """Send messages for new fields like extractive quotes, highlights, etc."""
-        try:
-            # Extractive quotes
-            quotes = shaped.get("extractive_quotes") or []
-            if isinstance(quotes, list) and quotes:
-                quote_lines = ["💬 Key Quotes:"]
-                for i, quote in enumerate(quotes[:5], 1):
-                    if isinstance(quote, dict) and quote.get("text"):
-                        text = str(quote["text"]).strip()
-                        if text:
-                            quote_lines.append(f'{i}. "{text}"')
-                if len(quote_lines) > 1:
-                    await self._send_long_text(message, "\n".join(quote_lines))
-
-            highlights = [
-                str(h).strip() for h in (shaped.get("highlights") or []) if str(h).strip()
-            ]
-            if highlights:
-                await self._send_long_text(
-                    message, "✨ Highlights:\n" + "\n".join([f"• {h}" for h in highlights[:10]])
-                )
-
-            # Questions answered (as Q&A pairs)
-            questions_answered = shaped.get("questions_answered") or []
-            if isinstance(questions_answered, list) and questions_answered:
-                qa_lines = ["❓ Questions Answered:"]
-                for i, qa in enumerate(questions_answered[:10], 1):
-                    if isinstance(qa, dict):
-                        question = str(qa.get("question", "")).strip()
-                        answer = str(qa.get("answer", "")).strip()
-                        if question:
-                            qa_lines.append(f"\n{i}. **Q:** {question}")
-                            if answer:
-                                qa_lines.append(f"   **A:** {answer}")
-                            else:
-                                qa_lines.append("   **A:** _(No answer provided)_")
-                if len(qa_lines) > 1:
-                    await self._send_long_text(message, "\n".join(qa_lines))
-
-            # Key points to remember
-            key_points = [
-                str(kp).strip()
-                for kp in (shaped.get("key_points_to_remember") or [])
-                if str(kp).strip()
-            ]
-            if key_points:
-                await self._send_long_text(
-                    message,
-                    "🎯 Key Points to Remember:\n"
-                    + "\n".join([f"• {kp}" for kp in key_points[:10]]),
-                )
-
-            # Topic taxonomy (if present and not empty)
-            taxonomy = shaped.get("topic_taxonomy") or []
-            if isinstance(taxonomy, list) and taxonomy:
-                tax_lines = ["🏷️ Topic Classification:"]
-                for tax in taxonomy[:5]:
-                    if isinstance(tax, dict) and tax.get("label"):
-                        label = str(tax["label"]).strip()
-                        score = tax.get("score", 0.0)
-                        if isinstance(score, int | float) and score > 0:
-                            tax_lines.append(f"• {label} ({score:.1%})")
-                        else:
-                            tax_lines.append(f"• {label}")
-                if len(tax_lines) > 1:
-                    await self._send_long_text(message, "\n".join(tax_lines))
-
-            # Forwarded post extras
-            fwd_extras = shaped.get("forwarded_post_extras")
-            if isinstance(fwd_extras, dict):
-                fwd_parts = []
-                if fwd_extras.get("channel_title"):
-                    fwd_parts.append(f"📺 Channel: {fwd_extras['channel_title']}")
-                if fwd_extras.get("channel_username"):
-                    fwd_parts.append(f"@{fwd_extras['channel_username']}")
-                hashtags = [
-                    str(h).strip() for h in (fwd_extras.get("hashtags") or []) if str(h).strip()
-                ]
-                if hashtags:
-                    fwd_parts.append(
-                        "Tags: "
-                        + " ".join([f"#{h}" if not h.startswith("#") else h for h in hashtags[:5]])
-                    )
-                if fwd_parts:
-                    await self._send_long_text(message, "📤 Forward Info:\n" + "\n".join(fwd_parts))
-
-        except Exception:
-            pass
+        await self._notification_formatter.send_url_accepted_notification(
+            message, norm, correlation_id, silent=silent
+        )
 
     async def send_firecrawl_start_notification(
         self, message: Any, url: str | None = None, *, silent: bool = False
     ) -> None:
         """Send Firecrawl start notification."""
-        if silent:
-            return
-
-        try:
-            # Format URL for display (truncate if too long)
-            url_display = ""
-            if url:
-                # Extract domain or truncate URL
-                if len(url) > 60:
-                    url_display = f"\n🔗 {url[:57]}..."
-                else:
-                    url_display = f"\n🔗 {url}"
-
-            await self.safe_reply(
-                message,
-                f"🕷️ **Firecrawl Extraction**{url_display}\n"
-                "📡 Connecting to Firecrawl API...\n"
-                "⏱️ This may take 10-30 seconds\n"
-                "🔄 Processing pipeline active",
-            )
-        except Exception:
-            pass
+        await self._notification_formatter.send_firecrawl_start_notification(
+            message, url, silent=silent
+        )
 
     async def send_firecrawl_success_notification(
         self,
@@ -1794,39 +199,17 @@ class ResponseFormatter:
         silent: bool = False,
     ) -> None:
         """Send Firecrawl success notification with crawl metadata."""
-        if silent:
-            return
-
-        try:
-            lines = [
-                "✅ **Content Extracted Successfully**",
-                f"📊 Size: ~{excerpt_len:,} characters",
-                f"⏱️ Extraction time: {latency_sec:.1f}s",
-            ]
-
-            status_bits: list[str] = []
-            if http_status is not None:
-                status_bits.append(f"HTTP {http_status}")
-            if crawl_status:
-                status_bits.append(crawl_status)
-            if status_bits:
-                lines.append("📶 Firecrawl: " + " | ".join(status_bits))
-
-            if endpoint:
-                lines.append(f"🌐 Endpoint: {endpoint}")
-
-            option_line = self._format_firecrawl_options(options)
-            if option_line:
-                lines.append(f"⚙️ Options: {option_line}")
-
-            if correlation_id:
-                lines.append(f"🆔 Firecrawl CID: `{correlation_id}`")
-
-            lines.append("🔄 Status: Preparing for AI analysis...")
-
-            await self.safe_reply(message, "\n".join(lines))
-        except Exception:
-            pass
+        await self._notification_formatter.send_firecrawl_success_notification(
+            message,
+            excerpt_len,
+            latency_sec,
+            http_status=http_status,
+            crawl_status=crawl_status,
+            correlation_id=correlation_id,
+            endpoint=endpoint,
+            options=options,
+            silent=silent,
+        )
 
     async def send_content_reuse_notification(
         self,
@@ -1840,67 +223,27 @@ class ResponseFormatter:
         silent: bool = False,
     ) -> None:
         """Send content reuse notification with cached crawl metadata."""
-        if silent:
-            return
-        try:
-            lines = [
-                "♻️ **Reusing Cached Content**",
-                "📊 Status: Content already extracted",
-            ]
-
-            status_bits: list[str] = []
-            if http_status is not None:
-                status_bits.append(f"HTTP {http_status}")
-            if crawl_status:
-                status_bits.append(crawl_status)
-            if status_bits:
-                lines.append("📶 Firecrawl (cached): " + " | ".join(status_bits))
-
-            if latency_sec is not None:
-                lines.append(f"⏱️ Original extraction: {latency_sec:.1f}s")
-
-            option_line = self._format_firecrawl_options(options)
-            if option_line:
-                lines.append(f"⚙️ Options: {option_line}")
-
-            if correlation_id:
-                lines.append(f"🆔 Firecrawl CID: `{correlation_id}`")
-
-            lines.append("⚡ Proceeding to AI analysis...")
-
-            await self.safe_reply(message, "\n".join(lines))
-        except Exception:
-            pass
+        await self._notification_formatter.send_content_reuse_notification(
+            message,
+            http_status=http_status,
+            crawl_status=crawl_status,
+            latency_sec=latency_sec,
+            correlation_id=correlation_id,
+            options=options,
+            silent=silent,
+        )
 
     async def send_cached_summary_notification(self, message: Any, *, silent: bool = False) -> None:
         """Inform the user that a cached summary is being reused."""
-        if silent:
-            return
-        try:
-            await self.safe_reply(
-                message,
-                "♻️ **Using Cached Summary**\n⚡ Delivered instantly without extra processing",
-            )
-        except Exception:
-            pass
+        await self._notification_formatter.send_cached_summary_notification(message, silent=silent)
 
     async def send_html_fallback_notification(
         self, message: Any, content_len: int, *, silent: bool = False
     ) -> None:
         """Send HTML fallback notification."""
-        if silent:
-            return
-        try:
-            await self.safe_reply(
-                message,
-                f"🔄 **Content Processing Update**\n"
-                f"📄 Markdown extraction was empty\n"
-                f"🛠️ Using HTML content extraction\n"
-                f"📊 Processing {content_len:,} characters...\n"
-                f"🤖 Pipeline will optimize for best results",
-            )
-        except Exception:
-            pass
+        await self._notification_formatter.send_html_fallback_notification(
+            message, content_len, silent=silent
+        )
 
     async def send_language_detection_notification(
         self,
@@ -1912,36 +255,9 @@ class ResponseFormatter:
         silent: bool = False,
     ) -> None:
         """Send language detection notification."""
-        if silent:
-            return
-        try:
-            # Format URL for display (extract domain)
-            url_line = ""
-            if url:
-                try:
-                    from urllib.parse import urlparse
-
-                    parsed = urlparse(url)
-                    domain = parsed.netloc or parsed.path.split("/")[0] if parsed.path else url
-                    # Clean up domain
-                    if domain.startswith("www."):
-                        domain = domain[4:]
-                    if domain and len(domain) <= 40:
-                        url_line = f"🔗 Source: {domain}\n"
-                except Exception:
-                    pass
-
-            await self.safe_reply(
-                message,
-                f"🌍 **Language Detection**\n"
-                f"{url_line}"
-                f"📝 Detected: `{detected or 'unknown'}`\n"
-                f"📄 Content preview:\n"
-                f"```\n{content_preview}\n```\n"
-                f"🤖 Status: Preparing AI analysis with structured outputs...",
-            )
-        except Exception:
-            pass
+        await self._notification_formatter.send_language_detection_notification(
+            message, detected, content_preview, url=url, silent=silent
+        )
 
     async def send_content_analysis_notification(
         self,
@@ -1955,38 +271,15 @@ class ResponseFormatter:
         silent: bool = False,
     ) -> None:
         """Send content analysis notification."""
-        if silent:
-            return
-        try:
-            if enable_chunking and content_len > max_chars and (chunks or []):
-                await self.safe_reply(
-                    message,
-                    f"📚 **Content Analysis**\n"
-                    f"📊 Length: {content_len:,} characters\n"
-                    f"🔀 Processing: Chunked analysis ({len(chunks or [])} chunks)\n"
-                    f"🤖 Method: Advanced structured output with schema validation\n"
-                    f"⚡ Status: Sending to AI model with smart fallbacks...",
-                )
-            elif not enable_chunking and content_len > max_chars:
-                await self.safe_reply(
-                    message,
-                    f"📚 **Content Analysis**\n"
-                    f"📊 Length: {content_len:,} characters (exceeds {max_chars:,} adaptive threshold)\n"
-                    f"🔀 Processing: Single-pass (chunking disabled)\n"
-                    f"🤖 Method: Structured output with intelligent fallbacks\n"
-                    f"⚡ Status: Sending to AI model...",
-                )
-            else:
-                await self.safe_reply(
-                    message,
-                    f"📚 **Content Analysis**\n"
-                    f"📊 Length: {content_len:,} characters\n"
-                    f"🔀 Processing: Single-pass summary\n"
-                    f"🤖 Method: Structured output with schema validation\n"
-                    f"⚡ Status: Sending to AI model...",
-                )
-        except Exception:
-            pass
+        await self._notification_formatter.send_content_analysis_notification(
+            message,
+            content_len,
+            max_chars,
+            enable_chunking,
+            chunks,
+            structured_output_mode,
+            silent=silent,
+        )
 
     async def send_llm_start_notification(
         self,
@@ -1999,210 +292,37 @@ class ResponseFormatter:
         silent: bool = False,
     ) -> None:
         """Send LLM start notification."""
-        if silent:
-            return
-
-        try:
-            # Format URL for display (extract domain or truncate)
-            url_line = ""
-            if url:
-                try:
-                    from urllib.parse import urlparse
-
-                    parsed = urlparse(url)
-                    domain = parsed.netloc or parsed.path.split("/")[0] if parsed.path else url
-                    # Clean up domain
-                    if domain.startswith("www."):
-                        domain = domain[4:]
-                    if domain and len(domain) <= 40:
-                        url_line = f"🔗 Source: {domain}\n"
-                    elif len(url) <= 50:
-                        url_line = f"🔗 {url}\n"
-                    else:
-                        url_line = f"🔗 {url[:47]}...\n"
-                except Exception:
-                    # Fallback to simple truncation
-                    if len(url) <= 50:
-                        url_line = f"🔗 {url}\n"
-                    else:
-                        url_line = f"🔗 {url[:47]}...\n"
-
-            await self.safe_reply(
-                message,
-                f"🤖 **AI Analysis Starting**\n"
-                f"{url_line}"
-                f"🧠 Model: `{model}`\n"
-                f"📊 Content: {content_len:,} characters\n"
-                f"🔧 Mode: {structured_output_mode.upper()} with smart fallbacks\n"
-                f"⏱️ This may take 30-60 seconds...",
-            )
-        except Exception:
-            pass
+        await self._notification_formatter.send_llm_start_notification(
+            message, model, content_len, structured_output_mode, url=url, silent=silent
+        )
 
     async def send_llm_completion_notification(
         self, message: Any, llm: Any, correlation_id: str, *, silent: bool = False
     ) -> None:
         """Send LLM completion notification."""
-        if silent:
-            return
-        try:
-            model_name = llm.model or "unknown"
-            latency_sec = (llm.latency_ms or 0) / 1000.0
-
-            if llm.status == "ok":
-                prompt_tokens = llm.tokens_prompt or 0
-                completion_tokens = llm.tokens_completion or 0
-                tokens_used = prompt_tokens + completion_tokens
-
-                lines = [
-                    "🤖 **AI Analysis Complete**",
-                    "✅ Status: Success",
-                    f"🧠 Model: `{model_name}`",
-                    f"⏱️ Processing time: {latency_sec:.1f}s",
-                    (
-                        "🔢 Tokens — prompt: "
-                        f"{prompt_tokens:,} • completion: {completion_tokens:,} "
-                        f"(total: {tokens_used:,})"
-                    ),
-                ]
-
-                if llm.cost_usd is not None:
-                    lines.append(f"💲 Estimated cost: ${llm.cost_usd:.4f}")
-
-                if getattr(llm, "structured_output_used", False):
-                    mode = getattr(llm, "structured_output_mode", "unknown")
-                    lines.append(f"🔧 Structured output: {mode.upper()}")
-
-                if llm.endpoint:
-                    lines.append(f"🌐 Endpoint: {llm.endpoint}")
-
-                if correlation_id:
-                    lines.append(f"🆔 Request ID: `{correlation_id}`")
-
-                lines.append("📋 Status: Generating summary...")
-
-                await self.safe_reply(message, "\n".join(lines))
-            else:
-                # Error message for failure scenarios
-                await self.safe_reply(
-                    message,
-                    f"🤖 **AI Analysis Failed**\n"
-                    f"❌ Status: Error\n"
-                    f"🧠 Model: `{model_name}`\n"
-                    f"⏱️ Processing time: {latency_sec:.1f}s\n"
-                    f"🚨 Error: {llm.error_text or 'Unknown error'}\n"
-                    f"🔄 Smart fallbacks: Active\n"
-                    f"🆔 Error ID: `{correlation_id}`",
-                )
-        except Exception:
-            pass
-
-    def _format_firecrawl_options(self, options: dict[str, Any] | None) -> str | None:
-        if not isinstance(options, dict) or not options:
-            return None
-
-        parts: list[str] = []
-
-        mobile = options.get("mobile")
-        if isinstance(mobile, bool):
-            parts.append("mobile=on" if mobile else "mobile=off")
-
-        formats = options.get("formats")
-        if isinstance(formats, list | tuple):
-            fmt_values = [str(v).strip() for v in formats if str(v).strip()]
-            if fmt_values:
-                parts.append("formats=" + ", ".join(fmt_values[:5]))
-
-        parsers = options.get("parsers")
-        if isinstance(parsers, list | tuple):
-            parser_values = [str(v).strip() for v in parsers if str(v).strip()]
-            if parser_values:
-                parts.append("parsers=" + ", ".join(parser_values[:5]))
-
-        for key, value in options.items():
-            if key in {"mobile", "formats", "parsers"}:
-                continue
-            if isinstance(value, bool):
-                parts.append(f"{key}={'on' if value else 'off'}")
-            elif isinstance(value, int | float):
-                parts.append(f"{key}={value}")
-            elif isinstance(value, str):
-                clean = value.strip()
-                if clean:
-                    parts.append(f"{key}={clean}")
-            elif isinstance(value, list | tuple):
-                clean_values = [str(v).strip() for v in value if str(v).strip()]
-                if clean_values:
-                    parts.append(f"{key}=" + ", ".join(clean_values[:5]))
-
-        if not parts:
-            return None
-
-        return "; ".join(parts)
+        await self._notification_formatter.send_llm_completion_notification(
+            message, llm, correlation_id, silent=silent
+        )
 
     async def send_forward_accepted_notification(self, message: Any, title: str) -> None:
         """Send forward request accepted notification."""
-        try:
-            await self.safe_reply(
-                message,
-                "✅ **Forward Request Accepted**\n"
-                f"📺 Channel: {title}\n"
-                "🤖 Processing with structured outputs...\n"
-                "📋 Status: Generating summary...",
-            )
-        except Exception:
-            pass
+        await self._notification_formatter.send_forward_accepted_notification(message, title)
 
     async def send_forward_language_notification(self, message: Any, detected: str | None) -> None:
         """Send forward language detection notification."""
-        try:
-            await self.safe_reply(
-                message,
-                f"🌍 **Language Detection**\n"
-                f"📝 Detected: `{detected or 'unknown'}`\n"
-                f"🤖 Processing with structured outputs...\n"
-                f"⚡ Status: Sending to AI model...",
-            )
-        except Exception:
-            pass
+        await self._notification_formatter.send_forward_language_notification(message, detected)
 
     async def send_forward_completion_notification(self, message: Any, llm: Any) -> None:
         """Send forward completion notification."""
-        try:
-            status_emoji = "✅" if llm.status == "ok" else "❌"
-            latency_sec = (llm.latency_ms or 0) / 1000.0
-            structured_info = ""
-            if hasattr(llm, "structured_output_used") and llm.structured_output_used:
-                mode = getattr(llm, "structured_output_mode", "unknown")
-                structured_info = f"\n🔧 Schema: {mode.upper()}"
-
-            await self.safe_reply(
-                message,
-                f"🤖 **AI Analysis Complete**\n"
-                f"{status_emoji} Status: {'Success' if llm.status == 'ok' else 'Error'}\n"
-                f"⏱️ Time: {latency_sec:.1f}s{structured_info}\n"
-                f"📋 Status: {'Generating summary...' if llm.status == 'ok' else 'Processing error...'}",
-            )
-        except Exception:
-            pass
+        await self._notification_formatter.send_forward_completion_notification(message, llm)
 
     async def send_youtube_download_notification(
         self, message: Any, url: str, *, silent: bool = False
     ) -> None:
         """Notify user that YouTube video download is starting."""
-        if silent:
-            return
-
-        try:
-            await self.safe_reply(
-                message,
-                "🎥 **YouTube Video Detected**\n\n"
-                "📥 Downloading video in 1080p and extracting transcript...\n"
-                "⏱️ This may take a few minutes depending on video length.\n\n"
-                f"🔗 URL: {url[:60]}{'...' if len(url) > 60 else ''}",
-            )
-        except Exception:
-            pass
+        await self._notification_formatter.send_youtube_download_notification(
+            message, url, silent=silent
+        )
 
     async def send_youtube_download_complete_notification(
         self,
@@ -2214,20 +334,9 @@ class ResponseFormatter:
         silent: bool = False,
     ) -> None:
         """Notify user that video download is complete."""
-        if silent:
-            return
-
-        try:
-            await self.safe_reply(
-                message,
-                "✅ **Video Downloaded Successfully!**\n\n"
-                f"📹 Title: {title[:80]}{'...' if len(title) > 80 else ''}\n"
-                f"📺 Resolution: {resolution}\n"
-                f"💾 Size: {size_mb:.1f} MB\n\n"
-                "🤖 Generating summary from transcript...",
-            )
-        except Exception:
-            pass
+        await self._notification_formatter.send_youtube_download_complete_notification(
+            message, title, resolution, size_mb, silent=silent
+        )
 
     async def send_error_notification(
         self,
@@ -2237,116 +346,162 @@ class ResponseFormatter:
         details: str | None = None,
     ) -> None:
         """Send error notification with rich formatting."""
-        # Deduplication: check if we've already sent a notification for this error ID
-        if correlation_id and correlation_id in self._notified_error_ids:
-            return
+        await self._notification_formatter.send_error_notification(
+            message, error_type, correlation_id, details
+        )
 
-        # Mark this error ID as notified
-        if correlation_id:
-            self._notified_error_ids.add(correlation_id)
+    # =========================================================================
+    # SummaryPresenter delegation (summary presentation)
+    # =========================================================================
 
-        try:
-            if error_type == "firecrawl_error":
-                details_block = f"\n\n{details}" if details else ""
-                await self.safe_reply(
-                    message,
-                    (
-                        "❌ **Content Extraction Failed**\n"
-                        "🚨 Unable to extract readable content\n"
-                        f"🆔 Error ID: `{correlation_id}`"
-                        f"{details_block}\n\n"
-                        "💡 **Possible Solutions:**\n"
-                        "• Try a different URL\n"
-                        "• Check if content is publicly accessible\n"
-                        "• Ensure URL points to text-based content"
-                    ),
-                )
-            elif error_type == "empty_content":
-                await self.safe_reply(
-                    message,
-                    f"❌ **Content Extraction Failed**\n\n"
-                    f"🚨 **Possible Causes:**\n"
-                    f"• Website blocking automated access\n"
-                    f"• Content behind paywall/login\n"
-                    f"• Non-text content (images, videos)\n"
-                    f"• Temporary server issues\n"
-                    f"• Invalid or inaccessible URL\n\n"
-                    f"💡 **Suggestions:**\n"
-                    f"• Try a different URL\n"
-                    f"• Check if content is publicly accessible\n"
-                    f"• Ensure URL points to text-based content\n\n"
-                    f"🆔 Error ID: `{correlation_id}`",
-                )
-            elif error_type == "processing_failed":
-                detail_block = f"\n🔍 Reason: {details}" if details else ""
-                if self._safe_reply_func is not None:
-                    await self._safe_reply_func(
-                        message,
-                        f"Invalid summary format. Error ID: {correlation_id}{detail_block}",
-                    )
-                else:
-                    message_parts = [
-                        "❌ **Processing Failed**",
-                        f"🚨 Invalid summary format despite smart fallbacks{detail_block}",
-                        "",
-                        "💡 **What happened:**",
-                        "• The AI models returned data that couldn't be processed",
-                        "• All automatic repair attempts were unsuccessful",
-                        "",
-                        "💡 **Try:**",
-                        "• Submit the URL again",
-                        "• Try a different article from the same source",
-                        "",
-                        f"🆔 Error ID: `{correlation_id}`",
-                    ]
-                    await self.safe_reply(message, "\n".join(message_parts))
-            elif error_type == "llm_error":
-                # Parse details to extract models tried if present
-                models_info = ""
-                error_info = details or ""
+    async def send_structured_summary_response(
+        self, message: Any, summary_shaped: dict[str, Any], llm: Any, chunks: int | None = None
+    ) -> None:
+        """Send summary where each top-level JSON field is a separate message."""
+        await self._summary_presenter.send_structured_summary_response(
+            message, summary_shaped, llm, chunks
+        )
 
-                if "Tried" in error_info and "model(s):" in error_info:
-                    # Extract models and error details
-                    lines = error_info.split("\n")
-                    models_info = lines[0] if lines else ""
-                    error_detail = "\n".join(lines[1:]) if len(lines) > 1 else ""
-                else:
-                    error_detail = f"\n🔍 Provider response: {details}" if details else ""
+    async def send_forward_summary_response(
+        self, message: Any, forward_shaped: dict[str, Any]
+    ) -> None:
+        """Send forward summary with per-field messages."""
+        await self._summary_presenter.send_forward_summary_response(message, forward_shaped)
 
-                message_parts = [
-                    "❌ **Processing Failed**",
-                    "🚨 All AI models failed despite automatic fallbacks",
-                ]
+    async def send_russian_translation(
+        self, message: Any, translated_text: str, correlation_id: str | None = None
+    ) -> None:
+        """Send the adapted Russian translation as a follow-up message."""
+        await self._summary_presenter.send_russian_translation(
+            message, translated_text, correlation_id
+        )
 
-                if models_info:
-                    message_parts.append(f"📊 {models_info}")
+    async def send_additional_insights_message(
+        self, message: Any, insights: dict[str, Any], correlation_id: str | None = None
+    ) -> None:
+        """Send follow-up message summarizing additional research insights."""
+        await self._summary_presenter.send_additional_insights_message(
+            message, insights, correlation_id
+        )
 
-                if error_detail:
-                    message_parts.append(error_detail)
+    async def send_custom_article(self, message: Any, article: dict[str, Any]) -> None:
+        """Send the custom generated article with a nice header and downloadable JSON."""
+        await self._summary_presenter.send_custom_article(message, article)
 
-                message_parts.extend(
-                    [
-                        "",
-                        "💡 **Possible Solutions:**",
-                        "• Check your account balance/credits",
-                        "• Try again in a few moments",
-                        "• Contact support if the issue persists",
-                        "",
-                        f"🆔 Error ID: `{correlation_id}`",
-                    ]
-                )
+    # =========================================================================
+    # DatabasePresenter delegation (database UI)
+    # =========================================================================
 
-                await self.safe_reply(message, "\n".join(message_parts))
-            else:
-                # Generic error
-                await self.safe_reply(
-                    message,
-                    f"❌ **Error Occurred**\n"
-                    f"🚨 {details or 'Unknown error'}\n"
-                    f"🆔 Error ID: `{correlation_id}`",
-                )
-        except Exception:
-            pass
+    async def send_db_overview(self, message: Any, overview: dict[str, object]) -> None:
+        """Send an overview of the database state."""
+        await self._database_presenter.send_db_overview(message, overview)
 
+    async def send_topic_search_results(
+        self,
+        message: Any,
+        *,
+        topic: str,
+        articles: Sequence[TopicArticle],
+        source: str = "online",
+    ) -> None:
+        """Send a formatted list of topic search results to the user."""
+        await self._database_presenter.send_topic_search_results(
+            message, topic=topic, articles=articles, source=source
+        )
 
-from app.services.topic_search import TopicArticle
+    async def send_db_verification(self, message: Any, verification: dict[str, Any]) -> None:
+        """Send database verification summary highlighting missing fields."""
+        await self._database_presenter.send_db_verification(message, verification)
+
+    async def send_db_reprocess_start(
+        self,
+        message: Any,
+        *,
+        url_targets: list[dict[str, Any]],
+        skipped: list[dict[str, Any]],
+    ) -> None:
+        """Notify the user that reprocessing of missing posts has started."""
+        await self._database_presenter.send_db_reprocess_start(
+            message, url_targets=url_targets, skipped=skipped
+        )
+
+    async def send_db_reprocess_complete(
+        self,
+        message: Any,
+        *,
+        url_targets: list[dict[str, Any]],
+        failures: list[dict[str, Any]],
+        skipped: list[dict[str, Any]],
+    ) -> None:
+        """Summarize the outcome of the automated reprocessing."""
+        await self._database_presenter.send_db_reprocess_complete(
+            message, url_targets=url_targets, failures=failures, skipped=skipped
+        )
+
+    # =========================================================================
+    # Private methods exposed for backward compatibility with tests
+    # =========================================================================
+
+    def _is_safe_content(self, text: str) -> tuple[bool, str]:
+        """Validate content for security issues."""
+        return self._message_validator.is_safe_content(text)
+
+    def _validate_url(self, url: str) -> tuple[bool, str]:
+        """Validate URL for security."""
+        return self._message_validator.validate_url(url)
+
+    async def _check_rate_limit(self) -> bool:
+        """Ensure replies respect the minimum delay between Telegram messages."""
+        return await self._message_validator.check_rate_limit()
+
+    def _chunk_text(self, text: str, *, max_len: int) -> list[str]:
+        """Split text into chunks respecting Telegram's message length limit."""
+        return self._text_processor.chunk_text(text, max_len=max_len)
+
+    def _find_split_index(self, text: str, limit: int) -> int:
+        """Find a sensible split index before the limit."""
+        return self._text_processor._find_split_index(text, limit)
+
+    def _sanitize_summary_text(self, text: str) -> str:
+        """Normalize and clean summary text for safe sending."""
+        return self._text_processor.sanitize_summary_text(text)
+
+    def _slugify(self, text: str, *, max_len: int = 60) -> str:
+        """Create a filesystem-friendly slug from text."""
+        return self._text_processor.slugify(text, max_len=max_len)
+
+    def _build_json_filename(self, obj: dict) -> str:
+        """Build a descriptive filename for the JSON attachment."""
+        return self._text_processor.build_json_filename(obj)
+
+    async def _send_long_text(self, message: Any, text: str) -> None:
+        """Send text, splitting into multiple messages if too long for Telegram."""
+        await self._text_processor.send_long_text(message, text)
+
+    async def _send_labelled_text(self, message: Any, label: str, body: str) -> None:
+        """Send labelled text, splitting into continuation messages when needed."""
+        await self._text_processor.send_labelled_text(message, label, body)
+
+    def _format_bytes(self, size: int) -> str:
+        """Convert byte count into a human-readable string."""
+        return self._data_formatter.format_bytes(size)
+
+    def _format_metric_value(self, value: Any) -> str | None:
+        """Format metric values, trimming insignificant decimals and booleans."""
+        return self._data_formatter.format_metric_value(value)
+
+    def _format_key_stats(self, key_stats: list[dict[str, Any]]) -> list[str]:
+        """Render key statistics into bullet-point lines."""
+        return self._data_formatter.format_key_stats(key_stats)
+
+    def _format_readability(self, readability: Any) -> str | None:
+        """Create a reader-friendly readability summary line."""
+        return self._data_formatter.format_readability(readability)
+
+    def _format_firecrawl_options(self, options: dict[str, Any] | None) -> str | None:
+        """Format Firecrawl options into a display string."""
+        return self._data_formatter.format_firecrawl_options(options)
+
+    async def _send_new_field_messages(self, message: Any, shaped: dict[str, Any]) -> None:
+        """Send messages for new fields like extractive quotes, highlights, etc."""
+        await self._summary_presenter._send_new_field_messages(message, shaped)

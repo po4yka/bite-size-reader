@@ -1,0 +1,628 @@
+"""Summary presentation formatting."""
+
+from __future__ import annotations
+
+import html
+import logging
+import re
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from app.adapters.external.formatting.data_formatter import DataFormatterImpl
+    from app.adapters.external.formatting.response_sender import ResponseSenderImpl
+    from app.adapters.external.formatting.text_processor import TextProcessorImpl
+
+logger = logging.getLogger(__name__)
+
+
+class SummaryPresenterImpl:
+    """Implementation of summary presentation."""
+
+    def __init__(
+        self,
+        response_sender: ResponseSenderImpl,
+        text_processor: TextProcessorImpl,
+        data_formatter: DataFormatterImpl,
+    ) -> None:
+        """Initialize the summary presenter.
+
+        Args:
+            response_sender: Response sender for sending messages.
+            text_processor: Text processor for text operations.
+            data_formatter: Data formatter for formatting values.
+        """
+        self._response_sender = response_sender
+        self._text_processor = text_processor
+        self._data_formatter = data_formatter
+
+    async def send_structured_summary_response(
+        self, message: Any, summary_shaped: dict[str, Any], llm: Any, chunks: int | None = None
+    ) -> None:
+        """Send summary where each top-level JSON field is a separate message,
+        then attach the full JSON as a .json document with a descriptive filename."""
+        try:
+            # Optional short header
+            try:
+                method = f"Chunked ({chunks} parts)" if chunks else "Single-pass"
+                model_name = getattr(llm, "model", None)
+                header = (
+                    f"🎉 Summary Ready\n🧠 Model: {model_name or 'unknown'}\n🔧 Method: {method}"
+                )
+                await self._response_sender.safe_reply(message, header)
+            except Exception:
+                pass
+
+            # Combined first message: TL;DR, Tags, Entities, Reading Time, Key Stats, Readability, SEO
+            combined_lines: list[str] = []
+
+            tl_dr = str(summary_shaped.get("summary_250", "")).strip()
+            if tl_dr:
+                tl_dr_clean = self._text_processor.sanitize_summary_text(tl_dr)
+                combined_lines.extend(["📋 TL;DR:", tl_dr_clean, ""])
+
+            tags = [
+                str(t).strip() for t in (summary_shaped.get("topic_tags") or []) if str(t).strip()
+            ]
+            if tags:
+                combined_lines.append("🏷️ Tags: " + " ".join(tags))
+                combined_lines.append("")
+
+            entities = summary_shaped.get("entities") or {}
+            if isinstance(entities, dict):
+                people = [str(x).strip() for x in (entities.get("people") or []) if str(x).strip()]
+                orgs = [
+                    str(x).strip() for x in (entities.get("organizations") or []) if str(x).strip()
+                ]
+                locs = [str(x).strip() for x in (entities.get("locations") or []) if str(x).strip()]
+                ent_parts: list[str] = []
+                if people:
+                    ent_parts.append("👤 " + ", ".join(people[:10]))
+                if orgs:
+                    ent_parts.append("🏢 " + ", ".join(orgs[:10]))
+                if locs:
+                    ent_parts.append("🌍 " + ", ".join(locs[:10]))
+                if ent_parts:
+                    combined_lines.append("🧭 Entities: " + " | ".join(ent_parts))
+                    combined_lines.append("")
+
+            reading_time = summary_shaped.get("estimated_reading_time_min")
+            if reading_time:
+                combined_lines.append(f"⏱️ Reading time: ~{reading_time} min")
+                combined_lines.append("")
+
+            key_stats = summary_shaped.get("key_stats") or []
+            if isinstance(key_stats, list) and key_stats:
+                ks_lines = self._data_formatter.format_key_stats(key_stats[:10])
+                if ks_lines:
+                    combined_lines.append("📈 Key Stats:")
+                    combined_lines.extend(ks_lines)
+                    combined_lines.append("")
+
+            readability = summary_shaped.get("readability") or {}
+            readability_line = self._data_formatter.format_readability(readability)
+            if readability_line:
+                combined_lines.append(f"🧮 Readability — {readability_line}")
+                combined_lines.append("")
+
+            seo = [
+                str(x).strip() for x in (summary_shaped.get("seo_keywords") or []) if str(x).strip()
+            ]
+            if seo:
+                combined_lines.append("🔎 SEO Keywords: " + ", ".join(seo[:20]))
+                combined_lines.append("")
+
+            metadata = summary_shaped.get("metadata") or {}
+            if isinstance(metadata, dict):
+                meta_parts = []
+                if metadata.get("title"):
+                    meta_parts.append(f"📰 {metadata['title']}")
+                if metadata.get("author"):
+                    meta_parts.append(f"✍️ {metadata['author']}")
+                if metadata.get("domain"):
+                    meta_parts.append(f"🌐 {metadata['domain']}")
+                if meta_parts:
+                    combined_lines.extend(meta_parts)
+                    combined_lines.append("")
+
+            # Categories & Topic Taxonomy
+            categories = [
+                str(c).strip() for c in (summary_shaped.get("categories") or []) if str(c).strip()
+            ]
+            if categories:
+                combined_lines.append("📁 Categories: " + ", ".join(categories[:10]))
+                combined_lines.append("")
+
+            # Confidence & Risk
+            confidence = summary_shaped.get("confidence", 1.0)
+            risk = summary_shaped.get("hallucination_risk", "low")
+            if isinstance(confidence, int | float) and confidence < 1.0:
+                combined_lines.append(f"🎯 Confidence: {confidence:.1%}")
+            if risk != "low":
+                risk_emoji = "⚠️" if risk == "med" else "🚨"
+                combined_lines.append(f"{risk_emoji} Hallucination risk: {risk}")
+            if confidence < 1.0 or risk != "low":
+                combined_lines.append("")
+
+            if combined_lines:
+                # Remove trailing empty lines
+                while combined_lines and not combined_lines[-1]:
+                    combined_lines.pop()
+                await self._text_processor.send_long_text(message, "\n".join(combined_lines))
+
+            # Send separated summary fields (summary_250, summary_500, tldr, ...)
+            summary_fields = [
+                k
+                for k in summary_shaped
+                if ((k.startswith("summary_") and k.split("_", 1)[1].isdigit()) or k == "tldr")
+            ]
+
+            def _key_num(k: str) -> int:
+                if k == "tldr":
+                    return 10_000
+                try:
+                    return int(k.split("_", 1)[1])
+                except Exception:
+                    return 0
+
+            for key in sorted(summary_fields, key=_key_num):
+                content = str(summary_shaped.get(key, "")).strip()
+                if content:
+                    content = self._text_processor.sanitize_summary_text(content)
+                    if key == "tldr":
+                        label = "🧾 TL;DR"
+                    else:
+                        label = f"🧾 Summary {key.split('_', 1)[1]}"
+                    await self._text_processor.send_labelled_text(
+                        message,
+                        label,
+                        content,
+                    )
+
+            # Key ideas as separate messages
+            ideas = [
+                str(x).strip() for x in (summary_shaped.get("key_ideas") or []) if str(x).strip()
+            ]
+            if ideas:
+                chunk: list[str] = []
+                for idea in ideas:
+                    chunk.append(f"• {idea}")
+                    if sum(len(c) + 1 for c in chunk) > 3000:
+                        await self._text_processor.send_long_text(
+                            message, "💡 Key Ideas:\n" + "\n".join(chunk)
+                        )
+                        chunk = []
+                if chunk:
+                    await self._text_processor.send_long_text(
+                        message, "💡 Key Ideas:\n" + "\n".join(chunk)
+                    )
+
+            # Send new field messages
+            await self._send_new_field_messages(message, summary_shaped)
+
+            # Finally attach full JSON as a document with a descriptive filename
+            await self._response_sender.reply_json(message, summary_shaped)
+
+        except Exception:
+            # Fallback to simpler format
+            try:
+                tl_dr = str(summary_shaped.get("summary_250", "")).strip()
+                if tl_dr:
+                    await self._response_sender.safe_reply(message, f"📋 TL;DR:\n{tl_dr}")
+            except Exception:
+                pass
+
+            await self._response_sender.reply_json(message, summary_shaped)
+
+    async def send_russian_translation(
+        self, message: Any, translated_text: str, correlation_id: str | None = None
+    ) -> None:
+        """Send the adapted Russian translation as a follow-up message."""
+        if not translated_text or not translated_text.strip():
+            logger.warning("russian_translation_empty", extra={"cid": correlation_id})
+            return
+
+        cleaned = self._text_processor.sanitize_summary_text(translated_text.strip())
+        header = "🇷🇺 Перевод резюме"
+        if correlation_id:
+            header += f"\n🆔 Correlation ID: `{correlation_id}`"
+
+        await self._response_sender.safe_reply(message, header)
+        await self._text_processor.send_long_text(message, cleaned)
+
+    async def send_additional_insights_message(
+        self, message: Any, insights: dict[str, Any], correlation_id: str | None = None
+    ) -> None:
+        """Send follow-up message summarizing additional research insights."""
+        try:
+            header = "🔍 Additional Research Highlights"
+            if correlation_id:
+                header += f"\n🆔 Correlation ID: `{correlation_id}`"
+            await self._response_sender.safe_reply(message, header)
+
+            sections_sent = False
+
+            overview = insights.get("topic_overview")
+            if isinstance(overview, str) and overview.strip():
+                sections_sent = True
+                await self._text_processor.send_long_text(
+                    message,
+                    "🧭 Overview:\n" + self._text_processor.sanitize_summary_text(overview.strip()),
+                )
+
+            facts_section: list[str] = []
+            facts = insights.get("new_facts")
+            if isinstance(facts, list):
+                for idx, fact in enumerate(facts[:5], start=1):
+                    if not isinstance(fact, dict):
+                        continue
+                    fact_text = str(fact.get("fact", "")).strip()
+                    if not fact_text:
+                        continue
+                    fact_lines = [f"{idx}. {self._text_processor.sanitize_summary_text(fact_text)}"]
+
+                    why_matters = str(fact.get("why_it_matters", "")).strip()
+                    if why_matters:
+                        fact_lines.append(
+                            f"   • Why it matters: {self._text_processor.sanitize_summary_text(why_matters)}"
+                        )
+
+                    source_hint = str(fact.get("source_hint", "")).strip()
+                    if source_hint:
+                        fact_lines.append(
+                            f"   • Source hint: {self._text_processor.sanitize_summary_text(source_hint)}"
+                        )
+
+                    confidence = fact.get("confidence")
+                    if confidence is not None:
+                        try:
+                            conf_val = float(confidence)
+                            fact_lines.append(f"   • Confidence: {conf_val:.0%}")
+                        except Exception:
+                            fact_lines.append(
+                                f"   • Confidence: {self._text_processor.sanitize_summary_text(str(confidence))}"
+                            )
+
+                    facts_section.append("\n".join(fact_lines))
+            if facts_section:
+                sections_sent = True
+                await self._text_processor.send_long_text(
+                    message, "📌 Fresh Facts:\n" + "\n\n".join(facts_section)
+                )
+
+            def _clean_list(items: list[Any]) -> list[str]:
+                cleaned: list[str] = []
+                for item in items:
+                    text = str(item).strip()
+                    if not text:
+                        continue
+                    cleaned.append(self._text_processor.sanitize_summary_text(text))
+                return cleaned
+
+            open_questions = insights.get("open_questions")
+            if isinstance(open_questions, list):
+                questions = _clean_list(open_questions)[:5]
+                if questions:
+                    sections_sent = True
+                    await self._text_processor.send_long_text(
+                        message, "❓ Open Questions:\n" + "\n".join(f"- {q}" for q in questions)
+                    )
+
+            suggested_sources = insights.get("suggested_sources")
+            if isinstance(suggested_sources, list):
+                sources = _clean_list(suggested_sources)[:5]
+                if sources:
+                    sections_sent = True
+                    await self._text_processor.send_long_text(
+                        message, "🔗 Suggested Follow-up:\n" + "\n".join(f"- {s}" for s in sources)
+                    )
+
+            expansion = insights.get("expansion_topics")
+            if isinstance(expansion, list):
+                exp_clean = _clean_list(expansion)[:8]
+                if exp_clean:
+                    sections_sent = True
+                    await self._text_processor.send_long_text(
+                        message,
+                        "🧠 Expansion Topics (beyond the article):\n"
+                        + "\n".join(f"- {item}" for item in exp_clean),
+                    )
+
+            next_steps = insights.get("next_exploration")
+            if isinstance(next_steps, list):
+                nxt_clean = _clean_list(next_steps)[:8]
+                if nxt_clean:
+                    sections_sent = True
+                    await self._text_processor.send_long_text(
+                        message,
+                        "🚀 What to explore next:\n" + "\n".join(f"- {step}" for step in nxt_clean),
+                    )
+
+            caution = insights.get("caution")
+            if isinstance(caution, str) and caution.strip():
+                sections_sent = True
+                await self._text_processor.send_long_text(
+                    message,
+                    "⚠️ Caveats:\n" + self._text_processor.sanitize_summary_text(caution.strip()),
+                )
+
+            if not sections_sent:
+                await self._response_sender.safe_reply(
+                    message, "No additional research insights were available."
+                )
+
+        except Exception as exc:  # pragma: no cover - defensive
+            logger.error("insights_message_error", extra={"error": str(exc)})
+
+    async def send_custom_article(self, message: Any, article: dict[str, Any]) -> None:
+        """Send the custom generated article with a nice header and downloadable JSON."""
+        try:
+            title = str(article.get("title", "")).strip() or "Custom Article"
+            subtitle = str(article.get("subtitle", "") or "").strip()
+            body = str(article.get("article_markdown", "")).strip()
+
+            raw_highlights = article.get("highlights")
+            if isinstance(raw_highlights, list):
+                highlights = [str(x).strip() for x in raw_highlights if str(x).strip()]
+            elif isinstance(raw_highlights, str):
+                highlights = [
+                    part.strip(" -•\t")
+                    for part in re.split(r"[\n\r•;]+", raw_highlights)
+                    if part.strip()
+                ]
+            elif raw_highlights is None:
+                highlights = []
+            else:
+                highlights = [str(raw_highlights).strip()] if str(raw_highlights).strip() else []
+
+            header_lines: list[str] = []
+            title_html = html.escape(title)
+            header_lines.append(f"<b>📝 {title_html}</b>")
+            if subtitle:
+                subtitle_html = html.escape(subtitle)
+                header_lines.append(f"<i>{subtitle_html}</i>")
+
+            await self._response_sender.safe_reply(
+                message, "\n".join(header_lines), parse_mode="HTML"
+            )
+
+            if body:
+                await self._text_processor.send_long_text(message, body)
+
+            if highlights:
+                await self._text_processor.send_long_text(
+                    message, "⭐ Key Highlights:\n" + "\n".join([f"• {h}" for h in highlights[:10]])
+                )
+
+            await self._response_sender.reply_json(message, article)
+        except Exception:
+            pass
+
+    async def send_forward_summary_response(
+        self, message: Any, forward_shaped: dict[str, Any]
+    ) -> None:
+        """Send forward summary with per-field messages, then attach full JSON file."""
+        try:
+            await self._response_sender.safe_reply(message, "🎉 Forward Summary Ready")
+
+            combined_lines: list[str] = []
+            tl_dr = str(forward_shaped.get("summary_250", "")).strip()
+            if tl_dr:
+                tl_dr_clean = self._text_processor.sanitize_summary_text(tl_dr)
+                combined_lines.extend(["📋 TL;DR:", tl_dr_clean, ""])
+
+            tags = [
+                str(t).strip() for t in (forward_shaped.get("topic_tags") or []) if str(t).strip()
+            ]
+            if tags:
+                combined_lines.append("🏷️ Tags: " + " ".join(tags))
+                combined_lines.append("")
+
+            entities = forward_shaped.get("entities") or {}
+            if isinstance(entities, dict):
+                people = [str(x).strip() for x in (entities.get("people") or []) if str(x).strip()]
+                orgs = [
+                    str(x).strip() for x in (entities.get("organizations") or []) if str(x).strip()
+                ]
+                locs = [str(x).strip() for x in (entities.get("locations") or []) if str(x).strip()]
+                ent_parts: list[str] = []
+                if people:
+                    ent_parts.append("👤 " + ", ".join(people[:10]))
+                if orgs:
+                    ent_parts.append("🏢 " + ", ".join(orgs[:10]))
+                if locs:
+                    ent_parts.append("🌍 " + ", ".join(locs[:10]))
+                if ent_parts:
+                    combined_lines.append("🧭 Entities: " + " | ".join(ent_parts))
+                    combined_lines.append("")
+
+            reading_time = forward_shaped.get("estimated_reading_time_min")
+            if reading_time:
+                combined_lines.append(f"⏱️ Reading time: ~{reading_time} min")
+                combined_lines.append("")
+
+            key_stats = forward_shaped.get("key_stats") or []
+            if isinstance(key_stats, list) and key_stats:
+                ks_lines = self._data_formatter.format_key_stats(key_stats[:10])
+                if ks_lines:
+                    combined_lines.append("📈 Key Stats:")
+                    combined_lines.extend(ks_lines)
+                    combined_lines.append("")
+
+            readability = forward_shaped.get("readability") or {}
+            readability_line = self._data_formatter.format_readability(readability)
+            if readability_line:
+                combined_lines.append(f"🧮 Readability — {readability_line}")
+                combined_lines.append("")
+
+            seo = [
+                str(x).strip() for x in (forward_shaped.get("seo_keywords") or []) if str(x).strip()
+            ]
+            if seo:
+                combined_lines.append("🔎 SEO Keywords: " + ", ".join(seo[:20]))
+                combined_lines.append("")
+
+            # Metadata for forward posts
+            metadata = forward_shaped.get("metadata") or {}
+            if isinstance(metadata, dict):
+                meta_parts = []
+                if metadata.get("title"):
+                    meta_parts.append(f"📰 {metadata['title']}")
+                if metadata.get("author"):
+                    meta_parts.append(f"✍️ {metadata['author']}")
+                if meta_parts:
+                    combined_lines.extend(meta_parts)
+                    combined_lines.append("")
+
+            # Categories & Risk for forwards
+            categories = [
+                str(c).strip() for c in (forward_shaped.get("categories") or []) if str(c).strip()
+            ]
+            if categories:
+                combined_lines.append("📁 Categories: " + ", ".join(categories[:10]))
+                combined_lines.append("")
+
+            confidence = forward_shaped.get("confidence", 1.0)
+            risk = forward_shaped.get("hallucination_risk", "low")
+            if isinstance(confidence, int | float) and confidence < 1.0:
+                combined_lines.append(f"🎯 Confidence: {confidence:.1%}")
+            if risk != "low":
+                risk_emoji = "⚠️" if risk == "med" else "🚨"
+                combined_lines.append(f"{risk_emoji} Hallucination risk: {risk}")
+            if confidence < 1.0 or risk != "low":
+                combined_lines.append("")
+
+            if combined_lines:
+                # Remove trailing empty lines
+                while combined_lines and not combined_lines[-1]:
+                    combined_lines.pop()
+                await self._text_processor.send_long_text(message, "\n".join(combined_lines))
+
+            # Separated summary fields
+            summary_fields = [
+                k
+                for k in forward_shaped
+                if k.startswith("summary_") and k.split("_", 1)[1].isdigit()
+            ]
+
+            def _key_num_f(k: str) -> int:
+                try:
+                    return int(k.split("_", 1)[1])
+                except Exception:
+                    return 0
+
+            for key in sorted(summary_fields, key=_key_num_f):
+                content = str(forward_shaped.get(key, "")).strip()
+                if content:
+                    content = self._text_processor.sanitize_summary_text(content)
+                    await self._text_processor.send_labelled_text(
+                        message,
+                        f"🧾 Summary {key.split('_', 1)[1]}",
+                        content,
+                    )
+
+            ideas = [
+                str(x).strip() for x in (forward_shaped.get("key_ideas") or []) if str(x).strip()
+            ]
+            if ideas:
+                await self._text_processor.send_long_text(
+                    message, "💡 Key Ideas:\n" + "\n".join([f"• {i}" for i in ideas])
+                )
+
+            # Send new field messages for forwards
+            await self._send_new_field_messages(message, forward_shaped)
+        except Exception:
+            pass
+
+        await self._response_sender.reply_json(message, forward_shaped)
+
+    async def _send_new_field_messages(self, message: Any, shaped: dict[str, Any]) -> None:
+        """Send messages for new fields like extractive quotes, highlights, etc."""
+        try:
+            # Extractive quotes
+            quotes = shaped.get("extractive_quotes") or []
+            if isinstance(quotes, list) and quotes:
+                quote_lines = ["💬 Key Quotes:"]
+                for i, quote in enumerate(quotes[:5], 1):
+                    if isinstance(quote, dict) and quote.get("text"):
+                        text = str(quote["text"]).strip()
+                        if text:
+                            quote_lines.append(f'{i}. "{text}"')
+                if len(quote_lines) > 1:
+                    await self._text_processor.send_long_text(message, "\n".join(quote_lines))
+
+            highlights = [
+                str(h).strip() for h in (shaped.get("highlights") or []) if str(h).strip()
+            ]
+            if highlights:
+                await self._text_processor.send_long_text(
+                    message, "✨ Highlights:\n" + "\n".join([f"• {h}" for h in highlights[:10]])
+                )
+
+            # Questions answered (as Q&A pairs)
+            questions_answered = shaped.get("questions_answered") or []
+            if isinstance(questions_answered, list) and questions_answered:
+                qa_lines = ["❓ Questions Answered:"]
+                for i, qa in enumerate(questions_answered[:10], 1):
+                    if isinstance(qa, dict):
+                        question = str(qa.get("question", "")).strip()
+                        answer = str(qa.get("answer", "")).strip()
+                        if question:
+                            qa_lines.append(f"\n{i}. **Q:** {question}")
+                            if answer:
+                                qa_lines.append(f"   **A:** {answer}")
+                            else:
+                                qa_lines.append("   **A:** _(No answer provided)_")
+                if len(qa_lines) > 1:
+                    await self._text_processor.send_long_text(message, "\n".join(qa_lines))
+
+            # Key points to remember
+            key_points = [
+                str(kp).strip()
+                for kp in (shaped.get("key_points_to_remember") or [])
+                if str(kp).strip()
+            ]
+            if key_points:
+                await self._text_processor.send_long_text(
+                    message,
+                    "🎯 Key Points to Remember:\n"
+                    + "\n".join([f"• {kp}" for kp in key_points[:10]]),
+                )
+
+            # Topic taxonomy (if present and not empty)
+            taxonomy = shaped.get("topic_taxonomy") or []
+            if isinstance(taxonomy, list) and taxonomy:
+                tax_lines = ["🏷️ Topic Classification:"]
+                for tax in taxonomy[:5]:
+                    if isinstance(tax, dict) and tax.get("label"):
+                        label = str(tax["label"]).strip()
+                        score = tax.get("score", 0.0)
+                        if isinstance(score, int | float) and score > 0:
+                            tax_lines.append(f"• {label} ({score:.1%})")
+                        else:
+                            tax_lines.append(f"• {label}")
+                if len(tax_lines) > 1:
+                    await self._text_processor.send_long_text(message, "\n".join(tax_lines))
+
+            # Forwarded post extras
+            fwd_extras = shaped.get("forwarded_post_extras")
+            if isinstance(fwd_extras, dict):
+                fwd_parts = []
+                if fwd_extras.get("channel_title"):
+                    fwd_parts.append(f"📺 Channel: {fwd_extras['channel_title']}")
+                if fwd_extras.get("channel_username"):
+                    fwd_parts.append(f"@{fwd_extras['channel_username']}")
+                hashtags = [
+                    str(h).strip() for h in (fwd_extras.get("hashtags") or []) if str(h).strip()
+                ]
+                if hashtags:
+                    fwd_parts.append(
+                        "Tags: "
+                        + " ".join([f"#{h}" if not h.startswith("#") else h for h in hashtags[:5]])
+                    )
+                if fwd_parts:
+                    await self._text_processor.send_long_text(
+                        message, "📤 Forward Info:\n" + "\n".join(fwd_parts)
+                    )
+
+        except Exception:
+            pass
