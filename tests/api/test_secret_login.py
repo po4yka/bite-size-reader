@@ -1,7 +1,13 @@
 import pytest
 
 from app.api.exceptions import AuthenticationError, AuthorizationError
-from app.api.routers import auth
+from app.api.models.auth import (
+    SecretKeyCreateRequest,
+    SecretKeyRevokeRequest,
+    SecretKeyRotateRequest,
+    SecretLoginRequest,
+)
+from app.api.routers.auth import endpoints as auth_endpoints, secret_auth
 from app.db.database import Database
 from app.db.models import ClientSecret, User
 
@@ -20,7 +26,7 @@ def _configure_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("BOT_TOKEN", "1000000000:TESTTOKENPLACEHOLDER1234567890ABC")
     monkeypatch.setenv("FIRECRAWL_API_KEY", "dummy-firecrawl-key")
     monkeypatch.setenv("OPENROUTER_API_KEY", "dummy-openrouter-key")
-    auth._cfg = None
+    secret_auth._cfg = None
 
 
 def _init_db(tmp_path) -> Database:
@@ -35,8 +41,8 @@ async def test_secret_login_success(tmp_path, monkeypatch: pytest.MonkeyPatch):
     _db = _init_db(tmp_path)
 
     user = User.create(telegram_user_id=123456789, username="owner", is_owner=True)
-    # _build_secret_record is now async and takes user_id (int) not user object
-    secret_value, record = await auth._build_secret_record(
+    # build_secret_record is now async and takes user_id (int) not user object
+    secret_value, record = await secret_auth.build_secret_record(
         user.telegram_user_id,
         "mobile-client",
         provided_secret="secret-value-strong",
@@ -45,8 +51,8 @@ async def test_secret_login_success(tmp_path, monkeypatch: pytest.MonkeyPatch):
         expires_at=None,
     )
 
-    response = await auth.secret_login(
-        auth.SecretLoginRequest(
+    response = await auth_endpoints.secret_login(
+        SecretLoginRequest(
             user_id=123456789,
             client_id="mobile-client",
             secret=secret_value,
@@ -71,8 +77,8 @@ async def test_secret_login_lockout(tmp_path, monkeypatch: pytest.MonkeyPatch):
     _db = _init_db(tmp_path)
 
     user = User.create(telegram_user_id=123456789, username="owner", is_owner=True)
-    # _build_secret_record is now async and takes user_id (int) not user object
-    await auth._build_secret_record(
+    # build_secret_record is now async and takes user_id (int) not user object
+    await secret_auth.build_secret_record(
         user.telegram_user_id,
         "mobile-client",
         provided_secret="secret-value-strong",
@@ -81,18 +87,18 @@ async def test_secret_login_lockout(tmp_path, monkeypatch: pytest.MonkeyPatch):
         expires_at=None,
     )
 
-    bad_request = auth.SecretLoginRequest(
+    bad_request = SecretLoginRequest(
         user_id=123456789, client_id="mobile-client", secret="wrong-secret-12", username="owner"
     )
 
     # First failed attempt should raise AuthenticationError
     with pytest.raises(AuthenticationError):
-        await auth.secret_login(bad_request)
+        await auth_endpoints.secret_login(bad_request)
 
     # Second failed attempt should also raise AuthenticationError
     # (the lockout happens after enough failures)
     with pytest.raises((AuthenticationError, AuthorizationError)):
-        await auth.secret_login(bad_request)
+        await auth_endpoints.secret_login(bad_request)
 
     record = ClientSecret.select().first()
     assert record.status == "locked"
@@ -107,7 +113,7 @@ async def test_secret_key_management(tmp_path, monkeypatch: pytest.MonkeyPatch):
 
     owner = User.create(telegram_user_id=123456789, username="owner", is_owner=True)
 
-    create_payload = auth.SecretKeyCreateRequest(
+    create_payload = SecretKeyCreateRequest(
         user_id=owner.telegram_user_id,
         client_id="mobile-client",
         label="primary",
@@ -119,21 +125,23 @@ async def test_secret_key_management(tmp_path, monkeypatch: pytest.MonkeyPatch):
 
     owner_context = {"user_id": owner.telegram_user_id, "client_id": "admin", "username": "owner"}
 
-    create_resp = await auth.create_secret_key(create_payload, user=owner_context)
+    create_resp = await auth_endpoints.create_secret_key(create_payload, user=owner_context)
     key = create_resp["data"]["key"]
     assert key["client_id"] == "mobile-client"
     assert key["status"] == "active"
 
-    rotate_payload = auth.SecretKeyRotateRequest(secret="rotated-secret-value")
-    rotate_resp = await auth.rotate_secret_key(key["id"], rotate_payload, user=owner_context)
+    rotate_payload = SecretKeyRotateRequest(secret="rotated-secret-value")
+    rotate_resp = await auth_endpoints.rotate_secret_key(
+        key["id"], rotate_payload, user=owner_context
+    )
     rotated_secret = rotate_resp["data"]["secret"]
     assert rotated_secret == "rotated-secret-value"
 
-    revoke_resp = await auth.revoke_secret_key(
-        key["id"], auth.SecretKeyRevokeRequest(reason="cleanup"), user=owner_context
+    revoke_resp = await auth_endpoints.revoke_secret_key(
+        key["id"], SecretKeyRevokeRequest(reason="cleanup"), user=owner_context
     )
     revoked_key = revoke_resp["data"]["key"]
     assert revoked_key["status"] == "revoked"
 
-    list_resp = await auth.list_secret_keys(user=owner_context)
+    list_resp = await auth_endpoints.list_secret_keys(user=owner_context)
     assert len(list_resp["data"]["keys"]) == 1

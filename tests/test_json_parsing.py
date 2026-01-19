@@ -227,6 +227,9 @@ class TestJsonParsing(unittest.TestCase):
 
             bot._safe_reply = AsyncMock()  # type: ignore[method-assign]
             bot._reply_json = AsyncMock()  # type: ignore[method-assign]
+            # Also update the response formatter's internal references
+            bot.response_formatter._reply_json_func = bot._reply_json
+            bot.response_formatter._response_sender._reply_json_func = bot._reply_json
 
             message = MagicMock()
             await bot._handle_url_flow(message, "http://example.com")
@@ -262,6 +265,8 @@ class TestJsonParsing(unittest.TestCase):
             _setup_openrouter_mock(bot, mock_openrouter_instance)
 
             bot._safe_reply = AsyncMock()  # type: ignore[method-assign]
+            # Also update the notification formatter's internal reference
+            bot.response_formatter._notification_formatter._safe_reply_func = bot._safe_reply
 
             message = MagicMock()
             await bot._handle_url_flow(message, "http://example.com")
@@ -318,6 +323,9 @@ class TestJsonParsing(unittest.TestCase):
 
             bot._safe_reply = AsyncMock()  # type: ignore[method-assign]
             bot._reply_json = AsyncMock()  # type: ignore[method-assign]
+            # Also update the response formatter's internal references
+            bot.response_formatter._reply_json_func = bot._reply_json
+            bot.response_formatter._response_sender._reply_json_func = bot._reply_json
 
             message = MagicMock()
             await bot._handle_url_flow(message, "http://example.com")
@@ -379,6 +387,9 @@ class TestJsonParsing(unittest.TestCase):
 
             bot._safe_reply = AsyncMock()  # type: ignore[method-assign]
             bot._reply_json = AsyncMock()  # type: ignore[method-assign]
+            # Also update the response formatter's internal references
+            bot.response_formatter._reply_json_func = bot._reply_json
+            bot.response_formatter._response_sender._reply_json_func = bot._reply_json
 
             message = MagicMock()
             await bot._handle_url_flow(message, "http://example.com")
@@ -438,6 +449,9 @@ class TestJsonParsing(unittest.TestCase):
 
             bot._safe_reply = AsyncMock()  # type: ignore[method-assign]
             bot._reply_json = AsyncMock()  # type: ignore[method-assign]
+            # Also update the response formatter's internal references
+            bot.response_formatter._reply_json_func = bot._reply_json
+            bot.response_formatter._response_sender._reply_json_func = bot._reply_json
 
             message = MagicMock()
             message.text = "Some forwarded text"

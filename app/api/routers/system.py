@@ -10,7 +10,8 @@ from fastapi import APIRouter, Depends, Request
 from starlette.responses import FileResponse
 
 from app.api.exceptions import ProcessingError, ResourceNotFoundError
-from app.api.routers.auth import _require_owner, get_current_user
+from app.api.routers.auth import get_current_user
+from app.api.services.auth_service import AuthService
 from app.config import Config
 from app.core.logging_utils import get_logger
 
@@ -103,7 +104,7 @@ async def download_database(request: Request, user=Depends(get_current_user)):
 
     Requires owner permissions.
     """
-    await _require_owner(user)
+    await AuthService.require_owner(user)
     return _build_db_dump_response(request, user)
 
 
@@ -113,5 +114,5 @@ async def head_database(request: Request, user=Depends(get_current_user)):
 
     Requires owner permissions.
     """
-    await _require_owner(user)
+    await AuthService.require_owner(user)
     return _build_db_dump_response(request, user)

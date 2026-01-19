@@ -199,30 +199,30 @@ class TestJWTSecretValidation:
         # This test should be run in isolation or with proper mocking
         # as it affects module import
 
-        with patch("app.config.Config.get") as mock_config:
-            mock_config.return_value = None
+        with patch("app.api.routers.auth.tokens.Config.get") as mock_config:
+            mock_config.return_value = ""  # Empty secret
 
             with pytest.raises(RuntimeError) as exc_info:
                 # Re-import to trigger validation
                 import importlib
 
-                import app.api.routers.auth
+                import app.api.routers.auth.tokens
 
-                importlib.reload(app.api.routers.auth)
+                importlib.reload(app.api.routers.auth.tokens)
 
             assert "JWT_SECRET_KEY" in str(exc_info.value)
 
     def test_jwt_secret_minimum_length(self):
         """Test that JWT_SECRET_KEY must be at least 32 characters."""
-        with patch("app.config.Config.get") as mock_config:
+        with patch("app.api.routers.auth.tokens.Config.get") as mock_config:
             mock_config.return_value = "short"  # Too short
 
             with pytest.raises(RuntimeError) as exc_info:
                 import importlib
 
-                import app.api.routers.auth
+                import app.api.routers.auth.tokens
 
-                importlib.reload(app.api.routers.auth)
+                importlib.reload(app.api.routers.auth.tokens)
 
             assert "at least 32 characters" in str(exc_info.value)
 

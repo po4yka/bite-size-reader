@@ -1,7 +1,10 @@
+import time
+
 import pytest
 
 from app.api.exceptions import ValidationError
-from app.api.routers import auth
+from app.api.models.auth import TelegramLinkCompleteRequest
+from app.api.routers.auth import endpoints as auth_endpoints, secret_auth
 from app.db.database import Database
 from app.db.models import User
 
@@ -14,7 +17,7 @@ def _configure_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("API_HASH", "test_api_hash_placeholder_value___")
     monkeypatch.setenv("FIRECRAWL_API_KEY", "dummy-firecrawl-key")
     monkeypatch.setenv("OPENROUTER_API_KEY", "dummy-openrouter-key")
-    auth._cfg = None
+    secret_auth._cfg = None
 
 
 def _init_db(tmp_path) -> Database:
@@ -44,18 +47,18 @@ async def test_link_happy_path(tmp_path, monkeypatch: pytest.MonkeyPatch):
 
     user = User.create(telegram_user_id=123456789, username="owner", is_owner=True)
 
-    begin_resp = await auth.begin_telegram_link(user={"user_id": user.telegram_user_id})
+    begin_resp = await auth_endpoints.begin_telegram_link(user={"user_id": user.telegram_user_id})
     nonce = begin_resp["data"]["nonce"]
 
     payload = {
-        "auth_date": int(auth.time.time()),
+        "auth_date": int(time.time()),
         "id": 123456789,
         "username": "linked_user",
         "client_id": "android-app",
     }
     auth_hash = _fake_auth_hash("1000000000:TESTTOKENPLACEHOLDER1234567890ABC", payload)
 
-    complete_req = auth.TelegramLinkCompleteRequest(
+    complete_req = TelegramLinkCompleteRequest(
         id=payload["id"],
         auth_date=payload["auth_date"],
         hash=auth_hash,
@@ -63,16 +66,18 @@ async def test_link_happy_path(tmp_path, monkeypatch: pytest.MonkeyPatch):
         client_id=payload["client_id"],
         nonce=nonce,
     )
-    complete_resp = await auth.complete_telegram_link(
+    complete_resp = await auth_endpoints.complete_telegram_link(
         complete_req, user={"user_id": user.telegram_user_id}
     )
     assert complete_resp["data"]["linked"] is True
     assert complete_resp["data"]["username"] == "linked_user"
 
-    status_resp = await auth.get_telegram_link_status(user={"user_id": user.telegram_user_id})
+    status_resp = await auth_endpoints.get_telegram_link_status(
+        user={"user_id": user.telegram_user_id}
+    )
     assert status_resp["data"]["linked"] is True
 
-    unlink_resp = await auth.unlink_telegram(user={"user_id": user.telegram_user_id})
+    unlink_resp = await auth_endpoints.unlink_telegram(user={"user_id": user.telegram_user_id})
     assert unlink_resp["data"]["linked"] is False
 
 
@@ -82,7 +87,7 @@ async def test_link_invalid_nonce(tmp_path, monkeypatch: pytest.MonkeyPatch):
     _init_db(tmp_path)
 
     user = User.create(telegram_user_id=123456789, username="owner", is_owner=True)
-    await auth.begin_telegram_link(user={"user_id": user.telegram_user_id})
+    await auth_endpoints.begin_telegram_link(user={"user_id": user.telegram_user_id})
 
     payload = {
         "auth_date": 9999999,
@@ -92,7 +97,7 @@ async def test_link_invalid_nonce(tmp_path, monkeypatch: pytest.MonkeyPatch):
     }
     auth_hash = _fake_auth_hash("1000000000:TESTTOKENPLACEHOLDER1234567890ABC", payload)
 
-    complete_req = auth.TelegramLinkCompleteRequest(
+    complete_req = TelegramLinkCompleteRequest(
         id=payload["id"],
         auth_date=payload["auth_date"],
         hash=auth_hash,
@@ -101,4 +106,6 @@ async def test_link_invalid_nonce(tmp_path, monkeypatch: pytest.MonkeyPatch):
         nonce="bad-nonce",
     )
     with pytest.raises(ValidationError):
-        await auth.complete_telegram_link(complete_req, user={"user_id": user.telegram_user_id})
+        await auth_endpoints.complete_telegram_link(
+            complete_req, user={"user_id": user.telegram_user_id}
+        )

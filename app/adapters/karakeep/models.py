@@ -66,6 +66,8 @@ class SyncResult(BaseModel):
     items_skipped: int = 0
     items_failed: int = 0
     errors: list[str] = Field(default_factory=list)
+    retryable_errors: list[str] = Field(default_factory=list)
+    permanent_errors: list[str] = Field(default_factory=list)
     duration_seconds: float = 0.0
 
 

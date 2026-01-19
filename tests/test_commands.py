@@ -36,6 +36,17 @@ class BotSpy(TelegramBot):
         super().__init__(*a, **kw)
         self.seen_urls: list[str] = []
 
+        # Override the URL processor to bypass Firecrawl and track URLs
+        if hasattr(self, "url_processor"):
+
+            async def mock_handle_url_flow(message: Any, url_text: str, **kwargs: object) -> None:
+                # Track the URL and simulate successful processing
+                self.seen_urls.append(url_text)
+                await self._safe_reply(message, f"OK {url_text}")
+
+            # Use setattr to avoid mypy method assignment error
+            self.url_processor.handle_url_flow = mock_handle_url_flow  # type: ignore[method-assign]
+
     async def _handle_url_flow(self, message: Any, url_text: str, **_: object) -> None:
         self.seen_urls.append(url_text)
         await self._safe_reply(message, f"OK {url_text}")
