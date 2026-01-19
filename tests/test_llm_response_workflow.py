@@ -16,7 +16,6 @@ from app.adapters.content.llm_response_workflow import (
 # repositories directly instead of mocking the ORM layer.
 
 
-
 class _DummySemaphore:
     async def __aenter__(self) -> None:
         return None
@@ -49,14 +48,18 @@ class LLMResponseWorkflowTests(unittest.IsolatedAsyncioTestCase):
         )
 
         # Mock repositories directly to avoid model/proxy issues
+        # Store AsyncMock objects as typed instance variables for assertion access
         self.workflow.request_repo = MagicMock()
-        self.workflow.request_repo.async_update_request_status = AsyncMock()
+        self.update_status_mock: AsyncMock = AsyncMock()
+        self.workflow.request_repo.async_update_request_status = self.update_status_mock
 
         self.workflow.summary_repo = MagicMock()
-        self.workflow.summary_repo.async_upsert_summary = AsyncMock(return_value=1)
+        self.upsert_summary_mock: AsyncMock = AsyncMock(return_value=1)
+        self.workflow.summary_repo.async_upsert_summary = self.upsert_summary_mock
 
         self.workflow.llm_repo = MagicMock()
-        self.workflow.llm_repo.async_insert_llm_call = AsyncMock(return_value=1)
+        self.insert_llm_call_mock: AsyncMock = AsyncMock(return_value=1)
+        self.workflow.llm_repo.async_insert_llm_call = self.insert_llm_call_mock
 
         self.base_messages = [
             {"role": "system", "content": "System"},
@@ -121,12 +124,12 @@ class LLMResponseWorkflowTests(unittest.IsolatedAsyncioTestCase):
             )
 
         assert summary is not None
-        self.workflow.summary_repo.async_upsert_summary.assert_awaited_once()
-        _args, kwargs = self.workflow.summary_repo.async_upsert_summary.await_args
+        self.upsert_summary_mock.assert_awaited_once()
+        _args, kwargs = self.upsert_summary_mock.await_args
         assert kwargs["request_id"] == 101
         assert kwargs["lang"] == "en"
-        self.workflow.request_repo.async_update_request_status.assert_awaited_once_with(101, "ok")
-        self.workflow.llm_repo.async_insert_llm_call.assert_awaited_once()
+        self.update_status_mock.assert_awaited_once_with(101, "ok")
+        self.insert_llm_call_mock.assert_awaited_once()
         self.completion_mock.assert_awaited_once()
         self.llm_error_mock.assert_not_awaited()
 
@@ -160,8 +163,8 @@ class LLMResponseWorkflowTests(unittest.IsolatedAsyncioTestCase):
         assert summary is not None
         assert self.openrouter.chat.await_count == 2
         self.repair_failure_mock.assert_not_awaited()
-        self.workflow.summary_repo.async_upsert_summary.assert_awaited_once()
-        assert self.workflow.llm_repo.async_insert_llm_call.await_count >= 1
+        self.upsert_summary_mock.assert_awaited_once()
+        assert self.insert_llm_call_mock.await_count >= 1
 
     async def test_execute_handles_llm_error(self) -> None:
         llm_error = self._llm_response({}, status="error", error_text="boom", text=None)
@@ -179,9 +182,9 @@ class LLMResponseWorkflowTests(unittest.IsolatedAsyncioTestCase):
         )
 
         assert summary is None
-        self.workflow.summary_repo.async_upsert_summary.assert_not_awaited()
-        self.workflow.request_repo.async_update_request_status.assert_awaited_with(303, "error")
-        self.workflow.llm_repo.async_insert_llm_call.assert_awaited_once()
+        self.upsert_summary_mock.assert_not_awaited()
+        self.update_status_mock.assert_awaited_with(303, "error")
+        self.insert_llm_call_mock.assert_awaited_once()
         # llm_error callback is called twice: once for the error, once for all attempts failed
         assert self.llm_error_mock.await_count == 2
 
@@ -241,7 +244,7 @@ class LLMResponseWorkflowTests(unittest.IsolatedAsyncioTestCase):
 
         assert summary is None
         assert self.openrouter.chat.await_count == 4
-        assert self.workflow.llm_repo.async_insert_llm_call.await_count == 2
+        assert self.insert_llm_call_mock.await_count == 2
         fail_mock.assert_awaited_once()
         failed_attempts = fail_mock.await_args.args[5]
         assert len(failed_attempts) == 2
