@@ -180,9 +180,9 @@ murmurhash==1.0.15
     #   preshed
     #   spacy
     #   thinc
-networkx==3.4.2
+networkx==3.6.1
     # via torch
-numpy==2.2.6
+numpy==2.4.1
     # via
     #   blis
     #   chromadb
@@ -248,7 +248,7 @@ protobuf==6.33.4
     #   opentelemetry-proto
 pyaes==1.6.1
     # via pyrogram
-pyasn1==0.6.1
+pyasn1==0.6.2
     # via
     #   pyasn1-modules
     #   rsa
@@ -345,11 +345,11 @@ ru-core-news-sm @ https://github.com/explosion/spacy-models/releases/download/ru
     # via bite-size-reader (pyproject.toml)
 safetensors==0.7.0
     # via transformers
-scikit-learn==1.7.2
+scikit-learn==1.8.0
     # via
     #   bite-size-reader (pyproject.toml)
     #   sentence-transformers
-scipy==1.15.3
+scipy==1.17.0
     # via
     #   scikit-learn
     #   sentence-transformers
@@ -382,7 +382,7 @@ srsly==2.5.2
     #   spacy
     #   thinc
     #   weasel
-starlette==0.50.0
+starlette==0.52.1
     # via
     #   bite-size-reader (pyproject.toml)
     #   fastapi
@@ -419,7 +419,7 @@ tqdm==4.67.1
     #   transformers
 trafilatura==2.0.0
     # via bite-size-reader (pyproject.toml)
-transformers==4.57.5
+transformers==4.57.6
     # via
     #   bite-size-reader (pyproject.toml)
     #   sentence-transformers

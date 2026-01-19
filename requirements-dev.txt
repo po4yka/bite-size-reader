@@ -201,11 +201,11 @@ mypy==1.19.1
     # via bite-size-reader (pyproject.toml)
 mypy-extensions==1.1.0
     # via mypy
-networkx==3.4.2
+networkx==3.6.1
     # via torch
 nodeenv==1.10.0
     # via pre-commit
-numpy==2.2.6
+numpy==2.4.1
     # via
     #   blis
     #   chromadb
@@ -280,7 +280,7 @@ protobuf==6.33.4
     #   opentelemetry-proto
 pyaes==1.6.1
     # via pyrogram
-pyasn1==0.6.1
+pyasn1==0.6.2
     # via
     #   pyasn1-modules
     #   rsa
@@ -384,15 +384,15 @@ rsa==4.9.1
     # via google-auth
 ru-core-news-sm @ https://github.com/explosion/spacy-models/releases/download/ru_core_news_sm-3.8.0/ru_core_news_sm-3.8.0-py3-none-any.whl
     # via bite-size-reader (pyproject.toml)
-ruff==0.14.12
+ruff==0.14.13
     # via bite-size-reader (pyproject.toml)
 safetensors==0.7.0
     # via transformers
-scikit-learn==1.7.2
+scikit-learn==1.8.0
     # via
     #   bite-size-reader (pyproject.toml)
     #   sentence-transformers
-scipy==1.15.3
+scipy==1.17.0
     # via
     #   scikit-learn
     #   sentence-transformers
@@ -425,7 +425,7 @@ srsly==2.5.2
     #   spacy
     #   thinc
     #   weasel
-starlette==0.50.0
+starlette==0.52.1
     # via
     #   bite-size-reader (pyproject.toml)
     #   fastapi
@@ -465,7 +465,7 @@ tqdm==4.67.1
     #   transformers
 trafilatura==2.0.0
     # via bite-size-reader (pyproject.toml)
-transformers==4.57.5
+transformers==4.57.6
     # via
     #   bite-size-reader (pyproject.toml)
     #   sentence-transformers
