@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
 
 import pytest
@@ -51,10 +52,24 @@ class _DummyMessage:
 
 @pytest.fixture
 def db(tmp_path) -> Database:
+    from app.db.models import database_proxy
+
+    # Save the original database proxy state
+    old_db = database_proxy.obj
+
+    # Create test database with file-based storage
     path = tmp_path / "app.db"
     database = Database(str(path))
     database.migrate()
-    return database
+
+    # Ensure database_proxy is initialized AFTER migrate
+    database_proxy.initialize(database._database)
+
+    yield database
+
+    # Close the database and restore original proxy
+    database._database.close()
+    database_proxy.initialize(old_db)
 
 
 @pytest.fixture
@@ -87,7 +102,7 @@ def test_persist_message_snapshot_populates_user_and_chat(
         user=_DummyUser(id=202, username="alice"),
     )
 
-    persistence.persist_message_snapshot(req_id, message)
+    asyncio.run(persistence.persist_message_snapshot(req_id, message))
 
     user_row = db.fetchone("SELECT username FROM users WHERE telegram_user_id = ?", (202,))
     assert user_row is not None
@@ -108,14 +123,14 @@ def test_persist_message_snapshot_refreshes_user_and_chat(
         chat=_DummyChat(id=303, type="group", title="Old Title", username="old_chat"),
         user=_DummyUser(id=404, username="old_user"),
     )
-    persistence.persist_message_snapshot(first_req, first_message)
+    asyncio.run(persistence.persist_message_snapshot(first_req, first_message))
 
     second_req = _create_request(db)
     second_message = _DummyMessage(
         chat=_DummyChat(id=303, type="supergroup", title="New Title", username="new_chat"),
         user=_DummyUser(id=404, username="new_user"),
     )
-    persistence.persist_message_snapshot(second_req, second_message)
+    asyncio.run(persistence.persist_message_snapshot(second_req, second_message))
 
     user_row = db.fetchone("SELECT username FROM users WHERE telegram_user_id = ?", (404,))
     assert user_row is not None

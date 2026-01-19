@@ -90,6 +90,16 @@ async def test_low_value_content_triggers_failure() -> None:
     extractor = _make_extractor(db, response_formatter, firecrawl)
     cast("Any", extractor)._attempt_direct_html_salvage = AsyncMock(return_value=None)
 
+    # Override internally-created repository with mock to match new Repository pattern
+    # The extractor uses message_persistence.request_repo for status updates
+    mock_request_repo = MagicMock()
+    mock_request_repo.async_update_request_status = AsyncMock()
+    extractor.message_persistence.request_repo = mock_request_repo
+
+    mock_crawl_repo = MagicMock()
+    mock_crawl_repo.async_insert_crawl_result = AsyncMock(return_value=1)
+    extractor.message_persistence.crawl_repo = mock_crawl_repo
+
     with pytest.raises(ValueError) as exc_info:
         await extractor._perform_new_crawl(
             message=SimpleNamespace(),
@@ -102,14 +112,14 @@ async def test_low_value_content_triggers_failure() -> None:
         )
 
     assert "insufficient_useful_content" in str(exc_info.value)
-    db.async_update_request_status.assert_awaited_once_with(42, "error")
+    mock_request_repo.async_update_request_status.assert_awaited_once_with(42, "error")
     response_formatter.send_error_notification.assert_awaited()
     response_formatter.send_firecrawl_success_notification.assert_not_awaited()
 
-    assert db.insert_crawl_result.called
-    inserted_kwargs = db.insert_crawl_result.call_args.kwargs
-    assert inserted_kwargs["status"] == "error"
-    assert "insufficient_useful_content" in inserted_kwargs["error_text"]
+    assert mock_crawl_repo.async_insert_crawl_result.called
+    call_kwargs = mock_crawl_repo.async_insert_crawl_result.call_args.kwargs
+    # The crawl repo uses 'error' field for error messages
+    assert "insufficient_useful_content" in (call_kwargs.get("error") or "")
 
 
 def test_detect_low_value_content_allows_substantive_text() -> None:

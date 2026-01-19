@@ -108,23 +108,28 @@ async def test_summary_persistence_deferred_from_llm_flow() -> None:
     persist_started = asyncio.Event()
     persist_release = asyncio.Event()
 
-    class _SlowDB:
+    class _SlowSummaryRepo:
         async def async_upsert_summary(self, **kwargs) -> int:
             persist_started.set()
             await persist_release.wait()
             return 42
 
+    class _SlowRequestRepo:
         async def async_update_request_status(self, req_id: int, status: str) -> None:
             await persist_release.wait()
 
+    # Create workflow with a mock db - the actual db won't be used since we override repos
     workflow = LLMResponseWorkflow(
         cfg=SimpleNamespace(openrouter=SimpleNamespace(model="test-model")),
-        db=_SlowDB(),
+        db=SimpleNamespace(),  # Mock db, won't be used
         openrouter=None,
         response_formatter=None,
         audit_func=lambda *args, **kwargs: None,
         sem=lambda: _DummySemaphore(),
     )
+    # Override repositories with slow mocks
+    workflow.summary_repo = _SlowSummaryRepo()
+    workflow.request_repo = _SlowRequestRepo()
 
     summary = {"summary_250": "short", "summary_1000": "long form", "tldr": "tldr"}
     llm_stub = SimpleNamespace(status="ok", latency_ms=5, model="m")

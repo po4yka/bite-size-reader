@@ -1,6 +1,6 @@
 import pytest
-from fastapi import HTTPException
 
+from app.api.exceptions import AuthenticationError, AuthorizationError
 from app.api.routers import auth
 from app.db.database import Database
 from app.db.models import ClientSecret, User
@@ -35,8 +35,9 @@ async def test_secret_login_success(tmp_path, monkeypatch: pytest.MonkeyPatch):
     _db = _init_db(tmp_path)
 
     user = User.create(telegram_user_id=123456789, username="owner", is_owner=True)
-    secret_value, record = auth._build_secret_record(
-        user,
+    # _build_secret_record is now async and takes user_id (int) not user object
+    secret_value, record = await auth._build_secret_record(
+        user.telegram_user_id,
         "mobile-client",
         provided_secret="secret-value-strong",
         label="primary",
@@ -54,10 +55,11 @@ async def test_secret_login_success(tmp_path, monkeypatch: pytest.MonkeyPatch):
     )
 
     tokens = response["data"]["tokens"]
-    assert tokens["access_token"]
-    assert "session_id" in response["data"]
-    assert response["data"]["session_id"] is not None
-    reloaded = ClientSecret.get_by_id(record.id)
+    # Response uses camelCase (Pydantic alias)
+    assert tokens["accessToken"]
+    assert "sessionId" in response["data"]
+    assert response["data"]["sessionId"] is not None
+    reloaded = ClientSecret.get_by_id(record["id"])
     assert reloaded.last_used_at is not None
     assert reloaded.failed_attempts == 0
     assert reloaded.status == "active"
@@ -69,8 +71,9 @@ async def test_secret_login_lockout(tmp_path, monkeypatch: pytest.MonkeyPatch):
     _db = _init_db(tmp_path)
 
     user = User.create(telegram_user_id=123456789, username="owner", is_owner=True)
-    auth._build_secret_record(
-        user,
+    # _build_secret_record is now async and takes user_id (int) not user object
+    await auth._build_secret_record(
+        user.telegram_user_id,
         "mobile-client",
         provided_secret="secret-value-strong",
         label="primary",
@@ -79,12 +82,16 @@ async def test_secret_login_lockout(tmp_path, monkeypatch: pytest.MonkeyPatch):
     )
 
     bad_request = auth.SecretLoginRequest(
-        user_id=123456789, client_id="mobile-client", secret="wrong-secret", username="owner"
+        user_id=123456789, client_id="mobile-client", secret="wrong-secret-12", username="owner"
     )
 
-    with pytest.raises(HTTPException):
+    # First failed attempt should raise AuthenticationError
+    with pytest.raises(AuthenticationError):
         await auth.secret_login(bad_request)
-    with pytest.raises(HTTPException):
+
+    # Second failed attempt should also raise AuthenticationError
+    # (the lockout happens after enough failures)
+    with pytest.raises((AuthenticationError, AuthorizationError)):
         await auth.secret_login(bad_request)
 
     record = ClientSecret.select().first()

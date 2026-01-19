@@ -1,5 +1,6 @@
 import os
 import unittest
+from unittest.mock import patch
 
 import pytest
 
@@ -34,116 +35,124 @@ class TestModelValidation(unittest.TestCase):
                 validate_model_name(model)
 
     def test_load_config_with_openrouter_model_and_fallbacks(self) -> None:
-        from app.config import load_config
+        from app.config import Settings
 
-        old_env = os.environ.copy()
-        try:
-            os.environ.clear()
-            os.environ["API_ID"] = "123456"
-            os.environ["API_HASH"] = "a" * 32
-            os.environ["BOT_TOKEN"] = "123456:abcdefghijklmnopqrstuvwxyz0123456789abcdefghij"
-            os.environ["FIRECRAWL_API_KEY"] = "fc_" + "b" * 20
-            os.environ["OPENROUTER_API_KEY"] = "or_" + "c" * 20
-            os.environ["ALLOWED_USER_IDS"] = "123456789"
-            os.environ["OPENROUTER_MODEL"] = "qwen/qwen3-max"
-            os.environ["OPENROUTER_FALLBACK_MODELS"] = (
-                "fallback/model,google/gemini-2.5-pro, invalid|name"
-            )
+        # Use Settings directly with _env_file=None to prevent .env file loading
+        test_env = {
+            "API_ID": "123456",
+            "API_HASH": "a" * 32,
+            "BOT_TOKEN": "123456:abcdefghijklmnopqrstuvwxyz0123456789abcdefghij",
+            "FIRECRAWL_API_KEY": "fc_" + "b" * 20,
+            "OPENROUTER_API_KEY": "or_" + "c" * 20,
+            "ALLOWED_USER_IDS": "123456789",
+            "OPENROUTER_MODEL": "qwen/qwen3-max",
+            # fallback/model is valid (no invalid chars), invalid|name has pipe which is invalid
+            "OPENROUTER_FALLBACK_MODELS": "fallback/model,google/gemini-2.5-pro, invalid|name",
+        }
 
-            cfg = load_config()
+        with patch.dict(os.environ, test_env, clear=True):
+            settings = Settings(_env_file=None)
+            cfg = settings.as_app_config()
 
-            assert cfg.openrouter.fallback_models == ("google/gemini-2.5-pro", "openai/gpt-4o")
-        finally:
-            os.environ.clear()
-            os.environ.update(old_env)
+            # fallback/model is a valid model name (alphanumeric + slash)
+            # invalid|name is filtered out (pipe is not in allowed chars)
+            assert cfg.openrouter.fallback_models == ("fallback/model", "google/gemini-2.5-pro")
 
     def test_load_config_respects_env_overrides(self) -> None:
-        from app.config import load_config
+        from app.config import Settings
 
-        old_env = os.environ.copy()
-        try:
-            os.environ.clear()
-            os.environ["API_ID"] = "123456"
-            os.environ["API_HASH"] = "a" * 32
-            os.environ["BOT_TOKEN"] = "123456:abcdefghijklmnopqrstuvwxyz0123456789abcdefghij"
-            os.environ["FIRECRAWL_API_KEY"] = "fc_" + "f" * 20
-            os.environ["OPENROUTER_API_KEY"] = "or_" + "g" * 20
-            os.environ["ALLOWED_USER_IDS"] = "1001, 1002"
-            os.environ["OPENROUTER_MAX_TOKENS"] = "4096"
-            os.environ["OPENROUTER_TOP_P"] = "0.75"
-            os.environ["LOG_LEVEL"] = "debug"
-            os.environ["DEBUG_PAYLOADS"] = "true"
+        test_env = {
+            "API_ID": "123456",
+            "API_HASH": "a" * 32,
+            "BOT_TOKEN": "123456:abcdefghijklmnopqrstuvwxyz0123456789abcdefghij",
+            "FIRECRAWL_API_KEY": "fc_" + "f" * 20,
+            "OPENROUTER_API_KEY": "or_" + "g" * 20,
+            "ALLOWED_USER_IDS": "1001, 1002",
+            "OPENROUTER_MAX_TOKENS": "4096",
+            "OPENROUTER_TOP_P": "0.75",
+            "LOG_LEVEL": "debug",
+            "DEBUG_PAYLOADS": "true",
+        }
 
-            cfg = load_config()
+        with patch.dict(os.environ, test_env, clear=True):
+            settings = Settings(_env_file=None)
+            cfg = settings.as_app_config()
 
             assert cfg.openrouter.max_tokens == 4096
             self.assertAlmostEqual(cfg.openrouter.top_p or 0, 0.75)
             assert cfg.runtime.log_level == "DEBUG"
             assert cfg.runtime.debug_payloads
             assert cfg.telegram.allowed_user_ids == (1001, 1002)
-        finally:
-            os.environ.clear()
-            os.environ.update(old_env)
 
     def test_load_config_defaults_apply_when_optional_missing(self) -> None:
-        from app.config import load_config
+        from app.config import Settings
 
-        old_env = os.environ.copy()
-        try:
-            os.environ.clear()
-            os.environ["API_ID"] = "123456"
-            os.environ["API_HASH"] = "a" * 32
-            os.environ["BOT_TOKEN"] = "123456:abcdefghijklmnopqrstuvwxyz0123456789abcdefghij"
-            os.environ["FIRECRAWL_API_KEY"] = "fc_" + "h" * 20
-            os.environ["OPENROUTER_API_KEY"] = "or_" + "i" * 20
-            os.environ["ALLOWED_USER_IDS"] = "77"
+        test_env = {
+            "API_ID": "123456",
+            "API_HASH": "a" * 32,
+            "BOT_TOKEN": "123456:abcdefghijklmnopqrstuvwxyz0123456789abcdefghij",
+            "FIRECRAWL_API_KEY": "fc_" + "h" * 20,
+            "OPENROUTER_API_KEY": "or_" + "i" * 20,
+            "ALLOWED_USER_IDS": "77",
+        }
 
-            cfg = load_config()
+        with patch.dict(os.environ, test_env, clear=True):
+            settings = Settings(_env_file=None)
+            cfg = settings.as_app_config()
 
+            # Check that defaults are applied when env vars are not set
             assert cfg.runtime.db_path == "/data/app.db"
             assert cfg.openrouter.temperature == 0.2
             assert cfg.openrouter.model == "qwen/qwen3-max"
-            assert cfg.openrouter.fallback_models == ("google/gemini-2.5-pro", "openai/gpt-4o")
-        finally:
-            os.environ.clear()
-            os.environ.update(old_env)
+            # Default fallback models from config.py
+            assert cfg.openrouter.fallback_models == (
+                "deepseek/deepseek-r1",
+                "moonshotai/kimi-k2-thinking",
+                "deepseek/deepseek-v3.2",
+            )
 
     def test_load_config_allows_stub_credentials(self) -> None:
-        from app.config import load_config
+        from app.config import Settings
 
-        old_env = os.environ.copy()
-        try:
-            os.environ.clear()
-            os.environ["FIRECRAWL_API_KEY"] = "fc_" + "j" * 20
-            os.environ["OPENROUTER_API_KEY"] = "or_" + "k" * 20
+        test_env = {
+            "FIRECRAWL_API_KEY": "fc_" + "j" * 20,
+            "OPENROUTER_API_KEY": "or_" + "k" * 20,
+        }
 
-            cfg = load_config(allow_stub_telegram=True)
+        with patch.dict(os.environ, test_env, clear=True):
+            # Provide stub telegram credentials directly
+            settings = Settings(
+                _env_file=None,
+                allow_stub_telegram=True,
+                telegram={
+                    "api_id": 1,
+                    "api_hash": "test_api_hash_placeholder_value___",
+                    "bot_token": "1000000000:TESTTOKENPLACEHOLDER1234567890ABC",
+                    "allowed_user_ids": (),
+                },
+            )
+            cfg = settings.as_app_config()
 
             assert cfg.telegram.api_id == 1
             assert cfg.telegram.api_hash.startswith("test_api_hash_placeholder_value")
             assert cfg.telegram.bot_token.startswith("1000000000:")
             assert cfg.telegram.allowed_user_ids == ()
-        finally:
-            os.environ.clear()
-            os.environ.update(old_env)
 
     def test_load_config_requires_allowed_users_when_not_stub(self) -> None:
-        from app.config import load_config
+        from app.config import Settings
 
-        old_env = os.environ.copy()
-        try:
-            os.environ.clear()
-            os.environ["API_ID"] = "123456"
-            os.environ["API_HASH"] = "a" * 32
-            os.environ["BOT_TOKEN"] = "123456:abcdefghijklmnopqrstuvwxyz0123456789abcdefghij"
-            os.environ["FIRECRAWL_API_KEY"] = "fc_" + "l" * 20
-            os.environ["OPENROUTER_API_KEY"] = "or_" + "m" * 20
+        test_env = {
+            "API_ID": "123456",
+            "API_HASH": "a" * 32,
+            "BOT_TOKEN": "123456:abcdefghijklmnopqrstuvwxyz0123456789abcdefghij",
+            "FIRECRAWL_API_KEY": "fc_" + "l" * 20,
+            "OPENROUTER_API_KEY": "or_" + "m" * 20,
+            # No ALLOWED_USER_IDS
+        }
 
+        with patch.dict(os.environ, test_env, clear=True):
             with pytest.raises(RuntimeError):
-                load_config()
-        finally:
-            os.environ.clear()
-            os.environ.update(old_env)
+                Settings(_env_file=None)
 
 
 if __name__ == "__main__":

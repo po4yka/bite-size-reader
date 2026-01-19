@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock, patch
 from app.adapters.telegram.command_processor import CommandProcessor
 from app.adapters.telegram.telegram_bot import TelegramBot
 from app.db.database import Database
+from app.db.models import database_proxy
 from tests.conftest import make_test_app_config
 
 
@@ -76,12 +77,14 @@ class ReadStatusBot(TelegramBot):
 def make_bot(tmp_path: str) -> ReadStatusBot:
     db = Database(tmp_path)
     db.migrate()
+    # Ensure the database_proxy is properly initialized
+    database_proxy.initialize(db._database)
     cfg = make_test_app_config(db_path=tmp_path, allowed_user_ids=(1,))
     from app.adapters import telegram_bot as tbmod
 
     tbmod.Client = object
     tbmod.filters = None
-    return ReadStatusBot(cfg=cfg, db=Database(tmp_path))
+    return ReadStatusBot(cfg=cfg, db=db)
 
 
 class TestParseUnreadArguments(unittest.TestCase):
@@ -133,12 +136,16 @@ class TestParseUnreadArguments(unittest.TestCase):
 
 class TestReadStatusDatabase(unittest.TestCase):
     def setUp(self):
+        # Save the original database_proxy object to restore later
+        self._old_proxy_obj = database_proxy.obj
         self.tmp = tempfile.TemporaryDirectory()
         self.db_path = os.path.join(self.tmp.name, "app.db")
         self.db = Database(self.db_path)
         self.db.migrate()
 
     def tearDown(self):
+        # Restore the original database_proxy object
+        database_proxy.initialize(self._old_proxy_obj)
         self.tmp.cleanup()
 
     def test_summary_read_status_defaults(self):
@@ -831,13 +838,6 @@ class TestReadStatusCommands(unittest.IsolatedAsyncioTestCase):
 
 
 class TestReadStatusIntegration(unittest.IsolatedAsyncioTestCase):
-    async def test_file_processing_creates_unread_articles(self):
-        """Test that file processing creates unread articles."""
-        # NOTE: This test is complex to mock properly due to Firecrawl dependencies
-        # The core functionality is tested in the database and command tests
-        # For now, skip this integration test
-        self.skipTest("Complex integration test - core functionality tested elsewhere")
-
     async def test_direct_url_processing_creates_read_articles(self):
         """Test that direct URL processing creates read articles."""
         with tempfile.TemporaryDirectory() as tmp:

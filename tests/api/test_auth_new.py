@@ -1,4 +1,4 @@
-import hashlib
+from unittest.mock import patch
 
 import pytest
 
@@ -42,20 +42,32 @@ async def test_apple_login(tmp_path, monkeypatch: pytest.MonkeyPatch):
     _configure_env(monkeypatch)
     _init_db(tmp_path)
 
-    payload = auth.AppleLoginRequest(id_token="apple_test_token", client_id="com.example.app")
+    # Mock verify_apple_id_token to return fake claims
+    fake_apple_sub = "test_apple_sub_123"
+    mock_claims = {"sub": fake_apple_sub, "email": "test@example.com"}
 
-    apple_user_id = int(hashlib.sha256(b"apple_test_token").hexdigest(), 16) % 1000000
-    assert not User.select().where(User.telegram_user_id == apple_user_id).exists()
+    with patch.object(auth, "verify_apple_id_token", return_value=mock_claims):
+        payload = auth.AppleLoginRequest(id_token="apple_test_token", client_id="com.example.app")
 
-    response = await auth.apple_login(payload)
+        # Calculate expected user_id using the same derivation as the code
+        apple_user_id = auth._derive_user_id_from_sub("apple", fake_apple_sub)
 
-    tokens = response["data"]["tokens"]
-    assert tokens["access_token"]
-    assert tokens["refresh_token"]
+        # Allow this user ID in whitelist
+        monkeypatch.setenv("ALLOWED_USER_IDS", f"123456789,{apple_user_id}")
+        auth._cfg = None
 
-    assert User.select().where(User.telegram_user_id == apple_user_id).exists()
-    user = User.get(User.telegram_user_id == apple_user_id)
-    assert user.username == f"apple_{apple_user_id}"
+        assert not User.select().where(User.telegram_user_id == apple_user_id).exists()
+
+        response = await auth.apple_login(payload)
+
+        tokens = response["data"]["tokens"]
+        # Response uses camelCase (Pydantic alias)
+        assert tokens["accessToken"]
+        assert tokens["refreshToken"]
+
+        assert User.select().where(User.telegram_user_id == apple_user_id).exists()
+        user = User.get(User.telegram_user_id == apple_user_id)
+        assert user.username == "test@example.com"
 
 
 @pytest.mark.asyncio
@@ -63,17 +75,29 @@ async def test_google_login(tmp_path, monkeypatch: pytest.MonkeyPatch):
     _configure_env(monkeypatch)
     _init_db(tmp_path)
 
-    payload = auth.GoogleLoginRequest(id_token="google_test_token", client_id="com.example.app")
+    # Mock verify_google_id_token to return fake claims
+    fake_google_sub = "test_google_sub_456"
+    mock_claims = {"sub": fake_google_sub, "email": "user@gmail.com", "name": "Test User"}
 
-    google_user_id = int(hashlib.sha256(b"google_test_token").hexdigest(), 16) % 1000000
-    assert not User.select().where(User.telegram_user_id == google_user_id).exists()
+    with patch.object(auth, "verify_google_id_token", return_value=mock_claims):
+        payload = auth.GoogleLoginRequest(id_token="google_test_token", client_id="com.example.app")
 
-    response = await auth.google_login(payload)
+        # Calculate expected user_id using the same derivation as the code
+        google_user_id = auth._derive_user_id_from_sub("google", fake_google_sub)
 
-    tokens = response["data"]["tokens"]
-    assert tokens["access_token"]
-    assert tokens["refresh_token"]
+        # Allow this user ID in whitelist
+        monkeypatch.setenv("ALLOWED_USER_IDS", f"123456789,{google_user_id}")
+        auth._cfg = None
 
-    assert User.select().where(User.telegram_user_id == google_user_id).exists()
-    user = User.get(User.telegram_user_id == google_user_id)
-    assert user.username == f"google_{google_user_id}"
+        assert not User.select().where(User.telegram_user_id == google_user_id).exists()
+
+        response = await auth.google_login(payload)
+
+        tokens = response["data"]["tokens"]
+        # Response uses camelCase (Pydantic alias)
+        assert tokens["accessToken"]
+        assert tokens["refreshToken"]
+
+        assert User.select().where(User.telegram_user_id == google_user_id).exists()
+        user = User.get(User.telegram_user_id == google_user_id)
+        assert user.username == "Test User"

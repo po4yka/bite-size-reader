@@ -10,7 +10,23 @@ from app.adapters.external.firecrawl_parser import (
     FirecrawlSearchResult,
 )
 from app.db.database import Database
+from app.db.models import database_proxy
 from app.services.topic_search import LocalTopicSearchService, TopicSearchService
+
+
+@pytest.fixture
+def test_database(tmp_path):
+    """Create an isolated test database with proper database_proxy handling."""
+    old_proxy_obj = database_proxy.obj
+    db_path = tmp_path / "app.db"
+    database = Database(str(db_path))
+    database.migrate()
+    # Explicitly ensure database_proxy points to this database
+    database_proxy.initialize(database._database)
+    yield database
+    # Close the database and restore original database_proxy
+    database._database.close()
+    database_proxy.initialize(old_proxy_obj)
 
 
 class DummyFirecrawl:
@@ -84,10 +100,8 @@ async def test_find_articles_raises_on_error_status() -> None:
 
 
 @pytest.mark.asyncio
-async def test_local_search_returns_recent_matches(tmp_path) -> None:
-    db_path = tmp_path / "app.db"
-    database = Database(str(db_path))
-    database.migrate()
+async def test_local_search_returns_recent_matches(test_database) -> None:
+    database = test_database
 
     request_id = database.create_request(
         type_="url",
@@ -149,9 +163,8 @@ async def test_local_search_returns_recent_matches(tmp_path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_local_search_handles_empty_results(tmp_path) -> None:
-    database = Database(str(tmp_path / "app.db"))
-    database.migrate()
+async def test_local_search_handles_empty_results(test_database) -> None:
+    database = test_database
 
     service = LocalTopicSearchService(db=database, max_results=3)
     results = await service.find_articles("Nonexistent Topic")
@@ -159,9 +172,8 @@ async def test_local_search_handles_empty_results(tmp_path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_local_search_rejects_blank_queries(tmp_path) -> None:
-    database = Database(str(tmp_path / "app.db"))
-    database.migrate()
+async def test_local_search_rejects_blank_queries(test_database) -> None:
+    database = test_database
     service = LocalTopicSearchService(db=database, max_results=2)
 
     with pytest.raises(ValueError):
@@ -169,9 +181,8 @@ async def test_local_search_rejects_blank_queries(tmp_path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_local_search_index_finds_older_match(tmp_path) -> None:
-    database = Database(str(tmp_path / "app.db"))
-    database.migrate()
+async def test_local_search_index_finds_older_match(test_database) -> None:
+    database = test_database
 
     matching_request = database.create_request(
         type_="url",
@@ -227,9 +238,8 @@ async def test_local_search_index_finds_older_match(tmp_path) -> None:
     assert results[0].url == "https://example.com/android-old"
 
 
-def test_database_populates_topic_search_index(tmp_path) -> None:
-    database = Database(str(tmp_path / "app.db"))
-    database.migrate()
+def test_database_populates_topic_search_index(test_database) -> None:
+    database = test_database
 
     request_id = database.create_request(
         type_="url",

@@ -1,13 +1,6 @@
-import sys
 import unittest
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
-
-sys.modules.setdefault("pydantic", MagicMock())
-sys.modules.setdefault("pydantic_settings", MagicMock())
-sys.modules.setdefault("peewee", MagicMock())
-sys.modules.setdefault("playhouse", MagicMock())
-sys.modules.setdefault("playhouse.sqlite_ext", MagicMock())
 
 from app.adapters.content.llm_response_workflow import (
     LLMInteractionConfig,
@@ -17,6 +10,11 @@ from app.adapters.content.llm_response_workflow import (
     LLMSummaryPersistenceSettings,
     LLMWorkflowNotifications,
 )
+
+# NOTE: Do NOT mock peewee/playhouse at module level - it contaminates sys.modules
+# and breaks tests that run after this one. The workflow tests use mocked
+# repositories directly instead of mocking the ORM layer.
+
 
 
 class _DummySemaphore:

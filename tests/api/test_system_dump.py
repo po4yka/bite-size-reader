@@ -8,8 +8,8 @@ from app.db.models import User
 
 
 def test_db_dump_head_and_get(client: TestClient, db):
-    # Setup auth - Create user in DB
-    user = User.create(telegram_user_id=123456789, username="test_dump_user")
+    # Setup auth - Create user in DB with owner permissions (required for db-dump)
+    user = User.create(telegram_user_id=123456789, username="test_dump_user", is_owner=True)
 
     token = create_access_token(user.telegram_user_id, client_id="test_client")
     headers = {"Authorization": f"Bearer {token}"}
@@ -41,11 +41,11 @@ def test_db_dump_head_and_get(client: TestClient, db):
 
 
 def test_db_dump_regeneration_logic(client: TestClient, db):
-    # Setup auth - Create user in DB (use different ID to avoid conflict if DB persists)
+    # Setup auth - Create user in DB with owner permissions (use different ID to avoid conflict)
     try:
         user = User.get(telegram_user_id=987654321)
     except Exception:
-        user = User.create(telegram_user_id=987654321, username="test_dump_user_2")
+        user = User.create(telegram_user_id=987654321, username="test_dump_user_2", is_owner=True)
 
     token = create_access_token(user.telegram_user_id, client_id="test")
     headers = {"Authorization": f"Bearer {token}"}

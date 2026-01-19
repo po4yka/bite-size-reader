@@ -107,6 +107,15 @@ class Database:
         self._topic_search = TopicSearchIndexManager(self._database, self._logger)
         self._video_downloads = VideoDownloadManager(self._logger)
 
+    @property
+    def database(self) -> peewee.SqliteDatabase:
+        """Access the underlying Peewee database instance.
+
+        This property provides compatibility with code that expects a `database`
+        attribute, while the internal implementation uses `_database`.
+        """
+        return self._database
+
     async def _safe_db_operation(
         self,
         operation: Any,

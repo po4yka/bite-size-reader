@@ -14,8 +14,12 @@ class TestDatabaseRWLockIntegration(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self) -> None:
         """Set up test database."""
         from app.db.database import Database
+        from app.db.models import database_proxy
 
-        # Create temporary database
+        # Save original database proxy state
+        self._old_db = database_proxy.obj
+
+        # Create temporary database (file-based, not :memory:)
         with tempfile.NamedTemporaryFile(delete=False, suffix=".db") as temp_db:
             self.db_path = temp_db.name
 
@@ -24,6 +28,11 @@ class TestDatabaseRWLockIntegration(unittest.IsolatedAsyncioTestCase):
 
     async def asyncTearDown(self) -> None:
         """Clean up test database."""
+        from app.db.models import database_proxy
+
+        # Restore original database proxy state
+        database_proxy.initialize(self._old_db)
+
         Path(self.db_path).unlink(missing_ok=True)
 
     async def test_concurrent_reads(self) -> None:

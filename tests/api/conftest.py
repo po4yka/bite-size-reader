@@ -20,6 +20,9 @@ logger.setLevel(logging.WARNING)
 
 @pytest.fixture
 def db(tmp_path, monkeypatch):
+    # Save the original database_proxy object to restore later
+    old_proxy_obj = database_proxy.obj
+
     # Set config to avoid production DB usage
     monkeypatch.setenv("DB_PATH", str(tmp_path / "test.db"))
     monkeypatch.setenv("JWT_SECRET_KEY", "test-secret-at-least-32-chars-long-string")
@@ -29,8 +32,15 @@ def db(tmp_path, monkeypatch):
     database = Database(str(db_path))
     database.migrate()
 
+    # Explicitly ensure database_proxy points to this test database
+    # This is needed because previous tests or imports may have changed it
+    database_proxy.initialize(database._database)
+
     yield database
+
+    # Close and restore the original database_proxy
     database._database.close()
+    database_proxy.initialize(old_proxy_obj)
 
 
 @pytest.fixture
@@ -53,7 +63,9 @@ def client(db):
 
 
 @pytest.fixture
-def user_factory():
+def user_factory(db):
+    """Factory for creating test users. Depends on db fixture to ensure database is initialized."""
+
     def create_user(username="testuser", telegram_user_id=None, **kwargs):
         if telegram_user_id is None:
             import random

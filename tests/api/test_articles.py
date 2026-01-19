@@ -19,11 +19,32 @@ def article_data(db, article_user):
         input_url="https://example.com/article",
         normalized_url="https://example.com/article",
     )
-    # Create summary
+    # Create summary with full json_payload to satisfy API response model
+    full_payload = {
+        "summary_250": "Short summary",
+        "summary_1000": "Long summary",
+        "tldr": "Too long",
+        "key_ideas": ["Idea 1", "Idea 2"],
+        "topic_tags": ["tag1", "tag2"],
+        "entities": {"people": ["Person"], "organizations": ["Org"], "locations": ["Loc"]},
+        "estimated_reading_time_min": 5,
+        "key_stats": [{"label": "Stat", "value": 10, "unit": "%", "source_excerpt": "source"}],
+        "answered_questions": ["Q1?"],
+        "readability": {"method": "FK", "score": 50.0, "level": "Easy"},
+        "seo_keywords": ["keyword"],
+        "metadata": {
+            "title": "Example Article",
+            "domain": "example.com",
+            "author": "Author",
+            "published_at": "2023-01-01",
+        },
+        "confidence": 0.9,
+        "hallucination_risk": "low",
+    }
     summary = Summary.create(
         request=req,
         lang="en",
-        json_payload={"tldr": "Too long", "metadata": {"title": "Example Article"}},
+        json_payload=full_payload,
     )
     return {"user": article_user, "request": req, "summary": summary}
 
@@ -40,8 +61,9 @@ def test_get_article_by_id(client, article_data):
 
     assert response.status_code == 200
     data = response.json()["data"]
-    assert data["summary"]["id"] == summary.id
-    assert data["request"]["input_url"] == "https://example.com/article"
+    # Response uses SummaryDetail model with camelCase keys
+    assert data["summary"]["tldr"] == "Too long"
+    assert data["request"]["url"] == "https://example.com/article"
 
 
 def test_get_article_by_url(client, article_data):
@@ -58,8 +80,9 @@ def test_get_article_by_url(client, article_data):
 
     assert response.status_code == 200
     data = response.json()["data"]
-    assert data["summary"]["id"] == summary.id
-    assert data["request"]["input_url"] == url
+    # Response uses SummaryDetail model with camelCase keys
+    assert data["summary"]["tldr"] == "Too long"
+    assert data["request"]["url"] == url
 
 
 def test_get_article_by_url_not_found(client, article_data):

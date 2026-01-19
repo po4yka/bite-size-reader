@@ -5,7 +5,11 @@ from app.db.models import CrawlResult, Request, Summary
 
 
 @pytest.fixture
-def summary_with_content(db, user_factory, monkeypatch):
+def summary_with_content(client, db, user_factory, monkeypatch):
+    """Fixture to create a summary with associated CrawlResult content.
+
+    Depends on `client` to ensure database_proxy is properly initialized before model operations.
+    """
     user = user_factory()
     monkeypatch.setenv("ALLOWED_USER_IDS", str(user.telegram_user_id))
     monkeypatch.setenv("REDIS_ENABLED", "0")
@@ -66,7 +70,7 @@ def test_get_summary_content_text_format(client, summary_with_content):
     assert "Body text." in content["content"]
 
 
-def test_get_summary_content_not_found(client, user_factory, monkeypatch):
+def test_get_summary_content_not_found(client, db, user_factory, monkeypatch):
     user = user_factory()
     monkeypatch.setenv("ALLOWED_USER_IDS", str(user.telegram_user_id))
     monkeypatch.setenv("REDIS_ENABLED", "0")

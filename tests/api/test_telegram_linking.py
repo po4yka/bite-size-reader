@@ -1,6 +1,6 @@
 import pytest
-from fastapi import HTTPException
 
+from app.api.exceptions import ValidationError
 from app.api.routers import auth
 from app.db.database import Database
 from app.db.models import User
@@ -100,5 +100,5 @@ async def test_link_invalid_nonce(tmp_path, monkeypatch: pytest.MonkeyPatch):
         client_id=payload["client_id"],
         nonce="bad-nonce",
     )
-    with pytest.raises(HTTPException):
+    with pytest.raises(ValidationError):
         await auth.complete_telegram_link(complete_req, user={"user_id": user.telegram_user_id})

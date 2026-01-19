@@ -5,6 +5,8 @@ from types import SimpleNamespace
 from typing import TYPE_CHECKING, cast
 from unittest.mock import Mock
 
+import pytest
+
 from app.adapters.telegram.message_router import MessageRouter
 from app.config import AppConfig  # noqa: TC001 - used for type annotation
 from app.db.session import DatabaseSessionManager
@@ -28,15 +30,29 @@ def _make_config() -> AppConfig:
     return make_test_app_config(db_path=":memory:")
 
 
-def _make_db(tmp_path) -> DatabaseSessionManager:
-    db = DatabaseSessionManager(str(tmp_path / "interactions.db"))
-    db.migrate()
-    return db
+@pytest.fixture
+def db(tmp_path) -> DatabaseSessionManager:
+    from app.db.models import database_proxy
+
+    # Save the original database proxy state
+    old_db = database_proxy.obj
+
+    # Create test database with file-based storage
+    db_instance = DatabaseSessionManager(str(tmp_path / "interactions.db"))
+    db_instance.migrate()
+
+    # Ensure database_proxy is initialized AFTER migrate
+    database_proxy.initialize(db_instance._database)
+
+    yield db_instance
+
+    # Close the database and restore original proxy
+    db_instance._database.close()
+    database_proxy.initialize(old_db)
 
 
-def test_message_router_logs_interaction(tmp_path) -> None:
+def test_message_router_logs_interaction(db: DatabaseSessionManager) -> None:
     cfg = _make_config()
-    db = _make_db(tmp_path)
 
     router = MessageRouter(
         cfg=cfg,
@@ -79,8 +95,7 @@ def test_message_router_logs_interaction(tmp_path) -> None:
     assert row["correlation_id"] == "cid-123"
 
 
-def test_safe_update_user_interaction_updates_interaction(tmp_path) -> None:
-    db = _make_db(tmp_path)
+def test_safe_update_user_interaction_updates_interaction(db: DatabaseSessionManager) -> None:
     user_repo = SqliteUserRepositoryAdapter(db)
     request_repo = SqliteRequestRepositoryAdapter(db)
 
@@ -140,8 +155,7 @@ def test_safe_update_user_interaction_updates_interaction(tmp_path) -> None:
     assert row["request_id"] == request_id
 
 
-def test_async_safe_update_user_interaction_updates_interaction(tmp_path) -> None:
-    db = _make_db(tmp_path)
+def test_async_safe_update_user_interaction_updates_interaction(db: DatabaseSessionManager) -> None:
     user_repo = SqliteUserRepositoryAdapter(db)
     request_repo = SqliteRequestRepositoryAdapter(db)
 

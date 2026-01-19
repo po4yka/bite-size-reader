@@ -425,6 +425,17 @@ class URLProcessor:
                     "cache_hit",
                     extra={"cid": correlation_id, "url": url_text, "hash": dedupe_hash[:12]},
                 )
+                # Update correlation_id on the existing request for cache hit
+                if correlation_id:
+                    try:
+                        await self.message_persistence.request_repo.async_update_request_correlation_id(
+                            request_id, correlation_id
+                        )
+                    except Exception as exc:
+                        logger.warning(
+                            "cache_hit_cid_update_failed",
+                            extra={"error": str(exc), "cid": correlation_id},
+                        )
                 if not silent:
                     await self.response_formatter.send_cached_summary_notification(
                         message, silent=silent

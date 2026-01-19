@@ -8,17 +8,26 @@ import unittest
 import pytest
 
 from app.db.database import Database
+from app.db.models import database_proxy
 
 
 class TestDatabaseHelpers(unittest.TestCase):
     def setUp(self):
+        # Save the old database_proxy.obj to restore it later for test isolation
+        self._old_db = database_proxy.obj
+
         self.tmp = tempfile.TemporaryDirectory()
         self.db_path = os.path.join(self.tmp.name, "app.db")
         self.db = Database(self.db_path)
         self.db.migrate()
 
     def tearDown(self):
+        # Close the database connection
+        self.db._database.close()
         self.tmp.cleanup()
+        # Restore the old database_proxy.obj for test isolation
+        if self._old_db is not None:
+            database_proxy.initialize(self._old_db)
 
     def test_create_backup_copy_writes_snapshot(self):
         backup_dir = os.path.join(self.tmp.name, "backups")

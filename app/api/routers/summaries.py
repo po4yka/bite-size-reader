@@ -239,29 +239,74 @@ async def get_summary(
             "llm_latency_ms": latest_call.get("latency_ms"),
         }
 
+    # Build SummaryDetailSummary from json_payload
+    json_payload = ensure_mapping(summary.get("json_payload"))
+    entities_raw = ensure_mapping(json_payload.get("entities"))
+    readability_raw = ensure_mapping(json_payload.get("readability"))
+
+    summary_detail = {
+        "summary_250": json_payload.get("summary_250", ""),
+        "summary_1000": json_payload.get("summary_1000", ""),
+        "tldr": json_payload.get("tldr", ""),
+        "key_ideas": json_payload.get("key_ideas", []),
+        "topic_tags": json_payload.get("topic_tags", []),
+        "entities": {
+            "people": entities_raw.get("people", []),
+            "organizations": entities_raw.get("organizations", []),
+            "locations": entities_raw.get("locations", []),
+        },
+        "estimated_reading_time_min": json_payload.get("estimated_reading_time_min", 0),
+        "key_stats": json_payload.get("key_stats", []),
+        "answered_questions": json_payload.get("answered_questions", []),
+        "readability": (
+            {
+                "method": readability_raw.get("method", ""),
+                "score": readability_raw.get("score", 0.0),
+                "level": readability_raw.get("level", ""),
+            }
+            if readability_raw
+            else None
+        ),
+        "seo_keywords": json_payload.get("seo_keywords", []),
+    }
+
+    request_detail = {
+        "id": str(request_data.get("id", "")),
+        "type": request_data.get("type", ""),
+        "url": request_data.get("input_url"),
+        "normalized_url": request_data.get("normalized_url"),
+        "dedupe_hash": request_data.get("dedupe_hash"),
+        "status": request_data.get("status", ""),
+        "lang_detected": request_data.get("lang_detected"),
+        "created_at": _isotime(request_data.get("created_at")),
+        "updated_at": _isotime(request_data.get("updated_at") or request_data.get("created_at")),
+    }
+
+    source_detail = {
+        "url": source.get("url"),
+        "title": source.get("title"),
+        "domain": source.get("domain"),
+        "author": source.get("author"),
+        "published_at": source.get("published_at"),
+        "word_count": source.get("word_count"),
+        "content_type": source.get("content_type"),
+    }
+
+    processing_detail = {
+        "model_used": processing.get("model"),
+        "tokens_used": processing.get("tokens_used"),
+        "processing_time_ms": processing.get("latency_ms"),
+        "crawl_time_ms": processing.get("crawl_latency_ms"),
+        "confidence": json_payload.get("confidence"),
+        "hallucination_risk": json_payload.get("hallucination_risk"),
+    }
+
     return success_response(
         SummaryDetail(
-            summary={
-                "id": summary.get("id"),
-                "request_id": request_id,
-                "lang": summary.get("lang"),
-                "is_read": summary.get("is_read"),
-                "is_favorited": summary.get("is_favorited", False),
-                "version": summary.get("version"),
-                "created_at": _isotime(summary.get("created_at")),
-                "json_payload": summary.get("json_payload"),
-            },
-            request={
-                "id": request_data.get("id"),
-                "type": request_data.get("type"),
-                "status": request_data.get("status"),
-                "input_url": request_data.get("input_url"),
-                "normalized_url": request_data.get("normalized_url"),
-                "correlation_id": request_data.get("correlation_id"),
-                "created_at": _isotime(request_data.get("created_at")),
-            },
-            source=source,
-            processing=processing,
+            summary=summary_detail,
+            request=request_detail,
+            source=source_detail,
+            processing=processing_detail,
         )
     )
 

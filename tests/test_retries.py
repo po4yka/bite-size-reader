@@ -103,7 +103,8 @@ class TestRetries(unittest.IsolatedAsyncioTestCase):
             attempts["n"] += 1
             if attempts["n"] == 1:
                 return _Resp(500, {"error": "temporary"})
-            return _Resp(200, {"markdown": "# ok"})
+            # Include status_code in JSON for http_status extraction
+            return _Resp(200, {"markdown": "# ok", "success": True, "status_code": 200})
 
         original = fc_httpx.AsyncClient
         try:

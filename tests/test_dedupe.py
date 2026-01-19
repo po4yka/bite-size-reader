@@ -79,6 +79,18 @@ class FakeOpenRouter:
 
 
 class TestDedupeReuse(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self) -> None:
+        """Save database proxy state before each test."""
+        from app.db.models import database_proxy
+
+        self._old_db = database_proxy.obj
+
+    async def asyncTearDown(self) -> None:
+        """Restore database proxy state after each test."""
+        from app.db.models import database_proxy
+
+        database_proxy.initialize(self._old_db)
+
     async def test_dedupe_and_summary_version_increment(self):
         with tempfile.TemporaryDirectory() as tmp:
             db_path = os.path.join(tmp, "app.db")

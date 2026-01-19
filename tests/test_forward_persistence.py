@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock, MagicMock
 from app.adapters.external.response_formatter import ResponseFormatter
 from app.adapters.telegram.forward_content_processor import ForwardContentProcessor
 from app.db.database import Database
+from app.db.models import database_proxy
 from tests.conftest import make_test_app_config
 
 
@@ -42,6 +43,16 @@ class _ForwardMessage:
 
 
 class TestForwardMessagePersistence(unittest.IsolatedAsyncioTestCase):
+    @classmethod
+    def setUpClass(cls):
+        # Save the original database_proxy object to restore later
+        cls._old_proxy_obj = database_proxy.obj
+
+    @classmethod
+    def tearDownClass(cls):
+        # Restore the original database_proxy object
+        database_proxy.initialize(cls._old_proxy_obj)
+
     async def test_process_forward_content_persists_snapshot(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             db_path = os.path.join(tmpdir, "app.db")

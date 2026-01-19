@@ -72,6 +72,8 @@ class TestAdaptersIntegration(unittest.IsolatedAsyncioTestCase):
                             "markdown": "# Title\n\nContent",
                             "html": "<h1>Title</h1>",
                             "metadata": {"title": "Title"},
+                            "success": True,
+                            "status_code": 200,  # Required for http_status extraction
                         },
                     )
                 }

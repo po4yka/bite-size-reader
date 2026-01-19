@@ -56,6 +56,8 @@ def vector_store(chroma_config):
 
 def test_health_check(vector_store):
     vector_store._client.heartbeat.return_value = 12345
+    # Reset mock count since __init__ also calls heartbeat()
+    vector_store._client.heartbeat.reset_mock()
     assert vector_store.health_check() is True
     vector_store._client.heartbeat.assert_called_once()
 

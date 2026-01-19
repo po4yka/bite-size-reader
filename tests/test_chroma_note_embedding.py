@@ -25,16 +25,19 @@ def test_sync_vector_store_embeds_note_text_and_user_notes():
         "request": {"lang_detected": "en"},
     }
 
-    db = types.SimpleNamespace(async_get_summary_by_request=AsyncMock(return_value=summary))
+    # Create summary repository mock
+    summary_repo = MagicMock()
+    summary_repo.async_get_summary_by_request = AsyncMock(return_value=summary)
+
     embedding_service = MagicMock()
     embedding_service.generate_embedding = AsyncMock(return_value=[0.1, 0.2, 0.3])
 
-    generator = types.SimpleNamespace(db=db, embedding_service=embedding_service)
+    generator = types.SimpleNamespace(embedding_service=embedding_service)
 
     vector_store = MagicMock()
     vector_store.user_scope = "public"
     vector_store.environment = "dev"
-    handler = EmbeddingGenerationEventHandler(generator, vector_store)
+    handler = EmbeddingGenerationEventHandler(generator, summary_repo, vector_store)
 
     expected_text, _ = MetadataBuilder.prepare_for_upsert(
         request_id=request_id,
@@ -94,16 +97,19 @@ def test_sync_vector_store_chunk_windows():
         "request": {"lang_detected": "en"},
     }
 
-    db = types.SimpleNamespace(async_get_summary_by_request=AsyncMock(return_value=summary))
+    # Create summary repository mock
+    summary_repo = MagicMock()
+    summary_repo.async_get_summary_by_request = AsyncMock(return_value=summary)
+
     embedding_service = MagicMock()
     embedding_service.generate_embedding = AsyncMock(side_effect=[[0.1, 0.2], [0.3, 0.4]])
 
-    generator = types.SimpleNamespace(db=db, embedding_service=embedding_service)
+    generator = types.SimpleNamespace(embedding_service=embedding_service)
 
     vector_store = MagicMock()
     vector_store.user_scope = "public"
     vector_store.environment = "dev"
-    handler = EmbeddingGenerationEventHandler(generator, vector_store)
+    handler = EmbeddingGenerationEventHandler(generator, summary_repo, vector_store)
 
     asyncio.run(handler._sync_vector_store(request_id))
 

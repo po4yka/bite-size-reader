@@ -1271,10 +1271,14 @@ async def rotate_secret_key(
     if not record:
         raise ResourceNotFoundError("Secret key", key_id)
 
-    # Get user_id from nested user dict or direct field
+    # Get user_id from nested user dict, direct field, or user as int
     record_user_id = record.get("user_id")
-    if record_user_id is None and isinstance(record.get("user"), dict):
-        record_user_id = record["user"].get("telegram_user_id")
+    if record_user_id is None:
+        user_field = record.get("user")
+        if isinstance(user_field, dict):
+            record_user_id = user_field.get("telegram_user_id")
+        elif isinstance(user_field, int):
+            record_user_id = user_field
 
     _ensure_user_allowed(record_user_id)
     validate_client_id(record.get("client_id", ""))
@@ -1335,10 +1339,14 @@ async def revoke_secret_key(
     if not record:
         raise ResourceNotFoundError("Secret key", key_id)
 
-    # Get user_id from nested user dict or direct field
+    # Get user_id from nested user dict, direct field, or user as int
     record_user_id = record.get("user_id")
-    if record_user_id is None and isinstance(record.get("user"), dict):
-        record_user_id = record["user"].get("telegram_user_id")
+    if record_user_id is None:
+        user_field = record.get("user")
+        if isinstance(user_field, dict):
+            record_user_id = user_field.get("telegram_user_id")
+        elif isinstance(user_field, int):
+            record_user_id = user_field
 
     _ensure_user_allowed(record_user_id)
 

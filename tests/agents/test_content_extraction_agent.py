@@ -25,6 +25,16 @@ class TestContentExtractionAgent(unittest.IsolatedAsyncioTestCase):
             correlation_id=self.correlation_id,
         )
 
+        # Override internally-created repositories with mocks to avoid database proxy issues
+        self.mock_request_repo = MagicMock()
+        self.mock_crawl_result_repo = MagicMock()
+        self.agent.request_repo = self.mock_request_repo
+        self.agent.crawl_result_repo = self.mock_crawl_result_repo
+
+        # Default async methods on repos
+        self.mock_request_repo.async_get_request_by_dedupe_hash = AsyncMock(return_value=None)
+        self.mock_crawl_result_repo.async_get_crawl_result_by_request = AsyncMock(return_value=None)
+
         # Sample extracted content
         self.sample_content = "This is extracted content. " * 50
         self.sample_metadata = {
@@ -35,9 +45,8 @@ class TestContentExtractionAgent(unittest.IsolatedAsyncioTestCase):
 
     async def test_successful_fresh_extraction(self):
         """Test successful content extraction from URL."""
-        # Mock no existing crawl result
-        self.mock_db.async_get_request_by_dedupe_hash = AsyncMock(return_value=None)
-        self.mock_db.get_request_by_dedupe_hash = MagicMock(return_value=None)
+        # Mock no existing crawl result (already set in setUp, but explicit here for clarity)
+        self.mock_request_repo.async_get_request_by_dedupe_hash = AsyncMock(return_value=None)
 
         # Mock successful extraction
         self.mock_content_extractor.extract_content_pure = AsyncMock(
@@ -70,8 +79,12 @@ class TestContentExtractionAgent(unittest.IsolatedAsyncioTestCase):
             "metadata_json": self.sample_metadata,
         }
 
-        self.mock_db.async_get_request_by_dedupe_hash = AsyncMock(return_value=existing_request)
-        self.mock_db.async_get_crawl_result_by_request = AsyncMock(return_value=existing_crawl)
+        self.mock_request_repo.async_get_request_by_dedupe_hash = AsyncMock(
+            return_value=existing_request
+        )
+        self.mock_crawl_result_repo.async_get_crawl_result_by_request = AsyncMock(
+            return_value=existing_crawl
+        )
 
         input_data = ExtractionInput(url=self.test_url, correlation_id=self.correlation_id)
 
@@ -89,8 +102,7 @@ class TestContentExtractionAgent(unittest.IsolatedAsyncioTestCase):
         input_url = "HTTPS://EXAMPLE.COM/Article?utm_source=test"
         expected_normalized = "https://example.com/article?utm_source=test"
 
-        self.mock_db.async_get_request_by_dedupe_hash = AsyncMock(return_value=None)
-        self.mock_db.get_request_by_dedupe_hash = MagicMock(return_value=None)
+        self.mock_request_repo.async_get_request_by_dedupe_hash = AsyncMock(return_value=None)
 
         self.mock_content_extractor.extract_content_pure = AsyncMock(
             return_value=(self.sample_content, "firecrawl", {})
@@ -106,8 +118,7 @@ class TestContentExtractionAgent(unittest.IsolatedAsyncioTestCase):
 
     async def test_extraction_failure_handled(self):
         """Test that extraction failures are handled gracefully."""
-        self.mock_db.async_get_request_by_dedupe_hash = AsyncMock(return_value=None)
-        self.mock_db.get_request_by_dedupe_hash = MagicMock(return_value=None)
+        self.mock_request_repo.async_get_request_by_dedupe_hash = AsyncMock(return_value=None)
 
         # Mock extraction failure
         self.mock_content_extractor.extract_content_pure = AsyncMock(
@@ -123,7 +134,7 @@ class TestContentExtractionAgent(unittest.IsolatedAsyncioTestCase):
 
     async def test_unexpected_exception_handled(self):
         """Test that unexpected exceptions are handled."""
-        self.mock_db.async_get_request_by_dedupe_hash = AsyncMock(
+        self.mock_request_repo.async_get_request_by_dedupe_hash = AsyncMock(
             side_effect=RuntimeError("Database error")
         )
 
@@ -137,8 +148,7 @@ class TestContentExtractionAgent(unittest.IsolatedAsyncioTestCase):
 
     async def test_content_quality_validation_short_content(self):
         """Test content quality validation detects very short content."""
-        self.mock_db.async_get_request_by_dedupe_hash = AsyncMock(return_value=None)
-        self.mock_db.get_request_by_dedupe_hash = MagicMock(return_value=None)
+        self.mock_request_repo.async_get_request_by_dedupe_hash = AsyncMock(return_value=None)
 
         # Return very short content
         short_content = "Short"
@@ -156,8 +166,7 @@ class TestContentExtractionAgent(unittest.IsolatedAsyncioTestCase):
 
     async def test_content_validation_detects_error_pages(self):
         """Test content validation detects error page indicators."""
-        self.mock_db.async_get_request_by_dedupe_hash = AsyncMock(return_value=None)
-        self.mock_db.get_request_by_dedupe_hash = MagicMock(return_value=None)
+        self.mock_request_repo.async_get_request_by_dedupe_hash = AsyncMock(return_value=None)
 
         # Return content that looks like an error page
         error_content = "404 Not Found - Page not found"
@@ -193,38 +202,33 @@ class TestContentExtractionAgent(unittest.IsolatedAsyncioTestCase):
         error = self.agent._validate_content(result)
         self.assertIsNone(error)
 
-    async def test_fallback_to_sync_db_methods(self):
-        """Test fallback to sync DB methods when async not available."""
-        # Async method returns None, sync method returns data
-        self.mock_db.async_get_request_by_dedupe_hash = AsyncMock(return_value=None)
-
+    async def test_fallback_to_fresh_extraction_when_no_existing_crawl(self):
+        """Test fresh extraction when existing request found but no crawl result."""
+        # Async method returns existing request but no crawl result
         existing_request = {"id": "req-123"}
-        self.mock_db.get_request_by_dedupe_hash = MagicMock(return_value=existing_request)
+        self.mock_request_repo.async_get_request_by_dedupe_hash = AsyncMock(
+            return_value=existing_request
+        )
+        self.mock_crawl_result_repo.async_get_crawl_result_by_request = AsyncMock(return_value=None)
 
-        existing_crawl = {
-            "id": 456,
-            "content_markdown": self.sample_content,
-            "content_html": None,
-            "metadata_json": {},
-        }
-        self.mock_db.async_get_crawl_result_by_request = AsyncMock(return_value=None)
-        self.mock_db.get_crawl_result_by_request = MagicMock(return_value=existing_crawl)
+        # Mock successful extraction for the fresh crawl
+        self.mock_content_extractor.extract_content_pure = AsyncMock(
+            return_value=(self.sample_content, "firecrawl", {})
+        )
 
         input_data = ExtractionInput(url=self.test_url, correlation_id=self.correlation_id)
 
         result = await self.agent.execute(input_data)
 
         self.assertTrue(result.success)
-        self.assertEqual(result.output.crawl_result_id, 456)
-
-        # Verify fallback methods were called
-        self.mock_db.get_request_by_dedupe_hash.assert_called_once()
-        self.mock_db.get_crawl_result_by_request.assert_called_once()
+        # No crawl result ID since it was freshly extracted
+        self.assertIsNone(result.output.crawl_result_id)
+        # Verify extraction was called since no existing crawl
+        self.mock_content_extractor.extract_content_pure.assert_called_once()
 
     async def test_extraction_returns_none_handled(self):
         """Test that None return from extraction is handled."""
-        self.mock_db.async_get_request_by_dedupe_hash = AsyncMock(return_value=None)
-        self.mock_db.get_request_by_dedupe_hash = MagicMock(return_value=None)
+        self.mock_request_repo.async_get_request_by_dedupe_hash = AsyncMock(return_value=None)
 
         # Mock extraction returning None (via ValueError exception)
         self.mock_content_extractor.extract_content_pure = AsyncMock(
@@ -250,8 +254,12 @@ class TestContentExtractionAgent(unittest.IsolatedAsyncioTestCase):
             "metadata_json": {},
         }
 
-        self.mock_db.async_get_request_by_dedupe_hash = AsyncMock(return_value=existing_request)
-        self.mock_db.async_get_crawl_result_by_request = AsyncMock(return_value=existing_crawl)
+        self.mock_request_repo.async_get_request_by_dedupe_hash = AsyncMock(
+            return_value=existing_request
+        )
+        self.mock_crawl_result_repo.async_get_crawl_result_by_request = AsyncMock(
+            return_value=existing_crawl
+        )
 
         input_data = ExtractionInput(
             url=self.test_url,
@@ -267,8 +275,7 @@ class TestContentExtractionAgent(unittest.IsolatedAsyncioTestCase):
 
     async def test_metadata_in_result(self):
         """Test that result metadata includes useful information."""
-        self.mock_db.async_get_request_by_dedupe_hash = AsyncMock(return_value=None)
-        self.mock_db.get_request_by_dedupe_hash = MagicMock(return_value=None)
+        self.mock_request_repo.async_get_request_by_dedupe_hash = AsyncMock(return_value=None)
 
         self.mock_content_extractor.extract_content_pure = AsyncMock(
             return_value=(self.sample_content, "firecrawl", self.sample_metadata)

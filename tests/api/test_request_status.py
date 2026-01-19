@@ -9,11 +9,15 @@ from app.db.models import CrawlResult, LLMCall, Request, database_proxy
 
 
 @pytest.fixture
-def in_memory_db():
+def in_memory_db(tmp_path):
     # Save old proxy state
     old_db = database_proxy.obj
 
-    db = peewee.SqliteDatabase(":memory:")
+    # Use a file-based database instead of :memory: because asyncio.to_thread
+    # runs operations in separate threads, and SQLite in-memory databases
+    # are thread-local by default
+    db_path = str(tmp_path / "test_request_status.db")
+    db = peewee.SqliteDatabase(db_path, pragmas={"journal_mode": "wal"})
     database_proxy.initialize(db)
     db.bind([Request, CrawlResult, LLMCall], bind_refs=False, bind_backrefs=False)
     db.create_tables([Request, CrawlResult, LLMCall])
@@ -23,6 +27,12 @@ def in_memory_db():
 
     # Restore old proxy state
     database_proxy.initialize(old_db)
+
+    # IMPORTANT: Rebind models to database_proxy so subsequent tests don't use the closed db.
+    # The bind() call above permanently sets model._meta.database to `db`, so we need to
+    # restore it to the proxy to allow other fixtures to properly initialize models.
+    for model in [Request, CrawlResult, LLMCall]:
+        model._meta.database = database_proxy
 
 
 def _create_request(

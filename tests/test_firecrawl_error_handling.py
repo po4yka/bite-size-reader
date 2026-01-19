@@ -43,6 +43,7 @@ class TestFirecrawlErrorHandling(unittest.IsolatedAsyncioTestCase):
                     "markdown": None,
                     "html": None,
                     "metadata": None,
+                    "status_code": 200,
                 },
             )
 
@@ -84,6 +85,7 @@ class TestFirecrawlErrorHandling(unittest.IsolatedAsyncioTestCase):
                     "html": "<h1>Test Content</h1><p>This is a test.</p>",
                     "metadata": {"title": "Test Page"},
                     "links": [],
+                    "status_code": 200,
                 },
             )
 
@@ -125,6 +127,7 @@ class TestFirecrawlErrorHandling(unittest.IsolatedAsyncioTestCase):
                     "markdown": "# Test Content\n\nThis is a test.",
                     "html": "<h1>Test Content</h1><p>This is a test.</p>",
                     "metadata": {"title": "Test Page"},
+                    "status_code": 200,
                 },
             )
 
@@ -165,6 +168,7 @@ class TestFirecrawlErrorHandling(unittest.IsolatedAsyncioTestCase):
                     "markdown": "# Test Content\n\nThis is a test.",
                     "html": "<h1>Test Content</h1><p>This is a test.</p>",
                     "metadata": {"title": "Test Page"},
+                    "status_code": 200,
                 },
             )
 
@@ -205,6 +209,7 @@ class TestFirecrawlErrorHandling(unittest.IsolatedAsyncioTestCase):
                     "markdown": "# Test Content\n\nThis is a test.",
                     "html": "<h1>Test Content</h1><p>This is a test.</p>",
                     "metadata": {"title": "Test Page"},
+                    "status_code": 200,
                 },
             )
 
@@ -250,6 +255,7 @@ class TestFirecrawlErrorHandling(unittest.IsolatedAsyncioTestCase):
                             "metadata": None,
                         }
                     ],
+                    "status_code": 200,
                 },
             )
 
@@ -295,6 +301,7 @@ class TestFirecrawlErrorHandling(unittest.IsolatedAsyncioTestCase):
                             "links": [],
                         }
                     ],
+                    "status_code": 200,
                 },
             )
 
@@ -339,6 +346,7 @@ class TestFirecrawlErrorHandling(unittest.IsolatedAsyncioTestCase):
                         "metadata": {"title": "Test Page"},
                         "links": [],
                     },
+                    "status_code": 200,
                 },
             )
 
@@ -383,6 +391,7 @@ class TestFirecrawlErrorHandling(unittest.IsolatedAsyncioTestCase):
                         "html": None,
                         "metadata": None,
                     },
+                    "status_code": 200,
                 },
             )
 

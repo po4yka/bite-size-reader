@@ -124,7 +124,10 @@ class TestFieldNormalization(unittest.TestCase):
         # Check content preservation
         assert result["summary_250"] == "Test summary 250"
         assert result["summary_1000"] == "Test summary 1000"
-        assert result["tldr"] == "Test summary 1000"
+        # Note: tldr is intentionally enriched with key_ideas when it equals summary_1000
+        # This is expected behavior per the summary contract
+        assert "Test summary 1000" in result["tldr"]
+        assert "Key ideas" in result["tldr"]  # tldr should be enriched
         assert result["key_ideas"] == ["idea1", "idea2"]
 
 

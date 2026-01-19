@@ -31,7 +31,13 @@ class StubSummarizer:
         self.calls: list[tuple[dict, int, str | None]] = []
 
     async def translate_summary_to_ru(
-        self, summary: dict, req_id: int, correlation_id: str | None = None
+        self,
+        summary: dict,
+        *,
+        req_id: int,
+        correlation_id: str | None = None,
+        url_hash: str | None = None,
+        source_lang: str | None = None,
     ) -> str | None:
         self.calls.append((summary, req_id, correlation_id))
         return self.translated_text

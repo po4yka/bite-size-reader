@@ -148,6 +148,24 @@ async def test_forward_prompt_normalized_when_flag_enabled(monkeypatch: pytest.M
         audit_func=lambda *args, **kwargs: None,
     )
 
+    # Override internally-created repository with mock to avoid database proxy issues
+    mock_request_repo = MagicMock()
+    mock_request_repo.async_get_request_by_forward = AsyncMock(return_value=None)
+    mock_request_repo.async_create_request = AsyncMock(return_value=77)
+    mock_request_repo.async_update_request_lang_detected = AsyncMock()
+    mock_request_repo.async_update_request_correlation_id = AsyncMock()
+    mock_request_repo.async_insert_telegram_message = AsyncMock(return_value=1)
+    processor.message_persistence.request_repo = mock_request_repo
+
+    # Also mock the chat/user repo methods
+    mock_chat_repo = MagicMock()
+    mock_chat_repo.async_upsert_chat = AsyncMock()
+    processor.message_persistence.chat_repo = mock_chat_repo
+
+    mock_user_repo = MagicMock()
+    mock_user_repo.async_upsert_user = AsyncMock()
+    processor.message_persistence.user_repo = mock_user_repo
+
     monkeypatch.setattr(fcp, "detect_language", lambda text: "en")
     monkeypatch.setattr(fcp, "choose_language", lambda preferred, detected: detected)
 
@@ -169,7 +187,7 @@ async def test_forward_prompt_normalized_when_flag_enabled(monkeypatch: pytest.M
     assert prompt == "Channel: Source Hello - world"
     assert chosen_lang == "en"
     assert system_prompt
-    db.create_request.assert_called_once()
-    db.update_request_lang_detected.assert_called_once_with(77, "en")
+    mock_request_repo.async_create_request.assert_awaited_once()
+    mock_request_repo.async_update_request_lang_detected.assert_awaited_once_with(77, "en")
     forward_accepted.assert_awaited_once()
     forward_language.assert_awaited_once_with(message, "en")
