@@ -18,6 +18,13 @@ from playhouse.sqlite_ext import SqliteExtDatabase
 
 from app.core.time_utils import UTC
 from app.db.database_diagnostics import DatabaseDiagnostics
+from app.db.database_maintenance import DatabaseMaintenance
+from app.db.json_utils import (
+    decode_json_field,
+    normalize_json_container,
+    normalize_legacy_json_value,
+    prepare_json_payload,
+)
 from app.db.models import (
     ALL_MODELS,
     AuditLog,
@@ -36,7 +43,11 @@ from app.db.models import (
 from app.db.rw_lock import AsyncRWLock
 from app.db.topic_search_index import TopicSearchIndexManager
 from app.db.video_downloads import VideoDownloadManager
-from app.services.topic_search_utils import ensure_mapping, tokenize
+from app.services.topic_search_utils import (
+    ensure_mapping,
+    summary_matches_topic,
+    yield_topic_fragments,
+)
 from app.services.trending_cache import clear_trending_cache
 
 JSONValue = Mapping[str, Any] | Sequence[Any] | str | None
@@ -69,13 +80,43 @@ class RowSqliteDatabase(SqliteExtDatabase):
 
 @dataclass
 class Database:
-    """Peewee-backed database helper that maintains API parity with the old sqlite3 version."""
+    """Peewee-backed database facade providing backward-compatible access.
+
+    This class serves as a facade for database operations, maintaining API
+    compatibility with existing code while internally delegating to specialized
+    components.
+
+    **Deprecation Notice:**
+    For new code, prefer using the component classes directly:
+    - `DatabaseSessionManager` for session/connection management
+    - `SqliteSummaryRepositoryAdapter` for summary operations
+    - `SqliteRequestRepositoryAdapter` for request operations
+    - `SqliteLLMRepositoryAdapter` for LLM call operations
+    - `SqliteTelegramMessageRepositoryAdapter` for message operations
+
+    These repository adapters are located in:
+    `app.infrastructure.persistence.sqlite.repositories`
+
+    Example of modern usage::
+
+        from app.db.session import DatabaseSessionManager
+        from app.infrastructure.persistence.sqlite.repositories import (
+            SqliteSummaryRepositoryAdapter,
+        )
+
+        session = DatabaseSessionManager("/path/to/db.sqlite")
+        session.migrate()
+
+        summary_repo = SqliteSummaryRepositoryAdapter(session)
+        summary = await summary_repo.async_get_summary_by_id(123)
+    """
 
     path: str
-    _logger: logging.Logger = logging.getLogger(__name__)
+    _logger: logging.Logger = field(default_factory=lambda: logging.getLogger(__name__))
     _database: peewee.SqliteDatabase = field(init=False)
     _rw_lock: AsyncRWLock = field(init=False)
     _diagnostics: DatabaseDiagnostics = field(init=False)
+    _maintenance: DatabaseMaintenance = field(init=False)
     _topic_search: TopicSearchIndexManager = field(init=False)
     _video_downloads: VideoDownloadManager = field(init=False)
 
@@ -104,6 +145,7 @@ class Database:
         # This allows multiple concurrent readers OR one exclusive writer
         self._rw_lock = AsyncRWLock()
         self._diagnostics = DatabaseDiagnostics(self, self._database, self._logger)
+        self._maintenance = DatabaseMaintenance(self._database, self.path, self._logger)
         self._topic_search = TopicSearchIndexManager(self._database, self._logger)
         self._video_downloads = VideoDownloadManager(self._logger)
 
@@ -377,127 +419,24 @@ class Database:
         with self._database.connection_context():
             yield self._database.connection()
 
-    @staticmethod
-    def _normalize_json_container(value: Any) -> Any:
-        if isinstance(value, Mapping):
-            return dict(value)
-        if isinstance(value, Sequence) and not isinstance(value, str | bytes | bytearray):
-            return list(value)
-        return value
-
-    @staticmethod
-    def _prepare_json_payload(value: Any, *, default: Any | None = None) -> Any | None:
-        if value is None:
-            value = default
-        if value is None:
-            return None
-        if isinstance(value, memoryview):
-            value = value.tobytes()
-        if isinstance(value, bytes | bytearray):
-            try:
-                value = value.decode("utf-8")
-            except (UnicodeDecodeError, AttributeError):
-                value = value.decode("utf-8", errors="replace")
-        if isinstance(value, str):
-            stripped = value.strip()
-            if not stripped:
-                return None
-            try:
-                return json.loads(stripped)
-            except json.JSONDecodeError:
-                return stripped
-        normalized = Database._normalize_json_container(value)
-        try:
-            json.dumps(normalized)
-            return normalized
-        except (TypeError, ValueError):
-            try:
-                coerced = json.loads(json.dumps(normalized, default=str))
-            except (TypeError, ValueError):
-                return None
-            return coerced
+    # JSON utilities are now delegated to app.db.json_utils module
+    # These static methods are kept for backward compatibility
+    _normalize_json_container = staticmethod(normalize_json_container)
+    _prepare_json_payload = staticmethod(prepare_json_payload)
+    _normalize_legacy_json_value = staticmethod(normalize_legacy_json_value)
 
     def _decode_json_field(self, value: Any) -> tuple[Any | None, str | None]:
         """Decode JSON field with security validation.
 
-        Args:
-            value: The value to decode (string, bytes, dict, list, etc.)
-
-        Returns:
-            Tuple of (decoded_value, error_message)
+        Delegates to app.db.json_utils.decode_json_field with instance config.
         """
-        from app.core.json_depth_validator import safe_json_parse, validate_json_structure
-
-        if value is None:
-            return None, None
-        if isinstance(value, memoryview):
-            value = value.tobytes()
-        if isinstance(value, bytes | bytearray):
-            try:
-                value = value.decode("utf-8")
-            except (UnicodeDecodeError, AttributeError):
-                return None, "decode_error"
-
-        # If already a dict/list, validate structure
-        if isinstance(value, dict | list):
-            valid, error = validate_json_structure(value)
-            if not valid:
-                return None, error
-            return value, None
-
-        if isinstance(value, str):
-            stripped = value.strip()
-            if not stripped:
-                return None, None
-
-            # Use safe_json_parse with validation
-            parsed, error = safe_json_parse(
-                stripped,
-                max_size=self.json_max_size,
-                max_depth=self.json_max_depth,
-                max_array_length=self.json_max_array_length,
-                max_dict_keys=self.json_max_dict_keys,
-            )
-            if error:
-                return None, error
-            return parsed, None
-
-        # For other types, validate after conversion
-        try:
-            json.dumps(value)
-        except (TypeError, ValueError):
-            return None, "unsupported_type"
-
-        # If it's a valid JSON-serializable value, return it
-        return value, None
-
-    @staticmethod
-    def _normalize_legacy_json_value(value: Any) -> tuple[Any | None, bool, str | None]:
-        if value is None:
-            return None, False, None
-        if isinstance(value, memoryview):
-            value = value.tobytes()
-        if isinstance(value, bytes | bytearray):
-            try:
-                value = value.decode("utf-8")
-            except (UnicodeDecodeError, AttributeError):
-                value = value.decode("utf-8", errors="replace")
-        if isinstance(value, dict | list):
-            return value, False, None
-        if isinstance(value, str):
-            stripped = value.strip()
-            if not stripped:
-                return None, True, "blank"
-            try:
-                json.loads(stripped)
-            except json.JSONDecodeError:
-                return {"__legacy_text__": stripped}, True, "invalid_json"
-            return None, False, None
-        try:
-            json.dumps(value)
-        except (TypeError, ValueError):
-            return {"__legacy_text__": str(value)}, True, "invalid_json"
-        return value, False, None
+        return decode_json_field(
+            value,
+            max_size=self.json_max_size,
+            max_depth=self.json_max_depth,
+            max_array_length=self.json_max_array_length,
+            max_dict_keys=self.json_max_dict_keys,
+        )
 
     def migrate(self) -> None:
         with self._database.connection_context(), self._database.bind_ctx(ALL_MODELS):
@@ -1331,63 +1270,10 @@ class Database:
             read_only=True,
         )
 
-    @staticmethod
-    def _yield_topic_fragments(value: Any) -> Iterator[str]:
-        """Yield normalized text fragments from arbitrary payload values."""
-        if value is None:
-            return
-        if isinstance(value, str):
-            text = value.strip()
-            if text:
-                yield text
-            return
-        if isinstance(value, Sequence) and not isinstance(value, str | bytes | bytearray):
-            for item in value:
-                yield from Database._yield_topic_fragments(item)
-            return
-        yield str(value)
-
-    @staticmethod
-    def _summary_matches_topic(
-        payload: Mapping[str, Any], request_data: Mapping[str, Any], topic: str
-    ) -> bool:
-        """Return True when a stored summary appears to match the requested topic."""
-        terms = [term for term in tokenize(topic) if term]
-        if not terms:
-            normalized = topic.casefold().strip()
-            if not normalized:
-                return True
-            terms = [normalized]
-
-        metadata = ensure_mapping(payload.get("metadata"))
-        candidate_values: list[Any] = [
-            payload.get("title"),
-            payload.get("summary_250"),
-            payload.get("summary_1000"),
-            payload.get("tldr"),
-            payload.get("topic_tags"),
-            payload.get("topic_taxonomy"),
-            metadata.get("title"),
-            metadata.get("description"),
-            metadata.get("keywords"),
-            metadata.get("section"),
-            metadata.get("topics"),
-            metadata.get("category"),
-            request_data.get("input_url"),
-            request_data.get("normalized_url"),
-            request_data.get("content_text"),
-        ]
-
-        fragments: list[str] = []
-        for value in candidate_values:
-            for fragment in Database._yield_topic_fragments(value):
-                fragments.append(fragment.casefold())
-
-        if not fragments:
-            return False
-
-        combined = " ".join(fragments)
-        return all(term in combined for term in terms)
+    # Topic search helpers are now delegated to app.services.topic_search_utils
+    # These static methods are kept for backward compatibility
+    _yield_topic_fragments = staticmethod(yield_topic_fragments)
+    _summary_matches_topic = staticmethod(summary_matches_topic)
 
     def get_unread_summaries(
         self,
@@ -1775,29 +1661,17 @@ class Database:
 
     # ================================================================
 
+    # ==================== Maintenance Methods ====================
+    # These delegate to the DatabaseMaintenance class
+
     def _run_database_maintenance(self) -> None:
-        if self.path == ":memory":
-            self._logger.debug("db_maintenance_skipped_in_memory")
-            return
-        self._run_analyze()
-        self._run_vacuum()
+        """Run database maintenance operations (ANALYZE, VACUUM)."""
+        self._maintenance.run_maintenance()
 
     def _run_analyze(self) -> None:
-        try:
-            with self._database.connection_context():
-                self._database.execute_sql("ANALYZE;")
-        except peewee.DatabaseError as exc:
-            self._logger.warning(
-                "db_analyze_failed",
-                extra={"path": self._mask_path(self.path), "error": str(exc)},
-            )
+        """Run ANALYZE to update query planner statistics."""
+        self._maintenance.run_analyze()
 
     def _run_vacuum(self) -> None:
-        try:
-            with self._database.connection_context():
-                self._database.execute_sql("VACUUM;")
-        except peewee.DatabaseError as exc:
-            self._logger.warning(
-                "db_vacuum_failed",
-                extra={"path": self._mask_path(self.path), "error": str(exc)},
-            )
+        """Run VACUUM to reclaim disk space and defragment."""
+        self._maintenance.run_vacuum()

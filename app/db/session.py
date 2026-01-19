@@ -1,4 +1,13 @@
-"""Database session management and core infrastructure."""
+"""Database session management and core infrastructure.
+
+This module provides the DatabaseSessionManager class, which is the primary
+infrastructure component for database operations. It handles:
+- Connection management with SQLite
+- Read/write locking for concurrent access
+- Async operation wrappers with timeout and retry logic
+- Database migrations and maintenance
+- Backup creation
+"""
 
 from __future__ import annotations
 
@@ -54,11 +63,21 @@ class RowSqliteDatabase(SqliteExtDatabase):
 class DatabaseSessionManager:
     """Peewee-backed database session manager.
 
-    Handles connection management, locking, diagnostics, and migrations.
+    Handles connection management, locking, async operations, and migrations.
+    This is the core infrastructure class that repositories use for database access.
+
+    Attributes:
+        path: Path to the SQLite database file, or ":memory:" for in-memory
+        operation_timeout: Default timeout for database operations in seconds
+        max_retries: Maximum retries for transient database errors
+        json_max_size: Maximum size for JSON fields in bytes
+        json_max_depth: Maximum nesting depth for JSON fields
+        json_max_array_length: Maximum array length in JSON fields
+        json_max_dict_keys: Maximum dictionary keys in JSON fields
     """
 
     path: str
-    _logger: logging.Logger = logging.getLogger(__name__)
+    _logger: logging.Logger = field(default_factory=lambda: logging.getLogger(__name__))
     _database: peewee.SqliteDatabase = field(init=False)
     _rw_lock: AsyncRWLock = field(init=False)
     _topic_search_index_delete_warned: bool = field(default=False, init=False)
@@ -94,7 +113,7 @@ class DatabaseSessionManager:
         """Access the underlying Peewee database instance."""
         return self._database
 
-    def connection_context(self) -> AbstractAsyncContextManager[Any]:
+    def connection_context(self) -> Any:
         """Return a connection context manager."""
         return self._database.connection_context()
 
@@ -110,7 +129,7 @@ class DatabaseSessionManager:
             self._database.create_tables(ALL_MODELS, safe=True)
             SchemaMigrator(self._database, self._logger).ensure_schema_compatibility()
         self._run_database_maintenance()
-        self._logger.info("db_migrated", extra={"path": self.path})
+        self._logger.info("db_migrated", extra={"path": self._mask_path(self.path)})
 
     async def _safe_db_operation(
         self,
@@ -121,7 +140,25 @@ class DatabaseSessionManager:
         read_only: bool = False,
         **kwargs: Any,
     ) -> Any:
-        """Execute database operation with timeout, retry, and connection protection."""
+        """Execute database operation with timeout, retry, and connection protection.
+
+        Args:
+            operation: The database operation to execute
+            *args: Positional arguments for the operation
+            timeout: Timeout in seconds (default: self.operation_timeout)
+            operation_name: Name for logging purposes
+            read_only: Whether this is a read-only operation (allows concurrent reads)
+            **kwargs: Keyword arguments for the operation
+
+        Returns:
+            Result of the operation
+
+        Raises:
+            asyncio.TimeoutError: If operation times out
+            peewee.OperationalError: If database is locked or busy after retries
+            peewee.IntegrityError: If constraint violation occurs
+            Exception: Other database errors
+        """
         if timeout is None:
             timeout = self.operation_timeout
 
@@ -146,34 +183,202 @@ class DatabaseSessionManager:
                 return await asyncio.wait_for(_run_with_lock(lock_context), timeout=timeout)
 
             except TimeoutError:
-                self._logger.exception("db_operation_timeout", extra={"operation": operation_name})
+                self._logger.exception(
+                    "db_operation_timeout",
+                    extra={
+                        "operation": operation_name,
+                        "timeout": timeout,
+                        "retries": retries,
+                    },
+                )
                 raise
 
             except peewee.OperationalError as e:
                 last_error = e
-                if "locked" in str(e).lower() or "busy" in str(e).lower():
+                error_msg = str(e).lower()
+
+                if "locked" in error_msg or "busy" in error_msg:
                     if retries < self.max_retries:
                         retries += 1
-                        wait_time = 0.1 * (2**retries)
+                        wait_time = 0.1 * (2**retries)  # Exponential backoff
+                        self._logger.warning(
+                            "db_locked_retrying",
+                            extra={
+                                "operation": operation_name,
+                                "retry": retries,
+                                "max_retries": self.max_retries,
+                                "wait_time": wait_time,
+                                "error": str(e),
+                            },
+                        )
                         await asyncio.sleep(wait_time)
                         continue
+
+                self._logger.exception(
+                    "db_operational_error",
+                    extra={
+                        "operation": operation_name,
+                        "retries": retries,
+                        "error": str(e),
+                    },
+                )
+                raise
+
+            except peewee.IntegrityError as e:
+                self._logger.exception(
+                    "db_integrity_error",
+                    extra={
+                        "operation": operation_name,
+                        "error": str(e),
+                    },
+                )
                 raise
 
             except Exception as e:
                 self._logger.exception(
-                    "db_unexpected_error", extra={"operation": operation_name, "error": str(e)}
+                    "db_unexpected_error",
+                    extra={
+                        "operation": operation_name,
+                        "retries": retries,
+                        "error": str(e),
+                        "error_type": type(e).__name__,
+                    },
                 )
                 raise
 
         if last_error:
             raise last_error
-        raise RuntimeError(f"Operation {operation_name} failed after retries")
+        msg = f"Database operation {operation_name} failed after {self.max_retries} retries"
+        raise RuntimeError(msg)
+
+    async def _safe_db_transaction(
+        self,
+        operation: Any,
+        *args: Any,
+        timeout: float | None = None,
+        operation_name: str = "database_transaction",
+        **kwargs: Any,
+    ) -> Any:
+        """Execute database operation within an explicit transaction with rollback.
+
+        This method wraps database operations in an atomic transaction, ensuring
+        that all changes are either committed together or rolled back on error.
+
+        Args:
+            operation: The database operation to execute
+            *args: Positional arguments for the operation
+            timeout: Timeout in seconds (default: self.operation_timeout)
+            operation_name: Name for logging purposes
+            **kwargs: Keyword arguments for the operation
+
+        Returns:
+            Result of the operation
+
+        Raises:
+            asyncio.TimeoutError: If operation times out
+            peewee.OperationalError: If database is locked or busy after retries
+            peewee.IntegrityError: If constraint violation occurs
+            Exception: Other database errors
+        """
+        if timeout is None:
+            timeout = self.operation_timeout
+
+        retries = 0
+        last_error = None
+
+        while retries <= self.max_retries:
+            try:
+                # Transactions always require write lock
+                async def _run_transaction() -> Any:
+                    async with self._rw_lock.write_lock():
+
+                        def _execute_in_transaction() -> Any:
+                            with self._database.atomic() as txn:
+                                try:
+                                    return operation(*args, **kwargs)
+                                except BaseException:
+                                    txn.rollback()
+                                    raise
+
+                        return await asyncio.to_thread(_execute_in_transaction)
+
+                return await asyncio.wait_for(_run_transaction(), timeout=timeout)
+
+            except TimeoutError:
+                self._logger.exception(
+                    "db_transaction_timeout",
+                    extra={
+                        "operation": operation_name,
+                        "timeout": timeout,
+                        "retries": retries,
+                    },
+                )
+                raise
+
+            except peewee.OperationalError as e:
+                last_error = e
+                error_msg = str(e).lower()
+
+                if "locked" in error_msg or "busy" in error_msg:
+                    if retries < self.max_retries:
+                        retries += 1
+                        wait_time = 0.1 * (2**retries)
+                        self._logger.warning(
+                            "db_transaction_locked_retrying",
+                            extra={
+                                "operation": operation_name,
+                                "retry": retries,
+                                "max_retries": self.max_retries,
+                                "wait_time": wait_time,
+                                "error": str(e),
+                            },
+                        )
+                        await asyncio.sleep(wait_time)
+                        continue
+
+                self._logger.exception(
+                    "db_transaction_operational_error",
+                    extra={
+                        "operation": operation_name,
+                        "retries": retries,
+                        "error": str(e),
+                    },
+                )
+                raise
+
+            except peewee.IntegrityError as e:
+                self._logger.exception(
+                    "db_transaction_integrity_error",
+                    extra={
+                        "operation": operation_name,
+                        "error": str(e),
+                    },
+                )
+                raise
+
+            except Exception as e:
+                self._logger.exception(
+                    "db_transaction_unexpected_error",
+                    extra={
+                        "operation": operation_name,
+                        "retries": retries,
+                        "error": str(e),
+                        "error_type": type(e).__name__,
+                    },
+                )
+                raise
+
+        if last_error:
+            raise last_error
+        msg = f"Database transaction {operation_name} failed after {self.max_retries} retries"
+        raise RuntimeError(msg)
 
     def execute(self, sql: str, params: Iterable | None = None) -> None:
         """Execute raw SQL synchronously."""
         params = tuple(params or ())
         with self._database.connection_context():
             self._database.execute_sql(sql, params)
+        self._logger.debug("db_execute", extra={"sql": sql, "params": list(params)[:10]})
 
     def fetchone(self, sql: str, params: Iterable | None = None) -> sqlite3.Row | None:
         """Fetch a single row using raw SQL."""
@@ -183,9 +388,24 @@ class DatabaseSessionManager:
             return cursor.fetchone()
 
     def create_backup_copy(self, dest_path: str) -> Path:
-        """Create a full backup of the database file."""
+        """Create a full backup of the database file.
+
+        Args:
+            dest_path: Destination path for the backup
+
+        Returns:
+            Path to the created backup file
+
+        Raises:
+            ValueError: If trying to backup an in-memory database
+            FileNotFoundError: If source database file doesn't exist
+        """
         if self.path == ":memory:":
-            raise ValueError("Cannot backup in-memory database")
+            raise ValueError("Cannot create a backup for an in-memory database")
+
+        source = Path(self.path)
+        if not source.exists():
+            raise FileNotFoundError(f"Database file not found at {self.path}")
 
         destination = Path(dest_path)
         destination.parent.mkdir(parents=True, exist_ok=True)
@@ -194,6 +414,13 @@ class DatabaseSessionManager:
             conn.backup(dest_conn)
             dest_conn.commit()
 
+        self._logger.info(
+            "db_backup_copy_created",
+            extra={
+                "source": self._mask_path(str(source)),
+                "dest": self._mask_path(str(destination)),
+            },
+        )
         return destination
 
     def get_database_overview(self) -> dict[str, Any]:
@@ -218,9 +445,13 @@ class DatabaseSessionManager:
 
         return overview
 
-    def verify_processing_integrity(self, limit: int | None = None) -> dict[str, Any]:
+    def verify_processing_integrity(
+        self,
+        *,
+        required_fields: Iterable[str] | None = None,
+        limit: int | None = None,
+    ) -> dict[str, Any]:
         """Perform deep integrity check on processed summaries."""
-        # Simplified version of verification logic
         query = (
             Request.select(Request, Summary, CrawlResult)
             .join(Summary, JOIN.LEFT_OUTER, on=(Summary.request == Request.id))
@@ -233,17 +464,40 @@ class DatabaseSessionManager:
 
         return {"checked": query.count()}
 
-    # -- Internal migration and maintenance helpers -----------------------
+    # -- Internal helpers -------------------------------------------------
+
+    @staticmethod
+    def _mask_path(path: str) -> str:
+        """Mask a path for logging (show only parent/filename)."""
+        try:
+            p = Path(path)
+            if not p.name:
+                return str(p)
+            parent = p.parent.name
+            if parent:
+                return f".../{parent}/{p.name}"
+            return p.name
+        except (OSError, ValueError, AttributeError):
+            return "..."
 
     def _run_database_maintenance(self) -> None:
+        """Run database maintenance operations (ANALYZE, checkpoint)."""
+        if self.path == ":memory:":
+            self._logger.debug("db_maintenance_skipped_in_memory")
+            return
+
         try:
             with self._database.connection_context():
                 self._database.execute_sql("ANALYZE")
                 self._database.execute_sql("PRAGMA wal_checkpoint(TRUNCATE)")
-        except Exception:
-            pass
+        except peewee.DatabaseError as exc:
+            self._logger.warning(
+                "db_maintenance_failed",
+                extra={"path": self._mask_path(self.path), "error": str(exc)},
+            )
 
     def _count_table_rows(self, table_name: str) -> int:
+        """Count rows in a table by model."""
         model = next((m for m in ALL_MODELS if m._meta.table_name == table_name), None)
         if model is not None:
             return model.select().count()

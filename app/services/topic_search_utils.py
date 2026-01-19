@@ -125,6 +125,90 @@ def compose_search_body(
     return normalized.casefold(), tags_text
 
 
+def yield_topic_fragments(value: Any) -> Iterable[str]:
+    """Yield normalized text fragments from arbitrary payload values.
+
+    This function recursively extracts all string content from nested data
+    structures, yielding each non-empty string fragment.
+
+    Args:
+        value: Any value (string, list, dict, etc.)
+
+    Yields:
+        Non-empty string fragments found in the value
+    """
+    if value is None:
+        return
+    if isinstance(value, str):
+        text = value.strip()
+        if text:
+            yield text
+        return
+    if isinstance(value, Sequence) and not isinstance(value, str | bytes | bytearray):
+        for item in value:
+            yield from yield_topic_fragments(item)
+        return
+    yield str(value)
+
+
+def summary_matches_topic(
+    payload: Mapping[str, Any],
+    request_data: Mapping[str, Any],
+    topic: str,
+) -> bool:
+    """Return True when a stored summary appears to match the requested topic.
+
+    This function performs a software-level filter on summary payloads to
+    verify they match a topic query. It extracts relevant text from both
+    the summary payload and request data, then checks if all query terms
+    appear in the combined text.
+
+    Args:
+        payload: The summary JSON payload
+        request_data: The request data dict
+        topic: The topic query string
+
+    Returns:
+        True if all query terms are found in the summary/request content
+    """
+    terms = [term for term in tokenize(topic) if term]
+    if not terms:
+        normalized = topic.casefold().strip()
+        if not normalized:
+            return True
+        terms = [normalized]
+
+    metadata = ensure_mapping(payload.get("metadata"))
+    candidate_values: list[Any] = [
+        payload.get("title"),
+        payload.get("summary_250"),
+        payload.get("summary_1000"),
+        payload.get("tldr"),
+        payload.get("topic_tags"),
+        payload.get("topic_taxonomy"),
+        metadata.get("title"),
+        metadata.get("description"),
+        metadata.get("keywords"),
+        metadata.get("section"),
+        metadata.get("topics"),
+        metadata.get("category"),
+        request_data.get("input_url"),
+        request_data.get("normalized_url"),
+        request_data.get("content_text"),
+    ]
+
+    fragments: list[str] = []
+    for value in candidate_values:
+        for fragment in yield_topic_fragments(value):
+            fragments.append(fragment.casefold())
+
+    if not fragments:
+        return False
+
+    combined = " ".join(fragments)
+    return all(term in combined for term in terms)
+
+
 def build_topic_search_document(
     *,
     request_id: int,

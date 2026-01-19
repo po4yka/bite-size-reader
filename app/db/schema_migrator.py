@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-import json
 from typing import TYPE_CHECKING, Any
 
+from app.db.json_utils import normalize_legacy_json_value
 from app.db.models import ALL_MODELS
 
 if TYPE_CHECKING:
@@ -92,34 +92,6 @@ class SchemaMigrator:
             for column in columns:
                 self._coerce_json_column(table, column)
 
-    @staticmethod
-    def _normalize_legacy_json_value(value: Any) -> tuple[Any | None, bool, str | None]:
-        if value is None:
-            return None, False, None
-        if isinstance(value, memoryview):
-            value = value.tobytes()
-        if isinstance(value, bytes | bytearray):
-            try:
-                value = value.decode("utf-8")
-            except (UnicodeDecodeError, AttributeError):
-                value = value.decode("utf-8", errors="replace")
-        if isinstance(value, dict | list):
-            return value, False, None
-        if isinstance(value, str):
-            stripped = value.strip()
-            if not stripped:
-                return None, True, "blank"
-            try:
-                json.loads(stripped)
-            except json.JSONDecodeError:
-                return {"__legacy_text__": stripped}, True, "invalid_json"
-            return None, False, None
-        try:
-            json.dumps(value)
-        except (TypeError, ValueError):
-            return {"__legacy_text__": str(value)}, True, "invalid_json"
-        return value, False, None
-
     def _coerce_json_column(self, table: str, column: str) -> None:
         model = next((m for m in ALL_MODELS if m._meta.table_name == table), None)
         if model is None:
@@ -134,7 +106,7 @@ class SchemaMigrator:
 
             try:
                 for row_id, raw_value in query:
-                    normalized, should_update, reason = self._normalize_legacy_json_value(raw_value)
+                    normalized, should_update, reason = normalize_legacy_json_value(raw_value)
                     if not should_update:
                         continue
                     if reason == "invalid_json" and isinstance(raw_value, str):
