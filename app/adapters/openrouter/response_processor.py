@@ -3,9 +3,32 @@
 from __future__ import annotations
 
 import json
+import logging
+from dataclasses import dataclass
 from typing import Any
 
 from app.core.json_utils import extract_json
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass
+class CacheMetrics:
+    """Cache metrics extracted from OpenRouter response."""
+
+    cache_read_tokens: int = 0
+    cache_creation_tokens: int = 0
+    cache_discount: float | None = None
+
+    @property
+    def cache_hit(self) -> bool:
+        """Return True if cache was used (read tokens > 0)."""
+        return self.cache_read_tokens > 0
+
+    @property
+    def total_cached_tokens(self) -> int:
+        """Total tokens involved in caching (read + creation)."""
+        return self.cache_read_tokens + self.cache_creation_tokens
 
 
 class ResponseProcessor:
@@ -190,6 +213,67 @@ class ResponseProcessor:
                 cost_usd = None
 
         return text, usage, cost_usd
+
+    def extract_cache_metrics(self, response: dict[str, Any]) -> CacheMetrics:
+        """Extract cache metrics from OpenRouter response.
+
+        OpenRouter includes cache metrics in the usage object:
+        - cache_read_input_tokens: Tokens read from cache (cache hit)
+        - cache_creation_input_tokens: Tokens added to cache (cache miss/write)
+        - cache_discount: Cost discount from caching (if available)
+
+        Args:
+            response: Full API response dict
+
+        Returns:
+            CacheMetrics dataclass with extracted values
+        """
+        usage = response.get("usage", {})
+        if not isinstance(usage, dict):
+            return CacheMetrics()
+
+        cache_read = 0
+        cache_creation = 0
+        cache_discount = None
+
+        # Extract cache token counts
+        try:
+            cache_read = int(usage.get("cache_read_input_tokens", 0) or 0)
+        except (TypeError, ValueError):
+            cache_read = 0
+
+        try:
+            cache_creation = int(usage.get("cache_creation_input_tokens", 0) or 0)
+        except (TypeError, ValueError):
+            cache_creation = 0
+
+        # Extract cache discount if available
+        try:
+            discount_val = response.get("cache_discount")
+            if discount_val is not None:
+                cache_discount = float(discount_val)
+        except (TypeError, ValueError):
+            cache_discount = None
+
+        metrics = CacheMetrics(
+            cache_read_tokens=cache_read,
+            cache_creation_tokens=cache_creation,
+            cache_discount=cache_discount,
+        )
+
+        # Log cache metrics if stats are enabled
+        if self._enable_stats and (cache_read > 0 or cache_creation > 0):
+            logger.info(
+                "cache_metrics_extracted",
+                extra={
+                    "cache_read_tokens": cache_read,
+                    "cache_creation_tokens": cache_creation,
+                    "cache_discount": cache_discount,
+                    "cache_hit": metrics.cache_hit,
+                },
+            )
+
+        return metrics
 
     def validate_structured_response(
         self, text: str | None, rf_included: bool, requested_rf: dict[str, Any] | None

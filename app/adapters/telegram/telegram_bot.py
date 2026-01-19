@@ -149,6 +149,12 @@ class TelegramBot:
                 extra={"interval_minutes": interval},
             )
 
+        # Start rate limiter cleanup task (runs every 5 minutes)
+        self._rate_limiter_cleanup_task = asyncio.create_task(
+            self._run_rate_limiter_cleanup_loop(),
+            name="rate_limiter_cleanup_loop",
+        )
+
         # Start background scheduler for periodic tasks (e.g., Karakeep sync)
         await self._scheduler.start()
 
@@ -165,6 +171,14 @@ class TelegramBot:
                 self._backup_task.cancel()
                 with contextlib.suppress(asyncio.CancelledError):
                     await self._backup_task
+
+            if (
+                hasattr(self, "_rate_limiter_cleanup_task")
+                and self._rate_limiter_cleanup_task is not None
+            ):
+                self._rate_limiter_cleanup_task.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await self._rate_limiter_cleanup_task
 
     def _audit(self, level: str, event: str, details: dict) -> None:
         """Audit log helper (background async)."""
@@ -417,6 +431,35 @@ class TelegramBot:
                     "db_backup_remove_failed",
                     extra={"backup_path": self._mask_path(str(obsolete)), "error": str(exc)},
                 )
+
+    async def _run_rate_limiter_cleanup_loop(self, interval_minutes: int = 5) -> None:
+        """Periodically clean up expired rate limiter entries to prevent memory leaks.
+
+        Args:
+            interval_minutes: How often to run cleanup (default: 5 minutes)
+        """
+        logger.info(
+            "rate_limiter_cleanup_loop_started",
+            extra={"interval_minutes": interval_minutes},
+        )
+        try:
+            while True:
+                await asyncio.sleep(interval_minutes * 60)
+                try:
+                    cleaned = await self.message_handler.message_router.cleanup_rate_limiter()
+                    if cleaned > 0:
+                        logger.debug(
+                            "rate_limiter_cleanup_completed",
+                            extra={"users_cleaned": cleaned},
+                        )
+                except Exception as exc:
+                    logger.warning(
+                        "rate_limiter_cleanup_error",
+                        extra={"error": str(exc)},
+                    )
+        except asyncio.CancelledError:
+            logger.info("rate_limiter_cleanup_loop_cancelled")
+            raise
 
     # ---- Compatibility helpers expected by tests (typed stubs) ----
     async def _safe_reply(

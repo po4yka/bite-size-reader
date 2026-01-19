@@ -131,6 +131,14 @@ class MessageRouter:
             return
         await limiter.release_concurrent_slot(uid)
 
+    async def cleanup_rate_limiter(self) -> int:
+        """Clean up expired rate limiter entries to prevent memory leaks.
+
+        Only cleans up the in-memory rate limiter; Redis handles TTL automatically.
+        Returns the number of users cleaned up.
+        """
+        return await self._rate_limiter.cleanup_expired()
+
     async def route_message(self, message: Any) -> None:
         """Main message routing entry point."""
         start_time = time.time()

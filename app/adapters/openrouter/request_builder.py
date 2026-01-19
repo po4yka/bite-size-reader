@@ -2,13 +2,21 @@
 
 from __future__ import annotations
 
+import logging
 import re
 from typing import TYPE_CHECKING, Any
 
 from app.adapters.openrouter.exceptions import ValidationError
+from app.adapters.openrouter.model_capabilities import (
+    get_caching_info,
+    supports_automatic_caching,
+    supports_explicit_caching,
+)
 
 if TYPE_CHECKING:
     from app.models.llm.llm_models import ChatRequest
+
+logger = logging.getLogger(__name__)
 
 
 class RequestBuilder:
@@ -23,6 +31,11 @@ class RequestBuilder:
         enable_structured_outputs: bool = True,
         structured_output_mode: str = "json_schema",
         require_parameters: bool = True,
+        # Prompt caching settings
+        enable_prompt_caching: bool = True,
+        prompt_cache_ttl: str = "ephemeral",
+        cache_system_prompt: bool = True,
+        cache_large_content_threshold: int = 4096,
     ) -> None:
         self._api_key = api_key
         self._http_referer = http_referer
@@ -31,6 +44,11 @@ class RequestBuilder:
         self._enable_structured_outputs = enable_structured_outputs
         self._structured_output_mode = structured_output_mode
         self._require_parameters = require_parameters
+        # Prompt caching settings
+        self._enable_prompt_caching = enable_prompt_caching
+        self._prompt_cache_ttl = prompt_cache_ttl
+        self._cache_system_prompt = cache_system_prompt
+        self._cache_large_content_threshold = cache_large_content_threshold
 
     def validate_chat_request(self, request: ChatRequest) -> None:
         """Validate chat request parameters."""
@@ -78,13 +96,32 @@ class RequestBuilder:
                         "valid_roles": ["system", "user", "assistant"],
                     },
                 )
-            if not isinstance(message["content"], str):
+            content = message["content"]
+            # Allow content as string OR list (for multipart content with cache_control)
+            if isinstance(content, str):
+                pass  # Valid string content
+            elif isinstance(content, list):
+                # Validate multipart content format
+                for part_idx, part in enumerate(content):
+                    if not isinstance(part, dict):
+                        error_msg = f"Message {i} content part {part_idx} must be a dict"
+                        raise ValidationError(
+                            error_msg,
+                            context={"message_index": i, "part_index": part_idx},
+                        )
+                    if part.get("type") == "text" and not isinstance(part.get("text"), str):
+                        error_msg = f"Message {i} content part {part_idx} text must be a string"
+                        raise ValidationError(
+                            error_msg,
+                            context={"message_index": i, "part_index": part_idx},
+                        )
+            else:
                 error_msg = (
-                    f"Message {i} content must be string, got {type(message['content']).__name__}"
+                    f"Message {i} content must be string or list, got {type(content).__name__}"
                 )
                 raise ValidationError(
                     error_msg,
-                    context={"message_index": i, "content_type": type(message["content"]).__name__},
+                    context={"message_index": i, "content_type": type(content).__name__},
                 )
 
         # Validate other parameters
@@ -307,3 +344,192 @@ class RequestBuilder:
         if "Authorization" in redacted_headers:
             redacted_headers["Authorization"] = "REDACTED"
         return redacted_headers
+
+    def build_cacheable_messages(
+        self,
+        messages: list[dict[str, Any]],
+        model: str,
+        enable_caching: bool | None = None,
+    ) -> list[dict[str, Any]]:
+        """Convert messages to cacheable format for supported providers.
+
+        For Anthropic and Google providers, adds cache_control breakpoints to
+        system messages and large content blocks to enable prompt caching.
+
+        For providers with automatic caching (OpenAI, DeepSeek, Qwen, Moonshot),
+        no modification is needed - caching happens server-side.
+
+        Args:
+            messages: List of message dicts with role and content
+            model: Model identifier for provider detection
+            enable_caching: Override for enabling caching (defaults to instance setting)
+
+        Returns:
+            Messages with cache_control added where appropriate
+        """
+        should_cache = enable_caching if enable_caching is not None else self._enable_prompt_caching
+        caching_info = get_caching_info(model)
+        provider = caching_info["provider"]
+
+        # Log caching info on first request
+        if caching_info["supports_caching"]:
+            if supports_automatic_caching(model):
+                logger.debug(
+                    "prompt_caching_automatic",
+                    extra={
+                        "model": model,
+                        "provider": provider,
+                        "caching_type": "automatic",
+                        "notes": caching_info["notes"],
+                    },
+                )
+                # Automatic caching providers don't need message modification
+                return messages
+
+        # Only Anthropic and Google require explicit cache_control
+        if not should_cache or not supports_explicit_caching(model):
+            if not caching_info["supports_caching"]:
+                logger.debug(
+                    "prompt_caching_not_supported",
+                    extra={
+                        "model": model,
+                        "provider": provider,
+                        "reason": "Provider does not support prompt caching",
+                    },
+                )
+            return messages
+
+        result: list[dict[str, Any]] = []
+        breakpoints_added = 0
+        max_breakpoints = 4 if provider == "anthropic" else 1  # Gemini only uses last breakpoint
+
+        for i, msg in enumerate(messages):
+            if self._should_cache_message(msg, provider, i, len(messages)):
+                # Only add breakpoints up to the limit
+                if breakpoints_added < max_breakpoints:
+                    result.append(self._add_cache_control(msg))
+                    breakpoints_added += 1
+                    logger.debug(
+                        "cache_control_added",
+                        extra={
+                            "message_index": i,
+                            "role": msg.get("role"),
+                            "provider": provider,
+                            "breakpoints": breakpoints_added,
+                        },
+                    )
+                else:
+                    result.append(msg)
+            else:
+                result.append(msg)
+
+        if breakpoints_added > 0:
+            logger.info(
+                "prompt_caching_enabled",
+                extra={
+                    "provider": provider,
+                    "model": model,
+                    "breakpoints_added": breakpoints_added,
+                },
+            )
+
+        return result
+
+    def _should_cache_message(
+        self,
+        msg: dict[str, Any],
+        provider: str,
+        index: int,
+        total_messages: int,
+    ) -> bool:
+        """Determine if a message should be cached.
+
+        Args:
+            msg: Message dict
+            provider: Provider name
+            index: Message index in list
+            total_messages: Total number of messages
+
+        Returns:
+            True if message should have cache_control added
+        """
+        role = msg.get("role", "")
+        content = msg.get("content", "")
+
+        # Always cache system messages if enabled
+        if role == "system" and self._cache_system_prompt:
+            return True
+
+        # Cache large content blocks
+        content_length = len(content) if isinstance(content, str) else 0
+        # Rough estimate: ~4 chars per token
+        estimated_tokens = content_length // 4
+
+        # For Gemini, must meet minimum token threshold (4096)
+        if provider == "google" and estimated_tokens < self._cache_large_content_threshold:
+            return False
+
+        # Cache large assistant/user messages (e.g., RAG chunks)
+        if estimated_tokens >= self._cache_large_content_threshold:
+            return True
+
+        return False
+
+    def _add_cache_control(self, msg: dict[str, Any]) -> dict[str, Any]:
+        """Convert message to multipart format with cache_control.
+
+        Args:
+            msg: Original message dict
+
+        Returns:
+            Message with cache_control added to content
+        """
+        content = msg.get("content", "")
+
+        # If content is already a list, add cache_control to last text part
+        if isinstance(content, list):
+            new_content = []
+            for i, part in enumerate(content):
+                if i == len(content) - 1 and isinstance(part, dict) and part.get("type") == "text":
+                    # Add cache_control to last text part
+                    new_part = dict(part)
+                    new_part["cache_control"] = {"type": self._prompt_cache_ttl}
+                    new_content.append(new_part)
+                else:
+                    new_content.append(part)
+            return {**msg, "content": new_content}
+
+        # Convert string content to multipart format with cache_control
+        if isinstance(content, str):
+            return {
+                **msg,
+                "content": [
+                    {
+                        "type": "text",
+                        "text": content,
+                        "cache_control": {"type": self._prompt_cache_ttl},
+                    }
+                ],
+            }
+
+        # Return unchanged if content is neither string nor list
+        return msg
+
+    def estimate_content_tokens(self, content: str | list) -> int:
+        """Estimate token count for content.
+
+        Args:
+            content: String or list of content parts
+
+        Returns:
+            Estimated token count (rough: ~4 chars per token)
+        """
+        if isinstance(content, str):
+            return len(content) // 4
+        if isinstance(content, list):
+            total = 0
+            for part in content:
+                if isinstance(part, dict) and isinstance(part.get("text"), str):
+                    total += len(part["text"]) // 4
+            return total
+        return 0

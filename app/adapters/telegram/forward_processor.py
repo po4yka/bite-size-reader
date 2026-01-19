@@ -231,15 +231,18 @@ class ForwardProcessor:
             if isinstance(content_text, str):
                 return content_text
 
-            # Fallback: get from request table directly
-            # Since we don't have get_request_by_id, we'll need to construct a query
-            with self.db.connect() as conn:
-                row = conn.execute(
-                    "SELECT content_text FROM requests WHERE id = ?", (req_id,)
-                ).fetchone()
-                if row:
-                    return row[0]
-            return None
+            # Fallback: get from request table directly using async wrapper
+            # to avoid blocking the event loop
+            def _sync_query() -> str | None:
+                with self.db.connect() as conn:
+                    row = conn.execute(
+                        "SELECT content_text FROM requests WHERE id = ?", (req_id,)
+                    ).fetchone()
+                    if row:
+                        return row[0]
+                return None
+
+            return await asyncio.to_thread(_sync_query)
         except Exception as exc:
             logger.exception(
                 "get_forward_content_text_failed",

@@ -8,6 +8,129 @@ from typing import Any
 
 import httpx
 
+# Provider patterns for detecting which provider a model belongs to
+PROVIDER_PATTERNS: dict[str, list[str]] = {
+    "anthropic": ["anthropic/", "claude-"],
+    "google": ["google/", "gemini-"],
+    "openai": ["openai/", "gpt-"],
+    "deepseek": ["deepseek/"],
+    "qwen": ["qwen/"],
+    "minimax": ["minimax/"],
+    "moonshotai": ["moonshotai/", "kimi-"],
+    "meta": ["meta-llama/", "llama-"],
+    "mistral": ["mistral/", "mistral-"],
+    "cohere": ["cohere/"],
+}
+
+# Providers that require explicit cache_control breakpoints
+# - Anthropic: max 4 breakpoints, TTL ephemeral (5min) or 1h
+# - Google: only last breakpoint used, min ~4096 tokens
+EXPLICIT_CACHING_PROVIDERS: frozenset[str] = frozenset({"anthropic", "google"})
+
+# Providers with automatic/implicit caching (no configuration needed)
+# These handle caching server-side without explicit cache_control
+AUTOMATIC_CACHING_PROVIDERS: frozenset[str] = frozenset(
+    {
+        "openai",  # Automatic, 1024 token minimum, free writes, 0.25-0.50x reads
+        "deepseek",  # Automatic caching
+        "qwen",  # Implicit caching via Alibaba Cloud (supports_implicit_caching: true)
+        "moonshotai",  # Automatic caching for Kimi models
+        "minimax",  # Automatic caching
+    }
+)
+
+
+def detect_provider(model: str) -> str:
+    """Detect the provider for a given model name.
+
+    Args:
+        model: Model identifier (e.g., "anthropic/claude-3-opus", "qwen/qwen3-max")
+
+    Returns:
+        Provider name (e.g., "anthropic", "google", "openai") or "unknown"
+    """
+    model_lower = model.lower()
+    for provider, patterns in PROVIDER_PATTERNS.items():
+        for pattern in patterns:
+            if pattern.lower() in model_lower:
+                return provider
+    return "unknown"
+
+
+def supports_explicit_caching(model: str) -> bool:
+    """Check if model's provider requires explicit cache_control breakpoints.
+
+    Args:
+        model: Model identifier
+
+    Returns:
+        True if the provider (Anthropic/Google) requires explicit cache_control
+    """
+    provider = detect_provider(model)
+    return provider in EXPLICIT_CACHING_PROVIDERS
+
+
+def supports_automatic_caching(model: str) -> bool:
+    """Check if model's provider has automatic caching.
+
+    Args:
+        model: Model identifier
+
+    Returns:
+        True if the provider handles caching automatically (no config needed)
+    """
+    provider = detect_provider(model)
+    return provider in AUTOMATIC_CACHING_PROVIDERS
+
+
+def get_caching_info(model: str) -> dict[str, Any]:
+    """Get detailed caching information for a model.
+
+    Args:
+        model: Model identifier
+
+    Returns:
+        Dict with caching details: supports_caching, caching_type, provider, notes
+    """
+    provider = detect_provider(model)
+
+    if provider in EXPLICIT_CACHING_PROVIDERS:
+        notes = {
+            "anthropic": "Max 4 breakpoints, TTL: ephemeral (5min) or 1h",
+            "google": "Only last breakpoint used, min ~4096 tokens",
+        }
+        return {
+            "supports_caching": True,
+            "caching_type": "explicit",
+            "provider": provider,
+            "requires_cache_control": True,
+            "notes": notes.get(provider, "Requires cache_control breakpoints"),
+        }
+
+    if provider in AUTOMATIC_CACHING_PROVIDERS:
+        notes = {
+            "openai": "Automatic, 1024 token min, free writes, 0.25-0.50x reads",
+            "deepseek": "Automatic caching, no config needed",
+            "qwen": "Implicit caching via Alibaba Cloud",
+            "moonshotai": "Automatic caching for Kimi models",
+            "minimax": "Automatic caching",
+        }
+        return {
+            "supports_caching": True,
+            "caching_type": "automatic",
+            "provider": provider,
+            "requires_cache_control": False,
+            "notes": notes.get(provider, "Automatic caching, no config needed"),
+        }
+
+    return {
+        "supports_caching": False,
+        "caching_type": "unknown",
+        "provider": provider,
+        "requires_cache_control": False,
+        "notes": "Caching support unknown for this provider",
+    }
+
 
 class ModelCapabilities:
     """Handles model capability detection and caching."""
