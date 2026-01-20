@@ -16,7 +16,6 @@ import contextlib
 import logging
 import sqlite3
 from collections.abc import Iterable, Iterator, Mapping, Sequence
-from contextlib import AbstractAsyncContextManager
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -167,20 +166,23 @@ class DatabaseSessionManager:
 
         while retries <= self.max_retries:
             try:
-                lock_context: AbstractAsyncContextManager[Any] = (
-                    self._rw_lock.read_lock() if read_only else self._rw_lock.write_lock()
-                )
 
-                async def _run_with_lock(context: AbstractAsyncContextManager[Any]) -> Any:
-                    async with context:
+                async def _run_with_lock() -> Any:
+                    def _op_wrapper() -> Any:
+                        with self._database.connection_context():
+                            return operation(*args, **kwargs)
 
-                        def _op_wrapper() -> Any:
-                            with self._database.connection_context():
-                                return operation(*args, **kwargs)
-
+                    if read_only:
+                        # Read operations don't need application-level locking.
+                        # SQLite WAL mode (configured in __post_init__) handles
+                        # reader-writer coordination at the database level,
+                        # allowing concurrent reads with a single writer.
                         return await asyncio.to_thread(_op_wrapper)
 
-                return await asyncio.wait_for(_run_with_lock(lock_context), timeout=timeout)
+                    async with self._rw_lock.write_lock():
+                        return await asyncio.to_thread(_op_wrapper)
+
+                return await asyncio.wait_for(_run_with_lock(), timeout=timeout)
 
             except TimeoutError:
                 self._logger.exception(

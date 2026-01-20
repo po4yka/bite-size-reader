@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING
 
-from app.config import ChromaConfig
+from app.config import ChromaConfig, load_config
 from app.core.logging_utils import get_logger
 from app.infrastructure.vector.chroma_store import ChromaVectorStore
 from app.services.chroma_vector_search_service import ChromaVectorSearchService
@@ -31,6 +31,10 @@ def _default_vector_store_factory(config: ChromaConfig) -> ChromaVectorStore:
     )
 
 
+def _default_config_factory() -> ChromaConfig:
+    return load_config(allow_stub_telegram=True).vector_store
+
+
 class _ChromaSearchResourceManager:
     _lock = asyncio.Lock()
     _service: ChromaVectorSearchService | None = None
@@ -40,7 +44,7 @@ class _ChromaSearchResourceManager:
     _vector_store_factory: Callable[[ChromaConfig], ChromaVectorStore] = (
         _default_vector_store_factory
     )
-    _config_factory: Callable[[], ChromaConfig] = ChromaConfig
+    _config_factory: Callable[[], ChromaConfig] = _default_config_factory
 
     @classmethod
     async def get_service(cls) -> ChromaVectorSearchService:
@@ -111,7 +115,7 @@ class _ChromaSearchResourceManager:
         """Override factories for tests and reset cached instances."""
         cls._embedding_factory = embedding_factory or _default_embedding_factory
         cls._vector_store_factory = vector_store_factory or _default_vector_store_factory
-        cls._config_factory = config_factory or ChromaConfig
+        cls._config_factory = config_factory or _default_config_factory
         cls._service = None
         cls._embedding = None
         cls._vector_store = None

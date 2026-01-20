@@ -5,7 +5,9 @@ This adapter handles FTS index maintenance and search operations.
 
 from __future__ import annotations
 
+import operator
 import re
+from functools import reduce
 from typing import TYPE_CHECKING, Any
 
 import peewee
@@ -186,17 +188,45 @@ class SqliteTopicSearchRepositoryAdapter(SqliteBaseRepository):
         TopicSearchIndex.delete().where(TopicSearchIndex.request_id == request_id).execute()
 
     def _rebuild_topic_search_index(self) -> None:
-        self._clear_topic_search_index()
+        batch: list[dict[str, Any]] = []
+        batch_size = 250
 
-        query = Summary.select(Summary, Request).join(Request).iterator()
-        for row in query:
-            payload = ensure_mapping(row.json_payload)
-            request_data = model_to_dict(row.request) or {}
-            doc = build_topic_search_document(
-                request_id=row.request_id, payload=payload, request_data=request_data
-            )
-            if doc:
-                self._write_topic_search_index(doc)
+        def _flush_batch(items: list[dict[str, Any]]) -> None:
+            if not items:
+                return
+            TopicSearchIndex.insert_many(items).execute()
+            items.clear()
+
+        # Wrap in atomic transaction for atomicity - either full rebuild succeeds
+        # or rolls back completely, avoiding partial index states on error.
+        with self._session.database.atomic():
+            self._clear_topic_search_index()
+            query = Summary.select(Summary, Request).join(Request).iterator()
+
+            for row in query:
+                payload = ensure_mapping(row.json_payload)
+                request_data = model_to_dict(row.request) or {}
+                doc = build_topic_search_document(
+                    request_id=row.request_id, payload=payload, request_data=request_data
+                )
+                if not doc:
+                    continue
+                batch.append(
+                    {
+                        "request_id": doc.request_id,
+                        "url": doc.url,
+                        "title": doc.title,
+                        "snippet": doc.snippet,
+                        "source": doc.source,
+                        "published_at": doc.published_at,
+                        "body": doc.body,
+                        "tags": doc.tags_text,
+                    }
+                )
+                if len(batch) >= batch_size:
+                    _flush_batch(batch)
+
+            _flush_batch(batch)
 
     def _clear_topic_search_index(self) -> None:
         TopicSearchIndex.delete().execute()
@@ -302,23 +332,41 @@ class SqliteTopicSearchRepositoryAdapter(SqliteBaseRepository):
         documents: list[TopicSearchDocument] = []
 
         query = (
-            Summary.select(Summary, Request)
+            Summary.select(
+                Summary.request,
+                Summary.json_payload,
+                Request.normalized_url,
+                Request.input_url,
+                Request.content_text,
+            )
             .join(Request)
             .where(Summary.json_payload.is_null(False))
             .order_by(Summary.created_at.desc())
         )
+        if terms:
+            term_conditions = []
+            for term in terms:
+                term_conditions.extend(
+                    [
+                        Request.content_text.contains(term),
+                        Request.normalized_url.contains(term),
+                        Request.input_url.contains(term),
+                    ]
+                )
+            if term_conditions:
+                query = query.where(reduce(operator.or_, term_conditions))
         if max_scan:
             query = query.limit(max_scan)
 
-        for row in query:
-            payload = ensure_mapping(row.json_payload)
+        for row in query.dicts():
+            payload = ensure_mapping(row.get("json_payload"))
             metadata = ensure_mapping(payload.get("metadata"))
 
             url = (
                 normalize_text(metadata.get("canonical_url"))
                 or normalize_text(metadata.get("url"))
-                or normalize_text(getattr(row.request, "normalized_url", None))
-                or normalize_text(getattr(row.request, "input_url", None))
+                or normalize_text(row.get("normalized_url"))
+                or normalize_text(row.get("input_url"))
             )
             if not url or url in seen_urls:
                 continue
@@ -331,14 +379,18 @@ class SqliteTopicSearchRepositoryAdapter(SqliteBaseRepository):
                 title=title,
                 payload=payload,
                 metadata=metadata,
-                content_text=getattr(row.request, "content_text", None),
+                content_text=row.get("content_text"),
             )
 
             if not self._matches(terms, normalized_query, haystack):
                 continue
 
+            request_id = row.get("request")
+            if request_id is None:
+                continue
+
             doc = TopicSearchDocument(
-                request_id=row.request.id,
+                request_id=int(request_id),
                 url=url,
                 title=title,
                 snippet=build_snippet(payload),

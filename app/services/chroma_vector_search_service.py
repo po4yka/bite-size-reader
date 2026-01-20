@@ -10,7 +10,6 @@ from chromadb.errors import ChromaError
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.core.lang import detect_language
-from app.infrastructure.vector.chroma_schemas import ChromaQueryFilters
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -109,13 +108,18 @@ class ChromaVectorSearchService:
             )
             return ChromaVectorSearchResults(results=[], has_more=False)
 
-        effective_scope = user_scope or getattr(self._vector_store, "user_scope", None)
-        filters = ChromaQueryFilters(
-            environment=getattr(self._vector_store, "environment", "dev"),
-            user_scope=effective_scope or "public",
-            language=detected_language,
-            tags=list(tags) if tags else [],
-        ).to_where()
+        store_scope = getattr(self._vector_store, "user_scope", None) or "public"
+        if user_scope and user_scope != store_scope:
+            logger.warning(
+                "chroma_search_scope_mismatch",
+                extra={"requested_scope": user_scope, "store_scope": store_scope},
+            )
+            return ChromaVectorSearchResults(results=[], has_more=False)
+
+        filters = {
+            "language": detected_language,
+            "tags": list(tags) if tags else [],
+        }
 
         try:
             raw = await asyncio.to_thread(

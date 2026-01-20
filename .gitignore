@@ -90,6 +90,10 @@ app.db
 app.db-shm
 app.db-wal
 
+# Database backups (created by backup service)
+*.db.backup*
+data/*.backup*
+
 # --- OS-specific files ---
 # macOS
 .DS_Store

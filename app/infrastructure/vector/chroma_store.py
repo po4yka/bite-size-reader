@@ -201,9 +201,21 @@ class ChromaVectorStore:
     @staticmethod
     def _extract_id(metadata: dict[str, Any]) -> str:
         request_id = metadata.get("request_id")
-        if request_id is None:
-            return uuid4().hex
-        return str(request_id)
+        summary_id = metadata.get("summary_id")
+        chunk_id = metadata.get("chunk_id")
+        window_id = metadata.get("window_id")
+
+        if request_id is not None:
+            base = str(request_id)
+            if chunk_id:
+                return f"{base}:{chunk_id}"
+            if window_id:
+                return f"{base}:{window_id}"
+            if summary_id is not None:
+                return f"{base}:{summary_id}"
+            return base
+
+        return uuid4().hex
 
     def query(
         self,
