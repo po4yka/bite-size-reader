@@ -851,6 +851,71 @@ class BackgroundProcessorConfig(BaseModel):
             raise ValueError(msg)
         return parsed
 
+    @model_validator(mode="after")
+    def _validate_retry_delay_order(self) -> BackgroundProcessorConfig:
+        """Ensure retry_base_delay_ms <= retry_max_delay_ms."""
+        if self.retry_base_delay_ms > self.retry_max_delay_ms:
+            msg = (
+                f"retry_base_delay_ms ({self.retry_base_delay_ms}) must be <= "
+                f"retry_max_delay_ms ({self.retry_max_delay_ms})"
+            )
+            raise ValueError(msg)
+        return self
+
+
+class CircuitBreakerConfig(BaseModel):
+    """Circuit breaker configuration for external services."""
+
+    model_config = ConfigDict(frozen=True, populate_by_name=True)
+
+    enabled: bool = Field(
+        default=True,
+        validation_alias="CIRCUIT_BREAKER_ENABLED",
+        description="Enable circuit breaker for external service calls",
+    )
+    failure_threshold: int = Field(
+        default=5,
+        validation_alias="CIRCUIT_BREAKER_FAILURE_THRESHOLD",
+        description="Number of failures before opening circuit",
+    )
+    timeout_seconds: float = Field(
+        default=60.0,
+        validation_alias="CIRCUIT_BREAKER_TIMEOUT_SECONDS",
+        description="Seconds to wait before entering half-open state",
+    )
+    success_threshold: int = Field(
+        default=2,
+        validation_alias="CIRCUIT_BREAKER_SUCCESS_THRESHOLD",
+        description="Successful attempts needed in half-open to close",
+    )
+
+    @field_validator("failure_threshold", "success_threshold", mode="before")
+    @classmethod
+    def _validate_threshold(cls, value: Any, info: ValidationInfo) -> int:
+        default = cls.model_fields[info.field_name].default
+        try:
+            parsed = int(str(value if value not in (None, "") else default))
+        except ValueError as exc:
+            msg = f"{info.field_name.replace('_', ' ')} must be a valid integer"
+            raise ValueError(msg) from exc
+        if parsed < 1 or parsed > 100:
+            msg = f"{info.field_name.replace('_', ' ').capitalize()} must be between 1 and 100"
+            raise ValueError(msg)
+        return parsed
+
+    @field_validator("timeout_seconds", mode="before")
+    @classmethod
+    def _validate_timeout(cls, value: Any) -> float:
+        try:
+            parsed = float(str(value if value not in (None, "") else 60.0))
+        except ValueError as exc:
+            msg = "Circuit breaker timeout must be a valid number"
+            raise ValueError(msg) from exc
+        if parsed < 1.0 or parsed > 600.0:
+            msg = "Circuit breaker timeout must be between 1 and 600 seconds"
+            raise ValueError(msg)
+        return parsed
+
 
 class ApiLimitsConfig(BaseModel):
     """API rate limiting configuration."""
@@ -1537,6 +1602,7 @@ class AppConfig:
     sync: SyncConfig
     background: BackgroundProcessorConfig
     karakeep: KarakeepConfig
+    circuit_breaker: CircuitBreakerConfig
 
 
 class Settings(BaseSettings):
@@ -1570,6 +1636,7 @@ class Settings(BaseSettings):
     sync: SyncConfig = Field(default_factory=SyncConfig)
     background: BackgroundProcessorConfig = Field(default_factory=BackgroundProcessorConfig)
     karakeep: KarakeepConfig = Field(default_factory=KarakeepConfig)
+    circuit_breaker: CircuitBreakerConfig = Field(default_factory=CircuitBreakerConfig)
 
     @model_validator(mode="before")
     @classmethod
@@ -1659,6 +1726,7 @@ class Settings(BaseSettings):
             sync=self.sync,
             background=self.background,
             karakeep=self.karakeep,
+            circuit_breaker=self.circuit_breaker,
         )
 
 

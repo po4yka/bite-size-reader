@@ -1,0 +1,43 @@
+# Prometheus configuration for Bite-Size Reader
+# Optimized for Raspberry Pi 5 with 30s scrape interval
+
+global:
+  scrape_interval: 30s
+  evaluation_interval: 30s
+  external_labels:
+    monitor: 'bite-size-reader'
+
+# Alertmanager configuration (optional)
+# alerting:
+#   alertmanagers:
+#     - static_configs:
+#         - targets: []
+
+# Rule files
+rule_files:
+  - 'alerting_rules.yml'
+
+scrape_configs:
+  # Prometheus self-monitoring
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # Bite-Size Reader Mobile API
+  - job_name: 'bsr-mobile-api'
+    metrics_path: '/metrics'
+    static_configs:
+      - targets: ['host.docker.internal:18000']
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: 'bsr-mobile-api'
+
+  # Node Exporter (if available)
+  - job_name: 'node'
+    static_configs:
+      - targets: ['host.docker.internal:9100']
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: 'raspberrypi'

@@ -323,7 +323,20 @@ class RedisUserRateLimiter:
         pipe = self._redis.pipeline()
         pipe.incrby(key, cost)
         pipe.expire(key, ttl)
-        result = await pipe.execute()
+        try:
+            # Add timeout to prevent indefinite hangs on Redis pipeline operations
+            result = await asyncio.wait_for(pipe.execute(), timeout=5.0)
+        except TimeoutError:
+            # Fail-open: allow request to proceed on timeout for availability
+            logger.warning(
+                "redis_rate_limit_timeout",
+                extra={
+                    "user_id": user_id,
+                    "operation": operation,
+                    "timeout_seconds": 5.0,
+                },
+            )
+            return True, None, self._config.max_requests
         count = int(result[0]) if result else 0
 
         if count > self._config.max_requests:

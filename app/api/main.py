@@ -27,6 +27,7 @@ from app.api.models.responses import success_response
 from app.api.routers import (
     auth,
     collections,
+    health,
     notifications,
     proxy,
     requests,
@@ -125,6 +126,7 @@ app.include_router(user.router, prefix="/v1/user", tags=["User"])
 app.include_router(system.router, prefix="/v1/system", tags=["System"])
 app.include_router(proxy.router, prefix="/v1/proxy", tags=["Proxy"])
 app.include_router(notifications.router, prefix="/v1/notifications", tags=["Notifications"])
+app.include_router(health.router, tags=["Health"])
 
 
 @app.get("/")
@@ -150,6 +152,22 @@ async def health_check(request: Request):
             "timestamp": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
         },
         correlation_id=getattr(request.state, "correlation_id", None),
+    )
+
+
+@app.get("/metrics")
+async def metrics():
+    """Prometheus metrics endpoint.
+
+    Returns metrics in Prometheus text format for scraping.
+    """
+    from fastapi.responses import Response
+
+    from app.observability.metrics import get_metrics, get_metrics_content_type
+
+    return Response(
+        content=get_metrics(),
+        media_type=get_metrics_content_type(),
     )
 
 

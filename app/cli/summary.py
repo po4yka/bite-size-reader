@@ -271,8 +271,15 @@ def _build_audit(db: DatabaseSessionManager) -> Callable[[str, str, dict[str, An
             )
             _audit_tasks.add(task)
             task.add_done_callback(_audit_tasks.discard)
-        except Exception:
-            logger.exception("audit_log_failed", extra={"event": event})
+        except Exception as exc:
+            logger.debug(
+                "audit_log_failed",
+                extra={
+                    "event": event,
+                    "error": str(exc),
+                    "error_type": type(exc).__name__,
+                },
+            )
 
     return audit
 

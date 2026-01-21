@@ -871,8 +871,15 @@ class ContentExtractor:
 
         try:
             crawl = FirecrawlResult(**cached)
-        except Exception:
-            logger.warning("firecrawl_cache_invalid", extra={"cid": correlation_id})
+        except Exception as exc:
+            logger.warning(
+                "firecrawl_cache_invalid",
+                extra={
+                    "cid": correlation_id,
+                    "error": str(exc),
+                    "error_type": type(exc).__name__,
+                },
+            )
             return None
 
         if self._detect_low_value_content(crawl):

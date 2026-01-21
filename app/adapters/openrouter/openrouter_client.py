@@ -33,6 +33,8 @@ from app.models.llm.llm_models import ChatRequest, LLMCallResult
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Callable
 
+    from app.utils.circuit_breaker import CircuitBreaker
+
 logger = logging.getLogger(__name__)
 
 
@@ -101,6 +103,8 @@ class OpenRouterClient:
         keepalive_expiry: float = 30.0,
         # Response size limits
         max_response_size_mb: int = 10,
+        # Circuit breaker for fault tolerance
+        circuit_breaker: CircuitBreaker | None = None,
     ) -> None:
         # Validate core parameters
         self._validate_init_params(
@@ -221,9 +225,21 @@ class OpenRouterClient:
         # Client management
         self._client_key = f"{self._base_url}:{hash((api_key, timeout_sec, max_connections))}"
         self._client: httpx.AsyncClient | None = None
+        self._circuit_breaker = circuit_breaker
 
         # Register for cleanup
         self._cleanup_registry.add(self)
+
+    @property
+    def circuit_breaker(self) -> CircuitBreaker | None:
+        """Return the circuit breaker instance if configured."""
+        return self._circuit_breaker
+
+    def get_circuit_breaker_stats(self) -> dict[str, Any]:
+        """Get circuit breaker statistics."""
+        if self._circuit_breaker:
+            return self._circuit_breaker.get_stats()
+        return {"state": "disabled"}
 
     @classmethod
     async def cleanup_all_clients(cls) -> None:
@@ -518,6 +534,27 @@ class OpenRouterClient:
             msg = "Client has been closed"
             raise RuntimeError(msg)
 
+        # Check circuit breaker before proceeding
+        if self._circuit_breaker and not self._circuit_breaker.can_proceed():
+            logger.warning(
+                "openrouter_circuit_breaker_open",
+                extra={
+                    "request_id": request_id,
+                    "circuit_state": self._circuit_breaker.state.value,
+                    "failure_count": self._circuit_breaker.failure_count,
+                },
+            )
+            return LLMCallResult(
+                status="error",
+                model=None,
+                response_text=None,
+                error_text="Service temporarily unavailable (circuit breaker open)",
+                tokens_prompt=0,
+                tokens_completion=0,
+                cost_usd=0.0,
+                latency_ms=0,
+            )
+
         # Early validation to fail fast
         if not messages:
             msg = "Messages cannot be empty"
@@ -643,6 +680,9 @@ class OpenRouterClient:
                                 self.request_builder._structured_output_mode = (
                                     builder_rf_mode_original
                                 )
+                                # Record circuit breaker success
+                                if self._circuit_breaker:
+                                    self._circuit_breaker.record_success()
                                 return result["llm_result"]
 
                             # Handle retry/fallback logic
@@ -708,6 +748,9 @@ class OpenRouterClient:
                                 self.request_builder._structured_output_mode = (
                                     builder_rf_mode_original
                                 )
+                                # Record circuit breaker failure
+                                if self._circuit_breaker:
+                                    self._circuit_breaker.record_failure()
                                 return result["error_result"]
 
                         except httpx.TimeoutException as e:
@@ -805,6 +848,10 @@ class OpenRouterClient:
         self.error_handler.log_exhausted(
             models_to_try, self.error_handler._max_retries + 1, last_error_text, request_id
         )
+
+        # Record circuit breaker failure when all retries exhausted
+        if self._circuit_breaker:
+            self._circuit_breaker.record_failure()
 
         return LLMCallResult(
             status="error",

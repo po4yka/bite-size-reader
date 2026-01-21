@@ -150,9 +150,16 @@ class DatabaseHealthCheck:
                     for idx_name in expected:
                         if idx_name not in index_names:
                             missing_indexes.append(f"{table}.{idx_name}")
-                except Exception:
-                    # Table might not exist
-                    pass
+                except Exception as exc:
+                    # Table might not exist - log for debugging but continue
+                    logger.debug(
+                        "db_health_index_check_skipped",
+                        extra={
+                            "table": table,
+                            "error": str(exc),
+                            "error_type": type(exc).__name__,
+                        },
+                    )
 
             healthy = len(missing_indexes) == 0
             return {

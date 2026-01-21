@@ -191,6 +191,24 @@ class BackgroundProcessor:
                     **error_payload,
                 },
             )
+        except asyncio.CancelledError:
+            # Handle task cancellation explicitly - ensure lock release and re-raise
+            logger.warning(
+                "bg_processing_cancelled",
+                extra={
+                    "correlation_id": correlation_id,
+                    "request_id": request_id,
+                },
+            )
+            if request:
+                await self._mark_status(
+                    processor_db,
+                    request_id,
+                    "cancelled",
+                    correlation_id or request.get("correlation_id"),
+                )
+            await self._publish_update(request_id, "CANCELLED", "CANCELLED", "Task cancelled", 0.0)
+            raise  # Re-raise CancelledError after cleanup
         except Exception as exc:  # pragma: no cover - defensive
             error_payload = self._build_error_payload("unknown", exc)
             if request:
@@ -488,7 +506,15 @@ class BackgroundProcessor:
         repo = self.summary_repo if db == self.db else SqliteSummaryRepositoryAdapter(db)
         try:
             return bool(await repo.async_get_summary_by_request(request_id))
-        except Exception:
+        except Exception as exc:
+            logger.debug(
+                "bg_summary_check_failed",
+                extra={
+                    "request_id": request_id,
+                    "error": str(exc),
+                    "error_type": type(exc).__name__,
+                },
+            )
             return False
 
     async def _mark_status(

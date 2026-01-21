@@ -5,6 +5,7 @@ API route handlers.
 from . import (
     auth,
     collections,
+    health,
     notifications,
     proxy,
     requests,
@@ -18,6 +19,7 @@ from . import (
 __all__ = [
     "auth",
     "collections",
+    "health",
     "notifications",
     "proxy",
     "requests",

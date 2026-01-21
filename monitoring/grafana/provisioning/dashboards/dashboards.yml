@@ -1,0 +1,16 @@
+# Grafana dashboard provisioning for Bite-Size Reader
+
+apiVersion: 1
+
+providers:
+  - name: 'BSR Dashboards'
+    orgId: 1
+    folder: 'Bite-Size Reader'
+    folderUid: 'bsr'
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 60
+    allowUiUpdates: true
+    options:
+      path: /etc/grafana/provisioning/dashboards
+      foldersFromFilesStructure: false

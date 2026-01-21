@@ -58,6 +58,8 @@ from app.core.http_utils import ResponseSizeError, validate_response_size
 if TYPE_CHECKING:
     from collections.abc import Callable
 
+    from app.utils.circuit_breaker import CircuitBreaker
+
 
 class FirecrawlClient:
     """Firecrawl v2 async client (scrape, search, crawl, batch, extract)."""
@@ -93,6 +95,7 @@ class FirecrawlClient:
         screenshot_viewport_height: int | None = None,
         json_prompt: str | None = None,
         json_schema: dict[str, Any] | None = None,
+        circuit_breaker: CircuitBreaker | None = None,
     ) -> None:
         validate_init(
             api_key=api_key,
@@ -158,6 +161,18 @@ class FirecrawlClient:
             keepalive_expiry=float(keepalive_expiry),
         )
         self._client = httpx.AsyncClient(timeout=self._timeout, limits=self._limits)
+        self._circuit_breaker = circuit_breaker
+
+    @property
+    def circuit_breaker(self) -> CircuitBreaker | None:
+        """Return the circuit breaker instance if configured."""
+        return self._circuit_breaker
+
+    def get_circuit_breaker_stats(self) -> dict[str, Any]:
+        """Get circuit breaker statistics."""
+        if self._circuit_breaker:
+            return self._circuit_breaker.get_stats()
+        return {"state": "disabled"}
 
     async def aclose(self) -> None:
         await self._client.aclose()
@@ -265,7 +280,20 @@ class FirecrawlClient:
         options: dict[str, Any] | None = None,
         poll_interval: float = 1.0,
         timeout_sec: int = 120,
+        status_check_timeout: float = 30.0,
     ) -> dict[str, Any]:
+        """Crawl a URL with polling for completion.
+
+        Args:
+            url: URL to crawl
+            options: Optional crawl options
+            poll_interval: Seconds between status checks
+            timeout_sec: Overall timeout for the crawl operation
+            status_check_timeout: Timeout for each individual status check request
+
+        Returns:
+            Crawl result dictionary with status and data
+        """
         started = await self.start_crawl(url, options)
         job_id = started.get("jobId") or started.get("job_id") or started.get("id")
         if not job_id:
@@ -273,7 +301,37 @@ class FirecrawlClient:
 
         deadline = time.time() + max(1, timeout_sec)
         while time.time() < deadline:
-            status = await self.get_crawl_status(str(job_id))
+            try:
+                # Wrap each status check with a timeout to prevent indefinite hangs
+                status = await asyncio.wait_for(
+                    self.get_crawl_status(str(job_id)),
+                    timeout=status_check_timeout,
+                )
+            except TimeoutError:
+                self._logger.warning(
+                    "crawl_status_check_timeout",
+                    extra={
+                        "job_id": job_id,
+                        "timeout_sec": status_check_timeout,
+                        "url": url,
+                    },
+                )
+                # Continue polling - one slow check shouldn't abort the crawl
+                await asyncio.sleep(max(0.1, poll_interval))
+                continue
+            except Exception as exc:
+                self._logger.error(
+                    "crawl_status_check_error",
+                    extra={
+                        "job_id": job_id,
+                        "error": str(exc),
+                        "error_type": type(exc).__name__,
+                        "url": url,
+                    },
+                )
+                # On persistent errors, return error status
+                return {"status": "error", "jobId": job_id, "error": str(exc)}
+
             state = status.get("status") or status.get("state")
             if state in {"completed", "success", "succeeded"}:
                 return status
@@ -310,6 +368,29 @@ class FirecrawlClient:
         self, url: str, *, mobile: bool = True, request_id: int | None = None
     ) -> FirecrawlResult:
         validate_scrape_inputs(url, request_id)
+
+        # Check circuit breaker before proceeding
+        if self._circuit_breaker and not self._circuit_breaker.can_proceed():
+            self._logger.warning(
+                "firecrawl_circuit_breaker_open",
+                extra={
+                    "url": url,
+                    "request_id": request_id,
+                    "circuit_state": self._circuit_breaker.state.value,
+                    "failure_count": self._circuit_breaker.failure_count,
+                },
+            )
+            return FirecrawlResult(
+                status="error",
+                http_status=503,
+                content_markdown=None,
+                content_html=None,
+                response_success=False,
+                error_text="Service temporarily unavailable (circuit breaker open)",
+                latency_ms=0,
+                source_url=url,
+            )
+
         headers = {"Authorization": f"Bearer {self._api_key}"}
         body_base = {"url": url, "formats": self._options.build_formats()}
 
@@ -354,6 +435,11 @@ class FirecrawlClient:
                                 cur_pdf = not cur_pdf
                         await asyncio.sleep(delay)
                         continue
+                    # Record circuit breaker success on successful result
+                    if self._circuit_breaker and result.success:
+                        self._circuit_breaker.record_success()
+                    elif self._circuit_breaker and not result.success:
+                        self._circuit_breaker.record_failure()
                     return result
             except Exception as exc:
                 raise_if_cancelled(exc)
@@ -374,6 +460,10 @@ class FirecrawlClient:
             error=last_error,
             request_id=request_id,
         )
+        # Record circuit breaker failure when retries are exhausted
+        if self._circuit_breaker:
+            self._circuit_breaker.record_failure()
+
         return self._result_builder.build_fallback_result(
             last_error=last_error,
             last_latency=last_latency,

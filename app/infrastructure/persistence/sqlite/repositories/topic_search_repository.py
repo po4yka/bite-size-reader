@@ -248,7 +248,19 @@ class SqliteTopicSearchRepositoryAdapter(SqliteBaseRepository):
         try:
             cursor = self._session.database.execute_sql(sql, (fts_query, candidate_limit))
             rows = list(cursor)
-        except Exception:
+        except Exception as exc:
+            # Log FTS query failures for debugging - may indicate index corruption
+            import logging
+
+            logging.getLogger(__name__).debug(
+                "topic_search_fts_query_failed",
+                extra={
+                    "fts_query": fts_query,
+                    "candidate_limit": candidate_limit,
+                    "error": str(exc),
+                    "error_type": type(exc).__name__,
+                },
+            )
             return None
 
         request_ids: list[int] = []
@@ -286,7 +298,19 @@ class SqliteTopicSearchRepositoryAdapter(SqliteBaseRepository):
         try:
             cursor = self._session.database.execute_sql(sql, (fts_query, candidate_limit))
             rows = list(cursor)
-        except Exception:
+        except Exception as exc:
+            # Log FTS search failures for debugging - may indicate index corruption
+            import logging
+
+            logging.getLogger(__name__).debug(
+                "topic_search_documents_fts_failed",
+                extra={
+                    "fts_query": fts_query,
+                    "candidate_limit": candidate_limit,
+                    "error": str(exc),
+                    "error_type": type(exc).__name__,
+                },
+            )
             return []
 
         for row in rows:
@@ -459,9 +483,17 @@ class SqliteTopicSearchRepositoryAdapter(SqliteBaseRepository):
 
     def _reset_topic_search_index(self) -> None:
         """Drop and rebuild the topic search index to recover from corruption."""
+        import logging
+
         try:
             self._session.database.execute_sql("DROP TABLE IF EXISTS topic_search_index")
             TopicSearchIndex.create_table()
             self._rebuild_topic_search_index()
-        except Exception:
-            pass
+        except Exception as exc:
+            logging.getLogger(__name__).warning(
+                "topic_search_index_reset_failed",
+                extra={
+                    "error": str(exc),
+                    "error_type": type(exc).__name__,
+                },
+            )
