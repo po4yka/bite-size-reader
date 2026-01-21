@@ -368,6 +368,27 @@ class OpenRouterConfig(BaseModel):
     max_response_size_mb: int = Field(
         default=10, validation_alias="OPENROUTER_MAX_RESPONSE_SIZE_MB"
     )
+    # Prompt caching settings (reduces inference costs)
+    enable_prompt_caching: bool = Field(
+        default=True,
+        validation_alias="OPENROUTER_ENABLE_PROMPT_CACHING",
+        description="Enable OpenRouter prompt caching for supported providers",
+    )
+    prompt_cache_ttl: str = Field(
+        default="ephemeral",
+        validation_alias="OPENROUTER_PROMPT_CACHE_TTL",
+        description="Cache TTL: 'ephemeral' (5min) or '1h'",
+    )
+    cache_system_prompt: bool = Field(
+        default=True,
+        validation_alias="OPENROUTER_CACHE_SYSTEM_PROMPT",
+        description="Cache the system message for reuse across requests",
+    )
+    cache_large_content_threshold: int = Field(
+        default=4096,
+        validation_alias="OPENROUTER_CACHE_LARGE_CONTENT_THRESHOLD",
+        description="Minimum tokens to auto-cache content (Gemini requires 4096)",
+    )
 
     @field_validator("api_key", mode="before")
     @classmethod
@@ -529,6 +550,32 @@ class OpenRouterConfig(BaseModel):
             msg = "Max response size must be between 1 and 100 MB"
             raise ValueError(msg)
         return size_mb
+
+    @field_validator("prompt_cache_ttl", mode="before")
+    @classmethod
+    def _validate_prompt_cache_ttl(cls, value: Any) -> str:
+        if value in (None, ""):
+            return "ephemeral"
+        ttl = str(value).strip().lower()
+        if ttl not in {"ephemeral", "1h"}:
+            msg = f"Invalid prompt cache TTL: {ttl}. Must be 'ephemeral' or '1h'"
+            raise ValueError(msg)
+        return ttl
+
+    @field_validator("cache_large_content_threshold", mode="before")
+    @classmethod
+    def _validate_cache_large_content_threshold(cls, value: Any) -> int:
+        if value in (None, ""):
+            return 4096
+        try:
+            threshold = int(str(value))
+        except ValueError as exc:
+            msg = "Cache large content threshold must be a valid integer"
+            raise ValueError(msg) from exc
+        if threshold < 0 or threshold > 100000:
+            msg = "Cache large content threshold must be between 0 and 100000"
+            raise ValueError(msg)
+        return threshold
 
 
 class YouTubeConfig(BaseModel):

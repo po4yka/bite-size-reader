@@ -105,6 +105,11 @@ class OpenRouterClient:
         max_response_size_mb: int = 10,
         # Circuit breaker for fault tolerance
         circuit_breaker: CircuitBreaker | None = None,
+        # Prompt caching settings
+        enable_prompt_caching: bool = True,
+        prompt_cache_ttl: str = "ephemeral",
+        cache_system_prompt: bool = True,
+        cache_large_content_threshold: int = 4096,
     ) -> None:
         # Validate core parameters
         self._validate_init_params(
@@ -129,6 +134,11 @@ class OpenRouterClient:
         self._enable_structured_outputs = enable_structured_outputs
         self._closed = False
         self._max_response_size_bytes = int(max_response_size_mb) * 1024 * 1024
+        # Store prompt caching settings
+        self._enable_prompt_caching = enable_prompt_caching
+        self._prompt_cache_ttl = prompt_cache_ttl
+        self._cache_system_prompt = cache_system_prompt
+        self._cache_large_content_threshold = cache_large_content_threshold
 
         # Optional pricing overrides (USD per 1k tokens) for local cost estimation
         try:
@@ -157,6 +167,11 @@ class OpenRouterClient:
                 enable_structured_outputs=enable_structured_outputs,
                 structured_output_mode=structured_output_mode,
                 require_parameters=require_parameters,
+                # Prompt caching settings
+                enable_prompt_caching=enable_prompt_caching,
+                prompt_cache_ttl=prompt_cache_ttl,
+                cache_system_prompt=cache_system_prompt,
+                cache_large_content_threshold=cache_large_content_threshold,
             )
         except Exception as e:
             raise_if_cancelled(e)
@@ -894,11 +909,16 @@ class OpenRouterClient:
         """Attempt a single request with comprehensive error handling."""
         self.error_handler.log_attempt(attempt, model, request_id)
 
+        # Apply prompt caching to messages if enabled for supported providers
+        cacheable_messages = self.request_builder.build_cacheable_messages(
+            sanitized_messages, model
+        )
+
         # Build request components
         self.request_builder._structured_output_mode = rf_mode_current
         headers = self.request_builder.build_headers()
         body = self.request_builder.build_request_body(
-            model, sanitized_messages, request, response_format_current
+            model, cacheable_messages, request, response_format_current
         )
 
         if rf_mode_current == "json_object" and "response_format" in body:
@@ -906,11 +926,18 @@ class OpenRouterClient:
 
         # Apply content compression if needed
         should_compress, transform_type = self.request_builder.should_apply_compression(
-            sanitized_messages, model
+            cacheable_messages, model
         )
         if should_compress and transform_type:
             body["transforms"] = [transform_type]
-            total_length = sum(len(msg.get("content", "")) for msg in sanitized_messages)
+            total_length = sum(
+                len(msg.get("content", ""))
+                if isinstance(msg.get("content"), str)
+                else sum(
+                    len(p.get("text", "")) for p in msg.get("content", []) if isinstance(p, dict)
+                )
+                for msg in cacheable_messages
+            )
             self.payload_logger.log_compression_applied(total_length, 200000, model)
 
         # Check if response format is included
@@ -935,7 +962,7 @@ class OpenRouterClient:
 
             if self.payload_logger._debug_payloads:
                 self.payload_logger.log_request_payload(
-                    headers, body, sanitized_messages, rf_mode_current
+                    headers, body, cacheable_messages, rf_mode_current
                 )
 
             resp = await client.post(
@@ -1182,6 +1209,21 @@ class OpenRouterClient:
         tokens_completion = usage.get("completion_tokens") if isinstance(usage, dict) else None
         tokens_total = usage.get("total_tokens") if isinstance(usage, dict) else None
 
+        # Extract cache metrics from response
+        cache_metrics = self.response_processor.extract_cache_metrics(data)
+        if cache_metrics.cache_hit or cache_metrics.cache_creation_tokens > 0:
+            logger.info(
+                "prompt_cache_metrics",
+                extra={
+                    "model": model_reported,
+                    "cache_read_tokens": cache_metrics.cache_read_tokens,
+                    "cache_creation_tokens": cache_metrics.cache_creation_tokens,
+                    "cache_discount": cache_metrics.cache_discount,
+                    "cache_hit": cache_metrics.cache_hit,
+                    "request_id": request_id,
+                },
+            )
+
         # If API did not provide cost, optionally estimate using env-provided rates
         if cost_usd is None and tokens_prompt is not None and tokens_completion is not None:
             if self._price_input_per_1k is not None and self._price_output_per_1k is not None:
@@ -1243,6 +1285,16 @@ class OpenRouterClient:
                 endpoint="/api/v1/chat/completions",
                 structured_output_used=structured_output_used,
                 structured_output_mode=structured_output_mode_used,
+                # Prompt caching metrics
+                cache_read_tokens=(
+                    cache_metrics.cache_read_tokens if cache_metrics.cache_read_tokens > 0 else None
+                ),
+                cache_creation_tokens=(
+                    cache_metrics.cache_creation_tokens
+                    if cache_metrics.cache_creation_tokens > 0
+                    else None
+                ),
+                cache_discount=cache_metrics.cache_discount,
             ),
         }
 

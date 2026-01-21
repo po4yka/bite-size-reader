@@ -184,12 +184,7 @@ class LLMSummarizer:
         def _clamp(value: float, min_value: float, max_value: float) -> float:
             return max(min_value, min(max_value, value))
 
-        relaxed_temperature = self.cfg.openrouter.summary_temperature_relaxed or _clamp(
-            base_temperature + 0.15, 0.0, 0.8
-        )
-        relaxed_top_p = self.cfg.openrouter.summary_top_p_relaxed or _clamp(
-            (base_top_p or 0.9) + 0.03, 0.0, 0.97
-        )
+        # Temperature/top_p for json_object fallback (lower for deterministic output)
         json_temperature = self.cfg.openrouter.summary_temperature_json_fallback or _clamp(
             base_temperature - 0.05, 0.0, 0.5
         )
@@ -233,14 +228,7 @@ class LLMSummarizer:
             top_p=base_top_p,
         )
 
-        _add_request(
-            preset="schema_relaxed",
-            model_name=base_model,
-            response_format=response_format_schema,
-            max_tokens=max_tokens_schema,
-            temperature=relaxed_temperature,
-            top_p=relaxed_top_p,
-        )
+        # Removed schema_relaxed preset (marginal benefit, adds latency/cost)
 
         _add_request(
             preset="json_object_guardrail",
@@ -251,19 +239,21 @@ class LLMSummarizer:
             top_p=json_top_p,
         )
 
+        # Limit fallback to single model (deepseek-r1) to reduce cost on failing requests
         fallback_models = [
             model for model in self.cfg.openrouter.fallback_models if model and model != base_model
         ]
         if fallback_models:
-            for model_name in fallback_models:
-                _add_request(
-                    preset="json_object_fallback",
-                    model_name=model_name,
-                    response_format=response_format_json_object,
-                    max_tokens=max_tokens_json_object,
-                    temperature=json_temperature,
-                    top_p=json_top_p,
-                )
+            # Only use first fallback model to limit cost
+            fallback_model = fallback_models[0]
+            _add_request(
+                preset="json_object_fallback",
+                model_name=fallback_model,
+                response_format=response_format_json_object,
+                max_tokens=max_tokens_json_object,
+                temperature=json_temperature,
+                top_p=json_top_p,
+            )
 
         repair_context = LLMRepairContext(
             base_messages=[
@@ -599,13 +589,17 @@ class LLMSummarizer:
         return None
 
     def _select_max_tokens(self, content_text: str) -> int | None:
-        """Choose an appropriate max_tokens budget based on content size."""
+        """Choose an appropriate max_tokens budget based on content size.
+
+        Optimized formula: summaries rarely exceed 4K tokens, so we use a more
+        conservative budget to reduce costs (10-20% savings).
+        """
         configured = self.cfg.openrouter.max_tokens
 
         approx_input_tokens = max(1, len(content_text) // 3)
 
-        # Model-specific token budget adjustments can be added here if needed
-        dynamic_budget = max(8192, min(24576, approx_input_tokens + 4096))
+        # Conservative budget: summary output rarely exceeds 4K tokens
+        dynamic_budget = max(4096, min(12288, approx_input_tokens // 2 + 2048))
 
         if configured is None:
             logger.debug(

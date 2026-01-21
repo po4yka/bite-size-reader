@@ -56,6 +56,16 @@ class LLMCallResult(BaseModel):
     error_context: dict[str, Any] | None = Field(
         default=None, description="Additional context about encountered errors."
     )
+    # Prompt caching metrics
+    cache_read_tokens: int | None = Field(
+        default=None, description="Tokens read from cache (cache hit)."
+    )
+    cache_creation_tokens: int | None = Field(
+        default=None, description="Tokens added to cache (cache write)."
+    )
+    cache_discount: float | None = Field(
+        default=None, description="Cost discount from prompt caching."
+    )
 
 
 class ChatRequest(BaseModel):
