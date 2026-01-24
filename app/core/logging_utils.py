@@ -374,6 +374,26 @@ def get_logger(name: str) -> logging.Logger:
     return logging.getLogger(name)
 
 
+def log_exception(
+    logger: logging.Logger,
+    event: str,
+    exc: BaseException,
+    *,
+    level: str = "error",
+    **extra: Any,
+) -> None:
+    """Log an exception with structured context and traceback."""
+    payload = {"error": str(exc), "error_type": type(exc).__name__}
+    payload.update(extra)
+
+    if level == "warning":
+        logger.warning(event, exc_info=exc, extra=payload)
+    elif level == "info":
+        logger.info(event, exc_info=exc, extra=payload)
+    else:
+        logger.error(event, exc_info=exc, extra=payload)
+
+
 def generate_correlation_id() -> str:
     """Generate a short correlation ID for tracing errors across logs and user messages."""
     return uuid.uuid4().hex[:12]
@@ -415,6 +435,7 @@ __all__ = [
     "EnhancedJsonFormatter",
     "generate_correlation_id",
     "get_logger",
+    "log_exception",
     "setup_json_logging",
     "truncate_log_content",
 ]

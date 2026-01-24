@@ -17,6 +17,8 @@ from typing import TYPE_CHECKING
 
 import peewee
 
+from app.core.logging_utils import log_exception
+
 if TYPE_CHECKING:
     from app.db.database import Database
 
@@ -130,14 +132,17 @@ def upgrade(db: Database) -> None:
         try:
             # Check if table exists
             if table not in db._database.get_tables():
-                logger.warning(f"Table {table} does not exist, skipping index {index_name}")
+                logger.warning(
+                    "index_table_missing",
+                    extra={"table": table, "index": index_name},
+                )
                 skipped_count += 1
                 continue
 
             # Check if index already exists
             existing_indexes = db._database.get_indexes(table)
             if any(idx.name == index_name for idx in existing_indexes):
-                logger.info(f"Index {index_name} already exists, skipping")
+                logger.info("index_exists", extra={"index": index_name})
                 skipped_count += 1
                 continue
 
@@ -146,15 +151,27 @@ def upgrade(db: Database) -> None:
             sql = f"CREATE INDEX IF NOT EXISTS {index_name} ON {table}({cols})"
             db._database.execute_sql(sql)
 
-            logger.info(f"✓ Created index {index_name} on {table}({cols})")
-            logger.debug(f"  Purpose: {description}")
+            logger.info(
+                "index_created",
+                extra={"index": index_name, "table": table, "columns": cols},
+            )
+            logger.debug("index_purpose", extra={"index": index_name, "purpose": description})
             created_count += 1
 
         except peewee.DatabaseError as e:
-            logger.error(f"✗ Failed to create index {index_name}: {e}")
+            log_exception(
+                logger,
+                "index_create_failed",
+                e,
+                index=index_name,
+                table=table,
+            )
             raise
 
-    logger.info(f"Index migration complete: {created_count} created, {skipped_count} skipped")
+    logger.info(
+        "index_migration_complete",
+        extra={"created": created_count, "skipped": skipped_count},
+    )
 
 
 def downgrade(db: Database) -> None:
@@ -182,9 +199,15 @@ def downgrade(db: Database) -> None:
     for index_name in indexes:
         try:
             db._database.execute_sql(f"DROP INDEX IF EXISTS {index_name}")
-            logger.info(f"✓ Dropped index {index_name}")
+            logger.info("index_dropped", extra={"index": index_name})
             dropped_count += 1
         except peewee.DatabaseError as e:
-            logger.warning(f"✗ Failed to drop index {index_name}: {e}")
+            log_exception(
+                logger,
+                "index_drop_failed",
+                e,
+                level="warning",
+                index=index_name,
+            )
 
-    logger.info(f"Index rollback complete: {dropped_count} dropped")
+    logger.info("index_rollback_complete", extra={"dropped": dropped_count})

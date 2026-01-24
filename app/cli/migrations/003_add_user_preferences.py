@@ -16,6 +16,8 @@ from typing import TYPE_CHECKING
 import peewee
 from playhouse.migrate import SqliteMigrator, migrate
 
+from app.core.logging_utils import log_exception
+
 if TYPE_CHECKING:
     from app.db.database import Database
 
@@ -58,4 +60,4 @@ def downgrade(db: Database) -> None:
         logger.info("Removed preferences_json column from users table")
 
     except peewee.OperationalError as e:
-        logger.warning(f"Failed to remove preferences_json column: {e}")
+        log_exception(logger, "preferences_column_drop_failed", e, level="warning")

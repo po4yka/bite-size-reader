@@ -27,7 +27,10 @@ def upgrade(db: Database) -> None:
     logger.info("Step 1: Checking for orphaned LLM calls...")
     orphaned_count = _cleanup_orphaned_llm_calls(db)
     if orphaned_count > 0:
-        logger.warning(f"Cleaned up {orphaned_count} orphaned LLM calls")
+        logger.warning(
+            "orphaned_llm_calls_cleaned",
+            extra={"count": orphaned_count},
+        )
 
     # Step 2: Recreate llm_calls table with NOT NULL constraint
     logger.info("Step 2: Recreating llm_calls table with NOT NULL constraint...")

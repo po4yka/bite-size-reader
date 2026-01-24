@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Any
 from app.adapters.content.url_processor import URLProcessor, _get_system_prompt
 from app.config import AppConfig, load_config
 from app.core.lang import choose_language, detect_language
-from app.core.logging_utils import get_logger
+from app.core.logging_utils import get_logger, log_exception
 from app.core.url_utils import normalize_url
 from app.db.session import DatabaseSessionManager
 from app.infrastructure.persistence.sqlite.repositories.request_repository import (
@@ -613,4 +613,19 @@ async def process_url_request(
         processor._processing_tasks = set()  # type: ignore[attr-defined]
     tasks = processor._processing_tasks  # type: ignore[attr-defined]
     tasks.add(task)
-    task.add_done_callback(tasks.discard)
+
+    def _on_task_done(t: asyncio.Task) -> None:
+        tasks.discard(t)
+        if t.cancelled():
+            return
+        exc = t.exception()
+        if exc:
+            log_exception(
+                logger,
+                "bg_processing_task_failed",
+                exc,
+                request_id=request_id,
+                correlation_id=correlation_id,
+            )
+
+    task.add_done_callback(_on_task_done)

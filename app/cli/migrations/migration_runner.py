@@ -32,6 +32,8 @@ from typing import TYPE_CHECKING, Any
 
 import peewee
 
+from app.core.logging_utils import log_exception
+
 if TYPE_CHECKING:
     from collections.abc import Callable
 
@@ -191,7 +193,12 @@ class MigrationRunner:
                 logger.info(f"✓ Migration {migration_name} completed successfully")
 
         except Exception as e:
-            logger.error(f"✗ Migration {migration_name} failed")
+            log_exception(
+                logger,
+                "migration_failed",
+                e,
+                migration=migration_name,
+            )
             raise MigrationError(f"Migration {migration_name} failed: {e}") from e
 
     def run_pending(self, dry_run: bool = False) -> int:
@@ -391,7 +398,7 @@ def main() -> int:
         return 1
 
     except MigrationError as e:
-        logger.error(f"Migration error: {e}")
+        log_exception(logger, "migration_error", e, level="error")
         return 1
     except Exception:
         logger.exception("Unexpected error")

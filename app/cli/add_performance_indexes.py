@@ -19,6 +19,7 @@ import logging
 import sys
 from pathlib import Path
 
+from app.core.logging_utils import log_exception
 from app.db.database import Database
 
 logging.basicConfig(
@@ -85,7 +86,13 @@ def create_indexes(db: Database) -> None:
             created_count += 1
             logger.info(f"  ✓ {idx_name} created successfully")
         except Exception as e:
-            logger.error(f"  ✗ Failed to create {idx_name}: {e}")
+            log_exception(
+                logger,
+                "index_create_failed",
+                e,
+                index=idx_name,
+                table=table,
+            )
             raise
 
     logger.info(f"\nSuccessfully created {created_count} indexes")
@@ -130,11 +137,11 @@ def main() -> int:
     if len(sys.argv) > 1:
         db_path = sys.argv[1]
 
-    logger.info(f"Adding performance indexes to: {db_path}")
+    logger.info("adding_performance_indexes", extra={"db_path": db_path})
 
     # Check if database file exists (skip for :memory:)
     if db_path != ":memory:" and not Path(db_path).exists():
-        logger.error(f"Database file does not exist: {db_path}")
+        logger.error("db_file_missing", extra={"db_path": db_path})
         logger.info("Run 'python -m app.cli.migrate_db' first to create the database")
         return 1
 

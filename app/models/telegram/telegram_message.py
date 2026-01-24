@@ -8,6 +8,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.core.logging_utils import log_exception
 from app.models.telegram.telegram_chat import TelegramChat
 from app.models.telegram.telegram_entity import MessageEntity
 from app.models.telegram.telegram_enums import MediaType, MessageEntityType
@@ -215,7 +216,12 @@ class TelegramMessage(BaseModel):
                         # Single Photo object - convert to list with single item
                         photo_list = [photo.__dict__]
                 except (AttributeError, TypeError) as e:
-                    logger.warning(f"Failed to process photo object: {e}")
+                    log_exception(
+                        logger,
+                        "telegram_photo_parse_failed",
+                        e,
+                        level="warning",
+                    )
                     photo_list = None
             video_dict = video.__dict__ if video else None
             audio_dict = audio.__dict__ if audio else None
@@ -404,7 +410,12 @@ class TelegramMessage(BaseModel):
                         # Single Photo object - convert to list with single item
                         photo_list = [photo_raw.__dict__]
                 except (AttributeError, TypeError) as e:
-                    logger.warning(f"Failed to process photo object in error case: {e}")
+                    log_exception(
+                        logger,
+                        "telegram_photo_parse_failed",
+                        e,
+                        level="warning",
+                    )
                     photo_list = None
 
             video = getattr(message, "video", None)

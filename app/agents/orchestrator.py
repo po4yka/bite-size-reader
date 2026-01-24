@@ -20,6 +20,7 @@ if TYPE_CHECKING:
 
 from app.agents.content_extraction_agent import ExtractionInput
 from app.agents.summarization_agent import SummarizationInput
+from app.core.logging_utils import log_exception
 
 logger = logging.getLogger(__name__)
 
@@ -447,7 +448,13 @@ class AgentOrchestrator:
                         attempts=attempts,
                     )
                 except Exception as e:
-                    logger.error(f"[Batch] Failed to process {url}: {e}")
+                    log_exception(
+                        logger,
+                        "batch_url_processing_failed",
+                        e,
+                        url=url,
+                        correlation_id=correlation_id,
+                    )
                     # For failures, we don't know the exact attempts, use 1 as fallback
                     return BatchPipelineOutput(
                         correlation_id=correlation_id,

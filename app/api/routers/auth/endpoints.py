@@ -78,7 +78,7 @@ from app.api.routers.auth.tokens import (
 )
 from app.api.services.auth_service import AuthService
 from app.config import Config
-from app.core.logging_utils import get_logger
+from app.core.logging_utils import get_logger, log_exception
 from app.core.time_utils import UTC
 from app.db.models import database_proxy
 from app.infrastructure.persistence.sqlite.repositories.auth_repository import (
@@ -761,7 +761,7 @@ async def logout(
             logger.info("Revoked refresh token", extra={"token_hash": token_hash[:8] + "..."})
 
     except Exception as e:
-        logger.warning(f"Logout failed: {e}")
+        log_exception(logger, "logout_failed", e, level="warning")
 
     return success_response({"message": "Logged out successfully"})
 

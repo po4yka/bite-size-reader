@@ -2,7 +2,6 @@
 Authentication service - business logic for auth operations.
 """
 
-import asyncio
 from datetime import datetime
 
 from app.api.exceptions import AuthorizationError, ResourceNotFoundError
@@ -104,43 +103,27 @@ class AuthService:
     async def set_link_nonce(user_id: int, nonce: str, expires_at: datetime) -> None:
         """Set link nonce for a user.
 
-        TODO: Implement via repository. Currently uses direct model access.
-
         Args:
             user_id: Telegram user ID
             nonce: Link nonce value
             expires_at: Nonce expiration time
         """
-        from app.db.models import User as UserModel
-
-        def _set() -> None:
-            user = UserModel.get_or_none(UserModel.telegram_user_id == user_id)
-            if user:
-                user.link_nonce = nonce
-                user.link_nonce_expires_at = _coerce_naive(expires_at)
-                user.save()
-
-        await asyncio.to_thread(_set)
+        user_repo = SqliteUserRepositoryAdapter(database_proxy)
+        await user_repo.async_set_link_nonce(
+            telegram_user_id=user_id,
+            nonce=nonce,
+            expires_at=_coerce_naive(expires_at),
+        )
 
     @staticmethod
     async def clear_link_nonce(user_id: int) -> None:
         """Clear link nonce for a user.
 
-        TODO: Implement via repository. Currently uses direct model access.
-
         Args:
             user_id: Telegram user ID
         """
-        from app.db.models import User as UserModel
-
-        def _clear() -> None:
-            user = UserModel.get_or_none(UserModel.telegram_user_id == user_id)
-            if user:
-                user.link_nonce = None
-                user.link_nonce_expires_at = None
-                user.save()
-
-        await asyncio.to_thread(_clear)
+        user_repo = SqliteUserRepositoryAdapter(database_proxy)
+        await user_repo.async_clear_link_nonce(telegram_user_id=user_id)
 
     @staticmethod
     def build_link_status_payload(user: dict) -> TelegramLinkStatus:
@@ -188,8 +171,6 @@ class AuthService:
     ) -> None:
         """Complete Telegram account linking.
 
-        TODO: Implement via repository. Currently uses direct model access.
-
         Args:
             user_id: Main user ID
             telegram_user_id: Linked Telegram user ID
@@ -198,65 +179,34 @@ class AuthService:
             first_name: First name
             last_name: Last name
         """
-        from app.db.models import User as UserModel
-
         now = _utcnow_naive()
-
-        def _update_link() -> None:
-            user_rec = UserModel.get_or_none(UserModel.telegram_user_id == user_id)
-            if user_rec:
-                user_rec.linked_telegram_user_id = telegram_user_id
-                user_rec.linked_telegram_username = username
-                user_rec.linked_telegram_photo_url = photo_url
-                user_rec.linked_telegram_first_name = first_name
-                user_rec.linked_telegram_last_name = last_name
-                user_rec.linked_at = now
-                user_rec.link_nonce = None
-                user_rec.link_nonce_expires_at = None
-                user_rec.save()
-
-        await asyncio.to_thread(_update_link)
+        user_repo = SqliteUserRepositoryAdapter(database_proxy)
+        await user_repo.async_complete_telegram_link(
+            telegram_user_id=user_id,
+            linked_telegram_user_id=telegram_user_id,
+            username=username,
+            photo_url=photo_url,
+            first_name=first_name,
+            last_name=last_name,
+            linked_at=now,
+        )
 
     @staticmethod
     async def unlink_telegram(user_id: int) -> None:
         """Unlink Telegram account.
 
-        TODO: Implement via repository. Currently uses direct model access.
-
         Args:
             user_id: User ID to unlink
         """
-        from app.db.models import User as UserModel
-
-        def _unlink() -> None:
-            user_record = UserModel.get_or_none(UserModel.telegram_user_id == user_id)
-            if user_record:
-                user_record.linked_telegram_user_id = None
-                user_record.linked_telegram_username = None
-                user_record.linked_telegram_photo_url = None
-                user_record.linked_telegram_first_name = None
-                user_record.linked_telegram_last_name = None
-                user_record.linked_at = None
-                user_record.link_nonce = None
-                user_record.link_nonce_expires_at = None
-                user_record.save()
-
-        await asyncio.to_thread(_unlink)
+        user_repo = SqliteUserRepositoryAdapter(database_proxy)
+        await user_repo.async_unlink_telegram(telegram_user_id=user_id)
 
     @staticmethod
     async def delete_user(user_id: int) -> None:
         """Delete a user account and all associated data.
 
-        TODO: Implement via repository with proper cascade delete.
-
         Args:
             user_id: User ID to delete
         """
-        from app.db.models import User as UserModel
-
-        def _delete() -> None:
-            user_record = UserModel.get_or_none(UserModel.telegram_user_id == user_id)
-            if user_record:
-                user_record.delete_instance(recursive=True)
-
-        await asyncio.to_thread(_delete)
+        user_repo = SqliteUserRepositoryAdapter(database_proxy)
+        await user_repo.async_delete_user(telegram_user_id=user_id)

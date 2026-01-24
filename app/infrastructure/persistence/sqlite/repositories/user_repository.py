@@ -52,6 +52,88 @@ class SqliteUserRepositoryAdapter(SqliteBaseRepository):
 
         return await self._execute(_get_or_create, operation_name="get_or_create_user")
 
+    async def async_set_link_nonce(
+        self,
+        *,
+        telegram_user_id: int,
+        nonce: str,
+        expires_at: dt.datetime,
+    ) -> None:
+        """Set link nonce fields for a user."""
+
+        def _set() -> None:
+            User.update(
+                link_nonce=nonce,
+                link_nonce_expires_at=expires_at,
+            ).where(User.telegram_user_id == telegram_user_id).execute()
+
+        await self._execute(_set, operation_name="set_link_nonce")
+
+    async def async_clear_link_nonce(self, *, telegram_user_id: int) -> None:
+        """Clear link nonce fields for a user."""
+
+        def _clear() -> None:
+            User.update(
+                link_nonce=None,
+                link_nonce_expires_at=None,
+            ).where(User.telegram_user_id == telegram_user_id).execute()
+
+        await self._execute(_clear, operation_name="clear_link_nonce")
+
+    async def async_complete_telegram_link(
+        self,
+        *,
+        telegram_user_id: int,
+        linked_telegram_user_id: int,
+        username: str | None,
+        photo_url: str | None,
+        first_name: str | None,
+        last_name: str | None,
+        linked_at: dt.datetime,
+    ) -> None:
+        """Complete Telegram account linking for a user."""
+
+        def _update() -> None:
+            User.update(
+                linked_telegram_user_id=linked_telegram_user_id,
+                linked_telegram_username=username,
+                linked_telegram_photo_url=photo_url,
+                linked_telegram_first_name=first_name,
+                linked_telegram_last_name=last_name,
+                linked_at=linked_at,
+                link_nonce=None,
+                link_nonce_expires_at=None,
+            ).where(User.telegram_user_id == telegram_user_id).execute()
+
+        await self._execute(_update, operation_name="complete_telegram_link")
+
+    async def async_unlink_telegram(self, *, telegram_user_id: int) -> None:
+        """Remove Telegram link information from a user."""
+
+        def _unlink() -> None:
+            User.update(
+                linked_telegram_user_id=None,
+                linked_telegram_username=None,
+                linked_telegram_photo_url=None,
+                linked_telegram_first_name=None,
+                linked_telegram_last_name=None,
+                linked_at=None,
+                link_nonce=None,
+                link_nonce_expires_at=None,
+            ).where(User.telegram_user_id == telegram_user_id).execute()
+
+        await self._execute(_unlink, operation_name="unlink_telegram")
+
+    async def async_delete_user(self, *, telegram_user_id: int) -> None:
+        """Delete a user and related data."""
+
+        def _delete() -> None:
+            user = User.get_or_none(User.telegram_user_id == telegram_user_id)
+            if user:
+                user.delete_instance(recursive=True)
+
+        await self._execute(_delete, operation_name="delete_user")
+
     async def async_update_user_preferences(
         self, telegram_user_id: int, preferences: dict[str, Any]
     ) -> None:

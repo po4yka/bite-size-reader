@@ -982,21 +982,49 @@ class ContentExtractor:
         }
         timeout = max(5, int(getattr(self.cfg.runtime, "request_timeout_sec", 30)))
         overall_timeout = timeout + 5  # Add buffer for connection setup/teardown
+        max_size_mb = int(getattr(getattr(self.cfg, "firecrawl", None), "max_response_size_mb", 10))
+        max_bytes = max(1, max_size_mb) * 1024 * 1024
 
         try:
             # Wrap entire operation in timeout to prevent indefinite hangs
             async def _fetch_html() -> str | None:
                 async with httpx.AsyncClient(follow_redirects=True, timeout=timeout) as client:
-                    resp = await client.get(url, headers=headers)
-                    ctype = resp.headers.get("content-type", "").lower()
-                    if resp.status_code != 200 or "text/html" not in ctype:
-                        return None
-                    html = resp.text or ""
-                    # Validate that extracted text is sufficiently long to be useful
-                    text_preview = html_to_text(html)
-                    if len(text_preview) < 400:
-                        return None
-                    return html
+                    async with client.stream("GET", url, headers=headers) as resp:
+                        ctype = resp.headers.get("content-type", "").lower()
+                        if resp.status_code != 200 or "text/html" not in ctype:
+                            return None
+
+                        content_length = resp.headers.get("content-length")
+                        if content_length:
+                            try:
+                                if int(content_length) > max_bytes:
+                                    logger.debug(
+                                        "direct_html_salvage_too_large",
+                                        extra={"url": url, "content_length": content_length},
+                                    )
+                                    return None
+                            except ValueError:
+                                pass
+
+                        chunks: list[bytes] = []
+                        total = 0
+                        async for chunk in resp.aiter_bytes():
+                            total += len(chunk)
+                            if total > max_bytes:
+                                logger.debug(
+                                    "direct_html_salvage_too_large",
+                                    extra={"url": url, "max_bytes": max_bytes},
+                                )
+                                return None
+                            chunks.append(chunk)
+
+                        encoding = resp.encoding or "utf-8"
+                        html = b"".join(chunks).decode(encoding, errors="replace")
+                        # Validate that extracted text is sufficiently long to be useful
+                        text_preview = html_to_text(html)
+                        if len(text_preview) < 400:
+                            return None
+                        return html
 
             return await asyncio.wait_for(_fetch_html(), timeout=overall_timeout)
         except TimeoutError:

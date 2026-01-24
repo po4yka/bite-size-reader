@@ -50,13 +50,25 @@ class OpenRouterClient:
     """Enhanced OpenRouter Chat Completions client with structured output support."""
 
     # Class-level client pool for connection reuse
-    _client_pool: dict[str, httpx.AsyncClient] = {}
+    _client_pools: weakref.WeakKeyDictionary[
+        asyncio.AbstractEventLoop, dict[str, httpx.AsyncClient]
+    ] = weakref.WeakKeyDictionary()
     _cleanup_registry: weakref.WeakSet[OpenRouterClient] = weakref.WeakSet()
 
     # Async lock for client pool access (created lazily per event loop)
-    _client_pool_lock: asyncio.Lock | None = None
+    _client_pool_locks: weakref.WeakKeyDictionary[asyncio.AbstractEventLoop, asyncio.Lock] = (
+        weakref.WeakKeyDictionary()
+    )
     # Thread lock to protect async lock initialization (fixes race condition)
     _lock_init_lock = threading.Lock()
+
+    @classmethod
+    def _get_event_loop(cls) -> asyncio.AbstractEventLoop:
+        """Return the current event loop (running preferred)."""
+        try:
+            return asyncio.get_running_loop()
+        except RuntimeError:
+            return asyncio.get_event_loop()
 
     @classmethod
     def _get_pool_lock(cls) -> asyncio.Lock:
@@ -65,16 +77,35 @@ class OpenRouterClient:
         Thread-safe initialization using double-checked locking pattern.
         Prevents race condition where multiple threads could create different locks.
         """
+        loop = cls._get_event_loop()
+
         # Fast path: lock already exists (no thread lock needed for read)
-        if cls._client_pool_lock is not None:
-            return cls._client_pool_lock
+        lock = cls._client_pool_locks.get(loop)
+        if lock is not None:
+            return lock
 
         # Slow path: create the lock with thread-safe initialization
         with cls._lock_init_lock:
-            # Double-check: another thread may have initialized while we waited
-            if cls._client_pool_lock is None:
-                cls._client_pool_lock = asyncio.Lock()
-            return cls._client_pool_lock
+            lock = cls._client_pool_locks.get(loop)
+            if lock is None:
+                lock = asyncio.Lock()
+                cls._client_pool_locks[loop] = lock
+            return lock
+
+    @classmethod
+    def _get_pool(cls) -> dict[str, httpx.AsyncClient]:
+        """Get or create the client pool for the current event loop."""
+        loop = cls._get_event_loop()
+        pool = cls._client_pools.get(loop)
+        if pool is not None:
+            return pool
+
+        with cls._lock_init_lock:
+            pool = cls._client_pools.get(loop)
+            if pool is None:
+                pool = {}
+                cls._client_pools[loop] = pool
+            return pool
 
     def __init__(
         self,
@@ -259,9 +290,12 @@ class OpenRouterClient:
     @classmethod
     async def cleanup_all_clients(cls) -> None:
         """Clean up all shared HTTP clients."""
-        async with cls._get_pool_lock():
-            clients = list(cls._client_pool.values())
-            cls._client_pool.clear()
+        with cls._lock_init_lock:
+            pools = list(cls._client_pools.values())
+            cls._client_pools = weakref.WeakKeyDictionary()
+            cls._client_pool_locks = weakref.WeakKeyDictionary()
+
+        clients = [client for pool in pools for client in pool.values()]
 
         # Close all clients concurrently
         if clients:
@@ -298,7 +332,8 @@ class OpenRouterClient:
 
         # Use shared client pool for better connection reuse
         async with self._get_pool_lock():
-            client = self._client_pool.get(self._client_key)
+            pool = self._get_pool()
+            client = pool.get(self._client_key)
             if client is None or client.is_closed:
                 client = httpx.AsyncClient(
                     base_url=self._base_url,
@@ -308,7 +343,7 @@ class OpenRouterClient:
                     http2=HTTP2_AVAILABLE,
                     follow_redirects=True,
                 )
-                self._client_pool[self._client_key] = client
+                pool[self._client_key] = client
 
             self._client = client
             return client
@@ -500,7 +535,7 @@ class OpenRouterClient:
             raise NetworkError(
                 msg,
                 context={
-                    "client": "shared" if client in self._client_pool.values() else "dedicated",
+                    "client": "shared" if client in self._get_pool().values() else "dedicated",
                     "timeout_seconds": (
                         self._timeout.read_timeout
                         if hasattr(self._timeout, "read_timeout")
@@ -513,7 +548,7 @@ class OpenRouterClient:
             raise NetworkError(
                 msg,
                 context={
-                    "client": "shared" if client in self._client_pool.values() else "dedicated",
+                    "client": "shared" if client in self._get_pool().values() else "dedicated",
                     "base_url": self._base_url,
                 },
             ) from e
@@ -527,7 +562,7 @@ class OpenRouterClient:
             raise ClientError(
                 msg,
                 context={
-                    "client": "shared" if client in self._client_pool.values() else "dedicated",
+                    "client": "shared" if client in self._get_pool().values() else "dedicated",
                     "error_type": type(e).__name__,
                 },
             ) from e

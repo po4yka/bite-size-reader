@@ -10,7 +10,7 @@ import httpx
 from fastapi import APIRouter, HTTPException, Query
 from starlette.responses import StreamingResponse
 
-from app.core.logging_utils import get_logger
+from app.core.logging_utils import get_logger, log_exception
 
 logger = get_logger(__name__)
 router = APIRouter()
@@ -100,7 +100,7 @@ async def proxy_image(url: str = Query(..., description="URL of the image to pro
             for _ in range(max_redirects + 1):
                 # SSRF protection: block requests to internal/private networks
                 if not _is_url_safe(current_url):
-                    logger.warning(f"Blocked SSRF attempt to internal address: {current_url}")
+                    logger.warning("proxy_blocked_ssrf", extra={"url": current_url})
                     raise HTTPException(status_code=403, detail="URL resolves to blocked address")
 
                 req = client.build_request("GET", current_url, headers=headers)
@@ -123,12 +123,18 @@ async def proxy_image(url: str = Query(..., description="URL of the image to pro
                 raise HTTPException(status_code=502, detail="Too many redirects")
 
             if resp.status_code >= 400:
-                logger.warning(f"Failed to fetch image: {current_url} - Status: {resp.status_code}")
+                logger.warning(
+                    "proxy_fetch_failed",
+                    extra={"url": current_url, "status_code": resp.status_code},
+                )
                 raise HTTPException(status_code=404, detail="Image not found or inaccessible")
 
             content_type = resp.headers.get("content-type", "")
             if not content_type.startswith("image/"):
-                logger.warning(f"URL is not an image: {current_url} - Type: {content_type}")
+                logger.warning(
+                    "proxy_non_image_content",
+                    extra={"url": current_url, "content_type": content_type},
+                )
                 raise HTTPException(status_code=400, detail="URL does not point to an image")
 
             return StreamingResponse(
@@ -140,10 +146,10 @@ async def proxy_image(url: str = Query(..., description="URL of the image to pro
             )
 
     except httpx.RequestError as e:
-        logger.error(f"Proxy request error for {url}: {e}")
+        log_exception(logger, "proxy_request_error", e, url=url)
         raise HTTPException(status_code=502, detail="Failed to fetch upstream image") from e
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Unexpected proxy error: {e}")
+        log_exception(logger, "proxy_unexpected_error", e, url=url)
         raise HTTPException(status_code=500, detail="Internal proxy error") from e

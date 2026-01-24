@@ -7,6 +7,8 @@ import logging
 import time
 from typing import TYPE_CHECKING, Any
 
+from app.core.logging_utils import log_exception
+
 if TYPE_CHECKING:
     from app.db.session import DatabaseSessionManager
     from app.infrastructure.persistence.sqlite.repositories.user_repository import (
@@ -78,7 +80,23 @@ def safe_update_user_interaction(
         else:
             task = loop.create_task(coro)
             _update_tasks.add(task)
-            task.add_done_callback(_update_tasks.discard)
+
+            def _on_task_done(t: asyncio.Task) -> None:
+                _update_tasks.discard(t)
+                if t.cancelled():
+                    return
+                exc = t.exception()
+                if exc:
+                    log = logger_ if logger_ is not None else logger
+                    log_exception(
+                        log,
+                        "user_interaction_update_task_failed",
+                        exc,
+                        level="warning",
+                        interaction_id=interaction_id,
+                    )
+
+            task.add_done_callback(_on_task_done)
     except Exception as exc:
         log = logger_ if logger_ is not None else logger
         log.warning(
