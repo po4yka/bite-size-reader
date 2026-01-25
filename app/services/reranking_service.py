@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from sentence_transformers import CrossEncoder
 
-    from app.adapters.openrouter.openrouter_client import OpenRouterClient
+    from app.adapters.llm.protocol import LLMClientProtocol
 
 logger = logging.getLogger(__name__)
 
@@ -151,11 +151,11 @@ class RerankingService:
 
 
 class OpenRouterRerankingService:
-    """Re-rank results using OpenRouter chat completions."""
+    """Re-rank results using LLM chat completions."""
 
     def __init__(
         self,
-        client: OpenRouterClient,
+        client: LLMClientProtocol,
         *,
         top_k: int | None = None,
         timeout_sec: float = 8.0,

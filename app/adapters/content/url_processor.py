@@ -25,7 +25,7 @@ if TYPE_CHECKING:
 
     from app.adapters.external.firecrawl_parser import FirecrawlClient
     from app.adapters.external.response_formatter import ResponseFormatter
-    from app.adapters.openrouter.openrouter_client import OpenRouterClient
+    from app.adapters.llm.protocol import LLMClientProtocol
     from app.config import AppConfig
     from app.db.session import DatabaseSessionManager
 
@@ -67,7 +67,7 @@ class URLProcessor:
         cfg: AppConfig,
         db: DatabaseSessionManager,
         firecrawl: FirecrawlClient,
-        openrouter: OpenRouterClient,
+        openrouter: LLMClientProtocol,
         response_formatter: ResponseFormatter,
         audit_func: Callable[[str, str, dict], None],
         sem: Callable[[], Any],

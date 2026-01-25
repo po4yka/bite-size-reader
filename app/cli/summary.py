@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING, Any
 from app.adapters.content.url_processor import URLProcessor
 from app.adapters.external.firecrawl_parser import FirecrawlClient
 from app.adapters.external.response_formatter import ResponseFormatter
-from app.adapters.openrouter.openrouter_client import OpenRouterClient
+from app.adapters.llm import LLMClientFactory
 from app.adapters.telegram.command_processor import CommandProcessor
 from app.config import AppConfig, load_config
 from app.core.logging_utils import generate_correlation_id, setup_json_logging
@@ -337,29 +337,14 @@ async def run_summary_cli(args: argparse.Namespace) -> None:
         json_schema=cfg.firecrawl.json_schema,
     )
 
-    openrouter = OpenRouterClient(
-        api_key=cfg.openrouter.api_key,
-        model=cfg.openrouter.model,
-        fallback_models=list(cfg.openrouter.fallback_models),
-        http_referer=cfg.openrouter.http_referer,
-        x_title=cfg.openrouter.x_title,
-        timeout_sec=cfg.runtime.request_timeout_sec,
-        audit=audit,
-        debug_payloads=cfg.runtime.debug_payloads,
-        provider_order=list(cfg.openrouter.provider_order),
-        enable_stats=cfg.openrouter.enable_stats,
-        log_truncate_length=cfg.runtime.log_truncate_length,
-        enable_structured_outputs=cfg.openrouter.enable_structured_outputs,
-        structured_output_mode=cfg.openrouter.structured_output_mode,
-        require_parameters=cfg.openrouter.require_parameters,
-        auto_fallback_structured=cfg.openrouter.auto_fallback_structured,
-    )
+    # Create LLM client using factory based on LLM_PROVIDER config
+    llm_client = LLMClientFactory.create_from_config(cfg, audit=audit)
 
     url_processor = URLProcessor(
         cfg=cfg,
         db=db,
         firecrawl=firecrawl,
-        openrouter=openrouter,
+        openrouter=llm_client,  # URLProcessor still uses 'openrouter' param name for compatibility
         response_formatter=response_formatter,
         audit_func=audit,
         sem=sem_factory,
@@ -405,8 +390,7 @@ async def run_summary_cli(args: argparse.Namespace) -> None:
 
     finally:
         await firecrawl.aclose()
-        await openrouter.aclose()
-        await OpenRouterClient.cleanup_all_clients()
+        await llm_client.aclose()
 
 
 def main(argv: list[str] | None = None) -> int:

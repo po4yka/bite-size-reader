@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any
 from app.adapters.content.url_processor import URLProcessor
 from app.adapters.external.firecrawl_parser import FirecrawlClient
 from app.adapters.external.response_formatter import ResponseFormatter
-from app.adapters.openrouter.openrouter_client import OpenRouterClient
+from app.adapters.llm import LLMClientFactory, LLMClientProtocol
 from app.adapters.telegram.forward_processor import ForwardProcessor
 from app.adapters.telegram.message_handler import MessageHandler
 from app.adapters.telegram.telegram_client import TelegramClient
@@ -38,7 +38,7 @@ class ExternalClients:
     """Container for external service clients."""
 
     firecrawl: FirecrawlClient
-    openrouter: OpenRouterClient
+    llm_client: LLMClientProtocol
 
 
 @dataclass
@@ -68,7 +68,11 @@ class BotFactory:
         cfg: AppConfig,
         audit_func: Callable[[str, str, dict], None],
     ) -> ExternalClients:
-        """Create external service clients (Firecrawl, OpenRouter)."""
+        """Create external service clients (Firecrawl, LLM client).
+
+        The LLM client is created based on the LLM_PROVIDER config setting,
+        which can be "openrouter", "openai", or "anthropic".
+        """
         firecrawl = FirecrawlClient(
             api_key=cfg.firecrawl.api_key,
             timeout_sec=cfg.runtime.request_timeout_sec,
@@ -99,26 +103,10 @@ class BotFactory:
             json_schema=cfg.firecrawl.json_schema,
         )
 
-        openrouter = OpenRouterClient(
-            api_key=cfg.openrouter.api_key,
-            model=cfg.openrouter.model,
-            fallback_models=list(cfg.openrouter.fallback_models),
-            http_referer=cfg.openrouter.http_referer,
-            x_title=cfg.openrouter.x_title,
-            timeout_sec=cfg.runtime.request_timeout_sec,
-            audit=audit_func,
-            debug_payloads=cfg.runtime.debug_payloads,
-            provider_order=list(cfg.openrouter.provider_order),
-            enable_stats=cfg.openrouter.enable_stats,
-            log_truncate_length=cfg.runtime.log_truncate_length,
-            enable_structured_outputs=cfg.openrouter.enable_structured_outputs,
-            structured_output_mode=cfg.openrouter.structured_output_mode,
-            require_parameters=cfg.openrouter.require_parameters,
-            auto_fallback_structured=cfg.openrouter.auto_fallback_structured,
-            max_response_size_mb=cfg.openrouter.max_response_size_mb,
-        )
+        # Create LLM client using factory based on LLM_PROVIDER config
+        llm_client = LLMClientFactory.create_from_config(cfg, audit=audit_func)
 
-        return ExternalClients(firecrawl=firecrawl, openrouter=openrouter)
+        return ExternalClients(firecrawl=firecrawl, llm_client=llm_client)
 
     @staticmethod
     def create_components(
@@ -143,7 +131,7 @@ class BotFactory:
             cfg=cfg,
             db=db,
             firecrawl=clients.firecrawl,
-            openrouter=clients.openrouter,
+            openrouter=clients.llm_client,
             response_formatter=response_formatter,
             audit_func=audit_func,
             sem=sem_func,
@@ -153,7 +141,7 @@ class BotFactory:
         forward_processor = ForwardProcessor(
             cfg=cfg,
             db=db,
-            openrouter=clients.openrouter,
+            openrouter=clients.llm_client,
             response_formatter=response_formatter,
             audit_func=audit_func,
             sem=sem_func,
@@ -218,7 +206,7 @@ class BotFactory:
             )
 
         reranking_service = OpenRouterRerankingService(
-            client=clients.openrouter,
+            client=clients.llm_client,
             top_k=topic_search_max_results * 2,
             timeout_sec=cfg.runtime.request_timeout_sec,
         )
@@ -243,7 +231,7 @@ class BotFactory:
                 database=db,
                 topic_search_service=local_searcher,
                 content_fetcher=clients.firecrawl,
-                llm_client=clients.openrouter,
+                llm_client=clients.llm_client,
                 analytics_service=None,  # No analytics service yet
                 vector_store=vector_store,
                 embedding_generator=embedding_generator,

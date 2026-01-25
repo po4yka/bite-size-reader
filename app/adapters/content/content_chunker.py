@@ -17,7 +17,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
     from app.adapters.external.response_formatter import ResponseFormatter
-    from app.adapters.openrouter.openrouter_client import OpenRouterClient
+    from app.adapters.llm.protocol import LLMClientProtocol
     from app.config import AppConfig
 
 logger = logging.getLogger(__name__)
@@ -29,7 +29,7 @@ class ContentChunker:
     def __init__(
         self,
         cfg: AppConfig,
-        openrouter: OpenRouterClient,
+        openrouter: LLMClientProtocol,
         response_formatter: ResponseFormatter,
         audit_func: Callable[[str, str, dict], None],
         sem: Callable[[], Any],

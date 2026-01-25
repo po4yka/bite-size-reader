@@ -71,7 +71,7 @@ class TelegramBot:
             audit_func=self._audit,
         )
         self._firecrawl = clients.firecrawl
-        self._openrouter = clients.openrouter
+        self._llm_client = clients.llm_client
 
         # Create all bot components using factory
         components = BotFactory.create_components(
@@ -213,7 +213,7 @@ class TelegramBot:
     def _sync_client_dependencies(self) -> None:
         """Ensure helper components reference the active external clients."""
         firecrawl = getattr(self, "_firecrawl", None)
-        openrouter = getattr(self, "_openrouter", None)
+        llm_client = getattr(self, "_llm_client", None)
 
         if hasattr(self, "url_processor"):
             extractor = getattr(self.url_processor, "content_extractor", None)
@@ -222,19 +222,19 @@ class TelegramBot:
 
             chunker = getattr(self.url_processor, "content_chunker", None)
             if chunker is not None:
-                chunker.openrouter = openrouter
+                chunker.openrouter = llm_client
 
             summarizer = getattr(self.url_processor, "llm_summarizer", None)
             if summarizer is not None:
-                summarizer.openrouter = openrouter
+                summarizer.openrouter = llm_client
                 workflow = getattr(summarizer, "_workflow", None)
                 if workflow is not None:
-                    workflow.openrouter = openrouter
+                    workflow.openrouter = llm_client
 
         if hasattr(self, "forward_processor"):
             forward_summarizer = getattr(self.forward_processor, "summarizer", None)
             if forward_summarizer is not None:
-                forward_summarizer.openrouter = openrouter
+                forward_summarizer.openrouter = llm_client
 
     def _get_backup_settings(self) -> tuple[bool, int, int, str | None]:
         """Return sanitized backup configuration values."""

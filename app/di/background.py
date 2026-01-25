@@ -6,7 +6,7 @@ from typing import Any
 from app.adapters.content.url_processor import URLProcessor
 from app.adapters.external.firecrawl import FirecrawlClient
 from app.adapters.external.response_formatter import ResponseFormatter
-from app.adapters.openrouter.openrouter_client import OpenRouterClient
+from app.adapters.llm import LLMClientFactory, LLMClientProtocol
 from app.api.background_processor import BackgroundProcessor
 from app.config import AppConfig, load_config
 from app.core.logging_utils import get_logger
@@ -21,13 +21,28 @@ async def build_background_processor(
     *,
     db: DatabaseSessionManager | None = None,
     firecrawl: FirecrawlClient | None = None,
-    openrouter: OpenRouterClient | None = None,
+    llm_client: LLMClientProtocol | None = None,
     response_formatter: ResponseFormatter | None = None,
     redis_client: Any | None = None,
     semaphore: asyncio.Semaphore | None = None,
     audit_func: Callable[[str, str, dict], None] | None = None,
 ) -> BackgroundProcessor:
-    """Construct a BackgroundProcessor with modern DI-friendly wiring."""
+    """Construct a BackgroundProcessor with modern DI-friendly wiring.
+
+    Args:
+        cfg: Application configuration. If None, loads from environment.
+        db: Database session manager. If None, creates from config.
+        firecrawl: Firecrawl client. If None, creates from config.
+        llm_client: LLM client (OpenRouter, OpenAI, or Anthropic). If None, creates
+                   using LLMClientFactory based on LLM_PROVIDER config.
+        response_formatter: Response formatter. If None, creates from config.
+        redis_client: Redis client. If None, creates from config.
+        semaphore: Concurrency semaphore. If None, creates from config.
+        audit_func: Audit callback function. If None, uses default logger.
+
+    Returns:
+        Configured BackgroundProcessor instance.
+    """
 
     cfg = cfg or load_config()
 
@@ -73,23 +88,8 @@ async def build_background_processor(
             json_schema=cfg.firecrawl.json_schema,
         )
 
-    if openrouter is None:
-        openrouter = OpenRouterClient(
-            api_key=cfg.openrouter.api_key,
-            model=cfg.openrouter.model,
-            fallback_models=list(cfg.openrouter.fallback_models),
-            http_referer=cfg.openrouter.http_referer,
-            x_title=cfg.openrouter.x_title,
-            timeout_sec=cfg.runtime.request_timeout_sec,
-            debug_payloads=cfg.runtime.debug_payloads,
-            provider_order=list(cfg.openrouter.provider_order),
-            enable_stats=cfg.openrouter.enable_stats,
-            enable_structured_outputs=cfg.openrouter.enable_structured_outputs,
-            structured_output_mode=cfg.openrouter.structured_output_mode,
-            require_parameters=cfg.openrouter.require_parameters,
-            auto_fallback_structured=cfg.openrouter.auto_fallback_structured,
-            max_response_size_mb=cfg.openrouter.max_response_size_mb,
-        )
+    if llm_client is None:
+        llm_client = LLMClientFactory.create_from_config(cfg, audit=audit_func)
 
     if response_formatter is None:
         response_formatter = ResponseFormatter(telegram_limits=cfg.telegram_limits)
@@ -108,7 +108,7 @@ async def build_background_processor(
         cfg=cfg,
         db=db,
         firecrawl=firecrawl,
-        openrouter=openrouter,
+        openrouter=llm_client,  # URLProcessor still uses 'openrouter' param name for compatibility
         response_formatter=response_formatter,
         audit_func=audit_func,
         sem=lambda: semaphore,

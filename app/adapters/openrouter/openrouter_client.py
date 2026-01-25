@@ -47,7 +47,14 @@ if not HTTP2_AVAILABLE:
 
 
 class OpenRouterClient:
-    """Enhanced OpenRouter Chat Completions client with structured output support."""
+    """Enhanced OpenRouter Chat Completions client with structured output support.
+
+    This client implements the LLMClientProtocol interface, allowing it to be used
+    interchangeably with other LLM providers (OpenAI, Anthropic) in the application.
+    """
+
+    # Provider name for protocol compliance
+    _provider_name: str = "openrouter"
 
     # Class-level client pool for connection reuse
     _client_pools: weakref.WeakKeyDictionary[
@@ -286,6 +293,11 @@ class OpenRouterClient:
         if self._circuit_breaker:
             return self._circuit_breaker.get_stats()
         return {"state": "disabled"}
+
+    @property
+    def provider_name(self) -> str:
+        """Return the provider name for LLMClientProtocol compliance."""
+        return self._provider_name
 
     @classmethod
     async def cleanup_all_clients(cls) -> None:

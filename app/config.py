@@ -578,6 +578,114 @@ class OpenRouterConfig(BaseModel):
         return threshold
 
 
+class OpenAIConfig(BaseModel):
+    """OpenAI API configuration for direct API access."""
+
+    model_config = ConfigDict(frozen=True, populate_by_name=True)
+
+    api_key: str = Field(default="", validation_alias="OPENAI_API_KEY")
+    model: str = Field(default="gpt-4o", validation_alias="OPENAI_MODEL")
+    fallback_models: tuple[str, ...] = Field(
+        default_factory=lambda: ("gpt-4o-mini",),
+        validation_alias="OPENAI_FALLBACK_MODELS",
+    )
+    organization: str | None = Field(default=None, validation_alias="OPENAI_ORGANIZATION")
+    enable_structured_outputs: bool = Field(
+        default=True, validation_alias="OPENAI_ENABLE_STRUCTURED_OUTPUTS"
+    )
+
+    @field_validator("api_key", mode="before")
+    @classmethod
+    def _validate_api_key(cls, value: Any) -> str:
+        if value in (None, ""):
+            return ""
+        return _ensure_api_key(str(value), name="OpenAI")
+
+    @field_validator("model", mode="before")
+    @classmethod
+    def _validate_model(cls, value: Any) -> str:
+        if value in (None, ""):
+            return "gpt-4o"
+        return validate_model_name(str(value))
+
+    @field_validator("fallback_models", mode="before")
+    @classmethod
+    def _parse_fallback_models(cls, value: Any) -> tuple[str, ...]:
+        if value in (None, ""):
+            return ()
+        iterable = value if isinstance(value, list | tuple) else str(value).split(",")
+
+        validated: list[str] = []
+        for raw in iterable:
+            candidate = str(raw).strip()
+            if not candidate:
+                continue
+            try:
+                validated.append(validate_model_name(candidate))
+            except ValueError:
+                continue
+        return tuple(validated)
+
+    @field_validator("organization", mode="before")
+    @classmethod
+    def _validate_organization(cls, value: Any) -> str | None:
+        if value in (None, ""):
+            return None
+        org = str(value).strip()
+        if len(org) > 100:
+            msg = "OpenAI organization ID appears too long"
+            raise ValueError(msg)
+        return org
+
+
+class AnthropicConfig(BaseModel):
+    """Anthropic API configuration for direct API access."""
+
+    model_config = ConfigDict(frozen=True, populate_by_name=True)
+
+    api_key: str = Field(default="", validation_alias="ANTHROPIC_API_KEY")
+    model: str = Field(default="claude-sonnet-4-5-20250929", validation_alias="ANTHROPIC_MODEL")
+    fallback_models: tuple[str, ...] = Field(
+        default_factory=lambda: ("claude-3-5-haiku-20241022",),
+        validation_alias="ANTHROPIC_FALLBACK_MODELS",
+    )
+    enable_structured_outputs: bool = Field(
+        default=True, validation_alias="ANTHROPIC_ENABLE_STRUCTURED_OUTPUTS"
+    )
+
+    @field_validator("api_key", mode="before")
+    @classmethod
+    def _validate_api_key(cls, value: Any) -> str:
+        if value in (None, ""):
+            return ""
+        return _ensure_api_key(str(value), name="Anthropic")
+
+    @field_validator("model", mode="before")
+    @classmethod
+    def _validate_model(cls, value: Any) -> str:
+        if value in (None, ""):
+            return "claude-sonnet-4-5-20250929"
+        return validate_model_name(str(value))
+
+    @field_validator("fallback_models", mode="before")
+    @classmethod
+    def _parse_fallback_models(cls, value: Any) -> tuple[str, ...]:
+        if value in (None, ""):
+            return ()
+        iterable = value if isinstance(value, list | tuple) else str(value).split(",")
+
+        validated: list[str] = []
+        for raw in iterable:
+            candidate = str(raw).strip()
+            if not candidate:
+                continue
+            try:
+                validated.append(validate_model_name(candidate))
+            except ValueError:
+                continue
+        return tuple(validated)
+
+
 class YouTubeConfig(BaseModel):
     """YouTube video download and storage configuration."""
 
@@ -1482,6 +1590,17 @@ class RuntimeConfig(BaseModel):
     db_backup_retention: int = Field(default=14, validation_alias="DB_BACKUP_RETENTION")
     db_backup_dir: str | None = Field(default=None, validation_alias="DB_BACKUP_DIR")
     enable_hex_container: bool = Field(default=False, validation_alias="ENABLE_HEX_CONTAINER")
+    llm_provider: str = Field(default="openrouter", validation_alias="LLM_PROVIDER")
+
+    @field_validator("llm_provider", mode="before")
+    @classmethod
+    def _validate_llm_provider(cls, value: Any) -> str:
+        provider = str(value or "openrouter").lower().strip()
+        valid_providers = {"openrouter", "openai", "anthropic"}
+        if provider not in valid_providers:
+            msg = f"Invalid LLM provider: {provider}. Must be one of {sorted(valid_providers)}"
+            raise ValueError(msg)
+        return provider
 
     @field_validator("log_level", mode="before")
     @classmethod
@@ -1637,6 +1756,8 @@ class AppConfig:
     telegram: TelegramConfig
     firecrawl: FirecrawlConfig
     openrouter: OpenRouterConfig
+    openai: OpenAIConfig
+    anthropic: AnthropicConfig
     youtube: YouTubeConfig
     runtime: RuntimeConfig
     telegram_limits: TelegramLimitsConfig
@@ -1671,6 +1792,8 @@ class Settings(BaseSettings):
     telegram: TelegramConfig
     firecrawl: FirecrawlConfig
     openrouter: OpenRouterConfig
+    openai: OpenAIConfig = Field(default_factory=OpenAIConfig)
+    anthropic: AnthropicConfig = Field(default_factory=AnthropicConfig)
     youtube: YouTubeConfig = Field(default_factory=YouTubeConfig)
     runtime: RuntimeConfig = Field(default_factory=RuntimeConfig)
     telegram_limits: TelegramLimitsConfig = Field(default_factory=TelegramLimitsConfig)
@@ -1761,6 +1884,8 @@ class Settings(BaseSettings):
             telegram=self.telegram,
             firecrawl=self.firecrawl,
             openrouter=self.openrouter,
+            openai=self.openai,
+            anthropic=self.anthropic,
             youtube=self.youtube,
             runtime=self.runtime,
             telegram_limits=self.telegram_limits,
