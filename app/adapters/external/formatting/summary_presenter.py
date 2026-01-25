@@ -188,12 +188,16 @@ class SummaryPresenterImpl:
                     chunk.append(f"• {idea}")
                     if sum(len(c) + 1 for c in chunk) > 3000:
                         await self._text_processor.send_long_text(
-                            message, "💡 Key Ideas:\n" + "\n".join(chunk)
+                            message,
+                            "<b>💡 Key Ideas</b>\n" + "\n".join(chunk),
+                            parse_mode="HTML",
                         )
                         chunk = []
                 if chunk:
                     await self._text_processor.send_long_text(
-                        message, "💡 Key Ideas:\n" + "\n".join(chunk)
+                        message,
+                        "<b>💡 Key Ideas</b>\n" + "\n".join(chunk),
+                        parse_mode="HTML",
                     )
 
             # Send new field messages
@@ -246,7 +250,9 @@ class SummaryPresenterImpl:
                 sections_sent = True
                 await self._text_processor.send_long_text(
                     message,
-                    "🧭 Overview:\n" + self._text_processor.sanitize_summary_text(overview.strip()),
+                    "<b>🧭 Overview</b>\n"
+                    + self._text_processor.sanitize_summary_text(overview.strip()),
+                    parse_mode="HTML",
                 )
 
             facts_section: list[str] = []
@@ -286,7 +292,9 @@ class SummaryPresenterImpl:
             if facts_section:
                 sections_sent = True
                 await self._text_processor.send_long_text(
-                    message, "📌 Fresh Facts:\n" + "\n\n".join(facts_section)
+                    message,
+                    "<b>📌 Fresh Facts</b>\n" + "\n\n".join(facts_section),
+                    parse_mode="HTML",
                 )
 
             def _clean_list(items: list[Any]) -> list[str]:
@@ -304,7 +312,9 @@ class SummaryPresenterImpl:
                 if questions:
                     sections_sent = True
                     await self._text_processor.send_long_text(
-                        message, "❓ Open Questions:\n" + "\n".join(f"- {q}" for q in questions)
+                        message,
+                        "<b>❓ Open Questions</b>\n" + "\n".join(f"- {q}" for q in questions),
+                        parse_mode="HTML",
                     )
 
             suggested_sources = insights.get("suggested_sources")
@@ -313,7 +323,9 @@ class SummaryPresenterImpl:
                 if sources:
                     sections_sent = True
                     await self._text_processor.send_long_text(
-                        message, "🔗 Suggested Follow-up:\n" + "\n".join(f"- {s}" for s in sources)
+                        message,
+                        "<b>🔗 Suggested Follow-up</b>\n" + "\n".join(f"- {s}" for s in sources),
+                        parse_mode="HTML",
                     )
 
             expansion = insights.get("expansion_topics")
@@ -323,8 +335,9 @@ class SummaryPresenterImpl:
                     sections_sent = True
                     await self._text_processor.send_long_text(
                         message,
-                        "🧠 Expansion Topics (beyond the article):\n"
+                        "<b>🧠 Expansion Topics</b> (beyond the article)\n"
                         + "\n".join(f"- {item}" for item in exp_clean),
+                        parse_mode="HTML",
                     )
 
             next_steps = insights.get("next_exploration")
@@ -334,7 +347,9 @@ class SummaryPresenterImpl:
                     sections_sent = True
                     await self._text_processor.send_long_text(
                         message,
-                        "🚀 What to explore next:\n" + "\n".join(f"- {step}" for step in nxt_clean),
+                        "<b>🚀 What to explore next</b>\n"
+                        + "\n".join(f"- {step}" for step in nxt_clean),
+                        parse_mode="HTML",
                     )
 
             caution = insights.get("caution")
@@ -342,7 +357,9 @@ class SummaryPresenterImpl:
                 sections_sent = True
                 await self._text_processor.send_long_text(
                     message,
-                    "⚠️ Caveats:\n" + self._text_processor.sanitize_summary_text(caution.strip()),
+                    "<b>⚠️ Caveats</b>\n"
+                    + self._text_processor.sanitize_summary_text(caution.strip()),
+                    parse_mode="HTML",
                 )
 
             if not sections_sent:
@@ -525,7 +542,9 @@ class SummaryPresenterImpl:
             ]
             if ideas:
                 await self._text_processor.send_long_text(
-                    message, "💡 Key Ideas:\n" + "\n".join([f"• {i}" for i in ideas])
+                    message,
+                    "<b>💡 Key Ideas</b>\n" + "\n".join([f"• {i}" for i in ideas]),
+                    parse_mode="HTML",
                 )
 
             # Send new field messages for forwards
@@ -538,42 +557,51 @@ class SummaryPresenterImpl:
     async def _send_new_field_messages(self, message: Any, shaped: dict[str, Any]) -> None:
         """Send messages for new fields like extractive quotes, highlights, etc."""
         try:
-            # Extractive quotes
+            # Extractive quotes with HTML blockquotes
             quotes = shaped.get("extractive_quotes") or []
             if isinstance(quotes, list) and quotes:
-                quote_lines = ["💬 Key Quotes:"]
+                quote_lines = ["<b>💬 Key Quotes</b>"]
                 for i, quote in enumerate(quotes[:5], 1):
                     if isinstance(quote, dict) and quote.get("text"):
                         text = str(quote["text"]).strip()
                         if text:
-                            quote_lines.append(f'{i}. "{text}"')
+                            escaped_text = html.escape(text)
+                            quote_lines.append(f"<blockquote>{i}. {escaped_text}</blockquote>")
                 if len(quote_lines) > 1:
-                    await self._text_processor.send_long_text(message, "\n".join(quote_lines))
+                    await self._text_processor.send_long_text(
+                        message, "\n".join(quote_lines), parse_mode="HTML"
+                    )
 
             highlights = [
                 str(h).strip() for h in (shaped.get("highlights") or []) if str(h).strip()
             ]
             if highlights:
                 await self._text_processor.send_long_text(
-                    message, "✨ Highlights:\n" + "\n".join([f"• {h}" for h in highlights[:10]])
+                    message,
+                    "<b>✨ Highlights</b>\n" + "\n".join([f"• {h}" for h in highlights[:10]]),
+                    parse_mode="HTML",
                 )
 
-            # Questions answered (as Q&A pairs)
+            # Questions answered (as Q&A pairs) with HTML formatting
             questions_answered = shaped.get("questions_answered") or []
             if isinstance(questions_answered, list) and questions_answered:
-                qa_lines = ["❓ Questions Answered:"]
+                qa_lines = ["<b>❓ Questions Answered</b>"]
                 for i, qa in enumerate(questions_answered[:10], 1):
                     if isinstance(qa, dict):
                         question = str(qa.get("question", "")).strip()
                         answer = str(qa.get("answer", "")).strip()
                         if question:
-                            qa_lines.append(f"\n{i}. **Q:** {question}")
+                            escaped_question = html.escape(question)
+                            qa_lines.append(f"\n{i}. <b>Q:</b> {escaped_question}")
                             if answer:
-                                qa_lines.append(f"   **A:** {answer}")
+                                escaped_answer = html.escape(answer)
+                                qa_lines.append(f"   <b>A:</b> {escaped_answer}")
                             else:
-                                qa_lines.append("   **A:** _(No answer provided)_")
+                                qa_lines.append("   <b>A:</b> <i>(No answer provided)</i>")
                 if len(qa_lines) > 1:
-                    await self._text_processor.send_long_text(message, "\n".join(qa_lines))
+                    await self._text_processor.send_long_text(
+                        message, "\n".join(qa_lines), parse_mode="HTML"
+                    )
 
             # Key points to remember
             key_points = [
@@ -584,14 +612,15 @@ class SummaryPresenterImpl:
             if key_points:
                 await self._text_processor.send_long_text(
                     message,
-                    "🎯 Key Points to Remember:\n"
+                    "<b>🎯 Key Points to Remember</b>\n"
                     + "\n".join([f"• {kp}" for kp in key_points[:10]]),
+                    parse_mode="HTML",
                 )
 
             # Topic taxonomy (if present and not empty)
             taxonomy = shaped.get("topic_taxonomy") or []
             if isinstance(taxonomy, list) and taxonomy:
-                tax_lines = ["🏷️ Topic Classification:"]
+                tax_lines = ["<b>🏷️ Topic Classification</b>"]
                 for tax in taxonomy[:5]:
                     if isinstance(tax, dict) and tax.get("label"):
                         label = str(tax["label"]).strip()
@@ -601,7 +630,9 @@ class SummaryPresenterImpl:
                         else:
                             tax_lines.append(f"• {label}")
                 if len(tax_lines) > 1:
-                    await self._text_processor.send_long_text(message, "\n".join(tax_lines))
+                    await self._text_processor.send_long_text(
+                        message, "\n".join(tax_lines), parse_mode="HTML"
+                    )
 
             # Forwarded post extras
             fwd_extras = shaped.get("forwarded_post_extras")
@@ -621,7 +652,9 @@ class SummaryPresenterImpl:
                     )
                 if fwd_parts:
                     await self._text_processor.send_long_text(
-                        message, "📤 Forward Info:\n" + "\n".join(fwd_parts)
+                        message,
+                        "<b>📤 Forward Info</b>\n" + "\n".join(fwd_parts),
+                        parse_mode="HTML",
                     )
 
         except Exception:

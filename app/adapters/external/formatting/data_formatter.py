@@ -1,7 +1,12 @@
-"""Stateless data formatting operations."""
+"""Stateless data formatting operations.
+
+All formatting methods return HTML-safe strings with proper escaping and markup.
+Numeric values are wrapped in <code> tags for visual distinction.
+"""
 
 from __future__ import annotations
 
+import html
 import math
 from typing import Any
 
@@ -38,7 +43,20 @@ class DataFormatterImpl:
         return str(value).strip()
 
     def format_key_stats(self, key_stats: list[dict[str, Any]]) -> list[str]:
-        """Render key statistics into bullet-point lines."""
+        """Render key statistics into bullet-point lines with HTML formatting.
+
+        Returns HTML-formatted strings where:
+        - Labels are HTML-escaped
+        - Numeric values are wrapped in <code> tags
+        - Units are appended after numeric values
+        - Example: "• Revenue: <code>$1.2B</code>"
+
+        Args:
+            key_stats: List of stats dicts with 'label', 'value', 'unit', 'source_excerpt'.
+
+        Returns:
+            List of HTML-formatted bullet-point strings.
+        """
         formatted: list[str] = []
         for entry in key_stats:
             if not isinstance(entry, dict):
@@ -48,44 +66,66 @@ class DataFormatterImpl:
             if not label:
                 continue
 
+            # Escape label for HTML
+            label_escaped = html.escape(label)
+
             value_text = self.format_metric_value(entry.get("value"))
             unit = str(entry.get("unit", "")).strip()
             source_excerpt = str(entry.get("source_excerpt", "")).strip()
 
             detail_parts: list[str] = []
             if value_text is not None:
+                # Wrap numeric value in <code> tags
+                value_code = f"<code>{html.escape(value_text)}</code>"
                 if unit:
-                    detail_parts.append(f"{value_text} {unit}".strip())
+                    # Append unit after the code tag
+                    detail_parts.append(f"{value_code} {html.escape(unit)}")
                 else:
-                    detail_parts.append(value_text)
+                    detail_parts.append(value_code)
             elif unit:
-                detail_parts.append(unit)
+                detail_parts.append(html.escape(unit))
 
             if source_excerpt:
-                detail_parts.append(f"Source: {source_excerpt}")
+                # Escape source excerpt as well
+                detail_parts.append(f"Source: {html.escape(source_excerpt)}")
 
             if detail_parts:
-                formatted.append(f"• {label}: " + " — ".join(detail_parts))
+                formatted.append(f"• {label_escaped}: " + " — ".join(detail_parts))
             else:
-                formatted.append(f"• {label}")
+                formatted.append(f"• {label_escaped}")
 
         return formatted
 
     def format_readability(self, readability: Any) -> str | None:
-        """Create a reader-friendly readability summary line."""
+        """Create a reader-friendly readability summary line with HTML formatting.
+
+        Returns HTML-formatted string where:
+        - Method name is displayed (e.g., "Flesch-Kincaid")
+        - Score (numeric) is wrapped in <code> tags (e.g., "<code>12.4</code>")
+        - Level is displayed (e.g., "College")
+        - Example: "Flesch-Kincaid • Score: <code>12.4</code> • Level: College"
+
+        Args:
+            readability: Dict with optional 'method', 'score', 'level' keys.
+
+        Returns:
+            HTML-formatted readability summary string, or None if no valid data.
+        """
         if not isinstance(readability, dict):
             return None
 
         method_raw = str(readability.get("method", "")).strip()
-        method_display = method_raw[:1].upper() + method_raw[1:] if method_raw else ""
+        method_display = html.escape(method_raw[:1].upper() + method_raw[1:]) if method_raw else ""
 
         score = self.format_metric_value(readability.get("score"))
         level_raw = str(readability.get("level", "")).strip()
-        level_display = level_raw[:1].upper() + level_raw[1:] if level_raw else ""
+        level_display = html.escape(level_raw[:1].upper() + level_raw[1:]) if level_raw else ""
 
         detail_parts: list[str] = []
         if score is not None:
-            detail_parts.append(f"Score: {score}")
+            # Wrap score in <code> tags
+            score_code = f"<code>{html.escape(score)}</code>"
+            detail_parts.append(f"Score: {score_code}")
         if level_display:
             detail_parts.append(f"Level: {level_display}")
 

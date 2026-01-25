@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import html
 import re
 import unicodedata
 from datetime import UTC, datetime
@@ -134,11 +135,103 @@ class TextProcessorImpl:
         timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
         return f"{base}-{timestamp}.json"
 
-    async def send_long_text(self, message: Any, text: str) -> None:
+    def markdown_to_telegram_html(self, text: str) -> str:
+        """Convert Markdown to Telegram-supported HTML.
+
+        Handles:
+        - H2 headers (## ) → bold with 📌 emoji prefix
+        - H3 headers (### ) → plain bold
+        - Bold (**text**) → <b>text</b>
+        - Italic (*text*) → <i>text</i>
+        - Inline code (`code`) → <code>code</code>
+        - Code blocks (```) → <pre>code</pre> or <pre><code class="language-X">code</code></pre>
+        - Bullet lists (- item) → • item
+
+        Code blocks with language hints preserve the syntax hint in a class attribute:
+        - ```python\ncode``` → <pre><code class="language-python">code</code></pre>
+        - ```\ncode``` → <pre>code</pre>
+        """
+        # Escape HTML entities first to prevent injection
+        text = html.escape(text)
+
+        # Code blocks (triple backticks) - must be before other transforms
+        # Handle ```language\ncode``` and ```\ncode``` with language preservation
+        def replace_code_block(match: re.Match[str]) -> str:
+            lang = match.group(1) or ""
+            code = match.group(2)
+            if lang:
+                return f'<pre><code class="language-{lang}">{code}</code></pre>'
+            return f"<pre>{code}</pre>"
+
+        text = re.sub(
+            r"```(\w+)?\n(.*?)```",
+            replace_code_block,
+            text,
+            flags=re.DOTALL,
+        )
+
+        # Headers (must be before bold to avoid conflicts with **)
+        # H3: ### Header → bold (no emoji)
+        text = re.sub(r"^### (.+)$", r"\n<b>\1</b>\n", text, flags=re.MULTILINE)
+        # H2: ## Header → bold with 📌 emoji
+        text = re.sub(r"^## (.+)$", r"\n<b>📌 \1</b>\n", text, flags=re.MULTILINE)
+        # H1: # Header → bold with section marker (rarely used in articles)
+        text = re.sub(r"^# (.+)$", r"\n<b>▶ \1</b>\n", text, flags=re.MULTILINE)
+
+        # Bold: **text** → <b>text</b>
+        text = re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", text)
+
+        # Italic: *text* → <i>text</i> (but not ** which is bold)
+        # Use negative lookbehind/lookahead to avoid matching ** patterns
+        text = re.sub(r"(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)", r"<i>\1</i>", text)
+
+        # Inline code: `code` → <code>code</code>
+        text = re.sub(r"`([^`]+)`", r"<code>\1</code>", text)
+
+        # Bullet lists: - item → • item (at start of line)
+        text = re.sub(r"^- ", "• ", text, flags=re.MULTILINE)
+        # Also handle * as bullet (common in Markdown)
+        text = re.sub(r"^\* ", "• ", text, flags=re.MULTILINE)
+
+        # Clean up excessive newlines (more than 2 consecutive)
+        text = re.sub(r"\n{3,}", "\n\n", text)
+
+        return text.strip()
+
+    def linkify_urls(self, text: str) -> str:
+        """Convert bare URLs in text to clickable HTML links.
+
+        Only linkifies URLs that aren't already inside href attributes.
+        Long URLs are truncated for display but full URL is preserved in href.
+
+        Args:
+            text: Text that may contain bare URLs.
+
+        Returns:
+            Text with bare URLs converted to <a href="...">...</a> links.
+        """
+        # Pattern to match URLs not already in href="..."
+        # Negative lookbehind for href=" to avoid double-linking
+        url_pattern = r'(?<!href=")(?<!">)(https?://[^\s<>"\']+)'
+
+        def replace_url(match: re.Match[str]) -> str:
+            url = match.group(1)
+            # Escape URL for href attribute
+            escaped_url = html.escape(url, quote=True)
+            # Truncate display text for long URLs
+            display = url[:47] + "..." if len(url) > 50 else url
+            display_escaped = html.escape(display)
+            return f'<a href="{escaped_url}">{display_escaped}</a>'
+
+        return re.sub(url_pattern, replace_url, text)
+
+    async def send_long_text(
+        self, message: Any, text: str, *, parse_mode: str | None = None
+    ) -> None:
         """Send text, splitting into multiple messages if too long for Telegram."""
         for chunk in self.chunk_text(text, max_len=self._max_message_chars):
             if chunk:
-                await self._response_sender.safe_reply(message, chunk)
+                await self._response_sender.safe_reply(message, chunk, parse_mode=parse_mode)
 
     async def send_labelled_text(self, message: Any, label: str, body: str) -> None:
         """Send labelled text, splitting into continuation messages when needed."""
