@@ -242,6 +242,46 @@ class ResponseSenderImpl:
             logger.error("reply_failed", extra={"error": str(e), "text_length": len(text)})
             return None
 
+    async def edit_or_send(
+        self,
+        message: Any,
+        text: str,
+        message_id: int | None = None,
+        *,
+        parse_mode: str | None = None,
+    ) -> int | None:
+        """Edit existing message or send new if edit fails.
+
+        This method provides a convenient pattern for progress updates:
+        - If message_id is provided, tries to edit that message
+        - If edit fails or no message_id, sends a new message
+        - Returns the message_id for future edits
+
+        Args:
+            message: The original Telegram message (for chat_id and reply context)
+            text: The text content to send/edit
+            message_id: Optional message ID to edit
+            parse_mode: Optional parse mode for text formatting
+
+        Returns:
+            Message ID for future edits, or None if both operations failed
+        """
+        chat_id = getattr(getattr(message, "chat", None), "id", None)
+
+        # Try to edit if we have a message_id
+        if message_id and chat_id:
+            edit_success = await self.edit_message(chat_id, message_id, text)
+            if edit_success:
+                return message_id
+            # Edit failed (maybe message was deleted), log and fall through to send
+            logger.debug(
+                "edit_or_send_edit_failed_fallback_send",
+                extra={"chat_id": chat_id, "message_id": message_id},
+            )
+
+        # Send new message
+        return await self.safe_reply_with_id(message, text, parse_mode=parse_mode)
+
     async def edit_message(self, chat_id: int, message_id: int, text: str) -> bool:
         """Edit an existing message in Telegram with security checks.
 

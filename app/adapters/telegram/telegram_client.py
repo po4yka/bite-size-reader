@@ -112,35 +112,30 @@ class TelegramClient:
         try:
             from pyrogram.types import BotCommand, BotCommandScopeAllPrivateChats
 
+            # Main commands (ordered by most common usage)
             commands_en = [
-                BotCommand("start", "Welcome and instructions"),
-                BotCommand("help", "Show help and usage"),
                 BotCommand("summarize", "Summarize a URL"),
-                BotCommand("summarize_all", "Summarize multiple URLs from one message"),
-                BotCommand("cancel", "Cancel pending URL or multi-link prompts"),
-                BotCommand("unread", "Show list of unread articles"),
-                BotCommand("read", "Mark article as read and view it"),
-                BotCommand("dbverify", "Verify database integrity and reprocess"),
-                BotCommand("dbinfo", "Show database overview"),
+                BotCommand("search", "Search your summaries"),
+                BotCommand("unread", "Show unread articles"),
+                BotCommand("read", "Mark article as read"),
+                BotCommand("summarize_all", "Summarize multiple URLs"),
+                BotCommand("cancel", "Cancel pending operation"),
+                BotCommand("help", "Show help and usage"),
+                BotCommand("start", "Welcome and instructions"),
+                BotCommand("dbinfo", "Show database stats"),
+                BotCommand("dbverify", "Verify database integrity"),
             ]
             commands_ru = [
-                BotCommand("start", "Приветствие и инструкция"),
-                BotCommand("help", "Показать помощь и инструкцию"),
-                BotCommand("summarize", "Суммировать ссылку (или пришлите позже)"),
-                BotCommand("summarize_all", "Суммировать несколько ссылок из сообщения"),
-                BotCommand(
-                    "cancel",
-                    "Отменить ожидание ссылки или подтверждения нескольких ссылок",
-                ),
-                BotCommand("unread", "Показать список непрочитанных статей"),
-                BotCommand(
-                    "read", "Отметить статью как прочитанную и просмотреть (используйте /read <ID>)"
-                ),
-                BotCommand(
-                    "dbverify",
-                    "Проверить целостность базы данных и перезапустить обработку",
-                ),
-                BotCommand("dbinfo", "Показать состояние базы данных"),
+                BotCommand("summarize", "Суммировать ссылку"),
+                BotCommand("search", "Поиск по резюме"),
+                BotCommand("unread", "Непрочитанные статьи"),
+                BotCommand("read", "Отметить прочитанным"),
+                BotCommand("summarize_all", "Суммировать несколько"),
+                BotCommand("cancel", "Отменить операцию"),
+                BotCommand("help", "Помощь и инструкция"),
+                BotCommand("start", "Приветствие"),
+                BotCommand("dbinfo", "Статистика БД"),
+                BotCommand("dbverify", "Проверка БД"),
             ]
             try:
                 client_any: Any = self.client
@@ -156,27 +151,50 @@ class TelegramClient:
                     scope=BotCommandScopeAllPrivateChats(),
                     language_code="ru",
                 )
-                # Optional descriptions (if supported)
+
+                # Set bot descriptions
                 try:
                     await client_any.set_bot_description(
-                        "Summarize URLs and forwarded posts into structured JSON with reliable results.",
+                        "Bite-Size Reader: Summarize URLs, YouTube videos, and forwarded posts. "
+                        "Get structured summaries with key ideas, entities, and tags.",
                         language_code="en",
                     )
                     await client_any.set_bot_short_description(
-                        "Structured JSON summaries with smart fallbacks", language_code="en"
+                        "Summarize articles & videos into bite-sized insights",
+                        language_code="en",
                     )
                     await client_any.set_bot_description(
-                        "Улучшенные резюме ссылок и пересланных постов в формате JSON с повышенной надёжностью.",
+                        "Bite-Size Reader: Резюме ссылок, YouTube видео и пересланных постов. "
+                        "Структурированные саммари с ключевыми идеями, сущностями и тегами.",
                         language_code="ru",
                     )
                     await client_any.set_bot_short_description(
-                        "Улучшенные JSON резюме с умными резервами", language_code="ru"
+                        "Резюме статей и видео в краткие инсайты",
+                        language_code="ru",
                     )
                 except Exception:
                     pass
-                # Ensure default menu button (best-effort)
-                with contextlib.suppress(Exception):
-                    await client_any.set_chat_menu_button()
+
+                # Set up persistent menu button that shows commands
+                # The default behavior shows the command menu when button is tapped
+                try:
+                    from pyrogram.types import BotMenuButtonCommands
+
+                    await client_any.set_chat_menu_button(menu_button=BotMenuButtonCommands())
+                    logger.debug("menu_button_commands_set")
+                except ImportError:
+                    # Fallback: just set default menu button
+                    with contextlib.suppress(Exception):
+                        await client_any.set_chat_menu_button()
+                except Exception as menu_error:
+                    logger.debug(
+                        "menu_button_set_fallback",
+                        extra={"error": str(menu_error)},
+                    )
+                    # Fallback to default
+                    with contextlib.suppress(Exception):
+                        await client_any.set_chat_menu_button()
+
                 logger.info(
                     "bot_commands_set",
                     extra={"count_en": len(commands_en), "count_ru": len(commands_ru)},

@@ -94,8 +94,12 @@ class ForwardProcessor:
             )
 
             if forward_shaped:
-                # Send formatted preview for forward flow
-                await self.response_formatter.send_forward_summary_response(message, forward_shaped)
+                # Send formatted preview for forward flow with action buttons
+                await self.response_formatter.send_forward_summary_response(
+                    message,
+                    forward_shaped,
+                    summary_id=f"req:{req_id}" if req_id else None,
+                )
 
                 summary_payload: dict[str, Any] | None = (
                     dict(forward_shaped) if isinstance(forward_shaped, dict) else None
@@ -197,7 +201,11 @@ class ForwardProcessor:
             return False
 
         await self.response_formatter.send_cached_summary_notification(message)
-        await self.response_formatter.send_forward_summary_response(message, shaped)
+        await self.response_formatter.send_forward_summary_response(
+            message,
+            shaped,
+            summary_id=f"req:{req_id}" if req_id else None,
+        )
 
         await self.request_repo.async_update_request_status(req_id, "ok")
 

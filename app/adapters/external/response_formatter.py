@@ -355,18 +355,25 @@ class ResponseFormatter:
     # =========================================================================
 
     async def send_structured_summary_response(
-        self, message: Any, summary_shaped: dict[str, Any], llm: Any, chunks: int | None = None
+        self,
+        message: Any,
+        summary_shaped: dict[str, Any],
+        llm: Any,
+        chunks: int | None = None,
+        summary_id: int | str | None = None,
     ) -> None:
         """Send summary where each top-level JSON field is a separate message."""
         await self._summary_presenter.send_structured_summary_response(
-            message, summary_shaped, llm, chunks
+            message, summary_shaped, llm, chunks, summary_id=summary_id
         )
 
     async def send_forward_summary_response(
-        self, message: Any, forward_shaped: dict[str, Any]
+        self, message: Any, forward_shaped: dict[str, Any], summary_id: int | str | None = None
     ) -> None:
         """Send forward summary with per-field messages."""
-        await self._summary_presenter.send_forward_summary_response(message, forward_shaped)
+        await self._summary_presenter.send_forward_summary_response(
+            message, forward_shaped, summary_id=summary_id
+        )
 
     async def send_russian_translation(
         self, message: Any, translated_text: str, correlation_id: str | None = None

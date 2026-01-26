@@ -6,6 +6,7 @@ import logging
 from typing import TYPE_CHECKING, Any
 
 from app.adapters.telegram.access_controller import AccessController
+from app.adapters.telegram.callback_handler import CallbackHandler
 from app.adapters.telegram.command_processor import CommandProcessor
 from app.adapters.telegram.message_router import MessageRouter
 from app.adapters.telegram.task_manager import UserTaskManager
@@ -88,6 +89,13 @@ class MessageHandler:
             task_manager=self.task_manager,
         )
 
+        # Initialize callback handler for post-summary actions
+        self.callback_handler = CallbackHandler(
+            db=db,
+            response_formatter=response_formatter,
+            url_handler=self.url_handler,
+        )
+
     async def handle_message(self, message: Any) -> None:
         """Main message handling entry point."""
         await self.message_router.route_message(message)
@@ -118,13 +126,20 @@ class MessageHandler:
             except Exception as e:
                 logger.warning("callback_answer_failed", extra={"error": str(e)})
 
-            # Handle multi-link confirmation callbacks
+            # Handle multi-link confirmation callbacks (legacy path)
             if callback_data == "multi_confirm_yes":
                 await self._handle_multi_confirm_yes(message, uid)
-            elif callback_data == "multi_confirm_no":
+                return
+            if callback_data == "multi_confirm_no":
                 await self._handle_multi_confirm_no(message, uid)
-            else:
-                logger.warning("unknown_callback_data", extra={"data": callback_data})
+                return
+
+            # Route to the unified callback handler for all other actions
+            handled = await self.callback_handler.handle_callback(
+                callback_query, uid, callback_data
+            )
+            if not handled:
+                logger.warning("unhandled_callback_data", extra={"data": callback_data})
 
         except Exception as e:
             logger.exception("callback_query_handler_failed", extra={"error": str(e)})

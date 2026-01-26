@@ -343,11 +343,13 @@ class URLProcessor:
             # Format and send the response (skip if silent)
             if not silent:
                 llm_result = self.llm_summarizer.last_llm_result or self._create_chunk_llm_stub()
+                # Pass request ID prefixed with 'req:' for action button callbacks
                 await self.response_formatter.send_structured_summary_response(
                     message,
                     summary_json,
                     llm_result,
                     chunks=len(chunks) if should_chunk and chunks else None,
+                    summary_id=f"req:{req_id}" if req_id else None,
                 )
 
             await self._schedule_post_summary_tasks(
@@ -444,6 +446,7 @@ class URLProcessor:
                         message,
                         payload,
                         self._create_chunk_llm_stub(),
+                        summary_id=f"req:{request_id}" if request_id else None,
                     )
 
                 # Update interaction if provided

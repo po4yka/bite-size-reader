@@ -35,11 +35,107 @@ class SummaryPresenterImpl:
         self._text_processor = text_processor
         self._data_formatter = data_formatter
 
+    def _create_action_buttons(self, summary_id: int | str) -> list[list[dict[str, str]]]:
+        """Create inline keyboard buttons for post-summary actions.
+
+        Returns a 2D list of button rows for InlineKeyboardMarkup.
+        """
+        summary_id_str = str(summary_id)
+
+        # Row 1: Export options
+        export_row = [
+            {"text": "PDF", "callback_data": f"export:{summary_id_str}:pdf"},
+            {"text": "Markdown", "callback_data": f"export:{summary_id_str}:md"},
+            {"text": "HTML", "callback_data": f"export:{summary_id_str}:html"},
+        ]
+
+        # Row 2: Actions
+        action_row = [
+            {"text": "Save", "callback_data": f"save:{summary_id_str}"},
+            {"text": "Similar", "callback_data": f"similar:{summary_id_str}"},
+        ]
+
+        # Row 3: Feedback
+        feedback_row = [
+            {"text": "Rate", "callback_data": f"rate:{summary_id_str}:1"},
+            {"text": "Rate", "callback_data": f"rate:{summary_id_str}:-1"},
+        ]
+
+        return [export_row, action_row, feedback_row]
+
+    def _create_inline_keyboard(self, summary_id: int | str) -> Any:
+        """Create an inline keyboard markup for post-summary actions."""
+        try:
+            from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+
+            summary_id_str = str(summary_id)
+
+            # Create keyboard with multiple rows
+            keyboard = [
+                # Row 1: Export options
+                [
+                    InlineKeyboardButton("PDF", callback_data=f"export:{summary_id_str}:pdf"),
+                    InlineKeyboardButton("MD", callback_data=f"export:{summary_id_str}:md"),
+                    InlineKeyboardButton("HTML", callback_data=f"export:{summary_id_str}:html"),
+                ],
+                # Row 2: Actions
+                [
+                    InlineKeyboardButton("Save", callback_data=f"save:{summary_id_str}"),
+                    InlineKeyboardButton("Find Similar", callback_data=f"similar:{summary_id_str}"),
+                ],
+                # Row 3: Feedback
+                [
+                    InlineKeyboardButton("Good", callback_data=f"rate:{summary_id_str}:1"),
+                    InlineKeyboardButton("Bad", callback_data=f"rate:{summary_id_str}:-1"),
+                ],
+            ]
+
+            return InlineKeyboardMarkup(keyboard)
+        except ImportError:
+            logger.debug("pyrogram_not_available_for_action_buttons")
+            return None
+        except Exception as e:
+            logger.warning("create_action_buttons_failed", extra={"error": str(e)})
+            return None
+
+    async def _send_action_buttons(self, message: Any, summary_id: int | str) -> None:
+        """Send action buttons as a separate message after the summary."""
+        try:
+            keyboard = self._create_inline_keyboard(summary_id)
+            if keyboard:
+                await self._response_sender.safe_reply(
+                    message,
+                    "Quick Actions:",
+                    reply_markup=keyboard,
+                )
+                logger.debug(
+                    "action_buttons_sent",
+                    extra={"summary_id": summary_id},
+                )
+        except Exception as e:
+            logger.warning(
+                "send_action_buttons_failed",
+                extra={"summary_id": summary_id, "error": str(e)},
+            )
+
     async def send_structured_summary_response(
-        self, message: Any, summary_shaped: dict[str, Any], llm: Any, chunks: int | None = None
+        self,
+        message: Any,
+        summary_shaped: dict[str, Any],
+        llm: Any,
+        chunks: int | None = None,
+        summary_id: int | str | None = None,
     ) -> None:
         """Send summary where each top-level JSON field is a separate message,
-        then attach the full JSON as a .json document with a descriptive filename."""
+        then attach the full JSON as a .json document with a descriptive filename.
+
+        Args:
+            message: Telegram message object
+            summary_shaped: Summary data dictionary
+            llm: LLM instance (for model name)
+            chunks: Number of chunks used (optional)
+            summary_id: Database summary ID for action buttons (optional)
+        """
         try:
             # Optional short header
             try:
@@ -206,6 +302,10 @@ class SummaryPresenterImpl:
             # Finally attach full JSON as a document with a descriptive filename
             await self._response_sender.reply_json(message, summary_shaped)
 
+            # Add action buttons after summary if summary_id is available
+            if summary_id:
+                await self._send_action_buttons(message, summary_id)
+
         except Exception:
             # Fallback to simpler format
             try:
@@ -216,6 +316,10 @@ class SummaryPresenterImpl:
                 pass
 
             await self._response_sender.reply_json(message, summary_shaped)
+
+            # Still try to add action buttons in fallback
+            if summary_id:
+                await self._send_action_buttons(message, summary_id)
 
     async def send_russian_translation(
         self, message: Any, translated_text: str, correlation_id: str | None = None
@@ -415,9 +519,15 @@ class SummaryPresenterImpl:
             pass
 
     async def send_forward_summary_response(
-        self, message: Any, forward_shaped: dict[str, Any]
+        self, message: Any, forward_shaped: dict[str, Any], summary_id: int | str | None = None
     ) -> None:
-        """Send forward summary with per-field messages, then attach full JSON file."""
+        """Send forward summary with per-field messages, then attach full JSON file.
+
+        Args:
+            message: Telegram message object
+            forward_shaped: Forward summary data dictionary
+            summary_id: Database summary ID for action buttons (optional)
+        """
         try:
             await self._response_sender.safe_reply(message, "🎉 Forward Summary Ready")
 
@@ -553,6 +663,10 @@ class SummaryPresenterImpl:
             pass
 
         await self._response_sender.reply_json(message, forward_shaped)
+
+        # Add action buttons after forward summary if summary_id is available
+        if summary_id:
+            await self._send_action_buttons(message, summary_id)
 
     async def _send_new_field_messages(self, message: Any, shaped: dict[str, Any]) -> None:
         """Send messages for new fields like extractive quotes, highlights, etc."""

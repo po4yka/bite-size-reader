@@ -162,6 +162,8 @@ dependencies = [
   "transformers>=4.57.5",
   # Background task scheduling
   "apscheduler>=3.11.2,<4.0.0",
+  # PDF export (optional - graceful degradation if not available)
+  "weasyprint>=62.0",
 ]
 
 [project.optional-dependencies]
