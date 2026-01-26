@@ -28,6 +28,7 @@ if TYPE_CHECKING:
     from app.adapters.llm.protocol import LLMClientProtocol
     from app.config import AppConfig
     from app.db.session import DatabaseSessionManager
+    from app.services.topic_search import TopicSearchService
 
 logger = logging.getLogger(__name__)
 
@@ -71,6 +72,7 @@ class URLProcessor:
         response_formatter: ResponseFormatter,
         audit_func: Callable[[str, str, dict], None],
         sem: Callable[[], Any],
+        topic_search: TopicSearchService | None = None,
     ) -> None:
         self.cfg = cfg
         self.db = db
@@ -103,6 +105,7 @@ class URLProcessor:
             response_formatter=response_formatter,
             audit_func=audit_func,
             sem=sem,
+            topic_search=topic_search,
         )
 
         self.message_persistence = MessagePersistence(db=db)

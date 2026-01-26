@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
 from app.adapters.content.llm_response_workflow import (
@@ -43,6 +44,7 @@ if TYPE_CHECKING:
     from app.adapters.llm import LLMClientProtocol
     from app.config import AppConfig
     from app.db.session import DatabaseSessionManager
+    from app.services.topic_search import TopicSearchService
 
 logger = logging.getLogger(__name__)
 
@@ -58,6 +60,7 @@ class LLMSummarizer:
         response_formatter: ResponseFormatter,
         audit_func: Callable[[str, str, dict], None],
         sem: Callable[[], Any],
+        topic_search: TopicSearchService | None = None,
     ) -> None:
         self.cfg = cfg
         self.db = db
@@ -65,6 +68,7 @@ class LLMSummarizer:
         self.response_formatter = response_formatter
         self._audit = audit_func
         self._sem = sem
+        self._topic_search = topic_search
         self.summary_repo = SqliteSummaryRepositoryAdapter(db)
         self.request_repo = SqliteRequestRepositoryAdapter(db)
         self.crawl_result_repo = SqliteCrawlResultRepositoryAdapter(db)
@@ -154,11 +158,20 @@ class LLMSummarizer:
                     },
                 )
 
+        # Optionally enrich with web search context
+        search_context = await self._maybe_enrich_with_search(
+            content_for_summary, chosen_lang, correlation_id
+        )
+
         user_content = (
             f"Analyze the following content and output ONLY a valid JSON object that matches the system contract exactly. "
             f"Respond in {'Russian' if chosen_lang == LANG_RU else 'English'}. Do NOT include any text outside the JSON.\n\n"
             f"CONTENT START\n{content_for_summary}\nCONTENT END"
         )
+
+        # Inject web search context if available
+        if search_context:
+            user_content = f"{user_content}\n\n{search_context}"
 
         self._log_llm_content_validation(
             content_for_summary, system_prompt, user_content, correlation_id
@@ -721,6 +734,92 @@ class LLMSummarizer:
                 },
             },
         )
+
+    async def _maybe_enrich_with_search(
+        self, content_text: str, chosen_lang: str, correlation_id: str | None
+    ) -> str:
+        """Optionally enrich content with web search context.
+
+        This method checks if web search enrichment is enabled and beneficial,
+        then executes targeted searches to provide additional context for summarization.
+
+        Args:
+            content_text: The article content to analyze
+            chosen_lang: Target language for the summary
+            correlation_id: Optional correlation ID for tracing
+
+        Returns:
+            Formatted search context string, or empty string if search not needed/available
+        """
+        # Skip if web search is disabled
+        if not self.cfg.web_search.enabled:
+            return ""
+
+        # Skip if TopicSearchService not available
+        if self._topic_search is None:
+            logger.debug(
+                "web_search_skipped_no_service",
+                extra={"cid": correlation_id},
+            )
+            return ""
+
+        # Skip for short content
+        if len(content_text) < self.cfg.web_search.min_content_length:
+            logger.debug(
+                "web_search_skipped_short_content",
+                extra={
+                    "cid": correlation_id,
+                    "content_len": len(content_text),
+                    "min_required": self.cfg.web_search.min_content_length,
+                },
+            )
+            return ""
+
+        try:
+            from app.agents.web_search_agent import WebSearchAgent, WebSearchAgentInput
+
+            agent = WebSearchAgent(
+                llm_client=self.openrouter,
+                search_service=self._topic_search,
+                cfg=self.cfg.web_search,
+                correlation_id=correlation_id,
+            )
+
+            input_data = WebSearchAgentInput(
+                content=content_text[:8000],  # Limit for analysis
+                language=chosen_lang,
+                correlation_id=correlation_id,
+            )
+
+            result = await agent.execute(input_data)
+
+            if result.success and result.output and result.output.context:
+                context = result.output.context
+                logger.info(
+                    "web_search_context_injected",
+                    extra={
+                        "cid": correlation_id,
+                        "searched": result.output.searched,
+                        "queries": result.output.queries_executed,
+                        "articles_found": result.output.articles_found,
+                        "context_chars": len(context),
+                    },
+                )
+                # Format with header
+                current_date = datetime.now().strftime("%Y-%m-%d")
+                return f"ADDITIONAL WEB CONTEXT (retrieved {current_date}):\n{context}"
+
+            return ""
+
+        except Exception as e:
+            logger.warning(
+                "web_search_enrichment_failed",
+                extra={
+                    "cid": correlation_id,
+                    "error": str(e),
+                },
+            )
+            return ""
 
     @property
     def last_llm_result(self) -> Any | None:

@@ -67,9 +67,10 @@ Telegram Message → MessageHandler → AccessController → MessageRouter
 2. **Content Pipeline** (`app/adapters/content/`)
    - `content_extractor.py` — Firecrawl integration and YouTube routing
    - `content_chunker.py` — Splits large content for LLM processing
-   - `llm_summarizer.py` — OpenRouter summarization
+   - `llm_summarizer.py` — OpenRouter summarization with optional web search enrichment
    - `llm_response_workflow.py` — LLM response handling workflow
    - `url_processor.py` — Coordinates extraction → chunking → summarization
+   - `search_context_builder.py` — Formats web search results for LLM context injection
 
 3. **YouTube Adapter** (`app/adapters/youtube/`)
    - `youtube_downloader.py` — yt-dlp video download and youtube-transcript-api integration
@@ -125,6 +126,7 @@ Telegram Message → MessageHandler → AccessController → MessageRouter
    - `validation_agent.py` — Summary validation with detailed errors
    - `content_extraction_agent.py` — Content extraction with quality checks
    - `summarization_agent.py` — Summarization with self-correction loop
+   - `web_search_agent.py` — LLM-driven web search for context enrichment (opt-in)
    - `orchestrator.py` — Agent pipeline orchestration
 
 9. **Search Services** (`app/services/`)
@@ -353,6 +355,55 @@ GitHub Actions (`.github/workflows/ci.yml`) enforces:
   - `content_extractor.py` routes YouTube URLs to `youtube_downloader.py`
   - Rest of pipeline (LLM summarization, response formatting) remains unchanged
 
+### Web Search Enrichment (Optional)
+
+When `WEB_SEARCH_ENABLED=true`, the bot can enrich article summaries with current web context:
+
+- **Two-Pass Architecture:**
+  1. **Pass 1 (Analysis):** LLM analyzes content to identify knowledge gaps
+  2. **Pass 2 (Enriched Summary):** If search beneficial, inject search context into summarization prompt
+
+- **Knowledge Gap Detection:**
+  - Unfamiliar entities or terminology mentioned in content
+  - Recent events or developments referenced
+  - Claims or statistics needing verification
+  - Content about events after LLM training cutoff
+
+- **Components:**
+  - `WebSearchAgent` (`app/agents/web_search_agent.py`) — Decides if search needed, extracts queries
+  - `SearchContextBuilder` (`app/adapters/content/search_context_builder.py`) — Formats results as markdown
+  - `TopicSearchService` (`app/services/topic_search.py`) — Executes Firecrawl Search API calls
+
+- **Flow:**
+  ```
+  Article Content → LLM Analysis → "Do I need more context?"
+                                            ↓
+                                      Yes → Extract queries → Firecrawl Search → Format context
+                                            ↓
+                                      Inject into summarization prompt → Generate enriched summary
+  ```
+
+- **Configuration:**
+  - `WEB_SEARCH_ENABLED=false` — Opt-in feature (default off)
+  - `WEB_SEARCH_MAX_QUERIES=3` — Max search queries per article
+  - `WEB_SEARCH_MIN_CONTENT_LENGTH=500` — Skip search for short content
+  - `WEB_SEARCH_TIMEOUT_SEC=10.0` — Timeout for search operations
+  - `WEB_SEARCH_MAX_CONTEXT_CHARS=2000` — Max chars for injected context
+
+- **Cost Considerations:**
+  - ~30-40% of articles trigger search (self-contained content skipped)
+  - Adds 1 LLM call for analysis (~200-500 tokens)
+  - 1-3 Firecrawl search API calls when triggered
+  - Feature is opt-in to control costs
+
+- **Integration Point:**
+  - `llm_summarizer.py` calls `_maybe_enrich_with_search()` before main summarization
+  - Graceful degradation: failures don't break summarization
+
+- **Prompts:**
+  - `app/prompts/search_analysis_en.txt` — English gap analysis prompt
+  - `app/prompts/search_analysis_ru.txt` — Russian gap analysis prompt
+
 ### Debugging Tips
 
 1. **Correlation IDs:** Every request gets a unique `correlation_id` — use it to trace through logs and DB
@@ -367,7 +418,7 @@ The project implements a multi-agent pattern for improved quality, maintainabili
 
 ### Agent Overview
 
-**Three specialized agents handle different workflow stages:**
+**Four specialized agents handle different workflow stages:**
 
 1. **ContentExtractionAgent** (`app/agents/content_extraction_agent.py`)
    - Extracts content from URLs via Firecrawl
@@ -383,6 +434,13 @@ The project implements a multi-agent pattern for improved quality, maintainabili
    - Enforces JSON contract compliance
    - Checks character limits, field types, deduplication
    - Returns detailed, actionable error messages
+
+4. **WebSearchAgent** (`app/agents/web_search_agent.py`)
+   - Analyzes content for knowledge gaps (unfamiliar entities, recent events, claims needing verification)
+   - Extracts targeted search queries when beneficial
+   - Executes searches via TopicSearchService (Firecrawl Search API)
+   - Returns formatted context for LLM injection
+   - Opt-in feature (controlled by `WEB_SEARCH_ENABLED`)
 
 ### Feedback Loop Pattern
 
@@ -405,7 +463,7 @@ Generate Summary → Validate → If Valid: Return
 **AgentOrchestrator** (`app/agents/orchestrator.py`) coordinates the full pipeline:
 
 ```
-URL → ContentExtractionAgent → SummarizationAgent ↔ ValidationAgent → Output
+URL → ContentExtractionAgent → WebSearchAgent (optional) → SummarizationAgent ↔ ValidationAgent → Output
 ```
 
 ### Using Agents
@@ -624,11 +682,18 @@ YOUTUBE_PREFERRED_QUALITY=1080p     # Video quality (1080p, 720p, 480p, etc.)
 YOUTUBE_SUBTITLE_LANGUAGES=en,ru    # Preferred subtitle/transcript languages
 YOUTUBE_AUTO_CLEANUP_ENABLED=true   # Enable automatic cleanup of old videos
 YOUTUBE_CLEANUP_AFTER_DAYS=30       # Delete videos older than N days
+
+# Web Search Enrichment (Optional)
+WEB_SEARCH_ENABLED=false            # Enable LLM-driven web search (opt-in)
+WEB_SEARCH_MAX_QUERIES=3            # Max search queries per article
+WEB_SEARCH_MIN_CONTENT_LENGTH=500   # Min content length (chars) to trigger search
+WEB_SEARCH_TIMEOUT_SEC=10.0         # Timeout for search operations
+WEB_SEARCH_MAX_CONTEXT_CHARS=2000   # Max chars for injected search context
 ```
 
 ---
 
-**Last Updated:** 2025-11-16
+**Last Updated:** 2026-01-26
 
 For questions about the codebase, always refer to:
 1. This file (CLAUDE.md) for AI assistant guidance

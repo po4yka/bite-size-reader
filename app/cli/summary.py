@@ -26,6 +26,7 @@ from app.db.session import DatabaseSessionManager
 from app.infrastructure.persistence.sqlite.repositories.audit_log_repository import (
     SqliteAuditLogRepositoryAdapter,
 )
+from app.services.topic_search import TopicSearchService
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -340,6 +341,16 @@ async def run_summary_cli(args: argparse.Namespace) -> None:
     # Create LLM client using factory based on LLM_PROVIDER config
     llm_client = LLMClientFactory.create_from_config(cfg, audit=audit)
 
+    # Create topic search service for web search enrichment if enabled
+    topic_search = None
+    if cfg.web_search.enabled:
+        topic_search = TopicSearchService(
+            firecrawl=firecrawl,
+            max_results=5,
+            audit_func=audit,
+        )
+        logger.info("web_search_enabled_in_cli", extra={"max_queries": cfg.web_search.max_queries})
+
     url_processor = URLProcessor(
         cfg=cfg,
         db=db,
@@ -348,6 +359,7 @@ async def run_summary_cli(args: argparse.Namespace) -> None:
         response_formatter=response_formatter,
         audit_func=audit,
         sem=sem_factory,
+        topic_search=topic_search,
     )
 
     command_processor = CommandProcessor(

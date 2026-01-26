@@ -126,7 +126,17 @@ class BotFactory:
             telegram_limits=cfg.telegram_limits,
         )
 
-        # Create URL processor
+        # Determine topic search limit (moved up for URLProcessor dependency)
+        topic_search_max_results = BotFactory._get_topic_search_limit(cfg)
+
+        # Create topic search service first (needed by URLProcessor for web search enrichment)
+        topic_searcher = TopicSearchService(
+            firecrawl=clients.firecrawl,
+            max_results=topic_search_max_results,
+            audit_func=audit_func,
+        )
+
+        # Create URL processor with topic search service for web search enrichment
         url_processor = URLProcessor(
             cfg=cfg,
             db=db,
@@ -135,6 +145,7 @@ class BotFactory:
             response_formatter=response_formatter,
             audit_func=audit_func,
             sem=sem_func,
+            topic_search=topic_searcher if cfg.web_search.enabled else None,
         )
 
         # Create forward processor
@@ -146,9 +157,6 @@ class BotFactory:
             audit_func=audit_func,
             sem=sem_func,
         )
-
-        # Determine topic search limit
-        topic_search_max_results = BotFactory._get_topic_search_limit(cfg)
 
         # Initialize vector store with graceful degradation
         # ChromaDB is optional - bot will function without vector search if unavailable
@@ -175,13 +183,7 @@ class BotFactory:
             )
             vector_store = None
 
-        # Create search services
-        topic_searcher = TopicSearchService(
-            firecrawl=clients.firecrawl,
-            max_results=topic_search_max_results,
-            audit_func=audit_func,
-        )
-
+        # Create local search service
         local_searcher = LocalTopicSearchService(
             db=db,
             max_results=topic_search_max_results,

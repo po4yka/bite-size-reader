@@ -26,6 +26,8 @@ flowchart LR
   end
 
   ForwardProcessor --> LLMSummarizer
+  LLMSummarizer -.->|optional| WebSearch[WebSearchAgent]
+  WebSearch -.-> Firecrawl
   ContentExtractor --> SQLite[(SQLite)]
   MessagePersistence --> SQLite
   LLMSummarizer --> SQLite
@@ -61,6 +63,11 @@ Environment
 - `YOUTUBE_SUBTITLE_LANGUAGES=en,ru` — Preferred subtitle/transcript languages
 - `YOUTUBE_AUTO_CLEANUP_ENABLED=true` — Enable automatic cleanup of old videos
 - `YOUTUBE_CLEANUP_AFTER_DAYS=30` — Delete videos older than N days
+- `WEB_SEARCH_ENABLED=false` — Enable LLM-driven web search to enrich summaries (opt-in)
+- `WEB_SEARCH_MAX_QUERIES=3` — Maximum search queries per article
+- `WEB_SEARCH_MIN_CONTENT_LENGTH=500` — Minimum content length (chars) to trigger search
+- `WEB_SEARCH_TIMEOUT_SEC=10.0` — Timeout for search operations
+- `WEB_SEARCH_MAX_CONTEXT_CHARS=2000` — Maximum characters for injected search context
 - `DB_PATH=/data/app.db`, `LOG_LEVEL=INFO`, `REQUEST_TIMEOUT_SEC=60`
 - `DB_BACKUP_ENABLED=1`, `DB_BACKUP_INTERVAL_MINUTES=360`, `DB_BACKUP_RETENTION=14`, `DB_BACKUP_DIR=/data/backups`
 - `PREFERRED_LANG=auto` (auto|en|ru)
@@ -70,16 +77,18 @@ Environment
 
 Repository layout
 - `app/core` — URL normalization, JSON contract, logging, language helpers
-- `app/adapters/content` — Firecrawl integration, content chunking, LLM summarization
+- `app/adapters/content` — Firecrawl integration, content chunking, LLM summarization, web search context building
 - `app/adapters/youtube` — YouTube video download and transcript extraction
 - `app/adapters/external` — response formatting helpers shared by adapters
 - `app/adapters/openrouter` — OpenRouter client, payload shaping, error handling
 - `app/adapters/telegram` — Telegram client, message routing, access control, persistence
+- `app/agents` — Multi-agent system (extraction, summarization, validation, web search)
 - `app/db` — SQLite schema, migrations, audit logging helpers
 - `app/models` — Pydantic-style models for Telegram entities and LLM configuration
+- `app/services` — Topic search, embedding, hybrid search services
 - `app/utils` — shared validation utilities
 - `app/cli` — local CLI runner for summaries
-- `app/prompts` — LLM prompt templates
+- `app/prompts` — LLM prompt templates (including web search analysis)
 - `bot.py` — entrypoint wiring config, DB, and Telegram bot
 - `SPEC.md` — full technical specification
 
@@ -117,6 +126,26 @@ YouTube Video Support
   - New `video_downloads` table stores all video metadata
   - Links to `requests` table via foreign key for correlation
   - Tracks video ID, file paths, title, channel, duration, views, likes, transcript
+
+Web Search Enrichment (Optional)
+- The bot can optionally enrich article summaries with current web context
+- **How it works:**
+  1. LLM analyzes article content to identify knowledge gaps (unfamiliar entities, recent events, claims needing verification)
+  2. If search would help, LLM extracts targeted search queries (max 3)
+  3. Firecrawl Search API retrieves relevant web results
+  4. Search context is injected into the summarization prompt
+  5. Final summary benefits from up-to-date information beyond LLM training cutoff
+- **Enable with:** `WEB_SEARCH_ENABLED=true`
+- **Use cases:**
+  - Articles mentioning recent mergers, acquisitions, or corporate events
+  - Content referencing new regulations or policies
+  - Technical articles with unfamiliar terminology
+  - News articles that need verification of claims
+- **Cost considerations:**
+  - Adds 1 extra LLM call for content analysis (~200-500 tokens)
+  - 1-3 Firecrawl search API calls when triggered
+  - Only ~30-40% of articles trigger search (self-contained content skipped)
+  - Feature is opt-in to control costs
 
 Notes
 - Dependencies include Pyrogram; if using PyroTGFork, align installation accordingly.

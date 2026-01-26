@@ -88,6 +88,8 @@ flowchart TD
   end
 
   ForwardProcessor --> LLMSummarizer
+  LLMSummarizer -.->|optional| WebSearch[WebSearchAgent]
+  WebSearch -.-> Firecrawl
   ContentExtractor --> DB
   LLMSummarizer --> DB
   MessageRouter --> ResponseFormatter
@@ -549,6 +551,64 @@ classDiagram
     - Auto-cleanup enabled by default (`YOUTUBE_AUTO_CLEANUP_ENABLED`)
     - Removes videos older than configured retention period (`YOUTUBE_CLEANUP_AFTER_DAYS`)
     - Monitors storage usage and warns at 90% threshold
+
+### Web search enrichment flow (optional)
+
+When `WEB_SEARCH_ENABLED=true`, the summarization pipeline can enrich content with current web context:
+
+```mermaid
+flowchart LR
+  Content[Article Content] --> Analysis["WebSearchAgent\n(Pass 1: Gap Analysis)"]
+  Analysis -->|needs_search=false| Summarize["LLMSummarizer\n(Generate Summary)"]
+  Analysis -->|needs_search=true| Queries["Extract Queries\n(max 3)"]
+  Queries --> Search["TopicSearchService\n(Firecrawl Search API)"]
+  Search --> Context["SearchContextBuilder\n(Format Results)"]
+  Context --> Inject["Inject Context\ninto User Prompt"]
+  Inject --> Summarize
+  Summarize --> Output[Summary JSON]
+```
+
+1) **Configuration** (`WebSearchConfig`):
+   - `enabled`: Opt-in feature, default `false`
+   - `max_queries`: Maximum search queries per article (default 3)
+   - `min_content_length`: Skip search for short content (default 500 chars)
+   - `timeout_sec`: Search timeout (default 10s)
+   - `max_context_chars`: Maximum injected context size (default 2000 chars)
+   - `cache_ttl_sec`: Cache TTL for search results (default 3600s)
+
+2) **Gap analysis** (via `WebSearchAgent`):
+   - Analyzes content preview (first 8000 chars) using LLM
+   - Identifies: unfamiliar entities, recent events, claims needing verification
+   - Returns JSON: `{"needs_search": bool, "queries": [...], "reason": "..."}`
+   - Uses language-specific prompts (`search_analysis_en.txt`, `search_analysis_ru.txt`)
+
+3) **Search execution**:
+   - Uses existing `TopicSearchService` (Firecrawl Search API)
+   - Executes up to `max_queries` searches
+   - Handles search failures gracefully (continues without context)
+
+4) **Context building** (`SearchContextBuilder`):
+   - Formats `TopicArticle` results as markdown
+   - Includes: title, source, date, snippet
+   - Deduplicates by URL
+   - Truncates to `max_context_chars` with sentence boundary awareness
+
+5) **Context injection**:
+   - Appended to user prompt with header: `ADDITIONAL WEB CONTEXT (retrieved YYYY-MM-DD):`
+   - LLM uses context to provide more accurate, current summaries
+
+6) **Cost & performance**:
+   - ~30-40% of articles trigger search (self-contained content skipped)
+   - Extra LLM tokens for analysis: 200-500 per article
+   - Firecrawl search calls: 1-3 when triggered
+   - Added latency: 2-5 seconds when triggered
+
+7) **Files**:
+   - `app/agents/web_search_agent.py` — WebSearchAgent and SearchAnalysisResult
+   - `app/adapters/content/search_context_builder.py` — SearchContextBuilder
+   - `app/adapters/content/llm_summarizer.py` — `_maybe_enrich_with_search()` integration
+   - `app/prompts/search_analysis_en.txt`, `app/prompts/search_analysis_ru.txt` — Gap analysis prompts
+   - `app/config.py` — `WebSearchConfig`
 
 ---
 

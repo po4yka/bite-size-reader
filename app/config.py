@@ -1477,6 +1477,118 @@ class ContentLimitsConfig(BaseModel):
         return parsed
 
 
+class WebSearchConfig(BaseModel):
+    """Web search enrichment configuration for LLM summarization."""
+
+    model_config = ConfigDict(frozen=True, populate_by_name=True)
+
+    enabled: bool = Field(
+        default=False,
+        validation_alias="WEB_SEARCH_ENABLED",
+        description="Enable web search enrichment for summaries (opt-in)",
+    )
+    max_queries: int = Field(
+        default=3,
+        validation_alias="WEB_SEARCH_MAX_QUERIES",
+        description="Maximum search queries per article",
+    )
+    min_content_length: int = Field(
+        default=500,
+        validation_alias="WEB_SEARCH_MIN_CONTENT_LENGTH",
+        description="Minimum content length (chars) to trigger search",
+    )
+    timeout_sec: float = Field(
+        default=10.0,
+        validation_alias="WEB_SEARCH_TIMEOUT_SEC",
+        description="Timeout for search operations in seconds",
+    )
+    max_context_chars: int = Field(
+        default=2000,
+        validation_alias="WEB_SEARCH_MAX_CONTEXT_CHARS",
+        description="Maximum characters for injected search context",
+    )
+    cache_ttl_sec: int = Field(
+        default=3600,
+        validation_alias="WEB_SEARCH_CACHE_TTL_SEC",
+        description="Cache TTL for search results in seconds",
+    )
+
+    @field_validator("max_queries", mode="before")
+    @classmethod
+    def _validate_max_queries(cls, value: Any) -> int:
+        if value in (None, ""):
+            return 3
+        try:
+            parsed = int(str(value))
+        except ValueError as exc:
+            msg = "Max queries must be a valid integer"
+            raise ValueError(msg) from exc
+        if parsed < 1 or parsed > 10:
+            msg = "Max queries must be between 1 and 10"
+            raise ValueError(msg)
+        return parsed
+
+    @field_validator("min_content_length", mode="before")
+    @classmethod
+    def _validate_min_content_length(cls, value: Any) -> int:
+        if value in (None, ""):
+            return 500
+        try:
+            parsed = int(str(value))
+        except ValueError as exc:
+            msg = "Min content length must be a valid integer"
+            raise ValueError(msg) from exc
+        if parsed < 0 or parsed > 10000:
+            msg = "Min content length must be between 0 and 10000"
+            raise ValueError(msg)
+        return parsed
+
+    @field_validator("timeout_sec", mode="before")
+    @classmethod
+    def _validate_timeout_sec(cls, value: Any) -> float:
+        if value in (None, ""):
+            return 10.0
+        try:
+            parsed = float(str(value))
+        except ValueError as exc:
+            msg = "Timeout must be a valid number"
+            raise ValueError(msg) from exc
+        if parsed < 1.0 or parsed > 60.0:
+            msg = "Timeout must be between 1 and 60 seconds"
+            raise ValueError(msg)
+        return parsed
+
+    @field_validator("max_context_chars", mode="before")
+    @classmethod
+    def _validate_max_context_chars(cls, value: Any) -> int:
+        if value in (None, ""):
+            return 2000
+        try:
+            parsed = int(str(value))
+        except ValueError as exc:
+            msg = "Max context chars must be a valid integer"
+            raise ValueError(msg) from exc
+        if parsed < 500 or parsed > 10000:
+            msg = "Max context chars must be between 500 and 10000"
+            raise ValueError(msg)
+        return parsed
+
+    @field_validator("cache_ttl_sec", mode="before")
+    @classmethod
+    def _validate_cache_ttl_sec(cls, value: Any) -> int:
+        if value in (None, ""):
+            return 3600
+        try:
+            parsed = int(str(value))
+        except ValueError as exc:
+            msg = "Cache TTL must be a valid integer"
+            raise ValueError(msg) from exc
+        if parsed < 60 or parsed > 86400:
+            msg = "Cache TTL must be between 60 and 86400 seconds"
+            raise ValueError(msg)
+        return parsed
+
+
 class ChromaConfig(BaseModel):
     """Vector store configuration for Chroma."""
 
@@ -1771,6 +1883,7 @@ class AppConfig:
     background: BackgroundProcessorConfig
     karakeep: KarakeepConfig
     circuit_breaker: CircuitBreakerConfig
+    web_search: WebSearchConfig
 
 
 class Settings(BaseSettings):
@@ -1807,6 +1920,7 @@ class Settings(BaseSettings):
     background: BackgroundProcessorConfig = Field(default_factory=BackgroundProcessorConfig)
     karakeep: KarakeepConfig = Field(default_factory=KarakeepConfig)
     circuit_breaker: CircuitBreakerConfig = Field(default_factory=CircuitBreakerConfig)
+    web_search: WebSearchConfig = Field(default_factory=WebSearchConfig)
 
     @model_validator(mode="before")
     @classmethod
@@ -1899,6 +2013,7 @@ class Settings(BaseSettings):
             background=self.background,
             karakeep=self.karakeep,
             circuit_breaker=self.circuit_breaker,
+            web_search=self.web_search,
         )
 
 
