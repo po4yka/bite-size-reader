@@ -19,8 +19,13 @@ TRACKING_PARAMS = {
 }
 
 
+# Match URLs with explicit protocol
 _URL_SEARCH_PATTERN = re.compile(r"https?://[\w\.-]+[\w\./\-?=&%#]*", re.IGNORECASE)
 _URL_FINDALL_PATTERN = re.compile(r"https?://[^\s<>\"']+", re.IGNORECASE)
+
+# Match URLs starting with www. without protocol (e.g., www.example.com/path)
+_WWW_URL_SEARCH_PATTERN = re.compile(r"\bwww\.[\w\.-]+[\w\./\-?=&%#]*", re.IGNORECASE)
+_WWW_URL_FINDALL_PATTERN = re.compile(r"\bwww\.[\w\.-]+[^\s<>\"']*", re.IGNORECASE)
 _DANGEROUS_URL_SUBSTRINGS: tuple[str, ...] = (
     "<",
     ">",
@@ -422,7 +427,11 @@ def looks_like_url(text: str, max_text_length_kb: int = 50) -> bool:
         return False
 
     try:
+        # Check for URLs with explicit protocol (https?://)
         ok = bool(_URL_SEARCH_PATTERN.search(text))
+        if not ok:
+            # Also check for URLs starting with www. (no protocol)
+            ok = bool(_WWW_URL_SEARCH_PATTERN.search(text))
         logger.debug("looks_like_url", extra={"text_sample": text[:80], "match": ok})
         return ok
     except Exception as e:
@@ -459,23 +468,31 @@ def extract_all_urls(text: str, max_text_length_kb: int = 50) -> list[str]:
         return []
 
     try:
-        # Optimized regex pattern for better performance
+        # Find URLs with explicit protocol (https?://)
         urls = _URL_FINDALL_PATTERN.findall(text)
 
-        if not urls:
-            return []
+        # Also find URLs starting with www. (no protocol)
+        www_urls = _WWW_URL_FINDALL_PATTERN.findall(text)
 
         # Deduplicate URLs (validation happens later in security checks)
         valid_urls = []
-        seen = set()
+        seen: set[str] = set()
 
+        # Process URLs with explicit protocol first
         for url in urls:
-            # Skip if already seen (deduplication)
             if url in seen:
                 continue
-
             valid_urls.append(url)
             seen.add(url)
+
+        # Process www. URLs (normalize by adding https://)
+        for url in www_urls:
+            normalized_url = f"https://{url}"
+            # Skip if we already have this URL (with or without protocol)
+            if normalized_url in seen or url in seen:
+                continue
+            valid_urls.append(normalized_url)
+            seen.add(normalized_url)
 
         logger.debug("extract_all_urls", extra={"count": len(valid_urls), "input_len": len(text)})
         return valid_urls
