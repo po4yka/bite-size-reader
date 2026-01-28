@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+import time
+from dataclasses import dataclass, field
+from enum import Enum
+from urllib.parse import urlparse
 
 
 @dataclass
@@ -113,3 +116,231 @@ class URLProcessingResult:
             error_message=str(error),
             retry_possible=False,  # Conservative: don't retry unknown errors
         )
+
+
+class URLStatus(Enum):
+    """Status of a URL in batch processing."""
+
+    PENDING = "pending"
+    PROCESSING = "processing"
+    COMPLETE = "complete"
+    FAILED = "failed"
+
+
+@dataclass
+class URLStatusEntry:
+    """Status entry for a single URL in batch processing.
+
+    Tracks the current status, metadata, and timing for display in progress messages.
+
+    Attributes:
+        url: The URL being processed
+        status: Current processing status
+        domain: Extracted domain for compact display (e.g., "techcrunch.com")
+        title: Article title (populated on completion)
+        error_type: Type of error if failed
+        error_message: Human-readable error message if failed
+        processing_time_ms: Time taken to process in milliseconds
+        start_time: Unix timestamp when processing started
+    """
+
+    url: str
+    status: URLStatus = URLStatus.PENDING
+    domain: str | None = None
+    title: str | None = None
+    error_type: str | None = None
+    error_message: str | None = None
+    processing_time_ms: float = 0.0
+    start_time: float | None = None
+
+    def __post_init__(self) -> None:
+        """Extract domain from URL on creation."""
+        if self.domain is None:
+            self.domain = self._extract_domain(self.url)
+
+    @staticmethod
+    def _extract_domain(url: str) -> str:
+        """Extract display-friendly domain from URL."""
+        try:
+            parsed = urlparse(url if "://" in url else f"https://{url}")
+            host = parsed.hostname or parsed.netloc or url
+            # Remove www. prefix for cleaner display
+            if host.startswith("www."):
+                host = host[4:]
+            return host
+        except Exception:
+            return url[:30]
+
+
+@dataclass
+class URLBatchStatus:
+    """Status tracker for batch URL processing.
+
+    Provides methods to update status, track timing, and calculate estimates.
+
+    Attributes:
+        entries: List of URLStatusEntry objects, one per URL
+        batch_start_time: Unix timestamp when batch processing started
+        _processing_times: List of completed processing times for ETA calculation
+    """
+
+    entries: list[URLStatusEntry] = field(default_factory=list)
+    batch_start_time: float = field(default_factory=time.time)
+    _processing_times: list[float] = field(default_factory=list, repr=False)
+
+    @classmethod
+    def from_urls(cls, urls: list[str]) -> URLBatchStatus:
+        """Create a batch status tracker from a list of URLs."""
+        entries = [URLStatusEntry(url=url) for url in urls]
+        return cls(entries=entries)
+
+    def _find_entry(self, url: str) -> URLStatusEntry | None:
+        """Find entry by URL."""
+        for entry in self.entries:
+            if entry.url == url:
+                return entry
+        return None
+
+    def mark_processing(self, url: str) -> None:
+        """Mark a URL as currently processing."""
+        entry = self._find_entry(url)
+        if entry:
+            entry.status = URLStatus.PROCESSING
+            entry.start_time = time.time()
+
+    def mark_complete(
+        self,
+        url: str,
+        *,
+        title: str | None = None,
+        processing_time_ms: float | None = None,
+    ) -> None:
+        """Mark a URL as successfully completed.
+
+        Args:
+            url: The URL that completed
+            title: Optional article title for display
+            processing_time_ms: Optional explicit processing time
+        """
+        entry = self._find_entry(url)
+        if entry:
+            entry.status = URLStatus.COMPLETE
+            entry.title = title
+
+            # Calculate processing time
+            if processing_time_ms is not None:
+                entry.processing_time_ms = processing_time_ms
+            elif entry.start_time:
+                entry.processing_time_ms = (time.time() - entry.start_time) * 1000
+
+            # Track for ETA calculation
+            if entry.processing_time_ms > 0:
+                self._processing_times.append(entry.processing_time_ms)
+
+    def mark_failed(
+        self,
+        url: str,
+        error_type: str,
+        error_message: str,
+        *,
+        processing_time_ms: float | None = None,
+    ) -> None:
+        """Mark a URL as failed.
+
+        Args:
+            url: The URL that failed
+            error_type: Type of error (e.g., "timeout", "network")
+            error_message: Human-readable error message
+            processing_time_ms: Optional explicit processing time
+        """
+        entry = self._find_entry(url)
+        if entry:
+            entry.status = URLStatus.FAILED
+            entry.error_type = error_type
+            entry.error_message = error_message
+
+            # Calculate processing time
+            if processing_time_ms is not None:
+                entry.processing_time_ms = processing_time_ms
+            elif entry.start_time:
+                entry.processing_time_ms = (time.time() - entry.start_time) * 1000
+
+            # Track for ETA calculation (even failures contribute to timing)
+            if entry.processing_time_ms > 0:
+                self._processing_times.append(entry.processing_time_ms)
+
+    @property
+    def total(self) -> int:
+        """Total number of URLs in batch."""
+        return len(self.entries)
+
+    @property
+    def completed(self) -> list[URLStatusEntry]:
+        """List of successfully completed entries."""
+        return [e for e in self.entries if e.status == URLStatus.COMPLETE]
+
+    @property
+    def failed(self) -> list[URLStatusEntry]:
+        """List of failed entries."""
+        return [e for e in self.entries if e.status == URLStatus.FAILED]
+
+    @property
+    def pending(self) -> list[URLStatusEntry]:
+        """List of pending entries."""
+        return [e for e in self.entries if e.status == URLStatus.PENDING]
+
+    @property
+    def processing(self) -> list[URLStatusEntry]:
+        """List of currently processing entries."""
+        return [e for e in self.entries if e.status == URLStatus.PROCESSING]
+
+    @property
+    def done_count(self) -> int:
+        """Number of URLs that are done (completed + failed)."""
+        return len(self.completed) + len(self.failed)
+
+    @property
+    def success_count(self) -> int:
+        """Number of successfully completed URLs."""
+        return len(self.completed)
+
+    @property
+    def fail_count(self) -> int:
+        """Number of failed URLs."""
+        return len(self.failed)
+
+    @property
+    def pending_count(self) -> int:
+        """Number of pending URLs."""
+        return len(self.pending)
+
+    def average_processing_time_ms(self) -> float:
+        """Calculate average processing time in milliseconds."""
+        if not self._processing_times:
+            return 0.0
+        return sum(self._processing_times) / len(self._processing_times)
+
+    def estimate_remaining_time_sec(self) -> float | None:
+        """Estimate remaining time in seconds based on average processing time.
+
+        Returns:
+            Estimated seconds remaining, or None if insufficient data
+        """
+        remaining = self.pending_count + len(self.processing)
+        if remaining == 0:
+            return 0.0
+
+        avg_ms = self.average_processing_time_ms()
+        if avg_ms <= 0:
+            return None
+
+        # Estimate remaining time
+        return (remaining * avg_ms) / 1000.0
+
+    def total_elapsed_time_sec(self) -> float:
+        """Calculate total elapsed time since batch started."""
+        return time.time() - self.batch_start_time
+
+    def is_complete(self) -> bool:
+        """Check if all URLs have been processed."""
+        return self.done_count >= self.total

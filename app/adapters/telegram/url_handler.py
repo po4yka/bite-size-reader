@@ -4,15 +4,17 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from typing import TYPE_CHECKING, Any
 
+from app.adapters.external.formatting import BatchProgressFormatter
 from app.core.logging_utils import generate_correlation_id
 from app.core.url_utils import extract_all_urls
 from app.db.user_interactions import async_safe_update_user_interaction
 from app.infrastructure.persistence.sqlite.repositories.user_repository import (
     SqliteUserRepositoryAdapter,
 )
-from app.utils.message_formatter import format_completion_message, format_progress_message
+from app.models.batch_processing import URLBatchStatus
 from app.utils.progress_tracker import ProgressTracker
 
 if TYPE_CHECKING:
@@ -350,9 +352,12 @@ class URLHandler:
         uid: int,
         correlation_id: str,
     ) -> None:
-        """Process multiple URLs in parallel with controlled concurrency."""
+        """Process multiple URLs in parallel with controlled concurrency and detailed status tracking."""
         if not urls:
             return
+
+        # Initialize batch status tracker
+        batch_status = URLBatchStatus.from_urls(urls)
 
         # Use semaphore to limit concurrent processing (prevent overwhelming external APIs)
         # Adaptive concurrency: 2-4 concurrent based on batch size
@@ -361,15 +366,20 @@ class URLHandler:
 
         async def process_single_url(
             url: str, progress_tracker: ProgressTracker
-        ) -> tuple[str, bool, str]:
+        ) -> tuple[str, bool, str, str | None]:
             """Process a single URL with retry and exponential backoff.
 
             Returns:
-                Tuple of (url, success, error_message)
+                Tuple of (url, success, error_message, title)
             """
             async with semaphore:
                 per_link_cid = generate_correlation_id()
                 last_error = ""
+                error_type = "unknown"
+                start_time_ms = time.time() * 1000
+
+                # Mark as processing
+                batch_status.mark_processing(url)
 
                 for attempt in range(URL_MAX_RETRIES + 1):
                     # Calculate timeout with exponential increase per retry
@@ -391,20 +401,34 @@ class URLHandler:
 
                     try:
                         # Add timeout protection for individual URL processing
-                        await asyncio.wait_for(
+                        result = await asyncio.wait_for(
                             self.url_processor.handle_url_flow(
                                 message, url, correlation_id=per_link_cid
                             ),
                             timeout=current_timeout,
                         )
 
+                        # Calculate processing time
+                        processing_time_ms = time.time() * 1000 - start_time_ms
+
+                        # Extract title from result
+                        title = None
+                        if result and hasattr(result, "title"):
+                            title = result.title
+
+                        # Mark as complete with title
+                        batch_status.mark_complete(
+                            url, title=title, processing_time_ms=processing_time_ms
+                        )
+
                         # Update progress after successful completion
                         await progress_tracker.increment_and_update()
 
-                        return url, True, ""
+                        return url, True, "", title
 
                     except TimeoutError:
-                        last_error = f"Timeout after {int(current_timeout)}s (attempt {attempt + 1}/{URL_MAX_RETRIES + 1})"
+                        error_type = "timeout"
+                        last_error = f"Timeout ({int(current_timeout)}s)"
                         logger.warning(
                             "url_processing_timeout_retry",
                             extra={
@@ -435,6 +459,16 @@ class URLHandler:
                         ]
                         is_transient = any(kw in last_error.lower() for kw in transient_keywords)
 
+                        # Determine error type
+                        if "timeout" in last_error.lower():
+                            error_type = "timeout"
+                        elif "connection" in last_error.lower() or "network" in last_error.lower():
+                            error_type = "network"
+                        elif "429" in last_error or "rate limit" in last_error.lower():
+                            error_type = "rate_limit"
+                        else:
+                            error_type = "error"
+
                         if is_transient and attempt < URL_MAX_RETRIES:
                             backoff = min(URL_BACKOFF_BASE * (2**attempt), URL_BACKOFF_MAX)
                             logger.warning(
@@ -464,7 +498,15 @@ class URLHandler:
                         )
                         break
 
-                # All retries exhausted
+                # All retries exhausted - mark as failed
+                processing_time_ms = time.time() * 1000 - start_time_ms
+                batch_status.mark_failed(
+                    url,
+                    error_type=error_type,
+                    error_message=last_error,
+                    processing_time_ms=processing_time_ms,
+                )
+
                 logger.error(
                     "url_processing_all_retries_exhausted",
                     extra={
@@ -476,13 +518,11 @@ class URLHandler:
                     },
                 )
                 await progress_tracker.increment_and_update()
-                return url, False, last_error
+                return url, False, last_error, None
 
         # Send initial progress message with error handling
         try:
-            initial_progress_text = format_progress_message(
-                0, len(urls), context="links in parallel", show_bar=False
-            )
+            initial_progress_text = BatchProgressFormatter.format_progress_message(batch_status)
             progress_msg_id = await self.response_formatter.safe_reply_with_id(
                 message, initial_progress_text
             )
@@ -491,7 +531,6 @@ class URLHandler:
                 extra={
                     "progress_msg_id": progress_msg_id,
                     "url_count": len(urls),
-                    "progress_text": initial_progress_text,
                     "uid": uid,
                 },
             )
@@ -502,23 +541,20 @@ class URLHandler:
             )
             progress_msg_id = None
 
-        # Create progress tracker with shared ProgressTracker utility
+        # Create progress tracker with batch-aware formatter
         async def progress_formatter(
             current: int, total_count: int, msg_id: int | None
         ) -> int | None:
-            """Format and send/edit progress updates for URL processing."""
+            """Format and send/edit progress updates using batch status."""
             try:
-                # Use shared formatter for consistent progress messages
-                progress_text = format_progress_message(
-                    current, total_count, context="links in parallel", show_bar=False
-                )
+                # Use BatchProgressFormatter for rich progress messages
+                progress_text = BatchProgressFormatter.format_progress_message(batch_status)
 
                 logger.debug(
                     "attempting_progress_update",
                     extra={
-                        "completed": current,
+                        "completed": batch_status.done_count,
                         "total": total_count,
-                        "progress_text": progress_text,
                         "progress_msg_id": msg_id,
                         "uid": uid,
                     },
@@ -535,7 +571,7 @@ class URLHandler:
                         logger.debug(
                             "progress_update_sent_successfully",
                             extra={
-                                "completed": current,
+                                "completed": batch_status.done_count,
                                 "total": total_count,
                                 "chat_id": chat_id,
                                 "message_id": msg_id,
@@ -547,13 +583,12 @@ class URLHandler:
                     logger.warning(
                         "progress_update_edit_failed",
                         extra={
-                            "completed": current,
+                            "completed": batch_status.done_count,
                             "total": total_count,
                             "message_id": msg_id,
                             "uid": uid,
                         },
                     )
-                    # Keep returning the same message_id to retry on next update
                     return msg_id
 
                 logger.warning(
@@ -571,7 +606,7 @@ class URLHandler:
                     "progress_update_failed",
                     extra={
                         "error": str(e),
-                        "completed": current,
+                        "completed": batch_status.done_count,
                         "total": total_count,
                         "progress_msg_id": msg_id,
                         "uid": uid,
@@ -586,18 +621,11 @@ class URLHandler:
             small_batch_threshold=5,  # User-initiated batches use smaller threshold
         )
 
-        # Initialize counters for result tracking
-        successful = 0
-        failed = 0
-        failed_urls = []
-
         # Process URLs in memory-efficient batches to prevent resource exhaustion
-        # User-initiated batches use smaller batches for better responsiveness and user control
-        batch_size = min(5, len(urls))  # Process max 5 URLs at a time for user-initiated batches
+        batch_size = min(5, len(urls))
 
-        async def process_batches():
+        async def process_batches() -> None:
             """Process URL batches with progress tracking."""
-            nonlocal successful, failed, failed_urls
             for batch_start in range(0, len(urls), batch_size):
                 batch_end = min(batch_start + batch_size, len(urls))
                 batch_urls = urls[batch_start:batch_end]
@@ -608,61 +636,20 @@ class URLHandler:
                 # Process batch and handle results immediately
                 batch_results = await asyncio.gather(*batch_tasks, return_exceptions=True)
 
-                # Process results from this batch immediately
+                # Process results from this batch (status already tracked in process_single_url)
                 for result in batch_results:
-                    # Progress is already incremented in process_single_url() - no double counting
                     if isinstance(result, Exception):
-                        # Handle asyncio-specific exceptions properly
                         if isinstance(result, asyncio.CancelledError):
-                            # Re-raise cancellation
                             raise result
-                        # This should rarely happen due to return_exceptions=True, but handle it
-                        failed += 1
                         logger.exception(
                             "unexpected_task_exception", extra={"error": str(result), "uid": uid}
-                        )
-                        failed_urls.append(f"Unknown URL (task exception: {type(result).__name__})")
-                    elif isinstance(result, tuple) and len(result) == 3:
-                        url, success, error_msg = result
-                        if success:
-                            successful += 1
-                        else:
-                            failed += 1
-                            failed_urls.append(url)
-                            if error_msg:
-                                logger.debug(
-                                    "url_processing_failed_detail",
-                                    extra={"url": url, "error": error_msg, "uid": uid},
-                                )
-                    elif isinstance(result, tuple) and len(result) == 2:
-                        # Backward compatibility with old format
-                        url, success = result
-                        if success:
-                            successful += 1
-                        else:
-                            failed += 1
-                            failed_urls.append(url)
-                            logger.warning("legacy_result_format", extra={"url": url, "uid": uid})
-                    else:
-                        # Unexpected result type - this is a programming error
-                        failed += 1
-                        logger.exception(
-                            "unexpected_result_type",
-                            extra={
-                                "result_type": type(result).__name__,
-                                "result_value": str(result)[:200],  # Truncate for logging
-                                "uid": uid,
-                            },
-                        )
-                        failed_urls.append(
-                            f"Unknown URL (unexpected result type: {type(result).__name__})"
                         )
 
                 # Small delay between batches to prevent overwhelming external APIs
                 if batch_end < len(urls):
                     await asyncio.sleep(0.1)
 
-        # Run batch processing and progress updates concurrently with proper shutdown handling
+        # Run batch processing and progress updates concurrently
         progress_task = asyncio.create_task(progress_tracker.process_update_queue())
         try:
             await process_batches()
@@ -685,20 +672,13 @@ class URLHandler:
                     extra={"error": str(progress_exc), "uid": uid},
                 )
 
-        # Send completion summary with detailed feedback using shared formatter
-        completion_message = format_completion_message(
-            total=len(urls),
-            successful=successful,
-            failed=failed,
-            context="links",
-            show_stats=False,  # User-initiated batches are smaller, don't need detailed stats
-            failure_rate_threshold=20.0,
-        )
+        # Send completion summary with detailed batch results
+        completion_message = BatchProgressFormatter.format_completion_message(batch_status)
         await self.response_formatter.safe_reply(message, completion_message)
 
-        # Safety check: ensure all URLs were processed
+        # Safety check and logging
         expected_total = len(urls)
-        actual_total = successful + failed
+        actual_total = batch_status.done_count
 
         if actual_total != expected_total:
             logger.exception(
@@ -707,8 +687,8 @@ class URLHandler:
                     "uid": uid,
                     "expected_total": expected_total,
                     "actual_total": actual_total,
-                    "successful": successful,
-                    "failed": failed,
+                    "successful": batch_status.success_count,
+                    "failed": batch_status.fail_count,
                 },
             )
 
@@ -717,9 +697,10 @@ class URLHandler:
             extra={
                 "uid": uid,
                 "total": expected_total,
-                "successful": successful,
-                "failed": failed,
-                "failed_urls": failed_urls[:3],  # Log first 3 failed URLs
+                "successful": batch_status.success_count,
+                "failed": batch_status.fail_count,
+                "total_time_sec": round(batch_status.total_elapsed_time_sec(), 2),
+                "avg_time_ms": round(batch_status.average_processing_time_ms(), 0),
                 "count_match": actual_total == expected_total,
             },
         )

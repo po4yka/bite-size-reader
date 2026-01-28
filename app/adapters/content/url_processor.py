@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from app.adapters.content.content_chunker import ContentChunker
@@ -31,6 +32,59 @@ if TYPE_CHECKING:
     from app.services.topic_search import TopicSearchService
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class URLProcessingFlowResult:
+    """Result of URL processing flow for batch status tracking.
+
+    Attributes:
+        success: Whether processing completed successfully
+        title: Extracted article title (from summary_250 or tldr)
+        cached: Whether result was served from cache
+    """
+
+    success: bool = True
+    title: str | None = None
+    cached: bool = False
+
+    @classmethod
+    def from_summary(
+        cls, summary_json: dict[str, Any] | None, cached: bool = False
+    ) -> URLProcessingFlowResult:
+        """Create result from summary JSON, extracting title."""
+        if not summary_json:
+            return cls(success=True, title=None, cached=cached)
+
+        # Try to extract a meaningful title from summary fields
+        # Priority: explicit title field > summary_250 (truncated) > tldr (truncated)
+        title = None
+
+        # Check for explicit title in metadata (some sources include it)
+        if "title" in summary_json:
+            title = str(summary_json["title"])[:100]
+
+        # Fall back to summary_250 (already concise)
+        if not title and summary_json.get("summary_250"):
+            title = str(summary_json["summary_250"])
+            # Truncate at first sentence if too long
+            if len(title) > 60:
+                # Find first sentence boundary
+                for sep in (". ", "! ", "? "):
+                    idx = title.find(sep)
+                    if 0 < idx < 60:
+                        title = title[: idx + 1]
+                        break
+                else:
+                    title = title[:57] + "..."
+
+        # Fall back to tldr
+        if not title and summary_json.get("tldr"):
+            title = str(summary_json["tldr"])
+            if len(title) > 60:
+                title = title[:57] + "..."
+
+        return cls(success=True, title=title, cached=cached)
 
 
 def _get_system_prompt(lang: str) -> str:
@@ -197,20 +251,24 @@ class URLProcessor:
         correlation_id: str | None = None,
         interaction_id: int | None = None,
         silent: bool = False,
-    ) -> None:
+    ) -> URLProcessingFlowResult:
         """Handle complete URL processing flow from extraction to summarization.
 
         Args:
             silent: If True, suppress all Telegram responses and only persist to database
+
+        Returns:
+            URLProcessingFlowResult with success status and extracted title
         """
-        if await self._maybe_reply_with_cached_summary(
+        cached_result = await self._maybe_reply_with_cached_summary(
             message,
             url_text,
             correlation_id=correlation_id,
             interaction_id=interaction_id,
             silent=silent,
-        ):
-            return
+        )
+        if cached_result is not None:
+            return cached_result
 
         try:
             norm = normalize_url(url_text)
@@ -325,7 +383,7 @@ class URLProcessor:
                         "processing_failed",
                         correlation_id or "unknown",
                     )
-                return
+                return URLProcessingFlowResult(success=False)
 
             if should_chunk and chunks:
                 persist_task = self._schedule_persistence_task(
@@ -371,6 +429,9 @@ class URLProcessor:
             if silent and persist_task:
                 await self._await_persistence_task(persist_task)
 
+            # Return result with extracted title
+            return URLProcessingFlowResult.from_summary(summary_json)
+
         except Exception as exc:
             raise_if_cancelled(exc)
             logger.exception(
@@ -383,6 +444,7 @@ class URLProcessor:
                     "processing_failed",
                     correlation_id or "unknown",
                 )
+            return URLProcessingFlowResult(success=False)
 
     async def _load_system_prompt(self, lang: str) -> str:
         """Load system prompt for the given language.
@@ -399,10 +461,10 @@ class URLProcessor:
         correlation_id: str | None = None,
         interaction_id: int | None = None,
         silent: bool = False,
-    ) -> bool:
+    ) -> URLProcessingFlowResult | None:
         """Check for cached summary and reply if found.
 
-        Returns True if a cached response was sent, False otherwise.
+        Returns URLProcessingFlowResult if a cached response was sent, None otherwise.
         """
         try:
             norm = normalize_url(url_text)
@@ -415,7 +477,7 @@ class URLProcessor:
             )
             request_id = request_row.get("id") if isinstance(request_row, dict) else None
             if not isinstance(request_id, int):
-                return False
+                return None
 
             cached = await self.summary_repo.async_get_summary_by_request(request_id)
             payload = cached.get("json_payload") if isinstance(cached, dict) else None
@@ -461,13 +523,13 @@ class URLProcessor:
                         response_type="summary",
                         request_id=request_id if isinstance(request_id, int) else None,
                     )
-                return True
+                return URLProcessingFlowResult.from_summary(payload, cached=True)
         except Exception as exc:
             logger.warning(
                 "cache_check_failed",
                 extra={"cid": correlation_id, "error": str(exc)},
             )
-        return False
+        return None
 
     async def _persist_summary(
         self,

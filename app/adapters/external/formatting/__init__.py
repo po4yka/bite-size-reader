@@ -1,5 +1,8 @@
 """Response formatting components for decomposed ResponseFormatter."""
 
+from app.adapters.external.formatting.batch_progress_formatter import (
+    BatchProgressFormatter,
+)
 from app.adapters.external.formatting.data_formatter import DataFormatterImpl
 from app.adapters.external.formatting.database_presenter import DatabasePresenterImpl
 from app.adapters.external.formatting.message_validator import MessageValidatorImpl
@@ -18,6 +21,7 @@ from app.adapters.external.formatting.summary_presenter import SummaryPresenterI
 from app.adapters.external.formatting.text_processor import TextProcessorImpl
 
 __all__ = [
+    "BatchProgressFormatter",
     "DataFormatter",
     "DataFormatterImpl",
     "DatabasePresenter",
