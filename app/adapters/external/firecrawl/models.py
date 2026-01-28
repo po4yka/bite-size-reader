@@ -60,6 +60,11 @@ class FirecrawlResult(BaseModel):
         default=None, description="Firecrawl correlation identifier (cid)."
     )
 
+    @property
+    def success(self) -> bool:
+        """Convenience property: True if status is 'success' or response_success is True."""
+        return self.status == "success" or self.response_success is True
+
 
 class FirecrawlSearchItem(BaseModel):
     """Normalized representation of a Firecrawl `/v2/search` result item."""

@@ -31,7 +31,7 @@ async def test_handle_awaited_url_rejects_invalid_links() -> None:
         SimpleNamespace(handle_url_flow=handle_url_flow_mock),
     )
     handler = URLHandler(
-        db=cast("Database", SimpleNamespace()),
+        db=cast("Database", SimpleNamespace()),  # type: ignore[arg-type]
         response_formatter=response_formatter,
         url_processor=url_processor,
     )
@@ -68,7 +68,7 @@ async def test_handle_awaited_url_filters_invalid_before_processing() -> None:
         SimpleNamespace(handle_url_flow=handle_url_flow_mock),
     )
     handler = URLHandler(
-        db=cast("Database", SimpleNamespace()),
+        db=cast("Database", SimpleNamespace()),  # type: ignore[arg-type]
         response_formatter=response_formatter,
         url_processor=url_processor,
     )

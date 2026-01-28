@@ -311,7 +311,7 @@ async def run_summary_cli(args: argparse.Namespace) -> None:
 
     firecrawl = FirecrawlClient(
         api_key=cfg.firecrawl.api_key,
-        timeout_sec=cfg.runtime.request_timeout_sec,
+        timeout_sec=cfg.firecrawl.timeout_sec,
         audit=audit,
         debug_payloads=cfg.runtime.debug_payloads,
         log_truncate_length=cfg.runtime.log_truncate_length,
@@ -336,6 +336,7 @@ async def run_summary_cli(args: argparse.Namespace) -> None:
         screenshot_viewport_height=cfg.firecrawl.screenshot_viewport_height,
         json_prompt=cfg.firecrawl.json_prompt,
         json_schema=cfg.firecrawl.json_schema,
+        wait_for_ms=cfg.firecrawl.wait_for_ms,
     )
 
     # Create LLM client using factory based on LLM_PROVIDER config

@@ -12,7 +12,7 @@ class TestModelValidation(unittest.TestCase):
         valid_models = [
             "deepseek/deepseek-v3.2",
             "qwen/qwen3-max",
-            "moonshotai/kimi-k2-thinking",
+            "moonshotai/kimi-k2.5",
         ]
 
         for model in valid_models:
@@ -103,12 +103,13 @@ class TestModelValidation(unittest.TestCase):
             # Check that defaults are applied when env vars are not set
             assert cfg.runtime.db_path == "/data/app.db"
             assert cfg.openrouter.temperature == 0.2
-            assert cfg.openrouter.model == "qwen/qwen3-max"
+            # DeepSeek v3.2 is most reliable for structured outputs
+            assert cfg.openrouter.model == "deepseek/deepseek-v3.2"
             # Default fallback models from config.py
             assert cfg.openrouter.fallback_models == (
+                "moonshotai/kimi-k2.5",
+                "qwen/qwen3-max",
                 "deepseek/deepseek-r1",
-                "moonshotai/kimi-k2-thinking",
-                "deepseek/deepseek-v3.2",
             )
 
     def test_load_config_allows_stub_credentials(self) -> None:
@@ -121,6 +122,7 @@ class TestModelValidation(unittest.TestCase):
 
         with patch.dict(os.environ, test_env, clear=True):
             # Provide stub telegram credentials directly
+            # _env_file and telegram dict are pydantic-settings internals
             settings = Settings(
                 _env_file=None,
                 allow_stub_telegram=True,

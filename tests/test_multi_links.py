@@ -33,7 +33,7 @@ class FakeMessage:
 class SpyBot(TelegramBot):
     def __post_init__(self) -> None:
         # Mock the OpenRouter client to avoid API key validation
-        with patch("app.adapters.telegram.bot_factory.OpenRouterClient") as mock_openrouter:
+        with patch("app.adapters.openrouter.openrouter_client.OpenRouterClient") as mock_openrouter:
             mock_openrouter.return_value = AsyncMock()
             super().__post_init__()
         self.seen_urls: list[str] = []
@@ -62,7 +62,7 @@ def make_bot(tmp_path: str) -> SpyBot:
 
     tbmod.Client = object
     tbmod.filters = None
-    return SpyBot(cfg=cfg, db=Database(tmp_path))
+    return SpyBot(cfg=cfg, db=Database(tmp_path))  # type: ignore[arg-type]
 
 
 class TestMultiLinks(unittest.IsolatedAsyncioTestCase):

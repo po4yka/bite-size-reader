@@ -67,7 +67,7 @@ class TestForwardMessagePersistence(unittest.IsolatedAsyncioTestCase):
 
             processor = ForwardContentProcessor(
                 cfg=cfg,
-                db=db,
+                db=db,  # type: ignore[arg-type]
                 response_formatter=formatter,
                 audit_func=lambda *args, **kwargs: None,
             )

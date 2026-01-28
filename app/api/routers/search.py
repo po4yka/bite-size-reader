@@ -4,7 +4,12 @@ from fastapi import APIRouter, Depends, Query
 
 from app.api.dependencies.search_resources import get_chroma_search_service
 from app.api.exceptions import ProcessingError
-from app.api.models.responses import SearchResult, SearchResultsData, success_response
+from app.api.models.responses import (
+    PaginationInfo,
+    SearchResult,
+    SearchResultsData,
+    success_response,
+)
 from app.api.routers.auth import get_current_user
 from app.core.logging_utils import get_logger
 from app.db.models import database_proxy
@@ -113,12 +118,12 @@ async def search_summaries(
             for item in results
         ]
 
-        pagination = {
-            "total": total,
-            "limit": limit,
-            "offset": offset,
-            "has_more": (offset + limit) < total,
-        }
+        pagination = PaginationInfo(
+            total=total,
+            limit=limit,
+            offset=offset,
+            has_more=(offset + limit) < total,
+        )
 
         return success_response(
             SearchResultsData(
@@ -224,12 +229,12 @@ async def semantic_search_summaries(
             for item in results
         ]
 
-        pagination = {
-            "total": estimated_total,
-            "limit": limit,
-            "offset": offset,
-            "has_more": search_results.has_more,
-        }
+        pagination = PaginationInfo(
+            total=estimated_total,
+            limit=limit,
+            offset=offset,
+            has_more=search_results.has_more,
+        )
 
         return success_response(
             SearchResultsData(

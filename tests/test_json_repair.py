@@ -102,11 +102,11 @@ def _setup_openrouter_mock(bot: TelegramBot, mock_instance: MagicMock) -> None:
             if hasattr(bot.url_processor.llm_summarizer, "_workflow"):
                 bot.url_processor.llm_summarizer._workflow.openrouter = mock_instance
             if hasattr(bot.url_processor.llm_summarizer, "_insights_helper"):
-                bot.url_processor.llm_summarizer._insights_helper.openrouter = mock_instance
+                bot.url_processor.llm_summarizer._insights_helper._openrouter = mock_instance
             if hasattr(bot.url_processor.llm_summarizer, "_article_helper"):
-                bot.url_processor.llm_summarizer._article_helper.openrouter = mock_instance
+                bot.url_processor.llm_summarizer._article_helper._openrouter = mock_instance
             if hasattr(bot.url_processor.llm_summarizer, "_metadata_helper"):
-                bot.url_processor.llm_summarizer._metadata_helper.openrouter = mock_instance
+                bot.url_processor.llm_summarizer._metadata_helper._openrouter = mock_instance
         if hasattr(bot.url_processor, "content_chunker"):
             bot.url_processor.content_chunker.openrouter = mock_instance
 
@@ -149,7 +149,7 @@ class TestJsonRepair(unittest.TestCase):
         self.cfg = make_test_app_config(db_path=":memory:")
         self.db = _create_mock_db()
 
-    @patch("app.adapters.telegram.bot_factory.OpenRouterClient")
+    @patch("app.adapters.openrouter.openrouter_client.OpenRouterClient")
     def test_json_repair_success(self, mock_openrouter_client):
         async def run_test():
             bot = TelegramBot(self.cfg, self.db)
@@ -210,8 +210,8 @@ class TestJsonRepair(unittest.TestCase):
             )
             _setup_openrouter_mock(bot, mock_openrouter_instance)
 
-            bot._safe_reply = AsyncMock()  # type: ignore[method-assign]
-            bot._reply_json = AsyncMock()  # type: ignore[method-assign]
+            bot._safe_reply = AsyncMock()
+            bot._reply_json = AsyncMock()
             # Also update the response formatter's internal references
             bot.response_formatter._reply_json_func = bot._reply_json
             bot.response_formatter._response_sender._reply_json_func = bot._reply_json
@@ -236,7 +236,7 @@ class TestJsonRepair(unittest.TestCase):
 
         asyncio.run(run_test())
 
-    @patch("app.adapters.telegram.bot_factory.OpenRouterClient")
+    @patch("app.adapters.openrouter.openrouter_client.OpenRouterClient")
     def test_json_repair_failure(self, mock_openrouter_client):
         async def run_test():
             bot = TelegramBot(self.cfg, self.db)
@@ -283,8 +283,8 @@ class TestJsonRepair(unittest.TestCase):
             )
             _setup_openrouter_mock(bot, mock_openrouter_instance)
 
-            bot._safe_reply = AsyncMock()  # type: ignore[method-assign]
-            bot._reply_json = AsyncMock()  # type: ignore[method-assign]
+            bot._safe_reply = AsyncMock()
+            bot._reply_json = AsyncMock()
             # Also update the response formatter's internal references
             bot.response_formatter._safe_reply_func = bot._safe_reply
             bot.response_formatter._reply_json_func = bot._reply_json
@@ -307,7 +307,7 @@ class TestJsonRepair(unittest.TestCase):
 
         asyncio.run(run_test())
 
-    @patch("app.adapters.telegram.bot_factory.OpenRouterClient")
+    @patch("app.adapters.openrouter.openrouter_client.OpenRouterClient")
     def test_json_repair_with_extra_text(self, mock_openrouter_client):
         async def run_test():
             bot = TelegramBot(self.cfg, self.db)
@@ -350,8 +350,8 @@ class TestJsonRepair(unittest.TestCase):
             )
             _setup_openrouter_mock(bot, mock_openrouter_instance)
 
-            bot._safe_reply = AsyncMock()  # type: ignore[method-assign]
-            bot._reply_json = AsyncMock()  # type: ignore[method-assign]
+            bot._safe_reply = AsyncMock()
+            bot._reply_json = AsyncMock()
             # Also update the response formatter's internal references
             bot.response_formatter._reply_json_func = bot._reply_json
             bot.response_formatter._response_sender._reply_json_func = bot._reply_json
@@ -367,7 +367,7 @@ class TestJsonRepair(unittest.TestCase):
 
         asyncio.run(run_test())
 
-    @patch("app.adapters.telegram.bot_factory.OpenRouterClient")
+    @patch("app.adapters.openrouter.openrouter_client.OpenRouterClient")
     def test_json_repair_sends_original_content(self, mock_openrouter_client):
         async def run_test():
             bot = TelegramBot(self.cfg, self.db)
@@ -427,8 +427,8 @@ class TestJsonRepair(unittest.TestCase):
             )
             _setup_openrouter_mock(bot, mock_openrouter_instance)
 
-            bot._safe_reply = AsyncMock()  # type: ignore[method-assign]
-            bot._reply_json = AsyncMock()  # type: ignore[method-assign]
+            bot._safe_reply = AsyncMock()
+            bot._reply_json = AsyncMock()
             # Also update the response formatter's internal references
             bot.response_formatter._reply_json_func = bot._reply_json
             bot.response_formatter._response_sender._reply_json_func = bot._reply_json
@@ -450,7 +450,7 @@ class TestJsonRepair(unittest.TestCase):
 
         asyncio.run(run_test())
 
-    @patch("app.adapters.telegram.bot_factory.OpenRouterClient")
+    @patch("app.adapters.openrouter.openrouter_client.OpenRouterClient")
     def test_local_json_repair_library_used(self, mock_openrouter_client):
         async def run_test():
             bot = TelegramBot(self.cfg, self.db)
@@ -493,8 +493,8 @@ class TestJsonRepair(unittest.TestCase):
             )
             _setup_openrouter_mock(bot, mock_openrouter_instance)
 
-            bot._safe_reply = AsyncMock()  # type: ignore[method-assign]
-            bot._reply_json = AsyncMock()  # type: ignore[method-assign]
+            bot._safe_reply = AsyncMock()
+            bot._reply_json = AsyncMock()
             # Also update the response formatter's internal references
             bot.response_formatter._reply_json_func = bot._reply_json
             bot.response_formatter._response_sender._reply_json_func = bot._reply_json

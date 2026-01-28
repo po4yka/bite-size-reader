@@ -40,7 +40,6 @@ from app.adapters.youtube.youtube_downloader import YouTubeDownloader
 if TYPE_CHECKING:
     from app.adapters.external.response_formatter import ResponseFormatter
     from app.config import AppConfig
-    from app.db.database import Database
 
 sys.modules.setdefault("pydantic", MagicMock())
 sys.modules.setdefault("pydantic_settings", MagicMock())
@@ -69,7 +68,7 @@ def _make_downloader(tmp_path: Path) -> YouTubeDownloader:
     rf.safe_reply = MagicMock()
     return YouTubeDownloader(
         cfg=cast("AppConfig", cfg),
-        db=cast("Database", db),
+        db=db,
         response_formatter=cast("ResponseFormatter", rf),
         audit_func=lambda *a, **k: None,
     )

@@ -60,19 +60,31 @@ class ErrorHandler:
         jitter = 1.0 + random.uniform(-0.25, 0.25)
         await asyncio.sleep(base_delay * jitter)
 
-    def should_retry(self, status_code: int, attempt: int) -> bool:
-        """Determine if a request should be retried based on status code.
+    def should_retry(self, status_code: int, attempt: int, error_text: str | None = None) -> bool:
+        """Determine if a request should be retried based on status code and error text.
 
         Args:
             status_code: HTTP status code from response
             attempt: Current attempt number
+            error_text: Optional error message text to check for timeout indicators
 
         Returns:
             True if request should be retried
         """
         if attempt >= self._max_retries:
             return False
-        return status_code == 429 or status_code >= 500
+        # Retry on rate limit or server errors
+        if status_code == 429 or status_code >= 500:
+            return True
+        # Retry on timeout errors (HTTP 408 Request Timeout)
+        if status_code == 408:
+            return True
+        # Retry if error text indicates a timeout
+        if error_text:
+            error_lower = error_text.lower()
+            if "timeout" in error_lower or "timed out" in error_lower:
+                return True
+        return False
 
     def handle_retryable_errors(
         self,
@@ -99,6 +111,8 @@ class ErrorHandler:
             - retry_delay: Delay before retry in seconds, or None if not retryable
             - should_toggle_mobile: Whether to toggle mobile/pdf modes on retry
         """
+        error_text = data.get("error") or data.get("message") or ""
+
         if resp.status_code == 429:
             retry_after = data.get("retry_after", 60)
             if attempt < self._max_retries:
@@ -116,6 +130,23 @@ class ErrorHandler:
             if attempt < self._max_retries:
                 delay = self._backoff_base * (2**attempt)
                 return delay, True
+
+        # Handle timeout errors (HTTP 408 or timeout/timed out in error message)
+        error_lower = str(error_text).lower() if error_text else ""
+        is_timeout_error = "timeout" in error_lower or "timed out" in error_lower
+        if resp.status_code == 408 or is_timeout_error:
+            if attempt < self._max_retries:
+                delay = self._backoff_base * (2**attempt)
+                self._logger.warning(
+                    "firecrawl_timeout_retry",
+                    extra={
+                        "status_code": resp.status_code,
+                        "attempt": attempt,
+                        "error_text": str(error_text)[:200],
+                    },
+                )
+                return delay, False  # Don't toggle mobile on timeout, just retry
+            return None, False
 
         return None, False
 

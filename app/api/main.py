@@ -184,20 +184,20 @@ app.add_exception_handler(Exception, global_error_handler)
 
 # Initialize database proxy eagerly so Peewee models can be used immediately
 DB_PATH = Config.get("DB_PATH", "/data/app.db")
-db_cfg = DatabaseConfig(
-    **{
-        key: value
-        for key, value in {
-            "operation_timeout": os.getenv("DB_OPERATION_TIMEOUT"),
-            "max_retries": os.getenv("DB_MAX_RETRIES"),
-            "json_max_size": os.getenv("DB_JSON_MAX_SIZE"),
-            "json_max_depth": os.getenv("DB_JSON_MAX_DEPTH"),
-            "json_max_array_length": os.getenv("DB_JSON_MAX_ARRAY_LENGTH"),
-            "json_max_dict_keys": os.getenv("DB_JSON_MAX_DICT_KEYS"),
-        }.items()
-        if value not in (None, "")
-    }
-)
+# Pydantic handles type coercion from string env vars
+_db_env_overrides = {
+    key: value
+    for key, value in {
+        "operation_timeout": os.getenv("DB_OPERATION_TIMEOUT"),
+        "max_retries": os.getenv("DB_MAX_RETRIES"),
+        "json_max_size": os.getenv("DB_JSON_MAX_SIZE"),
+        "json_max_depth": os.getenv("DB_JSON_MAX_DEPTH"),
+        "json_max_array_length": os.getenv("DB_JSON_MAX_ARRAY_LENGTH"),
+        "json_max_dict_keys": os.getenv("DB_JSON_MAX_DICT_KEYS"),
+    }.items()
+    if value not in (None, "")
+}
+db_cfg = DatabaseConfig(**_db_env_overrides)
 _db = DatabaseSessionManager(
     path=DB_PATH,
     operation_timeout=db_cfg.operation_timeout,

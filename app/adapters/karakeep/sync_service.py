@@ -5,10 +5,12 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
-from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from datetime import UTC, datetime
-from typing import Any, Protocol
+from typing import TYPE_CHECKING, Any, Protocol
+
+if TYPE_CHECKING:
+    from collections.abc import AsyncIterator, Awaitable, Callable
 
 from app.adapters.karakeep.client import KarakeepClient, KarakeepClientError
 from app.adapters.karakeep.models import FullSyncResult, KarakeepBookmark, SyncResult
@@ -1272,9 +1274,9 @@ class KarakeepSyncService:
                             # Handle favourite status
                             if bsr_fav != kk_fav:
                                 updated, success, retryable, error = await self._retry_operation(
-                                    lambda: client.update_bookmark(
-                                        bookmark.id,
-                                        favourited=bsr_fav,
+                                    lambda bid=bookmark.id, fav=bsr_fav: client.update_bookmark(  # type: ignore[misc]
+                                        bid,
+                                        favourited=fav,
                                     ),
                                     operation_name="update_bookmark_favourite",
                                     correlation_id=correlation_id,
@@ -1301,7 +1303,9 @@ class KarakeepSyncService:
                             # Apply tag changes
                             if tags_to_add:
                                 updated, success, retryable, error = await self._retry_operation(
-                                    lambda: client.attach_tags(bookmark.id, tags_to_add),
+                                    lambda bid=bookmark.id, tags=tags_to_add: client.attach_tags(  # type: ignore[misc]
+                                        bid, tags
+                                    ),
                                     operation_name="attach_tags",
                                     correlation_id=correlation_id,
                                 )
@@ -1325,7 +1329,7 @@ class KarakeepSyncService:
                                     )
                             for tag_id in tags_to_remove:
                                 _, success, retryable, error = await self._retry_operation(
-                                    lambda: client.detach_tag(bookmark.id, tag_id),
+                                    lambda bid=bookmark.id, tid=tag_id: client.detach_tag(bid, tid),  # type: ignore[misc]
                                     operation_name="detach_tag",
                                     correlation_id=correlation_id,
                                 )

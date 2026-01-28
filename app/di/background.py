@@ -60,7 +60,7 @@ async def build_background_processor(
     if firecrawl is None:
         firecrawl = FirecrawlClient(
             api_key=cfg.firecrawl.api_key,
-            timeout_sec=cfg.runtime.request_timeout_sec,
+            timeout_sec=cfg.firecrawl.timeout_sec,
             max_retries=cfg.firecrawl.retry_max_attempts,
             backoff_base=cfg.firecrawl.retry_initial_delay,
             debug_payloads=cfg.runtime.debug_payloads,
@@ -86,6 +86,7 @@ async def build_background_processor(
             screenshot_viewport_height=cfg.firecrawl.screenshot_viewport_height,
             json_prompt=cfg.firecrawl.json_prompt,
             json_schema=cfg.firecrawl.json_schema,
+            wait_for_ms=cfg.firecrawl.wait_for_ms,
         )
 
     if llm_client is None:

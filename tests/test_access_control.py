@@ -64,10 +64,10 @@ def make_bot(tmp_path: str, allowed_ids):
     tbmod.Client = object
     tbmod.filters = None
 
-    # Mock the OpenRouter client to avoid API key validation
-    with patch("app.adapters.telegram.bot_factory.OpenRouterClient") as mock_openrouter:
+    # Mock the LLM client factory to avoid API key validation
+    with patch("app.adapters.openrouter.openrouter_client.OpenRouterClient") as mock_openrouter:
         mock_openrouter.return_value = AsyncMock()
-        return TelegramBot(cfg=cfg, db=db)
+        return TelegramBot(cfg=cfg, db=db)  # type: ignore[arg-type]
 
 
 class TestAccessControl(unittest.IsolatedAsyncioTestCase):

@@ -12,21 +12,25 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from app.config import (
+    AnthropicConfig,
     ApiLimitsConfig,
     AppConfig,
     AuthConfig,
     BackgroundProcessorConfig,
     ChromaConfig,
+    CircuitBreakerConfig,
     ContentLimitsConfig,
     DatabaseConfig,
     FirecrawlConfig,
     KarakeepConfig,
+    OpenAIConfig,
     OpenRouterConfig,
     RedisConfig,
     RuntimeConfig,
     SyncConfig,
     TelegramConfig,
     TelegramLimitsConfig,
+    WebSearchConfig,
     YouTubeConfig,
 )
 
@@ -203,6 +207,10 @@ def make_test_app_config(
         "sync": SyncConfig(),
         "background": BackgroundProcessorConfig(),
         "karakeep": KarakeepConfig(),
+        "openai": OpenAIConfig(),
+        "anthropic": AnthropicConfig(),
+        "circuit_breaker": CircuitBreakerConfig(),
+        "web_search": WebSearchConfig(),
     }
     defaults.update(overrides)
     return AppConfig(**defaults)

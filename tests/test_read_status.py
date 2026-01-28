@@ -34,7 +34,7 @@ class FakeMessage:
 class ReadStatusBot(TelegramBot):
     def __post_init__(self) -> None:
         # Mock the OpenRouter client to avoid API key validation
-        with patch("app.adapters.telegram.bot_factory.OpenRouterClient") as mock_openrouter:
+        with patch("app.adapters.openrouter.openrouter_client.OpenRouterClient") as mock_openrouter:
             mock_openrouter.return_value = AsyncMock()
             super().__post_init__()
         self.seen_urls: list[str] = []
@@ -84,7 +84,7 @@ def make_bot(tmp_path: str) -> ReadStatusBot:
 
     tbmod.Client = object
     tbmod.filters = None
-    return ReadStatusBot(cfg=cfg, db=db)
+    return ReadStatusBot(cfg=cfg, db=db)  # type: ignore[arg-type]
 
 
 class TestParseUnreadArguments(unittest.TestCase):

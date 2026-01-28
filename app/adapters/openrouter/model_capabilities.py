@@ -169,7 +169,7 @@ class ModelCapabilities:
             # Moonshot AI (Kimi) models
             "moonshotai/kimi-k2:free",
             "moonshotai/kimi-k2",
-            "moonshotai/kimi-k2-thinking",
+            "moonshotai/kimi-k2.5",
             # Qwen models
             "qwen/qwen3-max",
             "qwen/qwen3-235b-a22b-instruct-2507",

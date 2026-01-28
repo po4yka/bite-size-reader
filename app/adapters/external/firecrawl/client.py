@@ -67,7 +67,7 @@ class FirecrawlClient:
     def __init__(
         self,
         api_key: str,
-        timeout_sec: int = 60,
+        timeout_sec: int = 90,
         max_retries: int = 3,
         backoff_base: float = 0.5,
         audit: Callable[[str, str, dict[str, Any]], None] | None = None,
@@ -96,6 +96,7 @@ class FirecrawlClient:
         json_prompt: str | None = None,
         json_schema: dict[str, Any] | None = None,
         circuit_breaker: CircuitBreaker | None = None,
+        wait_for_ms: int | None = None,
     ) -> None:
         validate_init(
             api_key=api_key,
@@ -135,6 +136,7 @@ class FirecrawlClient:
             screenshot_viewport_height=screenshot_viewport_height,
             json_prompt=json_prompt,
             json_schema=json_schema,
+            wait_for_ms=wait_for_ms,
         )
 
         self._payload_logger = PayloadLogger(

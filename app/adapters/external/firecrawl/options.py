@@ -25,6 +25,7 @@ class FirecrawlOptionsBuilder:
         screenshot_viewport_height: int | None,
         json_prompt: str | None,
         json_schema: dict[str, Any] | None,
+        wait_for_ms: int | None = None,
     ) -> None:
         self.max_age_seconds = max_age_seconds
         self.remove_base64_images = remove_base64_images
@@ -42,6 +43,7 @@ class FirecrawlOptionsBuilder:
         self.screenshot_viewport_height = screenshot_viewport_height
         self.json_prompt = json_prompt
         self.json_schema = json_schema
+        self.wait_for_ms = wait_for_ms
 
     def build_formats(self) -> list[Any]:
         formats: list[Any] = []
@@ -91,6 +93,9 @@ class FirecrawlOptionsBuilder:
         }
         if pdf:
             options["parsers"] = ["pdf"]
+        # Wait for JS content to load (helps with dynamic pages)
+        if self.wait_for_ms and self.wait_for_ms > 0:
+            options["waitFor"] = self.wait_for_ms
         return options
 
     def options_snapshot(self, *, mobile: bool, pdf: bool) -> dict[str, Any]:

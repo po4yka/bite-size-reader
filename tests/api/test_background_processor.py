@@ -153,7 +153,7 @@ async def test_lock_skip_when_redis_key_held(monkeypatch):
     db = StubDB()
     processor = BackgroundProcessor(
         cfg=cfg,
-        db=db,  # type: ignore
+        db=db,
         url_processor=StubURLProcessor(StubExtractor(), StubSummarizer()),
         redis=redis_client,
         semaphore=asyncio.Semaphore(2),
@@ -178,7 +178,7 @@ async def test_local_lock_fallback_and_success(monkeypatch):
     db = StubDB()
     processor = BackgroundProcessor(
         cfg=cfg,
-        db=db,  # type: ignore
+        db=db,
         url_processor=StubURLProcessor(StubExtractor(), StubSummarizer()),
         redis=None,
         semaphore=asyncio.Semaphore(2),
@@ -227,7 +227,7 @@ async def test_retries_and_error_status(monkeypatch):
     failing_summarizer = StubSummarizer(fail=True)
     processor = BackgroundProcessor(
         cfg=cfg,
-        db=db,  # type: ignore
+        db=db,
         url_processor=StubURLProcessor(StubExtractor(), failing_summarizer),
         redis=None,
         semaphore=asyncio.Semaphore(1),

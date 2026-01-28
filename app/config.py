@@ -162,6 +162,16 @@ class FirecrawlConfig(BaseModel):
     model_config = ConfigDict(frozen=True, populate_by_name=True)
 
     api_key: str = Field(..., validation_alias="FIRECRAWL_API_KEY", description="Firecrawl API key")
+    timeout_sec: int = Field(
+        default=90,
+        validation_alias="FIRECRAWL_TIMEOUT_SEC",
+        description="Request timeout in seconds (default 90, increased from 60 for better reliability)",
+    )
+    wait_for_ms: int = Field(
+        default=3000,
+        validation_alias="FIRECRAWL_WAIT_FOR_MS",
+        description="Wait for JS content to load in milliseconds (default 3000)",
+    )
     max_connections: int = Field(default=10, validation_alias="FIRECRAWL_MAX_CONNECTIONS")
     max_keepalive_connections: int = Field(
         default=5, validation_alias="FIRECRAWL_MAX_KEEPALIVE_CONNECTIONS"
@@ -223,6 +233,8 @@ class FirecrawlConfig(BaseModel):
         return _ensure_api_key(str(value or ""), name="Firecrawl")
 
     @field_validator(
+        "timeout_sec",
+        "wait_for_ms",
         "max_connections",
         "max_keepalive_connections",
         "retry_max_attempts",
@@ -247,6 +259,8 @@ class FirecrawlConfig(BaseModel):
             raise ValueError(msg) from exc
 
         limits: dict[str, tuple[int, int]] = {
+            "timeout_sec": (10, 300),  # 10 seconds to 5 minutes
+            "wait_for_ms": (0, 30000),  # 0 to 30 seconds
             "max_connections": (1, 100),
             "max_keepalive_connections": (1, 50),
             "retry_max_attempts": (0, 10),
@@ -322,12 +336,12 @@ class OpenRouterConfig(BaseModel):
     model_config = ConfigDict(frozen=True, populate_by_name=True)
 
     api_key: str = Field(..., validation_alias="OPENROUTER_API_KEY")
-    model: str = Field(default="qwen/qwen3-max", validation_alias="OPENROUTER_MODEL")
+    model: str = Field(default="deepseek/deepseek-v3.2", validation_alias="OPENROUTER_MODEL")
     fallback_models: tuple[str, ...] = Field(
         default_factory=lambda: (
+            "moonshotai/kimi-k2.5",
+            "qwen/qwen3-max",
             "deepseek/deepseek-r1",
-            "moonshotai/kimi-k2-thinking",
-            "deepseek/deepseek-v3.2",
         ),
         validation_alias="OPENROUTER_FALLBACK_MODELS",
     )
@@ -341,7 +355,7 @@ class OpenRouterConfig(BaseModel):
     )
     enable_stats: bool = Field(default=False, validation_alias="OPENROUTER_ENABLE_STATS")
     long_context_model: str | None = Field(
-        default="moonshotai/kimi-k2-thinking", validation_alias="OPENROUTER_LONG_CONTEXT_MODEL"
+        default="moonshotai/kimi-k2.5", validation_alias="OPENROUTER_LONG_CONTEXT_MODEL"
     )
     summary_temperature_relaxed: float | None = Field(
         default=None, validation_alias="OPENROUTER_SUMMARY_TEMPERATURE_RELAXED"
