@@ -26,7 +26,7 @@ class MessageValidatorImpl:
             r"<script[^>]*>.*?</script>",
             r"javascript:",
             r"vbscript:",
-            r"on\w+\s*=",
+            r"\bon\w+\s*=",
             r"alert\(",
             r"confirm\(",
             r"prompt\(",
