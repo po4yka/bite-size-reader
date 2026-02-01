@@ -1603,6 +1603,63 @@ class WebSearchConfig(BaseModel):
         return parsed
 
 
+class McpConfig(BaseModel):
+    """MCP (Model Context Protocol) server configuration.
+
+    Controls the MCP server that exposes articles and search
+    to external AI agents like OpenClaw.
+    """
+
+    model_config = ConfigDict(frozen=True, populate_by_name=True)
+
+    enabled: bool = Field(
+        default=False,
+        validation_alias="MCP_ENABLED",
+        description="Enable the MCP server for external agent access",
+    )
+    transport: str = Field(
+        default="stdio",
+        validation_alias="MCP_TRANSPORT",
+        description="Transport protocol: 'stdio' or 'sse'",
+    )
+    host: str = Field(
+        default="0.0.0.0",
+        validation_alias="MCP_HOST",
+        description="Bind address for SSE transport",
+    )
+    port: int = Field(
+        default=8200,
+        validation_alias="MCP_PORT",
+        description="Port for SSE transport",
+    )
+
+    @field_validator("transport", mode="before")
+    @classmethod
+    def _validate_transport(cls, value: Any) -> str:
+        if value in (None, ""):
+            return "stdio"
+        value = str(value).strip().lower()
+        if value not in ("stdio", "sse"):
+            msg = "MCP transport must be 'stdio' or 'sse'"
+            raise ValueError(msg)
+        return value
+
+    @field_validator("port", mode="before")
+    @classmethod
+    def _validate_port(cls, value: Any) -> int:
+        if value in (None, ""):
+            return 8200
+        try:
+            parsed = int(str(value))
+        except ValueError as exc:
+            msg = "MCP port must be a valid integer"
+            raise ValueError(msg) from exc
+        if parsed < 1 or parsed > 65535:
+            msg = "MCP port must be between 1 and 65535"
+            raise ValueError(msg)
+        return parsed
+
+
 class ChromaConfig(BaseModel):
     """Vector store configuration for Chroma."""
 
@@ -1935,6 +1992,7 @@ class Settings(BaseSettings):
     karakeep: KarakeepConfig = Field(default_factory=KarakeepConfig)
     circuit_breaker: CircuitBreakerConfig = Field(default_factory=CircuitBreakerConfig)
     web_search: WebSearchConfig = Field(default_factory=WebSearchConfig)
+    mcp: McpConfig = Field(default_factory=McpConfig)
 
     @model_validator(mode="before")
     @classmethod

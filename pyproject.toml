@@ -164,6 +164,8 @@ dependencies = [
   "apscheduler>=3.11.2,<4.0.0",
   # PDF export (optional - graceful degradation if not available)
   "weasyprint>=62.0",
+  # MCP (Model Context Protocol) server for OpenClaw and other AI agent integrations
+  "mcp>=1.25,<2",
 ]
 
 [project.optional-dependencies]

@@ -1,0 +1,40 @@
+{
+  "name": "bite-size-reader",
+  "description": "Personal knowledge base of web article summaries with keyword search, semantic search (ChromaDB), collections, YouTube transcripts, and entity discovery",
+  "version": "1.2.0",
+  "mcp": {
+    "transport": "stdio",
+    "command": "python",
+    "args": ["-m", "app.cli.mcp_server"],
+    "env": {
+      "DB_PATH": "/data/app.db"
+    }
+  },
+  "tools": [
+    "search_articles",
+    "semantic_search",
+    "get_article",
+    "list_articles",
+    "get_article_content",
+    "get_stats",
+    "find_by_entity",
+    "list_collections",
+    "get_collection",
+    "list_videos",
+    "get_video_transcript",
+    "check_url"
+  ],
+  "resources": [
+    "bsr://articles/recent",
+    "bsr://articles/favorites",
+    "bsr://articles/unread",
+    "bsr://stats",
+    "bsr://tags",
+    "bsr://entities",
+    "bsr://domains",
+    "bsr://collections",
+    "bsr://videos/recent",
+    "bsr://processing/stats"
+  ],
+  "tags": ["knowledge-base", "articles", "summaries", "search", "semantic-search", "reading", "collections", "youtube", "transcripts"]
+}
