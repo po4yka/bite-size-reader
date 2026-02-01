@@ -211,7 +211,7 @@ class YouTubeDownloader:
             detected_lang = detect_language(transcript_text or "")
             combined_text = self._combine_metadata_and_transcript(video_metadata, transcript_text)
 
-            # Update database with complete metadata
+            # Update database with complete metadata + transcript
             await self.video_repo.async_update_video_download(
                 download_id,
                 title=video_metadata.get("title"),
@@ -226,7 +226,14 @@ class YouTubeDownloader:
                 video_codec=video_metadata.get("vcodec"),
                 audio_codec=video_metadata.get("acodec"),
                 format_id=video_metadata.get("format_id"),
+                transcript_text=transcript_text,
+                subtitle_language=transcript_lang,
+                auto_generated=auto_generated,
+                transcript_source=transcript_source,
             )
+
+            # Mark download as completed so cached lookups work
+            await self.video_repo.async_update_video_download_status(download_id, "completed")
 
             # Update request status
             await self.request_repo.async_update_request_status(req_id, "ok")
@@ -842,11 +849,18 @@ class YouTubeDownloader:
     def _combine_metadata_and_transcript(self, metadata: dict, transcript_text: str) -> str:
         """Prepend metadata header to transcript for better summarization context."""
         header = self._format_metadata_header(metadata)
-        if header and transcript_text:
-            return f"{header}\n\n{transcript_text}"
+        preamble = (
+            "[Source: YouTube video transcript. "
+            "Summarize this as video content — "
+            "use watch time instead of reading time, "
+            "and set source_type to an appropriate value for video content.]"
+        )
+        parts: list[str] = [preamble]
         if header:
-            return header
-        return transcript_text
+            parts.append(header)
+        if transcript_text:
+            parts.append(transcript_text)
+        return "\n\n".join(parts)
 
     def _build_metadata_dict(self, download: dict | Any) -> dict:
         """Build metadata dictionary from VideoDownload model or dict."""

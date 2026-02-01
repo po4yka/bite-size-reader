@@ -110,7 +110,8 @@ def test_combine_metadata_and_transcript_includes_header(tmp_path):
 
     combined = downloader._combine_metadata_and_transcript(metadata, transcript)
 
-    assert combined.startswith("Title: Sample Video")
+    assert "[Source: YouTube video transcript" in combined
+    assert "Title: Sample Video" in combined
     assert "Channel: Test Channel" in combined
     assert "Duration:" in combined
     assert "This is the body." in combined
@@ -605,7 +606,8 @@ class TestVideoDownload(TestYouTubeDownloader):
 
                         self.assertEqual(req_id, 789)
                         self.assertIn("Existing transcript", transcript)
-                        self.assertTrue(transcript.startswith("Title: Test"))
+                        self.assertIn("[Source: YouTube video transcript", transcript)
+                        self.assertIn("Title: Test", transcript)
                         self.assertEqual(source, "cached")
 
 
@@ -898,6 +900,26 @@ class TestMetadataExtraction(TestYouTubeDownloader):
         self.downloader.request_repo.async_create_request.assert_called_once()
         self.downloader.video_repo.async_create_video_download.assert_called_once()
         self.downloader.video_repo.async_update_video_download.assert_called_once()
+
+        # Verify transcript fields are persisted to the database
+        update_kwargs = self.downloader.video_repo.async_update_video_download.call_args
+        assert (
+            "transcript_text" in update_kwargs.kwargs
+        ), "transcript_text must be persisted to database"
+        assert (
+            "subtitle_language" in update_kwargs.kwargs
+        ), "subtitle_language must be persisted to database"
+        assert (
+            "transcript_source" in update_kwargs.kwargs
+        ), "transcript_source must be persisted to database"
+
+        # Verify download status is set to "completed"
+        status_calls = self.downloader.video_repo.async_update_video_download_status.call_args_list
+        status_values = [call.args[1] for call in status_calls]
+        assert (
+            "completed" in status_values
+        ), "Video download status must be set to 'completed' after successful download"
+
         self.downloader.request_repo.async_update_request_status.assert_called()
 
     def test_build_metadata_dict(self):
@@ -961,6 +983,28 @@ class TestTranscriptFormatting(TestYouTubeDownloader):
         result = self.downloader._format_transcript(transcript_data)
 
         self.assertEqual(result, "Hello World")
+
+
+class TestCombineMetadataAndTranscript(TestYouTubeDownloader):
+    """Test _combine_metadata_and_transcript includes YouTube preamble."""
+
+    def test_combined_text_contains_youtube_preamble(self):
+        metadata = {"title": "My Video", "channel": "My Channel", "duration": 60}
+        result = self.downloader._combine_metadata_and_transcript(metadata, "hello world")
+        self.assertIn("[Source: YouTube video transcript", result)
+        self.assertIn("hello world", result)
+        self.assertIn("My Video", result)
+
+    def test_combined_text_without_transcript(self):
+        metadata = {"title": "My Video"}
+        result = self.downloader._combine_metadata_and_transcript(metadata, "")
+        self.assertIn("[Source: YouTube video transcript", result)
+        self.assertIn("My Video", result)
+
+    def test_combined_text_without_metadata(self):
+        result = self.downloader._combine_metadata_and_transcript({}, "hello world")
+        self.assertIn("[Source: YouTube video transcript", result)
+        self.assertIn("hello world", result)
 
 
 class TestNotifications(TestYouTubeDownloader):
