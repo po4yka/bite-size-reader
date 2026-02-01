@@ -374,7 +374,9 @@ def list_articles(
 
     try:
         query = (
-            Summary.select(Summary, Request).join(Request).where(Summary.is_deleted == False)  # noqa: E712
+            Summary.select(Summary, Request)
+            .join(Request)
+            .where(Summary.is_deleted == False)  # noqa: E712
         )
 
         if is_favorited is not None:
@@ -609,6 +611,324 @@ def find_by_entity(entity_name: str, entity_type: str | None = None, limit: int 
 
 
 @mcp.tool()
+def list_collections(limit: int = 20, offset: int = 0) -> str:
+    """List article collections (folders/reading lists).
+
+    Collections are hierarchical and can contain article summaries.
+    Returns top-level collections by default.
+
+    Args:
+        limit: Number of collections to return (1-50, default 20).
+        offset: Pagination offset (default 0).
+    """
+    from app.db.models import Collection, CollectionItem
+
+    limit = max(1, min(50, limit))
+    offset = max(0, offset)
+
+    try:
+        query = Collection.select().where(
+            Collection.is_deleted == False,  # noqa: E712
+            Collection.parent.is_null(True),
+        )
+        total = query.count()
+
+        collections = (
+            query.order_by(Collection.position, Collection.created_at.desc())
+            .offset(offset)
+            .limit(limit)
+        )
+
+        results = []
+        for c in collections:
+            item_count = CollectionItem.select().where(CollectionItem.collection == c.id).count()
+            child_count = (
+                Collection.select()
+                .where(
+                    Collection.parent == c.id,
+                    Collection.is_deleted == False,  # noqa: E712
+                )
+                .count()
+            )
+            results.append(
+                {
+                    "collection_id": c.id,
+                    "name": c.name,
+                    "description": c.description,
+                    "item_count": item_count,
+                    "child_collections": child_count,
+                    "is_shared": c.is_shared,
+                    "created_at": _isotime(c.created_at),
+                    "updated_at": _isotime(c.updated_at),
+                }
+            )
+
+        return json.dumps(
+            {
+                "collections": results,
+                "total": total,
+                "limit": limit,
+                "offset": offset,
+                "has_more": (offset + limit) < total,
+            },
+            default=str,
+        )
+    except Exception as exc:
+        logger.exception("list_collections failed")
+        return json.dumps({"error": str(exc)})
+
+
+@mcp.tool()
+def get_collection(collection_id: int, include_items: bool = True, limit: int = 50) -> str:
+    """Get details of a specific collection and its article summaries.
+
+    Args:
+        collection_id: The numeric ID of the collection.
+        include_items: Whether to include the article summaries in the collection (default true).
+        limit: Maximum articles to include (1-100, default 50).
+    """
+    from app.db.models import Collection, CollectionItem, Request, Summary
+
+    limit = max(1, min(100, limit))
+
+    try:
+        collection = Collection.get_or_none(
+            Collection.id == collection_id,
+            Collection.is_deleted == False,  # noqa: E712
+        )
+        if not collection:
+            return json.dumps({"error": f"Collection {collection_id} not found"})
+
+        # Child collections
+        children = (
+            Collection.select()
+            .where(
+                Collection.parent == collection.id,
+                Collection.is_deleted == False,  # noqa: E712
+            )
+            .order_by(Collection.position, Collection.created_at)
+        )
+        child_list = [
+            {"collection_id": ch.id, "name": ch.name, "description": ch.description}
+            for ch in children
+        ]
+
+        result: dict[str, Any] = {
+            "collection_id": collection.id,
+            "name": collection.name,
+            "description": collection.description,
+            "is_shared": collection.is_shared,
+            "child_collections": child_list,
+            "created_at": _isotime(collection.created_at),
+            "updated_at": _isotime(collection.updated_at),
+        }
+
+        if include_items:
+            items = (
+                CollectionItem.select(CollectionItem, Summary, Request)
+                .join(Summary)
+                .join(Request)
+                .where(CollectionItem.collection == collection.id)
+                .order_by(CollectionItem.position, CollectionItem.created_at)
+                .limit(limit)
+            )
+            articles = []
+            for item in items:
+                summary = item.summary
+                articles.append(_format_summary_compact(summary, summary.request))
+            result["articles"] = articles
+            result["article_count"] = len(articles)
+
+        return json.dumps(result, default=str)
+
+    except Exception as exc:
+        logger.exception("get_collection failed")
+        return json.dumps({"error": str(exc)})
+
+
+@mcp.tool()
+def list_videos(limit: int = 20, offset: int = 0, status: str | None = None) -> str:
+    """List downloaded YouTube videos with metadata.
+
+    Returns video downloads sorted most-recent first, with title,
+    channel, duration, and transcript availability.
+
+    Args:
+        limit: Number of results (1-50, default 20).
+        offset: Pagination offset (default 0).
+        status: Optional filter by status: "completed", "pending", "error".
+    """
+    from app.db.models import Request, VideoDownload
+
+    limit = max(1, min(50, limit))
+    offset = max(0, offset)
+
+    try:
+        query = VideoDownload.select(VideoDownload, Request).join(Request)
+
+        if status and status in ("pending", "downloading", "completed", "error"):
+            query = query.where(VideoDownload.status == status)
+
+        total = query.count()
+        videos = query.order_by(VideoDownload.created_at.desc()).offset(offset).limit(limit)
+
+        results = []
+        for v in videos:
+            req = v.request
+            results.append(
+                {
+                    "video_id": v.video_id,
+                    "request_id": req.id,
+                    "url": getattr(req, "input_url", ""),
+                    "title": v.title,
+                    "channel": v.channel,
+                    "duration_sec": v.duration_sec,
+                    "duration_display": (
+                        f"{v.duration_sec // 60}:{v.duration_sec % 60:02d}"
+                        if v.duration_sec
+                        else None
+                    ),
+                    "resolution": v.resolution,
+                    "view_count": v.view_count,
+                    "like_count": v.like_count,
+                    "has_transcript": bool(v.transcript_text),
+                    "transcript_source": v.transcript_source,
+                    "status": v.status,
+                    "upload_date": v.upload_date,
+                    "created_at": _isotime(v.created_at),
+                }
+            )
+
+        return json.dumps(
+            {
+                "videos": results,
+                "total": total,
+                "limit": limit,
+                "offset": offset,
+                "has_more": (offset + limit) < total,
+            },
+            default=str,
+        )
+    except Exception as exc:
+        logger.exception("list_videos failed")
+        return json.dumps({"error": str(exc)})
+
+
+@mcp.tool()
+def get_video_transcript(video_id: str) -> str:
+    """Get the transcript text of a downloaded YouTube video.
+
+    Returns the cached transcript text along with video metadata.
+    The video_id is the YouTube video identifier (e.g. "dQw4w9WgXcQ").
+
+    Args:
+        video_id: YouTube video ID.
+    """
+    from app.db.models import Request, VideoDownload
+
+    try:
+        video = (
+            VideoDownload.select(VideoDownload, Request)
+            .join(Request)
+            .where(VideoDownload.video_id == video_id)
+            .first()
+        )
+        if not video:
+            return json.dumps({"error": f"Video {video_id} not found"})
+
+        if not video.transcript_text:
+            return json.dumps(
+                {
+                    "video_id": video_id,
+                    "title": video.title,
+                    "error": "No transcript available for this video",
+                }
+            )
+
+        return json.dumps(
+            {
+                "video_id": video_id,
+                "title": video.title,
+                "channel": video.channel,
+                "duration_sec": video.duration_sec,
+                "transcript_source": video.transcript_source,
+                "subtitle_language": video.subtitle_language,
+                "auto_generated": video.auto_generated,
+                "transcript": video.transcript_text[:50000],
+                "transcript_length": len(video.transcript_text),
+                "truncated": len(video.transcript_text) > 50000,
+            },
+            default=str,
+        )
+    except Exception as exc:
+        logger.exception("get_video_transcript failed")
+        return json.dumps({"error": str(exc)})
+
+
+@mcp.tool()
+def check_url(url: str) -> str:
+    """Check if a URL has already been processed and summarised.
+
+    Uses the same normalisation and SHA-256 deduplication as the main
+    pipeline.  Returns the existing summary if found, or an indication
+    that the URL is new.
+
+    Args:
+        url: The URL to check (will be normalised automatically).
+    """
+    from app.core.url_utils import compute_dedupe_hash, normalize_url
+    from app.db.models import Request, Summary
+
+    try:
+        normalized = normalize_url(url)
+        dedupe_hash = compute_dedupe_hash(url)
+
+        request = Request.get_or_none(Request.dedupe_hash == dedupe_hash)
+
+        if not request:
+            return json.dumps(
+                {
+                    "exists": False,
+                    "normalized_url": normalized,
+                    "dedupe_hash": dedupe_hash,
+                    "message": "URL has not been processed yet",
+                }
+            )
+
+        summary = (
+            Summary.select()
+            .where(
+                Summary.request == request.id,
+                Summary.is_deleted == False,  # noqa: E712
+            )
+            .first()
+        )
+
+        result: dict[str, Any] = {
+            "exists": True,
+            "normalized_url": normalized,
+            "dedupe_hash": dedupe_hash,
+            "request_id": request.id,
+            "request_status": request.status,
+            "request_type": request.type,
+            "created_at": _isotime(request.created_at),
+        }
+
+        if summary:
+            result["summary_id"] = summary.id
+            result["summary"] = _format_summary_compact(summary, request)
+        else:
+            result["summary_id"] = None
+            result["message"] = "URL was processed but no summary is available"
+
+        return json.dumps(result, default=str)
+
+    except Exception as exc:
+        logger.exception("check_url failed")
+        return json.dumps({"error": str(exc), "url": url})
+
+
+@mcp.tool()
 async def semantic_search(
     description: str,
     limit: int = 10,
@@ -832,6 +1152,105 @@ def domains_resource() -> str:
         )
     except Exception as exc:
         logger.exception("domains_resource failed")
+        return json.dumps({"error": str(exc)})
+
+
+@mcp.resource("bsr://collections")
+def collections_resource() -> str:
+    """All top-level collections with item counts."""
+    return list_collections(limit=50, offset=0)
+
+
+@mcp.resource("bsr://videos/recent")
+def recent_videos_resource() -> str:
+    """10 most recent video downloads with metadata."""
+    return list_videos(limit=10, offset=0, status="completed")
+
+
+@mcp.resource("bsr://processing/stats")
+def processing_stats_resource() -> str:
+    """Processing statistics: LLM call counts, token usage, model breakdown."""
+    from app.db.models import LLMCall, VideoDownload
+
+    try:
+        total_calls = LLMCall.select().count()
+        success_calls = LLMCall.select().where(LLMCall.status == "success").count()
+        error_calls = LLMCall.select().where(LLMCall.status == "error").count()
+
+        # Token usage
+        from peewee import fn
+
+        token_stats = (
+            LLMCall.select(
+                fn.SUM(LLMCall.tokens_prompt).alias("total_prompt"),
+                fn.SUM(LLMCall.tokens_completion).alias("total_completion"),
+                fn.SUM(LLMCall.cost_usd).alias("total_cost"),
+                fn.AVG(LLMCall.latency_ms).alias("avg_latency_ms"),
+            )
+            .where(LLMCall.status == "success")
+            .dicts()
+            .first()
+        ) or {}
+
+        # Model breakdown
+        model_counts: dict[str, int] = {}
+        for row in (
+            LLMCall.select(LLMCall.model)
+            .where(LLMCall.status == "success", LLMCall.model.is_null(False))
+            .dicts()
+        ):
+            model = row.get("model") or "unknown"
+            model_counts[model] = model_counts.get(model, 0) + 1
+
+        top_models = sorted(model_counts.items(), key=lambda x: x[1], reverse=True)[:10]
+
+        # Video stats
+        total_videos = VideoDownload.select().count()
+        completed_videos = VideoDownload.select().where(VideoDownload.status == "completed").count()
+        videos_with_transcript = (
+            VideoDownload.select()
+            .where(
+                VideoDownload.status == "completed",
+                VideoDownload.transcript_text.is_null(False),
+            )
+            .count()
+        )
+
+        return json.dumps(
+            {
+                "llm_calls": {
+                    "total": total_calls,
+                    "success": success_calls,
+                    "errors": error_calls,
+                    "success_rate": (
+                        round(success_calls / total_calls * 100, 1) if total_calls > 0 else 0
+                    ),
+                },
+                "token_usage": {
+                    "total_prompt_tokens": token_stats.get("total_prompt"),
+                    "total_completion_tokens": token_stats.get("total_completion"),
+                    "total_cost_usd": (
+                        round(float(token_stats["total_cost"]), 4)
+                        if token_stats.get("total_cost")
+                        else None
+                    ),
+                    "avg_latency_ms": (
+                        round(float(token_stats["avg_latency_ms"]))
+                        if token_stats.get("avg_latency_ms")
+                        else None
+                    ),
+                },
+                "top_models": [{"model": m, "calls": c} for m, c in top_models],
+                "videos": {
+                    "total": total_videos,
+                    "completed": completed_videos,
+                    "with_transcript": videos_with_transcript,
+                },
+            },
+            default=str,
+        )
+    except Exception as exc:
+        logger.exception("processing_stats_resource failed")
         return json.dumps({"error": str(exc)})
 
 

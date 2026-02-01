@@ -2,7 +2,7 @@
 
 ## Description
 
-Bite-Size Reader is a personal knowledge base of web article summaries. It ingests URLs, extracts content using Firecrawl, and generates structured summaries via LLM. This skill gives you access to search, browse, and retrieve article summaries from the database.
+Bite-Size Reader is a personal knowledge base of web article summaries. It ingests URLs, extracts content using Firecrawl, and generates structured summaries via LLM. It also downloads YouTube videos and extracts transcripts. This skill gives you access to search, browse, and retrieve article summaries, manage collections, explore video transcripts, and check URL processing status.
 
 ## Capabilities
 
@@ -13,7 +13,10 @@ Bite-Size Reader is a personal knowledge base of web article summaries. It inges
 - **Read full article content** (original extracted markdown/text)
 - **Get database statistics** including total articles, language breakdown, and top tags
 - **Find articles by entity** (people, organizations, locations)
-- **Explore tags, entities, and source domains** via discoverable resources
+- **Manage collections** — browse and inspect reading lists / article folders
+- **Access YouTube videos** — list downloads, read transcripts
+- **Check URL status** — verify if a URL has already been processed (deduplication)
+- **Explore tags, entities, source domains, and processing stats** via discoverable resources
 
 ## Available Tools
 
@@ -65,6 +68,41 @@ Find articles mentioning a specific entity (person, organization, or location).
 - `entity_type` (string, optional): "people", "organizations", or "locations"
 - `limit` (integer, optional): Max results 1-25, default 10
 
+### list_collections
+List article collections (folders / reading lists). Returns top-level collections with item counts and child collection counts.
+
+**Parameters:**
+- `limit` (integer, optional): 1-50, default 20
+- `offset` (integer, optional): Pagination offset, default 0
+
+### get_collection
+Get details of a specific collection including its article summaries and child collections.
+
+**Parameters:**
+- `collection_id` (integer, required): The collection ID
+- `include_items` (boolean, optional): Include article summaries (default true)
+- `limit` (integer, optional): Max articles to include 1-100, default 50
+
+### list_videos
+List downloaded YouTube videos with metadata (title, channel, duration, transcript availability).
+
+**Parameters:**
+- `limit` (integer, optional): 1-50, default 20
+- `offset` (integer, optional): Pagination offset, default 0
+- `status` (string, optional): Filter by status: "completed", "pending", "error"
+
+### get_video_transcript
+Get the transcript text of a YouTube video by its video ID.
+
+**Parameters:**
+- `video_id` (string, required): YouTube video ID (e.g. "dQw4w9WgXcQ")
+
+### check_url
+Check whether a URL has already been processed and summarised. Uses the same normalisation and SHA-256 deduplication as the main pipeline.
+
+**Parameters:**
+- `url` (string, required): The URL to check
+
 ## Available Resources
 
 | URI | Description |
@@ -76,6 +114,9 @@ Find articles mentioning a specific entity (person, organization, or location).
 | `bsr://tags` | All topic tags with article counts |
 | `bsr://entities` | Aggregated people, organizations, locations |
 | `bsr://domains` | Source domains with article counts |
+| `bsr://collections` | All top-level collections with item counts |
+| `bsr://videos/recent` | 10 most recent completed video downloads |
+| `bsr://processing/stats` | Processing statistics: LLM calls, token usage, costs, models |
 
 ## Data Model
 
@@ -91,6 +132,15 @@ Each article summary contains:
 - **answered_questions**: Questions the article answers
 - **readability**: Flesch-Kincaid readability score and level
 - **seo_keywords**: SEO-relevant keywords
+
+Each video download contains:
+- **video_id**: YouTube video identifier
+- **title / channel**: Video and channel names
+- **duration_sec**: Video duration in seconds
+- **resolution**: Download quality (e.g. "1080p")
+- **view_count / like_count**: Engagement metrics
+- **transcript_text**: Cached transcript (if available)
+- **transcript_source**: How transcript was obtained ("youtube-transcript-api" or "vtt")
 
 ## Setup
 
