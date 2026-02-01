@@ -46,8 +46,33 @@ class ForwardContentProcessor:
         """Process forward content and return (req_id, prompt, chosen_lang, system_prompt)."""
         # Extract content
         text = (getattr(message, "text", None) or getattr(message, "caption", "") or "").strip()
-        title = getattr(getattr(message, "forward_from_chat", None), "title", "")
-        prompt = f"Channel: {title}\n\n{text}"
+
+        # Determine source attribution: channel title, user name, or sender name
+        fwd_chat = getattr(message, "forward_from_chat", None)
+        title = getattr(fwd_chat, "title", "") if fwd_chat is not None else ""
+        if not title:
+            fwd_user = getattr(message, "forward_from", None)
+            if fwd_user is not None:
+                first = getattr(fwd_user, "first_name", "") or ""
+                last = getattr(fwd_user, "last_name", "") or ""
+                title = f"{first} {last}".strip()
+            if not title:
+                title = getattr(message, "forward_sender_name", "") or ""
+
+        source_label = "Channel" if fwd_chat is not None else "Source"
+        prompt = f"{source_label}: {title}\n\n{text}" if title else text
+
+        if not text:
+            logger.warning(
+                "forward_empty_text",
+                extra={"cid": correlation_id, "source": title},
+            )
+            await self.response_formatter.safe_reply(
+                message,
+                "This forwarded message has no text content to summarize. "
+                "Please forward a message that contains text.",
+            )
+            raise ValueError("Forwarded message has no text content")
 
         # Optional normalization for forwards as well
         try:
@@ -103,7 +128,7 @@ class ForwardContentProcessor:
         fwd_from_chat_id_raw = getattr(fwd_chat_obj, "id", 0) if fwd_chat_obj is not None else None
         fwd_from_chat_id = int(fwd_from_chat_id_raw) if fwd_from_chat_id_raw is not None else None
 
-        fwd_msg_id_raw = getattr(message, "forward_from_message_id", 0)
+        fwd_msg_id_raw = getattr(message, "forward_from_message_id", None)
         fwd_from_msg_id = int(fwd_msg_id_raw) if fwd_msg_id_raw is not None else None
 
         existing_req: dict | None = None

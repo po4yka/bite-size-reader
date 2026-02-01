@@ -220,7 +220,7 @@ class MessagePersistence:
         forward_from_chat_type = getattr(fwd_chat, "type", None)
         forward_from_chat_title = getattr(fwd_chat, "title", None)
 
-        fwd_msg_id_raw = getattr(message, "forward_from_message_id", 0)
+        fwd_msg_id_raw = getattr(message, "forward_from_message_id", None)
         forward_from_message_id = int(fwd_msg_id_raw) if fwd_msg_id_raw is not None else None
         forward_date_ts = self._to_epoch(getattr(message, "forward_date", None))
 
