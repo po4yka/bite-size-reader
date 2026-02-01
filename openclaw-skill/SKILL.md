@@ -6,21 +6,31 @@ Bite-Size Reader is a personal knowledge base of web article summaries. It inges
 
 ## Capabilities
 
-- **Search articles** by keyword, topic tag, or entity name
+- **Search articles** by keyword, topic tag, or entity name (full-text search)
+- **Semantic search** by natural-language description using ChromaDB vector embeddings
 - **Retrieve article details** including key ideas, entities, readability scores, and topic tags
 - **Browse recent articles** with optional filtering by language, favorites, or tag
 - **Read full article content** (original extracted markdown/text)
 - **Get database statistics** including total articles, language breakdown, and top tags
 - **Find articles by entity** (people, organizations, locations)
+- **Explore tags, entities, and source domains** via discoverable resources
 
 ## Available Tools
 
 ### search_articles
-Search stored article summaries by keyword, topic, or entity. Performs full-text search across titles, summaries, tags, and entities.
+Search stored article summaries by keyword, topic, or entity. Performs full-text search (FTS5) across titles, summaries, tags, and entities.
 
 **Parameters:**
 - `query` (string, required): Search query
 - `limit` (integer, optional): Max results 1-25, default 10
+
+### semantic_search
+Search articles by meaning using ChromaDB vector similarity. Finds articles whose content is semantically similar to your description, even when exact keywords don't match. Falls back to keyword search if ChromaDB is unavailable.
+
+**Parameters:**
+- `description` (string, required): Natural-language description of what you're looking for
+- `limit` (integer, optional): Max results 1-25, default 10
+- `language` (string, optional): Language filter (e.g. "en", "ru"). Auto-detected if omitted.
 
 ### get_article
 Get full details of a specific article summary by its numeric ID. Returns key ideas, entities, topic tags, reading time, readability score, and more.
@@ -54,6 +64,18 @@ Find articles mentioning a specific entity (person, organization, or location).
 - `entity_name` (string, required): Entity to search for
 - `entity_type` (string, optional): "people", "organizations", or "locations"
 - `limit` (integer, optional): Max results 1-25, default 10
+
+## Available Resources
+
+| URI | Description |
+|---|---|
+| `bsr://articles/recent` | 10 most recent article summaries |
+| `bsr://articles/favorites` | All favorited articles (up to 50) |
+| `bsr://articles/unread` | Unread articles (up to 20) |
+| `bsr://stats` | Database statistics (totals, languages, top tags) |
+| `bsr://tags` | All topic tags with article counts |
+| `bsr://entities` | Aggregated people, organizations, locations |
+| `bsr://domains` | Source domains with article counts |
 
 ## Data Model
 
@@ -96,3 +118,17 @@ python -m app.cli.mcp_server --transport sse --port 8200
 ```
 
 Then configure the MCP client to connect to `http://localhost:8200/sse`.
+
+### Semantic search (requires ChromaDB)
+
+For `semantic_search` to work, ChromaDB must be running and configured:
+
+```bash
+# Environment variables for ChromaDB
+CHROMA_HOST=http://localhost:8000
+CHROMA_AUTH_TOKEN=your-chroma-token  # optional
+CHROMA_ENVIRONMENT=production
+CHROMA_USER_SCOPE=public
+```
+
+If ChromaDB is not available, `semantic_search` automatically falls back to keyword search.

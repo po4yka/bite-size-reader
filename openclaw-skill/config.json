@@ -1,7 +1,7 @@
 {
   "name": "bite-size-reader",
-  "description": "Personal knowledge base of web article summaries with search, retrieval, and entity discovery",
-  "version": "1.0.0",
+  "description": "Personal knowledge base of web article summaries with keyword search, semantic search (ChromaDB), and entity discovery",
+  "version": "1.1.0",
   "mcp": {
     "transport": "stdio",
     "command": "python",
@@ -12,6 +12,7 @@
   },
   "tools": [
     "search_articles",
+    "semantic_search",
     "get_article",
     "list_articles",
     "get_article_content",
@@ -20,7 +21,12 @@
   ],
   "resources": [
     "bsr://articles/recent",
-    "bsr://stats"
+    "bsr://articles/favorites",
+    "bsr://articles/unread",
+    "bsr://stats",
+    "bsr://tags",
+    "bsr://entities",
+    "bsr://domains"
   ],
-  "tags": ["knowledge-base", "articles", "summaries", "search", "reading"]
+  "tags": ["knowledge-base", "articles", "summaries", "search", "semantic-search", "reading"]
 }

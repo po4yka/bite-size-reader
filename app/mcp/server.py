@@ -3,6 +3,7 @@
 This module implements a Model Context Protocol (MCP) server that allows
 external AI agents (OpenClaw, Claude Desktop, etc.) to:
 - Search stored article summaries by keyword, topic, or entity
+- Perform semantic (vector) search using ChromaDB embeddings
 - Retrieve individual article details with full summary data
 - List recent articles with filtering and pagination
 - Get database statistics and collection overview
@@ -61,6 +62,57 @@ def _init_database(db_path: str | None = None) -> None:
     database_proxy.initialize(db)
     db.connect(reuse_if_open=True)
     logger.info("Database connected: %s", path)
+
+
+# ---------------------------------------------------------------------------
+# ChromaDB / semantic search — lazy singleton, optional (graceful degradation)
+# ---------------------------------------------------------------------------
+_chroma_service: Any = None
+_chroma_init_attempted: bool = False
+
+
+async def _get_chroma_service() -> Any:
+    """Lazily initialise and return the ChromaVectorSearchService singleton.
+
+    Returns None if ChromaDB is unavailable (the semantic_search tool
+    will degrade to a helpful error message).
+    """
+    global _chroma_service, _chroma_init_attempted
+
+    if _chroma_service is not None:
+        return _chroma_service
+    if _chroma_init_attempted:
+        return None
+
+    _chroma_init_attempted = True
+    try:
+        from app.config import load_config
+        from app.infrastructure.vector.chroma_store import ChromaVectorStore
+        from app.services.chroma_vector_search_service import ChromaVectorSearchService
+        from app.services.embedding_service import EmbeddingService
+
+        cfg = load_config(allow_stub_telegram=True).vector_store
+        embedding = EmbeddingService()
+        store = ChromaVectorStore(
+            host=cfg.host,
+            auth_token=cfg.auth_token,
+            environment=cfg.environment,
+            user_scope=cfg.user_scope,
+            collection_version=cfg.collection_version,
+        )
+        _chroma_service = ChromaVectorSearchService(
+            vector_store=store,
+            embedding_service=embedding,
+            default_top_k=100,
+        )
+        logger.info("ChromaDB search service initialised")
+        return _chroma_service
+    except Exception:
+        logger.warning(
+            "ChromaDB unavailable — semantic_search tool will be disabled",
+            exc_info=True,
+        )
+        return None
 
 
 # ---------------------------------------------------------------------------
@@ -556,8 +608,85 @@ def find_by_entity(entity_name: str, entity_type: str | None = None, limit: int 
         return json.dumps({"error": str(exc)})
 
 
+@mcp.tool()
+async def semantic_search(
+    description: str,
+    limit: int = 10,
+    language: str | None = None,
+) -> str:
+    """Search articles by meaning using vector similarity (ChromaDB).
+
+    Unlike keyword search, this finds articles whose *content* is
+    semantically similar to your description — even when exact keywords
+    don't match. Use this when you want to find articles "about" a topic
+    described in natural language.
+
+    Requires ChromaDB to be configured and running. Falls back to
+    keyword search if ChromaDB is unavailable.
+
+    Args:
+        description: Natural-language description of what you're looking for
+                     (e.g. "articles about climate change policy in Europe").
+        limit: Maximum number of results to return (1-25, default 10).
+        language: Optional language filter (e.g. "en", "ru"). Auto-detected if omitted.
+    """
+    limit = max(1, min(25, limit))
+
+    chroma = await _get_chroma_service()
+
+    if chroma is None:
+        # Graceful degradation: fall back to keyword search
+        logger.info("semantic_search: ChromaDB unavailable, falling back to keyword search")
+        return search_articles(query=description, limit=limit)
+
+    try:
+        results = await chroma.search(
+            description.strip(),
+            language=language,
+            limit=limit,
+            offset=0,
+        )
+
+        # Enrich Chroma results with full summary data from SQLite
+        from app.db.models import Request, Summary
+
+        output = []
+        for r in results.results:
+            try:
+                summary = (
+                    Summary.select(Summary, Request)
+                    .join(Request)
+                    .where(
+                        Summary.id == r.summary_id,
+                        Summary.is_deleted == False,  # noqa: E712
+                    )
+                    .get()
+                )
+                compact = _format_summary_compact(summary, summary.request)
+                compact["similarity_score"] = round(r.similarity_score, 4)
+                output.append(compact)
+            except Summary.DoesNotExist:
+                # Chroma entry with no matching summary — skip
+                continue
+
+        return json.dumps(
+            {
+                "results": output,
+                "total": len(output),
+                "query": description,
+                "search_type": "semantic",
+                "has_more": results.has_more,
+            },
+            default=str,
+        )
+
+    except Exception as exc:
+        logger.exception("semantic_search failed")
+        return json.dumps({"error": str(exc), "query": description})
+
+
 # ---------------------------------------------------------------------------
-# MCP Resources — expose article database as a discoverable resource
+# MCP Resources — expose article database as discoverable resources
 # ---------------------------------------------------------------------------
 @mcp.resource("bsr://articles/recent")
 def recent_articles_resource() -> str:
@@ -565,10 +694,145 @@ def recent_articles_resource() -> str:
     return list_articles(limit=10, offset=0)
 
 
+@mcp.resource("bsr://articles/favorites")
+def favorites_resource() -> str:
+    """All favorited article summaries."""
+    return list_articles(limit=50, offset=0, is_favorited=True)
+
+
+@mcp.resource("bsr://articles/unread")
+def unread_resource() -> str:
+    """Unread article summaries (up to 20)."""
+    from app.db.models import Request, Summary
+
+    try:
+        summaries = (
+            Summary.select(Summary, Request)
+            .join(Request)
+            .where(
+                Summary.is_deleted == False,  # noqa: E712
+                Summary.is_read == False,  # noqa: E712
+            )
+            .order_by(Summary.created_at.desc())
+            .limit(20)
+        )
+        results = [_format_summary_compact(s, s.request) for s in summaries]
+        return json.dumps({"articles": results, "total": len(results)}, default=str)
+    except Exception as exc:
+        logger.exception("unread_resource failed")
+        return json.dumps({"error": str(exc)})
+
+
 @mcp.resource("bsr://stats")
 def stats_resource() -> str:
     """Current database statistics for Bite-Size Reader."""
     return get_stats()
+
+
+@mcp.resource("bsr://tags")
+def tags_resource() -> str:
+    """All topic tags with article counts, sorted by frequency."""
+    from app.db.models import Summary
+
+    try:
+        tag_counts: dict[str, int] = {}
+        all_summaries = (
+            Summary.select(Summary.json_payload)
+            .where(Summary.is_deleted == False)  # noqa: E712
+            .order_by(Summary.created_at.desc())
+        )
+        for row in all_summaries:
+            payload = _ensure_mapping(getattr(row, "json_payload", None))
+            for tag in payload.get("topic_tags", []):
+                tag_counts[tag] = tag_counts.get(tag, 0) + 1
+
+        sorted_tags = sorted(tag_counts.items(), key=lambda x: x[1], reverse=True)
+        return json.dumps(
+            {
+                "tags": [{"tag": t, "count": c} for t, c in sorted_tags],
+                "total_unique_tags": len(sorted_tags),
+            },
+            default=str,
+        )
+    except Exception as exc:
+        logger.exception("tags_resource failed")
+        return json.dumps({"error": str(exc)})
+
+
+@mcp.resource("bsr://entities")
+def entities_resource() -> str:
+    """Aggregated entities (people, organizations, locations) across all articles."""
+    from app.db.models import Summary
+
+    try:
+        people: dict[str, int] = {}
+        orgs: dict[str, int] = {}
+        locations: dict[str, int] = {}
+
+        all_summaries = (
+            Summary.select(Summary.json_payload)
+            .where(Summary.is_deleted == False)  # noqa: E712
+            .order_by(Summary.created_at.desc())
+        )
+        for row in all_summaries:
+            payload = _ensure_mapping(getattr(row, "json_payload", None))
+            entities = _ensure_mapping(payload.get("entities"))
+            for p in entities.get("people", []):
+                people[p] = people.get(p, 0) + 1
+            for o in entities.get("organizations", []):
+                orgs[o] = orgs.get(o, 0) + 1
+            for loc in entities.get("locations", []):
+                locations[loc] = locations.get(loc, 0) + 1
+
+        def _top(d: dict[str, int], n: int = 50) -> list[dict]:
+            return [
+                {"name": k, "count": v}
+                for k, v in sorted(d.items(), key=lambda x: x[1], reverse=True)[:n]
+            ]
+
+        return json.dumps(
+            {
+                "people": _top(people),
+                "organizations": _top(orgs),
+                "locations": _top(locations),
+            },
+            default=str,
+        )
+    except Exception as exc:
+        logger.exception("entities_resource failed")
+        return json.dumps({"error": str(exc)})
+
+
+@mcp.resource("bsr://domains")
+def domains_resource() -> str:
+    """Source domains with article counts, sorted by frequency."""
+    from app.db.models import Request, Summary
+
+    try:
+        domain_counts: dict[str, int] = {}
+        all_summaries = (
+            Summary.select(Summary.json_payload, Request)
+            .join(Request)
+            .where(Summary.is_deleted == False)  # noqa: E712
+        )
+        for row in all_summaries:
+            payload = _ensure_mapping(getattr(row, "json_payload", None))
+            metadata = _ensure_mapping(payload.get("metadata"))
+            domain = metadata.get("domain", "")
+            if domain:
+                domain_counts[domain] = domain_counts.get(domain, 0) + 1
+
+        sorted_domains = sorted(domain_counts.items(), key=lambda x: x[1], reverse=True)
+        return json.dumps(
+            {
+                "domains": [{"domain": d, "count": c} for d, c in sorted_domains],
+                "total_unique_domains": len(sorted_domains),
+            },
+            default=str,
+        )
+    except Exception as exc:
+        logger.exception("domains_resource failed")
+        return json.dumps({"error": str(exc)})
 
 
 # ---------------------------------------------------------------------------
