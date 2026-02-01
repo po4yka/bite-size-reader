@@ -6,6 +6,7 @@ import asyncio
 import logging
 import time
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, Protocol
 
@@ -44,9 +45,17 @@ class KarakeepClientProtocol(Protocol):
         self, *, url: str, title: str | None, note: str | None
     ) -> KarakeepBookmark: ...
 
-    async def update_bookmark(self, bookmark_id: str, *, favourited: bool) -> KarakeepBookmark: ...
+    async def update_bookmark(
+        self,
+        bookmark_id: str,
+        *,
+        title: str | None = None,
+        note: str | None = None,
+        archived: bool | None = None,
+        favourited: bool | None = None,
+    ) -> KarakeepBookmark: ...
 
-    async def attach_tags(self, bookmark_id: str, tags: list[str]) -> KarakeepBookmark: ...
+    async def attach_tags(self, bookmark_id: str, tags: list[str]) -> None: ...
 
     async def detach_tag(self, bookmark_id: str, tag_id: str) -> None: ...
 
@@ -113,6 +122,20 @@ class KarakeepSyncRepository(Protocol):
         karakeep_modified_at: datetime | None = None,
     ) -> None: ...
 
+    async def async_delete_all_sync_records(self, direction: str | None = None) -> int: ...
+
+    async def async_upsert_sync_record(
+        self,
+        *,
+        bsr_summary_id: int | None = None,
+        karakeep_bookmark_id: str | None = None,
+        url_hash: str,
+        sync_direction: str,
+        synced_at: datetime | None = None,
+        bsr_modified_at: datetime | None = None,
+        karakeep_modified_at: datetime | None = None,
+    ) -> int: ...
+
 
 def _url_hash(url: str) -> str:
     """Generate consistent hash for URL deduplication.
@@ -121,6 +144,28 @@ def _url_hash(url: str) -> str:
     """
     normalized = normalize_url(url) or url
     return url_hash_sha256(normalized)
+
+
+def _ensure_datetime(value: Any) -> datetime | None:
+    """Convert a value to datetime if it's a string, or return as-is if already datetime.
+
+    SQLite may return datetime columns as strings depending on how they were inserted.
+    """
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value
+    if isinstance(value, str):
+        try:
+            return datetime.fromisoformat(value)
+        except ValueError:
+            logger.warning("ensure_datetime_parse_failed", extra={"value": repr(value)})
+            return None
+    logger.warning(
+        "ensure_datetime_unexpected_type",
+        extra={"type": type(value).__name__, "value": repr(value)},
+    )
+    return None
 
 
 def _check_hash_in_set(url_hash: str, hash_set: set[str]) -> bool:
@@ -139,6 +184,15 @@ def _check_hash_in_set(url_hash: str, hash_set: set[str]) -> bool:
     # Check for legacy hash match
     legacy_hash = url_hash[:LEGACY_HASH_LENGTH]
     return legacy_hash in hash_set
+
+
+@dataclass
+class _SyncWorkItem:
+    """Internal work item for BSR-to-Karakeep sync."""
+
+    summary_data: dict[str, Any]
+    url_hash: str
+    existing_bookmark: KarakeepBookmark | None = None
 
 
 class KarakeepSyncService:
@@ -422,6 +476,7 @@ class KarakeepSyncService:
         self,
         user_id: int | None = None,
         limit: int | None = None,
+        force: bool = False,
     ) -> SyncResult:
         """Sync BSR summaries to Karakeep bookmarks.
 
@@ -469,65 +524,94 @@ class KarakeepSyncService:
                 # Get summaries eligible for sync
                 summaries_data = await repository.async_get_summaries_for_sync(user_id=user_id)
 
-                summaries_to_sync: list[dict[str, Any]] = []
+                work_items: list[_SyncWorkItem] = []
                 for summary_data in summaries_data:
                     url = self._extract_summary_url(summary_data)
                     if not url:
+                        result.skipped_no_url += 1
                         continue
-                    url_hash = _url_hash(url)
+                    try:
+                        url_hash = _url_hash(url)
+                    except (ValueError, OSError) as e:
+                        logger.warning(
+                            "karakeep_sync_url_hash_failed",
+                            extra={
+                                "correlation_id": correlation_id,
+                                "summary_id": summary_data.get("id"),
+                                "url": url[:100],
+                                "error": str(e),
+                            },
+                        )
+                        result.skipped_hash_failed += 1
+                        continue
 
-                    # Skip if already synced (handles legacy hash format)
-                    if _check_hash_in_set(url_hash, synced_hashes):
-                        result.items_skipped += 1
+                    # Skip if already synced (handles legacy hash format) - bypass when force
+                    if not force and _check_hash_in_set(url_hash, synced_hashes):
+                        result.skipped_already_synced += 1
                         continue
+
+                    # Re-normalize for consistent comparison against Karakeep index
+                    try:
+                        comparison_url = normalize_url(url) or url
+                    except (ValueError, OSError):
+                        comparison_url = url
 
                     # Check if URL exists in Karakeep (using normalized comparison)
-                    if url in karakeep_url_index:
-                        # Already in Karakeep, mark as synced
-                        existing_bookmark = karakeep_url_index[url]
-                        await repository.async_create_sync_record(
-                            bsr_summary_id=summary_data.get("id"),
-                            karakeep_bookmark_id=existing_bookmark.id,
-                            url_hash=url_hash,
-                            sync_direction="bsr_to_karakeep",
-                            synced_at=datetime.now(UTC),
-                            bsr_modified_at=summary_data.get("updated_at"),
-                            karakeep_modified_at=existing_bookmark.modified_at,
-                        )
-                        result.items_skipped += 1
-                        synced_hashes.add(url_hash)
+                    if comparison_url in karakeep_url_index:
+                        existing_bookmark = karakeep_url_index[comparison_url]
+                        if force:
+                            # Force mode: update existing bookmark instead of skipping
+                            work_items.append(
+                                _SyncWorkItem(
+                                    summary_data=summary_data,
+                                    url_hash=url_hash,
+                                    existing_bookmark=existing_bookmark,
+                                )
+                            )
+                        else:
+                            # Normal mode: mark as synced and skip
+                            await repository.async_create_sync_record(
+                                bsr_summary_id=summary_data.get("id"),
+                                karakeep_bookmark_id=existing_bookmark.id,
+                                url_hash=url_hash,
+                                sync_direction="bsr_to_karakeep",
+                                synced_at=datetime.now(UTC),
+                                bsr_modified_at=summary_data.get("updated_at"),
+                                karakeep_modified_at=existing_bookmark.modified_at,
+                            )
+                            result.skipped_exists_in_target += 1
+                            synced_hashes.add(url_hash)
                         continue
 
-                    summary_data["_sync_url_hash"] = url_hash
-                    summaries_to_sync.append(summary_data)
-                    if limit and len(summaries_to_sync) >= limit:
+                    work_items.append(_SyncWorkItem(summary_data=summary_data, url_hash=url_hash))
+                    if limit and len(work_items) >= limit:
                         break
 
                 # Sync each summary to Karakeep
-                for summary_data in summaries_to_sync:
+                for work_item in work_items:
                     try:
                         non_fatal_errors = await self._sync_summary_to_karakeep(
                             client,
                             repository,
-                            summary_data,
+                            work_item,
                             correlation_id=correlation_id,
                             counters=item_counters,
                         )
                         result.items_synced += 1
-                        url_hash = summary_data.get("_sync_url_hash")
-                        if isinstance(url_hash, str):
-                            synced_hashes.add(url_hash)
+                        synced_hashes.add(work_item.url_hash)
                         for message, retryable in non_fatal_errors:
                             self._record_error(result, message, retryable)
                     except Exception as e:
                         result.items_failed += 1
-                        error_message = f"Failed to sync summary {summary_data.get('id')}: {e}"
+                        error_message = (
+                            f"Failed to sync summary {work_item.summary_data.get('id')}: {e}"
+                        )
                         self._record_error(result, error_message, is_transient_error(e))
                         logger.warning(
                             "karakeep_sync_item_failed",
                             extra={
                                 "correlation_id": correlation_id,
-                                "summary_id": summary_data.get("id"),
+                                "summary_id": work_item.summary_data.get("id"),
                                 "error": str(e),
                             },
                         )
@@ -566,7 +650,7 @@ class KarakeepSyncService:
         self,
         client: KarakeepClientProtocol,
         repository: KarakeepSyncRepository,
-        summary_data: dict[str, Any],
+        work_item: _SyncWorkItem,
         *,
         correlation_id: str,
         counters: dict[str, int] | None = None,
@@ -575,11 +659,13 @@ class KarakeepSyncService:
 
         Args:
             client: Karakeep client
-            summary_data: Summary dict with request_data
+            repository: Sync repository
+            work_item: Work item containing summary data, URL hash, and optional existing bookmark
 
         Raises:
             RuntimeError: If bookmark creation or sync record persistence fails
         """
+        summary_data = work_item.summary_data
         non_fatal_errors: list[tuple[str, bool]] = []
         url = self._extract_summary_url(summary_data)
         if not url:
@@ -587,6 +673,7 @@ class KarakeepSyncService:
 
         summary_id = summary_data.get("id")
         request_id = summary_data.get("request_data", {}).get("id")
+        existing_bookmark = work_item.existing_bookmark
 
         # Get metadata
         title = None
@@ -609,53 +696,118 @@ class KarakeepSyncService:
         # Get summary text for note
         note = self._extract_summary_note(summary_data)
 
-        # Create bookmark
-        bookmark, created, _, error = await self._retry_operation(
-            lambda: client.create_bookmark(url=url, title=title, note=note),
-            operation_name="create_bookmark",
-            correlation_id=correlation_id,
-        )
-        if not created or not bookmark:
-            raise RuntimeError(f"Failed to create bookmark for summary {summary_id}: {error}")
-        last_karakeep_modified_at = bookmark.modified_at
-
-        # Build tags list
-        tags = self._build_base_tags(summary_data)
-
-        # Persist sync record before tag updates for idempotency
-        sync_id = await repository.async_create_sync_record(
-            bsr_summary_id=summary_id,
-            karakeep_bookmark_id=bookmark.id,
-            url_hash=_url_hash(url),
-            sync_direction="bsr_to_karakeep",
-            synced_at=datetime.now(UTC),
-            bsr_modified_at=summary_data.get("updated_at"),
-            karakeep_modified_at=bookmark.modified_at,
-        )
-
-        if sync_id is None:
-            # Duplicate sync record - another sync beat us to it
-            # Delete the bookmark we just created to avoid orphans
-            logger.warning(
-                "karakeep_sync_record_duplicate_cleanup",
-                extra={
-                    "correlation_id": correlation_id,
-                    "bookmark_id": bookmark.id,
-                    "summary_id": summary_id,
-                },
+        if existing_bookmark is not None:
+            # Force mode: update existing bookmark
+            bookmark, updated, _, error = await self._retry_operation(
+                lambda: client.update_bookmark(existing_bookmark.id, title=title, note=note),
+                operation_name="update_bookmark",
+                correlation_id=correlation_id,
             )
-            try:
-                await client.delete_bookmark(bookmark.id)
-            except Exception as cleanup_err:
-                logger.error(
-                    "karakeep_duplicate_cleanup_failed",
+            if not updated or not bookmark:
+                raise RuntimeError(f"Failed to update bookmark for summary {summary_id}: {error}")
+
+            # Upsert sync record (may already exist from previous sync)
+            sync_id = await repository.async_upsert_sync_record(
+                bsr_summary_id=summary_id,
+                karakeep_bookmark_id=bookmark.id,
+                url_hash=work_item.url_hash,
+                sync_direction="bsr_to_karakeep",
+                synced_at=datetime.now(UTC),
+                bsr_modified_at=summary_data.get("updated_at"),
+                karakeep_modified_at=bookmark.modified_at,
+            )
+        else:
+            # Normal mode: create new bookmark
+            bookmark, created, _, error = await self._retry_operation(
+                lambda: client.create_bookmark(url=url, title=title, note=note),
+                operation_name="create_bookmark",
+                correlation_id=correlation_id,
+            )
+            if not created or not bookmark:
+                raise RuntimeError(f"Failed to create bookmark for summary {summary_id}: {error}")
+
+            # Persist sync record before tag updates for idempotency
+            sync_id = await repository.async_create_sync_record(
+                bsr_summary_id=summary_id,
+                karakeep_bookmark_id=bookmark.id,
+                url_hash=work_item.url_hash,
+                sync_direction="bsr_to_karakeep",
+                synced_at=datetime.now(UTC),
+                bsr_modified_at=summary_data.get("updated_at"),
+                karakeep_modified_at=bookmark.modified_at,
+            )
+
+            if sync_id is None:
+                # Duplicate sync record - another sync beat us to it
+                # Delete the bookmark we just created to avoid orphans
+                logger.warning(
+                    "karakeep_sync_record_duplicate_cleanup",
                     extra={
                         "correlation_id": correlation_id,
                         "bookmark_id": bookmark.id,
-                        "error": str(cleanup_err),
+                        "summary_id": summary_id,
                     },
                 )
-            raise RuntimeError("Duplicate sync record detected")
+                try:
+                    await client.delete_bookmark(bookmark.id)
+                except Exception as cleanup_err:
+                    logger.error(
+                        "karakeep_duplicate_cleanup_failed",
+                        extra={
+                            "correlation_id": correlation_id,
+                            "bookmark_id": bookmark.id,
+                            "error": str(cleanup_err),
+                        },
+                    )
+                raise RuntimeError("Duplicate sync record detected")
+
+        # Apply shared metadata (tags, favourite, archive) to the bookmark
+        metadata_errors, last_modified = await self._apply_bookmark_metadata(
+            client,
+            bookmark=bookmark,
+            summary_data=summary_data,
+            correlation_id=correlation_id,
+            counters=counters,
+        )
+        non_fatal_errors.extend(metadata_errors)
+
+        if last_modified and last_modified != bookmark.modified_at:
+            await repository.async_update_sync_timestamps(
+                sync_id,
+                karakeep_modified_at=last_modified,
+            )
+
+        return non_fatal_errors
+
+    async def _apply_bookmark_metadata(
+        self,
+        client: KarakeepClientProtocol,
+        *,
+        bookmark: KarakeepBookmark,
+        summary_data: dict[str, Any],
+        correlation_id: str,
+        counters: dict[str, int] | None = None,
+    ) -> tuple[list[tuple[str, bool]], datetime | None]:
+        """Apply tags, favourite, and read status to a Karakeep bookmark.
+
+        Handles:
+        - Attaching bsr-synced and topic tags
+        - Syncing favourite status
+        - Tracking the latest modified_at timestamp
+
+        Args:
+            client: Karakeep client
+            bookmark: The bookmark to update
+            summary_data: Summary dict with metadata
+            correlation_id: Correlation ID for logging
+            counters: Optional counters dict for tracking tag/favourite updates
+
+        Returns:
+            Tuple of (non-fatal errors list, latest karakeep modified_at or None)
+        """
+        non_fatal_errors: list[tuple[str, bool]] = []
+        summary_id = summary_data.get("id")
+        last_karakeep_modified_at = bookmark.modified_at
 
         # Sync favorite status (favourited has correct semantics)
         if summary_data.get("is_favorited"):
@@ -681,10 +833,10 @@ class KarakeepSyncService:
                 if counters is not None:
                     counters["favourites_updated"] = counters.get("favourites_updated", 0) + 1
 
-        # Add topic tags from summary
+        # Build and attach tags (bsr-synced + topic tags from summary)
+        tags = self._build_base_tags(summary_data)
         tags.extend(self._extract_topic_tags(summary_data))
 
-        # Attach tags
         if tags:
             updated_bookmark, success, tag_retryable, tag_error = await self._retry_operation(
                 lambda: client.attach_tags(bookmark.id, tags),
@@ -708,13 +860,7 @@ class KarakeepSyncService:
                 if counters is not None:
                     counters["tags_attached"] = counters.get("tags_attached", 0) + len(tags)
 
-        if last_karakeep_modified_at and last_karakeep_modified_at != bookmark.modified_at:
-            await repository.async_update_sync_timestamps(
-                sync_id,
-                karakeep_modified_at=last_karakeep_modified_at,
-            )
-
-        return non_fatal_errors
+        return non_fatal_errors, last_karakeep_modified_at
 
     async def sync_karakeep_to_bsr(
         self,
@@ -766,7 +912,7 @@ class KarakeepSyncService:
 
                     # Skip if already synced from Karakeep (handles legacy hash format)
                     if _check_hash_in_set(url_hash, synced_hashes):
-                        result.items_skipped += 1
+                        result.skipped_already_synced += 1
                         return False
 
                     # Check if already exists in BSR using full hash
@@ -780,7 +926,7 @@ class KarakeepSyncService:
                             synced_at=datetime.now(UTC),
                             karakeep_modified_at=bookmark.modified_at,
                         )
-                        result.items_skipped += 1
+                        result.skipped_exists_in_target += 1
                         synced_hashes.add(url_hash)
                         return False
 
@@ -916,6 +1062,7 @@ class KarakeepSyncService:
         self,
         user_id: int | None = None,
         limit: int | None = None,
+        force: bool = False,
     ) -> FullSyncResult:
         """Run bidirectional sync.
 
@@ -931,7 +1078,7 @@ class KarakeepSyncService:
 
         async with self._cache_scope():
             # BSR -> Karakeep
-            bsr_result = await self.sync_bsr_to_karakeep(user_id=user_id, limit=limit)
+            bsr_result = await self.sync_bsr_to_karakeep(user_id=user_id, limit=limit, force=force)
 
             # Karakeep -> BSR (requires user_id)
             if user_id:
@@ -1234,10 +1381,12 @@ class KarakeepSyncService:
 
                         # Determine source of truth based on sync direction and timestamps
                         bsr_is_source = sync_record.get("sync_direction") == "bsr_to_karakeep"
-                        summary_updated_at = summary_data.get("updated_at")
-                        bookmark_updated_at = bookmark.modified_at
-                        bsr_modified_at = sync_record.get("bsr_modified_at")
-                        karakeep_modified_at = sync_record.get("karakeep_modified_at")
+                        summary_updated_at = _ensure_datetime(summary_data.get("updated_at"))
+                        bookmark_updated_at = _ensure_datetime(bookmark.modified_at)
+                        bsr_modified_at = _ensure_datetime(sync_record.get("bsr_modified_at"))
+                        karakeep_modified_at = _ensure_datetime(
+                            sync_record.get("karakeep_modified_at")
+                        )
 
                         # Prefer actual modified timestamps when available
                         if summary_updated_at and bookmark_updated_at:

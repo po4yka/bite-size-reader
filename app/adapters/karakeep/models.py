@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime  # noqa: TC003 - Pydantic needs this at runtime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, computed_field
 
 
 class KarakeepTag(BaseModel):
@@ -63,12 +63,27 @@ class SyncResult(BaseModel):
 
     direction: str  # 'bsr_to_karakeep' or 'karakeep_to_bsr'
     items_synced: int = 0
-    items_skipped: int = 0
     items_failed: int = 0
+    # Skip reason breakdown
+    skipped_already_synced: int = 0
+    skipped_exists_in_target: int = 0
+    skipped_hash_failed: int = 0
+    skipped_no_url: int = 0
     errors: list[str] = Field(default_factory=list)
     retryable_errors: list[str] = Field(default_factory=list)
     permanent_errors: list[str] = Field(default_factory=list)
     duration_seconds: float = 0.0
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def items_skipped(self) -> int:
+        """Total skipped items (sum of all skip-reason fields)."""
+        return (
+            self.skipped_already_synced
+            + self.skipped_exists_in_target
+            + self.skipped_hash_failed
+            + self.skipped_no_url
+        )
 
 
 class FullSyncResult(BaseModel):

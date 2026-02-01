@@ -298,6 +298,80 @@ class SqliteKarakeepSyncRepositoryAdapter(SqliteBaseRepository):
 
         await self._execute(_update, operation_name="update_summary_status")
 
+    async def async_delete_all_sync_records(self, direction: str | None = None) -> int:
+        """Delete all sync records, optionally filtered by direction.
+
+        Args:
+            direction: If provided, only delete records for this direction
+                       ('bsr_to_karakeep' or 'karakeep_to_bsr')
+
+        Returns:
+            Count of deleted records
+        """
+
+        def _delete() -> int:
+            query = KarakeepSync.delete()
+            if direction:
+                query = query.where(KarakeepSync.sync_direction == direction)
+            return query.execute()
+
+        return await self._execute(_delete, operation_name="delete_all_sync_records")
+
+    async def async_upsert_sync_record(
+        self,
+        *,
+        bsr_summary_id: int | None = None,
+        karakeep_bookmark_id: str | None = None,
+        url_hash: str,
+        sync_direction: str,
+        synced_at: datetime | None = None,
+        bsr_modified_at: datetime | None = None,
+        karakeep_modified_at: datetime | None = None,
+    ) -> int:
+        """Create or update a sync record.
+
+        Args:
+            bsr_summary_id: BSR summary ID (optional)
+            karakeep_bookmark_id: Karakeep bookmark ID
+            url_hash: URL hash for deduplication
+            sync_direction: Sync direction
+            synced_at: When the sync occurred
+            bsr_modified_at: Last BSR modification time
+            karakeep_modified_at: Last Karakeep modification time
+
+        Returns:
+            Record ID (created or updated)
+        """
+
+        def _upsert() -> int:
+            existing = KarakeepSync.get_or_none(
+                (KarakeepSync.url_hash == url_hash)
+                & (KarakeepSync.sync_direction == sync_direction)
+            )
+            now = synced_at or datetime.now(UTC)
+            if existing:
+                existing.bsr_summary = bsr_summary_id
+                existing.karakeep_bookmark_id = karakeep_bookmark_id
+                existing.synced_at = now
+                if bsr_modified_at is not None:
+                    existing.bsr_modified_at = bsr_modified_at
+                if karakeep_modified_at is not None:
+                    existing.karakeep_modified_at = karakeep_modified_at
+                existing.save()
+                return existing.id
+            record = KarakeepSync.create(
+                bsr_summary=bsr_summary_id,
+                karakeep_bookmark_id=karakeep_bookmark_id,
+                url_hash=url_hash,
+                sync_direction=sync_direction,
+                synced_at=now,
+                bsr_modified_at=bsr_modified_at,
+                karakeep_modified_at=karakeep_modified_at,
+            )
+            return record.id
+
+        return await self._execute(_upsert, operation_name="upsert_sync_record")
+
     async def async_get_crawl_result_title(self, request_id: int) -> str | None:
         """Get the title from a crawl result's metadata.
 
