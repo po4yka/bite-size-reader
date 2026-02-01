@@ -93,11 +93,17 @@ class KarakeepHandlerImpl:
             await self._handle_karakeep_status(ctx)
         elif subcommand in ("run", "sync"):
             await self._handle_karakeep_sync(ctx)
+        elif subcommand == "force":
+            await self._handle_karakeep_sync(ctx, force=True)
+        elif subcommand == "reset":
+            await self._handle_karakeep_reset(ctx)
         else:
             await self._formatter.safe_reply(
                 ctx.message,
-                "📖 **Karakeep Sync Commands:**\n\n"
+                "**Karakeep Sync Commands:**\n\n"
                 "`/sync_karakeep` - Run bidirectional sync\n"
+                "`/sync_karakeep force` - Re-sync all (update tags/notes)\n"
+                "`/sync_karakeep reset` - Clear sync records, then re-sync\n"
                 "`/sync_karakeep status` - Show sync statistics\n",
             )
 
@@ -143,11 +149,14 @@ class KarakeepHandlerImpl:
             logger.exception("karakeep_status_failed", extra={"cid": ctx.correlation_id})
             await self._formatter.safe_reply(ctx.message, f"⚠️ Failed to get sync status: {exc}")
 
-    async def _handle_karakeep_sync(self, ctx: CommandExecutionContext) -> None:
+    async def _handle_karakeep_sync(
+        self, ctx: CommandExecutionContext, force: bool = False
+    ) -> None:
         """Run Karakeep sync with rate limiting.
 
         Args:
             ctx: The command execution context.
+            force: If True, re-sync all items (update tags/notes on existing bookmarks).
         """
         from app.adapters.karakeep import KarakeepSyncService
 
@@ -161,7 +170,7 @@ class KarakeepHandlerImpl:
                 seconds = remaining % 60
                 await self._formatter.safe_reply(
                     ctx.message,
-                    f"⏳ Please wait {minutes}m {seconds}s before syncing again.\n\n"
+                    f"Please wait {minutes}m {seconds}s before syncing again.\n\n"
                     "Use `/sync_karakeep status` to check current sync statistics.",
                 )
                 logger.info(
@@ -175,7 +184,8 @@ class KarakeepHandlerImpl:
                 return
 
         # Send initial message
-        await self._formatter.safe_reply(ctx.message, "🔄 Starting Karakeep sync...")
+        mode_label = " (force)" if force else ""
+        await self._formatter.safe_reply(ctx.message, f"Starting Karakeep sync{mode_label}...")
 
         try:
             karakeep_repo = SqliteKarakeepSyncRepositoryAdapter(self._db)
@@ -186,23 +196,35 @@ class KarakeepHandlerImpl:
                 repository=karakeep_repo,
             )
 
-            result = await service.run_full_sync(user_id=ctx.uid)
+            result = await service.run_full_sync(user_id=ctx.uid, force=force)
 
             # Update rate limit timestamp
             self._last_sync[ctx.uid] = time.time()
 
             # Format result message
+            bsr = result.bsr_to_karakeep
+            kk = result.karakeep_to_bsr
             result_text = (
-                "✅ **Karakeep Sync Complete**\n\n"
-                f"📤 **BSR → Karakeep:**\n"
-                f"   • Synced: {result.bsr_to_karakeep.items_synced}\n"
-                f"   • Skipped: {result.bsr_to_karakeep.items_skipped}\n"
-                f"   • Failed: {result.bsr_to_karakeep.items_failed}\n\n"
-                f"📥 **Karakeep → BSR:**\n"
-                f"   • Synced: {result.karakeep_to_bsr.items_synced}\n"
-                f"   • Skipped: {result.karakeep_to_bsr.items_skipped}\n"
-                f"   • Failed: {result.karakeep_to_bsr.items_failed}\n\n"
-                f"⏱ Duration: {result.total_duration_seconds:.1f}s"
+                "**Karakeep Sync Complete**\n\n"
+                f"**BSR -> Karakeep:**\n"
+                f"   Synced: {bsr.items_synced}\n"
+                f"   Skipped: {bsr.items_skipped}\n"
+            )
+            # Show skip breakdown if there are skipped items
+            if bsr.items_skipped > 0:
+                result_text += (
+                    f"      Already synced: {bsr.skipped_already_synced}\n"
+                    f"      Already in Karakeep: {bsr.skipped_exists_in_target}\n"
+                    f"      Hash errors: {bsr.skipped_hash_failed}\n"
+                    f"      No URL: {bsr.skipped_no_url}\n"
+                )
+            result_text += (
+                f"   Failed: {bsr.items_failed}\n\n"
+                f"**Karakeep -> BSR:**\n"
+                f"   Synced: {kk.items_synced}\n"
+                f"   Skipped: {kk.items_skipped}\n"
+                f"   Failed: {kk.items_failed}\n\n"
+                f"Duration: {result.total_duration_seconds:.1f}s"
             )
 
             # Add errors if any
@@ -226,7 +248,7 @@ class KarakeepHandlerImpl:
 
         except Exception as exc:
             logger.exception("karakeep_sync_failed", extra={"cid": ctx.correlation_id})
-            await self._formatter.safe_reply(ctx.message, f"❌ Karakeep sync failed: {exc}")
+            await self._formatter.safe_reply(ctx.message, f"Karakeep sync failed: {exc}")
             if ctx.interaction_id:
                 await async_safe_update_user_interaction(
                     ctx.user_repo,
@@ -238,3 +260,27 @@ class KarakeepHandlerImpl:
                     start_time=ctx.start_time,
                     logger_=logger,
                 )
+
+    async def _handle_karakeep_reset(self, ctx: CommandExecutionContext) -> None:
+        """Reset all sync records and run a fresh sync.
+
+        Args:
+            ctx: The command execution context.
+        """
+        try:
+            karakeep_repo = SqliteKarakeepSyncRepositoryAdapter(self._db)
+            deleted = await karakeep_repo.async_delete_all_sync_records()
+            await self._formatter.safe_reply(
+                ctx.message,
+                f"Cleared {deleted} sync records. Running fresh sync...",
+            )
+            logger.info(
+                "karakeep_sync_reset",
+                extra={"uid": ctx.uid, "deleted": deleted, "cid": ctx.correlation_id},
+            )
+            # Reset rate limit so the subsequent sync isn't blocked
+            self._last_sync.pop(ctx.uid, None)
+            await self._handle_karakeep_sync(ctx, force=True)
+        except Exception as exc:
+            logger.exception("karakeep_reset_failed", extra={"cid": ctx.correlation_id})
+            await self._formatter.safe_reply(ctx.message, f"Karakeep reset failed: {exc}")
