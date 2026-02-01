@@ -1,0 +1,26 @@
+{
+  "name": "bite-size-reader",
+  "description": "Personal knowledge base of web article summaries with search, retrieval, and entity discovery",
+  "version": "1.0.0",
+  "mcp": {
+    "transport": "stdio",
+    "command": "python",
+    "args": ["-m", "app.cli.mcp_server"],
+    "env": {
+      "DB_PATH": "/data/app.db"
+    }
+  },
+  "tools": [
+    "search_articles",
+    "get_article",
+    "list_articles",
+    "get_article_content",
+    "get_stats",
+    "find_by_entity"
+  ],
+  "resources": [
+    "bsr://articles/recent",
+    "bsr://stats"
+  ],
+  "tags": ["knowledge-base", "articles", "summaries", "search", "reading"]
+}
