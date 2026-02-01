@@ -138,34 +138,34 @@ dependencies = [
   "peewee>=3.19.0",
   "trafilatura>=2.0.0",
   "spacy>=3.8.11,<4",
-  "json-repair>=0.55.0",
-  "scikit-learn>=1.7.2",
-  "sentence-transformers>=5.2.0",
+  "json-repair>=0.55.1",
+  "scikit-learn>=1.8.0",
+  "sentence-transformers>=5.2.2",
   "chromadb>=1.4.1",
-  "orjson>=3.11.5",
+  "orjson>=3.11.6",
   "uvloop>=0.22.1",
   # YouTube support
-  "yt-dlp>=2025.12.8",
-  "youtube-transcript-api>=1.2.3",
+  "yt-dlp>=2026.1.31",
+  "youtube-transcript-api>=1.2.4",
   # Mobile API
   "fastapi>=0.128.0",
   "uvicorn[standard]>=0.40.0",
   "starlette>=0.50.0",
-  "pyjwt>=2.10.1",
-  "python-multipart>=0.0.21",
+  "pyjwt>=2.11.0",
+  "python-multipart>=0.0.22",
   # spaCy language models
   "en-core-web-sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl",
   "ru-core-news-sm @ https://github.com/explosion/spacy-models/releases/download/ru_core_news_sm-3.8.0/ru_core_news_sm-3.8.0-py3-none-any.whl",
   "redis>=7.1.0",
   "fakeredis>=2.33.0",
-  "torch>=2.9.1",
-  "transformers>=4.57.5",
+  "torch>=2.10.0",
+  "transformers>=5.0.0",
   # Background task scheduling
   "apscheduler>=3.11.2,<4.0.0",
   # PDF export (optional - graceful degradation if not available)
-  "weasyprint>=62.0",
+  "weasyprint>=68.0",
   # MCP (Model Context Protocol) server for OpenClaw and other AI agent integrations
-  "mcp>=1.25,<2",
+  "mcp>=1.26,<2",
 ]
 
 [project.optional-dependencies]
@@ -173,7 +173,7 @@ dev = [
   "isort>=7.0.0",
   "pytest>=9.0.2",
   "pytest-asyncio>=1.3.0",
-  "ruff>=0.14.12",
+  "ruff>=0.14.14",
   "mypy>=1.19.1",
   "pre-commit>=4.5.1",
 ]
@@ -187,7 +187,7 @@ dev = [
     "pytest>=9.0.2",
     "pytest-asyncio>=1.3.0",
     "pyyaml>=6.0.3",
-    "ruff>=0.14.12",
+    "ruff>=0.14.14",
 ]
 
 [tool.pytest.ini_options]
