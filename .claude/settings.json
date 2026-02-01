@@ -1,4 +1,7 @@
 {
+  "enabledPlugins": {
+    "compound-engineering@every-marketplace": false
+  },
   "hooks": {
     "PreToolUse": [
       {
