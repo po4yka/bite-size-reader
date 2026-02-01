@@ -401,6 +401,129 @@ class TestTelegramMessage(unittest.TestCase):
         assert message.forward_from_chat.id == -10012345
         assert message.forward_from_message_id == 54321
 
+    def test_from_pyrogram_message_forwarded_sender_name(self):
+        """Test that privacy-protected forwards (forward_sender_name only) are detected."""
+
+        class MockMessage:
+            def __init__(self):
+                self.id = 12345
+                self.date = datetime.now()
+                self.text = "Hidden sender forward"
+                self.caption = None
+                self.entities = []
+                self.caption_entities = []
+                self.photo = None
+                self.video = None
+                self.audio = None
+                self.document = None
+                self.sticker = None
+                self.voice = None
+                self.video_note = None
+                self.animation = None
+                self.contact = None
+                self.location = None
+                self.venue = None
+                self.poll = None
+                self.dice = None
+                self.game = None
+                self.invoice = None
+                self.successful_payment = None
+                self.story = None
+                self.forward_from = None
+                self.forward_from_chat = None
+                self.forward_from_message_id = None
+                self.forward_signature = None
+                self.forward_sender_name = "Hidden User"
+                self.forward_date = datetime.now()
+                self.reply_to_message = None
+                self.edit_date = None
+                self.media_group_id = None
+                self.author_signature = None
+                self.via_bot = None
+                self.has_protected_content = None
+                self.connected_website = None
+                self.reply_markup = None
+                self.views = None
+                self.via_bot_user_id = None
+                self.effect_id = None
+                self.link_preview_options = None
+                self.show_caption_above_media = None
+
+        mock_message = MockMessage()
+        message = TelegramMessage.from_pyrogram_message(mock_message)
+
+        assert message.is_forwarded
+        assert message.forward_sender_name == "Hidden User"
+        assert message.forward_from is None
+        assert message.forward_from_chat is None
+
+    def test_from_pyrogram_message_forwarded_from_user(self):
+        """Test that user forwards (no channel) are detected as forwarded."""
+
+        class MockMessage:
+            def __init__(self):
+                self.id = 12345
+                self.date = datetime.now()
+                self.text = "User forward"
+                self.caption = None
+                self.entities = []
+                self.caption_entities = []
+                self.photo = None
+                self.video = None
+                self.audio = None
+                self.document = None
+                self.sticker = None
+                self.voice = None
+                self.video_note = None
+                self.animation = None
+                self.contact = None
+                self.location = None
+                self.venue = None
+                self.poll = None
+                self.dice = None
+                self.game = None
+                self.invoice = None
+                self.successful_payment = None
+                self.story = None
+                self.forward_from = None
+                self.forward_from_chat = None
+                self.forward_from_message_id = None
+                self.forward_signature = None
+                self.forward_sender_name = None
+                self.forward_date = None
+                self.reply_to_message = None
+                self.edit_date = None
+                self.media_group_id = None
+                self.author_signature = None
+                self.via_bot = None
+                self.has_protected_content = None
+                self.connected_website = None
+                self.reply_markup = None
+                self.views = None
+                self.via_bot_user_id = None
+                self.effect_id = None
+                self.link_preview_options = None
+                self.show_caption_above_media = None
+
+        class MockUser:
+            def __init__(self):
+                self.id = 99999
+                self.is_bot = False
+                self.first_name = "Jane"
+                self.last_name = "Doe"
+                self.username = "janedoe"
+                self.language_code = "en"
+
+        mock_message = MockMessage()
+        mock_message.forward_from = MockUser()
+
+        message = TelegramMessage.from_pyrogram_message(mock_message)
+
+        assert message.is_forwarded
+        assert message.forward_from is not None
+        assert message.forward_from.id == 99999
+        assert message.forward_from_chat is None
+
     def test_validate_basic(self):
         """Test basic message validation."""
         message = TelegramMessage(
