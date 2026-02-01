@@ -104,7 +104,7 @@ services:
       resources:
         limits:
           memory: 1024M
-          cpus: "0.50"
+          cpus: "0.30"
   redis:
     image: redis:7-alpine
     container_name: bsr-redis
