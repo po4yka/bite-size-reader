@@ -257,7 +257,7 @@
         "operationId": "toggleFavorite",
         "security": [
           {
-            "BearerAuth": []
+            "HTTPBearer": []
           }
         ],
         "parameters": [
@@ -340,7 +340,7 @@
         "operationId": "registerDevice",
         "security": [
           {
-            "BearerAuth": []
+            "HTTPBearer": []
           }
         ],
         "requestBody": {
@@ -376,7 +376,7 @@
         "operationId": "getCollections",
         "security": [
           {
-            "BearerAuth": []
+            "HTTPBearer": []
           }
         ],
         "tags": [
@@ -400,7 +400,7 @@
         "operationId": "createCollection",
         "security": [
           {
-            "BearerAuth": []
+            "HTTPBearer": []
           }
         ],
         "tags": [
@@ -429,18 +429,18 @@
         }
       }
     },
-    "/v1/collections/{id}": {
+    "/v1/collections/{collection_id}": {
       "get": {
         "summary": "Get collection details",
         "operationId": "getCollection",
         "security": [
           {
-            "BearerAuth": []
+            "HTTPBearer": []
           }
         ],
         "parameters": [
           {
-            "name": "id",
+            "name": "collection_id",
             "in": "path",
             "required": true,
             "schema": {
@@ -469,12 +469,12 @@
         "operationId": "updateCollection",
         "security": [
           {
-            "BearerAuth": []
+            "HTTPBearer": []
           }
         ],
         "parameters": [
           {
-            "name": "id",
+            "name": "collection_id",
             "in": "path",
             "required": true,
             "schema": {
@@ -512,12 +512,12 @@
         "operationId": "deleteCollection",
         "security": [
           {
-            "BearerAuth": []
+            "HTTPBearer": []
           }
         ],
         "parameters": [
           {
-            "name": "id",
+            "name": "collection_id",
             "in": "path",
             "required": true,
             "schema": {
@@ -542,18 +542,18 @@
         }
       }
     },
-    "/v1/collections/{id}/items": {
+    "/v1/collections/{collection_id}/items": {
       "post": {
         "summary": "Add item to collection",
         "operationId": "addCollectionItem",
         "security": [
           {
-            "BearerAuth": []
+            "HTTPBearer": []
           }
         ],
         "parameters": [
           {
-            "name": "id",
+            "name": "collection_id",
             "in": "path",
             "required": true,
             "schema": {
@@ -591,12 +591,12 @@
         "operationId": "listCollectionItems",
         "security": [
           {
-            "BearerAuth": []
+            "HTTPBearer": []
           }
         ],
         "parameters": [
           {
-            "name": "id",
+            "name": "collection_id",
             "in": "path",
             "required": true,
             "schema": {
@@ -642,18 +642,18 @@
         }
       }
     },
-    "/v1/collections/{id}/items/{summary_id}": {
+    "/v1/collections/{collection_id}/items/{summary_id}": {
       "delete": {
         "summary": "Remove item from collection",
         "operationId": "removeCollectionItem",
         "security": [
           {
-            "BearerAuth": []
+            "HTTPBearer": []
           }
         ],
         "parameters": [
           {
-            "name": "id",
+            "name": "collection_id",
             "in": "path",
             "required": true,
             "schema": {
@@ -692,7 +692,7 @@
         "operationId": "getCollectionTree",
         "security": [
           {
-            "BearerAuth": []
+            "HTTPBearer": []
           }
         ],
         "tags": [
@@ -723,18 +723,18 @@
         }
       }
     },
-    "/v1/collections/{id}/acl": {
+    "/v1/collections/{collection_id}/acl": {
       "get": {
         "summary": "Get collection ACL",
         "operationId": "getCollectionAcl",
         "security": [
           {
-            "BearerAuth": []
+            "HTTPBearer": []
           }
         ],
         "parameters": [
           {
-            "name": "id",
+            "name": "collection_id",
             "in": "path",
             "required": true,
             "schema": {
@@ -759,18 +759,18 @@
         }
       }
     },
-    "/v1/collections/{id}/share": {
+    "/v1/collections/{collection_id}/share": {
       "post": {
         "summary": "Add collaborator",
         "operationId": "addCollectionCollaborator",
         "security": [
           {
-            "BearerAuth": []
+            "HTTPBearer": []
           }
         ],
         "parameters": [
           {
-            "name": "id",
+            "name": "collection_id",
             "in": "path",
             "required": true,
             "schema": {
@@ -804,18 +804,18 @@
         }
       }
     },
-    "/v1/collections/{id}/share/{user_id}": {
+    "/v1/collections/{collection_id}/share/{target_user_id}": {
       "delete": {
         "summary": "Remove collaborator",
         "operationId": "removeCollectionCollaborator",
         "security": [
           {
-            "BearerAuth": []
+            "HTTPBearer": []
           }
         ],
         "parameters": [
           {
-            "name": "id",
+            "name": "collection_id",
             "in": "path",
             "required": true,
             "schema": {
@@ -823,7 +823,7 @@
             }
           },
           {
-            "name": "user_id",
+            "name": "target_user_id",
             "in": "path",
             "required": true,
             "schema": {
@@ -848,18 +848,18 @@
         }
       }
     },
-    "/v1/collections/{id}/invite": {
+    "/v1/collections/{collection_id}/invite": {
       "post": {
         "summary": "Create invite token",
         "operationId": "createCollectionInvite",
         "security": [
           {
-            "BearerAuth": []
+            "HTTPBearer": []
           }
         ],
         "parameters": [
           {
-            "name": "id",
+            "name": "collection_id",
             "in": "path",
             "required": true,
             "schema": {
@@ -899,7 +899,7 @@
         "operationId": "acceptCollectionInvite",
         "security": [
           {
-            "BearerAuth": []
+            "HTTPBearer": []
           }
         ],
         "parameters": [
@@ -929,18 +929,18 @@
         }
       }
     },
-    "/v1/collections/{id}/reorder": {
+    "/v1/collections/{collection_id}/reorder": {
       "post": {
         "summary": "Reorder child collections",
         "operationId": "reorderCollections",
         "security": [
           {
-            "BearerAuth": []
+            "HTTPBearer": []
           }
         ],
         "parameters": [
           {
-            "name": "id",
+            "name": "collection_id",
             "in": "path",
             "required": true,
             "schema": {
@@ -974,18 +974,18 @@
         }
       }
     },
-    "/v1/collections/{id}/items/reorder": {
+    "/v1/collections/{collection_id}/items/reorder": {
       "post": {
         "summary": "Reorder collection items",
         "operationId": "reorderCollectionItems",
         "security": [
           {
-            "BearerAuth": []
+            "HTTPBearer": []
           }
         ],
         "parameters": [
           {
-            "name": "id",
+            "name": "collection_id",
             "in": "path",
             "required": true,
             "schema": {
@@ -1019,18 +1019,18 @@
         }
       }
     },
-    "/v1/collections/{id}/move": {
+    "/v1/collections/{collection_id}/move": {
       "post": {
         "summary": "Move collection to another parent",
         "operationId": "moveCollection",
         "security": [
           {
-            "BearerAuth": []
+            "HTTPBearer": []
           }
         ],
         "parameters": [
           {
-            "name": "id",
+            "name": "collection_id",
             "in": "path",
             "required": true,
             "schema": {
@@ -1064,18 +1064,18 @@
         }
       }
     },
-    "/v1/collections/{id}/items/move": {
+    "/v1/collections/{collection_id}/items/move": {
       "post": {
         "summary": "Move items to another collection",
         "operationId": "moveCollectionItems",
         "security": [
           {
-            "BearerAuth": []
+            "HTTPBearer": []
           }
         ],
         "parameters": [
           {
-            "name": "id",
+            "name": "collection_id",
             "in": "path",
             "required": true,
             "schema": {
@@ -1454,17 +1454,66 @@
           {
             "HTTPBearer": []
           }
-        ]
+        ],
+        "parameters": [
+          {
+            "name": "key_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SecretKeyRevokeRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Secret revoked",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SecretKeyActionResponseEnvelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenError"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundError"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequestsError"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
       }
     },
-    "/v1/me/telegram": {
+    "/v1/auth/me/telegram": {
       "get": {
         "tags": [
           "Authentication"
         ],
         "summary": "Get Telegram Link Status",
         "description": "Return current Telegram linkage state for the authenticated user.",
-        "operationId": "get_telegram_link_status_v1_me_telegram_get",
+        "operationId": "get_telegram_link_status_v1_auth_me_telegram_get",
         "security": [
           {
             "HTTPBearer": []
@@ -1495,7 +1544,7 @@
         ],
         "summary": "Unlink Telegram Account",
         "description": "Remove Telegram linkage for the authenticated user.",
-        "operationId": "unlink_telegram_v1_me_telegram_delete",
+        "operationId": "unlink_telegram_v1_auth_me_telegram_delete",
         "security": [
           {
             "HTTPBearer": []
@@ -1521,14 +1570,14 @@
         }
       }
     },
-    "/v1/me/telegram/link": {
+    "/v1/auth/me/telegram/link": {
       "post": {
         "tags": [
           "Authentication"
         ],
         "summary": "Begin Telegram Linking",
         "description": "Issue a nonce to start Telegram linking via Telegram Login Widget.",
-        "operationId": "begin_telegram_link_v1_me_telegram_link_post",
+        "operationId": "begin_telegram_link_v1_auth_me_telegram_link_post",
         "security": [
           {
             "HTTPBearer": []
@@ -1554,14 +1603,14 @@
         }
       }
     },
-    "/v1/me/telegram/complete": {
+    "/v1/auth/me/telegram/complete": {
       "post": {
         "tags": [
           "Authentication"
         ],
         "summary": "Complete Telegram Linking",
         "description": "Validate Telegram login payload and nonce to complete linking.",
-        "operationId": "complete_telegram_link_v1_me_telegram_complete_post",
+        "operationId": "complete_telegram_link_v1_auth_me_telegram_complete_post",
         "security": [
           {
             "HTTPBearer": []
@@ -3073,8 +3122,11 @@
     "/health": {
       "get": {
         "summary": "Health Check",
-        "description": "Health check endpoint.",
+        "description": "Lightweight health check endpoint.",
         "operationId": "health_check_health_get",
+        "tags": [
+          "Health"
+        ],
         "responses": {
           "200": {
             "description": "Health status",
@@ -3091,6 +3143,731 @@
           }
         }
       }
+    },
+    "/health/detailed": {
+      "get": {
+        "tags": [
+          "Health"
+        ],
+        "summary": "Detailed Health Check",
+        "description": "Comprehensive health check including database, Redis, and circuit breaker status. Has a 10-second timeout on component checks.",
+        "operationId": "detailed_health_check_health_detailed_get",
+        "responses": {
+          "200": {
+            "description": "Detailed health status with component breakdown",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DetailedHealthResponseEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health/ready": {
+      "get": {
+        "tags": [
+          "Health"
+        ],
+        "summary": "Readiness Probe",
+        "description": "Kubernetes readiness probe. Checks database connectivity. Returns 503 if not ready.",
+        "operationId": "readiness_check_health_ready_get",
+        "responses": {
+          "200": {
+            "description": "Service is ready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadinessResponseEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service is not ready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadinessResponseEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health/live": {
+      "get": {
+        "tags": [
+          "Health"
+        ],
+        "summary": "Liveness Probe",
+        "description": "Kubernetes liveness probe. Minimal check that the process is responsive.",
+        "operationId": "liveness_check_health_live_get",
+        "responses": {
+          "200": {
+            "description": "Service is alive",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LivenessResponseEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/metrics": {
+      "get": {
+        "tags": [
+          "Health"
+        ],
+        "summary": "Prometheus Metrics",
+        "description": "Prometheus-compatible metrics endpoint for scraping.",
+        "operationId": "metrics_get",
+        "responses": {
+          "200": {
+            "description": "Prometheus text metrics",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string",
+                  "description": "Prometheus exposition format metrics"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/summaries/by-url": {
+      "get": {
+        "tags": [
+          "Summaries"
+        ],
+        "summary": "Get Summary by URL",
+        "description": "Look up a summary by the original article URL.",
+        "operationId": "get_summary_by_url_v1_summaries_by_url_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "url",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Original URL of the article"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Summary detail",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SummaryDetailResponseEnvelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundError"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      }
+    },
+    "/v1/system/db-dump": {
+      "get": {
+        "tags": [
+          "System"
+        ],
+        "summary": "Download Database Backup",
+        "description": "Download a consistent SQLite database snapshot. Owner-only. Supports Range header for resumable downloads.",
+        "operationId": "download_database_v1_system_db_dump_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "Range",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Byte range for resumable downloads (e.g., \"bytes=0-1023\")"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "SQLite database file",
+            "headers": {
+              "Content-Disposition": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Attachment filename (e.g., bite_size_reader_backup_YYYYMMDD_HHMMSS.sqlite)"
+              },
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Entity tag for cache validation"
+              },
+              "Accept-Ranges": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Indicates range request support (bytes)"
+              }
+            },
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "206": {
+            "description": "Partial content (range request)",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenError"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundError"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      },
+      "head": {
+        "tags": [
+          "System"
+        ],
+        "summary": "Database Backup Pre-flight",
+        "description": "HEAD request for database backup. Returns headers (size, ETag) without body. Owner-only.",
+        "operationId": "head_database_v1_system_db_dump_head",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Headers only (Content-Length, ETag, Accept-Ranges)",
+            "headers": {
+              "Content-Length": {
+                "schema": {
+                  "type": "integer"
+                },
+                "description": "Database file size in bytes"
+              },
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Entity tag for cache validation"
+              },
+              "Accept-Ranges": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Indicates range request support (bytes)"
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenError"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundError"
+          }
+        }
+      }
+    },
+    "/v1/articles": {
+      "get": {
+        "tags": [
+          "Articles"
+        ],
+        "summary": "Get Articles (alias)",
+        "description": "Alias for GET /v1/summaries. Returns paginated list of summaries.\nThis endpoint mirrors /v1/summaries exactly and exists for API naming convenience.",
+        "operationId": "get_articles_v1_articles_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 20
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0
+            }
+          },
+          {
+            "name": "is_read",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          {
+            "name": "is_favorited",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          {
+            "name": "lang",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^(en|ru|auto)$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          {
+            "name": "start_date",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          {
+            "name": "end_date",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "pattern": "^(created_at_desc|created_at_asc)$",
+              "default": "created_at_desc"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated summaries",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaginatedSummariesResponseEnvelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenError"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequestsError"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      }
+    },
+    "/v1/articles/{summary_id}": {
+      "get": {
+        "tags": [
+          "Articles"
+        ],
+        "summary": "Get Article (alias)",
+        "description": "Alias for GET /v1/summaries/{summary_id}. Returns full summary details.",
+        "operationId": "get_article_v1_articles__summary_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "summary_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Summary detail",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SummaryDetailResponseEnvelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundError"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "Articles"
+        ],
+        "summary": "Update Article (alias)",
+        "description": "Alias for PATCH /v1/summaries/{summary_id}.",
+        "operationId": "update_article_v1_articles__summary_id__patch",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "summary_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateSummaryRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Summary updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SummaryUpdateResponseEnvelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundError"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Articles"
+        ],
+        "summary": "Delete Article (alias)",
+        "description": "Alias for DELETE /v1/summaries/{summary_id}.",
+        "operationId": "delete_article_v1_articles__summary_id__delete",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "summary_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Summary deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SummaryDeleteResponseEnvelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundError"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      }
+    },
+    "/v1/articles/{summary_id}/content": {
+      "get": {
+        "tags": [
+          "Articles"
+        ],
+        "summary": "Get Article Content (alias)",
+        "description": "Alias for GET /v1/summaries/{summary_id}/content.",
+        "operationId": "get_article_content_v1_articles__summary_id__content_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "summary_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "format",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "markdown",
+                "text"
+              ],
+              "default": "markdown"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Summary content",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SummaryContentResponseEnvelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundError"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      }
+    },
+    "/v1/articles/{summary_id}/favorite": {
+      "post": {
+        "tags": [
+          "Articles"
+        ],
+        "summary": "Toggle Article Favorite (alias)",
+        "description": "Alias for POST /v1/summaries/{summary_id}/favorite.",
+        "operationId": "toggle_article_favorite_v1_articles__summary_id__favorite_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "summary_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Favorite status updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundError"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      }
+    },
+    "/v1/articles/by-url": {
+      "get": {
+        "tags": [
+          "Articles"
+        ],
+        "summary": "Get Article by URL (alias)",
+        "description": "Alias for GET /v1/summaries/by-url.",
+        "operationId": "get_article_by_url_v1_articles_by_url_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "url",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Original URL of the article"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Summary detail",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SummaryDetailResponseEnvelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundError"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -3101,6 +3878,16 @@
       }
     },
     "responses": {
+      "BadRequestError": {
+        "description": "Bad Request",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            }
+          }
+        }
+      },
       "UnauthorizedError": {
         "description": "Unauthorized",
         "content": {
@@ -3900,9 +4687,18 @@
       "UserPreferences": {
         "type": "object",
         "required": [
-          "lang_preference"
+          "user_id"
         ],
         "properties": {
+          "user_id": {
+            "type": "integer",
+            "description": "User identifier."
+          },
+          "telegram_username": {
+            "type": "string",
+            "nullable": true,
+            "description": "Telegram username (if linked)."
+          },
           "lang_preference": {
             "type": "string",
             "enum": [
@@ -3910,7 +4706,8 @@
               "en",
               "ru"
             ],
-            "default": "auto"
+            "default": "auto",
+            "nullable": true
           },
           "notification_settings": {
             "type": "object",
@@ -3947,7 +4744,12 @@
         "required": [
           "total_summaries",
           "unread_count",
-          "read_count"
+          "read_count",
+          "total_reading_time_min",
+          "average_reading_time_min",
+          "favorite_topics",
+          "favorite_domains",
+          "language_distribution"
         ],
         "properties": {
           "total_summaries": {
@@ -3960,20 +4762,21 @@
             "type": "integer"
           },
           "total_reading_time_min": {
-            "type": "integer",
-            "nullable": true
+            "type": "integer"
           },
           "average_reading_time_min": {
-            "type": "integer",
-            "nullable": true
+            "type": "number"
           },
           "favorite_topics": {
             "type": "array",
-            "nullable": true,
             "items": {
               "type": "object",
+              "required": [
+                "topic",
+                "count"
+              ],
               "properties": {
-                "tag": {
+                "topic": {
                   "type": "string"
                 },
                 "count": {
@@ -3984,9 +4787,12 @@
           },
           "favorite_domains": {
             "type": "array",
-            "nullable": true,
             "items": {
               "type": "object",
+              "required": [
+                "domain",
+                "count"
+              ],
               "properties": {
                 "domain": {
                   "type": "string"
@@ -4001,8 +4807,7 @@
             "type": "object",
             "additionalProperties": {
               "type": "integer"
-            },
-            "nullable": true
+            }
           },
           "joined_at": {
             "type": "string",
@@ -4345,6 +5150,7 @@
           "id",
           "request_id",
           "title",
+          "domain",
           "url",
           "tldr",
           "summary_250",
@@ -4371,7 +5177,6 @@
           },
           "domain": {
             "type": "string",
-            "nullable": true,
             "description": "Source domain (e.g., example.com)."
           },
           "url": {
@@ -4828,6 +5633,10 @@
             "type": "boolean",
             "default": false
           },
+          "share_count": {
+            "type": "integer",
+            "nullable": true
+          },
           "item_count": {
             "type": "integer",
             "nullable": true
@@ -4970,13 +5779,13 @@
       "CollectionAclEntry": {
         "type": "object",
         "required": [
-          "user_id",
           "role",
           "status"
         ],
         "properties": {
           "user_id": {
-            "type": "integer"
+            "type": "integer",
+            "nullable": true
           },
           "role": {
             "type": "string",
@@ -5627,7 +6436,10 @@
         "type": "object",
         "required": [
           "request_id",
-          "status"
+          "status",
+          "stage",
+          "can_retry",
+          "updated_at"
         ],
         "properties": {
           "request_id": {
@@ -5646,13 +6458,12 @@
             "type": "string",
             "enum": [
               "pending",
-              "content_extraction",
-              "llm_summarization",
-              "validation",
-              "success",
-              "error"
+              "crawling",
+              "processing",
+              "complete",
+              "failed"
             ],
-            "nullable": true
+            "description": "Processing stage (maps to RequestStage enum)."
           },
           "progress": {
             "type": "object",
@@ -5673,21 +6484,30 @@
             "type": "integer",
             "nullable": true
           },
+          "queue_position": {
+            "type": "integer",
+            "nullable": true,
+            "description": "1-indexed position in processing queue (only when pending)."
+          },
           "error_stage": {
             "type": "string",
-            "nullable": true
+            "nullable": true,
+            "description": "Stage where error occurred (only when failed)."
           },
           "error_type": {
             "type": "string",
-            "nullable": true
+            "nullable": true,
+            "description": "Error classification (only when failed)."
           },
           "error_message": {
             "type": "string",
-            "nullable": true
+            "nullable": true,
+            "description": "Human-readable error message (only when failed)."
           },
           "can_retry": {
             "type": "boolean",
-            "nullable": true
+            "default": false,
+            "description": "Whether the request can be retried."
           },
           "correlation_id": {
             "type": "string",
@@ -5695,8 +6515,7 @@
           },
           "updated_at": {
             "type": "string",
-            "format": "date-time",
-            "nullable": true
+            "format": "date-time"
           }
         }
       },
@@ -6857,6 +7676,162 @@
                     }
                   }
                 }
+              }
+            }
+          }
+        ]
+      },
+      "BaseResponse": {
+        "type": "object",
+        "required": [
+          "status"
+        ],
+        "properties": {
+          "status": {
+            "type": "string",
+            "description": "Status indicator (e.g., \"ok\")."
+          }
+        }
+      },
+      "HealthComponentStatus": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "healthy",
+              "unhealthy",
+              "degraded",
+              "unknown"
+            ]
+          },
+          "latency_ms": {
+            "type": "number",
+            "nullable": true
+          },
+          "details": {
+            "type": "object",
+            "nullable": true,
+            "additionalProperties": true
+          }
+        }
+      },
+      "DetailedHealthData": {
+        "type": "object",
+        "required": [
+          "status",
+          "timestamp"
+        ],
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "healthy",
+              "unhealthy",
+              "degraded"
+            ]
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "components": {
+            "type": "object",
+            "properties": {
+              "database": {
+                "$ref": "#/components/schemas/HealthComponentStatus"
+              },
+              "redis": {
+                "$ref": "#/components/schemas/HealthComponentStatus"
+              },
+              "circuit_breakers": {
+                "$ref": "#/components/schemas/HealthComponentStatus"
+              }
+            }
+          }
+        }
+      },
+      "DetailedHealthResponseEnvelope": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/BaseSuccessResponse"
+          },
+          {
+            "type": "object",
+            "required": [
+              "data"
+            ],
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/DetailedHealthData"
+              }
+            }
+          }
+        ]
+      },
+      "ReadinessData": {
+        "type": "object",
+        "required": [
+          "ready",
+          "timestamp"
+        ],
+        "properties": {
+          "ready": {
+            "type": "boolean"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "ReadinessResponseEnvelope": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/BaseSuccessResponse"
+          },
+          {
+            "type": "object",
+            "required": [
+              "data"
+            ],
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/ReadinessData"
+              }
+            }
+          }
+        ]
+      },
+      "LivenessData": {
+        "type": "object",
+        "required": [
+          "alive",
+          "timestamp"
+        ],
+        "properties": {
+          "alive": {
+            "type": "boolean"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "LivenessResponseEnvelope": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/BaseSuccessResponse"
+          },
+          {
+            "type": "object",
+            "required": [
+              "data"
+            ],
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/LivenessData"
               }
             }
           }
