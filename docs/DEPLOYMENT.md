@@ -85,6 +85,17 @@ services:
 ```
 Run: `docker compose up -d --build`
 
+## Optional Subsystems
+
+These services are not required but enhance functionality when available:
+
+- **Redis** -- Caching layer for Firecrawl/LLM responses, API rate limiting, sync locks, and background task distributed locking. Set `REDIS_ENABLED=true` and configure `REDIS_URL` or host/port.
+- **ChromaDB** -- Vector search for semantic article queries. Set `CHROMA_HOST` to a running Chroma instance. Degrades gracefully when unavailable.
+- **MCP Server** -- Exposes articles and search to external AI agents (OpenClaw, Claude Desktop). Run via `python -m app.cli.mcp_server`. See `docs/mcp_server.md`.
+- **Karakeep** -- Bookmark sync integration. Set `KARAKEEP_ENABLED=true` with API URL and key. Use `/sync_karakeep` to trigger manually.
+
+Full variable reference: `docs/environment_variables.md`
+
 ## Security & Hardening
 - Access control: set `ALLOWED_USER_IDS`; restrict `ALLOWED_CLIENT_IDS` for API if used.
 - Resource control: configure rate limits (`API_RATE_LIMIT_*`) and concurrency caps; prefer Redis.

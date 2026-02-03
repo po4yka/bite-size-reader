@@ -1,4 +1,4 @@
-# CLAUDE.md — AI Assistant Guide for Bite-Size Reader
+# CLAUDE.md -- AI Assistant Guide for Bite-Size Reader
 
 This document helps AI assistants (like Claude) understand and work effectively with the Bite-Size Reader codebase.
 
@@ -28,187 +28,78 @@ This document helps AI assistants (like Claude) understand and work effectively 
 ### Core Pipeline Flow
 
 ```
-Telegram Message → MessageHandler → AccessController → MessageRouter
-                                                            ↓
-                    ┌───────────────────────────────────────┴─────────────┐
-                    ↓                                                     ↓
-              URL Handler                                    Forward Processor
-                    ↓                                                     ↓
-              URLProcessor                                    LLMSummarizer
-                    ↓                                                     ↓
-     ContentExtractor → Firecrawl                                OpenRouter
-                    ↓                                                     ↓
-              LLMSummarizer → OpenRouter                         Summary JSON
-                    ↓                                                     ↓
-              Summary JSON                                     ResponseFormatter
-                    ↓                                                     ↓
-           ResponseFormatter ─────────────────────────────────────────────┘
-                    ↓
+Telegram Message -> MessageHandler -> AccessController -> MessageRouter
+                                                            |
+                    +---------------------------------------+-----------+
+                    |                                                   |
+              URL Handler                                  Forward Processor
+                    |                                                   |
+              URLProcessor                                  LLMSummarizer
+                    |                                                   |
+     ContentExtractor -> Firecrawl                              OpenRouter
+                    |                                                   |
+              LLMSummarizer -> OpenRouter                     Summary JSON
+                    |                                                   |
+              Summary JSON                                 ResponseFormatter
+                    |                                                   |
+           ResponseFormatter -------------------------------------------+
+                    |
          Telegram Reply + SQLite Storage
 ```
 
 ### Key Components
 
-1. **Telegram Layer** (`app/adapters/telegram/`)
-   - `telegram_bot.py` — Main bot orchestration
-   - `telegram_client.py` — Telegram client wrapper
-   - `message_handler.py` — Normalizes incoming updates
-   - `access_controller.py` — Enforces owner whitelist
-   - `message_router.py` — Routes to URL/forward/command processors
-   - `message_persistence.py` — Persists all Telegram message snapshots
-   - `command_processor.py` — Handles bot commands (/help, /summarize, /cancel)
-   - `commands.py` — Command definitions and descriptions
-   - `url_handler.py` — Orchestrates URL processing flow
-   - `forward_processor.py` — Handles forwarded message summarization
-   - `forward_content_processor.py` — Forward content extraction
-   - `forward_summarizer.py` — Forward message summarization
-   - `task_manager.py` — Task management for multi-link processing
-
-2. **Content Pipeline** (`app/adapters/content/`)
-   - `content_extractor.py` — Firecrawl integration and YouTube routing
-   - `content_chunker.py` — Splits large content for LLM processing
-   - `llm_summarizer.py` — OpenRouter summarization with optional web search enrichment
-   - `llm_response_workflow.py` — LLM response handling workflow
-   - `url_processor.py` — Coordinates extraction → chunking → summarization
-   - `search_context_builder.py` — Formats web search results for LLM context injection
-
-3. **YouTube Adapter** (`app/adapters/youtube/`)
-   - `youtube_downloader.py` — yt-dlp video download and youtube-transcript-api integration
-   - Supports all major YouTube URL formats (watch, shorts, live, music, embed, mobile)
-   - Dual extraction: transcripts via API + video download in configurable quality (default 1080p)
-   - Storage management with configurable limits and auto-cleanup
-   - Comprehensive error handling for age-restricted, geo-blocked, and unavailable videos
-
-4. **External Services** (`app/adapters/openrouter/`, `app/adapters/external/`)
-   - `openrouter_client.py` — HTTP client for OpenRouter API
-   - `request_builder.py` — Builds OpenRouter payloads
-   - `response_processor.py` — Parses and validates LLM responses
-   - `error_handler.py` — Retry logic and error mapping
-   - `firecrawl_parser.py` — Parses Firecrawl responses
-   - `response_formatter.py` — Formats Telegram replies
-
-4. **Core Utilities** (`app/core/`)
-   - `url_utils.py` — URL normalization and deduplication (sha256 hash)
-   - `json_utils.py` — JSON parsing with repair (handles malformed LLM output)
-   - `summary_contract.py` — Summary JSON validation (strict contract enforcement)
-   - `lang.py` — Language detection and prompt selection
-   - `logging_utils.py` — Structured logging with correlation IDs
-
-5. **Database** (`app/db/`)
-   - `database.py` — SQLite connection and schema
-   - `models.py` — Peewee ORM models
-   - Schema: users, chats, requests, telegram_messages, crawl_results, video_downloads, llm_calls, summaries
-
-6. **CLI Tools** (`app/cli/`)
-   - `summary.py` — Local CLI runner for testing summaries without Telegram
-   - `migrate_db.py` — Database migrations
-   - `search.py` — Search summaries by topics/entities
-   - `search_compare.py` — Compare search implementations
-   - `backfill_embeddings.py` — Backfill embeddings for existing summaries
-
-7. **Mobile API** (`app/api/`)
-   - `main.py` — FastAPI application entry point
-   - `middleware.py` — Request/response middleware (CORS, error handling)
-   - `error_handlers.py` — Global error handlers
-   - `exceptions.py` — Custom API exceptions
-   - `background_processor.py` — Background task processing
-   - **Routers** (`app/api/routers/`)
-     - `auth.py` — Telegram-based authentication, JWT tokens
-     - `summaries.py` — Summary retrieval endpoints
-     - `sync.py` — Mobile client sync endpoints
-   - **Models** (`app/api/models/`)
-     - Pydantic request/response models for API contracts
-   - **Services** (`app/api/services/`)
-     - Business logic for API operations
-
-8. **Multi-Agent Architecture** (`app/agents/`)
-   - `base_agent.py` — Base agent class with result pattern
-   - `validation_agent.py` — Summary validation with detailed errors
-   - `content_extraction_agent.py` — Content extraction with quality checks
-   - `summarization_agent.py` — Summarization with self-correction loop
-   - `web_search_agent.py` — LLM-driven web search for context enrichment (opt-in)
-   - `orchestrator.py` — Agent pipeline orchestration
-
-9. **Search Services** (`app/services/`)
-   - `topic_search.py` — Topic-based search (local and service implementations)
-   - `topic_search_utils.py` — Search utilities and helpers
-   - `vector_search_service.py` — Vector similarity search
-   - `hybrid_search_service.py` — Hybrid search (keyword + vector)
-   - `query_expansion_service.py` — Query expansion for better search
-   - `reranking_service.py` — Search result reranking
-   - `embedding_service.py` — Text embedding generation
-   - `summary_embedding_generator.py` — Summary-specific embeddings
-   - `search_filters.py` — Search filtering utilities
-
-10. **Utilities** (`app/utils/`)
-    - `progress_tracker.py` — Progress tracking for multi-step operations
-    - `message_formatter.py` — Message formatting utilities
-    - `json_validation.py` — JSON validation helpers
-
-11. **Domain Layer** (`app/domain/`)
-    - Domain-driven design models and services
-    - Business logic separated from infrastructure
-
-12. **Infrastructure** (`app/infrastructure/`)
-    - Persistence layer implementations
-    - Event bus and messaging infrastructure
+- **Telegram Layer** (`app/adapters/telegram/`) -- Bot orchestration, message routing, access control, persistence, command processing, URL/forward handling
+- **Content Pipeline** (`app/adapters/content/`) -- Firecrawl integration, content chunking, LLM summarization, web search context
+- **YouTube Adapter** (`app/adapters/youtube/`) -- yt-dlp video download, transcript extraction, storage management
+- **External Services** (`app/adapters/openrouter/`, `app/adapters/external/`) -- OpenRouter client, Firecrawl parser, response formatting
+- **Core Utilities** (`app/core/`) -- URL normalization, JSON parsing/repair, summary contract validation, language detection, structured logging
+- **Database** (`app/db/`) -- SQLite schema, Peewee ORM models, migrations
+- **CLI Tools** (`app/cli/`) -- Summary runner, search, migrations, MCP server, embedding backfill
+- **Mobile API** (`app/api/`) -- FastAPI REST API with JWT auth, sync, background processing
+- **Multi-Agent System** (`app/agents/`) -- Content extraction, summarization with self-correction, validation, web search agents. See `docs/multi_agent_architecture.md`
+- **Search Services** (`app/services/`) -- Topic search, vector/hybrid search, embeddings, reranking, query expansion
+- **MCP Server** (`app/mcp/`) -- Model Context Protocol server for AI agent access. See `docs/mcp_server.md`
+- **Domain Layer** (`app/domain/`) -- DDD models and services
+- **Infrastructure** (`app/infrastructure/`) -- Persistence layer, event bus, vector store
 
 ## Directory Structure
 
 ```
 app/
-├── adapters/           # External service integrations
-│   ├── content/        # URL processing pipeline
-│   ├── external/       # Firecrawl parser, response formatter
-│   ├── openrouter/     # OpenRouter client and helpers
-│   ├── telegram/       # Telegram bot logic
-│   └── youtube/        # YouTube video download and transcript extraction
-├── cli/                # CLI tools (summary runner, search, migrations)
-├── core/               # Shared utilities (URL, JSON, logging, lang)
-├── db/                 # Database schema and models
-├── di/                 # Dependency injection
-├── domain/             # Domain models and services (DDD patterns)
-├── handlers/           # Request handlers
-├── infrastructure/     # Persistence and messaging infrastructure
-├── models/             # Pydantic/dataclass models
-│   ├── llm/            # LLM config models
-│   └── telegram/       # Telegram entity models
-├── presentation/       # Presentation layer
-├── prompts/            # LLM system prompts (en/ru)
-├── security/           # Security utilities
-├── services/           # Search and other domain services
-└── utils/              # Helper utilities (progress, formatting, validation)
++-- adapters/           # External service integrations
+|   +-- content/        # URL processing pipeline
+|   +-- external/       # Firecrawl parser, response formatter
+|   +-- openrouter/     # OpenRouter client and helpers
+|   +-- telegram/       # Telegram bot logic
+|   +-- youtube/        # YouTube video download and transcript extraction
++-- agents/             # Multi-agent system (extraction, summarization, validation, web search)
++-- api/                # Mobile API (FastAPI, JWT auth, sync)
+|   +-- models/         # Pydantic request/response models
+|   +-- routers/        # Route handlers (auth, summaries, sync)
+|   +-- services/       # API business logic
++-- cli/                # CLI tools (summary runner, search, MCP server, migrations)
++-- core/               # Shared utilities (URL, JSON, logging, lang)
++-- db/                 # Database schema and models
++-- di/                 # Dependency injection
++-- domain/             # Domain models and services (DDD patterns)
++-- handlers/           # Request handlers
++-- infrastructure/     # Persistence, event bus, vector store
++-- mcp/                # MCP server for AI agent access
++-- models/             # Pydantic/dataclass models
+|   +-- llm/            # LLM config models
+|   +-- telegram/       # Telegram entity models
++-- presentation/       # Presentation layer
++-- prompts/            # LLM system prompts (en/ru)
++-- security/           # Security utilities
++-- services/           # Search and other domain services
++-- types/              # Type definitions
++-- utils/              # Helper utilities (progress, formatting, validation)
 ```
 
 ## Summary JSON Contract
 
-All summaries must conform to a strict JSON schema (defined in `app/core/summary_contract.py`):
-
-```json
-{
-  "summary_250": "<=250 chars, sentence boundary",
-  "summary_1000": "<=1000 chars, multi-sentence overview",
-  "tldr": "concise multi-sentence summary",
-  "key_ideas": ["idea1", "idea2", "idea3", "idea4", "idea5"],
-  "topic_tags": ["#tag1", "#tag2", "#tag3"],
-  "entities": {
-    "people": [...],
-    "organizations": [...],
-    "locations": [...]
-  },
-  "estimated_reading_time_min": 7,
-  "key_stats": [{"label": "...", "value": 12.3, "unit": "BUSD", "source_excerpt": "..."}],
-  "answered_questions": ["What is ...?", "How does ...?"],
-  "readability": {"method": "Flesch-Kincaid", "score": 12.4, "level": "College"},
-  "seo_keywords": ["keyword one", "keyword two", "keyword three"]
-}
-```
-
-**Validation rules:**
-- Enforce character limits on `summary_250` and `summary_1000`
-- Deduplicate `topic_tags` (enforce leading `#`)
-- Deduplicate `entities` (case-insensitive)
-- All fields are validated in `app/core/summary_contract.py`
+Defined in `app/core/summary_contract.py` and documented in SPEC.md. Key fields: `summary_250`, `summary_1000`, `tldr`, `key_ideas`, `topic_tags`, `entities`, `estimated_reading_time_min`, `key_stats`, `answered_questions`, `readability`, `seo_keywords`.
 
 ## Development Workflow
 
@@ -217,7 +108,7 @@ All summaries must conform to a strict JSON schema (defined in `app/core/summary
 - **Formatting:** Black (line length 100) + isort (profile=black) + ruff format
 - **Linting:** Ruff (see `pyproject.toml` for rules)
 - **Type Checking:** mypy (permissive config, `python_version = "3.13"`)
-- **Pre-commit Hooks:** Run ruff → isort → black in sequence
+- **Pre-commit Hooks:** Run ruff -> isort -> black in sequence
 - **Testing:** unittest + pytest-asyncio
 
 ### Common Commands
@@ -269,7 +160,7 @@ GitHub Actions (`.github/workflows/ci.yml`) enforces:
 ### When Making Changes
 
 1. **URL Flow Changes:**
-   - Respect URL normalization (`app/core/url_utils.py`) — all URLs must be normalized before deduplication
+   - Respect URL normalization (`app/core/url_utils.py`) -- all URLs must be normalized before deduplication
    - Preserve `dedupe_hash` (sha256) for idempotence
    - Always persist Firecrawl responses in `crawl_results` table
    - Check `app/adapters/content/url_processor.py` for orchestration logic
@@ -300,7 +191,7 @@ GitHub Actions (`.github/workflows/ci.yml`) enforces:
 
 6. **Error Handling:**
    - All user-visible errors must include `Error ID: <correlation_id>`
-   - Correlation IDs tie Telegram messages → DB requests → logs
+   - Correlation IDs tie Telegram messages -> DB requests -> logs
    - Use structured logging (`app/core/logging_utils.py`)
    - Persist all LLM failures in `llm_calls` table (even errors)
 
@@ -326,240 +217,27 @@ GitHub Actions (`.github/workflows/ci.yml`) enforces:
 
 ### YouTube Video Support
 
-- **URL Detection:** Automatically detects YouTube URLs via `app/core/url_utils.py`
-- **Supported Formats:** Standard watch, shorts, live, embed, mobile (m.youtube.com), YouTube Music, legacy /v/ URLs
-- **URL Pattern Handling:** Handles query parameters in any order (e.g., `?feature=share&v=ID`)
-- **Dual Extraction Strategy:**
-  1. Transcript extraction via `youtube-transcript-api` (prefers manual, falls back to auto-generated)
-  2. Video download via `yt-dlp` in configurable quality (default 1080p)
-- **Storage Management:**
-  - Videos organized by date: `/data/videos/YYYYMMDD/VIDEO_ID_title.mp4`
-  - Configurable limits: per-video size, total storage GB
-  - Auto-cleanup of old videos (configurable retention period)
-  - Deduplication via URL hash (won't re-download same video)
-- **Database Schema:**
-  - `video_downloads` table stores metadata, file paths, transcript
-  - Links to `requests` table via foreign key
-  - Tracks: title, channel, duration, views, likes, resolution, codecs, transcript source
-- **Error Handling:**
-  - Age-restricted videos: Clear message about login requirement
-  - Geo-blocked: Informs user about regional restrictions
-  - Private/deleted: Explains unavailability
-  - Rate limits: Suggests retry timing
-  - No transcript: Continues download without transcript
-- **ffmpeg Dependency:**
-  - Required for yt-dlp to merge video/audio streams
-  - Installed in Docker runtime stage
-  - Essential for best quality downloads
-- **Integration Point:**
-  - `content_extractor.py` routes YouTube URLs to `youtube_downloader.py`
-  - Rest of pipeline (LLM summarization, response formatting) remains unchanged
+YouTube URL detection, transcript extraction, and video download are handled by `app/adapters/youtube/`. Supports all major URL formats (watch, shorts, live, embed, mobile, music). See README.md for details.
 
 ### Web Search Enrichment (Optional)
 
-When `WEB_SEARCH_ENABLED=true`, the bot can enrich article summaries with current web context:
-
-- **Two-Pass Architecture:**
-  1. **Pass 1 (Analysis):** LLM analyzes content to identify knowledge gaps
-  2. **Pass 2 (Enriched Summary):** If search beneficial, inject search context into summarization prompt
-
-- **Knowledge Gap Detection:**
-  - Unfamiliar entities or terminology mentioned in content
-  - Recent events or developments referenced
-  - Claims or statistics needing verification
-  - Content about events after LLM training cutoff
-
-- **Components:**
-  - `WebSearchAgent` (`app/agents/web_search_agent.py`) — Decides if search needed, extracts queries
-  - `SearchContextBuilder` (`app/adapters/content/search_context_builder.py`) — Formats results as markdown
-  - `TopicSearchService` (`app/services/topic_search.py`) — Executes Firecrawl Search API calls
-
-- **Flow:**
-  ```
-  Article Content → LLM Analysis → "Do I need more context?"
-                                            ↓
-                                      Yes → Extract queries → Firecrawl Search → Format context
-                                            ↓
-                                      Inject into summarization prompt → Generate enriched summary
-  ```
-
-- **Configuration:**
-  - `WEB_SEARCH_ENABLED=false` — Opt-in feature (default off)
-  - `WEB_SEARCH_MAX_QUERIES=3` — Max search queries per article
-  - `WEB_SEARCH_MIN_CONTENT_LENGTH=500` — Skip search for short content
-  - `WEB_SEARCH_TIMEOUT_SEC=10.0` — Timeout for search operations
-  - `WEB_SEARCH_MAX_CONTEXT_CHARS=2000` — Max chars for injected context
-
-- **Cost Considerations:**
-  - ~30-40% of articles trigger search (self-contained content skipped)
-  - Adds 1 LLM call for analysis (~200-500 tokens)
-  - 1-3 Firecrawl search API calls when triggered
-  - Feature is opt-in to control costs
-
-- **Integration Point:**
-  - `llm_summarizer.py` calls `_maybe_enrich_with_search()` before main summarization
-  - Graceful degradation: failures don't break summarization
-
-- **Prompts:**
-  - `app/prompts/search_analysis_en.txt` — English gap analysis prompt
-  - `app/prompts/search_analysis_ru.txt` — Russian gap analysis prompt
+When `WEB_SEARCH_ENABLED=true`, the bot enriches summaries with current web context via a two-pass LLM architecture. See README.md for details.
 
 ### Debugging Tips
 
-1. **Correlation IDs:** Every request gets a unique `correlation_id` — use it to trace through logs and DB
+1. **Correlation IDs:** Every request gets a unique `correlation_id` -- use it to trace through logs and DB
 2. **Debug Payloads:** Set `DEBUG_PAYLOADS=1` to log Firecrawl/OpenRouter request/response previews (Authorization redacted)
 3. **CLI Runner:** Use `python -m app.cli.summary` to test URL processing without Telegram
-4. **Database Inspection:** SQLite at `DB_PATH` (default: `/data/app.db`) — use any SQLite browser
+4. **Database Inspection:** SQLite at `DB_PATH` (default: `/data/app.db`) -- use any SQLite browser
 5. **Logs:** Structured JSON logs to stdout; use `LOG_LEVEL=DEBUG` for verbose traces
 
-## Multi-Agent Architecture
+### Multi-Agent Architecture
 
-The project implements a multi-agent pattern for improved quality, maintainability, and debugging:
+Four specialized agents (ContentExtraction, Summarization, Validation, WebSearch) coordinate via an AgentOrchestrator. The SummarizationAgent implements a self-correction feedback loop (retry with error feedback up to 3x). See `docs/multi_agent_architecture.md` for complete documentation.
 
-### Agent Overview
+### Safety Hooks
 
-**Four specialized agents handle different workflow stages:**
-
-1. **ContentExtractionAgent** (`app/agents/content_extraction_agent.py`)
-   - Extracts content from URLs via Firecrawl
-   - Validates content quality
-   - Persists crawl results
-
-2. **SummarizationAgent** (`app/agents/summarization_agent.py`)
-   - Generates summaries via LLM
-   - Implements self-correction feedback loop
-   - Retries with error feedback up to N times
-
-3. **ValidationAgent** (`app/agents/validation_agent.py`)
-   - Enforces JSON contract compliance
-   - Checks character limits, field types, deduplication
-   - Returns detailed, actionable error messages
-
-4. **WebSearchAgent** (`app/agents/web_search_agent.py`)
-   - Analyzes content for knowledge gaps (unfamiliar entities, recent events, claims needing verification)
-   - Extracts targeted search queries when beneficial
-   - Executes searches via TopicSearchService (Firecrawl Search API)
-   - Returns formatted context for LLM injection
-   - Opt-in feature (controlled by `WEB_SEARCH_ENABLED`)
-
-### Feedback Loop Pattern
-
-The SummarizationAgent implements self-correction:
-
-```
-Generate Summary → Validate → If Valid: Return
-                      ↓
-                   If Invalid
-                      ↓
-            Extract Error Details
-                      ↓
-         Retry with Error Feedback
-                      ↓
-              (Repeat up to 3x)
-```
-
-### Agent Orchestrator
-
-**AgentOrchestrator** (`app/agents/orchestrator.py`) coordinates the full pipeline:
-
-```
-URL → ContentExtractionAgent → WebSearchAgent (optional) → SummarizationAgent ↔ ValidationAgent → Output
-```
-
-### Using Agents
-
-```python
-from app.agents import ValidationAgent, SummarizationAgent
-
-# Validate a summary
-validator = ValidationAgent(correlation_id="abc123")
-result = await validator.execute({"summary_json": summary})
-
-if not result.success:
-    print(f"Validation errors: {result.error}")
-
-# Summarize with feedback loop
-summarizer = SummarizationAgent(llm_summarizer, validator)
-result = await summarizer.execute({
-    "content": content,
-    "correlation_id": "abc123",
-    "max_retries": 3
-})
-```
-
-### Benefits
-
-- **Improved Quality**: Self-correction reduces validation errors by 60-80%
-- **Better Debugging**: Clear agent boundaries and detailed tracking
-- **Easier Maintenance**: Single responsibility per agent
-- **Enhanced Observability**: Structured results with metadata
-
-**See `docs/multi_agent_architecture.md` for complete documentation.**
-
-## Safety Hooks
-
-Claude Code hooks in `.claude/settings.json` provide automatic safety checks and environment validation.
-
-### Configured Hooks
-
-**PreToolUse Hooks:**
-- **File Protection**: Blocks modifications to database, .env, requirements files
-- **Code Safety**: Warns about dangerous patterns (eval, exec, os.system)
-- **Bash Safety**: Blocks destructive commands (rm -rf /, dd, mkfs)
-
-**SessionStart Hook:**
-- Validates Python version and virtual environment
-- Checks required dependencies installed
-- Verifies .env file and API keys configured
-- Shows database status and git branch
-- Displays quick command reference
-
-**PostToolUse Hook:**
-- Runs quick lint check on modified Python files
-- Shows formatting issues immediately
-- Suggests fixes with `make format`
-
-**UserPromptSubmit Hook:**
-- Auto-injects helpful context based on prompt keywords
-- Adds database query patterns for correlation ID debugging
-- Links to relevant skills for common tasks
-
-### Hook Examples
-
-**Protected file modification:**
-```
-ERROR: Cannot modify protected file: data/app.db
-Protected pattern matched: data/app.db
-
-To modify this file:
-1. Review the change carefully
-2. Ask user for explicit permission
-3. Make changes manually if needed
-```
-
-**Session start output:**
-```
-=== Bite-Size Reader Session Started ===
-
-✓ Python: 3.13.0
-✓ Virtual environment: active
-✓ Core dependencies: installed
-✓ Environment file: .env exists
-✓ Required API keys: configured
-✓ Database: data/app.db (2.3M)
-✓ Git branch: main
-
-Quick commands:
-  make format  - Format code
-  make lint    - Lint code
-  python -m app.cli.summary --url <URL> - Test CLI runner
-
-IMPORTANT: Always preserve correlation IDs when debugging!
-```
-
-### Customizing Hooks
-
-Edit `.claude/settings.json` to modify hook behavior. See `.claude/settings.json` for current configuration.
+Claude Code hooks provide automatic safety checks. See `docs/claude_code_hooks.md`.
 
 ## Common Tasks
 
@@ -597,49 +275,37 @@ Edit `.claude/settings.json` to modify hook behavior. See `.claude/settings.json
 
 ## External Service References
 
-### Firecrawl
-- **Docs:** https://docs.firecrawl.dev/features/scrape
-- **API Reference:** https://docs.firecrawl.dev/api-reference/endpoint/scrape
-- **Advanced Guide:** https://docs.firecrawl.dev/advanced-scraping-guide
-- **Integration:** `app/adapters/content/content_extractor.py`
-
-### OpenRouter
-- **Overview:** https://openrouter.ai/docs/api-reference/overview
-- **Chat Completions:** https://openrouter.ai/docs/api-reference/chat-completion
-- **Quickstart:** https://openrouter.ai/docs/quickstart
-- **Integration:** `app/adapters/openrouter/openrouter_client.py`
-
-### Pyrogram (Telegram)
-- **PyroTGFork Site:** https://telegramplayground.github.io/pyrogram/
-- **Upstream Client Docs:** https://docs.pyrogram.org/api/client
-- **Upstream Message Docs:** https://docs.pyrogram.org/api/types/Message
-- **Integration:** `app/adapters/telegram/telegram_bot.py`
+- **Firecrawl:** https://docs.firecrawl.dev/api-reference/endpoint/scrape | Integration: `app/adapters/content/content_extractor.py`
+- **OpenRouter:** https://openrouter.ai/docs/api-reference/chat-completion | Integration: `app/adapters/openrouter/openrouter_client.py`
+- **Pyrogram:** https://telegramplayground.github.io/pyrogram/ | Integration: `app/adapters/telegram/telegram_bot.py`
 
 ## File References
 
 When making changes, these are the most critical files to understand:
 
-- **`app/adapters/telegram/message_router.py`** — Central routing logic
-- **`app/adapters/content/url_processor.py`** — URL processing orchestration
-- **`app/core/summary_contract.py`** — Summary validation (strict contract)
-- **`app/core/url_utils.py`** — URL normalization and deduplication
-- **`app/db/models.py`** — Database schema (ORM models)
-- **`app/config.py`** — Configuration loading
-- **`bot.py`** — Entrypoint (wires everything together)
-- **`SPEC.md`** — Full technical specification (canonical reference)
+- **`app/adapters/telegram/message_router.py`** -- Central routing logic
+- **`app/adapters/content/url_processor.py`** -- URL processing orchestration
+- **`app/core/summary_contract.py`** -- Summary validation (strict contract)
+- **`app/core/url_utils.py`** -- URL normalization and deduplication
+- **`app/db/models.py`** -- Database schema (ORM models)
+- **`app/config.py`** -- Configuration loading
+- **`app/api/main.py`** -- Mobile API entry point
+- **`app/mcp/server.py`** -- MCP server for AI agents
+- **`bot.py`** -- Entrypoint (wires everything together)
+- **`SPEC.md`** -- Full technical specification (canonical reference)
 
 ## Best Practices
 
-1. **Always read SPEC.md first** — it's the authoritative source of truth
-2. **Preserve correlation IDs** — they're essential for debugging
-3. **Validate summary JSON** — use `app/core/summary_contract.py` functions
-4. **Test with CLI runner** — faster iteration than full bot testing
-5. **Follow pre-commit hooks** — run `make format` before committing
-6. **Update both en/ and ru/ prompts** — when changing LLM behavior
-7. **Document DB schema changes** — update SPEC.md data model section
-8. **Persist everything** — Firecrawl responses, LLM calls, Telegram messages (observability is key)
-9. **Use structured logging** — include correlation IDs and context in all logs
-10. **Respect async patterns** — use `await` properly, don't block the event loop
+1. **Always read SPEC.md first** -- it's the authoritative source of truth
+2. **Preserve correlation IDs** -- they're essential for debugging
+3. **Validate summary JSON** -- use `app/core/summary_contract.py` functions
+4. **Test with CLI runner** -- faster iteration than full bot testing
+5. **Follow pre-commit hooks** -- run `make format` before committing
+6. **Update both en/ and ru/ prompts** -- when changing LLM behavior
+7. **Document DB schema changes** -- update SPEC.md data model section
+8. **Persist everything** -- Firecrawl responses, LLM calls, Telegram messages (observability is key)
+9. **Use structured logging** -- include correlation IDs and context in all logs
+10. **Respect async patterns** -- use `await` properly, don't block the event loop
 
 ## Quick Reference: Environment Variables
 
@@ -651,49 +317,15 @@ BOT_TOKEN=...                       # Telegram bot token
 ALLOWED_USER_IDS=123456789          # Comma-separated owner IDs
 FIRECRAWL_API_KEY=...               # Firecrawl API key
 OPENROUTER_API_KEY=...              # OpenRouter API key
-OPENROUTER_MODEL=deepseek/deepseek-v3.2  # Default model (most reliable for structured outputs)
-OPENROUTER_FALLBACK_MODELS=moonshotai/kimi-k2.5,qwen/qwen3-max,deepseek/deepseek-r1  # Fallback models
-OPENROUTER_LONG_CONTEXT_MODEL=moonshotai/kimi-k2.5  # Long context model (256k context + reasoning)
-
-# Mobile API (Optional - only if using Mobile API)
-JWT_SECRET_KEY=...                  # JWT secret for Mobile API auth (min 32 chars)
-ALLOWED_CLIENT_IDS=...              # Comma-separated client app IDs (empty = allow all)
-
-# Optional
-DB_PATH=/data/app.db                # SQLite database path
-LOG_LEVEL=INFO                      # Logging level (DEBUG, INFO, WARNING, ERROR)
-REQUEST_TIMEOUT_SEC=60              # Request timeout
-PREFERRED_LANG=auto                 # Language preference (auto|en|ru)
-DEBUG_PAYLOADS=0                    # Log request/response payloads (0|1)
-MAX_CONCURRENT_CALLS=4              # Max concurrent Firecrawl/OpenRouter calls
-OPENROUTER_HTTP_REFERER=...         # Optional OpenRouter attribution
-OPENROUTER_X_TITLE=...              # Optional OpenRouter attribution
-DB_BACKUP_ENABLED=1                 # Enable DB backups (0|1)
-DB_BACKUP_INTERVAL_MINUTES=360      # Backup interval
-DB_BACKUP_RETENTION=14              # Backup retention days
-DB_BACKUP_DIR=/data/backups         # Backup directory
-
-# YouTube Video Download
-YOUTUBE_DOWNLOAD_ENABLED=true       # Enable/disable YouTube video download feature
-YOUTUBE_STORAGE_PATH=/data/videos   # Directory for downloaded videos
-YOUTUBE_MAX_VIDEO_SIZE_MB=500       # Maximum size per video (MB)
-YOUTUBE_MAX_STORAGE_GB=100          # Maximum total storage for all videos (GB)
-YOUTUBE_PREFERRED_QUALITY=1080p     # Video quality (1080p, 720p, 480p, etc.)
-YOUTUBE_SUBTITLE_LANGUAGES=en,ru    # Preferred subtitle/transcript languages
-YOUTUBE_AUTO_CLEANUP_ENABLED=true   # Enable automatic cleanup of old videos
-YOUTUBE_CLEANUP_AFTER_DAYS=30       # Delete videos older than N days
-
-# Web Search Enrichment (Optional)
-WEB_SEARCH_ENABLED=false            # Enable LLM-driven web search (opt-in)
-WEB_SEARCH_MAX_QUERIES=3            # Max search queries per article
-WEB_SEARCH_MIN_CONTENT_LENGTH=500   # Min content length (chars) to trigger search
-WEB_SEARCH_TIMEOUT_SEC=10.0         # Timeout for search operations
-WEB_SEARCH_MAX_CONTEXT_CHARS=2000   # Max chars for injected search context
+OPENROUTER_MODEL=deepseek/deepseek-v3.2  # Default model
+OPENROUTER_FALLBACK_MODELS=moonshotai/kimi-k2.5,qwen/qwen3-max,deepseek/deepseek-r1
 ```
+
+Full reference: `docs/environment_variables.md`
 
 ---
 
-**Last Updated:** 2026-01-26
+**Last Updated:** 2026-02-03
 
 For questions about the codebase, always refer to:
 1. This file (CLAUDE.md) for AI assistant guidance
