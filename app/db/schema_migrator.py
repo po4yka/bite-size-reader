@@ -1,4 +1,10 @@
-"""Schema migration helpers for DatabaseSessionManager."""
+"""Schema migration helpers for DatabaseSessionManager.
+
+Column additions are now handled by versioned migration files in
+``app/cli/migrations/`` (see 005_add_schema_columns.py).  This module
+retains only the idempotent JSON coercion logic that must run on every
+startup to fix malformed data.
+"""
 
 from __future__ import annotations
 
@@ -14,49 +20,23 @@ if TYPE_CHECKING:
 
 
 class SchemaMigrator:
-    """Encapsulate schema compatibility and JSON coercion logic."""
+    """Idempotent JSON coercion for database columns.
+
+    Column additions that previously lived here have been moved to
+    ``app/cli/migrations/005_add_schema_columns.py``.
+    """
 
     def __init__(self, database: peewee.SqliteDatabase, logger: logging.Logger) -> None:
         self._database = database
         self._logger = logger
 
     def ensure_schema_compatibility(self) -> None:
-        """Execute schema migrations for backward compatibility."""
-        checks = [
-            ("requests", "correlation_id", "TEXT"),
-            ("summaries", "insights_json", "TEXT"),
-            ("summaries", "is_read", "INTEGER"),
-            ("crawl_results", "correlation_id", "TEXT"),
-            ("crawl_results", "firecrawl_success", "INTEGER"),
-            ("crawl_results", "firecrawl_error_code", "TEXT"),
-            ("crawl_results", "firecrawl_error_message", "TEXT"),
-            ("crawl_results", "firecrawl_details_json", "TEXT"),
-            ("llm_calls", "structured_output_used", "INTEGER"),
-            ("llm_calls", "structured_output_mode", "TEXT"),
-            ("llm_calls", "error_context_json", "TEXT"),
-            ("llm_calls", "openrouter_response_text", "TEXT"),
-            ("llm_calls", "openrouter_response_json", "TEXT"),
-            ("user_interactions", "updated_at", "DATETIME"),
-            ("summary_embeddings", "language", "TEXT"),  # Multi-language support
-            ("collections", "parent_id", "INTEGER"),
-            ("collections", "position", "INTEGER"),
-            ("collections", "is_shared", "INTEGER"),
-            ("collections", "share_count", "INTEGER"),
-            ("collections", "is_deleted", "INTEGER"),
-            ("collections", "deleted_at", "DATETIME"),
-            ("collection_items", "position", "INTEGER"),
-        ]
-        for table, column, coltype in checks:
-            self._ensure_column(table, column, coltype)
+        """Run idempotent JSON coercion on startup.
 
+        Column additions are no longer performed here -- they are handled by
+        the versioned migration runner (see ``005_add_schema_columns.py``).
+        """
         self._coerce_json_columns()
-
-    def _ensure_column(self, table: str, column: str, coltype: str) -> None:
-        if table not in self._database.get_tables():
-            return
-        existing = {col.name for col in self._database.get_columns(table)}
-        if column not in existing:
-            self._database.execute_sql(f"ALTER TABLE {table} ADD COLUMN {column} {coltype}")
 
     def _coerce_json_columns(self) -> None:
         """Ensure JSON columns contain valid JSON data."""

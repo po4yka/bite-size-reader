@@ -170,7 +170,7 @@ def upgrade(db: Database) -> None:
 
     logger.info(
         "index_migration_complete",
-        extra={"created": created_count, "skipped": skipped_count},
+        extra={"indexes_created": created_count, "indexes_skipped": skipped_count},
     )
 
 

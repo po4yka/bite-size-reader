@@ -150,25 +150,31 @@ def _add_request_validation_triggers(db: Database) -> None:
 
     Validation rules:
     - URL requests must have normalized_url
-    - Forward requests must have fwd_from_chat_id and fwd_from_msg_id
+    - Forward requests: if fwd_from_chat_id is set, fwd_from_msg_id must also be set
+      (and vice versa). Both NULL is valid (user/privacy-protected forwards).
     """
     # Drop existing triggers if they exist
     db._database.execute_sql("DROP TRIGGER IF EXISTS validate_request_insert")
     db._database.execute_sql("DROP TRIGGER IF EXISTS validate_request_update")
 
     # Trigger for INSERT
+    # For forward requests, enforce that chat_id and msg_id are either both set or both NULL.
+    # User forwards and privacy-protected forwards legitimately have both as NULL.
     db._database.execute_sql("""
         CREATE TRIGGER validate_request_insert
         BEFORE INSERT ON requests
         WHEN (
             (NEW.type = 'url' AND NEW.normalized_url IS NULL)
-            OR (NEW.type = 'forward' AND (NEW.fwd_from_chat_id IS NULL OR NEW.fwd_from_msg_id IS NULL))
+            OR (NEW.type = 'forward' AND (
+                (NEW.fwd_from_chat_id IS NOT NULL AND NEW.fwd_from_msg_id IS NULL)
+                OR (NEW.fwd_from_chat_id IS NULL AND NEW.fwd_from_msg_id IS NOT NULL)
+            ))
         )
         BEGIN
-            SELECT RAISE(ABORT, 'Request validation failed: URL requests must have normalized_url, forward requests must have fwd_from_chat_id and fwd_from_msg_id');
+            SELECT RAISE(ABORT, 'Request validation failed: URL requests must have normalized_url, forward requests must have both fwd_from_chat_id and fwd_from_msg_id or neither');
         END;
     """)
-    logger.debug("  ✓ Created INSERT validation trigger")
+    logger.debug("  Created INSERT validation trigger")
 
     # Trigger for UPDATE
     db._database.execute_sql("""
@@ -176,13 +182,16 @@ def _add_request_validation_triggers(db: Database) -> None:
         BEFORE UPDATE ON requests
         WHEN (
             (NEW.type = 'url' AND NEW.normalized_url IS NULL)
-            OR (NEW.type = 'forward' AND (NEW.fwd_from_chat_id IS NULL OR NEW.fwd_from_msg_id IS NULL))
+            OR (NEW.type = 'forward' AND (
+                (NEW.fwd_from_chat_id IS NOT NULL AND NEW.fwd_from_msg_id IS NULL)
+                OR (NEW.fwd_from_chat_id IS NULL AND NEW.fwd_from_msg_id IS NOT NULL)
+            ))
         )
         BEGIN
-            SELECT RAISE(ABORT, 'Request validation failed: URL requests must have normalized_url, forward requests must have fwd_from_chat_id and fwd_from_msg_id');
+            SELECT RAISE(ABORT, 'Request validation failed: URL requests must have normalized_url, forward requests must have both fwd_from_chat_id and fwd_from_msg_id or neither');
         END;
     """)
-    logger.debug("  ✓ Created UPDATE validation trigger")
+    logger.debug("  Created UPDATE validation trigger")
 
 
 def downgrade(db: Database) -> None:

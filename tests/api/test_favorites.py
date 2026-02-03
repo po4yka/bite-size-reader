@@ -15,7 +15,11 @@ async def test_toggle_favorite(db, user_factory):
 
     # Manually create summary
     req = Request.create(
-        user_id=user.telegram_user_id, input_url="http://test1.com", status="completed", type="url"
+        user_id=user.telegram_user_id,
+        input_url="http://test1.com",
+        normalized_url="http://test1.com",
+        status="completed",
+        type="url",
     )
 
     summary = Summary.create(

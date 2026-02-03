@@ -3,7 +3,6 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import datetime as dt
-import json
 import logging
 import sqlite3
 from collections.abc import Iterable, Iterator, Mapping, Sequence
@@ -13,7 +12,6 @@ from pathlib import Path
 from typing import Any
 
 import peewee
-from peewee import fn
 from playhouse.sqlite_ext import SqliteExtDatabase
 
 from app.core.time_utils import UTC
@@ -441,7 +439,19 @@ class Database:
     def migrate(self) -> None:
         with self._database.connection_context(), self._database.bind_ctx(ALL_MODELS):
             self._database.create_tables(ALL_MODELS, safe=True)
-            self._ensure_schema_compatibility()
+
+            # Run versioned migrations (column additions, data migrations).
+            # Must stay inside the same connection_context to preserve tables
+            # on :memory: databases.
+            from app.cli.migrations.migration_runner import MigrationRunner
+
+            runner = MigrationRunner(self)
+            runner.run_pending()
+
+            # Idempotent JSON coercion and topic search index (runs every startup)
+            self._coerce_json_columns()
+            self._topic_search.ensure_index()
+
         self._run_database_maintenance()
         self._logger.info("db_migrated", extra={"path": self.path})
 
@@ -1413,46 +1423,6 @@ class Database:
 
     # -- internal helpers -------------------------------------------------
 
-    def _ensure_schema_compatibility(self) -> None:
-        checks = [
-            ("requests", "correlation_id", "TEXT"),
-            ("summaries", "insights_json", "TEXT"),
-            ("summaries", "is_read", "INTEGER"),
-            ("crawl_results", "correlation_id", "TEXT"),
-            ("crawl_results", "firecrawl_success", "INTEGER"),
-            ("crawl_results", "firecrawl_error_code", "TEXT"),
-            ("crawl_results", "firecrawl_error_message", "TEXT"),
-            ("crawl_results", "firecrawl_details_json", "TEXT"),
-            ("llm_calls", "structured_output_used", "INTEGER"),
-            ("llm_calls", "structured_output_mode", "TEXT"),
-            ("llm_calls", "error_context_json", "TEXT"),
-            ("llm_calls", "openrouter_response_text", "TEXT"),
-            ("llm_calls", "openrouter_response_json", "TEXT"),
-            ("user_interactions", "updated_at", "DATETIME"),
-            ("summary_embeddings", "language", "TEXT"),  # Multi-language support
-            ("collections", "parent_id", "INTEGER"),
-            ("collections", "position", "INTEGER"),
-            ("collections", "is_shared", "INTEGER"),
-            ("collections", "share_count", "INTEGER"),
-            ("collections", "is_deleted", "INTEGER"),
-            ("collections", "deleted_at", "DATETIME"),
-            ("collection_items", "position", "INTEGER"),
-        ]
-        for table, column, coltype in checks:
-            self._ensure_column(table, column, coltype)
-        self._migrate_openrouter_response_payloads()
-        self._migrate_firecrawl_raw_payload()
-        self._coerce_json_columns()
-        self._topic_search.ensure_index()
-
-    def _ensure_column(self, table: str, column: str, coltype: str) -> None:
-        if table not in self._database.get_tables():
-            return
-        existing = {col.name for col in self._database.get_columns(table)}
-        if column in existing:
-            return
-        self._database.execute_sql(f"ALTER TABLE {table} ADD COLUMN {column} {coltype}")
-
     def _coerce_json_columns(self) -> None:
         columns_map: dict[str, tuple[str, ...]] = {
             "telegram_messages": (
@@ -1530,101 +1500,6 @@ class Database:
             if blanks:
                 extra["blanks"] = blanks
             self._logger.info("json_column_coerced", extra=extra)
-
-    def _migrate_firecrawl_raw_payload(self) -> None:
-        rows = (
-            CrawlResult.select()
-            .where(
-                (CrawlResult.raw_response_json.is_null(False))
-                & (fn.trim(CrawlResult.raw_response_json) != "")
-            )
-            .iterator()
-        )
-        updated = 0
-        for row in rows:
-            raw_value = row.raw_response_json
-            if not raw_value:
-                continue
-            if isinstance(raw_value, dict | list):
-                payload = raw_value
-            else:
-                try:
-                    payload = json.loads(raw_value)
-                except Exception as exc:
-                    self._logger.debug(
-                        "firecrawl_migration_json_error",
-                        extra={"error": str(exc), "row_id": row.id},
-                    )
-                    continue
-            if not isinstance(payload, Mapping):
-                continue
-
-            success_val = payload.get("success")
-            success_bool: bool | None
-            if isinstance(success_val, bool):
-                success_bool = success_val
-            elif isinstance(success_val, int | float):
-                success_bool = bool(success_val)
-            else:
-                success_bool = None
-
-            error_code = payload.get("code")
-            if error_code is not None and not isinstance(error_code, str):
-                error_code = str(error_code)
-
-            error_message = payload.get("error")
-            if error_message is not None and not isinstance(error_message, str):
-                error_message = str(error_message)
-
-            details = payload.get("details")
-            details_json = self._prepare_json_payload(details)
-
-            CrawlResult.update(
-                {
-                    CrawlResult.firecrawl_success: success_bool,
-                    CrawlResult.firecrawl_error_code: error_code,
-                    CrawlResult.firecrawl_error_message: error_message,
-                    CrawlResult.firecrawl_details_json: details_json,
-                    CrawlResult.raw_response_json: None,
-                }
-            ).where(CrawlResult.id == row.id).execute()
-            updated += 1
-
-        if updated:
-            self._logger.info("firecrawl_payload_migrated", extra={"rows": updated})
-
-    def _migrate_openrouter_response_payloads(self) -> None:
-        rows = (
-            LLMCall.select()
-            .where(
-                (LLMCall.provider == "openrouter")
-                & (
-                    (LLMCall.response_text.is_null(False) & (fn.trim(LLMCall.response_text) != ""))
-                    | (
-                        LLMCall.response_json.is_null(False)
-                        & (fn.trim(LLMCall.response_json) != "")
-                    )
-                )
-            )
-            .iterator()
-        )
-        updated = 0
-        for row in rows:
-            # Serialize JSON so SQLite binding does not receive a raw dict
-            new_openrouter_json = row.openrouter_response_json or row.response_json
-            new_openrouter_text = row.openrouter_response_text or row.response_text
-            LLMCall.update(
-                {
-                    LLMCall.openrouter_response_text: new_openrouter_text,
-                    LLMCall.openrouter_response_json: new_openrouter_json,
-                    LLMCall.response_text: None,
-                    LLMCall.response_json: None,
-                }
-            ).where(LLMCall.id == row.id).execute()
-            updated += 1
-
-        if updated:
-            self._logger.info("openrouter_payload_migrated", extra={"rows": updated})
 
     # ==================== Video Download Methods ====================
 

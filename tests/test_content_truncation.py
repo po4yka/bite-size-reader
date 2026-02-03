@@ -82,7 +82,7 @@ class TestContentTruncation(unittest.IsolatedAsyncioTestCase):
 
             with (
                 patch.object(bot._firecrawl, "scrape_markdown", return_value=mock_crawl_result),
-                patch.object(bot._openrouter, "chat", return_value=mock_llm_result),
+                patch.object(bot._llm_client, "chat", return_value=mock_llm_result),
             ):
                 msg = FakeMessage("https://example.com", uid=12345)
                 await bot._handle_url_flow(msg, "https://example.com")
@@ -117,7 +117,7 @@ class TestContentTruncation(unittest.IsolatedAsyncioTestCase):
             mock_llm_result.latency_ms = 2000
             mock_llm_result.error_text = None
 
-            with patch.object(bot._openrouter, "chat", return_value=mock_llm_result):
+            with patch.object(bot._llm_client, "chat", return_value=mock_llm_result):
                 msg = FakeMessage(very_long_content, uid=12345)
                 await bot._handle_forward_flow(msg)
 
@@ -161,7 +161,7 @@ class TestContentTruncation(unittest.IsolatedAsyncioTestCase):
 
             with (
                 patch.object(bot._firecrawl, "scrape_markdown", return_value=mock_crawl_result),
-                patch.object(bot._openrouter, "chat", return_value=mock_llm_result),
+                patch.object(bot._llm_client, "chat", return_value=mock_llm_result),
             ):
                 msg = FakeMessage("https://example.com", uid=12345)
                 await bot._handle_url_flow(msg, "https://example.com")
@@ -204,7 +204,7 @@ class TestContentTruncation(unittest.IsolatedAsyncioTestCase):
 
             with (
                 patch.object(bot._firecrawl, "scrape_markdown", return_value=mock_crawl_result),
-                patch.object(bot._openrouter, "chat", return_value=mock_llm_result),
+                patch.object(bot._llm_client, "chat", return_value=mock_llm_result),
             ):
                 msg = FakeMessage("https://example.com", uid=12345)
                 await bot._handle_url_flow(msg, "https://example.com")
@@ -247,7 +247,7 @@ class TestContentTruncation(unittest.IsolatedAsyncioTestCase):
 
             with (
                 patch.object(bot._firecrawl, "scrape_markdown", return_value=mock_crawl_result),
-                patch.object(bot._openrouter, "chat", return_value=mock_llm_result),
+                patch.object(bot._llm_client, "chat", return_value=mock_llm_result),
             ):
                 msg = FakeMessage("https://example.com", uid=12345)
                 await bot._handle_url_flow(msg, "https://example.com")

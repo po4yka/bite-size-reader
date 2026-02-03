@@ -92,9 +92,11 @@ def summary_factory(user_factory):
         import random
 
         rand_id = random.randint(1, 100000)
+        url = f"http://test{rand_id}.com"
         req = Request.create(
             user_id=user.telegram_user_id,
-            input_url=f"http://test{rand_id}.com",
+            input_url=url,
+            normalized_url=url,
             status="completed",
             type="url",
         )

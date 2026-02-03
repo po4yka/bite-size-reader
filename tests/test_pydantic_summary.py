@@ -1,18 +1,12 @@
 import unittest
 
-import pytest
-
 from app.core.summary_contract import validate_and_shape_summary
-from app.core.summary_schema import PydanticAvailable
+from app.core.summary_schema import SummaryModel
 
 
-@unittest.skipUnless(PydanticAvailable, "Pydantic not available")
 class TestPydanticSummary(unittest.TestCase):
-    def test_summarymodel_rejects_overlong(self):
-        from pydantic import ValidationError
-
-        from app.core.summary_schema import SummaryModel
-
+    def test_summarymodel_caps_overlong(self):
+        """SummaryModel field validators cap overlong summaries instead of rejecting."""
         payload = {
             "summary_250": "x" * 300,
             "summary_1000": "y" * 1200,
@@ -27,12 +21,11 @@ class TestPydanticSummary(unittest.TestCase):
             "seo_keywords": [],
         }
 
-        with pytest.raises(ValidationError):
-            SummaryModel(**payload)
+        model = SummaryModel(**payload)
+        assert len(model.summary_250) <= 250
+        assert len(model.summary_1000) <= 1000
 
     def test_validate_and_shape_is_model_compatible(self):
-        from app.core.summary_schema import SummaryModel
-
         payload = {
             "summary_250": "x" * 300,
             "summary_1000": "ok",

@@ -45,6 +45,7 @@ class TestDatabaseRWLockIntegration(unittest.IsolatedAsyncioTestCase):
             chat_id=123,
             user_id=456,
             input_url="https://example.com",
+            normalized_url="https://example.com",
         )
 
         # Create summary
@@ -75,6 +76,7 @@ class TestDatabaseRWLockIntegration(unittest.IsolatedAsyncioTestCase):
             correlation_id="test-456",
             chat_id=123,
             user_id=456,
+            normalized_url="https://example.com/rw-isolation",
         )
 
         results: list[str] = []
@@ -114,6 +116,7 @@ class TestDatabaseRWLockIntegration(unittest.IsolatedAsyncioTestCase):
                 correlation_id=f"test-write-{i}",
                 chat_id=123,
                 user_id=456,
+                normalized_url=f"https://example.com/write-{i}",
             )
             request_ids.append(request_id)
 
@@ -136,6 +139,7 @@ class TestDatabaseRWLockIntegration(unittest.IsolatedAsyncioTestCase):
             correlation_id="test-readonly",
             chat_id=123,
             user_id=456,
+            normalized_url="https://example.com/readonly",
         )
 
         # Perform read operation (should use read lock)
@@ -159,6 +163,7 @@ class TestDatabaseRWLockIntegration(unittest.IsolatedAsyncioTestCase):
             correlation_id="test-summary",
             chat_id=123,
             user_id=456,
+            normalized_url="https://example.com/summary-ops",
         )
 
         # Write summary

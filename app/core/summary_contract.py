@@ -14,13 +14,9 @@ from app.types.summary_types import (
     SummaryDict,
 )
 
-from .summary_schema import PydanticAvailable
+from .summary_schema import SummaryModel
 
 logger = logging.getLogger(__name__)
-
-SummaryModelT: Any
-if PydanticAvailable:
-    from .summary_schema import SummaryModel as SummaryModelT
 
 
 # Legacy alias for backward compatibility
@@ -388,7 +384,7 @@ def _summary_fallback_from_supporting_fields(payload: SummaryJSON) -> str | None
                     fact_text = str(fact.get("fact", "")).strip()
                     why = str(fact.get("why_it_matters", "")).strip()
                     if fact_text and why:
-                        _add_snippet(f"{fact_text} — {why}")
+                        _add_snippet(f"{fact_text} -- {why}")
                     else:
                         _add_snippet(fact_text or why)
                 else:
@@ -667,7 +663,7 @@ def _enrich_tldr_from_payload(base_text: str, payload: SummaryJSON) -> str:
                 question = str(qa.get("question", "")).strip()
                 answer = str(qa.get("answer", "")).strip()
                 if question and answer:
-                    questions.append(f"{question} — {answer}")
+                    questions.append(f"{question} -- {answer}")
                 elif question:
                     questions.append(question)
             elif isinstance(qa, str) and qa.strip():
@@ -815,9 +811,10 @@ def _normalize_field_names(payload: SummaryJSON) -> SummaryJSON:
 def validate_and_shape_summary(payload: SummaryJSON) -> SummaryJSON:
     """Validate and shape a model-produced summary to the canonical contract.
 
-    Applies caps, deduplication, and ensures required keys exist.
-    This is a light implementation for the initial skeleton; extend with
-    stricter validation or pydantic models as needed.
+    Pre-processes the payload with complex shaping logic (TF-IDF, readability
+    scoring, TL;DR enrichment, entity normalization, etc.) and then passes it
+    through the Pydantic ``SummaryModel`` for type coercion, constraint
+    enforcement, and default values.
     """
     # Security: Validate input
     if not payload or not isinstance(payload, dict):
@@ -830,19 +827,16 @@ def validate_and_shape_summary(payload: SummaryJSON) -> SummaryJSON:
         raise ValueError(msg)
 
     # Normalize field names first
-    normalized_payload = _normalize_field_names(payload)
-    p: SummaryJSON = dict(normalized_payload)
+    p: SummaryJSON = _normalize_field_names(payload)
 
-    # Handle summary fields with fallback logic
+    # --- Summary field backfill (before Pydantic, which needs valid values) ---
     tldr = str(p.get("tldr", "")).strip()
     summary_250 = str(p.get("summary_250", "")).strip()
     summary_1000 = str(p.get("summary_1000", "")).strip()
 
-    # If the model provided a generic summary field, treat it as the 1000-character slot
-    if not summary_1000 and "summary" in normalized_payload:
-        summary_1000 = str(normalized_payload.get("summary", "")).strip()
+    if not summary_1000 and "summary" in p:
+        summary_1000 = str(p.get("summary", "")).strip()
 
-    # Backfill missing fields using progressively longer slots
     if not tldr and summary_1000:
         tldr = summary_1000
     if not summary_1000 and tldr:
@@ -853,21 +847,19 @@ def validate_and_shape_summary(payload: SummaryJSON) -> SummaryJSON:
         summary_250 = _cap_text(tldr, 250)
 
     if not any((summary_250, summary_1000, tldr)):
-        fallback_text = _summary_fallback_from_supporting_fields(normalized_payload)
+        fallback_text = _summary_fallback_from_supporting_fields(p)
         if not fallback_text:
-            fallback_text = _summary_fallback_from_supporting_fields(p)
+            fallback_text = _summary_fallback_from_supporting_fields(payload)
         if fallback_text:
             summary_1000 = _cap_text(fallback_text, 1000)
             summary_250 = _cap_text(summary_1000, 250)
             tldr = summary_1000
 
-    # Enforce caps where appropriate
     summary_250 = _cap_text(summary_250, 250)
     summary_1000 = _cap_text(summary_1000, 1000)
 
     if not summary_1000 and summary_250:
         summary_1000 = summary_250
-
     if not tldr:
         tldr = summary_1000 or summary_250
 
@@ -878,53 +870,20 @@ def validate_and_shape_summary(payload: SummaryJSON) -> SummaryJSON:
     p["summary_1000"] = summary_1000
     p["tldr"] = tldr
 
+    # --- Shape complex fields that Pydantic cannot handle alone ---
     p["key_ideas"] = [str(x).strip() for x in p.get("key_ideas", []) if str(x).strip()]
     p["topic_tags"] = _hash_tagify([str(x) for x in p.get("topic_tags", [])])
-
     p["entities"] = _normalize_entities_field(p.get("entities"))
 
-    # numeric & nested fields
-    ert = p.get("estimated_reading_time_min")
-    try:
-        p["estimated_reading_time_min"] = int(ert) if ert is not None else 0
-    except Exception:
-        p["estimated_reading_time_min"] = 0
-
-    # key_stats normalize: keep only items with label and numeric value
-    norm_stats: list[dict] = []
-    for item in p.get("key_stats", []) or []:
-        try:
-            label = str(item.get("label", "")).strip()
-            if not label:
-                continue
-            value_raw = item.get("value")
-            value = float(value_raw)
-            unit = item.get("unit")
-            source_excerpt = item.get("source_excerpt")
-            source_excerpt_value = str(source_excerpt) if source_excerpt is not None else None
-            norm_stats.append(
-                {
-                    "label": label,
-                    "value": value,
-                    "unit": str(unit) if unit is not None else None,
-                    "source_excerpt": source_excerpt_value,
-                }
-            )
-        except Exception:
-            continue
-    p["key_stats"] = norm_stats
-    p.setdefault("answered_questions", [])
-    # readability: compute locally if libs available and fields empty
+    # readability: compute locally
     rb = p.get("readability") or {}
     method = str(rb.get("method") or "Flesch-Kincaid")
     score_val = rb.get("score")
     level = rb.get("level")
-    # Choose source: prefer TL;DR, fallback to summary_250
     read_src = p.get("tldr") or p.get("summary_1000") or p.get("summary_250") or ""
     if score_val is None or not _is_numeric(score_val) or float(score_val or 0.0) == 0.0:
         score = 0.0
         try:
-            # Compute Flesch reading ease directly
             score = _compute_flesch_reading_ease(read_src)
             method = "Flesch-Kincaid"
         except Exception:
@@ -958,7 +917,6 @@ def validate_and_shape_summary(payload: SummaryJSON) -> SummaryJSON:
         "score": score,
         "level": level,
     }
-    p.setdefault("seo_keywords", [])
 
     # keyterms: populate seo_keywords/topic_tags if missing (best-effort)
     if not p.get("seo_keywords") or not p.get("topic_tags"):
@@ -971,38 +929,9 @@ def validate_and_shape_summary(payload: SummaryJSON) -> SummaryJSON:
         except Exception as e:
             logger.debug("keyword_extraction_failed", extra={"error": str(e)})
 
-    # Handle new fields with defaults
-    p.setdefault("metadata", {})
-    p.setdefault("extractive_quotes", [])
-    p.setdefault("highlights", [])
-    p.setdefault("questions_answered", [])
-    p.setdefault("categories", [])
-    p.setdefault("topic_taxonomy", [])
-    p.setdefault("hallucination_risk", "low")
-    p.setdefault("confidence", 1.0)
-    p.setdefault("forwarded_post_extras", None)
-    p.setdefault("key_points_to_remember", [])
     p["insights"] = _shape_insights(p.get("insights"))
 
-    # Classification fields (new)
-    valid_source_types = {"news", "blog", "research", "opinion", "tutorial", "reference"}
-    source_type = str(p.get("source_type", "")).strip().lower()
-    p["source_type"] = source_type if source_type in valid_source_types else "blog"
-
-    valid_freshness = {"breaking", "recent", "evergreen"}
-    temporal_freshness = str(p.get("temporal_freshness", "")).strip().lower()
-    p["temporal_freshness"] = (
-        temporal_freshness if temporal_freshness in valid_freshness else "evergreen"
-    )
-
-    # Validate and clean new fields
-    if not isinstance(p["confidence"], int | float) or not (0.0 <= p["confidence"] <= 1.0):
-        p["confidence"] = 1.0
-
-    if p["hallucination_risk"] not in ["low", "med", "high"]:
-        p["hallucination_risk"] = "low"
-
-    # Clean lists
+    # Clean extractive_quotes before Pydantic
     p["extractive_quotes"] = [
         {
             "text": str(q.get("text", "")).strip(),
@@ -1022,16 +951,12 @@ def validate_and_shape_summary(payload: SummaryJSON) -> SummaryJSON:
             if question and answer:
                 clean_qa.append({"question": question, "answer": answer})
         elif isinstance(qa, str):
-            # Handle legacy format or single strings - try to split on common patterns
             qa_str = str(qa).strip()
             if qa_str:
-                # Look for patterns like "Q: ... A: ..." or "Question: ... Answer: ..."
-                import re
-
                 qa_patterns = [
                     r"Q:\s*(.+?)\s*A:\s*(.+)",
                     r"Question:\s*(.+?)\s*Answer:\s*(.+)",
-                    r"(.+?)\?\s*(.+)",  # Question ending with ? followed by answer
+                    r"(.+?)\?\s*(.+)",
                 ]
                 matched = False
                 for pattern in qa_patterns:
@@ -1043,7 +968,6 @@ def validate_and_shape_summary(payload: SummaryJSON) -> SummaryJSON:
                             clean_qa.append({"question": question, "answer": answer})
                             matched = True
                             break
-                # If no pattern matched, treat as a question without answer
                 if not matched:
                     clean_qa.append({"question": qa_str, "answer": ""})
     p["questions_answered"] = clean_qa
@@ -1094,37 +1018,27 @@ def validate_and_shape_summary(payload: SummaryJSON) -> SummaryJSON:
         language=language,
     )
 
-    # Optional strict validation via Pydantic
-    if PydanticAvailable:
-        try:
-            model = SummaryModelT(**p)
-            # Pydantic v2: model_dump; v1: dict
-            if hasattr(model, "model_dump"):
-                return model.model_dump()
-            return model.dict()
-        except Exception as e:
-            logger.debug("pydantic_validation_fallback", extra={"error": str(e)})
-            return p
-    return p
+    # --- Pass through Pydantic for type coercion and constraint enforcement ---
+    try:
+        model = SummaryModel(**p)
+        return model.model_dump()
+    except Exception as e:
+        logger.debug("pydantic_validation_fallback", extra={"error": str(e)})
+        return p
 
 
 def get_summary_json_schema() -> dict[str, Any]:
     """Return a JSON Schema for the summary contract.
 
-    Prefers exporting from Pydantic if available; falls back to a static schema.
+    Uses the Pydantic ``SummaryModel`` to generate the schema.
     """
 
     def _enforce_no_additional_props(schema_obj: Any) -> Any:
-        """Recursively enforce additionalProperties: false on all object schemas.
-
-        Handles nested objects under properties, items, oneOf/anyOf/allOf, $defs/definitions.
-        """
+        """Recursively enforce additionalProperties: false on all object schemas."""
         if isinstance(schema_obj, dict):
-            # If this dict describes an object type, set additionalProperties: false when absent
             if schema_obj.get("type") == "object":
                 schema_obj.setdefault("additionalProperties", False)
 
-            # Recurse common schema composition constructs
             for key in ("properties", "$defs", "definitions"):
                 if key in schema_obj and isinstance(schema_obj[key], dict):
                     for _, sub in list(schema_obj[key].items()):
@@ -1142,24 +1056,17 @@ def get_summary_json_schema() -> dict[str, Any]:
         return schema_obj
 
     def _enforce_required_all(schema_obj: Any) -> Any:
-        """Recursively ensure every object declares required for all of its properties.
-
-        Some providers (e.g., Azure) require that for any object with properties,
-        the 'required' array must include every key listed under 'properties'.
-        """
+        """Recursively ensure every object declares required for all of its properties."""
         if isinstance(schema_obj, dict):
             if schema_obj.get("type") == "object" and isinstance(
                 schema_obj.get("properties"), dict
             ):
                 prop_keys = list(schema_obj["properties"].keys())
-                # Set or replace 'required' to include all keys (provider requirement)
                 schema_obj["required"] = prop_keys
 
-                # Recurse into nested property schemas
                 for _, sub in list(schema_obj["properties"].items()):
                     _enforce_required_all(sub)
 
-            # Recurse common schema composition constructs
             for key in ("items",):
                 if key in schema_obj:
                     _enforce_required_all(schema_obj[key])
@@ -1176,258 +1083,13 @@ def get_summary_json_schema() -> dict[str, Any]:
                 _enforce_required_all(sub)
         return schema_obj
 
-    if PydanticAvailable:
-        try:
-            from .summary_schema import SummaryModel
+    schema = SummaryModel.model_json_schema()
 
-            # Pydantic v2
-            if hasattr(SummaryModel, "model_json_schema"):
-                schema = SummaryModel.model_json_schema()
-            else:  # v1
-                schema = SummaryModel.schema()
+    if isinstance(schema, dict):
+        schema.setdefault("$schema", "http://json-schema.org/draft-07/schema#")
+        schema.setdefault("type", "object")
+        _enforce_no_additional_props(schema)
+        _enforce_required_all(schema)
+        return schema
 
-            # Ensure top-level is object and provider strictness is satisfied
-            if isinstance(schema, dict):
-                schema.setdefault("$schema", "http://json-schema.org/draft-07/schema#")
-                schema.setdefault("type", "object")
-                _enforce_no_additional_props(schema)
-                _enforce_required_all(schema)
-                return schema
-        except Exception as e:
-            logger.debug("pydantic_schema_generation_failed", extra={"error": str(e)})
-
-    # Static fallback schema
-    return {
-        "$schema": "http://json-schema.org/draft-07/schema#",
-        "type": "object",
-        "additionalProperties": False,
-        "properties": {
-            "summary_250": {"type": "string", "maxLength": 250},
-            "summary_1000": {"type": "string", "maxLength": 1000},
-            "tldr": {"type": "string"},
-            "key_ideas": {"type": "array", "items": {"type": "string"}},
-            "topic_tags": {"type": "array", "items": {"type": "string"}},
-            "entities": {
-                "type": "object",
-                "additionalProperties": False,
-                "properties": {
-                    "people": {"type": "array", "items": {"type": "string"}},
-                    "organizations": {"type": "array", "items": {"type": "string"}},
-                    "locations": {"type": "array", "items": {"type": "string"}},
-                },
-                "required": ["people", "organizations", "locations"],
-            },
-            "estimated_reading_time_min": {"type": "integer", "minimum": 0},
-            "key_stats": {
-                "type": "array",
-                "items": {
-                    "type": "object",
-                    "additionalProperties": False,
-                    "properties": {
-                        "label": {"type": "string"},
-                        "value": {"type": "number"},
-                        "unit": {"type": ["string", "null"]},
-                        "source_excerpt": {"type": ["string", "null"]},
-                    },
-                    "required": ["label", "value", "unit", "source_excerpt"],
-                },
-            },
-            "answered_questions": {"type": "array", "items": {"type": "string"}},
-            "readability": {
-                "type": "object",
-                "additionalProperties": False,
-                "properties": {
-                    "method": {"type": "string"},
-                    "score": {"type": "number"},
-                    "level": {"type": "string"},
-                },
-                "required": ["method", "score", "level"],
-            },
-            "seo_keywords": {"type": "array", "items": {"type": "string"}},
-            "query_expansion_keywords": {"type": "array", "items": {"type": "string"}},
-            "semantic_boosters": {"type": "array", "items": {"type": "string"}},
-            "semantic_chunks": {
-                "type": "array",
-                "items": {
-                    "type": "object",
-                    "additionalProperties": False,
-                    "properties": {
-                        "article_id": {"type": ["string", "null"]},
-                        "section": {"type": ["string", "null"]},
-                        "language": {"type": ["string", "null"]},
-                        "topics": {"type": "array", "items": {"type": "string"}},
-                        "text": {"type": "string"},
-                        "local_summary": {"type": ["string", "null"]},
-                        "local_keywords": {"type": "array", "items": {"type": "string"}},
-                    },
-                    "required": [
-                        "article_id",
-                        "section",
-                        "language",
-                        "topics",
-                        "text",
-                        "local_summary",
-                        "local_keywords",
-                    ],
-                },
-            },
-            "article_id": {"type": ["string", "null"]},
-            "source_type": {
-                "type": "string",
-                "enum": ["news", "blog", "research", "opinion", "tutorial", "reference"],
-            },
-            "temporal_freshness": {
-                "type": "string",
-                "enum": ["breaking", "recent", "evergreen"],
-            },
-            "metadata": {
-                "type": "object",
-                "additionalProperties": False,
-                "properties": {
-                    "title": {"type": ["string", "null"]},
-                    "canonical_url": {"type": ["string", "null"]},
-                    "domain": {"type": ["string", "null"]},
-                    "author": {"type": ["string", "null"]},
-                    "published_at": {"type": ["string", "null"]},
-                    "last_updated": {"type": ["string", "null"]},
-                },
-                "required": [
-                    "title",
-                    "canonical_url",
-                    "domain",
-                    "author",
-                    "published_at",
-                    "last_updated",
-                ],
-            },
-            "extractive_quotes": {
-                "type": "array",
-                "items": {
-                    "type": "object",
-                    "additionalProperties": False,
-                    "properties": {
-                        "text": {"type": "string"},
-                        "source_span": {"type": ["string", "null"]},
-                    },
-                    "required": ["text", "source_span"],
-                },
-            },
-            "highlights": {"type": "array", "items": {"type": "string"}},
-            "questions_answered": {
-                "type": "array",
-                "items": {
-                    "type": "object",
-                    "additionalProperties": False,
-                    "properties": {
-                        "question": {"type": "string"},
-                        "answer": {"type": "string"},
-                    },
-                    "required": ["question", "answer"],
-                },
-            },
-            "categories": {"type": "array", "items": {"type": "string"}},
-            "topic_taxonomy": {
-                "type": "array",
-                "items": {
-                    "type": "object",
-                    "additionalProperties": False,
-                    "properties": {
-                        "label": {"type": "string"},
-                        "score": {"type": "number", "minimum": 0, "maximum": 1},
-                        "path": {"type": ["string", "null"]},
-                    },
-                    "required": ["label", "score", "path"],
-                },
-            },
-            "hallucination_risk": {"type": "string", "enum": ["low", "med", "high"]},
-            "confidence": {"type": "number", "minimum": 0, "maximum": 1},
-            "forwarded_post_extras": {
-                "type": ["object", "null"],
-                "additionalProperties": False,
-                "properties": {
-                    "channel_id": {"type": ["integer", "null"]},
-                    "channel_title": {"type": ["string", "null"]},
-                    "channel_username": {"type": ["string", "null"]},
-                    "message_id": {"type": ["integer", "null"]},
-                    "post_datetime": {"type": ["string", "null"]},
-                    "hashtags": {"type": "array", "items": {"type": "string"}},
-                    "mentions": {"type": "array", "items": {"type": "string"}},
-                },
-                "required": [
-                    "channel_id",
-                    "channel_title",
-                    "channel_username",
-                    "message_id",
-                    "post_datetime",
-                    "hashtags",
-                    "mentions",
-                ],
-            },
-            "key_points_to_remember": {"type": "array", "items": {"type": "string"}},
-            "insights": {
-                "type": "object",
-                "additionalProperties": False,
-                "properties": {
-                    "topic_overview": {"type": "string"},
-                    "new_facts": {
-                        "type": "array",
-                        "items": {
-                            "type": "object",
-                            "additionalProperties": False,
-                            "properties": {
-                                "fact": {"type": "string"},
-                                "why_it_matters": {"type": ["string", "null"]},
-                                "source_hint": {"type": ["string", "null"]},
-                                "confidence": {"type": ["number", "string", "null"]},
-                            },
-                            "required": ["fact", "why_it_matters", "source_hint", "confidence"],
-                        },
-                    },
-                    "open_questions": {"type": "array", "items": {"type": "string"}},
-                    "suggested_sources": {"type": "array", "items": {"type": "string"}},
-                    "expansion_topics": {"type": "array", "items": {"type": "string"}},
-                    "next_exploration": {"type": "array", "items": {"type": "string"}},
-                    "caution": {"type": ["string", "null"]},
-                },
-                "required": [
-                    "topic_overview",
-                    "new_facts",
-                    "open_questions",
-                    "suggested_sources",
-                    "expansion_topics",
-                    "next_exploration",
-                    "caution",
-                ],
-            },
-        },
-        "required": [
-            "summary_250",
-            "summary_1000",
-            "tldr",
-            "key_ideas",
-            "topic_tags",
-            "entities",
-            "estimated_reading_time_min",
-            "key_stats",
-            "answered_questions",
-            "readability",
-            "seo_keywords",
-            "source_type",
-            "temporal_freshness",
-            "metadata",
-            "extractive_quotes",
-            "highlights",
-            "questions_answered",
-            "categories",
-            "topic_taxonomy",
-            "hallucination_risk",
-            "confidence",
-            "forwarded_post_extras",
-            "key_points_to_remember",
-            "insights",
-            "query_expansion_keywords",
-            "semantic_boosters",
-            "semantic_chunks",
-            "article_id",
-        ],
-    }
+    return schema

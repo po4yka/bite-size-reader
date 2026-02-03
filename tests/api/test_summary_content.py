@@ -74,7 +74,12 @@ def test_get_summary_content_not_found(client, db, user_factory, monkeypatch):
     user = user_factory()
     monkeypatch.setenv("ALLOWED_USER_IDS", str(user.telegram_user_id))
     monkeypatch.setenv("REDIS_ENABLED", "0")
-    req = Request.create(user_id=user.telegram_user_id, type="url", status="completed")
+    req = Request.create(
+        user_id=user.telegram_user_id,
+        type="url",
+        status="completed",
+        normalized_url="https://example.com/not-found",
+    )
     summary = Summary.create(request=req, lang="en")
     token = create_access_token(user.telegram_user_id, client_id="test")
 

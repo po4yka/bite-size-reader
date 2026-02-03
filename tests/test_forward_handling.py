@@ -502,7 +502,11 @@ class TestForwardProcessorCustomArticle(unittest.IsolatedAsyncioTestCase):
         processor = self._make_processor()
         # Pass a string instead of dict
         await processor._maybe_generate_custom_article(
-            MagicMock(), "not a dict", "en", 1, "cid"  # type: ignore[arg-type]
+            MagicMock(),
+            "not a dict",
+            "en",
+            1,
+            "cid",  # type: ignore[arg-type]
         )
 
 
@@ -846,7 +850,7 @@ class TestMessagePersistenceForwardDefaults(unittest.IsolatedAsyncioTestCase):
                 fwd_from_user=SimpleNamespace(first_name="U", last_name=None),
             )
 
-            # Create a request first
+            # Create a request first (user forward -- no chat_id/msg_id pair)
             req_id = await persistence.request_repo.async_create_request(
                 type_="forward",
                 status="pending",
@@ -881,6 +885,8 @@ class TestMessagePersistenceForwardDefaults(unittest.IsolatedAsyncioTestCase):
                 correlation_id="cid",
                 chat_id=99,
                 user_id=7,
+                fwd_from_chat_id=-100,
+                fwd_from_msg_id=456,
             )
 
             await persistence.persist_message_snapshot(req_id, msg)
