@@ -20,6 +20,14 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+def _coerce_int(value: Any) -> int | None:
+    """Safely coerce a value to int, returning None on failure."""
+    try:
+        return int(value) if value is not None else None
+    except (TypeError, ValueError):
+        return None
+
+
 # Forward processing route version
 FORWARD_ROUTE_VERSION = 1
 
@@ -86,6 +94,9 @@ class ForwardContentProcessor:
 
         # Language detection and choice
         detected = detect_language(text)
+        # Graceful degradation: if persisting the detected language fails, the
+        # in-memory `detected` value is still used for prompt selection. The DB
+        # record may show NULL for lang_detected, which is acceptable.
         try:
             await self.message_persistence.request_repo.async_update_request_lang_detected(
                 req_id, detected
@@ -114,23 +125,27 @@ class ForwardContentProcessor:
         await self._upsert_sender_metadata(message)
 
         chat_obj = getattr(message, "chat", None)
-        chat_id_raw = getattr(chat_obj, "id", 0) if chat_obj is not None else None
-        chat_id = int(chat_id_raw) if chat_id_raw is not None else None
+        chat_id = _coerce_int(getattr(chat_obj, "id", None) if chat_obj is not None else None)
 
         from_user_obj = getattr(message, "from_user", None)
-        user_id_raw = getattr(from_user_obj, "id", 0) if from_user_obj is not None else None
-        user_id = int(user_id_raw) if user_id_raw is not None else None
+        user_id = _coerce_int(
+            getattr(from_user_obj, "id", None) if from_user_obj is not None else None
+        )
 
-        msg_id_raw = getattr(message, "id", getattr(message, "message_id", 0))
-        input_message_id = int(msg_id_raw) if msg_id_raw is not None else None
+        msg_id_raw = getattr(message, "id", getattr(message, "message_id", None))
+        input_message_id = _coerce_int(msg_id_raw)
 
         fwd_chat_obj = getattr(message, "forward_from_chat", None)
-        fwd_from_chat_id_raw = getattr(fwd_chat_obj, "id", 0) if fwd_chat_obj is not None else None
-        fwd_from_chat_id = int(fwd_from_chat_id_raw) if fwd_from_chat_id_raw is not None else None
+        fwd_from_chat_id = _coerce_int(
+            getattr(fwd_chat_obj, "id", None) if fwd_chat_obj is not None else None
+        )
 
         fwd_msg_id_raw = getattr(message, "forward_from_message_id", None)
-        fwd_from_msg_id = int(fwd_msg_id_raw) if fwd_msg_id_raw is not None else None
+        fwd_from_msg_id = _coerce_int(fwd_msg_id_raw)
 
+        # Deduplication only applies to channel forwards where both fwd_from_chat_id
+        # and fwd_from_msg_id are available. User/privacy forwards (where Telegram
+        # strips the origin) intentionally create a new request each time.
         existing_req: dict | None = None
         if fwd_from_chat_id is not None and fwd_from_msg_id is not None:
             existing_req = await self.message_persistence.request_repo.async_get_request_by_forward(
@@ -184,13 +199,6 @@ class ForwardContentProcessor:
 
     async def _upsert_sender_metadata(self, message: Any) -> None:
         """Persist sender user/chat metadata for the interaction."""
-
-        def _coerce_int(value: Any) -> int | None:
-            try:
-                return int(value) if value is not None else None
-            except (TypeError, ValueError):
-                return None
-
         chat_obj = getattr(message, "chat", None)
         chat_id = _coerce_int(getattr(chat_obj, "id", None) if chat_obj is not None else None)
         if chat_id is not None:
