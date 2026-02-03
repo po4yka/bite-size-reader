@@ -13,11 +13,15 @@ from fastapi import APIRouter, Depends, Query
 from app.api.exceptions import ResourceNotFoundError
 from app.api.models.requests import UpdateSummaryRequest
 from app.api.models.responses import (
+    DeleteSummaryResponse,
     SummaryCompact,
     SummaryContent,
     SummaryContentData,
     SummaryDetail,
     SummaryListResponse,
+    SummaryListStats,
+    ToggleFavoriteResponse,
+    UpdateSummaryResponse,
     success_response,
 )
 from app.api.routers.auth import get_current_user
@@ -155,7 +159,7 @@ async def get_summaries(
         SummaryListResponse(
             summaries=summary_list,
             pagination=pagination,
-            stats={"total_summaries": total, "unread_count": unread_count},
+            stats=SummaryListStats(total_summaries=total, unread_count=unread_count),
         ),
         pagination=pagination,
     )
@@ -430,11 +434,11 @@ async def update_summary(
     )
 
     return success_response(
-        {
-            "id": summary_id,
-            "is_read": update.is_read,
-            "updated_at": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
-        }
+        UpdateSummaryResponse(
+            id=summary_id,
+            is_read=update.is_read,
+            updated_at=datetime.now(UTC).isoformat().replace("+00:00", "Z"),
+        )
     )
 
 
@@ -448,10 +452,10 @@ async def delete_summary(
     await SummaryService.delete_summary(user_id=user["user_id"], summary_id=summary_id)
 
     return success_response(
-        {
-            "id": summary_id,
-            "deleted_at": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
-        }
+        DeleteSummaryResponse(
+            id=summary_id,
+            deleted_at=datetime.now(UTC).isoformat().replace("+00:00", "Z"),
+        )
     )
 
 
@@ -464,4 +468,4 @@ async def toggle_favorite(
     is_favorited = await SummaryService.toggle_favorite(
         user_id=user["user_id"], summary_id=summary_id
     )
-    return success_response({"success": True, "is_favorited": is_favorited})
+    return success_response(ToggleFavoriteResponse(success=True, is_favorited=is_favorited))

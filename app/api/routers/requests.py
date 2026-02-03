@@ -11,8 +11,15 @@ from app.api.background_processor import process_url_request
 from app.api.exceptions import DuplicateResourceError, ResourceNotFoundError, ValidationError
 from app.api.models.requests import SubmitForwardRequest, SubmitURLRequest
 from app.api.models.responses import (
+    DuplicateDetectionResponse,
+    RequestDetailCrawlResult,
+    RequestDetailLlmCall,
+    RequestDetailRequest,
+    RequestDetailResponse,
+    RequestDetailSummary,
     RequestStatus,
     RequestStatusData,
+    RetryRequestResponse,
     SubmitRequestData,
     SubmitRequestResponse,
     success_response,
@@ -48,13 +55,13 @@ async def submit_request(
         duplicate_info = await RequestService.check_duplicate_url(user["user_id"], input_url)
         if duplicate_info:
             return success_response(
-                {
-                    "is_duplicate": True,
-                    "existing_request_id": duplicate_info["existing_request_id"],
-                    "existing_summary_id": duplicate_info["existing_summary_id"],
-                    "message": "This URL was already summarized",
-                    "summarized_at": duplicate_info["summarized_at"],
-                }
+                DuplicateDetectionResponse(
+                    is_duplicate=True,
+                    existing_request_id=duplicate_info["existing_request_id"],
+                    existing_summary_id=duplicate_info["existing_summary_id"],
+                    message="This URL was already summarized",
+                    summarized_at=duplicate_info["summarized_at"],
+                )
             )
 
         # Create new request using service
@@ -67,11 +74,11 @@ async def submit_request(
         except DuplicateResourceError as e:
             # Race condition - handle gracefully
             return success_response(
-                {
-                    "is_duplicate": True,
-                    "existing_request_id": e.details.get("existing_id"),
-                    "message": e.message,
-                }
+                DuplicateDetectionResponse(
+                    is_duplicate=True,
+                    existing_request_id=e.details.get("existing_id"),
+                    message=e.message,
+                )
             )
 
         # Schedule background processing
@@ -146,47 +153,47 @@ async def get_request(
     llm_calls = result["llm_calls"]
     summary = result["summary"]
 
-    data = {
-        "request": {
-            "id": request.id,
-            "type": request.type,
-            "status": request.status,
-            "correlation_id": request.correlation_id,
-            "input_url": request.input_url,
-            "normalized_url": request.normalized_url,
-            "dedupe_hash": request.dedupe_hash,
-            "created_at": request.created_at.isoformat() + "Z",
-            "lang_detected": request.lang_detected,
-        },
-        "crawl_result": {
-            "status": crawl_result.status if crawl_result else None,
-            "http_status": crawl_result.http_status if crawl_result else None,
-            "latency_ms": crawl_result.latency_ms if crawl_result else None,
-            "error": crawl_result.error_text if crawl_result else None,
-        }
+    data = RequestDetailResponse(
+        request=RequestDetailRequest(
+            id=request.id,
+            type=request.type,
+            status=request.status,
+            correlation_id=request.correlation_id,
+            input_url=request.input_url,
+            normalized_url=request.normalized_url,
+            dedupe_hash=request.dedupe_hash,
+            created_at=request.created_at.isoformat() + "Z",
+            lang_detected=request.lang_detected,
+        ),
+        crawl_result=RequestDetailCrawlResult(
+            status=crawl_result.status,
+            http_status=crawl_result.http_status,
+            latency_ms=crawl_result.latency_ms,
+            error=crawl_result.error_text,
+        )
         if crawl_result
         else None,
-        "llm_calls": [
-            {
-                "id": call.id,
-                "model": call.model,
-                "status": call.status,
-                "tokens_prompt": call.tokens_prompt,
-                "tokens_completion": call.tokens_completion,
-                "cost_usd": call.cost_usd,
-                "latency_ms": call.latency_ms,
-                "created_at": call.created_at.isoformat() + "Z",
-            }
+        llm_calls=[
+            RequestDetailLlmCall(
+                id=call.id,
+                model=call.model,
+                status=call.status,
+                tokens_prompt=call.tokens_prompt,
+                tokens_completion=call.tokens_completion,
+                cost_usd=call.cost_usd,
+                latency_ms=call.latency_ms,
+                created_at=call.created_at.isoformat() + "Z",
+            )
             for call in llm_calls
         ],
-        "summary": {
-            "id": summary.id,
-            "status": "success",
-            "created_at": summary.created_at.isoformat() + "Z",
-        }
+        summary=RequestDetailSummary(
+            id=summary.id,
+            status="success",
+            created_at=summary.created_at.isoformat() + "Z",
+        )
         if summary
         else None,
-    }
+    )
 
     return success_response(data)
 
@@ -235,10 +242,10 @@ async def retry_request(
     background_tasks.add_task(process_url_request, new_request.id)
 
     return success_response(
-        {
-            "new_request_id": new_request.id,
-            "correlation_id": new_request.correlation_id,
-            "status": "pending",
-            "created_at": new_request.created_at.isoformat() + "Z",
-        }
+        RetryRequestResponse(
+            new_request_id=new_request.id,
+            correlation_id=new_request.correlation_id,
+            status="pending",
+            created_at=new_request.created_at.isoformat() + "Z",
+        )
     )

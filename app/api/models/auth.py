@@ -161,9 +161,9 @@ class SessionInfo(BaseModel):
     """Session information for active sessions list."""
 
     id: int
-    client_id: str | None
-    device_info: str | None
-    ip_address: str | None
-    last_used_at: str | None
-    created_at: str
-    is_current: bool = False
+    client_id: str | None = Field(serialization_alias="clientId")
+    device_info: str | None = Field(serialization_alias="deviceInfo")
+    ip_address: str | None = Field(serialization_alias="ipAddress")
+    last_used_at: str | None = Field(serialization_alias="lastUsedAt")
+    created_at: str = Field(serialization_alias="createdAt")
+    is_current: bool = Field(default=False, serialization_alias="isCurrent")

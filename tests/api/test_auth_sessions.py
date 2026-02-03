@@ -93,5 +93,5 @@ async def test_list_sessions(client, auth_user):
 
     # Should only see session 1
     assert len(sessions) == 1
-    assert sessions[0]["client_id"] == "client-1"
-    assert sessions[0]["device_info"] == "Device 1"
+    assert sessions[0]["clientId"] == "client-1"
+    assert sessions[0]["deviceInfo"] == "Device 1"

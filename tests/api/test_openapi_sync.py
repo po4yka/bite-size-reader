@@ -365,17 +365,18 @@ class TestErrorEnumSync:
 def _build_alias_map(model_cls: type) -> dict[str, str]:
     """Return {python_field_name: wire_name} for a Pydantic model.
 
-    The wire name is ``validation_alias`` (if str) or ``alias``, falling back
-    to the Python attribute name.
+    The wire name is determined by checking (in order):
+    1. serialization_alias (used for output / wire format)
+    2. validation_alias (used for input parsing)
+    3. alias (general alias)
+    4. Python attribute name (fallback)
     """
     mapping: dict[str, str] = {}
     for field_name, field_info in model_cls.model_fields.items():  # type: ignore[attr-defined]
         wire = field_name
-        # Pydantic v2: serialization_alias takes priority for output,
-        # but the YAML spec may use either alias or serialization_alias.
-        # Try validation_alias first (used for request models),
-        # then alias, then serialization_alias.
-        if field_info.validation_alias and isinstance(field_info.validation_alias, str):
+        if field_info.serialization_alias:
+            wire = field_info.serialization_alias
+        elif field_info.validation_alias and isinstance(field_info.validation_alias, str):
             wire = field_info.validation_alias
         elif field_info.alias:
             wire = field_info.alias

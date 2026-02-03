@@ -290,12 +290,19 @@ class SummaryContentData(BaseModel):
     content: SummaryContent
 
 
+class SummaryListStats(BaseModel):
+    """Stats included in summary list response."""
+
+    total_summaries: int = Field(serialization_alias="totalSummaries")
+    unread_count: int = Field(serialization_alias="unreadCount")
+
+
 class SummaryListResponse(BaseModel):
     """Response for GET /summaries."""
 
     summaries: list[SummaryCompact]
     pagination: PaginationInfo
-    stats: dict[str, int]
+    stats: SummaryListStats
 
 
 class RequestStatus(BaseModel):
@@ -367,7 +374,9 @@ class RequestStatus(BaseModel):
         - queuePosition: null
     """
 
-    request_id: int = Field(description="Unique request identifier")
+    request_id: int = Field(
+        serialization_alias="requestId", description="Unique request identifier"
+    )
     status: str = Field(description="Raw database status value")
     stage: RequestStage = Field(description="Processing stage enum value")
     progress: dict[str, Any] | None = Field(
@@ -376,6 +385,7 @@ class RequestStatus(BaseModel):
     )
     estimated_seconds_remaining: int | None = Field(
         default=None,
+        serialization_alias="estimatedSecondsRemaining",
         description="Estimated time to completion in seconds (crawling/processing only)",
     )
     queue_position: int | None = Field(
@@ -385,14 +395,17 @@ class RequestStatus(BaseModel):
     )
     error_stage: str | None = Field(
         default=None,
+        serialization_alias="errorStage",
         description="Stage where error occurred, e.g. 'crawling', 'summarization' (failed only)",
     )
     error_type: str | None = Field(
         default=None,
+        serialization_alias="errorType",
         description="Error classification e.g. timeout, rate_limit (failed only)",
     )
     error_message: str | None = Field(
         default=None,
+        serialization_alias="errorMessage",
         description="Human-readable error description (failed only)",
     )
     can_retry: bool = Field(
@@ -402,9 +415,13 @@ class RequestStatus(BaseModel):
     )
     correlation_id: str | None = Field(
         default=None,
+        serialization_alias="correlationId",
         description="Request correlation ID for debugging (always present)",
     )
-    updated_at: str = Field(description="ISO 8601 timestamp of last status update (always present)")
+    updated_at: str = Field(
+        serialization_alias="updatedAt",
+        description="ISO 8601 timestamp of last status update (always present)",
+    )
 
 
 class SubmitRequestResponse(BaseModel):
@@ -721,6 +738,110 @@ class UserStatsData(BaseModel):
     language_distribution: dict[str, int] = Field(serialization_alias="languageDistribution")
     joined_at: str | None = Field(default=None, serialization_alias="joinedAt")
     last_summary_at: str | None = Field(default=None, serialization_alias="lastSummaryAt")
+
+
+class DuplicateDetectionResponse(BaseModel):
+    """Response when a submitted URL is a duplicate."""
+
+    is_duplicate: bool = Field(serialization_alias="isDuplicate")
+    existing_request_id: int | None = Field(default=None, serialization_alias="existingRequestId")
+    existing_summary_id: int | None = Field(default=None, serialization_alias="existingSummaryId")
+    message: str
+    summarized_at: str | None = Field(default=None, serialization_alias="summarizedAt")
+
+
+class RequestDetailCrawlResult(BaseModel):
+    """Crawl result sub-object for request detail."""
+
+    status: str | None = None
+    http_status: int | None = Field(default=None, serialization_alias="httpStatus")
+    latency_ms: int | None = Field(default=None, serialization_alias="latencyMs")
+    error: str | None = None
+
+
+class RequestDetailLlmCall(BaseModel):
+    """LLM call sub-object for request detail."""
+
+    id: int
+    model: str | None = None
+    status: str | None = None
+    tokens_prompt: int | None = Field(default=None, serialization_alias="tokensPrompt")
+    tokens_completion: int | None = Field(default=None, serialization_alias="tokensCompletion")
+    cost_usd: float | None = Field(default=None, serialization_alias="costUsd")
+    latency_ms: int | None = Field(default=None, serialization_alias="latencyMs")
+    created_at: str = Field(serialization_alias="createdAt")
+
+
+class RequestDetailSummary(BaseModel):
+    """Summary sub-object for request detail."""
+
+    id: int
+    status: str
+    created_at: str = Field(serialization_alias="createdAt")
+
+
+class RequestDetailRequest(BaseModel):
+    """Request sub-object for request detail."""
+
+    id: int
+    type: str
+    status: str
+    correlation_id: str = Field(serialization_alias="correlationId")
+    input_url: str | None = Field(default=None, serialization_alias="inputUrl")
+    normalized_url: str | None = Field(default=None, serialization_alias="normalizedUrl")
+    dedupe_hash: str | None = Field(default=None, serialization_alias="dedupeHash")
+    created_at: str = Field(serialization_alias="createdAt")
+    lang_detected: str | None = Field(default=None, serialization_alias="langDetected")
+
+
+class RequestDetailResponse(BaseModel):
+    """Response for GET /requests/{id}."""
+
+    request: RequestDetailRequest
+    crawl_result: RequestDetailCrawlResult | None = Field(
+        default=None, serialization_alias="crawlResult"
+    )
+    llm_calls: list[RequestDetailLlmCall] = Field(
+        default_factory=list, serialization_alias="llmCalls"
+    )
+    summary: RequestDetailSummary | None = None
+
+
+class RetryRequestResponse(BaseModel):
+    """Response for POST /requests/{id}/retry."""
+
+    new_request_id: int = Field(serialization_alias="newRequestId")
+    correlation_id: str = Field(serialization_alias="correlationId")
+    status: str
+    created_at: str = Field(serialization_alias="createdAt")
+
+
+class UpdateSummaryResponse(BaseModel):
+    """Response for PATCH /summaries/{id}."""
+
+    id: int
+    is_read: bool = Field(serialization_alias="isRead")
+    updated_at: str = Field(serialization_alias="updatedAt")
+
+
+class DeleteSummaryResponse(BaseModel):
+    """Response for DELETE /summaries/{id}."""
+
+    id: int
+    deleted_at: str = Field(serialization_alias="deletedAt")
+
+
+class ToggleFavoriteResponse(BaseModel):
+    """Response for POST /summaries/{id}/favorite."""
+
+    success: bool
+    is_favorited: bool = Field(serialization_alias="isFavorited")
+
+
+class SessionListResponse(BaseModel):
+    """Response for GET /auth/sessions."""
+
+    sessions: list[Any]
 
 
 def _coerce_pagination(pagination: BaseModel | dict[str, Any] | None) -> PaginationInfo | None:

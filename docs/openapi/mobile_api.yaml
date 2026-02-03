@@ -4899,31 +4899,31 @@ components:
       type: object
       required:
       - id
-      - client_id
-      - device_info
-      - ip_address
-      - last_used_at
-      - created_at
+      - clientId
+      - deviceInfo
+      - ipAddress
+      - lastUsedAt
+      - createdAt
       properties:
         id:
           type: integer
-        client_id:
+        clientId:
           type: string
           nullable: true
-        device_info:
+        deviceInfo:
           type: string
           nullable: true
-        ip_address:
+        ipAddress:
           type: string
           nullable: true
-        last_used_at:
+        lastUsedAt:
           type: string
           format: date-time
           nullable: true
-        created_at:
+        createdAt:
           type: string
           format: date-time
-        is_current:
+        isCurrent:
           type: boolean
           default: false
     SessionListResponseEnvelope:
