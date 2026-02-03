@@ -1,4 +1,4 @@
-.PHONY: format lint type test test-unit test-integration test-all all setup-dev venv pre-commit-install pre-commit-run check-lock
+.PHONY: format lint type test test-unit test-integration test-all all setup-dev venv pre-commit-install pre-commit-run check-lock check-openapi check-openapi-validate
 
 format:
 	ruff format .
@@ -57,6 +57,13 @@ check-lock:
 	uv pip compile pyproject.toml -o requirements.txt
 	uv pip compile --extra dev pyproject.toml -o requirements-dev.txt
 	@git diff --exit-code requirements.txt requirements-dev.txt || (echo "Lockfiles are out of date. Run 'make lock-uv' and commit changes." && exit 1)
+
+check-openapi: ## Run OpenAPI spec sync checks
+	pytest tests/api/test_openapi_sync.py -v
+
+check-openapi-validate: ## Validate OpenAPI spec syntax
+	openapi-spec-validator docs/openapi/mobile_api.yaml
+	openapi-spec-validator docs/openapi/mobile_api.json
 
 # ==============================================================================
 # Docker targets

@@ -3810,8 +3810,6 @@ components:
                 type: integer
     CollectionMoveRequest:
       type: object
-      required:
-      - parent_id
       properties:
         parent_id:
           type: integer
@@ -4901,6 +4899,10 @@ components:
       type: object
       required:
       - id
+      - client_id
+      - device_info
+      - ip_address
+      - last_used_at
       - created_at
       properties:
         id:
