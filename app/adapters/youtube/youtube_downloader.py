@@ -34,6 +34,98 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+# Known ISO 639-1 language codes (subset covering common languages)
+_KNOWN_LANG_CODES = {
+    "af",
+    "am",
+    "ar",
+    "az",
+    "be",
+    "bg",
+    "bn",
+    "bs",
+    "ca",
+    "cs",
+    "cy",
+    "da",
+    "de",
+    "el",
+    "en",
+    "es",
+    "et",
+    "eu",
+    "fa",
+    "fi",
+    "fr",
+    "ga",
+    "gl",
+    "gu",
+    "ha",
+    "he",
+    "hi",
+    "hr",
+    "hu",
+    "hy",
+    "id",
+    "is",
+    "it",
+    "ja",
+    "ka",
+    "kk",
+    "km",
+    "kn",
+    "ko",
+    "ku",
+    "ky",
+    "lb",
+    "lo",
+    "lt",
+    "lv",
+    "mk",
+    "ml",
+    "mn",
+    "mr",
+    "ms",
+    "mt",
+    "my",
+    "nb",
+    "ne",
+    "nl",
+    "nn",
+    "no",
+    "or",
+    "pa",
+    "pl",
+    "ps",
+    "pt",
+    "ro",
+    "ru",
+    "rw",
+    "sd",
+    "si",
+    "sk",
+    "sl",
+    "so",
+    "sq",
+    "sr",
+    "sv",
+    "sw",
+    "ta",
+    "te",
+    "tg",
+    "th",
+    "tk",
+    "tl",
+    "tr",
+    "uk",
+    "ur",
+    "uz",
+    "vi",
+    "zh",
+}
+
+_VALID_QUALITIES = {"240", "360", "480", "720", "1080", "1440", "2160"}
+
 
 class YouTubeDownloader:
     """Handles YouTube video downloading with yt-dlp and transcript extraction."""
@@ -55,6 +147,9 @@ class YouTubeDownloader:
         # Create storage directory
         self.storage_path = Path(cfg.youtube.storage_path)
         self.storage_path.mkdir(parents=True, exist_ok=True)
+
+        # Per-URL locks to prevent TOCTOU races on dedupe check
+        self._url_locks: dict[str, asyncio.Lock] = {}
 
         # Progress tracking
         self._download_progress: dict[str, dict] = {}
@@ -90,60 +185,74 @@ class YouTubeDownloader:
         norm = normalize_url(url)
         dedupe = url_hash_sha256(norm)
 
-        # Fetch existing request by dedupe hash
-        existing_req = await self.request_repo.async_get_request_by_dedupe_hash(dedupe)
-        if isinstance(existing_req, Mapping):
-            req_id = int(existing_req["id"])
-            logger.info(
-                "youtube_dedupe_hit",
-                extra={"video_id": video_id, "request_id": req_id, "cid": correlation_id},
-            )
-        else:
-            # Create new request
-            req_id = await self._create_video_request(message, url, norm, dedupe, correlation_id)
+        # Get or create a lock for this URL's dedupe hash to prevent TOCTOU races
+        if dedupe not in self._url_locks:
+            self._url_locks[dedupe] = asyncio.Lock()
+        url_lock = self._url_locks[dedupe]
 
-        # Check for existing download
-        existing_download = await self.video_repo.async_get_video_download_by_request(req_id)
-        if existing_download and existing_download.get("status") == "completed":
-            logger.info(
-                "youtube_video_already_downloaded",
-                extra={"video_id": video_id, "request_id": req_id, "cid": correlation_id},
-            )
-            metadata = self._build_metadata_dict(existing_download)
-            transcript_text = existing_download.get("transcript_text") or ""
-            transcript_source = existing_download.get("transcript_source") or "cached"
-            detected_lang = existing_download.get("subtitle_language") or detect_language(
-                transcript_text
-            )
-            combined_text = self._combine_metadata_and_transcript(metadata, transcript_text)
-
-            if not combined_text.strip():
-                raise ValueError(
-                    "❌ Cached video found but no transcript or subtitles were available. "
-                    "Try re-downloading with subtitles enabled."
+        async with url_lock:
+            # Fetch existing request by dedupe hash
+            existing_req = await self.request_repo.async_get_request_by_dedupe_hash(dedupe)
+            if isinstance(existing_req, Mapping):
+                req_id = int(existing_req["id"])
+                logger.info(
+                    "youtube_dedupe_hit",
+                    extra={"video_id": video_id, "request_id": req_id, "cid": correlation_id},
+                )
+            else:
+                # Create new request
+                req_id = await self._create_video_request(
+                    message, url, norm, dedupe, correlation_id
                 )
 
-            if not silent:
-                try:
-                    await self.response_formatter.safe_reply(
-                        message,
-                        "♻️ Reusing previously downloaded video and transcript. Skipping re-download.",
+            # Check for existing download
+            existing_download = await self.video_repo.async_get_video_download_by_request(req_id)
+            if existing_download and existing_download.get("status") == "completed":
+                logger.info(
+                    "youtube_video_already_downloaded",
+                    extra={"video_id": video_id, "request_id": req_id, "cid": correlation_id},
+                )
+                metadata = self._build_metadata_dict(existing_download)
+                transcript_text = existing_download.get("transcript_text") or ""
+                transcript_source = existing_download.get("transcript_source") or "cached"
+                detected_lang = existing_download.get("subtitle_language") or detect_language(
+                    transcript_text
+                )
+                combined_text = self._combine_metadata_and_transcript(metadata, transcript_text)
+
+                if not combined_text.strip():
+                    self._url_locks.pop(dedupe, None)
+                    raise ValueError(
+                        "❌ Cached video found but no transcript or subtitles were available. "
+                        "Try re-downloading with subtitles enabled."
                     )
-                except Exception:
-                    logger.debug("youtube_cached_reply_failed", exc_info=True)
 
-            return (
-                req_id,
-                combined_text,
-                transcript_source,
-                detected_lang,
-                metadata,
+                if not silent:
+                    try:
+                        await self.response_formatter.safe_reply(
+                            message,
+                            "♻️ Reusing previously downloaded video and transcript. Skipping re-download.",
+                        )
+                    except Exception:
+                        logger.debug("youtube_cached_reply_failed", exc_info=True)
+
+                self._url_locks.pop(dedupe, None)
+                return (
+                    req_id,
+                    combined_text,
+                    transcript_source,
+                    detected_lang,
+                    metadata,
+                )
+
+            # 1. Create initial download record
+            download_id = await self.video_repo.async_create_video_download(
+                request_id=req_id, video_id=video_id, status="pending"
             )
+        # Lock released here; the actual download proceeds outside the lock
+        self._url_locks.pop(dedupe, None)
 
-        # 1. Create initial download record
-        download_id = await self.video_repo.async_create_video_download(
-            request_id=req_id, video_id=video_id, status="pending"
-        )
+        output_dir: Path | None = None
 
         try:
             # 2. Update status to downloading
@@ -171,15 +280,18 @@ class YouTubeDownloader:
 
             ydl_opts = self._get_ydl_opts(video_id, output_dir)
 
-            # Download in thread pool (yt-dlp is sync)
-            video_metadata = await asyncio.to_thread(
-                self._download_video_sync,
-                url,
-                ydl_opts,
-                download_id,
-                message,
-                silent,
-                correlation_id,
+            # Download in thread pool (yt-dlp is sync); timeout prevents hangs
+            video_metadata = await asyncio.wait_for(
+                asyncio.to_thread(
+                    self._download_video_sync,
+                    url,
+                    ydl_opts,
+                    download_id,
+                    message,
+                    silent,
+                    correlation_id,
+                ),
+                timeout=600.0,
             )
 
             # Fallback to downloaded VTT subtitles if API transcript is missing
@@ -286,6 +398,22 @@ class YouTubeDownloader:
                 "youtube_download_failed",
                 extra={"video_id": video_id, "error": str(e), "cid": correlation_id},
             )
+
+            # Clean up partial download files for this video
+            try:
+                if output_dir is not None and output_dir.exists():
+                    for partial in output_dir.glob(f"{video_id}_*"):
+                        try:
+                            partial.unlink()
+                        except OSError:
+                            pass
+                    logger.info(
+                        "youtube_partial_download_cleaned",
+                        extra={"video_id": video_id, "cid": correlation_id},
+                    )
+            except Exception:
+                logger.debug("youtube_partial_cleanup_failed", exc_info=True)
+
             raise
 
     async def _extract_transcript_api(
@@ -303,9 +431,12 @@ class YouTubeDownloader:
                 preferred_langs = self.cfg.youtube.subtitle_languages
 
                 # Try to get transcript in preferred language
-                transcript_list = await asyncio.to_thread(
-                    cast("Any", YouTubeTranscriptApi).list_transcripts,
-                    video_id,
+                transcript_list = await asyncio.wait_for(
+                    asyncio.to_thread(
+                        cast("Any", YouTubeTranscriptApi).list_transcripts,
+                        video_id,
+                    ),
+                    timeout=30.0,
                 )
 
                 transcript = None
@@ -367,7 +498,10 @@ class YouTubeDownloader:
                         return "", "en", False, "youtube-transcript-api"
 
                 # Fetch transcript data
-                transcript_data = await asyncio.to_thread(transcript.fetch)
+                transcript_data = await asyncio.wait_for(
+                    asyncio.to_thread(transcript.fetch),
+                    timeout=30.0,
+                )
 
                 # Format transcript text
                 transcript_text = self._format_transcript(transcript_data)
@@ -427,6 +561,8 @@ class YouTubeDownloader:
         )
         return "", "en", False, "youtube-transcript-api"
 
+    _MAX_TRANSCRIPT_CHARS = 500_000  # ~125k tokens, sufficient for most LLMs
+
     def _format_transcript(self, transcript_data: list[dict]) -> str:
         """Format transcript data into readable text with timestamps.
 
@@ -446,12 +582,28 @@ class YouTubeDownloader:
 
         # Join with spaces and clean up, removing duplicate spaces
         transcript = " ".join(lines)
-        # Remove duplicate spaces
-        return " ".join(transcript.split())
+        result = " ".join(transcript.split())
+        if len(result) > self._MAX_TRANSCRIPT_CHARS:
+            logger.warning(
+                "youtube_transcript_truncated",
+                extra={
+                    "original_length": len(result),
+                    "truncated_to": self._MAX_TRANSCRIPT_CHARS,
+                },
+            )
+            result = result[: self._MAX_TRANSCRIPT_CHARS]
+        return result
 
     def _get_ydl_opts(self, video_id: str, output_path: Path) -> dict:
         """Get yt-dlp options for 1080p download with subtitles."""
-        quality = self.cfg.youtube.preferred_quality.rstrip("p")  # Remove 'p' suffix
+        raw_quality = self.cfg.youtube.preferred_quality.rstrip("p")  # Remove 'p' suffix
+        if raw_quality not in _VALID_QUALITIES:
+            logger.warning(
+                "youtube_invalid_quality_fallback",
+                extra={"configured": self.cfg.youtube.preferred_quality, "fallback": "1080"},
+            )
+            raw_quality = "1080"
+        quality = raw_quality
 
         return {
             # Video format: best video up to configured quality + best audio, merge to mp4
@@ -604,6 +756,15 @@ class YouTubeDownloader:
                     subtitle_file = str(sub_path)
                     break
 
+            # Clean up extra VTT files for this video
+            for vtt_path in video_path.parent.glob(f"{video_id}_*.vtt"):
+                if subtitle_file and str(vtt_path) == subtitle_file:
+                    continue
+                try:
+                    vtt_path.unlink()
+                except OSError:
+                    pass
+
             metadata_file = video_path.with_suffix(".info.json")
             thumbnail_file = None
             # Thumbnail can have various extensions
@@ -615,10 +776,27 @@ class YouTubeDownloader:
 
             # Load metadata if available
             if metadata_file.exists():
-                with open(metadata_file, encoding="utf-8") as f:
-                    metadata = json.load(f)
+                try:
+                    with open(metadata_file, encoding="utf-8") as f:
+                        metadata = json.load(f)
+                except (json.JSONDecodeError, OSError) as exc:
+                    logger.warning(
+                        "youtube_metadata_file_corrupt",
+                        extra={"path": str(metadata_file), "error": str(exc)},
+                    )
+                    metadata = info
             else:
                 metadata = info
+
+            # Validate video file exists and is non-empty
+            actual_size = video_path.stat().st_size if video_path.exists() else 0
+            if actual_size == 0:
+                raise ValueError(
+                    "Video file missing or empty after download. "
+                    "ffmpeg may have failed to merge video/audio streams."
+                )
+
+            uploader = metadata.get("uploader")
 
             return {
                 "video_file_path": str(video_file),
@@ -627,11 +805,11 @@ class YouTubeDownloader:
                 "thumbnail_file_path": thumbnail_file,
                 "video_id": metadata.get("id", video_id),
                 "title": metadata.get("title", "Unknown"),
-                "channel": metadata.get("uploader") or metadata.get("channel", "Unknown"),
+                "channel": uploader if uploader is not None else metadata.get("channel", "Unknown"),
                 "channel_id": metadata.get("channel_id"),
                 "duration": metadata.get("duration"),
                 "resolution": f"{metadata.get('height', '?')}p",
-                "file_size": video_path.stat().st_size if video_path.exists() else 0,
+                "file_size": actual_size,
                 "upload_date": metadata.get("upload_date"),
                 "view_count": metadata.get("view_count"),
                 "like_count": metadata.get("like_count"),
@@ -702,11 +880,12 @@ class YouTubeDownloader:
             )
 
     def _calculate_storage_usage(self) -> int:
-        """Calculate total storage used by videos in bytes."""
+        """Calculate total storage used by video-related files in bytes."""
         total = 0
+        eligible_suffixes = {".mp4", ".info.json", ".vtt", ".jpg", ".png", ".webp"}
         try:
-            for file_path in self.storage_path.rglob("*.mp4"):
-                if file_path.is_file():
+            for file_path in self.storage_path.rglob("*"):
+                if file_path.is_file() and file_path.suffix.lower() in eligible_suffixes:
                     total += file_path.stat().st_size
         except Exception as e:
             logger.warning("youtube_storage_calculation_failed", extra={"error": str(e)})
@@ -798,7 +977,8 @@ class YouTubeDownloader:
         # Try to infer language code from filename suffix, e.g., .en.vtt
         parts = path.name.split(".")
         if len(parts) >= 3:
-            lang = parts[-2]
+            candidate = parts[-2].lower()
+            lang = candidate if candidate in _KNOWN_LANG_CODES else None
 
         with path.open(encoding="utf-8") as f:
             for raw in f:

@@ -775,10 +775,12 @@ class TestStorageManagement(TestYouTubeDownloader):
             mock_file1 = MagicMock()
             mock_file1.is_file.return_value = True
             mock_file1.stat.return_value.st_size = 100 * 1024 * 1024
+            mock_file1.suffix = ".mp4"
 
             mock_file2 = MagicMock()
             mock_file2.is_file.return_value = True
             mock_file2.stat.return_value.st_size = 200 * 1024 * 1024
+            mock_file2.suffix = ".mp4"
 
             mock_rglob.return_value = [mock_file1, mock_file2]
 
@@ -903,22 +905,22 @@ class TestMetadataExtraction(TestYouTubeDownloader):
 
         # Verify transcript fields are persisted to the database
         update_kwargs = self.downloader.video_repo.async_update_video_download.call_args
-        assert (
-            "transcript_text" in update_kwargs.kwargs
-        ), "transcript_text must be persisted to database"
-        assert (
-            "subtitle_language" in update_kwargs.kwargs
-        ), "subtitle_language must be persisted to database"
-        assert (
-            "transcript_source" in update_kwargs.kwargs
-        ), "transcript_source must be persisted to database"
+        assert "transcript_text" in update_kwargs.kwargs, (
+            "transcript_text must be persisted to database"
+        )
+        assert "subtitle_language" in update_kwargs.kwargs, (
+            "subtitle_language must be persisted to database"
+        )
+        assert "transcript_source" in update_kwargs.kwargs, (
+            "transcript_source must be persisted to database"
+        )
 
         # Verify download status is set to "completed"
         status_calls = self.downloader.video_repo.async_update_video_download_status.call_args_list
         status_values = [call.args[1] for call in status_calls]
-        assert (
-            "completed" in status_values
-        ), "Video download status must be set to 'completed' after successful download"
+        assert "completed" in status_values, (
+            "Video download status must be set to 'completed' after successful download"
+        )
 
         self.downloader.request_repo.async_update_request_status.assert_called()
 
