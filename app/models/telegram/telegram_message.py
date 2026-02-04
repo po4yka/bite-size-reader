@@ -251,6 +251,16 @@ class TelegramMessage(BaseModel):
             )
             via_bot_user = TelegramUser.from_dict(_pyrogram_to_dict(via_bot)) if via_bot else None
 
+            # Convert reply markup / link preview options into dicts for Pydantic validation
+            reply_markup_dict = (
+                _pyrogram_to_dict(reply_markup) if reply_markup is not None else None
+            )
+            link_preview_options_dict = (
+                _pyrogram_to_dict(link_preview_options)
+                if link_preview_options is not None
+                else None
+            )
+
             # Convert reply message
             reply_to_message_dict = reply_to_message.__dict__ if reply_to_message else None
 
@@ -340,11 +350,11 @@ class TelegramMessage(BaseModel):
                 via_bot=via_bot_user,
                 has_protected_content=has_protected_content,
                 connected_website=connected_website,
-                reply_markup=reply_markup,
+                reply_markup=reply_markup_dict,
                 views=views,
                 via_bot_user_id=via_bot_user_id,
                 effect_id=effect_id,
-                link_preview_options=link_preview_options,
+                link_preview_options=link_preview_options_dict,
                 show_caption_above_media=show_caption_above_media,
                 media_type=media_type,
                 is_forwarded=is_forwarded,
