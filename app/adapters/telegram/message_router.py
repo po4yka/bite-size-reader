@@ -111,24 +111,16 @@ class MessageRouter:
     async def _check_rate_limit(
         self, limiter: RedisUserRateLimiter | UserRateLimiter, uid: int, interaction_type: str
     ) -> tuple[bool, str | None]:
-        if isinstance(limiter, RedisUserRateLimiter):
-            allowed, error_msg, _ = await limiter.check_and_record(uid, operation=interaction_type)
-            return allowed, error_msg
         return await limiter.check_and_record(uid, operation=interaction_type)
 
     async def _acquire_concurrent_slot(
         self, limiter: RedisUserRateLimiter | UserRateLimiter, uid: int
     ) -> bool:
-        if isinstance(limiter, RedisUserRateLimiter):
-            return await limiter.acquire_concurrent_slot(uid)
         return await limiter.acquire_concurrent_slot(uid)
 
     async def _release_concurrent_slot(
         self, limiter: RedisUserRateLimiter | UserRateLimiter, uid: int
     ) -> None:
-        if isinstance(limiter, RedisUserRateLimiter):
-            await limiter.release_concurrent_slot(uid)
-            return
         await limiter.release_concurrent_slot(uid)
 
     async def cleanup_rate_limiter(self) -> int:
