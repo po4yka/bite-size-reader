@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from app.adapters.telegram import telegram_client as telegram_client_module
+from app.core.async_utils import raise_if_cancelled
 from app.core.logging_utils import generate_correlation_id, setup_json_logging
 from app.core.time_utils import UTC
 from app.infrastructure.persistence.sqlite.repositories.audit_log_repository import (
@@ -487,9 +488,9 @@ class TelegramBot:
                 if extra_kwargs:
                     kwargs.update(extra_kwargs)
                 await message.reply_text(text, **kwargs)
-        except Exception:
+        except Exception as exc:
+            raise_if_cancelled(exc)
             # Swallow in tests; production response path logs and continues.
-            pass
 
     async def _reply_json(
         self,
@@ -542,13 +543,14 @@ class TelegramBot:
             # Fallback to text
             if hasattr(message, "reply_text"):
                 await message.reply_text(f"```json\n{pretty}\n```")
-        except Exception:
+        except Exception as exc:
+            raise_if_cancelled(exc)
             try:
                 text = json.dumps(payload, ensure_ascii=False)
                 if hasattr(message, "reply_text"):
                     await message.reply_text(text)
-            except Exception:
-                pass
+            except Exception as inner_exc:
+                raise_if_cancelled(inner_exc)
         _ = metadata
 
     async def handle_url_flow(
