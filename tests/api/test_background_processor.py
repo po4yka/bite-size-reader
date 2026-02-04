@@ -289,3 +289,33 @@ async def test_local_locks_cleaned_after_release():
     assert request_id not in processor._local_locks, (
         f"_local_locks still contains request_id={request_id} after release"
     )
+
+
+@pytest.mark.asyncio
+async def test_run_with_backoff_propagates_cancellation():
+    """_run_with_backoff should re-raise CancelledError immediately, not retry."""
+    cfg = DummyCfg()
+    cfg.background.retry_attempts = 3
+    cfg.background.retry_base_delay_ms = 1
+    cfg.background.retry_max_delay_ms = 2
+
+    proc = BackgroundProcessor(
+        cfg=cfg,
+        db=StubDB(),
+        url_processor=StubURLProcessor(StubExtractor(), StubSummarizer()),
+        redis=None,
+        semaphore=asyncio.Semaphore(3),
+        audit_func=lambda *_args, **_kwargs: None,
+    )
+
+    call_count = 0
+
+    async def cancelling_func():
+        nonlocal call_count
+        call_count += 1
+        raise asyncio.CancelledError()
+
+    with pytest.raises(asyncio.CancelledError):
+        await proc._run_with_backoff(cancelling_func, "test_stage", "cid-123")
+
+    assert call_count == 1, "Should not retry on CancelledError"

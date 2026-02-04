@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, Any
 
 from app.adapters.content.url_processor import URLProcessor, _get_system_prompt
 from app.config import AppConfig, load_config
+from app.core.async_utils import raise_if_cancelled
 from app.core.lang import choose_language, detect_language
 from app.core.logging_utils import get_logger, log_exception
 from app.core.url_utils import normalize_url
@@ -482,6 +483,7 @@ class BackgroundProcessor:
             try:
                 return await func()
             except Exception as exc:
+                raise_if_cancelled(exc)
                 last_error = exc
                 delay_ms = min(
                     self._retry.max_delay_ms,
