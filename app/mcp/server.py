@@ -1273,6 +1273,8 @@ def run_server(
     logger.info("Starting Bite-Size Reader MCP server (transport=%s)", transport)
 
     if transport == "sse":
-        mcp.run(transport="sse", host=host, port=port)
+        mcp.settings.host = host
+        mcp.settings.port = port
+        mcp.run(transport="sse")
     else:
         mcp.run(transport="stdio")

@@ -6,7 +6,7 @@ Provides CRUD operations for summaries.
 
 from datetime import datetime
 from hashlib import sha256
-from typing import Any
+from typing import Any, Literal, cast
 
 from fastapi import APIRouter, Depends, Query
 
@@ -409,9 +409,11 @@ async def get_summary_content(
             content=SummaryContent(
                 summary_id=summary.get("id"),
                 request_id=request_id,
-                format=output_format,
+                format=cast('Literal["markdown", "text", "html"]', output_format),
                 content=content_value,
-                content_type=content_mime,
+                content_type=cast(
+                    'Literal["text/markdown", "text/plain", "text/html"]', content_mime
+                ),
                 lang=summary.get("lang"),
                 source_url=source_url,
                 title=title,

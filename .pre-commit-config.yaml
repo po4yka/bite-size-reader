@@ -25,6 +25,7 @@ repos:
           - --pretty
           - --show-error-codes
           - --ignore-missing-imports
+          - --no-warn-unused-ignores
 
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v6.0.0
