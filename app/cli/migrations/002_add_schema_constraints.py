@@ -15,11 +15,12 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from app.db.database import Database
+    from app.db.session import DatabaseSessionManager
 
 logger = logging.getLogger(__name__)
 
 
-def upgrade(db: Database) -> None:
+def upgrade(db: Database | DatabaseSessionManager) -> None:
     """Add schema integrity constraints."""
     logger.info("Starting Phase 2 schema improvements...")
 
@@ -45,7 +46,7 @@ def upgrade(db: Database) -> None:
     logger.info("Phase 2 schema improvements completed successfully")
 
 
-def _cleanup_orphaned_llm_calls(db: Database) -> int:
+def _cleanup_orphaned_llm_calls(db: Database | DatabaseSessionManager) -> int:
     """Delete any LLM calls without a valid request reference.
 
     Returns:
@@ -76,7 +77,7 @@ def _cleanup_orphaned_llm_calls(db: Database) -> int:
     return orphaned_count
 
 
-def _recreate_llm_calls_table(db: Database) -> None:
+def _recreate_llm_calls_table(db: Database | DatabaseSessionManager) -> None:
     """Recreate llm_calls table with NOT NULL constraint on request_id.
 
     SQLite doesn't support ALTER COLUMN, so we need to:
@@ -145,30 +146,36 @@ def _recreate_llm_calls_table(db: Database) -> None:
         logger.debug(f"  ✓ Recreated index {index_name}")
 
 
-def _add_request_validation_triggers(db: Database) -> None:
+def _add_request_validation_triggers(db: Database | DatabaseSessionManager) -> None:
     """Add triggers to validate request data based on type.
 
     Validation rules:
     - URL requests must have normalized_url
-    - Forward requests must have fwd_from_chat_id and fwd_from_msg_id
+    - Forward requests: if fwd_from_chat_id is set, fwd_from_msg_id must also be set
+      (and vice versa). Both NULL is valid (user/privacy-protected forwards).
     """
     # Drop existing triggers if they exist
     db._database.execute_sql("DROP TRIGGER IF EXISTS validate_request_insert")
     db._database.execute_sql("DROP TRIGGER IF EXISTS validate_request_update")
 
     # Trigger for INSERT
+    # For forward requests, enforce that chat_id and msg_id are either both set or both NULL.
+    # User forwards and privacy-protected forwards legitimately have both as NULL.
     db._database.execute_sql("""
         CREATE TRIGGER validate_request_insert
         BEFORE INSERT ON requests
         WHEN (
             (NEW.type = 'url' AND NEW.normalized_url IS NULL)
-            OR (NEW.type = 'forward' AND (NEW.fwd_from_chat_id IS NULL OR NEW.fwd_from_msg_id IS NULL))
+            OR (NEW.type = 'forward' AND (
+                (NEW.fwd_from_chat_id IS NOT NULL AND NEW.fwd_from_msg_id IS NULL)
+                OR (NEW.fwd_from_chat_id IS NULL AND NEW.fwd_from_msg_id IS NOT NULL)
+            ))
         )
         BEGIN
-            SELECT RAISE(ABORT, 'Request validation failed: URL requests must have normalized_url, forward requests must have fwd_from_chat_id and fwd_from_msg_id');
+            SELECT RAISE(ABORT, 'Request validation failed: URL requests must have normalized_url, forward requests must have both fwd_from_chat_id and fwd_from_msg_id or neither');
         END;
     """)
-    logger.debug("  ✓ Created INSERT validation trigger")
+    logger.debug("  Created INSERT validation trigger")
 
     # Trigger for UPDATE
     db._database.execute_sql("""
@@ -176,16 +183,19 @@ def _add_request_validation_triggers(db: Database) -> None:
         BEFORE UPDATE ON requests
         WHEN (
             (NEW.type = 'url' AND NEW.normalized_url IS NULL)
-            OR (NEW.type = 'forward' AND (NEW.fwd_from_chat_id IS NULL OR NEW.fwd_from_msg_id IS NULL))
+            OR (NEW.type = 'forward' AND (
+                (NEW.fwd_from_chat_id IS NOT NULL AND NEW.fwd_from_msg_id IS NULL)
+                OR (NEW.fwd_from_chat_id IS NULL AND NEW.fwd_from_msg_id IS NOT NULL)
+            ))
         )
         BEGIN
-            SELECT RAISE(ABORT, 'Request validation failed: URL requests must have normalized_url, forward requests must have fwd_from_chat_id and fwd_from_msg_id');
+            SELECT RAISE(ABORT, 'Request validation failed: URL requests must have normalized_url, forward requests must have both fwd_from_chat_id and fwd_from_msg_id or neither');
         END;
     """)
-    logger.debug("  ✓ Created UPDATE validation trigger")
+    logger.debug("  Created UPDATE validation trigger")
 
 
-def downgrade(db: Database) -> None:
+def downgrade(db: Database | DatabaseSessionManager) -> None:
     """Remove schema integrity constraints."""
     logger.info("Rolling back Phase 2 schema improvements...")
 

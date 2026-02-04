@@ -16,6 +16,7 @@ class FakeMessage:
     def __init__(self):
         class _Chat:
             id = 1
+            type = "private"
 
         self.chat = _Chat()
         self.id = 123
@@ -155,7 +156,8 @@ class TestDedupeReuse(unittest.IsolatedAsyncioTestCase):
             bot_any = cast("Any", bot)
             bot_any._firecrawl = FakeFirecrawl()
             fake_or = FakeOpenRouter()
-            bot_any._openrouter = fake_or
+            bot_any._llm_client = fake_or
+            bot_any._sync_client_dependencies()
 
             msg = FakeMessage()
             # First run: should reuse crawl and insert summary with a version marker

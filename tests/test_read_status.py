@@ -39,6 +39,11 @@ class ReadStatusBot(TelegramBot):
             super().__post_init__()
         self.seen_urls: list[str] = []
 
+        # Patch url_processor.handle_url_flow so the message router's
+        # url_handler routes through our test interceptor.
+        if hasattr(self, "url_processor"):
+            self.url_processor.handle_url_flow = self._fake_url_flow  # type: ignore[method-assign]
+
         # Mock Firecrawl to avoid API key issues
         if hasattr(self, "_firecrawl"):
 
@@ -70,6 +75,11 @@ class ReadStatusBot(TelegramBot):
             self._firecrawl.scrape_markdown = AsyncMock(return_value=MockCrawlResult())  # type: ignore[method-assign]
 
     async def _handle_url_flow(self, message: Any, url_text: str, **_: object) -> None:
+        self.seen_urls.append(url_text)
+        await self._safe_reply(message, f"OK {url_text}")
+
+    async def _fake_url_flow(self, message: Any, url_text: str, **_: object) -> None:
+        """Interceptor for url_processor.handle_url_flow used by tests."""
         self.seen_urls.append(url_text)
         await self._safe_reply(message, f"OK {url_text}")
 
@@ -156,6 +166,7 @@ class TestReadStatusDatabase(unittest.TestCase):
             correlation_id=None,
             chat_id=None,
             user_id=None,
+            normalized_url="https://example.com/test-defaults",
             route_version=1,
         )
 
@@ -178,6 +189,7 @@ class TestReadStatusDatabase(unittest.TestCase):
             correlation_id=None,
             chat_id=None,
             user_id=None,
+            normalized_url="https://example.com/explicit-1",
             route_version=1,
         )
         rid2 = self.db.create_request(
@@ -186,6 +198,7 @@ class TestReadStatusDatabase(unittest.TestCase):
             correlation_id=None,
             chat_id=None,
             user_id=None,
+            normalized_url="https://example.com/explicit-2",
             route_version=1,
         )
 
@@ -218,6 +231,7 @@ class TestReadStatusDatabase(unittest.TestCase):
             type_="url",
             status="pending",
             input_url="https://example1.com",
+            normalized_url="https://example1.com",
             correlation_id=None,
             chat_id=None,
             user_id=None,
@@ -227,6 +241,7 @@ class TestReadStatusDatabase(unittest.TestCase):
             type_="url",
             status="pending",
             input_url="https://example2.com",
+            normalized_url="https://example2.com",
             correlation_id=None,
             chat_id=None,
             user_id=None,
@@ -236,6 +251,7 @@ class TestReadStatusDatabase(unittest.TestCase):
             type_="url",
             status="pending",
             input_url="https://example3.com",
+            normalized_url="https://example3.com",
             correlation_id=None,
             chat_id=None,
             user_id=None,
@@ -276,6 +292,7 @@ class TestReadStatusDatabase(unittest.TestCase):
                 type_="url",
                 status="pending",
                 input_url=f"https://example{i}.com",
+                normalized_url=f"https://example{i}.com",
                 correlation_id=None,
                 chat_id=None,
                 user_id=None,
@@ -302,6 +319,7 @@ class TestReadStatusDatabase(unittest.TestCase):
             type_="url",
             status="pending",
             input_url="https://visible.com",
+            normalized_url="https://visible.com",
             correlation_id=None,
             chat_id=111,
             user_id=555,
@@ -311,6 +329,7 @@ class TestReadStatusDatabase(unittest.TestCase):
             type_="url",
             status="pending",
             input_url="https://other-user.com",
+            normalized_url="https://other-user.com",
             correlation_id=None,
             chat_id=111,
             user_id=777,
@@ -320,6 +339,7 @@ class TestReadStatusDatabase(unittest.TestCase):
             type_="url",
             status="pending",
             input_url="https://other-chat.com",
+            normalized_url="https://other-chat.com",
             correlation_id=None,
             chat_id=222,
             user_id=555,
@@ -367,6 +387,7 @@ class TestReadStatusDatabase(unittest.TestCase):
                 type_="url",
                 status="pending",
                 input_url=f"https://example{index}.com",
+                normalized_url=f"https://example{index}.com",
                 correlation_id=None,
                 chat_id=None,
                 user_id=None,
@@ -395,6 +416,7 @@ class TestReadStatusDatabase(unittest.TestCase):
             type_="url",
             status="pending",
             input_url="https://example.com",
+            normalized_url="https://example.com",
             correlation_id=None,
             chat_id=None,
             user_id=None,
@@ -422,6 +444,7 @@ class TestReadStatusDatabase(unittest.TestCase):
                 type_="url",
                 status="pending",
                 input_url=f"https://example{i}.com",
+                normalized_url=f"https://example{i}.com",
                 correlation_id=None,
                 chat_id=None,
                 user_id=None,
@@ -462,6 +485,7 @@ class TestReadStatusDatabase(unittest.TestCase):
             correlation_id=None,
             chat_id=None,
             user_id=None,
+            normalized_url="https://example.com/mark-read",
             route_version=1,
         )
 
@@ -491,6 +515,7 @@ class TestReadStatusDatabase(unittest.TestCase):
             correlation_id=None,
             chat_id=None,
             user_id=None,
+            normalized_url="https://example.com/read-status-1",
             route_version=1,
         )
         rid2 = self.db.create_request(
@@ -499,6 +524,7 @@ class TestReadStatusDatabase(unittest.TestCase):
             correlation_id=None,
             chat_id=None,
             user_id=None,
+            normalized_url="https://example.com/read-status-2",
             route_version=1,
         )
 
@@ -525,6 +551,7 @@ class TestReadStatusDatabase(unittest.TestCase):
             type_="url",
             status="pending",
             input_url="https://example.com",
+            normalized_url="https://example.com",
             correlation_id=None,
             chat_id=None,
             user_id=None,
@@ -597,6 +624,7 @@ class TestReadStatusCommands(unittest.IsolatedAsyncioTestCase):
                     type_="url",
                     status="ok",
                     input_url=url,
+                    normalized_url=url,
                     correlation_id=f"test-{i}",
                     chat_id=None,
                     user_id=None,
@@ -638,6 +666,7 @@ class TestReadStatusCommands(unittest.IsolatedAsyncioTestCase):
                     type_="url",
                     status="ok",
                     input_url=url,
+                    normalized_url=url,
                     correlation_id="test",
                     chat_id=None,
                     user_id=None,
@@ -673,6 +702,7 @@ class TestReadStatusCommands(unittest.IsolatedAsyncioTestCase):
                 type_="url",
                 status="ok",
                 input_url="https://example.com",
+                normalized_url="https://example.com",
                 correlation_id="test",
                 chat_id=None,
                 user_id=None,
@@ -706,6 +736,7 @@ class TestReadStatusCommands(unittest.IsolatedAsyncioTestCase):
                     type_="url",
                     status="ok",
                     input_url=f"https://example{i}.com",
+                    normalized_url=f"https://example{i}.com",
                     correlation_id=f"cid-{i}",
                     chat_id=None,
                     user_id=None,
@@ -779,6 +810,7 @@ class TestReadStatusCommands(unittest.IsolatedAsyncioTestCase):
                 type_="url",
                 status="ok",
                 input_url="https://example.com",
+                normalized_url="https://example.com",
                 correlation_id="test-read",
                 chat_id=None,
                 user_id=None,
@@ -817,6 +849,7 @@ class TestReadStatusCommands(unittest.IsolatedAsyncioTestCase):
                 type_="url",
                 status="ok",
                 input_url="https://example.com",
+                normalized_url="https://example.com",
                 correlation_id="test-read",
                 chat_id=None,
                 user_id=None,
@@ -862,6 +895,7 @@ class TestReadStatusIntegration(unittest.IsolatedAsyncioTestCase):
                 type_="url",
                 status="ok",
                 input_url="https://example.com",
+                normalized_url="https://example.com",
                 correlation_id="test-read-integration",
                 chat_id=None,
                 user_id=None,

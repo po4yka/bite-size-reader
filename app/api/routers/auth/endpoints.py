@@ -43,6 +43,7 @@ from app.api.models.auth import (
 )
 from app.api.models.responses import (
     AuthTokensResponse,
+    SessionListResponse,
     TokenPair,
     UserInfo,
     success_response,
@@ -802,4 +803,4 @@ async def list_sessions(
             )
         )
 
-    return success_response({"sessions": formatted_sessions})
+    return success_response(SessionListResponse(sessions=formatted_sessions))

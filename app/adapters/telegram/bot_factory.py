@@ -233,8 +233,6 @@ class BotFactory:
             container = Container(
                 database=db,
                 topic_search_service=local_searcher,
-                content_fetcher=clients.firecrawl,
-                llm_client=clients.llm_client,
                 analytics_service=None,  # No analytics service yet
                 vector_store=vector_store,
                 embedding_generator=embedding_generator,

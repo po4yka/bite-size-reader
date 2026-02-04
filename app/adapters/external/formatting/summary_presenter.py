@@ -7,6 +7,8 @@ import logging
 import re
 from typing import TYPE_CHECKING, Any
 
+from app.core.async_utils import raise_if_cancelled
+
 if TYPE_CHECKING:
     from app.adapters.external.formatting.data_formatter import DataFormatterImpl
     from app.adapters.external.formatting.response_sender import ResponseSenderImpl
@@ -113,6 +115,7 @@ class SummaryPresenterImpl:
                     extra={"summary_id": summary_id},
                 )
         except Exception as e:
+            raise_if_cancelled(e)
             logger.warning(
                 "send_action_buttons_failed",
                 extra={"summary_id": summary_id, "error": str(e)},
@@ -145,8 +148,8 @@ class SummaryPresenterImpl:
                     f"🎉 Summary Ready\n🧠 Model: {model_name or 'unknown'}\n🔧 Method: {method}"
                 )
                 await self._response_sender.safe_reply(message, header)
-            except Exception:
-                pass
+            except Exception as exc:
+                raise_if_cancelled(exc)
 
             # Combined first message: TL;DR, Tags, Entities, Reading Time, Key Stats, Readability, SEO
             combined_lines: list[str] = []
@@ -306,14 +309,15 @@ class SummaryPresenterImpl:
             if summary_id:
                 await self._send_action_buttons(message, summary_id)
 
-        except Exception:
+        except Exception as exc:
+            raise_if_cancelled(exc)
             # Fallback to simpler format
             try:
                 tl_dr = str(summary_shaped.get("summary_250", "")).strip()
                 if tl_dr:
                     await self._response_sender.safe_reply(message, f"📋 TL;DR:\n{tl_dr}")
-            except Exception:
-                pass
+            except Exception as exc2:
+                raise_if_cancelled(exc2)
 
             await self._response_sender.reply_json(message, summary_shaped)
 
@@ -472,6 +476,7 @@ class SummaryPresenterImpl:
                 )
 
         except Exception as exc:  # pragma: no cover - defensive
+            raise_if_cancelled(exc)
             logger.error("insights_message_error", extra={"error": str(exc)})
 
     async def send_custom_article(self, message: Any, article: dict[str, Any]) -> None:
@@ -515,8 +520,8 @@ class SummaryPresenterImpl:
                 )
 
             await self._response_sender.reply_json(message, article)
-        except Exception:
-            pass
+        except Exception as exc:
+            raise_if_cancelled(exc)
 
     async def send_forward_summary_response(
         self, message: Any, forward_shaped: dict[str, Any], summary_id: int | str | None = None
@@ -659,8 +664,8 @@ class SummaryPresenterImpl:
 
             # Send new field messages for forwards
             await self._send_new_field_messages(message, forward_shaped)
-        except Exception:
-            pass
+        except Exception as exc:
+            raise_if_cancelled(exc)
 
         await self._response_sender.reply_json(message, forward_shaped)
 
@@ -771,5 +776,5 @@ class SummaryPresenterImpl:
                         parse_mode="HTML",
                     )
 
-        except Exception:
-            pass
+        except Exception as exc:
+            raise_if_cancelled(exc)

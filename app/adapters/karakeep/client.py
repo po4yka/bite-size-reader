@@ -438,20 +438,17 @@ class KarakeepClient:
 
         await self._with_retry(_delete, f"delete_bookmark({bookmark_id})")
 
-    async def attach_tags(self, bookmark_id: str, tags: list[str]) -> KarakeepBookmark:
+    async def attach_tags(self, bookmark_id: str, tags: list[str]) -> None:
         """Attach tags to a bookmark.
 
         Args:
             bookmark_id: Bookmark ID
             tags: List of tag names to attach
-
-        Returns:
-            Updated bookmark
         """
         request = AttachTagRequest(tags=[{"tagName": tag} for tag in tags])
         timeout = self.get_timeout("attach_tags")
 
-        async def _attach() -> KarakeepBookmark:
+        async def _attach() -> None:
             response = await self.client.post(
                 f"/bookmarks/{bookmark_id}/tags",
                 json=request.model_dump(),
@@ -459,9 +456,8 @@ class KarakeepClient:
             )
             response.raise_for_status()
             logger.debug("karakeep_tags_attached", extra={"bookmark_id": bookmark_id, "tags": tags})
-            return KarakeepBookmark.model_validate(response.json())
 
-        return await self._with_retry(_attach, f"attach_tags({bookmark_id})")
+        await self._with_retry(_attach, f"attach_tags({bookmark_id})")
 
     async def detach_tag(self, bookmark_id: str, tag_id: str) -> None:
         """Detach a tag from a bookmark.

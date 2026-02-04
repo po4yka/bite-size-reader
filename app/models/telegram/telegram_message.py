@@ -292,7 +292,9 @@ class TelegramMessage(BaseModel):
                 media_type = MediaType.STORY
 
             # Compute boolean fields
-            is_forwarded = bool(forward_from or forward_from_chat)
+            is_forwarded = bool(
+                forward_from or forward_from_chat or forward_sender_name or forward_date
+            )
             is_reply = bool(reply_to_message)
             is_edited = bool(edit_date)
             has_media = bool(media_type)
@@ -502,7 +504,10 @@ class TelegramMessage(BaseModel):
 
         # Set boolean flags
         self.is_forwarded = bool(
-            self.forward_from or self.forward_from_chat or self.forward_from_message_id
+            self.forward_from
+            or self.forward_from_chat
+            or self.forward_sender_name
+            or self.forward_date
         )
         self.is_reply = bool(self.reply_to_message)
         self.is_edited = bool(self.edit_date)

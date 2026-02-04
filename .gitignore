@@ -31,6 +31,9 @@ venv.bak/
 # Pytest cache
 .pytest_cache/
 
+# Hypothesis test database
+.hypothesis/
+
 
 # --- Project-Specific Files ---
 # --- Secrets and Configuration ---

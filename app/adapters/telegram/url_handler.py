@@ -50,27 +50,29 @@ class URLHandler:
 
         # Lock to protect shared state from concurrent access
         self._state_lock = asyncio.Lock()
-        # Simple in-memory state: users awaiting a URL after /summarize
-        self._awaiting_url_users: set[int] = set()
-        # Pending multiple links confirmation: uid -> list of urls
-        self._pending_multi_links: dict[int, list[str]] = {}
+        # In-memory state with timestamps for TTL expiry
+        self._state_ttl_sec = 120  # 2 minutes
+        # uid -> timestamp when added
+        self._awaiting_url_users: dict[int, float] = {}
+        # uid -> (urls, timestamp)
+        self._pending_multi_links: dict[int, tuple[list[str], float]] = {}
 
     async def add_awaiting_user(self, uid: int) -> None:
         """Add user to awaiting URL list."""
         async with self._state_lock:
-            self._awaiting_url_users.add(uid)
+            self._awaiting_url_users[uid] = time.time()
 
     async def add_pending_multi_links(self, uid: int, urls: list[str]) -> None:
         """Add user to pending multi-links confirmation."""
         async with self._state_lock:
-            self._pending_multi_links[uid] = urls
+            self._pending_multi_links[uid] = (urls, time.time())
 
     async def cancel_pending_requests(self, uid: int) -> tuple[bool, bool]:
         """Cancel any pending URL or multi-link confirmation requests for a user."""
         async with self._state_lock:
             awaiting_cancelled = uid in self._awaiting_url_users
             if awaiting_cancelled:
-                self._awaiting_url_users.discard(uid)
+                self._awaiting_url_users.pop(uid, None)
 
             multi_cancelled = uid in self._pending_multi_links
             if multi_cancelled:
@@ -90,7 +92,7 @@ class URLHandler:
         """Handle URL sent after /summarize command."""
         urls = extract_all_urls(text)
         async with self._state_lock:
-            self._awaiting_url_users.discard(uid)
+            self._awaiting_url_users.pop(uid, None)
 
         urls = await self._apply_url_security_checks(message, urls, uid)
         if not urls:
@@ -156,7 +158,12 @@ class URLHandler:
             # CRITICAL: Keep lock held during state validation to prevent race conditions
             # This prevents concurrent modifications between retrieval and validation
             async with self._state_lock:
-                urls = self._pending_multi_links.get(uid)
+                entry = self._pending_multi_links.get(uid)
+
+                # Unpack timestamped entry
+                urls: list[str] | None = None
+                if entry is not None:
+                    urls = entry[0]
 
                 # Validate state while holding lock (prevents race condition)
                 if not urls:
@@ -257,14 +264,49 @@ class URLHandler:
                 )
 
     async def is_awaiting_url(self, uid: int) -> bool:
-        """Check if user is awaiting a URL."""
+        """Check if user is awaiting a URL (respects TTL)."""
         async with self._state_lock:
-            return uid in self._awaiting_url_users
+            ts = self._awaiting_url_users.get(uid)
+            if ts is None:
+                return False
+            if time.time() - ts > self._state_ttl_sec:
+                self._awaiting_url_users.pop(uid, None)
+                return False
+            return True
 
     async def has_pending_multi_links(self, uid: int) -> bool:
-        """Check if user has pending multi-link confirmation."""
+        """Check if user has pending multi-link confirmation (respects TTL)."""
         async with self._state_lock:
-            return uid in self._pending_multi_links
+            entry = self._pending_multi_links.get(uid)
+            if entry is None:
+                return False
+            if time.time() - entry[1] > self._state_ttl_sec:
+                self._pending_multi_links.pop(uid, None)
+                return False
+            return True
+
+    async def cleanup_expired_state(self) -> int:
+        """Remove expired awaiting/pending entries. Returns count removed."""
+        async with self._state_lock:
+            now = time.time()
+            cleaned = 0
+            expired_awaiting = [
+                uid
+                for uid, ts in self._awaiting_url_users.items()
+                if now - ts > self._state_ttl_sec
+            ]
+            for uid in expired_awaiting:
+                del self._awaiting_url_users[uid]
+                cleaned += 1
+            expired_multi = [
+                uid
+                for uid, (_, ts) in self._pending_multi_links.items()
+                if now - ts > self._state_ttl_sec
+            ]
+            for uid in expired_multi:
+                del self._pending_multi_links[uid]
+                cleaned += 1
+            return cleaned
 
     def _normalize_response(self, text: str) -> str:
         return text.strip().lower()
@@ -324,7 +366,7 @@ class URLHandler:
         start_time: float,
     ) -> None:
         async with self._state_lock:
-            self._pending_multi_links[uid] = urls
+            self._pending_multi_links[uid] = (urls, time.time())
         # Create inline keyboard buttons for confirmation
         buttons = [
             {"text": "✅ Yes", "callback_data": "multi_confirm_yes"},

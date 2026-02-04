@@ -1774,6 +1774,9 @@ class RuntimeConfig(BaseModel):
     db_backup_dir: str | None = Field(default=None, validation_alias="DB_BACKUP_DIR")
     enable_hex_container: bool = Field(default=False, validation_alias="ENABLE_HEX_CONTAINER")
     llm_provider: str = Field(default="openrouter", validation_alias="LLM_PROVIDER")
+    telegram_reply_timeout_sec: float = Field(
+        default=30.0, validation_alias="TELEGRAM_REPLY_TIMEOUT_SEC"
+    )
 
     @field_validator("llm_provider", mode="before")
     @classmethod

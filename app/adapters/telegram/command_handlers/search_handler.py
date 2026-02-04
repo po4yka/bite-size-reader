@@ -10,6 +10,7 @@ import logging
 from typing import TYPE_CHECKING, Any
 
 from app.adapters.telegram.command_handlers.decorators import audit_command
+from app.core.async_utils import raise_if_cancelled
 from app.db.user_interactions import async_safe_update_user_interaction
 
 if TYPE_CHECKING:
@@ -173,8 +174,9 @@ class SearchHandlerImpl:
                     "text": ctx.text[:100],
                 },
             )
-        except Exception:
-            pass
+        except Exception as exc:
+            raise_if_cancelled(exc)
+            logger.debug("audit_log_failed", extra={"error": str(exc)})
 
         # Check if searcher is available
         if not searcher:

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from app.core.async_utils import raise_if_cancelled
+
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
@@ -107,8 +109,8 @@ class NotificationFormatterImpl:
                 f"📋 Status: Fetching content...\n"
                 f"🤖 Structured output with smart fallbacks",
             )
-        except Exception:
-            pass
+        except Exception as exc:
+            raise_if_cancelled(exc)
 
     async def send_firecrawl_start_notification(
         self, message: Any, url: str | None = None, *, silent: bool = False
@@ -131,8 +133,8 @@ class NotificationFormatterImpl:
                 "⏱️ This may take 10-30 seconds\n"
                 "🔄 Processing pipeline active",
             )
-        except Exception:
-            pass
+        except Exception as exc:
+            raise_if_cancelled(exc)
 
     async def send_firecrawl_success_notification(
         self,
@@ -179,8 +181,8 @@ class NotificationFormatterImpl:
             lines.append("🔄 Status: Preparing for AI analysis...")
 
             await self._response_sender.safe_reply(message, "\n".join(lines))
-        except Exception:
-            pass
+        except Exception as exc:
+            raise_if_cancelled(exc)
 
     async def send_content_reuse_notification(
         self,
@@ -223,8 +225,8 @@ class NotificationFormatterImpl:
             lines.append("⚡ Proceeding to AI analysis...")
 
             await self._response_sender.safe_reply(message, "\n".join(lines))
-        except Exception:
-            pass
+        except Exception as exc:
+            raise_if_cancelled(exc)
 
     async def send_cached_summary_notification(self, message: Any, *, silent: bool = False) -> None:
         """Inform the user that a cached summary is being reused."""
@@ -235,8 +237,8 @@ class NotificationFormatterImpl:
                 message,
                 "♻️ **Using Cached Summary**\n⚡ Delivered instantly without extra processing",
             )
-        except Exception:
-            pass
+        except Exception as exc:
+            raise_if_cancelled(exc)
 
     async def send_html_fallback_notification(
         self, message: Any, content_len: int, *, silent: bool = False
@@ -253,8 +255,8 @@ class NotificationFormatterImpl:
                 f"📊 Processing {content_len:,} characters...\n"
                 f"🤖 Pipeline will optimize for best results",
             )
-        except Exception:
-            pass
+        except Exception as exc:
+            raise_if_cancelled(exc)
 
     async def send_language_detection_notification(
         self,
@@ -282,8 +284,8 @@ class NotificationFormatterImpl:
                         domain = domain[4:]
                     if domain and len(domain) <= 40:
                         url_line = f"🔗 Source: {domain}\n"
-                except Exception:
-                    pass
+                except Exception as exc:
+                    raise_if_cancelled(exc)
 
             await self._response_sender.safe_reply(
                 message,
@@ -294,8 +296,8 @@ class NotificationFormatterImpl:
                 f"```\n{content_preview}\n```\n"
                 f"🤖 Status: Preparing AI analysis with structured outputs...",
             )
-        except Exception:
-            pass
+        except Exception as exc:
+            raise_if_cancelled(exc)
 
     async def send_content_analysis_notification(
         self,
@@ -339,8 +341,8 @@ class NotificationFormatterImpl:
                     f"🤖 Method: Structured output with schema validation\n"
                     f"⚡ Status: Sending to AI model...",
                 )
-        except Exception:
-            pass
+        except Exception as exc:
+            raise_if_cancelled(exc)
 
     async def send_llm_start_notification(
         self,
@@ -374,7 +376,8 @@ class NotificationFormatterImpl:
                         url_line = f"🔗 {url}\n"
                     else:
                         url_line = f"🔗 {url[:47]}...\n"
-                except Exception:
+                except Exception as exc:
+                    raise_if_cancelled(exc)
                     # Fallback to simple truncation
                     url_line = f"🔗 {url}\n" if len(url) <= 50 else f"🔗 {url[:47]}...\n"
 
@@ -387,8 +390,8 @@ class NotificationFormatterImpl:
                 f"🔧 Mode: {structured_output_mode.upper()} with smart fallbacks\n"
                 f"⏱️ This may take 30-60 seconds...",
             )
-        except Exception:
-            pass
+        except Exception as exc:
+            raise_if_cancelled(exc)
 
     async def send_llm_completion_notification(
         self, message: Any, llm: Any, correlation_id: str, *, silent: bool = False
@@ -445,8 +448,8 @@ class NotificationFormatterImpl:
                     f"🔄 Smart fallbacks: Active\n"
                     f"🆔 Error ID: `{correlation_id}`",
                 )
-        except Exception:
-            pass
+        except Exception as exc:
+            raise_if_cancelled(exc)
 
     async def send_forward_accepted_notification(self, message: Any, title: str) -> None:
         """Send forward request accepted notification."""
@@ -458,8 +461,8 @@ class NotificationFormatterImpl:
                 "🤖 Processing with structured outputs...\n"
                 "📋 Status: Generating summary...",
             )
-        except Exception:
-            pass
+        except Exception as exc:
+            raise_if_cancelled(exc)
 
     async def send_forward_language_notification(self, message: Any, detected: str | None) -> None:
         """Send forward language detection notification."""
@@ -471,8 +474,8 @@ class NotificationFormatterImpl:
                 f"🤖 Processing with structured outputs...\n"
                 f"⚡ Status: Sending to AI model...",
             )
-        except Exception:
-            pass
+        except Exception as exc:
+            raise_if_cancelled(exc)
 
     async def send_forward_completion_notification(self, message: Any, llm: Any) -> None:
         """Send forward completion notification."""
@@ -491,8 +494,8 @@ class NotificationFormatterImpl:
                 f"⏱️ Time: {latency_sec:.1f}s{structured_info}\n"
                 f"📋 Status: {'Generating summary...' if llm.status == 'ok' else 'Processing error...'}",
             )
-        except Exception:
-            pass
+        except Exception as exc:
+            raise_if_cancelled(exc)
 
     async def send_youtube_download_notification(
         self, message: Any, url: str, *, silent: bool = False
@@ -509,8 +512,8 @@ class NotificationFormatterImpl:
                 "⏱️ This may take a few minutes depending on video length.\n\n"
                 f"🔗 URL: {url[:60]}{'...' if len(url) > 60 else ''}",
             )
-        except Exception:
-            pass
+        except Exception as exc:
+            raise_if_cancelled(exc)
 
     async def send_youtube_download_complete_notification(
         self,
@@ -534,8 +537,8 @@ class NotificationFormatterImpl:
                 f"💾 Size: {size_mb:.1f} MB\n\n"
                 "🤖 Generating summary from transcript...",
             )
-        except Exception:
-            pass
+        except Exception as exc:
+            raise_if_cancelled(exc)
 
     async def send_error_notification(
         self,
@@ -653,5 +656,5 @@ class NotificationFormatterImpl:
                     f"🚨 {details or 'Unknown error'}\n"
                     f"🆔 Error ID: `{correlation_id}`",
                 )
-        except Exception:
-            pass
+        except Exception as exc:
+            raise_if_cancelled(exc)

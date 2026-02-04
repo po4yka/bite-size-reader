@@ -7,7 +7,7 @@ to domain rules. It is framework-agnostic and has no infrastructure dependencies
 from typing import Any
 
 from app.domain.exceptions.domain_exceptions import ValidationError
-from app.domain.models.summary import Summary
+from app.domain.models.summary import REQUIRED_SUMMARY_FIELDS, Summary
 
 
 class SummaryValidator:
@@ -31,8 +31,7 @@ class SummaryValidator:
                 details={"content_type": str(type(content))},
             )
 
-        required_fields = ["tldr", "summary_250", "key_ideas"]
-        missing_fields = [field for field in required_fields if field not in content]
+        missing_fields = [field for field in REQUIRED_SUMMARY_FIELDS if field not in content]
 
         if missing_fields:
             msg = f"Summary content missing required fields: {', '.join(missing_fields)}"

@@ -9,13 +9,12 @@ This module provides:
 
 from __future__ import annotations
 
-import asyncio
 import logging
-import random
 import time
 from typing import TYPE_CHECKING, Any
 
 from app.adapters.external.firecrawl.models import FirecrawlSearchResult
+from app.core.backoff import sleep_backoff as _sleep_backoff
 
 if TYPE_CHECKING:
     import json
@@ -56,9 +55,7 @@ class ErrorHandler:
         Args:
             attempt: Current attempt number (0-indexed)
         """
-        base_delay = max(0.0, self._backoff_base * (2**attempt))
-        jitter = 1.0 + random.uniform(-0.25, 0.25)
-        await asyncio.sleep(base_delay * jitter)
+        await _sleep_backoff(attempt, self._backoff_base)
 
     def should_retry(self, status_code: int, attempt: int, error_text: str | None = None) -> bool:
         """Determine if a request should be retried based on status code and error text.
@@ -287,12 +284,11 @@ class ErrorHandler:
 async def asyncio_sleep_backoff(base: float, attempt: int) -> None:
     """Sleep with exponential backoff and jitter.
 
-    This is a standalone function for backward compatibility.
+    Thin wrapper around :func:`app.core.backoff.sleep_backoff` kept for
+    backward compatibility with existing callers.
 
     Args:
         base: Base delay in seconds
         attempt: Current attempt number (0-indexed)
     """
-    base_delay = max(0.0, base * (2**attempt))
-    jitter = 1.0 + random.uniform(-0.25, 0.25)
-    await asyncio.sleep(base_delay * jitter)
+    await _sleep_backoff(attempt, base)
