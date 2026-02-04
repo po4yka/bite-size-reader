@@ -7,6 +7,7 @@ import logging
 from dataclasses import dataclass
 from typing import Any
 
+from app.core.async_utils import raise_if_cancelled
 from app.core.json_utils import extract_json
 
 logger = logging.getLogger(__name__)
@@ -145,8 +146,9 @@ class ResponseProcessor:
                         text = "\n".join(json_segments)
                     elif text_segments:
                         text = "\n".join(text_segments)
-                except Exception:
-                    pass
+                except Exception as exc:
+                    raise_if_cancelled(exc)
+                    logger.debug("content_walk_failed", extra={"error": str(exc)})
 
         # Try reasoning field for o1-style models
         if not text or (isinstance(text, str) and not text.strip()):
@@ -175,8 +177,9 @@ class ResponseProcessor:
                         text = args
                     elif isinstance(args, dict):
                         text = json.dumps(args, ensure_ascii=False)
-                except Exception:
-                    pass
+                except Exception as exc:
+                    raise_if_cancelled(exc)
+                    logger.debug("tool_call_extraction_failed", extra={"error": str(exc)})
 
         return text
 
