@@ -261,3 +261,31 @@ async def test_retries_and_error_status(monkeypatch):
     assert db.summaries.get(3) is None
     assert status_updates[-1] == "error"
     assert failing_summarizer.calls == cfg.background.retry_attempts
+
+
+@pytest.mark.asyncio
+async def test_local_locks_cleaned_after_release():
+    """_local_locks entries must be removed after lock release to prevent memory leak."""
+    from app.api.background_processor import LockHandle
+
+    cfg = DummyCfg()
+    processor = BackgroundProcessor(
+        cfg=cfg,
+        db=StubDB(),
+        url_processor=StubURLProcessor(StubExtractor(), StubSummarizer()),
+        redis=None,
+        semaphore=asyncio.Semaphore(1),
+        audit_func=lambda *_args, **_kwargs: None,
+    )
+
+    request_id = 42
+    lock = asyncio.Lock()
+    await lock.acquire()
+    processor._local_locks[request_id] = lock
+
+    handle = LockHandle(source="local", key=str(request_id), token=None, local_lock=lock)
+    await processor._release_lock(handle)
+
+    assert request_id not in processor._local_locks, (
+        f"_local_locks still contains request_id={request_id} after release"
+    )
