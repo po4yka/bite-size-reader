@@ -142,6 +142,7 @@ dependencies = [
   "scikit-learn>=1.8.0",
   "sentence-transformers>=5.2.2",
   "chromadb>=1.4.1",
+  "loguru>=0.7.3",
   "orjson>=3.11.6",
   "uvloop>=0.22.1",
   # YouTube support
