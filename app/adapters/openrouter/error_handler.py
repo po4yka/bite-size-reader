@@ -6,6 +6,7 @@ import asyncio
 import logging
 from typing import TYPE_CHECKING, Any
 
+from app.core.backoff import sleep_backoff as _sleep_backoff
 from app.models.llm.llm_models import LLMCallResult
 
 if TYPE_CHECKING:
@@ -30,11 +31,7 @@ class ErrorHandler:
 
     async def sleep_backoff(self, attempt: int) -> None:
         """Sleep with exponential backoff and jitter."""
-        import random
-
-        base_delay = max(0.0, self._backoff_base * (2**attempt))
-        jitter = 1.0 + random.uniform(-0.25, 0.25)
-        await asyncio.sleep(base_delay * jitter)
+        await _sleep_backoff(attempt, self._backoff_base)
 
     def should_retry(self, status_code: int, attempt: int) -> bool:
         """Determine if a request should be retried based on status code and attempt."""
