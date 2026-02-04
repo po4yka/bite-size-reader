@@ -5,82 +5,10 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
+from app.core.text_utils import cap_text as _cap_text, hash_tagify as _hash_tagify
+
 # Kept as a constant for backward compatibility with any code that imports it.
 PydanticAvailable = True
-
-
-# ---------------------------------------------------------------------------
-# Helper utilities used by validators (duplicated from summary_contract to
-# avoid circular imports -- these are tiny pure functions).
-# ---------------------------------------------------------------------------
-
-
-def _cap_text(text: str, limit: int) -> str:
-    """Cap *text* to *limit* characters, trimming at a sentence boundary."""
-    if not isinstance(text, str):
-        text = str(text) if text is not None else ""
-    if not isinstance(limit, int) or limit <= 0:
-        msg = "Limit must be a positive integer"
-        raise ValueError(msg)
-    if limit > 10000:
-        msg = "Limit too large"
-        raise ValueError(msg)
-    if len(text) <= limit:
-        return text
-    snippet = text[:limit]
-    for sep in (". ", "! ", "? ", "; ", ", "):
-        idx = snippet.rfind(sep)
-        if idx > 0:
-            return snippet[: idx + len(sep)].strip()
-    return snippet.strip()
-
-
-def _hash_tagify(tags: list[str], max_tags: int = 10) -> list[str]:
-    """Deduplicate tags, enforce ``#`` prefix, and cap count."""
-    if not isinstance(tags, list):
-        return []
-    if not isinstance(max_tags, int) or max_tags <= 0 or max_tags > 100:
-        max_tags = 10
-    seen: set[str] = set()
-    result: list[str] = []
-    for t in tags:
-        if not isinstance(t, str):
-            continue
-        t = t.strip()
-        if not t:
-            continue
-        if len(t) > 100:
-            continue
-        if any(char in t.lower() for char in ["<", ">", "script", "javascript"]):
-            continue
-        if not t.startswith("#"):
-            t = f"#{t}"
-        key = t.lower()
-        if key not in seen:
-            seen.add(key)
-            result.append(t)
-        if len(result) >= max_tags:
-            break
-    return result
-
-
-def _dedupe_case_insensitive(items: list[str]) -> list[str]:
-    if not isinstance(items, list):
-        return []
-    seen: set[str] = set()
-    out: list[str] = []
-    for it in items:
-        if not isinstance(it, str):
-            continue
-        key = it.strip().lower()
-        if key and key not in seen:
-            if len(key) > 500:
-                continue
-            if any(char in key for char in ["<", ">", "script", "javascript"]):
-                continue
-            seen.add(key)
-            out.append(it.strip())
-    return out
 
 
 # ---------------------------------------------------------------------------
