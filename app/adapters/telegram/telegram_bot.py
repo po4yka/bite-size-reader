@@ -478,6 +478,8 @@ class TelegramBot:
         **extra_kwargs: Any,
     ) -> None:
         """Safely reply to a message (legacy-compatible helper)."""
+        _rt = getattr(getattr(self, "cfg", None), "runtime", None)
+        _timeout: float = getattr(_rt, "telegram_reply_timeout_sec", 30.0)
         try:
             if hasattr(message, "reply_text"):
                 kwargs: dict[str, Any] = {}
@@ -487,7 +489,12 @@ class TelegramBot:
                     kwargs["reply_markup"] = reply_markup
                 if extra_kwargs:
                     kwargs.update(extra_kwargs)
-                await message.reply_text(text, **kwargs)
+                await asyncio.wait_for(message.reply_text(text, **kwargs), timeout=_timeout)
+        except TimeoutError:
+            logger.warning(
+                "telegram_reply_timeout",
+                extra={"method": "_safe_reply", "timeout_sec": _timeout},
+            )
         except Exception as exc:
             raise_if_cancelled(exc)
             # Swallow in tests; production response path logs and continues.
@@ -503,6 +510,8 @@ class TelegramBot:
 
         Falls back to plain text if document upload fails.
         """
+        _rt = getattr(getattr(self, "cfg", None), "runtime", None)
+        _timeout: float = getattr(_rt, "telegram_reply_timeout_sec", 30.0)
         try:
             pretty = json.dumps(payload, ensure_ascii=False, indent=2)
 
@@ -537,18 +546,33 @@ class TelegramBot:
             if hasattr(message, "reply_document"):
                 bio = io.BytesIO(pretty.encode("utf-8"))
                 bio.name = filename
-                await message.reply_document(bio, caption="📊 Full Summary JSON attached")
+                await asyncio.wait_for(
+                    message.reply_document(bio, caption="📊 Full Summary JSON attached"),
+                    timeout=_timeout,
+                )
                 return
 
             # Fallback to text
             if hasattr(message, "reply_text"):
-                await message.reply_text(f"```json\n{pretty}\n```")
+                await asyncio.wait_for(
+                    message.reply_text(f"```json\n{pretty}\n```"), timeout=_timeout
+                )
+        except TimeoutError:
+            logger.warning(
+                "telegram_reply_timeout",
+                extra={"method": "_reply_json", "timeout_sec": _timeout},
+            )
         except Exception as exc:
             raise_if_cancelled(exc)
             try:
                 text = json.dumps(payload, ensure_ascii=False)
                 if hasattr(message, "reply_text"):
-                    await message.reply_text(text)
+                    await asyncio.wait_for(message.reply_text(text), timeout=_timeout)
+            except TimeoutError:
+                logger.warning(
+                    "telegram_reply_timeout",
+                    extra={"method": "_reply_json_fallback", "timeout_sec": _timeout},
+                )
             except Exception as inner_exc:
                 raise_if_cancelled(inner_exc)
         _ = metadata
