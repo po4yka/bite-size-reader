@@ -188,6 +188,8 @@ class TestURLHashProperties:
     def test_different_urls_different_hashes(self, url1: str, url2: str) -> None:
         """Verify different URLs produce different hashes (collision resistance)."""
         assume(url1 != url2)
+        assume(url1.strip())  # skip whitespace-only strings (invalid input)
+        assume(url2.strip())
 
         from app.core.url_utils import url_hash_sha256
 
@@ -205,6 +207,8 @@ class TestURLHashProperties:
     @settings(max_examples=100, deadline=None)
     def test_hash_format(self, url: str) -> None:
         """Verify hash output format is consistent."""
+        assume(url.strip())  # skip whitespace-only strings (invalid input)
+
         from app.core.url_utils import url_hash_sha256
 
         result = url_hash_sha256(url)

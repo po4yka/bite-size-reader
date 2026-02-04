@@ -124,16 +124,28 @@ class ChromaQueryFilters(BaseModel):
         return result
 
     def to_where(self) -> dict[str, Any]:
-        where: dict[str, Any] = {
-            "environment": self.environment,
-            "user_scope": self.user_scope,
-        }
+        if not self.tags:
+            where: dict[str, Any] = {
+                "environment": self.environment,
+                "user_scope": self.user_scope,
+            }
+            if self.language:
+                where["language"] = self.language
+            if self.request_id is not None:
+                where["request_id"] = self.request_id
+            if self.summary_id is not None:
+                where["summary_id"] = self.summary_id
+            return where
+
+        conditions: list[dict[str, Any]] = [
+            {"environment": self.environment},
+            {"user_scope": self.user_scope},
+        ]
         if self.language:
-            where["language"] = self.language
+            conditions.append({"language": self.language})
         if self.request_id is not None:
-            where["request_id"] = self.request_id
+            conditions.append({"request_id": self.request_id})
         if self.summary_id is not None:
-            where["summary_id"] = self.summary_id
-        if self.tags:
-            where["$and"] = [{"tags": {"$contains": tag}} for tag in self.tags]
-        return where
+            conditions.append({"summary_id": self.summary_id})
+        conditions.extend({"tags": {"$contains": tag}} for tag in self.tags)
+        return {"$and": conditions}

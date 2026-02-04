@@ -39,6 +39,11 @@ class ReadStatusBot(TelegramBot):
             super().__post_init__()
         self.seen_urls: list[str] = []
 
+        # Patch url_processor.handle_url_flow so the message router's
+        # url_handler routes through our test interceptor.
+        if hasattr(self, "url_processor"):
+            self.url_processor.handle_url_flow = self._fake_url_flow  # type: ignore[method-assign]
+
         # Mock Firecrawl to avoid API key issues
         if hasattr(self, "_firecrawl"):
 
@@ -70,6 +75,11 @@ class ReadStatusBot(TelegramBot):
             self._firecrawl.scrape_markdown = AsyncMock(return_value=MockCrawlResult())  # type: ignore[method-assign]
 
     async def _handle_url_flow(self, message: Any, url_text: str, **_: object) -> None:
+        self.seen_urls.append(url_text)
+        await self._safe_reply(message, f"OK {url_text}")
+
+    async def _fake_url_flow(self, message: Any, url_text: str, **_: object) -> None:
+        """Interceptor for url_processor.handle_url_flow used by tests."""
         self.seen_urls.append(url_text)
         await self._safe_reply(message, f"OK {url_text}")
 

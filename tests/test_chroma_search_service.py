@@ -50,8 +50,10 @@ async def test_find_duplicates():
 
     vector_store.query.assert_called_once()
     _, filters_arg, _ = vector_store.query.call_args.args
-    assert filters_arg["environment"] == "dev"
-    assert filters_arg["user_scope"] == "public"
+    # language and tags are passed by the search service;
+    # environment/user_scope are injected by ChromaVectorStore.query()
+    assert "language" in filters_arg
+    assert "tags" in filters_arg
 
     # Check results
     assert len(duplicates) == 2

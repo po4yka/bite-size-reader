@@ -215,16 +215,13 @@ class ChromaVectorSearchService:
 
     @staticmethod
     def _compute_similarity(distances: list[float], idx: int) -> float:
-        distance = 0.0
-        if 0 <= idx < len(distances):
-            try:
-                distance = float(distances[idx])
-            except (TypeError, ValueError):
-                distance = 0.0
-
-        if 0.0 <= distance <= 1.0:
-            return max(0.0, 1.0 - distance)
-        return 1.0 / (1.0 + distance) if distance >= 0 else 0.0
+        if idx < 0 or idx >= len(distances):
+            return 0.0
+        try:
+            distance = float(distances[idx])
+        except (TypeError, ValueError):
+            return 0.0
+        return max(0.0, min(1.0, 1.0 - distance))
 
     @staticmethod
     def _safe_int(value: Any) -> int | None:
@@ -247,21 +244,3 @@ class ChromaVectorSearchService:
                     clean.append(text)
             return clean
         return []
-
-    @staticmethod
-    def _build_filters(
-        *, language: str | None, tags: Iterable[str] | None, user_scope: str | None
-    ) -> dict[str, Any]:
-        filters: dict[str, Any] = {}
-
-        if language:
-            filters["language"] = language
-
-        normalized_tags = [tag for tag in (tags or []) if str(tag).strip()]
-        if normalized_tags:
-            filters["$and"] = [{"tags": {"$contains": tag}} for tag in normalized_tags]
-
-        if user_scope:
-            filters["user_scope"] = user_scope
-
-        return filters

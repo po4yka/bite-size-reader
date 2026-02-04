@@ -677,7 +677,8 @@ def _enrich_tldr_from_payload(base_text: str, payload: SummaryJSON) -> str:
         topic_overview = str(insights.get("topic_overview", "")).strip()
         if topic_overview:
             _add_segment(topic_overview)
-        caution = str(insights.get("caution", "")).strip()
+        caution_raw = insights.get("caution")
+        caution = str(caution_raw).strip() if caution_raw is not None else ""
         if caution:
             _add_segment(f"Caution: {caution}")
 
@@ -743,7 +744,8 @@ def _shape_insights(raw: Any) -> dict[str, Any]:
     shaped["expansion_topics"] = _clean_string_list(raw.get("expansion_topics"))
     shaped["next_exploration"] = _clean_string_list(raw.get("next_exploration"))
 
-    caution_value = str(raw.get("caution", "")).strip()
+    caution_raw = raw.get("caution")
+    caution_value = str(caution_raw).strip() if caution_raw is not None else ""
     shaped["caution"] = caution_value or None
 
     return shaped

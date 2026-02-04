@@ -53,8 +53,13 @@ def _dummy_cfg() -> SimpleNamespace:
         summary_top_p_json_fallback=None,
     )
     firecrawl_cfg = SimpleNamespace()
+    web_search_cfg = SimpleNamespace(enabled=False)
     return SimpleNamespace(
-        redis=redis_cfg, runtime=runtime_cfg, openrouter=openrouter_cfg, firecrawl=firecrawl_cfg
+        redis=redis_cfg,
+        runtime=runtime_cfg,
+        openrouter=openrouter_cfg,
+        firecrawl=firecrawl_cfg,
+        web_search=web_search_cfg,
     )
 
 

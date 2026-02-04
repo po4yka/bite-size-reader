@@ -34,17 +34,26 @@ class TestEnsureDatetime(unittest.TestCase):
         """None input should return None without error."""
         assert _ensure_datetime(None) is None
 
-    def test_datetime_returns_same(self):
-        """A datetime object should be returned unchanged."""
+    def test_naive_datetime_gets_utc(self):
+        """A naive datetime should get UTC tzinfo attached."""
         dt = datetime(2025, 6, 15, 12, 30, 0)
+        result = _ensure_datetime(dt)
+        assert result is not None
+        assert result.tzinfo is UTC
+        assert result == datetime(2025, 6, 15, 12, 30, 0, tzinfo=UTC)
+
+    def test_aware_datetime_returns_same(self):
+        """An aware datetime should be returned unchanged."""
+        dt = datetime(2025, 6, 15, 12, 30, 0, tzinfo=UTC)
         result = _ensure_datetime(dt)
         assert result is dt
 
     def test_iso_string_returns_parsed_datetime(self):
-        """A naive ISO format string should be parsed into a datetime."""
+        """A naive ISO format string should be parsed into a UTC-aware datetime."""
         iso = "2025-06-15T12:30:00"
         result = _ensure_datetime(iso)
         assert isinstance(result, datetime)
+        assert result.tzinfo is UTC
         assert result.year == 2025
         assert result.month == 6
         assert result.day == 15

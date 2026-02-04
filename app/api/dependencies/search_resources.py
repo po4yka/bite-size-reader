@@ -64,7 +64,7 @@ class _ChromaSearchResourceManager:
             cls._service = ChromaVectorSearchService(
                 vector_store=vector_store,
                 embedding_service=embedding,
-                default_top_k=100,
+                default_top_k=25,
             )
 
             logger.info(

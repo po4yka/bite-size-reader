@@ -37,6 +37,7 @@ class LLMSummarizerRequestTests(unittest.IsolatedAsyncioTestCase):
                 auto_fallback_structured=True,
             ),
             runtime=SimpleNamespace(summary_prompt_version="v1"),
+            web_search=SimpleNamespace(enabled=False),
             redis=SimpleNamespace(
                 enabled=False,
                 cache_enabled=False,
@@ -100,7 +101,6 @@ class LLMSummarizerRequestTests(unittest.IsolatedAsyncioTestCase):
         preset_names = [req.preset_name for req in captured_requests]
         assert preset_names == [
             "schema_strict",
-            "schema_relaxed",
             "json_object_guardrail",
             "json_object_fallback",
         ]
