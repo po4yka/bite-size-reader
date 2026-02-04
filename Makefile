@@ -46,7 +46,7 @@ pre-commit-run:
 .PHONY: lock-uv lock-piptools
 lock-uv:
 	uv pip compile pyproject.toml -o requirements.txt
-	uv pip compile --extra dev pyproject.toml -o requirements-dev.txt
+	uv pip compile --extra dev -c requirements.txt pyproject.toml -o requirements-dev.txt
 
 lock-piptools:
 	pip install pip-tools
@@ -55,7 +55,7 @@ lock-piptools:
 
 check-lock:
 	uv pip compile pyproject.toml -o requirements.txt
-	uv pip compile --extra dev pyproject.toml -o requirements-dev.txt
+	uv pip compile --extra dev -c requirements.txt pyproject.toml -o requirements-dev.txt
 	@git diff --exit-code requirements.txt requirements-dev.txt || (echo "Lockfiles are out of date. Run 'make lock-uv' and commit changes." && exit 1)
 
 check-openapi: ## Run OpenAPI spec sync checks
