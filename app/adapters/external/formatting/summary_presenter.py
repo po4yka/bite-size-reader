@@ -373,7 +373,7 @@ class SummaryPresenterImpl:
                 except Exception as exc:
                     raise_if_cancelled(exc)
 
-            # Combined first message: TL;DR, Tags, Entities, Reading Time, Key Stats, Readability, SEO
+            # Combined first message: TL;DR, Tags, Entities, Reading Time, Key Stats, Readability
             combined_lines: list[str] = []
 
             tl_dr = str(summary_shaped.get("summary_250", "")).strip()
