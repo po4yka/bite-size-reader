@@ -403,9 +403,9 @@ class RequestService:
             error_type = None
             message = latest_llm.error_text
             if isinstance(error_context, dict):
-                error_type = error_context.get("error_code")
+                error_type = error_context.get("status_code")
                 if message is None:
-                    message = error_context.get("error_message")
+                    message = error_context.get("message")
             return (
                 "llm_summarization",
                 error_type or "LLM_FAILED",

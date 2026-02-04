@@ -117,6 +117,9 @@ jobs:
           openapi-spec-validator docs/openapi/mobile_api.yaml
           openapi-spec-validator docs/openapi/mobile_api.json
 
+      - name: Check OpenAPI spec sync with code
+        run: pytest tests/api/test_openapi_sync.py -v --tb=short
+
       - name: Lint (ruff) - comprehensive
         run: ruff check .
 

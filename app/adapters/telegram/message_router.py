@@ -111,33 +111,42 @@ class MessageRouter:
     async def _check_rate_limit(
         self, limiter: RedisUserRateLimiter | UserRateLimiter, uid: int, interaction_type: str
     ) -> tuple[bool, str | None]:
-        if isinstance(limiter, RedisUserRateLimiter):
-            allowed, error_msg, _ = await limiter.check_and_record(uid, operation=interaction_type)
-            return allowed, error_msg
         return await limiter.check_and_record(uid, operation=interaction_type)
 
     async def _acquire_concurrent_slot(
         self, limiter: RedisUserRateLimiter | UserRateLimiter, uid: int
     ) -> bool:
-        if isinstance(limiter, RedisUserRateLimiter):
-            return await limiter.acquire_concurrent_slot(uid)
         return await limiter.acquire_concurrent_slot(uid)
 
     async def _release_concurrent_slot(
         self, limiter: RedisUserRateLimiter | UserRateLimiter, uid: int
     ) -> None:
-        if isinstance(limiter, RedisUserRateLimiter):
-            await limiter.release_concurrent_slot(uid)
-            return
         await limiter.release_concurrent_slot(uid)
 
     async def cleanup_rate_limiter(self) -> int:
         """Clean up expired rate limiter entries to prevent memory leaks.
 
         Only cleans up the in-memory rate limiter; Redis handles TTL automatically.
+        Also cleans up expired notification-suppression and recent message entries.
         Returns the number of users cleaned up.
         """
-        return await self._rate_limiter.cleanup_expired()
+        cleaned = await self._rate_limiter.cleanup_expired()
+
+        # Clean up expired rate-limit notification suppression entries
+        now = time.time()
+        expired_notifs = [
+            uid for uid, deadline in self._rate_limit_notified_until.items() if now >= deadline
+        ]
+        for uid in expired_notifs:
+            del self._rate_limit_notified_until[uid]
+
+        # Clean up expired recent message IDs
+        cutoff = now - self._recent_message_ttl
+        expired_msgs = [key for key, (ts, _sig) in self._recent_message_ids.items() if ts < cutoff]
+        for key in expired_msgs:
+            del self._recent_message_ids[key]
+
+        return cleaned
 
     async def route_message(self, message: Any) -> None:
         """Main message routing entry point."""
@@ -555,15 +564,53 @@ class MessageRouter:
             return
 
         # Handle forwarded messages before URL routing so forwards containing links aren't misclassified
-        if (
-            has_forward
-            and getattr(message, "forward_from_chat", None)
-            and getattr(message, "forward_from_message_id", None)
-        ):
-            await self.forward_processor.handle_forward_flow(
-                message, correlation_id=correlation_id, interaction_id=interaction_id
-            )
-            return
+        if has_forward:
+            fwd_chat = getattr(message, "forward_from_chat", None)
+            fwd_msg_id = getattr(message, "forward_from_message_id", None)
+            fwd_from_user = getattr(message, "forward_from", None)
+            fwd_sender_name = getattr(message, "forward_sender_name", None)
+
+            # Channel forwards (primary use case): have both chat and message ID
+            if fwd_chat is not None and fwd_msg_id is not None:
+                await self.forward_processor.handle_forward_flow(
+                    message, correlation_id=correlation_id, interaction_id=interaction_id
+                )
+                return
+
+            # User forwards and privacy-protected forwards: process if there's text content
+            if fwd_from_user is not None or fwd_sender_name:
+                fwd_text = (
+                    getattr(message, "text", None) or getattr(message, "caption", None) or ""
+                ).strip()
+                if fwd_text:
+                    await self.forward_processor.handle_forward_flow(
+                        message, correlation_id=correlation_id, interaction_id=interaction_id
+                    )
+                    return
+                # Media-only forward from user — no text to summarize
+                logger.info(
+                    "forward_skipped_no_text",
+                    extra={
+                        "cid": correlation_id,
+                        "has_fwd_user": fwd_from_user is not None,
+                        "has_fwd_sender_name": bool(fwd_sender_name),
+                    },
+                )
+                await self.response_formatter.safe_reply(
+                    message,
+                    "This forwarded message has no text content to summarize. "
+                    "Please forward a message that contains text.",
+                )
+                if interaction_id:
+                    await async_safe_update_user_interaction(
+                        self.user_repo,
+                        interaction_id=interaction_id,
+                        response_sent=True,
+                        response_type="forward_no_text",
+                        start_time=start_time,
+                        logger_=logger,
+                    )
+                return
 
         # If awaiting a URL due to prior /summarize
         if await self.url_handler.is_awaiting_url(uid) and looks_like_url(text):

@@ -17,7 +17,6 @@ import httpx
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.adapters.external.firecrawl_parser import FirecrawlClient, FirecrawlResult
-from app.adapters.telegram.message_persistence import MessagePersistence
 from app.config import AppConfig
 from app.core.async_utils import raise_if_cancelled
 from app.core.html_utils import clean_markdown_article_text, html_to_text, normalize_text
@@ -26,9 +25,11 @@ from app.core.url_utils import normalize_url, url_hash_sha256
 from app.db.session import DatabaseSessionManager
 from app.db.utils import prepare_json_payload
 from app.infrastructure.cache.redis_cache import RedisCache
+from app.infrastructure.persistence.message_persistence import MessagePersistence
 
 if TYPE_CHECKING:
     from app.adapters.external.response_formatter import ResponseFormatter
+    from app.adapters.youtube.youtube_downloader import YouTubeDownloader
 
 logger = logging.getLogger(__name__)
 
@@ -87,6 +88,7 @@ class ContentExtractor:
         self._sem = sem
         self._cache = RedisCache(cfg)
         self.message_persistence = MessagePersistence(db)
+        self._youtube_downloader: YouTubeDownloader | None = None
 
     def _schedule_crawl_persistence(
         self, req_id: int, crawl: FirecrawlResult, correlation_id: str | None
@@ -1126,8 +1128,6 @@ class ContentExtractor:
         Returns:
             (req_id, transcript_text, content_source, detected_lang)
         """
-        from app.adapters.youtube.youtube_downloader import YouTubeDownloader
-
         # Check if YouTube download is enabled
         if not self.cfg.youtube.enabled:
             logger.warning(
@@ -1136,13 +1136,16 @@ class ContentExtractor:
             )
             raise ValueError("YouTube video download is disabled in configuration")
 
-        # Initialize YouTube downloader
-        youtube_downloader = YouTubeDownloader(
-            cfg=self.cfg,
-            db=self.db,
-            response_formatter=self.response_formatter,
-            audit_func=self._audit,
-        )
+        # Lazy-initialize YouTube downloader (reused across requests)
+        if self._youtube_downloader is None:
+            from app.adapters.youtube.youtube_downloader import YouTubeDownloader
+
+            self._youtube_downloader = YouTubeDownloader(
+                cfg=self.cfg,
+                db=self.db,
+                response_formatter=self.response_formatter,
+                audit_func=self._audit,
+            )
 
         # Download video and extract transcript
         try:
@@ -1152,7 +1155,7 @@ class ContentExtractor:
                 content_source,
                 detected_lang,
                 video_metadata,
-            ) = await youtube_downloader.download_and_extract(
+            ) = await self._youtube_downloader.download_and_extract(
                 message, url_text, correlation_id, interaction_id, silent
             )
 

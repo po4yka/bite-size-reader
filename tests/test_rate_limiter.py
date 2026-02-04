@@ -1,6 +1,7 @@
 """Tests for rate limiter security module."""
 
 import asyncio
+import time
 import unittest
 
 from app.security.rate_limiter import RateLimitConfig, UserRateLimiter
@@ -209,6 +210,81 @@ class TestRateLimiter(unittest.IsolatedAsyncioTestCase):
         allowed, msg = await limiter.check_and_record(user_id)
         assert not allowed
         assert "cooldown" in msg.lower()
+
+
+class TestMessageRouterCleanup(unittest.IsolatedAsyncioTestCase):
+    """Test message router cleans up notification state."""
+
+    async def test_cleanup_removes_expired_notifications(self):
+        """cleanup_rate_limiter should also clean _rate_limit_notified_until."""
+        from unittest.mock import MagicMock
+
+        from app.adapters.telegram.message_router import MessageRouter
+
+        cfg = MagicMock()
+        cfg.api_limits.requests_limit = 10
+        cfg.api_limits.window_seconds = 60
+        cfg.api_limits.max_concurrent = 3
+        cfg.api_limits.cooldown_multiplier = 1.0
+
+        router = MessageRouter(
+            cfg=cfg,
+            db=MagicMock(),
+            access_controller=MagicMock(),
+            command_processor=MagicMock(),
+            url_handler=MagicMock(),
+            forward_processor=MagicMock(),
+            response_formatter=MagicMock(),
+            audit_func=MagicMock(),
+        )
+
+        now = time.time()
+        # Add expired entries (deadline in the past)
+        router._rate_limit_notified_until[111] = now - 100
+        router._rate_limit_notified_until[222] = now - 50
+        # Add active entry (deadline in the future)
+        router._rate_limit_notified_until[333] = now + 100
+
+        await router.cleanup_rate_limiter()
+
+        assert 111 not in router._rate_limit_notified_until
+        assert 222 not in router._rate_limit_notified_until
+        assert 333 in router._rate_limit_notified_until
+
+    async def test_cleanup_removes_expired_recent_messages(self):
+        """cleanup_rate_limiter should also clean _recent_message_ids."""
+        from unittest.mock import MagicMock
+
+        from app.adapters.telegram.message_router import MessageRouter
+
+        cfg = MagicMock()
+        cfg.api_limits.requests_limit = 10
+        cfg.api_limits.window_seconds = 60
+        cfg.api_limits.max_concurrent = 3
+        cfg.api_limits.cooldown_multiplier = 1.0
+
+        router = MessageRouter(
+            cfg=cfg,
+            db=MagicMock(),
+            access_controller=MagicMock(),
+            command_processor=MagicMock(),
+            url_handler=MagicMock(),
+            forward_processor=MagicMock(),
+            response_formatter=MagicMock(),
+            audit_func=MagicMock(),
+        )
+
+        now = time.time()
+        # _recent_message_ttl is 120 seconds
+        # Add expired entry (timestamp older than TTL)
+        router._recent_message_ids[(1, 1, 100)] = (now - 200, "old text")
+        # Add active entry (recent timestamp)
+        router._recent_message_ids[(1, 1, 200)] = (now - 10, "new text")
+
+        await router.cleanup_rate_limiter()
+
+        assert (1, 1, 100) not in router._recent_message_ids
+        assert (1, 1, 200) in router._recent_message_ids
 
 
 if __name__ == "__main__":

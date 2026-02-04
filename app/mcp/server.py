@@ -374,9 +374,7 @@ def list_articles(
 
     try:
         query = (
-            Summary.select(Summary, Request)
-            .join(Request)
-            .where(Summary.is_deleted == False)  # noqa: E712
+            Summary.select(Summary, Request).join(Request).where(Summary.is_deleted == False)  # noqa: E712
         )
 
         if is_favorited is not None:

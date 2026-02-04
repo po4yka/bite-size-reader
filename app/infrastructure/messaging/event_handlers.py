@@ -4,6 +4,7 @@ These handlers demonstrate how to use the event bus to implement side effects
 and cross-cutting concerns in a decoupled way.
 """
 
+import asyncio
 import logging
 from typing import Any
 
@@ -122,7 +123,7 @@ class EmbeddingGenerationEventHandler:
                 "vector_store_delete_missing_summary",
                 extra={"request_id": request_id},
             )
-            self._vector_store.delete_by_request_id(request_id)
+            await asyncio.to_thread(self._vector_store.delete_by_request_id, request_id)
             return
 
         payload = summary.get("json_payload")
@@ -133,7 +134,7 @@ class EmbeddingGenerationEventHandler:
                 "vector_store_delete_empty_payload",
                 extra={"request_id": request_id, "summary_id": summary_id},
             )
-            self._vector_store.delete_by_request_id(request_id)
+            await asyncio.to_thread(self._vector_store.delete_by_request_id, request_id)
             return
 
         from app.services.metadata_builder import MetadataBuilder
@@ -177,7 +178,7 @@ class EmbeddingGenerationEventHandler:
                     "vector_store_delete_empty_note",
                     extra={"request_id": request_id, "summary_id": summary_id},
                 )
-                self._vector_store.delete_by_request_id(request_id)
+                await asyncio.to_thread(self._vector_store.delete_by_request_id, request_id)
                 return
 
             embedding = await embedding_service.generate_embedding(
@@ -192,10 +193,10 @@ class EmbeddingGenerationEventHandler:
                 "vector_store_delete_empty_note",
                 extra={"request_id": request_id, "summary_id": summary_id},
             )
-            self._vector_store.delete_by_request_id(request_id)
+            await asyncio.to_thread(self._vector_store.delete_by_request_id, request_id)
             return
 
-        self._vector_store.upsert_notes(vectors, metadatas)
+        await asyncio.to_thread(self._vector_store.upsert_notes, vectors, metadatas)
 
         logger.info(
             "vector_store_synced",

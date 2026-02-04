@@ -33,7 +33,11 @@ logger = logging.getLogger("karakeep_sync")
 
 
 async def run_sync(
-    user_id: int | None = None, limit: int | None = None, dry_run: bool = False
+    user_id: int | None = None,
+    limit: int | None = None,
+    dry_run: bool = False,
+    force: bool = False,
+    reset: bool = False,
 ) -> int:
     """Run Karakeep sync.
 
@@ -87,6 +91,11 @@ async def run_sync(
             repository=karakeep_repo,
         )
 
+        if reset:
+            deleted = await karakeep_repo.async_delete_all_sync_records()
+            logger.info("Reset: cleared %d sync records", deleted)
+            print(f"Cleared {deleted} sync records.")
+
         if dry_run:
             logger.info("DRY RUN - no changes will be made")
             preview = await service.preview_sync(user_id=user_id, limit=limit)
@@ -136,7 +145,7 @@ async def run_sync(
             return 0
 
         # Run actual sync (service already created above)
-        result = await service.run_full_sync(user_id=user_id, limit=limit)
+        result = await service.run_full_sync(user_id=user_id, limit=limit, force=force)
 
         # Log results
         logger.info(
@@ -153,16 +162,24 @@ async def run_sync(
         )
 
         # Print summary
+        bsr = result.bsr_to_karakeep
+        kk = result.karakeep_to_bsr
         print("\n=== Karakeep Sync Summary ===")
         print(
-            f"BSR → Karakeep: {result.bsr_to_karakeep.items_synced} synced, "
-            f"{result.bsr_to_karakeep.items_skipped} skipped, "
-            f"{result.bsr_to_karakeep.items_failed} failed"
+            f"BSR -> Karakeep: {bsr.items_synced} synced, "
+            f"{bsr.items_skipped} skipped, "
+            f"{bsr.items_failed} failed"
         )
+        if bsr.items_skipped > 0:
+            print("  Skip breakdown:")
+            print(f"    Already synced: {bsr.skipped_already_synced}")
+            print(f"    Already in Karakeep: {bsr.skipped_exists_in_target}")
+            print(f"    Hash errors: {bsr.skipped_hash_failed}")
+            print(f"    No URL: {bsr.skipped_no_url}")
         print(
-            f"Karakeep → BSR: {result.karakeep_to_bsr.items_synced} synced, "
-            f"{result.karakeep_to_bsr.items_skipped} skipped, "
-            f"{result.karakeep_to_bsr.items_failed} failed"
+            f"Karakeep -> BSR: {kk.items_synced} synced, "
+            f"{kk.items_skipped} skipped, "
+            f"{kk.items_failed} failed"
         )
         print(f"Duration: {result.total_duration_seconds:.1f}s")
 
@@ -201,6 +218,16 @@ def main() -> None:
         action="store_true",
         help="Show what would be synced without making changes",
     )
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Re-sync all items, updating tags/notes on existing bookmarks",
+    )
+    parser.add_argument(
+        "--reset",
+        action="store_true",
+        help="Clear all sync records before syncing (fresh start)",
+    )
     args = parser.parse_args()
 
     # If no user_id provided, try to get from ALLOWED_USER_IDS
@@ -213,7 +240,15 @@ def main() -> None:
             except (ValueError, IndexError):
                 pass
 
-    exit_code = asyncio.run(run_sync(user_id=user_id, limit=args.limit, dry_run=args.dry_run))
+    exit_code = asyncio.run(
+        run_sync(
+            user_id=user_id,
+            limit=args.limit,
+            dry_run=args.dry_run,
+            force=args.force,
+            reset=args.reset,
+        )
+    )
     sys.exit(exit_code)
 
 

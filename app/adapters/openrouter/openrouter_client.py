@@ -71,11 +71,12 @@ class OpenRouterClient:
 
     @classmethod
     def _get_event_loop(cls) -> asyncio.AbstractEventLoop:
-        """Return the current event loop (running preferred)."""
-        try:
-            return asyncio.get_running_loop()
-        except RuntimeError:
-            return asyncio.get_event_loop()
+        """Return the running event loop.
+
+        Raises RuntimeError if called outside an async context -- this is
+        intentional, as the client pool must only be accessed from async code.
+        """
+        return asyncio.get_running_loop()
 
     @classmethod
     def _get_pool_lock(cls) -> asyncio.Lock:

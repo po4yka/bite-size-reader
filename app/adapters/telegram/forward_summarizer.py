@@ -25,6 +25,11 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+# Maximum character length for forward content sent to the LLM.
+# Typical model context windows are ~128k tokens; 45k chars (~11k tokens) leaves
+# ample room for the system prompt, response format schema, and generated output.
+_MAX_FORWARD_CONTENT_CHARS = 45_000
+
 
 class ForwardSummarizer:
     """Handles AI summarization for forwarded messages."""
@@ -43,7 +48,7 @@ class ForwardSummarizer:
         self.openrouter = openrouter
         self.response_formatter = response_formatter
         self._audit = audit_func
-        self._sem = sem
+        self.sem = sem
         self._workflow = LLMResponseWorkflow(
             cfg=cfg,
             db=db,
@@ -65,14 +70,14 @@ class ForwardSummarizer:
     ) -> dict[str, Any] | None:
         """Summarize forwarded message content."""
         # Truncate content if too long
-        max_content_length = 45000  # Leave some buffer for the prompt
-        if len(prompt) > max_content_length:
-            prompt = prompt[:max_content_length] + "\n\n[Content truncated due to length]"
+        if len(prompt) > _MAX_FORWARD_CONTENT_CHARS:
+            original_length = len(prompt)
+            prompt = prompt[:_MAX_FORWARD_CONTENT_CHARS] + "\n\n[Content truncated due to length]"
             logger.warning(
                 "content_truncated",
                 extra={
-                    "original_length": len(prompt),
-                    "truncated_length": max_content_length,
+                    "original_length": original_length,
+                    "truncated_length": _MAX_FORWARD_CONTENT_CHARS,
                     "cid": correlation_id,
                 },
             )
@@ -102,16 +107,7 @@ class ForwardSummarizer:
         ]
 
         repair_context = LLMRepairContext(
-            base_messages=[
-                {"role": "system", "content": system_prompt},
-                {
-                    "role": "user",
-                    "content": (
-                        f"Summarize the following message to the specified JSON schema. "
-                        f"Respond in {'Russian' if chosen_lang == LANG_RU else 'English'}.\n\n{prompt}"
-                    ),
-                },
-            ],
+            base_messages=messages,
             repair_response_format=self._workflow.build_structured_response_format(),
             repair_max_tokens=forward_tokens,
             default_prompt=(
@@ -176,6 +172,9 @@ class ForwardSummarizer:
             },
         )
 
+        # Forwards are consumed immediately in Telegram (user sees the summary
+        # inline), so they are pre-marked as read. URL summaries default to unread
+        # because they may be reviewed later in the mobile app.
         persistence = LLMSummaryPersistenceSettings(
             lang=chosen_lang,
             is_read=True,

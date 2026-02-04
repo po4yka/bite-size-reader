@@ -123,10 +123,21 @@ class DatabaseSessionManager:
             yield self._database.connection()
 
     def migrate(self) -> None:
-        """Create tables and ensure schema compatibility."""
+        """Create tables, run versioned migrations, and perform startup maintenance."""
         with self._database.connection_context(), self._database.bind_ctx(ALL_MODELS):
             self._database.create_tables(ALL_MODELS, safe=True)
+
+            # Run versioned migrations (column additions, data migrations).
+            # Must stay inside the same connection_context to preserve tables
+            # on :memory: databases.
+            from app.cli.migrations.migration_runner import MigrationRunner
+
+            runner = MigrationRunner(self)
+            runner.run_pending()
+
+            # Idempotent JSON coercion (runs every startup to fix malformed data)
             SchemaMigrator(self._database, self._logger).ensure_schema_compatibility()
+
         self._run_database_maintenance()
         self._logger.info("db_migrated", extra={"path": self._mask_path(self.path)})
 
