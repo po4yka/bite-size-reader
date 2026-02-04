@@ -8,6 +8,10 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
 
+# Canonical list of fields that every valid summary must contain.
+# Import this constant instead of hardcoding the field names elsewhere.
+REQUIRED_SUMMARY_FIELDS: list[str] = ["tldr", "summary_250", "key_ideas"]
+
 
 @dataclass
 class Summary:
@@ -57,12 +61,11 @@ class Summary:
             True if content has all required fields with non-empty values.
 
         """
-        required_fields = ["tldr", "summary_250", "key_ideas"]
         return all(
             field in self.content
             and self.content[field]
             and (not isinstance(self.content[field], str) or self.content[field].strip())
-            for field in required_fields
+            for field in REQUIRED_SUMMARY_FIELDS
         )
 
     def has_insights(self) -> bool:
