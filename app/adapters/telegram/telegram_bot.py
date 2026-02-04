@@ -457,6 +457,20 @@ class TelegramBot:
                         "rate_limiter_cleanup_error",
                         extra={"error": str(exc)},
                     )
+                # Also clean up expired URL handler state
+                try:
+                    if hasattr(self.message_handler, "url_handler"):
+                        url_cleaned = await self.message_handler.url_handler.cleanup_expired_state()
+                        if url_cleaned > 0:
+                            logger.debug(
+                                "url_handler_state_cleanup_completed",
+                                extra={"entries_cleaned": url_cleaned},
+                            )
+                except Exception as exc:
+                    logger.warning(
+                        "url_handler_state_cleanup_error",
+                        extra={"error": str(exc)},
+                    )
         except asyncio.CancelledError:
             logger.info("rate_limiter_cleanup_loop_cancelled")
             raise
