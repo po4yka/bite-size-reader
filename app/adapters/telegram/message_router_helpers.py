@@ -9,6 +9,7 @@ from typing import Any
 
 import httpx
 
+from app.core.async_utils import raise_if_cancelled
 from app.core.logging_utils import generate_correlation_id
 from app.db.user_interactions import async_safe_update_user_interaction
 from app.security.file_validation import FileValidationError
@@ -110,8 +111,8 @@ async def handle_document_file(
                 (router.response_formatter.MIN_MESSAGE_INTERVAL_MS + 10) / 1000.0,
             )
             await asyncio.sleep(initial_gap)
-        except Exception:
-            pass
+        except Exception as exc:
+            raise_if_cancelled(exc)
         # Create a dedicated progress message that we will edit in-place
         progress_message_id = await router.response_formatter.safe_reply_with_id(
             message,
@@ -140,8 +141,8 @@ async def handle_document_file(
                 (router.response_formatter.MIN_MESSAGE_INTERVAL_MS + 50) / 1000.0,
             )
             await asyncio.sleep(min_gap_sec)
-        except Exception:
-            pass
+        except Exception as exc:
+            raise_if_cancelled(exc)
 
     except Exception:
         logger.exception("document_file_processing_error", extra={"cid": correlation_id})
@@ -623,7 +624,6 @@ async def process_url_silently(
     """Process a single URL without sending Telegram responses."""
     import time as _time
 
-    from app.core.async_utils import raise_if_cancelled
     from app.models.batch_processing import URLProcessingResult
 
     start_time = _time.time()
