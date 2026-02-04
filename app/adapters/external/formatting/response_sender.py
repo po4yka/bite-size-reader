@@ -10,6 +10,7 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 from app.api.models.responses import success_response
+from app.core.async_utils import raise_if_cancelled
 from app.utils.retry_utils import retry_telegram_operation
 
 if TYPE_CHECKING:
@@ -31,6 +32,7 @@ class ResponseSenderImpl:
         safe_reply_func: Callable[[Any, str], Awaitable[None]] | None = None,
         reply_json_func: Callable[[Any, dict], Awaitable[None]] | None = None,
         telegram_client: Any = None,
+        admin_log_chat_id: int | None = None,
     ) -> None:
         """Initialize the response sender.
 
@@ -40,15 +42,23 @@ class ResponseSenderImpl:
             safe_reply_func: Optional callback for test compatibility.
             reply_json_func: Optional callback for test compatibility.
             telegram_client: Optional Telegram client for message operations.
+            admin_log_chat_id: Optional chat ID for admin-level debug logging.
         """
         self._validator = validator
         self._max_message_chars = max_message_chars
         self._safe_reply_func = safe_reply_func
         self._reply_json_func = reply_json_func
         self._telegram_client = telegram_client
+        self._admin_log_chat_id = admin_log_chat_id
 
     async def safe_reply(
-        self, message: Any, text: str, *, parse_mode: str | None = None, reply_markup: Any = None
+        self,
+        message: Any,
+        text: str,
+        *,
+        parse_mode: str | None = None,
+        reply_markup: Any = None,
+        disable_web_page_preview: bool | None = None,
     ) -> None:
         """Safely reply to a message with comprehensive security checks."""
         # Input validation
@@ -81,7 +91,7 @@ class ResponseSenderImpl:
             logger.warning("safe_reply_rate_limited", extra={"text_length": len(text)})
 
         if self._safe_reply_func is not None:
-            kwargs = {}
+            kwargs: dict[str, Any] = {}
             if parse_mode is not None:
                 kwargs["parse_mode"] = parse_mode
             if reply_markup is not None:
@@ -96,6 +106,8 @@ class ResponseSenderImpl:
                 kwargs["parse_mode"] = parse_mode
             if reply_markup:
                 kwargs["reply_markup"] = reply_markup
+            if disable_web_page_preview is not None:
+                kwargs["disable_web_page_preview"] = disable_web_page_preview
             await msg_any.reply_text(text, **kwargs)
             try:
                 logger.debug(
@@ -105,10 +117,17 @@ class ResponseSenderImpl:
             except Exception:
                 pass
         except Exception as e:
+            raise_if_cancelled(e)
             logger.error("reply_failed", extra={"error": str(e), "text_length": len(text)})
 
     async def safe_reply_with_id(
-        self, message: Any, text: str, *, parse_mode: str | None = None
+        self,
+        message: Any,
+        text: str,
+        *,
+        parse_mode: str | None = None,
+        reply_markup: Any | None = None,
+        disable_web_page_preview: bool | None = None,
     ) -> int | None:
         """Safely reply to a message and return the message ID for progress tracking with security checks."""
         # Input validation
@@ -163,11 +182,14 @@ class ResponseSenderImpl:
 
                     # Define send operation for retry logic
                     async def do_send() -> Any:
+                        kwargs: dict[str, Any] = {"chat_id": chat_id, "text": text}
                         if parse_mode is not None:
-                            return await client.send_message(
-                                chat_id=chat_id, text=text, parse_mode=parse_mode
-                            )
-                        return await client.send_message(chat_id=chat_id, text=text)
+                            kwargs["parse_mode"] = parse_mode
+                        if reply_markup is not None:
+                            kwargs["reply_markup"] = reply_markup
+                        if disable_web_page_preview is not None:
+                            kwargs["disable_web_page_preview"] = disable_web_page_preview
+                        return await client.send_message(**kwargs)
 
                     # Retry the send operation with exponential backoff
                     sent, success = await retry_telegram_operation(
@@ -192,6 +214,7 @@ class ResponseSenderImpl:
                     )
                     return None
             except Exception as e:
+                raise_if_cancelled(e)
                 # Fall back to the custom function if direct client send failed
                 logger.warning("reply_with_client_failed_fallback_custom", extra={"error": str(e)})
 
@@ -199,8 +222,18 @@ class ResponseSenderImpl:
                 "reply_with_custom_function",
                 extra={"text_length": len(text), "has_parse_mode": parse_mode is not None},
             )
-            kwargs = {"parse_mode": parse_mode} if parse_mode is not None else {}
-            await self._safe_reply_func(message, text, **kwargs)
+            kwargs: dict[str, Any] = {"parse_mode": parse_mode} if parse_mode is not None else {}
+            if reply_markup is not None:
+                kwargs["reply_markup"] = reply_markup
+            if disable_web_page_preview is not None:
+                kwargs["disable_web_page_preview"] = disable_web_page_preview
+            try:
+                await self._safe_reply_func(message, text, **kwargs)
+            except TypeError:
+                # Backward-compat: not all recorders accept reply_markup.
+                kwargs.pop("reply_markup", None)
+                kwargs.pop("disable_web_page_preview", None)
+                await self._safe_reply_func(message, text, **kwargs)
             logger.warning("reply_with_id_no_message_id", extra={"reason": "custom_reply_function"})
             return None  # Can't get message ID from custom function
 
@@ -209,9 +242,14 @@ class ResponseSenderImpl:
 
             # Define reply operation for retry logic
             async def do_reply() -> Any:
+                kwargs: dict[str, Any] = {}
                 if parse_mode:
-                    return await msg_any.reply_text(text, parse_mode=parse_mode)
-                return await msg_any.reply_text(text)
+                    kwargs["parse_mode"] = parse_mode
+                if reply_markup is not None:
+                    kwargs["reply_markup"] = reply_markup
+                if disable_web_page_preview is not None:
+                    kwargs["disable_web_page_preview"] = disable_web_page_preview
+                return await msg_any.reply_text(text, **kwargs)
 
             # Retry the reply operation with exponential backoff
             sent_message, success = await retry_telegram_operation(
@@ -239,6 +277,7 @@ class ResponseSenderImpl:
             )
             return None
         except Exception as e:
+            raise_if_cancelled(e)
             logger.error("reply_failed", extra={"error": str(e), "text_length": len(text)})
             return None
 
@@ -249,6 +288,8 @@ class ResponseSenderImpl:
         message_id: int | None = None,
         *,
         parse_mode: str | None = None,
+        reply_markup: Any | None = None,
+        disable_web_page_preview: bool | None = None,
     ) -> int | None:
         """Edit existing message or send new if edit fails.
 
@@ -270,7 +311,14 @@ class ResponseSenderImpl:
 
         # Try to edit if we have a message_id
         if message_id and chat_id:
-            edit_success = await self.edit_message(chat_id, message_id, text)
+            edit_success = await self.edit_message(
+                chat_id,
+                message_id,
+                text,
+                parse_mode=parse_mode,
+                reply_markup=reply_markup,
+                disable_web_page_preview=disable_web_page_preview,
+            )
             if edit_success:
                 return message_id
             # Edit failed (maybe message was deleted), log and fall through to send
@@ -280,9 +328,24 @@ class ResponseSenderImpl:
             )
 
         # Send new message
-        return await self.safe_reply_with_id(message, text, parse_mode=parse_mode)
+        return await self.safe_reply_with_id(
+            message,
+            text,
+            parse_mode=parse_mode,
+            reply_markup=reply_markup,
+            disable_web_page_preview=disable_web_page_preview,
+        )
 
-    async def edit_message(self, chat_id: int, message_id: int, text: str) -> bool:
+    async def edit_message(
+        self,
+        chat_id: int,
+        message_id: int,
+        text: str,
+        *,
+        parse_mode: str | None = None,
+        reply_markup: Any | None = None,
+        disable_web_page_preview: bool | None = None,
+    ) -> bool:
         """Edit an existing message in Telegram with security checks.
 
         Args:
@@ -367,9 +430,18 @@ class ResponseSenderImpl:
 
                     # Define API call for retry logic
                     async def do_edit() -> None:
-                        await client.edit_message_text(
-                            chat_id=chat_id, message_id=message_id, text=text
-                        )
+                        kwargs: dict[str, Any] = {
+                            "chat_id": chat_id,
+                            "message_id": message_id,
+                            "text": text,
+                        }
+                        if parse_mode is not None:
+                            kwargs["parse_mode"] = parse_mode
+                        if reply_markup is not None:
+                            kwargs["reply_markup"] = reply_markup
+                        if disable_web_page_preview is not None:
+                            kwargs["disable_web_page_preview"] = disable_web_page_preview
+                        await client.edit_message_text(**kwargs)
 
                     # Retry the API call with exponential backoff
                     _, success = await retry_telegram_operation(
@@ -398,6 +470,7 @@ class ResponseSenderImpl:
             )
             return False
         except Exception as e:
+            raise_if_cancelled(e)
             logger.warning(
                 "edit_message_failed",
                 extra={"error": str(e), "chat_id": chat_id, "message_id": message_id},
@@ -463,6 +536,23 @@ class ResponseSenderImpl:
         except Exception as e:
             logger.error("failed_to_create_inline_keyboard", extra={"error": str(e)})
             return None
+
+    async def send_to_admin_log(self, text: str, *, correlation_id: str | None = None) -> None:
+        """Send a debug message to the admin log chat.
+
+        No-op when ``admin_log_chat_id`` is not configured. Swallows all
+        exceptions so that admin logging never breaks the user-facing flow.
+        """
+        if self._admin_log_chat_id is None:
+            return
+        try:
+            if correlation_id:
+                text = f"[{correlation_id}] {text}"
+            client = getattr(self._telegram_client, "client", None)
+            if client is not None and hasattr(client, "send_message"):
+                await client.send_message(chat_id=self._admin_log_chat_id, text=text[:4096])
+        except Exception:
+            logger.debug("admin_log_send_failed", extra={"chat_id": self._admin_log_chat_id})
 
     def _slugify(self, text: str, *, max_len: int = 60) -> str:
         """Create a filesystem-friendly slug from text."""

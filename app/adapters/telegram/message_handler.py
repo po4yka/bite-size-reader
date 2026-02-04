@@ -43,6 +43,7 @@ class MessageHandler:
         container: Any | None = None,
         hybrid_search: HybridSearchService | None = None,
         attachment_processor: AttachmentProcessor | None = None,
+        verbosity_resolver: Any | None = None,
     ) -> None:
         self.cfg = cfg
         self.db = db
@@ -77,6 +78,7 @@ class MessageHandler:
             task_manager=self.task_manager,
             container=container,
             hybrid_search=hybrid_search,
+            verbosity_resolver=verbosity_resolver,
         )
 
         self.message_router = MessageRouter(

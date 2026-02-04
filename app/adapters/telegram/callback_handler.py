@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import html
 import logging
 from typing import TYPE_CHECKING, Any
 
@@ -25,6 +26,7 @@ logger = logging.getLogger(__name__)
 #   "save:abc123"           - Toggle bookmark/favorite
 #   "rate:abc123:1"         - Rate summary (thumbs up)
 #   "rate:abc123:-1"        - Rate summary (thumbs down)
+#   "more:abc123"           - Show additional details
 #   "multi_confirm_yes"     - Confirm multi-link processing
 #   "multi_confirm_no"      - Cancel multi-link processing
 
@@ -101,6 +103,8 @@ class CallbackHandler:
                 return await self._handle_toggle_save(message, uid, parts, correlation_id)
             if action == "rate":
                 return await self._handle_rate(message, uid, parts, correlation_id)
+            if action == "more":
+                return await self._handle_more(message, uid, parts, correlation_id)
             if action == "multi_confirm_yes":
                 return await self._handle_multi_confirm(message, uid, "yes", correlation_id)
             if action == "multi_confirm_no":
@@ -135,8 +139,14 @@ class CallbackHandler:
             logger.warning("export_missing_params", extra={"parts": parts, "cid": correlation_id})
             return False
 
-        summary_id = parts[1]
-        export_format = parts[2].lower()
+        # summary_id may itself contain ":" (e.g. "req:123"), so treat the last part as the format
+        summary_id = ":".join(parts[1:-1]).strip()
+        export_format = parts[-1].lower()
+        if not summary_id:
+            logger.warning(
+                "export_missing_summary_id", extra={"parts": parts, "cid": correlation_id}
+            )
+            return False
 
         if export_format not in ("pdf", "md", "html"):
             await self.response_formatter.safe_reply(
@@ -231,7 +241,7 @@ class CallbackHandler:
         if len(parts) < 2:
             return False
 
-        summary_id = parts[1]
+        summary_id = ":".join(parts[1:]).strip()
         await self.response_formatter.safe_reply(
             message,
             "Translation feature coming soon. Use /help for available commands.",
@@ -253,7 +263,7 @@ class CallbackHandler:
         if len(parts) < 2:
             return False
 
-        summary_id = parts[1]
+        summary_id = ":".join(parts[1:]).strip()
         await self.response_formatter.safe_reply(
             message,
             "Find similar feature coming soon. Use /search <query> to search your summaries.",
@@ -275,7 +285,7 @@ class CallbackHandler:
         if len(parts) < 2:
             return False
 
-        summary_id = parts[1]
+        summary_id = ":".join(parts[1:]).strip()
 
         try:
             from app.db.models import Summary
@@ -326,9 +336,12 @@ class CallbackHandler:
         if len(parts) < 3:
             return False
 
-        summary_id = parts[1]
+        # summary_id may contain ":" (e.g. "req:123"), so treat the last part as rating
+        summary_id = ":".join(parts[1:-1]).strip()
+        if not summary_id:
+            return False
         try:
-            rating = int(parts[2])
+            rating = int(parts[-1])
         except ValueError:
             return False
 
@@ -349,6 +362,164 @@ class CallbackHandler:
             },
         )
         return True
+
+    async def _handle_more(
+        self,
+        message: Any,
+        uid: int,
+        parts: list[str],
+        correlation_id: str,
+    ) -> bool:
+        """Show additional details for a summary without spamming the default card."""
+        if len(parts) < 2:
+            return False
+
+        summary_id = ":".join(parts[1:]).strip()
+        summary_data = await self._load_summary_payload(summary_id, correlation_id=correlation_id)
+        if not summary_data:
+            await self.response_formatter.safe_reply(message, "Summary not found.")
+            return True
+
+        meta = summary_data.get("metadata") or {}
+        title = ""
+        domain = ""
+        if isinstance(meta, dict):
+            title = str(meta.get("title") or "").strip()
+            domain = str(meta.get("domain") or "").strip()
+
+        summary_1000 = str(summary_data.get("summary_1000") or "").strip()
+        if not summary_1000:
+            summary_1000 = str(summary_data.get("tldr") or "").strip()
+
+        insights = summary_data.get("insights") or {}
+        if not isinstance(insights, dict):
+            insights = {}
+
+        tags = summary_data.get("topic_tags") or []
+        if not isinstance(tags, list):
+            tags = []
+
+        entities = summary_data.get("entities") or {}
+        people: list[str] = []
+        orgs: list[str] = []
+        locs: list[str] = []
+        if isinstance(entities, dict):
+            people = [str(x).strip() for x in (entities.get("people") or []) if str(x).strip()]
+            orgs = [str(x).strip() for x in (entities.get("organizations") or []) if str(x).strip()]
+            locs = [str(x).strip() for x in (entities.get("locations") or []) if str(x).strip()]
+
+        answered = summary_data.get("answered_questions") or []
+        if not isinstance(answered, list):
+            answered = []
+
+        lines: list[str] = []
+        if title:
+            lines.append(f"<b>{html.escape(title)}</b>")
+        if domain:
+            lines.append(f"<i>{html.escape(domain)}</i>")
+
+        if summary_1000:
+            lines.extend(["", "<b>Long summary</b>", html.escape(summary_1000)])
+
+        overview = str(insights.get("topic_overview") or "").strip()
+        new_facts = insights.get("new_facts") or []
+        if overview or (isinstance(new_facts, list) and new_facts):
+            lines.extend(["", "<b>Research highlights</b>"])
+            if overview:
+                overview_short = overview if len(overview) <= 500 else overview[:497].rstrip() + "…"
+                lines.append(html.escape(overview_short))
+            if isinstance(new_facts, list):
+                for item in new_facts[:3]:
+                    if isinstance(item, dict):
+                        fact = str(item.get("fact") or "").strip()
+                    else:
+                        fact = str(item).strip()
+                    if not fact:
+                        continue
+                    fact_short = fact if len(fact) <= 220 else fact[:217].rstrip() + "…"
+                    lines.append("• " + html.escape(fact_short))
+
+        if answered:
+            lines.extend(["", "<b>Answered questions</b>"])
+            for q in answered[:5]:
+                q_s = str(q).strip()
+                if q_s:
+                    lines.append("• " + html.escape(q_s))
+
+        if tags:
+            clean_tags = [str(t).strip() for t in tags if str(t).strip()]
+            if clean_tags:
+                shown = clean_tags[:5]
+                hidden = max(0, len(clean_tags) - len(shown))
+                tail = f" (+{hidden})" if hidden else ""
+                lines.extend(["", "<b>Tags</b>", html.escape(" ".join(shown) + tail)])
+
+        if people or orgs or locs:
+            lines.append("")
+            lines.append("<b>Entities</b>")
+            if people:
+                shown = people[:5]
+                hidden = max(0, len(people) - len(shown))
+                tail = f" (+{hidden})" if hidden else ""
+                lines.append("• People: " + html.escape(", ".join(shown) + tail))
+            if orgs:
+                shown = orgs[:5]
+                hidden = max(0, len(orgs) - len(shown))
+                tail = f" (+{hidden})" if hidden else ""
+                lines.append("• Orgs: " + html.escape(", ".join(shown) + tail))
+            if locs:
+                shown = locs[:5]
+                hidden = max(0, len(locs) - len(shown))
+                tail = f" (+{hidden})" if hidden else ""
+                lines.append("• Places: " + html.escape(", ".join(shown) + tail))
+
+        text = "\n".join(lines).strip() or "No additional details available."
+        await self.response_formatter.safe_reply(message, text, parse_mode="HTML")
+        logger.info(
+            "more_details_sent",
+            extra={"summary_id": summary_id, "uid": uid, "cid": correlation_id},
+        )
+        return True
+
+    async def _load_summary_payload(
+        self, summary_id: str, *, correlation_id: str | None = None
+    ) -> dict[str, Any] | None:
+        """Load summary JSON payload from database (supports 'req:' IDs)."""
+        try:
+            from app.db.models import Request, Summary
+
+            if summary_id.startswith("req:"):
+                request_id = int(summary_id[4:])
+                summary = Summary.get_or_none(Summary.request_id == request_id)
+            else:
+                summary = Summary.get_or_none(Summary.id == int(summary_id))
+
+            if not summary:
+                return None
+
+            request = Request.get_or_none(Request.id == summary.request_id)
+            url = request.normalized_url if request else None
+
+            payload = summary.json_payload or {}
+            if not isinstance(payload, dict):
+                payload = {}
+
+            return {
+                "id": str(summary.id),
+                "request_id": summary.request_id,
+                "url": url,
+                "lang": summary.lang,
+                "insights": summary.insights_json
+                if isinstance(summary.insights_json, dict)
+                else None,
+                **payload,
+            }
+        except Exception as e:
+            logger.exception(
+                "load_summary_payload_failed",
+                extra={"summary_id": summary_id, "error": str(e), "cid": correlation_id},
+            )
+            return None
 
     async def _handle_multi_confirm(
         self,

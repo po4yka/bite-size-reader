@@ -99,6 +99,11 @@ class TelegramConfig(BaseModel):
         validation_alias=AliasChoices("ALLOWED_USER_IDS", "TELEGRAM_ALLOWED_USER_IDS"),
         description="Comma separated list of Telegram user IDs that may interact with the bot",
     )
+    admin_log_chat_id: int | None = Field(
+        default=None,
+        validation_alias=AliasChoices("ADMIN_LOG_CHAT_ID", "TELEGRAM_ADMIN_LOG_CHAT_ID"),
+        description="Chat ID to send debug-level notifications to (optional)",
+    )
 
     @field_validator("api_id", mode="before")
     @classmethod

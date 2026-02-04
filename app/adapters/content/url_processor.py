@@ -593,14 +593,22 @@ class URLProcessor:
                 "ru_translation",
             )
 
+        reader_mode = False
         if not silent:
             try:
-                await self.response_formatter.safe_reply(
-                    message,
-                    "🧠 Generating additional research insights…",
-                )
-            except Exception as exc:
-                raise_if_cancelled(exc)
+                reader_mode = await self.response_formatter.is_reader_mode(message)
+            except Exception:
+                reader_mode = False
+
+        if not silent:
+            if not reader_mode:
+                try:
+                    await self.response_formatter.safe_reply(
+                        message,
+                        "🧠 Generating additional research insights…",
+                    )
+                except Exception as exc:
+                    raise_if_cancelled(exc)
 
         self._schedule_background_task(
             self._handle_additional_insights(
@@ -621,27 +629,29 @@ class URLProcessor:
             topics = summary.get("key_ideas") or []
             tags = summary.get("topic_tags") or []
             if (topics or tags) and isinstance(topics, list) and isinstance(tags, list):
-                try:
-                    await self.response_formatter.safe_reply(
-                        message,
-                        "📝 Crafting a standalone article from topics & tags…",
-                    )
-                except Exception as exc:
-                    raise_if_cancelled(exc)
+                if not reader_mode:
+                    try:
+                        await self.response_formatter.safe_reply(
+                            message,
+                            "📝 Crafting a standalone article from topics & tags…",
+                        )
+                    except Exception as exc:
+                        raise_if_cancelled(exc)
 
-                self._schedule_background_task(
-                    self._handle_custom_article(
-                        message,
-                        chosen_lang,
-                        req_id,
+                if not reader_mode:
+                    self._schedule_background_task(
+                        self._handle_custom_article(
+                            message,
+                            chosen_lang,
+                            req_id,
+                            correlation_id,
+                            topics,
+                            tags,
+                            url_hash=url_hash,
+                        ),
                         correlation_id,
-                        topics,
-                        tags,
-                        url_hash=url_hash,
-                    ),
-                    correlation_id,
-                    "custom_article",
-                )
+                        "custom_article",
+                    )
 
     async def _maybe_send_russian_translation(
         self,
@@ -731,13 +741,23 @@ class URLProcessor:
                     },
                 )
 
-                if not silent:
+                should_notify = not silent
+                if should_notify:
+                    try:
+                        should_notify = not (await self.response_formatter.is_reader_mode(message))
+                    except Exception:
+                        should_notify = True
+
+                if should_notify:
                     await self.response_formatter.send_additional_insights_message(
                         message, insights, correlation_id
                     )
                     logger.info("insights_message_sent", extra={"cid": correlation_id})
                 else:
-                    logger.info("insights_generated_silently", extra={"cid": correlation_id})
+                    logger.info(
+                        "insights_notification_skipped",
+                        extra={"cid": correlation_id, "reason": "reader_mode_or_silent"},
+                    )
 
                 try:
                     await self.summary_repo.async_update_summary_insights(req_id, insights)

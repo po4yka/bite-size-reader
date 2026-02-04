@@ -566,6 +566,12 @@ class MessageRouter:
             )
             return
 
+        if text.startswith("/debug"):
+            await self.command_processor.handle_debug_command(
+                message, uid, correlation_id, interaction_id, start_time
+            )
+            return
+
         # Handle forwarded messages before URL routing so forwards containing links aren't misclassified
         if has_forward:
             fwd_chat = getattr(message, "forward_from_chat", None)

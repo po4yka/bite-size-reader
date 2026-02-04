@@ -27,6 +27,7 @@ if TYPE_CHECKING:
 
     from app.adapters.telegram.telegram_bot import TelegramBot
     from app.config import AppConfig
+    from app.core.verbosity import VerbosityResolver
     from app.db.session import DatabaseSessionManager
 
 logger = logging.getLogger(__name__)
@@ -59,6 +60,7 @@ class BotComponents:
     query_expansion_service: QueryExpansionService
     hybrid_search_service: HybridSearchService
     vector_store: ChromaVectorStore
+    verbosity_resolver: VerbosityResolver | None = None
     container: Any | None = None
 
 
@@ -122,11 +124,21 @@ class BotFactory:
         sem_func: Callable[[], asyncio.Semaphore],
     ) -> BotComponents:
         """Create all bot components and wire them together."""
+        from app.core.verbosity import VerbosityResolver
+        from app.infrastructure.persistence.sqlite.repositories.user_repository import (
+            SqliteUserRepositoryAdapter,
+        )
+
+        user_repo = SqliteUserRepositoryAdapter(db)
+        verbosity_resolver = VerbosityResolver(user_repo)
+
         # Create response formatter (will be wired to telegram_client later)
         response_formatter = ResponseFormatter(
             safe_reply_func=safe_reply_func,
             reply_json_func=reply_json_func,
             telegram_limits=cfg.telegram_limits,
+            verbosity_resolver=verbosity_resolver,
+            admin_log_chat_id=cfg.telegram.admin_log_chat_id,
         )
 
         # Determine topic search limit (moved up for URLProcessor dependency)
@@ -279,6 +291,7 @@ class BotFactory:
             container=container,
             hybrid_search=hybrid_search_service,
             attachment_processor=attachment_processor,
+            verbosity_resolver=verbosity_resolver,
         )
 
         return BotComponents(
@@ -295,6 +308,7 @@ class BotFactory:
             query_expansion_service=query_expansion_service,
             hybrid_search_service=hybrid_search_service,
             vector_store=vector_store,
+            verbosity_resolver=verbosity_resolver,
             container=container,
         )
 

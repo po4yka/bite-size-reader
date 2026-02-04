@@ -31,6 +31,7 @@ from app.adapters.external.formatting.text_processor import TextProcessorImpl
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable, Sequence
 
+    from app.core.verbosity import VerbosityResolver
     from app.services.topic_search import TopicArticle
 
 
@@ -47,6 +48,8 @@ class ResponseFormatter:
         reply_json_func: Callable[[Any, dict], Awaitable[None]] | None = None,
         telegram_client: Any = None,
         telegram_limits: Any = None,
+        verbosity_resolver: VerbosityResolver | None = None,
+        admin_log_chat_id: int | None = None,
     ) -> None:
         """Initialize the ResponseFormatter facade.
 
@@ -55,11 +58,15 @@ class ResponseFormatter:
             reply_json_func: Optional callback for test compatibility.
             telegram_client: Optional Telegram client for message operations.
             telegram_limits: Optional limits configuration object.
+            verbosity_resolver: Optional resolver for per-user verbosity.
+                When *None*, all notification methods behave as DEBUG (legacy).
+            admin_log_chat_id: Optional chat ID for admin-level debug logging.
         """
         # Store original references for backward compatibility
         self._safe_reply_func = safe_reply_func
         self._reply_json_func = reply_json_func
         self._telegram_client = telegram_client
+        self._verbosity_resolver = verbosity_resolver
 
         # Load limits from config (with backward-compatible defaults)
         if telegram_limits is not None:
@@ -87,6 +94,7 @@ class ResponseFormatter:
             safe_reply_func=safe_reply_func,
             reply_json_func=reply_json_func,
             telegram_client=telegram_client,
+            admin_log_chat_id=admin_log_chat_id,
         )
 
         self._text_processor = TextProcessorImpl(
@@ -94,16 +102,25 @@ class ResponseFormatter:
             max_message_chars=self.MAX_MESSAGE_CHARS,
         )
 
+        # Create progress tracker for Reader mode
+        from app.core.progress_tracker import ProgressTracker
+
+        self._progress_tracker = ProgressTracker(self._response_sender)
+
         self._notification_formatter = NotificationFormatterImpl(
             self._response_sender,
             self._data_formatter,
             safe_reply_func=safe_reply_func,
+            verbosity_resolver=verbosity_resolver,
+            progress_tracker=self._progress_tracker,
         )
 
         self._summary_presenter = SummaryPresenterImpl(
             self._response_sender,
             self._text_processor,
             self._data_formatter,
+            verbosity_resolver=verbosity_resolver,
+            progress_tracker=self._progress_tracker,
         )
 
         self._database_presenter = DatabasePresenterImpl(
@@ -114,6 +131,17 @@ class ResponseFormatter:
         # Expose internal state for backward compatibility with existing code
         self._last_message_time: float = 0.0
         self._notified_error_ids: set[str] = set()
+
+    async def is_reader_mode(self, message: Any) -> bool:
+        """Return True when the user prefers Reader (consolidated) UX."""
+        if self._verbosity_resolver is None:
+            return False
+        try:
+            from app.core.verbosity import VerbosityLevel
+
+            return (await self._verbosity_resolver.get_verbosity(message)) == VerbosityLevel.READER
+        except Exception:
+            return False
 
     def __setattr__(self, name: str, value: Any) -> None:
         """Intercept attribute assignments to propagate telegram_client to components."""
