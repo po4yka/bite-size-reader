@@ -6,10 +6,10 @@ to process content (URL, forward, etc.).
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 
 
-class RequestType(str, Enum):
+class RequestType(StrEnum):
     """Types of requests that can be processed."""
 
     URL = "url"
@@ -18,7 +18,7 @@ class RequestType(str, Enum):
     UNKNOWN = "unknown"
 
 
-class RequestStatus(str, Enum):
+class RequestStatus(StrEnum):
     """Status of a request in its lifecycle."""
 
     PENDING = "pending"

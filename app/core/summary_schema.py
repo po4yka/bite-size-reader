@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from enum import Enum
+from enum import StrEnum
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
@@ -204,7 +204,7 @@ class SemanticChunk(BaseModel):
     topics: list[str] = Field(default_factory=list)
 
 
-class SourceType(str, Enum):
+class SourceType(StrEnum):
     """Content type classification."""
 
     NEWS = "news"
@@ -215,7 +215,7 @@ class SourceType(str, Enum):
     REFERENCE = "reference"
 
 
-class TemporalFreshness(str, Enum):
+class TemporalFreshness(StrEnum):
     """Content timeliness classification."""
 
     BREAKING = "breaking"

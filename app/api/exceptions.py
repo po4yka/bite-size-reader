@@ -3,11 +3,11 @@
 Provides standardized error handling with correlation IDs and detailed error messages.
 """
 
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 
-class ErrorCode(str, Enum):
+class ErrorCode(StrEnum):
     """Standard error codes for API responses."""
 
     # Client errors (4xx)
@@ -47,7 +47,7 @@ class ErrorCode(str, Enum):
     FEATURE_DISABLED = "FEATURE_DISABLED"
 
 
-class ErrorType(str, Enum):
+class ErrorType(StrEnum):
     """Categories of errors for client handling."""
 
     AUTHENTICATION = "authentication"

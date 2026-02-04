@@ -77,6 +77,8 @@ ignore = [
   "B008",    # function call in argument defaults - standard FastAPI pattern
   "PLW0603", # global statement - needed for asyncio semaphore initialization
   "SIM103",  # return condition directly - sometimes if/return is clearer
+  "ASYNC240", # async os.path/pathlib - not applicable, we use asyncio not trio/anyio
+  "PLW0108", # lambda may be unnecessary - false positive for factory patterns
 ]
 
 # Per-file ignores for test files

@@ -176,7 +176,7 @@ def calculate_cost(
     pricing = OPENAI_PRICING.get(model)
     if not pricing:
         # Try without version suffix
-        base_model = model.split("-")[0] if "-" in model else model
+        base_model = model.split("-", maxsplit=1)[0] if "-" in model else model
         for known_model, known_pricing in OPENAI_PRICING.items():
             if known_model.startswith(base_model):
                 pricing = known_pricing

@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import os
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field
@@ -15,7 +15,7 @@ from app.api.context import correlation_id_ctx
 from app.core.time_utils import UTC
 
 
-class ErrorType(str, Enum):
+class ErrorType(StrEnum):
     """Categories of errors for client handling."""
 
     AUTHENTICATION = "authentication"  # Auth failures, token issues
@@ -28,7 +28,7 @@ class ErrorType(str, Enum):
     INTERNAL = "internal"  # Server errors, unexpected failures
 
 
-class ErrorCode(str, Enum):
+class ErrorCode(StrEnum):
     """Structured error codes for programmatic handling."""
 
     # Authentication errors
@@ -72,7 +72,7 @@ class ErrorCode(str, Enum):
     INTERNAL_CONFIG_ERROR = "INTERNAL_CONFIG_ERROR"
 
 
-class RequestStage(str, Enum):
+class RequestStage(StrEnum):
     """Processing stages for request status polling."""
 
     PENDING = "pending"  # Request queued, waiting to start
