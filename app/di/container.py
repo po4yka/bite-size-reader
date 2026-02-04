@@ -10,7 +10,6 @@ from app.application.use_cases.get_unread_summaries import GetUnreadSummariesUse
 from app.application.use_cases.mark_summary_as_read import MarkSummaryAsReadUseCase
 from app.application.use_cases.mark_summary_as_unread import MarkSummaryAsUnreadUseCase
 from app.application.use_cases.search_topics import SearchTopicsUseCase
-from app.application.use_cases.summarize_url import SummarizeUrlUseCase
 from app.domain.services.summary_validator import SummaryValidator
 from app.infrastructure.messaging.event_bus import EventBus
 from app.infrastructure.messaging.event_handlers import wire_event_handlers
@@ -70,8 +69,6 @@ class Container:
         self,
         database: Any,
         topic_search_service: Any | None = None,
-        content_fetcher: Any | None = None,
-        llm_client: Any | None = None,
         analytics_service: Any | None = None,
         telegram_client: Any | None = None,
         notification_service: Any | None = None,
@@ -86,8 +83,6 @@ class Container:
         Args:
             database: The Database instance (existing infrastructure).
             topic_search_service: Optional TopicSearchService for search use case.
-            content_fetcher: Optional content fetcher service (e.g., FirecrawlClient).
-            llm_client: Optional LLM client (e.g., OpenRouterClient).
             analytics_service: Optional analytics service client.
             telegram_client: Optional Telegram client for notifications.
             notification_service: Optional notification service for other channels.
@@ -98,8 +93,6 @@ class Container:
         """
         self._database = database
         self._topic_search_service = topic_search_service
-        self._content_fetcher = content_fetcher
-        self._llm_client = llm_client
         self._analytics_service = analytics_service
         self._telegram_client = telegram_client
         self._notification_service = notification_service
@@ -127,7 +120,6 @@ class Container:
         self._mark_summary_as_read_use_case: MarkSummaryAsReadUseCase | None = None
         self._mark_summary_as_unread_use_case: MarkSummaryAsUnreadUseCase | None = None
         self._search_topics_use_case: SearchTopicsUseCase | None = None
-        self._summarize_url_use_case: SummarizeUrlUseCase | None = None
 
     def event_bus(self) -> EventBus:
         """Get or create the event bus.
@@ -309,27 +301,6 @@ class Container:
                 topic_search_service=self._topic_search_service
             )
         return self._search_topics_use_case
-
-    def summarize_url_use_case(self) -> SummarizeUrlUseCase | None:
-        """Get or create the SummarizeUrlUseCase.
-
-        Returns:
-            Use case for summarizing URLs, or None if required services not configured.
-
-        """
-        if self._content_fetcher is None or self._llm_client is None:
-            return None
-
-        if self._summarize_url_use_case is None:
-            self._summarize_url_use_case = SummarizeUrlUseCase(
-                request_repository=self.request_repository(),
-                summary_repository=self.summary_repository(),
-                crawl_result_repository=self.crawl_result_repository(),
-                content_fetcher=self._content_fetcher,
-                llm_client=self._llm_client,
-                summary_validator=self.summary_validator(),
-            )
-        return self._summarize_url_use_case
 
     def wire_event_handlers_auto(self) -> None:
         """Wire up event handlers to the event bus automatically.

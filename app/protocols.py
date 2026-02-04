@@ -166,119 +166,6 @@ class CrawlResultRepository(Protocol):
         ...
 
 
-class UserInteractionRepository(Protocol):
-    """Protocol for user interaction database operations."""
-
-    async def async_insert_user_interaction(
-        self,
-        uid: int,
-        cid: int,
-        interaction_type: str,
-        detail: str | None = None,
-    ) -> int:
-        """Insert a user interaction record.
-
-        Returns:
-            The ID of the inserted interaction.
-
-        """
-        ...
-
-    async def async_update_user_interaction(
-        self,
-        interaction_id: int,
-        completed: bool = False,
-        error_message: str | None = None,
-    ) -> None:
-        """Update a user interaction record."""
-        ...
-
-
-class LLMCallRepository(Protocol):
-    """Protocol for LLM call logging operations."""
-
-    async def async_insert_llm_call(
-        self,
-        request_id: int,
-        provider: str,
-        model: str,
-        prompt_tokens: int,
-        completion_tokens: int,
-        total_tokens: int,
-        latency_ms: int,
-        cost_usd: float | None = None,
-        error: str | None = None,
-    ) -> int:
-        """Insert an LLM call log record.
-
-        Returns:
-            The ID of the inserted log record.
-
-        """
-        ...
-
-
-class LLMClient(Protocol):
-    """Protocol for LLM client implementations."""
-
-    async def chat(
-        self,
-        messages: list[dict[str, str]],
-        model: str | None = None,
-        temperature: float | None = None,
-        max_tokens: int | None = None,
-        **kwargs: Any,
-    ) -> Any:
-        """Send a chat request to the LLM.
-
-        Args:
-            messages: List of message dictionaries with 'role' and 'content'.
-            model: Optional model name override.
-            temperature: Optional temperature override.
-            max_tokens: Optional max tokens override.
-            **kwargs: Additional provider-specific parameters.
-
-        Returns:
-            LLM response object.
-
-        """
-        ...
-
-
-class MessageFormatter(Protocol):
-    """Protocol for formatting messages for display."""
-
-    def format_summary(
-        self,
-        summary_data: dict[str, Any],
-        include_insights: bool = False,
-    ) -> str:
-        """Format a summary for display.
-
-        Args:
-            summary_data: Dictionary containing summary information.
-            include_insights: Whether to include insights section.
-
-        Returns:
-            Formatted message string.
-
-        """
-        ...
-
-    def format_error(self, error_message: str, context: dict[str, Any] | None = None) -> str:
-        """Format an error message for display.
-
-        Args:
-            error_message: The error message.
-            context: Optional context information.
-
-        Returns:
-            Formatted error message string.
-
-        """
-        ...
-
-
 class FileValidator(Protocol):
     """Protocol for file validation."""
 
@@ -305,11 +192,15 @@ class FileValidator(Protocol):
 class RateLimiter(Protocol):
     """Protocol for rate limiting."""
 
-    async def check_and_update(self, user_id: int) -> tuple[bool, str | None]:
-        """Check if user is rate limited and update counters.
+    async def check_and_record(
+        self, user_id: int, *, cost: int = 1, operation: str = "request"
+    ) -> tuple[bool, str | None]:
+        """Check if user is within rate limits and record the request.
 
         Args:
             user_id: The user identifier.
+            cost: Cost weight for this operation (default: 1).
+            operation: Description of operation for logging.
 
         Returns:
             Tuple of (is_allowed, error_message). error_message is None if allowed.
@@ -317,68 +208,11 @@ class RateLimiter(Protocol):
         """
         ...
 
-    async def reset(self, user_id: int) -> None:
+    async def reset_user(self, user_id: int) -> None:
         """Reset rate limit counters for a user.
 
         Args:
             user_id: The user identifier.
-
-        """
-        ...
-
-
-class ContentFetcher(Protocol):
-    """Protocol for content extraction from URLs."""
-
-    async def extract_content_pure(
-        self,
-        url: str,
-        correlation_id: str | None = None,
-    ) -> tuple[str, str, dict[str, Any]]:
-        """Extract content from a URL without message dependencies.
-
-        Args:
-            url: URL to extract content from.
-            correlation_id: Optional correlation ID for tracing.
-
-        Returns:
-            Tuple of (content_text, content_source, metadata) where:
-            - content_text: Extracted and cleaned content
-            - content_source: Source of content ("markdown", "html", or "none")
-            - metadata: Dictionary with extraction metadata
-
-        Raises:
-            ValueError: If extraction fails.
-
-        """
-        ...
-
-
-class SummaryGenerator(Protocol):
-    """Protocol for LLM-based summary generation."""
-
-    async def summarize_content_pure(
-        self,
-        content_text: str,
-        chosen_lang: str,
-        system_prompt: str,
-        correlation_id: str | None = None,
-        feedback_instructions: str | None = None,
-    ) -> dict[str, Any]:
-        """Generate a summary from content without message dependencies.
-
-        Args:
-            content_text: The content to summarize.
-            chosen_lang: Target language for the summary.
-            system_prompt: System prompt for the LLM.
-            correlation_id: Optional correlation ID for tracing.
-            feedback_instructions: Optional feedback from previous validation attempts.
-
-        Returns:
-            Dictionary containing the structured summary.
-
-        Raises:
-            ValueError: If summarization fails.
 
         """
         ...
