@@ -9,8 +9,7 @@ from collections import Counter
 from typing import Any
 
 from app.core.async_utils import raise_if_cancelled
-from app.core.nlp import extract_keywords_tfidf as _extract_keywords_tfidf
-from app.core.text_utils import cap_text as _cap_text, normalize_whitespace as _normalize_whitespace
+from app.core.summary_contract import _cap_text, _extract_keywords_tfidf, _normalize_whitespace
 
 logger = logging.getLogger(__name__)
 
