@@ -8,7 +8,7 @@ import logging
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any
 
 from app.adapters.telegram import telegram_client as telegram_client_module
 from app.core.logging_utils import generate_correlation_id, setup_json_logging
@@ -24,7 +24,6 @@ except ImportError:
     filters = None
 
 if TYPE_CHECKING:
-    from app.adapters.content.url_processor import URLProcessor
     from app.config import AppConfig
     from app.db.session import DatabaseSessionManager
 
@@ -100,18 +99,10 @@ class TelegramBot:
         self.vector_store = components.vector_store
         self._container = components.container
 
-        # Adapter ensures legacy hooks like ``_handle_url_flow`` and
-        # subclasses overriding it still observe URL processing
-        # requests, while defaulting to the real processor.
-        self._url_processor_entrypoint = _URLProcessorEntrypoint(self)
-
-        # Route URL handling via the bot instance so legacy tests overriding
-        # ``_handle_url_flow`` keep working.
-        self.message_handler.command_processor.url_processor = cast("URLProcessor", self)
-        self.message_handler.url_handler.url_processor = cast("URLProcessor", self)
-
-        # Update message handler to use entrypoint
-        self.message_handler.url_processor = cast("URLProcessor", self._url_processor_entrypoint)
+        # Point handlers directly at the real url_processor
+        self.message_handler.command_processor.url_processor = self.url_processor
+        self.message_handler.url_handler.url_processor = self.url_processor
+        self.message_handler.url_processor = self.url_processor
 
         # Expose in-memory state containers for unit tests
         self._awaiting_url_users = self.message_handler.url_handler._awaiting_url_users
@@ -643,28 +634,3 @@ class TelegramBot:
                 self.response_formatter._safe_reply_func = value
             else:
                 self.response_formatter._reply_json_func = value
-
-
-class _URLProcessorEntrypoint:
-    """Entrypoint for URL processing used to route requests back through the bot instance."""
-
-    def __init__(self, bot: TelegramBot) -> None:
-        self.bot = bot
-
-    async def handle_url_flow(
-        self,
-        message: Any,
-        url_text: str,
-        *,
-        correlation_id: str | None = None,
-        interaction_id: int | None = None,
-        silent: bool = False,
-    ) -> None:
-        """Process a URL message via the URL processor pipeline via the bot instance."""
-        await self.bot._handle_url_flow(
-            message,
-            url_text,
-            correlation_id=correlation_id,
-            interaction_id=interaction_id,
-            silent=silent,
-        )
