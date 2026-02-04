@@ -11,11 +11,11 @@ from typing import TYPE_CHECKING, Any
 from app.adapters.content.content_chunker import ContentChunker
 from app.adapters.content.content_extractor import ContentExtractor
 from app.adapters.content.llm_summarizer import LLMSummarizer
-from app.adapters.telegram.message_persistence import MessagePersistence
 from app.core.async_utils import raise_if_cancelled
 from app.core.lang import LANG_RU, choose_language
 from app.core.url_utils import normalize_url, url_hash_sha256
 from app.db.user_interactions import async_safe_update_user_interaction
+from app.infrastructure.persistence.message_persistence import MessagePersistence
 from app.infrastructure.persistence.sqlite.repositories.summary_repository import (
     SqliteSummaryRepositoryAdapter,
 )

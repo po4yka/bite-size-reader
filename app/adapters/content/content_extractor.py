@@ -17,7 +17,6 @@ import httpx
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.adapters.external.firecrawl_parser import FirecrawlClient, FirecrawlResult
-from app.adapters.telegram.message_persistence import MessagePersistence
 from app.config import AppConfig
 from app.core.async_utils import raise_if_cancelled
 from app.core.html_utils import clean_markdown_article_text, html_to_text, normalize_text
@@ -26,6 +25,7 @@ from app.core.url_utils import normalize_url, url_hash_sha256
 from app.db.session import DatabaseSessionManager
 from app.db.utils import prepare_json_payload
 from app.infrastructure.cache.redis_cache import RedisCache
+from app.infrastructure.persistence.message_persistence import MessagePersistence
 
 if TYPE_CHECKING:
     from app.adapters.external.response_formatter import ResponseFormatter

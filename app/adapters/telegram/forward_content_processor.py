@@ -5,9 +5,9 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any
 
-from app.adapters.telegram.message_persistence import MessagePersistence
 from app.core.html_utils import normalize_text
 from app.core.lang import choose_language, detect_language
+from app.infrastructure.persistence.message_persistence import MessagePersistence
 from app.prompts.manager import get_prompt_manager
 
 if TYPE_CHECKING:
