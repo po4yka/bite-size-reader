@@ -253,6 +253,7 @@ class YouTubeDownloader:
         self._url_locks.pop(dedupe, None)
 
         output_dir: Path | None = None
+        download_succeeded = False
 
         try:
             # 2. Update status to downloading
@@ -373,6 +374,7 @@ class YouTubeDownloader:
                 },
             )
 
+            download_succeeded = True
             return req_id, combined_text, transcript_source, detected_lang, video_metadata
 
         except Exception as e:
@@ -399,22 +401,37 @@ class YouTubeDownloader:
                 extra={"video_id": video_id, "error": str(e), "cid": correlation_id},
             )
 
-            # Clean up partial download files for this video
-            try:
-                if output_dir is not None and output_dir.exists():
-                    for partial in output_dir.glob(f"{video_id}_*"):
+            raise
+
+        finally:
+            # Clean up partial download files on ANY failure (including CancelledError)
+            if not download_succeeded and output_dir is not None:
+                try:
+                    if output_dir.exists():
+                        deleted_count = 0
+                        for partial in output_dir.glob(f"{video_id}_*"):
+                            try:
+                                partial.unlink()
+                                deleted_count += 1
+                            except OSError:
+                                pass
+                        # Remove empty date directory
                         try:
-                            partial.unlink()
+                            if not any(output_dir.iterdir()):
+                                output_dir.rmdir()
                         except OSError:
                             pass
-                    logger.info(
-                        "youtube_partial_download_cleaned",
-                        extra={"video_id": video_id, "cid": correlation_id},
-                    )
-            except Exception:
-                logger.debug("youtube_partial_cleanup_failed", exc_info=True)
-
-            raise
+                        if deleted_count > 0:
+                            logger.info(
+                                "youtube_partial_download_cleaned",
+                                extra={
+                                    "video_id": video_id,
+                                    "cid": correlation_id,
+                                    "files_removed": deleted_count,
+                                },
+                            )
+                except Exception:
+                    logger.debug("youtube_partial_cleanup_failed", exc_info=True)
 
     async def _extract_transcript_api(
         self, video_id: str, correlation_id: str | None
