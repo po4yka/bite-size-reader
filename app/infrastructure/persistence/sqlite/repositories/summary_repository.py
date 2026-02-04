@@ -311,6 +311,24 @@ class SqliteSummaryRepositoryAdapter(SqliteBaseRepository):
 
         await self._execute(_update, operation_name="mark_summary_as_unread")
 
+    async def async_mark_summary_as_read_by_request(self, request_id: int) -> None:
+        """Mark a summary as read by its request ID."""
+
+        def _update() -> None:
+            Summary.update({Summary.is_read: True}).where(Summary.request == request_id).execute()
+
+        await self._execute(_update, operation_name="mark_summary_as_read_by_request")
+
+    async def async_get_read_status(self, request_id: int) -> bool:
+        """Return whether the summary for a given request is marked as read."""
+
+        def _get() -> bool:
+            summary = Summary.get_or_none(Summary.request == request_id)
+            return bool(summary.is_read) if summary else False
+
+        result = await self._execute(_get, operation_name="get_read_status", read_only=True)
+        return bool(result)
+
     async def async_update_summary_insights(
         self, request_id: int, insights_json: dict[str, Any]
     ) -> None:

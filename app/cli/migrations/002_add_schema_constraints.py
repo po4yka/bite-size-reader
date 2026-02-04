@@ -15,11 +15,12 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from app.db.database import Database
+    from app.db.session import DatabaseSessionManager
 
 logger = logging.getLogger(__name__)
 
 
-def upgrade(db: Database) -> None:
+def upgrade(db: Database | DatabaseSessionManager) -> None:
     """Add schema integrity constraints."""
     logger.info("Starting Phase 2 schema improvements...")
 
@@ -45,7 +46,7 @@ def upgrade(db: Database) -> None:
     logger.info("Phase 2 schema improvements completed successfully")
 
 
-def _cleanup_orphaned_llm_calls(db: Database) -> int:
+def _cleanup_orphaned_llm_calls(db: Database | DatabaseSessionManager) -> int:
     """Delete any LLM calls without a valid request reference.
 
     Returns:
@@ -76,7 +77,7 @@ def _cleanup_orphaned_llm_calls(db: Database) -> int:
     return orphaned_count
 
 
-def _recreate_llm_calls_table(db: Database) -> None:
+def _recreate_llm_calls_table(db: Database | DatabaseSessionManager) -> None:
     """Recreate llm_calls table with NOT NULL constraint on request_id.
 
     SQLite doesn't support ALTER COLUMN, so we need to:
@@ -145,7 +146,7 @@ def _recreate_llm_calls_table(db: Database) -> None:
         logger.debug(f"  ✓ Recreated index {index_name}")
 
 
-def _add_request_validation_triggers(db: Database) -> None:
+def _add_request_validation_triggers(db: Database | DatabaseSessionManager) -> None:
     """Add triggers to validate request data based on type.
 
     Validation rules:
@@ -194,7 +195,7 @@ def _add_request_validation_triggers(db: Database) -> None:
     logger.debug("  Created UPDATE validation trigger")
 
 
-def downgrade(db: Database) -> None:
+def downgrade(db: Database | DatabaseSessionManager) -> None:
     """Remove schema integrity constraints."""
     logger.info("Rolling back Phase 2 schema improvements...")
 

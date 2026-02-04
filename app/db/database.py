@@ -1,18 +1,33 @@
+"""Backward-compatible database facade.
+
+**Deprecated** -- prefer ``DatabaseSessionManager`` + repository adapters for
+new code.  This module is retained solely so that existing call-sites and tests
+continue to work without modification.
+
+Migration path
+--------------
+1. ``DatabaseSessionManager``  (``app.db.session``)   -- connections, locks,
+   migrations, backup, raw SQL.
+2. Repository adapters (``app.infrastructure.persistence.sqlite.repositories``)
+   -- per-entity async CRUD.
+
+This facade creates a ``DatabaseSessionManager`` internally and delegates all
+infrastructure work to it.  Sync ORM helpers are kept as thin wrappers for
+backward compatibility.
+"""
+
 from __future__ import annotations
 
-import asyncio
 import contextlib
 import datetime as dt
 import logging
-import sqlite3
+import warnings
 from collections.abc import Iterable, Iterator, Mapping, Sequence
-from contextlib import AbstractAsyncContextManager
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import peewee
-from playhouse.sqlite_ext import SqliteExtDatabase
 
 from app.core.time_utils import UTC
 from app.db.database_diagnostics import DatabaseDiagnostics
@@ -35,10 +50,9 @@ from app.db.models import (
     TelegramMessage,
     User,
     UserInteraction,
-    database_proxy,
     model_to_dict,
 )
-from app.db.rw_lock import AsyncRWLock
+from app.db.session import DatabaseSessionManager
 from app.db.topic_search_index import TopicSearchIndexManager
 from app.db.video_downloads import VideoDownloadManager
 from app.services.topic_search_utils import (
@@ -47,6 +61,9 @@ from app.services.topic_search_utils import (
     yield_topic_fragments,
 )
 from app.services.trending_cache import clear_trending_cache
+
+if TYPE_CHECKING:
+    import sqlite3
 
 JSONValue = Mapping[str, Any] | Sequence[Any] | str | None
 
@@ -67,56 +84,28 @@ DB_JSON_MAX_ARRAY_LENGTH = 10_000
 DB_JSON_MAX_DICT_KEYS = 1_000
 
 
-class RowSqliteDatabase(SqliteExtDatabase):
-    """SQLite database subclass that configures the row factory for dict-like access."""
-
-    def _connect(self) -> sqlite3.Connection:
-        conn = super()._connect()
-        conn.row_factory = sqlite3.Row
-        return conn
-
-
 @dataclass
 class Database:
     """Peewee-backed database facade providing backward-compatible access.
 
-    This class serves as a facade for database operations, maintaining API
-    compatibility with existing code while internally delegating to specialized
-    components.
+    .. deprecated::
+        Use ``DatabaseSessionManager`` + repository adapters instead.
 
-    **Deprecation Notice:**
-    For new code, prefer using the component classes directly:
-    - `DatabaseSessionManager` for session/connection management
-    - `SqliteSummaryRepositoryAdapter` for summary operations
-    - `SqliteRequestRepositoryAdapter` for request operations
-    - `SqliteLLMRepositoryAdapter` for LLM call operations
-    - `SqliteTelegramMessageRepositoryAdapter` for message operations
-
-    These repository adapters are located in:
-    `app.infrastructure.persistence.sqlite.repositories`
-
-    Example of modern usage::
-
-        from app.db.session import DatabaseSessionManager
-        from app.infrastructure.persistence.sqlite.repositories import (
-            SqliteSummaryRepositoryAdapter,
-        )
-
-        session = DatabaseSessionManager("/path/to/db.sqlite")
-        session.migrate()
-
-        summary_repo = SqliteSummaryRepositoryAdapter(session)
-        summary = await summary_repo.async_get_summary_by_id(123)
+    This class creates a ``DatabaseSessionManager`` internally and delegates
+    infrastructure operations to it while keeping sync ORM helpers for
+    backward compatibility with existing tests and call-sites.
     """
 
     path: str
     _logger: logging.Logger = field(default_factory=lambda: logging.getLogger(__name__))
-    _database: peewee.SqliteDatabase = field(init=False)
-    _rw_lock: AsyncRWLock = field(init=False)
-    _diagnostics: DatabaseDiagnostics = field(init=False)
-    _maintenance: DatabaseMaintenance = field(init=False)
-    _topic_search: TopicSearchIndexManager = field(init=False)
-    _video_downloads: VideoDownloadManager = field(init=False)
+
+    # Managed by __post_init__ -- not user-supplied
+    _mgr: DatabaseSessionManager = field(init=False, repr=False)
+    _database: peewee.SqliteDatabase = field(init=False, repr=False)
+    _diagnostics: DatabaseDiagnostics = field(init=False, repr=False)
+    _maintenance: DatabaseMaintenance = field(init=False, repr=False)
+    _topic_search: TopicSearchIndexManager = field(init=False, repr=False)
+    _video_downloads: VideoDownloadManager = field(init=False, repr=False)
 
     # Configuration values (can be set via database_config parameter or use module defaults)
     operation_timeout: float = field(default=DB_OPERATION_TIMEOUT)
@@ -127,34 +116,39 @@ class Database:
     json_max_dict_keys: int = field(default=DB_JSON_MAX_DICT_KEYS)
 
     def __post_init__(self) -> None:
-        if self.path != ":memory":
-            Path(self.path).parent.mkdir(parents=True, exist_ok=True)
-        self._database = RowSqliteDatabase(
-            self.path,
-            pragmas={
-                "journal_mode": "wal",
-                "synchronous": "normal",
-                "foreign_keys": 1,  # Enforce foreign key constraints
-            },
-            check_same_thread=False,  # Still needed for asyncio.to_thread() but protected by lock
+        warnings.warn(
+            "Database is deprecated; use DatabaseSessionManager + repository adapters",
+            DeprecationWarning,
+            stacklevel=2,
         )
-        database_proxy.initialize(self._database)
-        # Initialize read-write lock for thread-safe database access
-        # This allows multiple concurrent readers OR one exclusive writer
-        self._rw_lock = AsyncRWLock()
+        self._mgr = DatabaseSessionManager(
+            path=self.path,
+            _logger=self._logger,
+            operation_timeout=self.operation_timeout,
+            max_retries=self.max_retries,
+            json_max_size=self.json_max_size,
+            json_max_depth=self.json_max_depth,
+            json_max_array_length=self.json_max_array_length,
+            json_max_dict_keys=self.json_max_dict_keys,
+        )
+        self._database = self._mgr.database
         self._diagnostics = DatabaseDiagnostics(self, self._database, self._logger)
         self._maintenance = DatabaseMaintenance(self._database, self.path, self._logger)
         self._topic_search = TopicSearchIndexManager(self._database, self._logger)
         self._video_downloads = VideoDownloadManager(self._logger)
 
+    # ------------------------------------------------------------------
+    # Properties
+    # ------------------------------------------------------------------
+
     @property
     def database(self) -> peewee.SqliteDatabase:
-        """Access the underlying Peewee database instance.
-
-        This property provides compatibility with code that expects a `database`
-        attribute, while the internal implementation uses `_database`.
-        """
+        """Access the underlying Peewee database instance."""
         return self._database
+
+    # ------------------------------------------------------------------
+    # Infrastructure -- delegated to DatabaseSessionManager
+    # ------------------------------------------------------------------
 
     async def _safe_db_operation(
         self,
@@ -167,121 +161,16 @@ class Database:
     ) -> Any:
         """Execute database operation with timeout and retry protection.
 
-        Args:
-            operation: The database operation to execute
-            *args: Positional arguments for the operation
-            timeout: Timeout in seconds (default: self.operation_timeout)
-            operation_name: Name for logging purposes
-            read_only: Whether this is a read-only operation (allows concurrent reads)
-            **kwargs: Keyword arguments for the operation
-
-        Returns:
-            Result of the operation
-
-        Raises:
-            asyncio.TimeoutError: If operation times out
-            peewee.OperationalError: If database is locked or busy after retries
-            peewee.IntegrityError: If constraint violation occurs
-            Exception: Other database errors
-
+        Delegates to ``DatabaseSessionManager._safe_db_operation``.
         """
-        if timeout is None:
-            timeout = self.operation_timeout
-
-        retries = 0
-        last_error = None
-
-        while retries <= self.max_retries:
-            try:
-                # Acquire lock with timeout to prevent indefinite hangs
-                lock_context: AbstractAsyncContextManager[Any] = (
-                    self._rw_lock.read_lock() if read_only else self._rw_lock.write_lock()
-                )
-
-                async def _run_with_lock(context: AbstractAsyncContextManager[Any]) -> Any:
-                    async with context:
-
-                        def _op_wrapper() -> Any:
-                            with self._database.connection_context():
-                                return operation(*args, **kwargs)
-
-                        return await asyncio.to_thread(_op_wrapper)
-
-                return await asyncio.wait_for(_run_with_lock(lock_context), timeout=timeout)
-
-            except TimeoutError:
-                self._logger.exception(
-                    "db_operation_timeout",
-                    extra={
-                        "operation": operation_name,
-                        "timeout": timeout,
-                        "retries": retries,
-                    },
-                )
-                raise
-
-            except peewee.OperationalError as e:
-                # Handle database locked or busy errors
-                last_error = e
-                error_msg = str(e).lower()
-
-                if "locked" in error_msg or "busy" in error_msg:
-                    if retries < self.max_retries:
-                        retries += 1
-                        wait_time = 0.1 * (2**retries)  # Exponential backoff
-                        self._logger.warning(
-                            "db_locked_retrying",
-                            extra={
-                                "operation": operation_name,
-                                "retry": retries,
-                                "max_retries": self.max_retries,
-                                "wait_time": wait_time,
-                                "error": str(e),
-                            },
-                        )
-                        await asyncio.sleep(wait_time)
-                        continue
-
-                # Non-retryable operational error or max retries exceeded
-                self._logger.exception(
-                    "db_operational_error",
-                    extra={
-                        "operation": operation_name,
-                        "retries": retries,
-                        "error": str(e),
-                    },
-                )
-                raise
-
-            except peewee.IntegrityError as e:
-                # Constraint violations should not be retried
-                self._logger.exception(
-                    "db_integrity_error",
-                    extra={
-                        "operation": operation_name,
-                        "error": str(e),
-                    },
-                )
-                raise
-
-            except Exception as e:
-                # Unexpected error
-                self._logger.exception(
-                    "db_unexpected_error",
-                    extra={
-                        "operation": operation_name,
-                        "retries": retries,
-                        "error": str(e),
-                        "error_type": type(e).__name__,
-                    },
-                )
-                raise
-
-        # Should not reach here, but handle it anyway
-        if last_error:
-            raise last_error
-        msg = f"Database operation {operation_name} failed after {self.max_retries} retries"
-        raise RuntimeError(msg) from last_error
+        return await self._mgr._safe_db_operation(
+            operation,
+            *args,
+            timeout=timeout,
+            operation_name=operation_name,
+            read_only=read_only,
+            **kwargs,
+        )
 
     async def _safe_db_transaction(
         self,
@@ -291,152 +180,31 @@ class Database:
         operation_name: str = "database_transaction",
         **kwargs: Any,
     ) -> Any:
-        """Execute database operation within an explicit transaction with rollback.
+        """Execute database operation within an explicit transaction.
 
-        This method wraps database operations in an atomic transaction, ensuring
-        that all changes are either committed together or rolled back on error.
-
-        Args:
-            operation: The database operation to execute
-            *args: Positional arguments for the operation
-            timeout: Timeout in seconds (default: self.operation_timeout)
-            operation_name: Name for logging purposes
-            **kwargs: Keyword arguments for the operation
-
-        Returns:
-            Result of the operation
-
-        Raises:
-            asyncio.TimeoutError: If operation times out
-            peewee.OperationalError: If database is locked or busy after retries
-            peewee.IntegrityError: If constraint violation occurs
-            Exception: Other database errors
-
+        Delegates to ``DatabaseSessionManager._safe_db_transaction``.
         """
-        if timeout is None:
-            timeout = self.operation_timeout
-
-        retries = 0
-        last_error = None
-
-        while retries <= self.max_retries:
-            try:
-                # Transactions always require write lock
-                async def _run_transaction() -> Any:
-                    async with self._rw_lock.write_lock():
-                        # Execute operation within explicit transaction
-                        def _execute_in_transaction():
-                            with self._database.atomic() as txn:
-                                try:
-                                    # Transaction commits automatically if no exception
-                                    return operation(*args, **kwargs)
-                                except BaseException:
-                                    # Explicit rollback on any error (catches all exceptions including system exits)
-                                    txn.rollback()
-                                    raise
-
-                        return await asyncio.to_thread(_execute_in_transaction)
-
-                return await asyncio.wait_for(_run_transaction(), timeout=timeout)
-
-            except TimeoutError:
-                self._logger.exception(
-                    "db_transaction_timeout",
-                    extra={
-                        "operation": operation_name,
-                        "timeout": timeout,
-                        "retries": retries,
-                    },
-                )
-                raise
-
-            except peewee.OperationalError as e:
-                last_error = e
-                error_msg = str(e).lower()
-
-                if "locked" in error_msg or "busy" in error_msg:
-                    if retries < self.max_retries:
-                        retries += 1
-                        wait_time = 0.1 * (2**retries)  # Exponential backoff
-                        self._logger.warning(
-                            "db_transaction_locked_retrying",
-                            extra={
-                                "operation": operation_name,
-                                "retry": retries,
-                                "max_retries": self.max_retries,
-                                "wait_time": wait_time,
-                                "error": str(e),
-                            },
-                        )
-                        await asyncio.sleep(wait_time)
-                        continue
-
-                self._logger.exception(
-                    "db_transaction_operational_error",
-                    extra={
-                        "operation": operation_name,
-                        "retries": retries,
-                        "error": str(e),
-                    },
-                )
-                raise
-
-            except peewee.IntegrityError as e:
-                # Constraint violations should not be retried
-                self._logger.exception(
-                    "db_transaction_integrity_error",
-                    extra={
-                        "operation": operation_name,
-                        "error": str(e),
-                    },
-                )
-                raise
-
-            except Exception as e:
-                # Unexpected error
-                self._logger.exception(
-                    "db_transaction_unexpected_error",
-                    extra={
-                        "operation": operation_name,
-                        "retries": retries,
-                        "error": str(e),
-                        "error_type": type(e).__name__,
-                    },
-                )
-                raise
-
-        # Should not reach here, but handle it anyway
-        if last_error:
-            raise last_error
-        msg = f"Database transaction {operation_name} failed after {self.max_retries} retries"
-        raise RuntimeError(msg) from last_error
+        return await self._mgr._safe_db_transaction(
+            operation,
+            *args,
+            timeout=timeout,
+            operation_name=operation_name,
+            **kwargs,
+        )
 
     @contextlib.contextmanager
     def connect(self) -> Iterator[sqlite3.Connection]:
         """Return a context manager yielding the raw sqlite3 connection."""
-        with self._database.connection_context():
-            yield self._database.connection()
-
-    # JSON utilities are now delegated to app.db.json_utils module
-    # These static methods are kept for backward compatibility
-    _normalize_json_container = staticmethod(normalize_json_container)
-    _prepare_json_payload = staticmethod(prepare_json_payload)
-    _normalize_legacy_json_value = staticmethod(normalize_legacy_json_value)
-
-    def _decode_json_field(self, value: Any) -> tuple[Any | None, str | None]:
-        """Decode JSON field with security validation.
-
-        Delegates to app.db.json_utils.decode_json_field with instance config.
-        """
-        return decode_json_field(
-            value,
-            max_size=self.json_max_size,
-            max_depth=self.json_max_depth,
-            max_array_length=self.json_max_array_length,
-            max_dict_keys=self.json_max_dict_keys,
-        )
+        with self._mgr.connect() as conn:
+            yield conn
 
     def migrate(self) -> None:
+        """Create tables, run versioned migrations, and perform startup maintenance.
+
+        Delegates table creation, migrations, and JSON coercion to the session
+        manager, then runs topic-search index rebuild and maintenance locally
+        (these depend on helpers that live on this class).
+        """
         with self._database.connection_context(), self._database.bind_ctx(ALL_MODELS):
             self._database.create_tables(ALL_MODELS, safe=True)
 
@@ -448,44 +216,147 @@ class Database:
             runner = MigrationRunner(self)
             runner.run_pending()
 
-            # Idempotent JSON coercion and topic search index (runs every startup)
-            self._coerce_json_columns()
+            # Idempotent JSON coercion (runs every startup)
+            from app.db.schema_migrator import SchemaMigrator
+
+            SchemaMigrator(self._database, self._logger).ensure_schema_compatibility()
+
+            # Topic search FTS index
             self._topic_search.ensure_index()
 
         self._run_database_maintenance()
         self._logger.info("db_migrated", extra={"path": self.path})
 
     def create_backup_copy(self, dest_path: str) -> Path:
-        if self.path == ":memory:":
-            msg = "Cannot create a backup for an in-memory database"
-            raise ValueError(msg)
-
-        source = Path(self.path)
-        if not source.exists():
-            msg = f"Database file not found at {self.path}"
-            raise FileNotFoundError(msg)
-
-        destination = Path(dest_path)
-        destination.parent.mkdir(parents=True, exist_ok=True)
-
-        with self.connect() as conn, sqlite3.connect(str(destination)) as dest_conn:
-            conn.backup(dest_conn)
-            dest_conn.commit()
-
-        self._logger.info(
-            "db_backup_copy_created",
-            extra={
-                "source": self._mask_path(str(source)),
-                "dest": self._mask_path(str(destination)),
-            },
-        )
-        return destination
+        """Create a full backup of the database file."""
+        return self._mgr.create_backup_copy(dest_path)
 
     def execute(self, sql: str, params: Iterable | None = None) -> None:
-        params = tuple(params or ())
-        with self._database.connection_context():
-            self._database.execute_sql(sql, params)
-        self._logger.debug("db_execute", extra={"sql": sql, "params": list(params)[:10]})
+        """Execute raw SQL synchronously."""
+        self._mgr.execute(sql, params)
+
+    def fetchone(self, sql: str, params: Iterable | None = None) -> sqlite3.Row | None:
+        """Fetch a single row using raw SQL."""
+        return self._mgr.fetchone(sql, params)
+
+    # ------------------------------------------------------------------
+    # JSON utilities -- static delegates kept for backward compat
+    # ------------------------------------------------------------------
+
+    _normalize_json_container = staticmethod(normalize_json_container)
+    _prepare_json_payload = staticmethod(prepare_json_payload)
+    _normalize_legacy_json_value = staticmethod(normalize_legacy_json_value)
+
+    def _decode_json_field(self, value: Any) -> tuple[Any | None, str | None]:
+        """Decode JSON field with security validation.
+
+        Delegates to ``app.db.json_utils.decode_json_field`` with instance config.
+        """
+        return decode_json_field(
+            value,
+            max_size=self.json_max_size,
+            max_depth=self.json_max_depth,
+            max_array_length=self.json_max_array_length,
+            max_dict_keys=self.json_max_dict_keys,
+        )
+
+    # ------------------------------------------------------------------
+    # Diagnostics / maintenance delegates
+    # ------------------------------------------------------------------
+
+    def get_database_overview(self) -> dict[str, Any]:
+        return self._diagnostics.get_database_overview()
+
+    def verify_processing_integrity(
+        self,
+        *,
+        required_fields: Iterable[str] | None = None,
+        limit: int | None = None,
+    ) -> dict[str, Any]:
+        return self._diagnostics.verify_processing_integrity(
+            required_fields=required_fields,
+            limit=limit,
+        )
+
+    def _run_database_maintenance(self) -> None:
+        """Run database maintenance operations (ANALYZE, VACUUM)."""
+        self._maintenance.run_maintenance()
+
+    def _run_analyze(self) -> None:
+        """Run ANALYZE to update query planner statistics."""
+        self._maintenance.run_analyze()
+
+    def _run_vacuum(self) -> None:
+        """Run VACUUM to reclaim disk space and defragment."""
+        self._maintenance.run_vacuum()
+
+    # ------------------------------------------------------------------
+    # Helpers
+    # ------------------------------------------------------------------
+
+    def _mask_path(self, path: str) -> str:
+        try:
+            p = Path(path)
+            if not p.name:
+                return str(p)
+            parent = p.parent.name
+            if parent:
+                return f".../{parent}/{p.name}"
+            return p.name
+        except (OSError, ValueError, AttributeError):
+            return "..."
+
+    @staticmethod
+    def _convert_bool_fields(data: dict[str, Any], fields: Iterable[str]) -> None:
+        for field_name in fields:
+            if field_name in data and data[field_name] is not None:
+                data[field_name] = int(bool(data[field_name]))
+
+    # Topic search helpers -- static delegates for backward compat
+    _yield_topic_fragments = staticmethod(yield_topic_fragments)
+    _summary_matches_topic = staticmethod(summary_matches_topic)
+
+    # ------------------------------------------------------------------
+    # User / Chat upserts
+    # ------------------------------------------------------------------
+
+    def upsert_user(
+        self, *, telegram_user_id: int, username: str | None = None, is_owner: bool = False
+    ) -> None:
+        User.insert(
+            telegram_user_id=telegram_user_id,
+            username=username,
+            is_owner=is_owner,
+        ).on_conflict(
+            conflict_target=[User.telegram_user_id],
+            update={"username": username, "is_owner": is_owner},
+        ).execute()
+
+    def upsert_chat(
+        self,
+        *,
+        chat_id: int,
+        type_: str,
+        title: str | None = None,
+        username: str | None = None,
+    ) -> None:
+        Chat.insert(
+            chat_id=chat_id,
+            type=type_,
+            title=title,
+            username=username,
+        ).on_conflict(
+            conflict_target=[Chat.chat_id],
+            update={
+                "type": type_,
+                "title": title,
+                "username": username,
+            },
+        ).execute()
+
+    # ------------------------------------------------------------------
+    # User interaction CRUD
+    # ------------------------------------------------------------------
 
     def insert_user_interaction(
         self,
@@ -531,207 +402,6 @@ class Database:
         )
         return created.id
 
-    def fetchone(self, sql: str, params: Iterable | None = None) -> sqlite3.Row | None:
-        params = tuple(params or ())
-        with self._database.connection_context():
-            cursor = self._database.execute_sql(sql, params)
-            return cursor.fetchone()
-
-    def get_database_overview(self) -> dict[str, Any]:
-        return self._diagnostics.get_database_overview()
-
-    def _mask_path(self, path: str) -> str:
-        try:
-            p = Path(path)
-            if not p.name:
-                return str(p)
-            parent = p.parent.name
-            if parent:
-                return f".../{parent}/{p.name}"
-            return p.name
-        except (OSError, ValueError, AttributeError):
-            return "..."
-
-    @staticmethod
-    def _convert_bool_fields(data: dict[str, Any], fields: Iterable[str]) -> None:
-        for field_name in fields:
-            if field_name in data and data[field_name] is not None:
-                data[field_name] = int(bool(data[field_name]))
-
-    def verify_processing_integrity(
-        self,
-        *,
-        required_fields: Iterable[str] | None = None,
-        limit: int | None = None,
-    ) -> dict[str, Any]:
-        return self._diagnostics.verify_processing_integrity(
-            required_fields=required_fields,
-            limit=limit,
-        )
-
-    def get_request_by_dedupe_hash(self, dedupe_hash: str) -> dict[str, Any] | None:
-        request = Request.get_or_none(Request.dedupe_hash == dedupe_hash)
-        return model_to_dict(request)
-
-    async def async_get_request_by_dedupe_hash(self, dedupe_hash: str) -> dict[str, Any] | None:
-        """Async wrapper for :meth:`get_request_by_dedupe_hash`."""
-        return await self._safe_db_operation(
-            self.get_request_by_dedupe_hash,
-            dedupe_hash,
-            operation_name="get_request_by_dedupe_hash",
-            read_only=True,
-        )
-
-    def get_request_by_id(self, request_id: int) -> dict[str, Any] | None:
-        request = Request.get_or_none(Request.id == request_id)
-        return model_to_dict(request)
-
-    async def async_get_request_by_id(self, request_id: int) -> dict[str, Any] | None:
-        """Async wrapper for :meth:`get_request_by_id`."""
-        return await self._safe_db_operation(
-            self.get_request_by_id,
-            request_id,
-            operation_name="get_request_by_id",
-            read_only=True,
-        )
-
-    def get_crawl_result_by_request(self, request_id: int) -> dict[str, Any] | None:
-        result = CrawlResult.get_or_none(CrawlResult.request == request_id)
-        data = model_to_dict(result)
-        if data:
-            self._convert_bool_fields(data, ["firecrawl_success"])
-        return data
-
-    async def async_get_crawl_result_by_request(self, request_id: int) -> dict[str, Any] | None:
-        """Async wrapper for :meth:`get_crawl_result_by_request`."""
-        return await self._safe_db_operation(
-            self.get_crawl_result_by_request,
-            request_id,
-            operation_name="get_crawl_result_by_request",
-            read_only=True,
-        )
-
-    def get_summary_by_request(self, request_id: int) -> dict[str, Any] | None:
-        summary = Summary.get_or_none(Summary.request == request_id)
-        data = model_to_dict(summary)
-        if data:
-            self._convert_bool_fields(data, ["is_read"])
-        return data
-
-    async def async_get_summary_by_request(self, request_id: int) -> dict[str, Any] | None:
-        """Async wrapper for :meth:`get_summary_by_request`."""
-        return await self._safe_db_operation(
-            self.get_summary_by_request,
-            request_id,
-            operation_name="get_summary_by_request",
-            read_only=True,
-        )
-
-    def get_summary_by_id(self, summary_id: int) -> dict[str, Any] | None:
-        """Get a summary by its ID, including request_id."""
-        summary = (
-            Summary.select(Summary, Request).join(Request).where(Summary.id == summary_id).first()
-        )
-        if not summary:
-            return None
-
-        data = model_to_dict(summary)
-        if data:
-            # Add request_id from the foreign key
-            if "request" in data:
-                data["request_id"] = data["request"]
-            self._convert_bool_fields(data, ["is_read"])
-        return data
-
-    async def async_get_summary_by_id(self, summary_id: int) -> dict[str, Any] | None:
-        """Async wrapper for :meth:`get_summary_by_id`."""
-        return await self._safe_db_operation(
-            self.get_summary_by_id,
-            summary_id,
-            operation_name="get_summary_by_id",
-            read_only=True,
-        )
-
-    def mark_summary_as_read_by_id(self, summary_id: int) -> None:
-        """Mark a summary as read by its ID.
-
-        Args:
-            summary_id: The ID of the summary to mark as read.
-
-        """
-        with self._database.connection_context():
-            Summary.update({Summary.is_read: True}).where(Summary.id == summary_id).execute()
-
-    async def async_mark_summary_as_read(self, summary_id: int) -> None:
-        """Async wrapper for :meth:`mark_summary_as_read_by_id`."""
-        await self._safe_db_operation(
-            self.mark_summary_as_read_by_id,
-            summary_id,
-            operation_name="mark_summary_as_read",
-        )
-
-    def mark_summary_as_unread_by_id(self, summary_id: int) -> None:
-        """Mark a summary as unread by its ID.
-
-        Args:
-            summary_id: The ID of the summary to mark as unread.
-
-        """
-        with self._database.connection_context():
-            Summary.update({Summary.is_read: False}).where(Summary.id == summary_id).execute()
-
-    async def async_mark_summary_as_unread(self, summary_id: int) -> None:
-        """Async wrapper for :meth:`mark_summary_as_unread_by_id`."""
-        await self._safe_db_operation(
-            self.mark_summary_as_unread_by_id,
-            summary_id,
-            operation_name="mark_summary_as_unread",
-        )
-
-    def get_request_by_forward(
-        self,
-        fwd_chat_id: int,
-        fwd_msg_id: int,
-    ) -> dict[str, Any] | None:
-        request = Request.get_or_none(
-            (Request.fwd_from_chat_id == fwd_chat_id) & (Request.fwd_from_msg_id == fwd_msg_id)
-        )
-        return model_to_dict(request)
-
-    def upsert_user(
-        self, *, telegram_user_id: int, username: str | None = None, is_owner: bool = False
-    ) -> None:
-        User.insert(
-            telegram_user_id=telegram_user_id,
-            username=username,
-            is_owner=is_owner,
-        ).on_conflict(
-            conflict_target=[User.telegram_user_id],
-            update={"username": username, "is_owner": is_owner},
-        ).execute()
-
-    def upsert_chat(
-        self,
-        *,
-        chat_id: int,
-        type_: str,
-        title: str | None = None,
-        username: str | None = None,
-    ) -> None:
-        Chat.insert(
-            chat_id=chat_id,
-            type=type_,
-            title=title,
-            username=username,
-        ).on_conflict(
-            conflict_target=[Chat.chat_id],
-            update={
-                "type": type_,
-                "title": title,
-                "username": username,
-            },
-        ).execute()
-
     def update_user_interaction(
         self,
         interaction_id: int,
@@ -752,7 +422,7 @@ class Database:
             processing_time_ms,
             request_id,
         )
-        if updates and any(field is not None for field in legacy_fields):
+        if updates and any(f is not None for f in legacy_fields):
             msg = "Cannot mix explicit field arguments with the updates mapping"
             raise ValueError(msg)
 
@@ -825,15 +495,7 @@ class Database:
         uid: int,
         limit: int = 10,
     ) -> list[dict[str, Any]]:
-        """Get recent user interactions for a user.
-
-        Args:
-            uid: The user ID to query
-            limit: Maximum number of interactions to return (default 10)
-
-        Returns:
-            List of interaction dictionaries, ordered by most recent first
-        """
+        """Get recent user interactions for a user."""
         interactions = (
             UserInteraction.select()
             .where(UserInteraction.user_id == uid)
@@ -841,6 +503,10 @@ class Database:
             .limit(limit)
         )
         return [model_to_dict(interaction) for interaction in interactions]
+
+    # ------------------------------------------------------------------
+    # Request CRUD
+    # ------------------------------------------------------------------
 
     def create_request(
         self,
@@ -901,6 +567,42 @@ class Database:
                     return existing.id
             raise
 
+    def get_request_by_dedupe_hash(self, dedupe_hash: str) -> dict[str, Any] | None:
+        request = Request.get_or_none(Request.dedupe_hash == dedupe_hash)
+        return model_to_dict(request)
+
+    async def async_get_request_by_dedupe_hash(self, dedupe_hash: str) -> dict[str, Any] | None:
+        """Async wrapper for :meth:`get_request_by_dedupe_hash`."""
+        return await self._safe_db_operation(
+            self.get_request_by_dedupe_hash,
+            dedupe_hash,
+            operation_name="get_request_by_dedupe_hash",
+            read_only=True,
+        )
+
+    def get_request_by_id(self, request_id: int) -> dict[str, Any] | None:
+        request = Request.get_or_none(Request.id == request_id)
+        return model_to_dict(request)
+
+    async def async_get_request_by_id(self, request_id: int) -> dict[str, Any] | None:
+        """Async wrapper for :meth:`get_request_by_id`."""
+        return await self._safe_db_operation(
+            self.get_request_by_id,
+            request_id,
+            operation_name="get_request_by_id",
+            read_only=True,
+        )
+
+    def get_request_by_forward(
+        self,
+        fwd_chat_id: int,
+        fwd_msg_id: int,
+    ) -> dict[str, Any] | None:
+        request = Request.get_or_none(
+            (Request.fwd_from_chat_id == fwd_chat_id) & (Request.fwd_from_msg_id == fwd_msg_id)
+        )
+        return model_to_dict(request)
+
     def update_request_status(self, request_id: int, status: str) -> None:
         with self._database.connection_context():
             Request.update({Request.status: status}).where(Request.id == request_id).execute()
@@ -945,47 +647,25 @@ class Database:
         with self._database.connection_context():
             Request.update({Request.lang_detected: lang}).where(Request.id == request_id).execute()
 
-    def insert_telegram_message(
-        self,
-        *,
-        request_id: int,
-        message_id: int | None,
-        chat_id: int | None,
-        date_ts: int | None,
-        text_full: str | None,
-        entities_json: JSONValue,
-        media_type: str | None,
-        media_file_ids_json: JSONValue,
-        forward_from_chat_id: int | None,
-        forward_from_chat_type: str | None,
-        forward_from_chat_title: str | None,
-        forward_from_message_id: int | None,
-        forward_date_ts: int | None,
-        telegram_raw_json: JSONValue,
-    ) -> int:
-        try:
-            message = TelegramMessage.create(
-                request=request_id,
-                message_id=message_id,
-                chat_id=chat_id,
-                date_ts=date_ts,
-                text_full=text_full,
-                entities_json=self._prepare_json_payload(entities_json),
-                media_type=media_type,
-                media_file_ids_json=self._prepare_json_payload(media_file_ids_json),
-                forward_from_chat_id=forward_from_chat_id,
-                forward_from_chat_type=forward_from_chat_type,
-                forward_from_chat_title=forward_from_chat_title,
-                forward_from_message_id=forward_from_message_id,
-                forward_date_ts=forward_date_ts,
-                telegram_raw_json=self._prepare_json_payload(telegram_raw_json),
-            )
-            return message.id
-        except peewee.IntegrityError:
-            existing = TelegramMessage.get_or_none(TelegramMessage.request == request_id)
-            if existing:
-                return existing.id
-            raise
+    # ------------------------------------------------------------------
+    # Crawl result CRUD
+    # ------------------------------------------------------------------
+
+    def get_crawl_result_by_request(self, request_id: int) -> dict[str, Any] | None:
+        result = CrawlResult.get_or_none(CrawlResult.request == request_id)
+        data = model_to_dict(result)
+        if data:
+            self._convert_bool_fields(data, ["firecrawl_success"])
+        return data
+
+    async def async_get_crawl_result_by_request(self, request_id: int) -> dict[str, Any] | None:
+        """Async wrapper for :meth:`get_crawl_result_by_request`."""
+        return await self._safe_db_operation(
+            self.get_crawl_result_by_request,
+            request_id,
+            operation_name="get_crawl_result_by_request",
+            read_only=True,
+        )
 
     def insert_crawl_result(
         self,
@@ -1040,6 +720,56 @@ class Database:
             if existing:
                 return existing.id
             raise
+
+    # ------------------------------------------------------------------
+    # Telegram message CRUD
+    # ------------------------------------------------------------------
+
+    def insert_telegram_message(
+        self,
+        *,
+        request_id: int,
+        message_id: int | None,
+        chat_id: int | None,
+        date_ts: int | None,
+        text_full: str | None,
+        entities_json: JSONValue,
+        media_type: str | None,
+        media_file_ids_json: JSONValue,
+        forward_from_chat_id: int | None,
+        forward_from_chat_type: str | None,
+        forward_from_chat_title: str | None,
+        forward_from_message_id: int | None,
+        forward_date_ts: int | None,
+        telegram_raw_json: JSONValue,
+    ) -> int:
+        try:
+            message = TelegramMessage.create(
+                request=request_id,
+                message_id=message_id,
+                chat_id=chat_id,
+                date_ts=date_ts,
+                text_full=text_full,
+                entities_json=self._prepare_json_payload(entities_json),
+                media_type=media_type,
+                media_file_ids_json=self._prepare_json_payload(media_file_ids_json),
+                forward_from_chat_id=forward_from_chat_id,
+                forward_from_chat_type=forward_from_chat_type,
+                forward_from_chat_title=forward_from_chat_title,
+                forward_from_message_id=forward_from_message_id,
+                forward_date_ts=forward_date_ts,
+                telegram_raw_json=self._prepare_json_payload(telegram_raw_json),
+            )
+            return message.id
+        except peewee.IntegrityError:
+            existing = TelegramMessage.get_or_none(TelegramMessage.request == request_id)
+            if existing:
+                return existing.id
+            raise
+
+    # ------------------------------------------------------------------
+    # LLM call CRUD
+    # ------------------------------------------------------------------
 
     def insert_llm_call(
         self,
@@ -1111,6 +841,50 @@ class Database:
             .first()
         )
         return call.model if call else None
+
+    # ------------------------------------------------------------------
+    # Summary CRUD
+    # ------------------------------------------------------------------
+
+    def get_summary_by_request(self, request_id: int) -> dict[str, Any] | None:
+        summary = Summary.get_or_none(Summary.request == request_id)
+        data = model_to_dict(summary)
+        if data:
+            self._convert_bool_fields(data, ["is_read"])
+        return data
+
+    async def async_get_summary_by_request(self, request_id: int) -> dict[str, Any] | None:
+        """Async wrapper for :meth:`get_summary_by_request`."""
+        return await self._safe_db_operation(
+            self.get_summary_by_request,
+            request_id,
+            operation_name="get_summary_by_request",
+            read_only=True,
+        )
+
+    def get_summary_by_id(self, summary_id: int) -> dict[str, Any] | None:
+        """Get a summary by its ID, including request_id."""
+        summary = (
+            Summary.select(Summary, Request).join(Request).where(Summary.id == summary_id).first()
+        )
+        if not summary:
+            return None
+
+        data = model_to_dict(summary)
+        if data:
+            if "request" in data:
+                data["request_id"] = data["request"]
+            self._convert_bool_fields(data, ["is_read"])
+        return data
+
+    async def async_get_summary_by_id(self, summary_id: int) -> dict[str, Any] | None:
+        """Async wrapper for :meth:`get_summary_by_id`."""
+        return await self._safe_db_operation(
+            self.get_summary_by_id,
+            summary_id,
+            operation_name="get_summary_by_id",
+            read_only=True,
+        )
 
     def insert_summary(
         self,
@@ -1189,101 +963,43 @@ class Database:
             Summary.request == request_id
         ).execute()
 
-    def create_or_update_summary_embedding(
-        self,
-        summary_id: int,
-        embedding_blob: bytes,
-        model_name: str,
-        model_version: str,
-        dimensions: int,
-        language: str | None = None,
-    ) -> None:
-        """Store or update embedding for a summary.
+    def mark_summary_as_read_by_id(self, summary_id: int) -> None:
+        """Mark a summary as read by its ID."""
+        with self._database.connection_context():
+            Summary.update({Summary.is_read: True}).where(Summary.id == summary_id).execute()
 
-        Args:
-            summary_id: ID of the summary to associate embedding with
-            embedding_blob: Serialized embedding data (pickled numpy array)
-            model_name: Name of the embedding model used
-            model_version: Version of the embedding model
-            dimensions: Number of dimensions in the embedding vector
-            language: Language code (en, ru, auto, etc.)
-        """
-        try:
-            # Try to create new embedding
-            SummaryEmbedding.create(
-                summary=summary_id,
-                embedding_blob=embedding_blob,
-                model_name=model_name,
-                model_version=model_version,
-                dimensions=dimensions,
-                language=language,
-            )
-        except peewee.IntegrityError:
-            # Embedding exists, update it
-            SummaryEmbedding.update(
-                {
-                    SummaryEmbedding.embedding_blob: embedding_blob,
-                    SummaryEmbedding.model_name: model_name,
-                    SummaryEmbedding.model_version: model_version,
-                    SummaryEmbedding.dimensions: dimensions,
-                    SummaryEmbedding.language: language,
-                    SummaryEmbedding.created_at: dt.datetime.now(UTC),
-                }
-            ).where(SummaryEmbedding.summary == summary_id).execute()
-
-    async def async_create_or_update_summary_embedding(
-        self,
-        summary_id: int,
-        embedding_blob: bytes,
-        model_name: str,
-        model_version: str,
-        dimensions: int,
-        language: str | None = None,
-    ) -> None:
-        """Asynchronously store or update embedding for a summary."""
+    async def async_mark_summary_as_read(self, summary_id: int) -> None:
+        """Async wrapper for :meth:`mark_summary_as_read_by_id`."""
         await self._safe_db_operation(
-            self.create_or_update_summary_embedding,
-            summary_id=summary_id,
-            embedding_blob=embedding_blob,
-            model_name=model_name,
-            model_version=model_version,
-            dimensions=dimensions,
-            language=language,
-            operation_name="create_or_update_summary_embedding",
+            self.mark_summary_as_read_by_id,
+            summary_id,
+            operation_name="mark_summary_as_read",
         )
 
-    def get_summary_embedding(self, summary_id: int) -> dict[str, Any] | None:
-        """Retrieve embedding for a summary.
+    def mark_summary_as_unread_by_id(self, summary_id: int) -> None:
+        """Mark a summary as unread by its ID."""
+        with self._database.connection_context():
+            Summary.update({Summary.is_read: False}).where(Summary.id == summary_id).execute()
 
-        Returns:
-            Dictionary with keys: embedding_blob, model_name, model_version, dimensions, language, created_at
-            None if no embedding exists
-        """
-        embedding = SummaryEmbedding.get_or_none(SummaryEmbedding.summary == summary_id)
-        if embedding is None:
-            return None
-        return {
-            "embedding_blob": embedding.embedding_blob,
-            "model_name": embedding.model_name,
-            "model_version": embedding.model_version,
-            "dimensions": embedding.dimensions,
-            "language": embedding.language,
-            "created_at": embedding.created_at,
-        }
-
-    async def async_get_summary_embedding(self, summary_id: int) -> dict[str, Any] | None:
-        """Asynchronously retrieve embedding for a summary."""
-        return await self._safe_db_operation(
-            self.get_summary_embedding,
-            summary_id=summary_id,
-            operation_name="get_summary_embedding",
-            read_only=True,
+    async def async_mark_summary_as_unread(self, summary_id: int) -> None:
+        """Async wrapper for :meth:`mark_summary_as_unread_by_id`."""
+        await self._safe_db_operation(
+            self.mark_summary_as_unread_by_id,
+            summary_id,
+            operation_name="mark_summary_as_unread",
         )
 
-    # Topic search helpers are now delegated to app.services.topic_search_utils
-    # These static methods are kept for backward compatibility
-    _yield_topic_fragments = staticmethod(yield_topic_fragments)
-    _summary_matches_topic = staticmethod(summary_matches_topic)
+    def mark_summary_as_read(self, request_id: int) -> None:
+        with self._database.connection_context():
+            Summary.update({Summary.is_read: True}).where(Summary.request == request_id).execute()
+
+    def get_read_status(self, request_id: int) -> bool:
+        summary = Summary.get_or_none(Summary.request == request_id)
+        return bool(summary.is_read) if summary else False
+
+    # ------------------------------------------------------------------
+    # Unread summaries (with topic search)
+    # ------------------------------------------------------------------
 
     def get_unread_summaries(
         self,
@@ -1359,18 +1075,7 @@ class Database:
         limit: int = 10,
         topic: str | None = None,
     ) -> list[dict[str, Any]]:
-        """Async wrapper for :meth:`get_unread_summaries`.
-
-        Args:
-            uid: Optional user ID filter.
-            cid: Optional chat ID filter.
-            limit: Maximum number of summaries to return.
-            topic: Optional topic filter for searching summaries.
-
-        Returns:
-            List of unread summary dictionaries.
-
-        """
+        """Async wrapper for :meth:`get_unread_summaries`."""
         return await self._safe_db_operation(
             self.get_unread_summaries,
             user_id=uid,
@@ -1399,13 +1104,88 @@ class Database:
         self._convert_bool_fields(data, ["is_read"])
         return data
 
-    def mark_summary_as_read(self, request_id: int) -> None:
-        with self._database.connection_context():
-            Summary.update({Summary.is_read: True}).where(Summary.request == request_id).execute()
+    # ------------------------------------------------------------------
+    # Summary embedding CRUD
+    # ------------------------------------------------------------------
 
-    def get_read_status(self, request_id: int) -> bool:
-        summary = Summary.get_or_none(Summary.request == request_id)
-        return bool(summary.is_read) if summary else False
+    def create_or_update_summary_embedding(
+        self,
+        summary_id: int,
+        embedding_blob: bytes,
+        model_name: str,
+        model_version: str,
+        dimensions: int,
+        language: str | None = None,
+    ) -> None:
+        """Store or update embedding for a summary."""
+        try:
+            SummaryEmbedding.create(
+                summary=summary_id,
+                embedding_blob=embedding_blob,
+                model_name=model_name,
+                model_version=model_version,
+                dimensions=dimensions,
+                language=language,
+            )
+        except peewee.IntegrityError:
+            SummaryEmbedding.update(
+                {
+                    SummaryEmbedding.embedding_blob: embedding_blob,
+                    SummaryEmbedding.model_name: model_name,
+                    SummaryEmbedding.model_version: model_version,
+                    SummaryEmbedding.dimensions: dimensions,
+                    SummaryEmbedding.language: language,
+                    SummaryEmbedding.created_at: dt.datetime.now(UTC),
+                }
+            ).where(SummaryEmbedding.summary == summary_id).execute()
+
+    async def async_create_or_update_summary_embedding(
+        self,
+        summary_id: int,
+        embedding_blob: bytes,
+        model_name: str,
+        model_version: str,
+        dimensions: int,
+        language: str | None = None,
+    ) -> None:
+        """Asynchronously store or update embedding for a summary."""
+        await self._safe_db_operation(
+            self.create_or_update_summary_embedding,
+            summary_id=summary_id,
+            embedding_blob=embedding_blob,
+            model_name=model_name,
+            model_version=model_version,
+            dimensions=dimensions,
+            language=language,
+            operation_name="create_or_update_summary_embedding",
+        )
+
+    def get_summary_embedding(self, summary_id: int) -> dict[str, Any] | None:
+        """Retrieve embedding for a summary."""
+        embedding = SummaryEmbedding.get_or_none(SummaryEmbedding.summary == summary_id)
+        if embedding is None:
+            return None
+        return {
+            "embedding_blob": embedding.embedding_blob,
+            "model_name": embedding.model_name,
+            "model_version": embedding.model_version,
+            "dimensions": embedding.dimensions,
+            "language": embedding.language,
+            "created_at": embedding.created_at,
+        }
+
+    async def async_get_summary_embedding(self, summary_id: int) -> dict[str, Any] | None:
+        """Asynchronously retrieve embedding for a summary."""
+        return await self._safe_db_operation(
+            self.get_summary_embedding,
+            summary_id=summary_id,
+            operation_name="get_summary_embedding",
+            read_only=True,
+        )
+
+    # ------------------------------------------------------------------
+    # Audit log
+    # ------------------------------------------------------------------
 
     def insert_audit_log(
         self,
@@ -1421,87 +1201,9 @@ class Database:
         )
         return entry.id
 
-    # -- internal helpers -------------------------------------------------
-
-    def _coerce_json_columns(self) -> None:
-        columns_map: dict[str, tuple[str, ...]] = {
-            "telegram_messages": (
-                "entities_json",
-                "media_file_ids_json",
-                "telegram_raw_json",
-            ),
-            "crawl_results": (
-                "options_json",
-                "structured_json",
-                "metadata_json",
-                "links_json",
-                "screenshots_paths_json",
-                "firecrawl_details_json",
-                "raw_response_json",
-            ),
-            "llm_calls": (
-                "request_headers_json",
-                "request_messages_json",
-                "response_json",
-                "openrouter_response_json",
-                "error_context_json",
-            ),
-            "summaries": ("json_payload", "insights_json"),
-            "audit_logs": ("details_json",),
-        }
-        tables = set(self._database.get_tables())
-        for table, columns in columns_map.items():
-            if table not in tables:
-                continue
-            for column in columns:
-                self._coerce_json_column(table, column)
-
-    def _coerce_json_column(self, table: str, column: str) -> None:
-        model = next((m for m in ALL_MODELS if m._meta.table_name == table), None)
-        if model is None:
-            return
-        field = getattr(model, column)
-
-        # Wrap the entire migration in a transaction for atomicity
-        with self._database.atomic():
-            query = model.select(model.id, field).where(field.is_null(False)).tuples()
-            updates = 0
-            wrapped = 0
-            blanks = 0
-
-            try:
-                for row_id, raw_value in query:
-                    normalized, should_update, reason = self._normalize_legacy_json_value(raw_value)
-                    if not should_update:
-                        continue
-                    if reason == "invalid_json" and isinstance(raw_value, str):
-                        wrapped += 1
-                    if reason == "blank":
-                        blanks += 1
-                    model.update({field: normalized}).where(model.id == row_id).execute()
-                    updates += 1
-            except Exception as exc:
-                self._logger.exception(
-                    "json_column_coercion_failed",
-                    extra={
-                        "table": table,
-                        "column": column,
-                        "error": str(exc),
-                        "rows_processed": updates,
-                    },
-                )
-                # Transaction will be rolled back automatically
-                raise
-
-        if updates:
-            extra: dict[str, Any] = {"table": table, "column": column, "rows": updates}
-            if wrapped:
-                extra["wrapped"] = wrapped
-            if blanks:
-                extra["blanks"] = blanks
-            self._logger.info("json_column_coerced", extra=extra)
-
-    # ==================== Video Download Methods ====================
+    # ------------------------------------------------------------------
+    # Video download delegates
+    # ------------------------------------------------------------------
 
     def create_video_download(self, request_id: int, video_id: str, status: str = "pending") -> int:
         """Create a new video download record."""
@@ -1533,20 +1235,3 @@ class Database:
     def update_video_download(self, download_id: int, **kwargs) -> None:
         """Update video download with arbitrary fields."""
         self._video_downloads.update_video_download(download_id, **kwargs)
-
-    # ================================================================
-
-    # ==================== Maintenance Methods ====================
-    # These delegate to the DatabaseMaintenance class
-
-    def _run_database_maintenance(self) -> None:
-        """Run database maintenance operations (ANALYZE, VACUUM)."""
-        self._maintenance.run_maintenance()
-
-    def _run_analyze(self) -> None:
-        """Run ANALYZE to update query planner statistics."""
-        self._maintenance.run_analyze()
-
-    def _run_vacuum(self) -> None:
-        """Run VACUUM to reclaim disk space and defragment."""
-        self._maintenance.run_vacuum()
