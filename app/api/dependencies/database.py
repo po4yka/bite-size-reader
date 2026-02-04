@@ -48,17 +48,17 @@ def get_session_manager() -> DatabaseSessionManager:
 @lru_cache(maxsize=1)
 def _get_db_config() -> DatabaseConfig:
     """Get database configuration from environment."""
-    return DatabaseConfig(
-        **{
-            key: value
-            for key, value in {
-                "operation_timeout": os.getenv("DB_OPERATION_TIMEOUT"),
-                "max_retries": os.getenv("DB_MAX_RETRIES"),
-                "json_max_size": os.getenv("DB_JSON_MAX_SIZE"),
-                "json_max_depth": os.getenv("DB_JSON_MAX_DEPTH"),
-                "json_max_array_length": os.getenv("DB_JSON_MAX_ARRAY_LENGTH"),
-                "json_max_dict_keys": os.getenv("DB_JSON_MAX_DICT_KEYS"),
-            }.items()
-            if value not in (None, "")
-        }
-    )
+    # Pydantic handles string-to-number coercion at runtime via validation_alias
+    overrides: dict[str, str] = {
+        key: value
+        for key, value in {
+            "DB_OPERATION_TIMEOUT": os.getenv("DB_OPERATION_TIMEOUT"),
+            "DB_MAX_RETRIES": os.getenv("DB_MAX_RETRIES"),
+            "DB_JSON_MAX_SIZE": os.getenv("DB_JSON_MAX_SIZE"),
+            "DB_JSON_MAX_DEPTH": os.getenv("DB_JSON_MAX_DEPTH"),
+            "DB_JSON_MAX_ARRAY_LENGTH": os.getenv("DB_JSON_MAX_ARRAY_LENGTH"),
+            "DB_JSON_MAX_DICT_KEYS": os.getenv("DB_JSON_MAX_DICT_KEYS"),
+        }.items()
+        if value not in (None, "")
+    }
+    return DatabaseConfig.model_validate(overrides)

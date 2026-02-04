@@ -32,6 +32,7 @@ from app.security.file_validation import SecureFileValidator
 from app.security.rate_limiter import RateLimitConfig, RedisUserRateLimiter, UserRateLimiter
 
 if TYPE_CHECKING:
+    from app.adapters.attachment.attachment_processor import AttachmentProcessor
     from app.adapters.external.response_formatter import ResponseFormatter
     from app.adapters.telegram.access_controller import AccessController
     from app.adapters.telegram.command_processor import CommandProcessor
@@ -58,6 +59,7 @@ class MessageRouter:
         response_formatter: ResponseFormatter,
         audit_func: Callable[[str, str, dict], None],
         task_manager: UserTaskManager | None = None,
+        attachment_processor: AttachmentProcessor | None = None,
     ) -> None:
         self.cfg = cfg
         self.db = db
@@ -66,6 +68,7 @@ class MessageRouter:
         self.command_processor = command_processor
         self.url_handler = url_handler
         self.forward_processor = forward_processor
+        self.attachment_processor = attachment_processor
         self.response_formatter = response_formatter
         self._audit = audit_func
         self._task_manager = task_manager
@@ -587,7 +590,12 @@ class MessageRouter:
                         message, correlation_id=correlation_id, interaction_id=interaction_id
                     )
                     return
-                # Media-only forward from user — no text to summarize
+                # Media-only forward from user — check for image/PDF attachment
+                if self.attachment_processor and self._should_handle_attachment(message):
+                    await self.attachment_processor.handle_attachment_flow(
+                        message, correlation_id=correlation_id, interaction_id=interaction_id
+                    )
+                    return
                 logger.info(
                     "forward_skipped_no_text",
                     extra={
@@ -611,6 +619,45 @@ class MessageRouter:
                         logger_=logger,
                     )
                 return
+
+            # Fallback: forward with only forward_date (privacy-restricted channels)
+            # Process if there's text content to summarize
+            fwd_text = (
+                getattr(message, "text", None) or getattr(message, "caption", None) or ""
+            ).strip()
+            if fwd_text:
+                await self.forward_processor.handle_forward_flow(
+                    message, correlation_id=correlation_id, interaction_id=interaction_id
+                )
+                return
+            # Forward with no identifiable source and no text — check for attachment
+            if self.attachment_processor and self._should_handle_attachment(message):
+                await self.attachment_processor.handle_attachment_flow(
+                    message, correlation_id=correlation_id, interaction_id=interaction_id
+                )
+                return
+            logger.info(
+                "forward_skipped_unrecognized",
+                extra={
+                    "cid": correlation_id,
+                    "has_forward_date": getattr(message, "forward_date", None) is not None,
+                },
+            )
+            await self.response_formatter.safe_reply(
+                message,
+                "This forwarded message has no text content to summarize. "
+                "Please forward a message that contains text.",
+            )
+            if interaction_id:
+                await async_safe_update_user_interaction(
+                    self.user_repo,
+                    interaction_id=interaction_id,
+                    response_sent=True,
+                    response_type="forward_no_text",
+                    start_time=start_time,
+                    logger_=logger,
+                )
+            return
 
         # If awaiting a URL due to prior /summarize
         if await self.url_handler.is_awaiting_url(uid) and looks_like_url(text):
@@ -636,6 +683,13 @@ class MessageRouter:
         # Handle document files (.txt files containing URLs)
         if is_txt_file_with_urls(message):
             await handle_document_file(self, message, correlation_id, interaction_id, start_time)
+            return
+
+        # Handle media attachments (images, PDFs)
+        if self.attachment_processor and self._should_handle_attachment(message):
+            await self.attachment_processor.handle_attachment_flow(
+                message, correlation_id=correlation_id, interaction_id=interaction_id
+            )
             return
 
         # Default response for unknown input
@@ -705,3 +759,15 @@ class MessageRouter:
                 },
             )
             return 0
+
+    @staticmethod
+    def _should_handle_attachment(message: Any) -> bool:
+        """Check if the message contains a supported attachment (image or PDF)."""
+        if getattr(message, "photo", None):
+            return True
+        doc = getattr(message, "document", None)
+        if doc:
+            mime = getattr(doc, "mime_type", "") or ""
+            if mime.startswith("image/") or mime == "application/pdf":
+                return True
+        return False

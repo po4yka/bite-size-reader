@@ -177,7 +177,7 @@ async def semantic_search_summaries(
             authorized_request_ids
         )
 
-        results: list[dict[str, object]] = []
+        result_models: list[SearchResult] = []
         for result in search_results.results:
             request = requests_map.get(result.request_id)
             if not request:
@@ -192,42 +192,24 @@ async def semantic_search_summaries(
 
             snippet = result.snippet or json_payload.get("summary_250") or json_payload.get("tldr")
 
-            results.append(
-                {
-                    "request_id": result.request_id,
-                    "summary_id": summary.get("id"),
-                    "url": result.url or request.get("input_url") or request.get("normalized_url"),
-                    "title": result.title or metadata.get("title", "Untitled"),
-                    "domain": metadata.get("domain") or metadata.get("source", ""),
-                    "snippet": snippet,
-                    "tldr": json_payload.get("tldr", ""),
-                    "published_at": metadata.get("published_at") or metadata.get("published"),
-                    "created_at": _isotime(request.get("created_at")),
-                    "relevance_score": result.similarity_score,
-                    "topic_tags": json_payload.get("topic_tags") or result.tags,
-                    "is_read": summary.get("is_read", False),
-                }
+            result_models.append(
+                SearchResult(
+                    request_id=result.request_id,
+                    summary_id=summary.get("id"),
+                    url=result.url or request.get("input_url") or request.get("normalized_url"),
+                    title=result.title or metadata.get("title", "Untitled"),
+                    domain=metadata.get("domain") or metadata.get("source", ""),
+                    snippet=snippet,
+                    tldr=json_payload.get("tldr", ""),
+                    published_at=metadata.get("published_at") or metadata.get("published"),
+                    created_at=_isotime(request.get("created_at")),
+                    relevance_score=result.similarity_score,
+                    topic_tags=json_payload.get("topic_tags") or result.tags,
+                    is_read=summary.get("is_read", False),
+                )
             )
 
-        estimated_total = offset + len(results) + (1 if search_results.has_more else 0)
-
-        result_models = [
-            SearchResult(
-                request_id=item["request_id"],
-                summary_id=item["summary_id"],
-                url=item["url"],
-                title=item["title"],
-                domain=item["domain"],
-                snippet=item["snippet"],
-                tldr=item["tldr"],
-                published_at=item["published_at"],
-                created_at=item["created_at"],
-                relevance_score=item["relevance_score"],
-                topic_tags=item["topic_tags"],
-                is_read=item["is_read"],
-            )
-            for item in results
-        ]
+        estimated_total = offset + len(result_models) + (1 if search_results.has_more else 0)
 
         pagination = PaginationInfo(
             total=estimated_total,

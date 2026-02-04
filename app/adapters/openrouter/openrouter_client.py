@@ -582,7 +582,7 @@ class OpenRouterClient:
 
     async def chat(
         self,
-        messages: list[dict[str, str]],
+        messages: list[dict[str, Any]],
         *,
         temperature: float = 0.2,
         max_tokens: int | None = None,
@@ -945,7 +945,7 @@ class OpenRouterClient:
         client: httpx.AsyncClient,
         model: str,
         attempt: int,
-        sanitized_messages: list[dict[str, str]],
+        sanitized_messages: list[dict[str, Any]],
         request: ChatRequest,
         rf_mode_current: str,
         response_format_current: dict[str, Any] | None,
@@ -1121,7 +1121,7 @@ class OpenRouterClient:
         structured_output_used: bool,
         structured_output_mode_used: str | None,
         headers: dict[str, str],
-        sanitized_messages: list[dict[str, str]],
+        sanitized_messages: list[dict[str, Any]],
         max_tokens: int | None = None,
     ) -> dict[str, Any]:
         """Handle successful API response."""
@@ -1360,7 +1360,7 @@ class OpenRouterClient:
         attempt: int,
         request_id: int | None,
         headers: dict[str, str],
-        sanitized_messages: list[dict[str, str]],
+        sanitized_messages: list[dict[str, Any]],
     ) -> dict[str, Any]:
         """Handle error responses with appropriate retry/fallback logic."""
         # Handle response format errors with graceful degradation

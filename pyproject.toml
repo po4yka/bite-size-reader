@@ -167,6 +167,9 @@ dependencies = [
   "weasyprint>=68.0",
   # MCP (Model Context Protocol) server for OpenClaw and other AI agent integrations
   "mcp>=1.26,<2",
+  # Attachment processing: image handling + PDF extraction
+  "Pillow>=11.0.0",
+  "pymupdf>=1.25.0",
 ]
 
 [project.optional-dependencies]

@@ -787,6 +787,86 @@ class YouTubeConfig(BaseModel):
         return value_str
 
 
+class AttachmentConfig(BaseModel):
+    """Attachment processing configuration for images and PDFs."""
+
+    model_config = ConfigDict(frozen=True, populate_by_name=True)
+
+    enabled: bool = Field(
+        default=True,
+        validation_alias="ATTACHMENT_PROCESSING_ENABLED",
+        description="Enable attachment processing (images, PDFs)",
+    )
+
+    vision_model: str = Field(
+        default="google/gemini-3-flash-preview",
+        validation_alias="ATTACHMENT_VISION_MODEL",
+        description="Vision-capable model for image and scanned PDF analysis",
+    )
+
+    max_image_size_mb: int = Field(
+        default=10,
+        validation_alias="ATTACHMENT_MAX_IMAGE_SIZE_MB",
+        description="Maximum image file size in MB",
+    )
+
+    max_pdf_size_mb: int = Field(
+        default=20,
+        validation_alias="ATTACHMENT_MAX_PDF_SIZE_MB",
+        description="Maximum PDF file size in MB",
+    )
+
+    max_pdf_pages: int = Field(
+        default=50,
+        validation_alias="ATTACHMENT_MAX_PDF_PAGES",
+        description="Maximum PDF pages to process",
+    )
+
+    image_max_dimension: int = Field(
+        default=2048,
+        validation_alias="ATTACHMENT_IMAGE_MAX_DIMENSION",
+        description="Maximum image dimension (width or height) before resizing",
+    )
+
+    storage_path: str = Field(
+        default="/data/attachments",
+        validation_alias="ATTACHMENT_STORAGE_PATH",
+        description="Temporary storage path for downloaded attachments",
+    )
+
+    cleanup_after_hours: int = Field(
+        default=24,
+        validation_alias="ATTACHMENT_CLEANUP_AFTER_HOURS",
+        description="Delete attachment files after this many hours",
+    )
+
+    max_vision_pages_per_pdf: int = Field(
+        default=5,
+        validation_alias="ATTACHMENT_MAX_VISION_PAGES",
+        description="Maximum number of sparse/scanned PDF pages to render for vision LLM",
+    )
+
+    @field_validator(
+        "max_image_size_mb",
+        "max_pdf_size_mb",
+        "max_pdf_pages",
+        "image_max_dimension",
+        "cleanup_after_hours",
+        "max_vision_pages_per_pdf",
+        mode="before",
+    )
+    @classmethod
+    def _parse_int_fields(cls, value: Any, info: ValidationInfo) -> int:
+        if value in (None, ""):
+            default = cls.model_fields[info.field_name].default
+            return int(default)
+        try:
+            return int(str(value))
+        except ValueError as exc:
+            msg = f"{info.field_name.replace('_', ' ')} must be a valid integer"
+            raise ValueError(msg) from exc
+
+
 class TelegramLimitsConfig(BaseModel):
     """Telegram message and URL limits configuration."""
 
@@ -1945,6 +2025,7 @@ class AppConfig:
     openai: OpenAIConfig
     anthropic: AnthropicConfig
     youtube: YouTubeConfig
+    attachment: AttachmentConfig
     runtime: RuntimeConfig
     telegram_limits: TelegramLimitsConfig
     database: DatabaseConfig
@@ -1982,6 +2063,7 @@ class Settings(BaseSettings):
     openai: OpenAIConfig = Field(default_factory=OpenAIConfig)
     anthropic: AnthropicConfig = Field(default_factory=AnthropicConfig)
     youtube: YouTubeConfig = Field(default_factory=YouTubeConfig)
+    attachment: AttachmentConfig = Field(default_factory=AttachmentConfig)
     runtime: RuntimeConfig = Field(default_factory=RuntimeConfig)
     telegram_limits: TelegramLimitsConfig = Field(default_factory=TelegramLimitsConfig)
     database: DatabaseConfig = Field(default_factory=DatabaseConfig)
@@ -2076,6 +2158,7 @@ class Settings(BaseSettings):
             openai=self.openai,
             anthropic=self.anthropic,
             youtube=self.youtube,
+            attachment=self.attachment,
             runtime=self.runtime,
             telegram_limits=self.telegram_limits,
             database=self.database,

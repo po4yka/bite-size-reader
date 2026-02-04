@@ -16,6 +16,7 @@ from app.infrastructure.persistence.sqlite.repositories.audit_log_repository imp
 )
 
 if TYPE_CHECKING:
+    from app.adapters.attachment.attachment_processor import AttachmentProcessor
     from app.adapters.content.url_processor import URLProcessor
     from app.adapters.external.response_formatter import ResponseFormatter
     from app.adapters.telegram.forward_processor import ForwardProcessor
@@ -41,6 +42,7 @@ class MessageHandler:
         local_searcher: LocalTopicSearchService | None = None,
         container: Any | None = None,
         hybrid_search: HybridSearchService | None = None,
+        attachment_processor: AttachmentProcessor | None = None,
     ) -> None:
         self.cfg = cfg
         self.db = db
@@ -87,6 +89,7 @@ class MessageHandler:
             response_formatter=response_formatter,
             audit_func=self._audit,
             task_manager=self.task_manager,
+            attachment_processor=attachment_processor,
         )
 
         # Initialize callback handler for post-summary actions

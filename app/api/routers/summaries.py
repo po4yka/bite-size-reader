@@ -14,10 +14,15 @@ from app.api.exceptions import ResourceNotFoundError
 from app.api.models.requests import UpdateSummaryRequest
 from app.api.models.responses import (
     DeleteSummaryResponse,
+    PaginationInfo,
     SummaryCompact,
     SummaryContent,
     SummaryContentData,
     SummaryDetail,
+    SummaryDetailProcessing,
+    SummaryDetailRequest,
+    SummaryDetailSource,
+    SummaryDetailSummary,
     SummaryListResponse,
     SummaryListStats,
     ToggleFavoriteResponse,
@@ -148,12 +153,12 @@ async def get_summaries(
             )
         )
 
-    pagination = {
-        "total": total,
-        "limit": limit,
-        "offset": offset,
-        "has_more": (offset + limit) < total,
-    }
+    pagination = PaginationInfo(
+        total=total,
+        limit=limit,
+        offset=offset,
+        has_more=(offset + limit) < total,
+    )
 
     return success_response(
         SummaryListResponse(
@@ -307,10 +312,10 @@ async def get_summary(
 
     return success_response(
         SummaryDetail(
-            summary=summary_detail,
-            request=request_detail,
-            source=source_detail,
-            processing=processing_detail,
+            summary=SummaryDetailSummary(**summary_detail),
+            request=SummaryDetailRequest(**request_detail),
+            source=SummaryDetailSource(**source_detail),
+            processing=SummaryDetailProcessing(**processing_detail),
         )
     )
 

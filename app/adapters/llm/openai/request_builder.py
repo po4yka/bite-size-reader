@@ -65,7 +65,7 @@ class OpenAIRequestBuilder:
     def build_request_body(
         self,
         model: str,
-        messages: list[dict[str, str]],
+        messages: list[dict[str, Any]],
         *,
         temperature: float = 0.2,
         max_tokens: int | None = None,
@@ -145,14 +145,14 @@ class OpenAIRequestBuilder:
             redacted["Authorization"] = "Bearer [REDACTED]"
         return redacted
 
-    def sanitize_messages(self, messages: list[dict[str, str]]) -> list[dict[str, str]]:
+    def sanitize_messages(self, messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """Sanitize messages for logging/storage."""
         sanitized = []
         for msg in messages:
             sanitized_msg = dict(msg)
             # Truncate very long content for logging
             content = sanitized_msg.get("content", "")
-            if len(content) > 1000:
+            if isinstance(content, str) and len(content) > 1000:
                 sanitized_msg["content"] = content[:1000] + "...[truncated]"
             sanitized.append(sanitized_msg)
         return sanitized

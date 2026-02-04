@@ -202,7 +202,7 @@ class RequestBuilder:
                 },
             )
 
-    def sanitize_messages(self, messages: list[dict[str, str]]) -> list[dict[str, str]]:
+    def sanitize_messages(self, messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """Sanitize user content to prevent prompt injection."""
         patterns = [
             r"(?i)ignore previous instructions",
@@ -216,15 +216,24 @@ class RequestBuilder:
         sanitized_messages = []
         for msg in messages:
             if msg["role"] == "user":
-                sanitized_content = msg["content"]
-                for pat in patterns:
-                    sanitized_content = re.sub(
-                        pat,
-                        "",
-                        sanitized_content,
-                    )
-                if sanitized_content != msg["content"]:
-                    msg = {**msg, "content": sanitized_content}
+                content = msg["content"]
+                if isinstance(content, str):
+                    sanitized_content = content
+                    for pat in patterns:
+                        sanitized_content = re.sub(pat, "", sanitized_content)
+                    if sanitized_content != content:
+                        msg = {**msg, "content": sanitized_content}
+                elif isinstance(content, list):
+                    sanitized_parts = []
+                    for part in content:
+                        if part.get("type") == "text" and isinstance(part.get("text"), str):
+                            sanitized_text = part["text"]
+                            for pat in patterns:
+                                sanitized_text = re.sub(pat, "", sanitized_text)
+                            sanitized_parts.append({**part, "text": sanitized_text})
+                        else:
+                            sanitized_parts.append(part)
+                    msg = {**msg, "content": sanitized_parts}
             sanitized_messages.append(msg)
         return sanitized_messages
 
@@ -240,7 +249,7 @@ class RequestBuilder:
     def build_request_body(
         self,
         model: str,
-        messages: list[dict[str, str]],
+        messages: list[dict[str, Any]],
         request: ChatRequest,
         response_format: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
@@ -326,7 +335,7 @@ class RequestBuilder:
         return {"type": "json_object"}
 
     def should_apply_compression(
-        self, messages: list[dict[str, str]], model: str
+        self, messages: list[dict[str, Any]], model: str
     ) -> tuple[bool, str | None]:
         """Determine if content compression should be applied."""
         total_content_length = sum(len(msg.get("content", "")) for msg in messages)

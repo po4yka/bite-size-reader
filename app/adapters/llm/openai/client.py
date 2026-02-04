@@ -250,7 +250,7 @@ class OpenAIClient:
 
     async def chat(
         self,
-        messages: list[dict[str, str]],
+        messages: list[dict[str, Any]],
         *,
         temperature: float = 0.2,
         max_tokens: int | None = None,
@@ -370,7 +370,7 @@ class OpenAIClient:
         self,
         client: httpx.AsyncClient,
         model: str,
-        messages: list[dict[str, str]],
+        messages: list[dict[str, Any]],
         temperature: float,
         max_tokens: int | None,
         top_p: float | None,
@@ -490,7 +490,7 @@ class OpenAIClient:
         model: str,
         latency: int,
         headers: dict[str, str],
-        messages: list[dict[str, str]],
+        messages: list[dict[str, Any]],
     ) -> LLMCallResult:
         """Parse a successful API response."""
         choices = data.get("choices", [])

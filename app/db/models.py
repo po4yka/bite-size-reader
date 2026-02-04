@@ -381,6 +381,34 @@ class VideoDownload(BaseModel):
         )
 
 
+class AttachmentProcessing(BaseModel):
+    """Tracks image and PDF attachment processing."""
+
+    id = peewee.AutoField()
+    request = peewee.ForeignKeyField(
+        Request, backref="attachment", unique=True, on_delete="CASCADE"
+    )
+    file_type = peewee.TextField()  # "image", "pdf"
+    mime_type = peewee.TextField(null=True)
+    file_name = peewee.TextField(null=True)
+    file_size_bytes = peewee.BigIntegerField(null=True)
+    page_count = peewee.IntegerField(null=True)
+    extracted_text_length = peewee.IntegerField(null=True)
+    vision_used = peewee.BooleanField(default=False)
+    vision_pages_count = peewee.IntegerField(null=True)
+    processing_method = peewee.TextField(null=True)  # "vision", "text_extraction", "hybrid"
+    status = peewee.TextField(default="pending")  # "pending", "processing", "completed", "error"
+    error_text = peewee.TextField(null=True)
+    created_at = peewee.DateTimeField(default=_utcnow)
+
+    class Meta:
+        table_name = "attachment_processing"
+        indexes = (
+            (("status",), False),
+            (("created_at",), False),
+        )
+
+
 class Collection(BaseModel):
     """User-created collections for organizing summaries."""
 
@@ -552,6 +580,7 @@ ALL_MODELS: tuple[type[BaseModel], ...] = (
     AuditLog,
     SummaryEmbedding,
     VideoDownload,
+    AttachmentProcessing,
     ClientSecret,
     Collection,
     CollectionItem,

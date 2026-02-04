@@ -4,6 +4,7 @@ import logging
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+from app.adapters.attachment.attachment_processor import AttachmentProcessor
 from app.adapters.content.url_processor import URLProcessor
 from app.adapters.external.firecrawl_parser import FirecrawlClient
 from app.adapters.external.response_formatter import ResponseFormatter
@@ -49,6 +50,7 @@ class BotComponents:
     response_formatter: ResponseFormatter
     url_processor: URLProcessor
     forward_processor: ForwardProcessor
+    attachment_processor: AttachmentProcessor
     message_handler: MessageHandler
     topic_searcher: TopicSearchService
     local_searcher: LocalTopicSearchService
@@ -151,6 +153,16 @@ class BotFactory:
 
         # Create forward processor
         forward_processor = ForwardProcessor(
+            cfg=cfg,
+            db=db,
+            openrouter=clients.llm_client,
+            response_formatter=response_formatter,
+            audit_func=audit_func,
+            sem=sem_func,
+        )
+
+        # Create attachment processor
+        attachment_processor = AttachmentProcessor(
             cfg=cfg,
             db=db,
             openrouter=clients.llm_client,
@@ -266,6 +278,7 @@ class BotFactory:
             local_searcher=local_searcher,
             container=container,
             hybrid_search=hybrid_search_service,
+            attachment_processor=attachment_processor,
         )
 
         return BotComponents(
@@ -273,6 +286,7 @@ class BotFactory:
             response_formatter=response_formatter,
             url_processor=url_processor,
             forward_processor=forward_processor,
+            attachment_processor=attachment_processor,
             message_handler=message_handler,
             topic_searcher=topic_searcher,
             local_searcher=local_searcher,

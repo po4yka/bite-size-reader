@@ -81,7 +81,7 @@ def _make_processor(db_path: str):
 
     processor = ForwardContentProcessor(
         cfg=cfg,
-        db=db,
+        db=db,  # type: ignore[arg-type]
         response_formatter=formatter,
         audit_func=lambda *a, **kw: None,
     )
@@ -423,7 +423,7 @@ class TestForwardProcessorExceptionHandling(unittest.IsolatedAsyncioTestCase):
             sem=lambda: MagicMock(__aenter__=AsyncMock(), __aexit__=AsyncMock()),
         )
 
-        processor.content_processor.process_forward_content = AsyncMock(
+        processor.content_processor.process_forward_content = AsyncMock(  # type: ignore[method-assign]
             side_effect=ValueError("Forwarded message has no text content")
         )
 
@@ -450,11 +450,11 @@ class TestForwardProcessorExceptionHandling(unittest.IsolatedAsyncioTestCase):
             sem=lambda: MagicMock(__aenter__=AsyncMock(), __aexit__=AsyncMock()),
         )
 
-        processor.content_processor.process_forward_content = AsyncMock(
+        processor.content_processor.process_forward_content = AsyncMock(  # type: ignore[method-assign]
             return_value=(1, "prompt", "en", "sys")
         )
-        processor._maybe_reply_with_cached_summary = AsyncMock(return_value=False)
-        processor.summarizer.summarize_forward = AsyncMock(side_effect=RuntimeError("LLM timeout"))
+        processor._maybe_reply_with_cached_summary = AsyncMock(return_value=False)  # type: ignore[method-assign]
+        processor.summarizer.summarize_forward = AsyncMock(side_effect=RuntimeError("LLM timeout"))  # type: ignore[method-assign]
 
         # Should NOT raise
         await processor.handle_forward_flow(MagicMock(), correlation_id="cid", interaction_id=None)
@@ -506,7 +506,7 @@ class TestForwardProcessorCustomArticle(unittest.IsolatedAsyncioTestCase):
             "not a dict",
             "en",
             1,
-            "cid",  # type: ignore[arg-type]
+            "cid",
         )
 
 
@@ -720,8 +720,8 @@ async def test_forward_caption_only_routes_to_forward_flow(
 
     router = MessageRouter(
         cfg=cfg,
-        db=db,
-        access_controller=SimpleNamespace(check_access=AsyncMock(return_value=True)),
+        db=db,  # type: ignore[arg-type]
+        access_controller=SimpleNamespace(check_access=AsyncMock(return_value=True)),  # type: ignore[arg-type]
         command_processor=MagicMock(),
         url_handler=url_handler,
         forward_processor=forward_processor,
@@ -780,8 +780,8 @@ async def test_channel_forward_missing_msg_id_falls_to_user_path(
 
     router = MessageRouter(
         cfg=cfg,
-        db=db,
-        access_controller=SimpleNamespace(check_access=AsyncMock(return_value=True)),
+        db=db,  # type: ignore[arg-type]
+        access_controller=SimpleNamespace(check_access=AsyncMock(return_value=True)),  # type: ignore[arg-type]
         command_processor=MagicMock(),
         url_handler=url_handler,
         forward_processor=forward_processor,
@@ -812,8 +812,8 @@ async def test_channel_forward_missing_msg_id_falls_to_user_path(
 
     # Should NOT go through the channel forward path (needs both chat AND msg_id)
     # And no forward_from or sender_name set, so user forward path also doesn't match
-    # Falls through to URL or default handler
-    assert forward_processor.handle_forward_flow.await_count == 0
+    # But the fallback branch catches forwards with text content (privacy-restricted channels)
+    assert forward_processor.handle_forward_flow.await_count == 1
 
 
 # ===========================================================================
