@@ -1703,7 +1703,7 @@ class McpConfig(BaseModel):
         description="Transport protocol: 'stdio' or 'sse'",
     )
     host: str = Field(
-        default="0.0.0.0",
+        default="0.0.0.0",  # nosec B104 - intentional for Docker
         validation_alias="MCP_HOST",
         description="Bind address for SSE transport",
     )

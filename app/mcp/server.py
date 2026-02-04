@@ -1257,7 +1257,7 @@ def processing_stats_resource() -> str:
 # ---------------------------------------------------------------------------
 def run_server(
     transport: str = "stdio",
-    host: str = "0.0.0.0",
+    host: str = "0.0.0.0",  # nosec B104 - intentional for Docker
     port: int = 8200,
     db_path: str | None = None,
 ) -> None:

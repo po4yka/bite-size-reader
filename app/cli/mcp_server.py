@@ -33,7 +33,7 @@ def main() -> None:
     )
     parser.add_argument(
         "--host",
-        default="0.0.0.0",
+        default="0.0.0.0",  # nosec B104 - intentional for Docker
         help="Bind address for SSE transport (default: 0.0.0.0)",
     )
     parser.add_argument(

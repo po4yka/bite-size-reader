@@ -271,7 +271,9 @@ class AttachmentProcessor:
         os.makedirs(storage_path, exist_ok=True)
 
         try:
-            path = await message.download(file_name=tempfile.mktemp(dir=storage_path))
+            fd, tmp_path = tempfile.mkstemp(dir=storage_path)
+            os.close(fd)
+            path = await message.download(file_name=tmp_path)
             return str(path) if path else None
         except Exception as exc:
             logger.exception(

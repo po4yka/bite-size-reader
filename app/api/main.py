@@ -221,8 +221,7 @@ if __name__ == "__main__":
     # Development server - bind to all interfaces for Docker/container access
     uvicorn.run(
         "app.api.main:app",
-        # nosec B104 - intentional for development/Docker environments
-        host="0.0.0.0",
+        host="0.0.0.0",  # nosec B104 - intentional for Docker
         port=8000,
         reload=True,
         log_level="info",

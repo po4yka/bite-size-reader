@@ -178,12 +178,20 @@ jsonschema==4.26.0
     # via
     #   chromadb
     #   mcp
+    #   openapi-schema-validator
+    #   openapi-spec-validator
+jsonschema-path==0.3.4
+    # via openapi-spec-validator
 jsonschema-specifications==2025.9.1
-    # via jsonschema
+    # via
+    #   jsonschema
+    #   openapi-schema-validator
 justext==3.0.2
     # via trafilatura
 kubernetes==35.0.0
     # via chromadb
+lazy-object-proxy==1.12.0
+    # via openapi-spec-validator
 librt==0.7.8
     # via mypy
 loguru==0.7.3
@@ -236,6 +244,10 @@ oauthlib==3.3.1
     # via requests-oauthlib
 onnxruntime==1.23.2
     # via chromadb
+openapi-schema-validator==0.6.3
+    # via openapi-spec-validator
+openapi-spec-validator==0.7.2
+    # via bite-size-reader (pyproject.toml)
 opentelemetry-api==1.39.1
     # via
     #   chromadb
@@ -272,6 +284,8 @@ packaging==26.0
     #   thinc
     #   transformers
     #   weasel
+pathable==0.4.4
+    # via jsonschema-path
 pathspec==1.0.4
     # via mypy
 peewee==3.19.0
@@ -375,8 +389,10 @@ pytz==2025.2
     # via dateparser
 pyyaml==6.0.3
     # via
+    #   bite-size-reader (pyproject.toml)
     #   chromadb
     #   huggingface-hub
+    #   jsonschema-path
     #   kubernetes
     #   pre-commit
     #   transformers
@@ -385,9 +401,10 @@ redis==7.1.0
     # via
     #   bite-size-reader (pyproject.toml)
     #   fakeredis
-referencing==0.37.0
+referencing==0.36.2
     # via
     #   jsonschema
+    #   jsonschema-path
     #   jsonschema-specifications
 regex==2026.1.15
     # via
@@ -395,6 +412,7 @@ regex==2026.1.15
     #   transformers
 requests==2.32.5
     # via
+    #   jsonschema-path
     #   kubernetes
     #   posthog
     #   requests-oauthlib
@@ -403,6 +421,8 @@ requests==2.32.5
     #   youtube-transcript-api
 requests-oauthlib==2.0.0
     # via kubernetes
+rfc3339-validator==0.1.4
+    # via openapi-schema-validator
 rich==14.3.2
     # via
     #   chromadb
@@ -442,6 +462,7 @@ six==1.17.0
     #   kubernetes
     #   posthog
     #   python-dateutil
+    #   rfc3339-validator
 smart-open==7.5.0
     # via weasel
 sortedcontainers==2.4.0

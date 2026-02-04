@@ -239,7 +239,7 @@ class SqliteTopicSearchRepositoryAdapter(SqliteBaseRepository):
             return None
 
         sql = (
-            f"SELECT request_id FROM {TopicSearchIndex._meta.table_name} "
+            f"SELECT request_id FROM {TopicSearchIndex._meta.table_name} "  # nosec B608
             f"WHERE {TopicSearchIndex._meta.table_name} MATCH ? "
             f"ORDER BY bm25({TopicSearchIndex._meta.table_name}) ASC "
             f"LIMIT ?"
@@ -286,7 +286,7 @@ class SqliteTopicSearchRepositoryAdapter(SqliteBaseRepository):
         # We select specific columns matching TopicSearchDocument
         sql = (
             "SELECT request_id, url, title, snippet, source, published_at, body, tags "
-            f"FROM {TopicSearchIndex._meta.table_name} "
+            f"FROM {TopicSearchIndex._meta.table_name} "  # nosec B608
             f"WHERE {TopicSearchIndex._meta.table_name} MATCH ? "
             f"ORDER BY bm25({TopicSearchIndex._meta.table_name}) ASC "
             f"LIMIT ?"
