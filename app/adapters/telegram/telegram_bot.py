@@ -172,6 +172,9 @@ class TelegramBot:
                 with contextlib.suppress(asyncio.CancelledError):
                     await self._rate_limiter_cleanup_task
 
+            # Close external clients and drain in-flight tasks
+            await self._shutdown()
+
     def _audit(self, level: str, event: str, details: dict) -> None:
         """Audit log helper (background async)."""
         if not hasattr(self, "audit_repo"):
@@ -194,6 +197,61 @@ class TelegramBot:
             task.add_done_callback(self._audit_tasks.discard)
         except RuntimeError:
             pass
+
+    async def _shutdown(self, drain_timeout: float = 5.0) -> None:
+        """Close external clients and drain in-flight tasks."""
+        # 1. Close Firecrawl client
+        firecrawl = getattr(self, "_firecrawl", None)
+        if firecrawl is not None and hasattr(firecrawl, "aclose"):
+            try:
+                await asyncio.wait_for(firecrawl.aclose(), timeout=drain_timeout)
+            except Exception:
+                logger.warning("shutdown_firecrawl_close_failed", exc_info=True)
+
+        # 2. Close LLM client
+        llm_client = getattr(self, "_llm_client", None)
+        if llm_client is not None and hasattr(llm_client, "aclose"):
+            try:
+                await asyncio.wait_for(llm_client.aclose(), timeout=drain_timeout)
+            except Exception:
+                logger.warning("shutdown_llm_client_close_failed", exc_info=True)
+
+        # 3. Close vector store
+        vector_store = getattr(self, "vector_store", None)
+        if vector_store is not None and hasattr(vector_store, "aclose"):
+            try:
+                await asyncio.wait_for(vector_store.aclose(), timeout=drain_timeout)
+            except Exception:
+                logger.warning("shutdown_vector_store_close_failed", exc_info=True)
+
+        # 4. Close embedding service
+        embedding_service = getattr(self, "embedding_service", None)
+        if embedding_service is not None and hasattr(embedding_service, "aclose"):
+            try:
+                await asyncio.wait_for(embedding_service.aclose(), timeout=drain_timeout)
+            except Exception:
+                logger.warning("shutdown_embedding_service_close_failed", exc_info=True)
+
+        # 5. Drain audit tasks
+        audit_tasks: set[asyncio.Task[None]] = getattr(self, "_audit_tasks", set())
+        if audit_tasks:
+            with contextlib.suppress(Exception):
+                await asyncio.wait_for(
+                    asyncio.gather(*list(audit_tasks), return_exceptions=True),
+                    timeout=drain_timeout,
+                )
+
+        # Catch-all for orphaned OpenRouter connection pool entries that may
+        # not be covered by _llm_client.aclose() (e.g. multiple instances).
+        # 6. Clean up OpenRouter shared client pools
+        try:
+            from app.adapters.openrouter.openrouter_client import OpenRouterClient
+
+            await asyncio.wait_for(OpenRouterClient.cleanup_all_clients(), timeout=drain_timeout)
+        except Exception:
+            logger.warning("shutdown_openrouter_cleanup_failed", exc_info=True)
+
+        logger.info("bot_shutdown_complete")
 
     def _mask_path(self, path: str) -> str:
         """Mask home directory in paths for logging."""
