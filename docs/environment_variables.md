@@ -238,12 +238,26 @@ Complete reference for all Bite-Size Reader configuration. Source of truth: `app
 | `BACKGROUND_RETRY_MAX_DELAY_MS` | `5000` | Max retry delay (ms) |
 | `BACKGROUND_RETRY_JITTER_RATIO` | `0.2` | Jitter ratio (0-1) |
 
+## Mobile API Server
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `API_HOST` | `0.0.0.0` | API bind address |
+| `API_PORT` | `8000` | API listen port |
+
 ## Runtime and Debug
 
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `LOG_LEVEL` | `INFO` | Logging level: DEBUG, INFO, WARNING, ERROR |
+| `LOG_TRUNCATE_LENGTH` | `1000` | Max chars for truncated log fields |
 | `REQUEST_TIMEOUT_SEC` | `60` | General request timeout |
 | `PREFERRED_LANG` | `auto` | Language preference: `auto`, `en`, `ru` |
 | `DEBUG_PAYLOADS` | `0` | Log API payloads (0/1, Authorization redacted) |
 | `MAX_CONCURRENT_CALLS` | `4` | Max concurrent Firecrawl/OpenRouter calls |
+| `TEXTACY_ENABLED` | `false` | Enable textacy-based text analysis |
+| `CHUNKING_ENABLED` | `false` | Enable content chunking for long articles |
+| `CHUNK_MAX_CHARS` | `200000` | Max chars per content chunk |
+| `SUMMARY_PROMPT_VERSION` | `v1` | Summary prompt template version |
+| `ENABLE_HEX_CONTAINER` | `false` | Enable hexagonal architecture container |
+| `TELEGRAM_REPLY_TIMEOUT_SEC` | `30.0` | Timeout for Telegram reply operations |

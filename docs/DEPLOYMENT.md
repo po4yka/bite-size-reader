@@ -22,7 +22,7 @@ This guide explains how to prepare environments, configure secrets, and run the 
 ## OpenRouter Setup
 - Sign up: https://openrouter.ai/
 - Create an API key and set `OPENROUTER_API_KEY`.
-- Choose a model (e.g., `qwen/qwen3-max`) and set `OPENROUTER_MODEL`.
+- Choose a model (e.g., `deepseek/deepseek-v3.2`) and set `OPENROUTER_MODEL`.
 - Optional attribution: `OPENROUTER_HTTP_REFERER`, `OPENROUTER_X_TITLE`.
 
 ## Firecrawl Setup
@@ -33,7 +33,7 @@ This guide explains how to prepare environments, configure secrets, and run the 
 Copy `.env.example` to `.env` and fill:
 
 - Telegram: `API_ID`, `API_HASH`, `BOT_TOKEN`, `ALLOWED_USER_IDS`
-- OpenRouter: `OPENROUTER_API_KEY`, `OPENROUTER_MODEL` (e.g., `qwen/qwen3-max`), optional `OPENROUTER_HTTP_REFERER`, `OPENROUTER_X_TITLE`
+- OpenRouter: `OPENROUTER_API_KEY`, `OPENROUTER_MODEL` (e.g., `deepseek/deepseek-v3.2`), optional `OPENROUTER_HTTP_REFERER`, `OPENROUTER_X_TITLE`
 - Firecrawl: `FIRECRAWL_API_KEY`
 - Runtime: `DB_PATH=/data/app.db`, `LOG_LEVEL=INFO|DEBUG`, `REQUEST_TIMEOUT_SEC=60`, `PREFERRED_LANG=auto|en|ru`, `DEBUG_PAYLOADS=0|1` (keep 0 in prod)
 - YouTube: `YOUTUBE_DOWNLOAD_ENABLED=true`, `YOUTUBE_PREFERRED_QUALITY=1080p`, `YOUTUBE_STORAGE_PATH=/data/videos`, size/retention knobs as needed
@@ -70,19 +70,38 @@ Notes
 - Set `ALLOWED_USER_IDS`; keep `DEBUG_PAYLOADS=0` in prod.
 - If using mobile API, ensure `JWT_SECRET_KEY` is set and port 8000 exposed.
 
-## Docker Compose (optional)
-`docker-compose.yml`:
-```
+## Docker Compose (recommended)
+
+The production `docker-compose.yml` defines a 4-service stack:
+
+```yaml
 services:
-  bsr:
+  bsr:              # Telegram bot
     build: .
     env_file: .env
-    volumes:
-      - ./data:/data
-    ports:
-      - "8000:8000"   # expose FastAPI if desired
-    restart: unless-stopped
+    volumes: [./data:/data]
+    depends_on: [chroma (optional)]
+    healthcheck: SQLite SELECT 1 every 30s
+
+  mobile-api:       # FastAPI REST API
+    build: {dockerfile: Dockerfile.api}
+    env_file: .env
+    ports: ["18000:8000"]
+    depends_on: [redis, chroma (optional)]
+    healthcheck: HTTP /health every 30s
+
+  redis:            # Caching, rate limits, sync locks
+    image: redis:7-alpine
+    ports: ["127.0.0.1:6379:6379"]
+    healthcheck: redis-cli ping every 10s
+
+  chroma:           # Vector search (ChromaDB)
+    image: bsr-chroma:1.4.1-curl
+    build: {dockerfile: Dockerfile.chroma}
+    ports: ["127.0.0.1:8001:8000"]
+    healthcheck: HTTP /api/v2/heartbeat every 30s
 ```
+
 Run: `docker compose up -d --build`
 
 ## Optional Subsystems
@@ -108,8 +127,72 @@ Full variable reference: `docs/environment_variables.md`
 - Monitoring: watch logs for latency spikes and error rates; consider dashboarding via structured logs.
 - Backups: automatic snapshots land in `/data/backups`. Copy them off-host or adjust `DB_BACKUP_*` if you need a different cadence.
 
+### Health Checks
+
+| Service | Method | Interval | Details |
+|---------|--------|----------|---------|
+| bsr | SQLite `SELECT 1` | 30s | Verifies DB connectivity; 5 retries, 60s start period |
+| mobile-api | HTTP `GET /health` | 30s | Returns 200 when API is ready; 5 retries, 60s start period |
+| redis | `redis-cli ping` | 10s | Standard Redis liveness check; 5 retries |
+| chroma | HTTP `GET /api/v2/heartbeat` | 30s | ChromaDB heartbeat endpoint; 3 retries, 60s start period |
+
+## Updating a Running Instance
+
+When deploying a new version to a host that already has the service running:
+
+### 1. Backup
+```bash
+cd /path/to/bite-size-reader
+tar czf ~/bite-size-reader-backup-$(date +%Y%m%d%H%M).tgz data .env
+```
+The container also writes automatic snapshots to `data/backups/`.
+
+### 2. Pull latest
+```bash
+git fetch --all --prune
+git checkout main
+git pull --ff-only
+```
+Pin to a specific tag: `git checkout tags/<tag>`
+
+### 3. Refresh deps (when pyproject/lock changed)
+```bash
+make lock-uv   # or: make lock-piptools
+```
+
+### 4. Rebuild & redeploy
+```bash
+# Compose (recommended)
+docker compose down
+docker compose up -d --build
+
+# Or manual
+docker stop bsr && docker rm bsr
+docker build -t bite-size-reader:latest .
+docker run -d --env-file .env -v $(pwd)/data:/data \
+  -p 8000:8000 --name bsr --restart unless-stopped bite-size-reader:latest
+```
+
+### 5. Verify
+```bash
+docker ps
+docker logs -f bsr
+```
+Send a test message from a whitelisted Telegram account.
+
+### 6. Rollback
+Stop the container, restore the backup tarball, and restart the previous image:
+```bash
+git checkout <previous-commit-sha>
+docker compose up -d --build
+```
+
 ## Troubleshooting
-- “Access denied”: verify `ALLOWED_USER_IDS` contains your Telegram numeric ID.
-- “Failed to fetch content”: Firecrawl error; try again or check the target page access.
-- “LLM error”: OpenRouter API issue or model outage; rely on built‑in retries/fallbacks; check logs.
+- "Access denied": verify `ALLOWED_USER_IDS` contains your Telegram numeric ID.
+- "Failed to fetch content": Firecrawl error; try again or check the target page access.
+- "LLM error": OpenRouter API issue or model outage; rely on built-in retries/fallbacks; check logs.
+- Missing deps after update: rebuild the Docker image.
+- Secrets/env issues: recheck `.env` (quote special chars).
+- Telegram auth: verify `API_ID`, `API_HASH`, `BOT_TOKEN`; ensure bot not banned.
+- DB permissions: ensure host `data/` is writable by the Docker user.
 - Large summaries: The bot returns JSON in a message; if too large, consider implementing file replies.

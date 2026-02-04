@@ -22,6 +22,17 @@ This document helps AI assistants (like Claude) understand and work effectively 
 - OpenRouter API (OpenAI-compatible LLM completions)
 - SQLite (persistence with Peewee ORM)
 - httpx (async HTTP client)
+- pydantic / pydantic-settings (validation, configuration)
+- trafilatura, spacy (content extraction fallbacks, NLP)
+- json-repair (JSON recovery from LLM output)
+- scikit-learn, sentence-transformers, chromadb (search, embeddings, vector store)
+- loguru, orjson (structured logging, fast JSON serialization)
+- FastAPI / uvicorn (Mobile REST API)
+- PyJWT (JWT authentication)
+- redis (optional caching and distributed locking)
+- apscheduler (background task scheduling)
+- weasyprint (PDF export)
+- mcp (Model Context Protocol server)
 
 ## Architecture Overview
 
@@ -52,16 +63,20 @@ Telegram Message -> MessageHandler -> AccessController -> MessageRouter
 - **Telegram Layer** (`app/adapters/telegram/`) -- Bot orchestration, message routing, access control, persistence, command processing, URL/forward handling
 - **Content Pipeline** (`app/adapters/content/`) -- Firecrawl integration, content chunking, LLM summarization, web search context
 - **YouTube Adapter** (`app/adapters/youtube/`) -- yt-dlp video download, transcript extraction, storage management
+- **LLM Abstraction** (`app/adapters/llm/`) -- Provider-agnostic LLM interface (OpenRouter, OpenAI, Anthropic)
 - **External Services** (`app/adapters/openrouter/`, `app/adapters/external/`) -- OpenRouter client, Firecrawl parser, response formatting
+- **Karakeep Integration** (`app/adapters/karakeep/`) -- Bookmark sync from self-hosted Karakeep
+- **Application Layer** (`app/application/`) -- DTOs (`dto/`) and use cases (`use_cases/`) for orchestrating domain logic
 - **Core Utilities** (`app/core/`) -- URL normalization, JSON parsing/repair, summary contract validation, language detection, structured logging
-- **Database** (`app/db/`) -- SQLite schema, Peewee ORM models, migrations
-- **CLI Tools** (`app/cli/`) -- Summary runner, search, migrations, MCP server, embedding backfill
+- **Database** (`app/db/`) -- SQLite schema, Peewee ORM models (21 model classes), migrations
+- **CLI Tools** (`app/cli/`) -- Summary runner, search, migrations, MCP server, embedding backfill, Chroma backfill, search comparison, performance indexes
 - **Mobile API** (`app/api/`) -- FastAPI REST API with JWT auth, sync, background processing
 - **Multi-Agent System** (`app/agents/`) -- Content extraction, summarization with self-correction, validation, web search agents. See `docs/multi_agent_architecture.md`
 - **Search Services** (`app/services/`) -- Topic search, vector/hybrid search, embeddings, reranking, query expansion
 - **MCP Server** (`app/mcp/`) -- Model Context Protocol server for AI agent access. See `docs/mcp_server.md`
+- **Observability** (`app/observability/`) -- Metrics, tracing, and telemetry infrastructure
 - **Domain Layer** (`app/domain/`) -- DDD models and services
-- **Infrastructure** (`app/infrastructure/`) -- Persistence layer, event bus, vector store
+- **Infrastructure** (`app/infrastructure/`) -- Persistence layer, event bus, vector store, cache, HTTP clients, messaging
 
 ## Directory Structure
 
@@ -70,26 +85,36 @@ app/
 +-- adapters/           # External service integrations
 |   +-- content/        # URL processing pipeline
 |   +-- external/       # Firecrawl parser, response formatter
+|   +-- karakeep/       # Karakeep bookmark sync
+|   +-- llm/            # Provider-agnostic LLM abstraction
 |   +-- openrouter/     # OpenRouter client and helpers
-|   +-- telegram/       # Telegram bot logic
+|   +-- telegram/       # Telegram bot logic, command_handlers/
 |   +-- youtube/        # YouTube video download and transcript extraction
 +-- agents/             # Multi-agent system (extraction, summarization, validation, web search)
 +-- api/                # Mobile API (FastAPI, JWT auth, sync)
 |   +-- models/         # Pydantic request/response models
-|   +-- routers/        # Route handlers (auth, summaries, sync)
+|   +-- routers/        # Route handlers (auth, summaries, sync, collections, health, system)
 |   +-- services/       # API business logic
-+-- cli/                # CLI tools (summary runner, search, MCP server, migrations)
++-- application/        # Application layer (DDD)
+|   +-- dto/            # Data transfer objects
+|   +-- use_cases/      # Use case orchestrators
++-- cli/                # CLI tools (summary runner, search, MCP server, migrations, Chroma backfill)
++-- config/             # Configuration modules
 +-- core/               # Shared utilities (URL, JSON, logging, lang)
 +-- db/                 # Database schema and models
 +-- di/                 # Dependency injection
 +-- domain/             # Domain models and services (DDD patterns)
++-- grpc/               # gRPC service definitions
 +-- handlers/           # Request handlers
 +-- infrastructure/     # Persistence, event bus, vector store
+|   +-- cache/          # Cache layer (Redis)
+|   +-- clients/        # HTTP client wrappers
+|   +-- messaging/      # Messaging infrastructure
 +-- mcp/                # MCP server for AI agent access
 +-- models/             # Pydantic/dataclass models
 |   +-- llm/            # LLM config models
 |   +-- telegram/       # Telegram entity models
-+-- presentation/       # Presentation layer
++-- observability/      # Metrics, tracing, telemetry
 +-- prompts/            # LLM system prompts (en/ru)
 +-- security/           # Security utilities
 +-- services/           # Search and other domain services
@@ -97,19 +122,25 @@ app/
 +-- utils/              # Helper utilities (progress, formatting, validation)
 ```
 
+## Database Models
+
+21 Peewee model classes in `app/db/models.py`:
+
+`BaseModel`, `User`, `ClientSecret`, `Chat`, `Request`, `TelegramMessage`, `CrawlResult`, `LLMCall`, `Summary`, `TopicSearchIndex` (FTS5), `UserInteraction`, `AuditLog`, `SummaryEmbedding`, `VideoDownload`, `Collection`, `UserDevice`, `CollectionItem`, `CollectionCollaborator`, `CollectionInvite`, `RefreshToken`, `KarakeepSync`
+
 ## Summary JSON Contract
 
-Defined in `app/core/summary_contract.py` and documented in SPEC.md. Key fields: `summary_250`, `summary_1000`, `tldr`, `key_ideas`, `topic_tags`, `entities`, `estimated_reading_time_min`, `key_stats`, `answered_questions`, `readability`, `seo_keywords`.
+Defined in `app/core/summary_contract.py` (validation) and `app/core/summary_schema.py` (Pydantic model), documented in SPEC.md. Core fields: `summary_250`, `summary_1000`, `tldr`, `key_ideas`, `topic_tags`, `entities`, `estimated_reading_time_min`, `key_stats`, `answered_questions`, `readability`, `seo_keywords`. The full contract includes 35+ fields with nested structures (`source_type`, `temporal_freshness`, `metadata`, `extractive_quotes`, `topic_taxonomy`, `hallucination_risk`, `confidence`, `insights`, `semantic_chunks`, etc.).
 
 ## Development Workflow
 
 ### Code Standards
 
-- **Formatting:** Black (line length 100) + isort (profile=black) + ruff format
+- **Formatting:** ruff format + isort (profile=black)
 - **Linting:** Ruff (see `pyproject.toml` for rules)
 - **Type Checking:** mypy (permissive config, `python_version = "3.13"`)
-- **Pre-commit Hooks:** Run ruff -> isort -> black in sequence
-- **Testing:** unittest + pytest-asyncio
+- **Pre-commit Hooks:** ruff (fix + format) -> isort -> mypy + standard hooks
+- **Testing:** pytest + pytest-asyncio, hypothesis, pytest-benchmark
 
 ### Common Commands
 
@@ -120,7 +151,7 @@ source .venv/bin/activate  # Activate venv
 pip install -r requirements.txt -r requirements-dev.txt
 
 # Development
-make format                # Format code (black + isort + ruff format)
+make format                # Format code (ruff format + isort)
 make lint                  # Lint code (ruff)
 make type                  # Type-check code (mypy)
 
@@ -148,12 +179,15 @@ python -m app.cli.summary --accept-multiple --json-path out.json --log-level DEB
 
 GitHub Actions (`.github/workflows/ci.yml`) enforces:
 - Lockfile freshness (rebuilds from `pyproject.toml`)
-- Lint (ruff), format check (black, isort), type check (mypy)
-- Unit tests (unittest)
-- Matrix tests with/without Pydantic
+- Lint (ruff), format check (ruff format, isort), type check (mypy)
+- Unit tests with coverage (pytest, 80% threshold)
 - Docker image build
+- OpenAPI spec validation, code complexity (radon)
+- Codecov coverage reporting
+- Integration tests
 - Security: Bandit (SAST), pip-audit + Safety (dependency vulns), Gitleaks (secrets)
 - Optional GHCR publishing when `PUBLISH_DOCKER=true`
+- PR summary automation
 
 ## Important Considerations
 
@@ -233,7 +267,16 @@ When `WEB_SEARCH_ENABLED=true`, the bot enriches summaries with current web cont
 
 ### Multi-Agent Architecture
 
-Four specialized agents (ContentExtraction, Summarization, Validation, WebSearch) coordinate via an AgentOrchestrator. The SummarizationAgent implements a self-correction feedback loop (retry with error feedback up to 3x). See `docs/multi_agent_architecture.md` for complete documentation.
+Four specialized agents (ContentExtraction, Summarization, Validation, WebSearch) coordinate via an AgentOrchestrator (multi-step pipeline) or SingleAgentOrchestrator (single-agent execution). The SummarizationAgent implements a self-correction feedback loop (retry with error feedback up to 3x). See `docs/multi_agent_architecture.md` for complete documentation.
+
+### Additional Subsystems
+
+- **Collections** -- User-created collections with items, collaborators, and invite links (`app/db/models.py`: Collection, CollectionItem, CollectionCollaborator, CollectionInvite)
+- **Device Sync** -- Multi-device sync with full/delta modes and conflict resolution (`app/api/routers/sync.py`, UserDevice model)
+- **Event Bus** -- Internal event publishing/subscribing (`app/infrastructure/messaging/`)
+- **Chroma Vector Store** -- Semantic search via ChromaDB embeddings (`app/infrastructure/`, `app/cli/backfill_chroma_store.py`)
+- **PDF Export** -- Summary export to PDF via weasyprint
+- **Background Scheduling** -- APScheduler-based background task processing with Redis distributed locks
 
 ### Safety Hooks
 
@@ -243,9 +286,9 @@ Claude Code hooks provide automatic safety checks. See `docs/claude_code_hooks.m
 
 ### Adding a New Bot Command
 
-1. Add command to `app/adapters/telegram/commands.py` (`COMMAND_NAMES` and `COMMAND_DESCRIPTIONS`)
-2. Implement handler in `app/adapters/telegram/command_processor.py`
-3. Update `message_router.py` to route to new handler
+1. Create a handler in `app/adapters/telegram/command_handlers/`
+2. Register via `CommandRegistry.register_command()` in `app/adapters/telegram/commands.py`
+3. The message router delegates automatically to registered commands
 4. Add tests in `tests/`
 
 ### Adding a New Summary Field
@@ -286,6 +329,7 @@ When making changes, these are the most critical files to understand:
 - **`app/adapters/telegram/message_router.py`** -- Central routing logic
 - **`app/adapters/content/url_processor.py`** -- URL processing orchestration
 - **`app/core/summary_contract.py`** -- Summary validation (strict contract)
+- **`app/core/summary_schema.py`** -- Summary Pydantic model (full schema)
 - **`app/core/url_utils.py`** -- URL normalization and deduplication
 - **`app/db/models.py`** -- Database schema (ORM models)
 - **`app/config.py`** -- Configuration loading
@@ -325,7 +369,7 @@ Full reference: `docs/environment_variables.md`
 
 ---
 
-**Last Updated:** 2026-02-03
+**Last Updated:** 2026-02-04
 
 For questions about the codebase, always refer to:
 1. This file (CLAUDE.md) for AI assistant guidance

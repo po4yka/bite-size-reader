@@ -1,6 +1,6 @@
 # Mobile API Specification (Bite-Size Reader)
 - Version: 1.0
-- Last Updated: 2025-12-08
+- Last Updated: 2026-02-04
 - Scope: Telegram-first pipeline exposed via FastAPI `/v1` for Android/iOS clients.
 
 ## Contract at a Glance
@@ -47,6 +47,20 @@ sequenceDiagram
   - `GET /topics/trending`, `GET /topics/related`: trending tags and related summaries.
 - URL Utility
   - `GET /urls/check-duplicate`: `is_duplicate`, `existing_request_id/summary_id`.
+- Collections
+  - `GET /collections`: list user collections.
+  - `POST /collections`: create a collection.
+  - `GET /collections/{id}`: collection detail with items.
+  - `PATCH /collections/{id}`: update collection.
+  - `DELETE /collections/{id}`: delete collection.
+  - `POST /collections/{id}/items`: add item to collection.
+  - `DELETE /collections/{id}/items/{item_id}`: remove item.
+- Health
+  - `GET /health`: service health check (returns 200 when API is ready).
+- Notifications
+  - Notification endpoints for push and in-app alerts.
+- System
+  - `GET /system/info`: system information and version.
 - User
   - `GET /user/preferences`, `PATCH /user/preferences`.
   - `GET /user/stats`.

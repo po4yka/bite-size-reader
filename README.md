@@ -58,8 +58,7 @@ The bot ingests updates via a lightweight `TelegramClient`, normalizes them thro
 
 - Copy `.env.example` to `.env` and fill required secrets.
 - Build and run with Docker.
-- See `docs/DEPLOYMENT.md` for full setup and deployment instructions.
-- For production refreshes, follow `docs/server_update_guide.md` for pull + redeploy steps.
+- See `docs/DEPLOYMENT.md` for full setup, deployment, and update instructions.
 
 ## Docker
 
@@ -148,23 +147,31 @@ app/
     content/     -- Firecrawl integration, content chunking, LLM summarization, web search context
     youtube/     -- YouTube video download and transcript extraction
     external/    -- Response formatting helpers shared by adapters
+    karakeep/    -- Karakeep bookmark sync
+    llm/         -- Provider-agnostic LLM abstraction
     openrouter/  -- OpenRouter client, payload shaping, error handling
-    telegram/    -- Telegram client, message routing, access control, persistence
+    telegram/    -- Telegram client, message routing, access control, persistence, command_handlers/
   agents/        -- Multi-agent system (extraction, summarization, validation, web search)
   api/           -- Mobile API (FastAPI, JWT auth, sync endpoints)
     models/      -- Pydantic request/response models
-    routers/     -- Route handlers (auth, summaries, sync)
+    routers/     -- Route handlers (auth, summaries, sync, collections, health, system)
     services/    -- API business logic
-  cli/           -- CLI tools (summary runner, search, MCP server, migrations)
+  application/   -- Application layer (DTOs, use cases)
+  cli/           -- CLI tools (summary runner, search, MCP server, migrations, Chroma backfill)
+  config/        -- Configuration modules
   core/          -- URL normalization, JSON contract, logging, language helpers
   db/            -- SQLite schema, migrations, audit logging helpers
   di/            -- Dependency injection
   domain/        -- Domain models and services (DDD patterns)
+  grpc/          -- gRPC service definitions
   handlers/      -- Request handlers
   infrastructure/ -- Persistence layer, event bus, vector store
+    cache/       -- Cache layer (Redis)
+    clients/     -- HTTP client wrappers
+    messaging/   -- Messaging infrastructure
   mcp/           -- MCP server for AI agent access
   models/        -- Pydantic-style models (Telegram entities, LLM config)
-  presentation/  -- Presentation layer
+  observability/ -- Metrics, tracing, telemetry
   prompts/       -- LLM prompt templates (en/ru, including web search analysis)
   security/      -- Security utilities
   services/      -- Topic search, embedding, hybrid search services
@@ -206,7 +213,7 @@ Only ~30-40% of articles trigger search (self-contained content is skipped). Add
 
 ## Mobile API
 
-FastAPI-based REST API for mobile clients with Telegram-based JWT authentication, summary retrieval, and sync endpoints. See `docs/MOBILE_API_README.md` and `docs/MOBILE_API_SPEC.md` for details.
+FastAPI-based REST API for mobile clients with Telegram-based JWT authentication, summary retrieval, and sync endpoints. See `docs/MOBILE_API_SPEC.md` for details.
 
 ## MCP Server
 
@@ -235,7 +242,7 @@ All user-visible errors include `Error ID: <cid>` to correlate with logs and DB 
 ## Dev tooling
 
 - Install dev deps: `pip install -r requirements.txt -r requirements-dev.txt`
-- Format: `make format` (black + isort + ruff format)
+- Format: `make format` (ruff format + isort)
 - Lint: `make lint` (ruff)
 - Type-check: `make type` (mypy)
 - Pre-commit: `pre-commit install` then commits will auto-run hooks
@@ -243,7 +250,7 @@ All user-visible errors include `Error ID: <cid>` to correlate with logs and DB 
 
 ## Pre-commit hooks
 
-Hooks run in this order to minimize churn: Ruff (with `--fix`), isort (profile=black), Black. If a first run modifies files, stage the changes and run again.
+Hooks run in this order to minimize churn: Ruff (check with `--fix`, format), isort (profile=black), mypy, plus standard hooks. If a first run modifies files, stage the changes and run again.
 
 ## Local environment
 
@@ -267,12 +274,15 @@ Hooks run in this order to minimize churn: Ruff (with `--fix`), isort (profile=b
 
 GitHub Actions workflow `.github/workflows/ci.yml` enforces:
 - Lockfile freshness (rebuilds from `pyproject.toml` and checks diff)
-- Lint (ruff), format check (black, isort), type check (mypy)
-- Unit tests (unittest)
-- Matrix tests with and without Pydantic installed to exercise both validation paths
+- Lint (ruff), format check (ruff format, isort), type check (mypy)
+- Unit tests with coverage (pytest, 80% threshold)
 - Docker image build on every push/PR; optional push to GHCR when `PUBLISH_DOCKER` repository variable is set to `true` (non-PR events)
+- OpenAPI spec validation, code complexity (radon)
+- Codecov coverage reporting
+- Integration tests
 - Security checks: Bandit (SAST), pip-audit + Safety (dependency vulns)
 - Secrets scanning: Gitleaks on workspace and full history (history only on push)
+- PR summary automation
 
 ## Docker publishing (optional)
 
@@ -300,10 +310,8 @@ GitHub Actions workflow `.github/workflows/ci.yml` enforces:
 | `docs/mcp_server.md` | MCP server tools, resources, and configuration |
 | `docs/claude_code_hooks.md` | Claude Code safety hooks |
 | `docs/multi_agent_architecture.md` | Multi-agent system design |
-| `docs/MOBILE_API_README.md` | Mobile API quick start |
 | `docs/MOBILE_API_SPEC.md` | Mobile API specification |
 | `docs/HEXAGONAL_ARCHITECTURE_QUICKSTART.md` | Architecture patterns guide |
-| `docs/server_update_guide.md` | Production update procedures |
 
 ## Notes
 
