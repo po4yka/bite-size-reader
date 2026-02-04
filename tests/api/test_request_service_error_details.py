@@ -94,3 +94,23 @@ async def test_error_text_takes_precedence_over_context_message(in_memory_db):
     assert status_info["error_stage"] == "llm_summarization"
     assert status_info["error_type"] == 500
     assert status_info["error_message"] == "explicit error text"
+
+
+@pytest.mark.asyncio
+async def test_falls_back_when_error_context_empty(in_memory_db):
+    """When error_context_json is empty, fall back to defaults."""
+    req = _create_request(user_id=12, dedupe_hash="hash-ec3", correlation_id="cid-ec3")
+
+    LLMCall.create(
+        request=req,
+        status="error",
+        error_text=None,
+        error_context_json={},
+        updated_at=dt.datetime.now(UTC),
+    )
+
+    status_info = await RequestService.get_request_status(req.user_id, req.id)
+
+    assert status_info["error_stage"] == "llm_summarization"
+    assert status_info["error_type"] == "LLM_FAILED"
+    assert status_info["error_message"] == "LLM summarization failed"
