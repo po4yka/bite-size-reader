@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, ConfigDict
 
+from app.core.async_utils import raise_if_cancelled
 from app.core.json_utils import extract_json
 from app.core.summary_contract import validate_and_shape_summary
 from app.db.user_interactions import async_safe_update_user_interaction
@@ -248,8 +249,8 @@ class LLMResponseWorkflow:
                     context.setdefault("message", "summary_processing_exception")
                     context.setdefault("exception", str(exc))
                     llm.error_context = context
-                except Exception:
-                    pass
+                except Exception as ctx_exc:
+                    raise_if_cancelled(ctx_exc)
 
             if summary is not None:
                 return summary
@@ -919,9 +920,8 @@ class LLMResponseWorkflow:
         try:
             if not getattr(llm, "error_text", None):
                 llm.error_text = reason
-        except Exception:
-            # Best-effort; llm may be a SimpleNamespace or MagicMock
-            pass
+        except Exception as exc:
+            raise_if_cancelled(exc)
 
         try:
             context = getattr(llm, "error_context", None)
@@ -930,9 +930,8 @@ class LLMResponseWorkflow:
             elif isinstance(context, dict):
                 context.setdefault("message", reason)
                 llm.error_context = context
-        except Exception:
-            # Do not let context attachment break the workflow
-            pass
+        except Exception as exc:
+            raise_if_cancelled(exc)
 
     async def _persist_llm_call(self, llm: Any, req_id: int, correlation_id: str | None) -> None:
         try:

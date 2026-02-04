@@ -689,8 +689,8 @@ class URLProcessor:
                     message,
                     f"⚠️ Russian translation failed. Error ID: {correlation_id or 'unknown'}.",
                 )
-            except Exception:
-                pass
+            except Exception as exc:
+                raise_if_cancelled(exc)
 
     async def _handle_additional_insights(
         self,
