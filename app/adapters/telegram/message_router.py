@@ -135,9 +135,26 @@ class MessageRouter:
         """Clean up expired rate limiter entries to prevent memory leaks.
 
         Only cleans up the in-memory rate limiter; Redis handles TTL automatically.
+        Also cleans up expired notification-suppression and recent message entries.
         Returns the number of users cleaned up.
         """
-        return await self._rate_limiter.cleanup_expired()
+        cleaned = await self._rate_limiter.cleanup_expired()
+
+        # Clean up expired rate-limit notification suppression entries
+        now = time.time()
+        expired_notifs = [
+            uid for uid, deadline in self._rate_limit_notified_until.items() if now >= deadline
+        ]
+        for uid in expired_notifs:
+            del self._rate_limit_notified_until[uid]
+
+        # Clean up expired recent message IDs
+        cutoff = now - self._recent_message_ttl
+        expired_msgs = [key for key, (ts, _sig) in self._recent_message_ids.items() if ts < cutoff]
+        for key in expired_msgs:
+            del self._recent_message_ids[key]
+
+        return cleaned
 
     async def route_message(self, message: Any) -> None:
         """Main message routing entry point."""
