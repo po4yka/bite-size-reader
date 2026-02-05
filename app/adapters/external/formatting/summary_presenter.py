@@ -407,31 +407,52 @@ class SummaryPresenterImpl:
     ) -> None:
         """Send follow-up message summarizing additional research insights."""
         try:
-            header = "Additional Research Highlights"
+            import html
 
-            reader = False
+            # Skip sending in Reader mode (the calling code should already gate on this),
+            # but keep the check here for safety when called directly.
             if self._verbosity_resolver is not None:
                 from app.core.verbosity import VerbosityLevel
 
-                reader = (
-                    await self._verbosity_resolver.get_verbosity(message)
-                ) == VerbosityLevel.READER
+                if (await self._verbosity_resolver.get_verbosity(message)) == VerbosityLevel.READER:
+                    return
 
-            if correlation_id and not reader:
-                header += f"\nCorrelation ID: {correlation_id}"
-            await self._response_sender.safe_reply(message, header)
+            def _cap(text: str, max_chars: int) -> str:
+                cleaned = self._text_processor.sanitize_summary_text(text.strip())
+                if len(cleaned) <= max_chars:
+                    return cleaned
+                return cleaned[: max(0, max_chars - 1)].rstrip() + "…"
+
+            def _safe_html(text: str, *, max_chars: int = 900) -> str:
+                cleaned = _cap(text, max_chars)
+                escaped = html.escape(cleaned)
+                return self._text_processor.linkify_urls(escaped)
+
+            def _clean_list(
+                items: list[Any], *, limit: int, item_max_chars: int = 220
+            ) -> list[str]:
+                cleaned: list[str] = []
+                for item in items:
+                    text = str(item).strip()
+                    if not text:
+                        continue
+                    cleaned.append(_safe_html(text, max_chars=item_max_chars))
+                    if len(cleaned) >= limit:
+                        break
+                return cleaned
+
+            lines: list[str] = ["<b>🔎 Additional Research Highlights</b>"]
+            if correlation_id:
+                lines.append(
+                    f"<i>Correlation ID:</i> <code>{html.escape(str(correlation_id))}</code>"
+                )
 
             sections_sent = False
 
             overview = insights.get("topic_overview")
             if isinstance(overview, str) and overview.strip():
                 sections_sent = True
-                await self._text_processor.send_long_text(
-                    message,
-                    "<b>🧭 Overview</b>\n"
-                    + self._text_processor.sanitize_summary_text(overview.strip()),
-                    parse_mode="HTML",
-                )
+                lines.extend(["", "<b>🧭 Overview</b>", _safe_html(overview, max_chars=1200)])
 
             facts_section: list[str] = []
             facts = insights.get("new_facts")
@@ -442,108 +463,95 @@ class SummaryPresenterImpl:
                     fact_text = str(fact.get("fact", "")).strip()
                     if not fact_text:
                         continue
-                    fact_lines = [f"{idx}. {self._text_processor.sanitize_summary_text(fact_text)}"]
+                    fact_lines = [f"<b>{idx}.</b> {_safe_html(fact_text, max_chars=320)}"]
 
                     why_matters = str(fact.get("why_it_matters", "")).strip()
                     if why_matters:
                         fact_lines.append(
-                            f"   • Why it matters: {self._text_processor.sanitize_summary_text(why_matters)}"
+                            f"• <i>Why it matters:</i> {_safe_html(why_matters, max_chars=260)}"
                         )
 
                     source_hint = str(fact.get("source_hint", "")).strip()
                     if source_hint:
                         fact_lines.append(
-                            f"   • Source hint: {self._text_processor.sanitize_summary_text(source_hint)}"
+                            f"• <i>Source hint:</i> {_safe_html(source_hint, max_chars=160)}"
                         )
 
                     confidence = fact.get("confidence")
                     if confidence is not None:
                         try:
                             conf_val = float(confidence)
-                            fact_lines.append(f"   • Confidence: {conf_val:.0%}")
+                            fact_lines.append(f"• <i>Confidence:</i> <code>{conf_val:.0%}</code>")
                         except Exception:
                             fact_lines.append(
-                                f"   • Confidence: {self._text_processor.sanitize_summary_text(str(confidence))}"
+                                f"• <i>Confidence:</i> <code>{html.escape(str(confidence))}</code>"
                             )
 
                     facts_section.append("\n".join(fact_lines))
             if facts_section:
                 sections_sent = True
-                await self._text_processor.send_long_text(
-                    message,
-                    "<b>📌 Fresh Facts</b>\n" + "\n\n".join(facts_section),
-                    parse_mode="HTML",
-                )
-
-            def _clean_list(items: list[Any]) -> list[str]:
-                cleaned: list[str] = []
-                for item in items:
-                    text = str(item).strip()
-                    if not text:
-                        continue
-                    cleaned.append(self._text_processor.sanitize_summary_text(text))
-                return cleaned
+                lines.extend(["", "<b>📌 Fresh Facts</b>", "\n\n".join(facts_section)])
 
             open_questions = insights.get("open_questions")
             if isinstance(open_questions, list):
-                questions = _clean_list(open_questions)[:5]
+                questions = _clean_list(open_questions, limit=5)
                 if questions:
                     sections_sent = True
-                    await self._text_processor.send_long_text(
-                        message,
-                        "<b>❓ Open Questions</b>\n" + "\n".join(f"- {q}" for q in questions),
-                        parse_mode="HTML",
+                    lines.extend(
+                        ["", "<b>❓ Open Questions</b>", "\n".join(f"• {q}" for q in questions)]
                     )
 
             suggested_sources = insights.get("suggested_sources")
             if isinstance(suggested_sources, list):
-                sources = _clean_list(suggested_sources)[:5]
+                sources = _clean_list(suggested_sources, limit=5, item_max_chars=260)
                 if sources:
                     sections_sent = True
-                    await self._text_processor.send_long_text(
-                        message,
-                        "<b>🔗 Suggested Follow-up</b>\n" + "\n".join(f"- {s}" for s in sources),
-                        parse_mode="HTML",
+                    lines.extend(
+                        ["", "<b>🔗 Suggested Follow-up</b>", "\n".join(f"• {s}" for s in sources)]
                     )
 
             expansion = insights.get("expansion_topics")
             if isinstance(expansion, list):
-                exp_clean = _clean_list(expansion)[:8]
+                exp_clean = _clean_list(expansion, limit=6)
                 if exp_clean:
                     sections_sent = True
-                    await self._text_processor.send_long_text(
-                        message,
-                        "<b>🧠 Expansion Topics</b> (beyond the article)\n"
-                        + "\n".join(f"- {item}" for item in exp_clean),
-                        parse_mode="HTML",
+                    lines.extend(
+                        [
+                            "",
+                            "<b>🧠 Expansion Topics</b> (beyond the article)",
+                            "\n".join(f"• {item}" for item in exp_clean),
+                        ]
                     )
 
             next_steps = insights.get("next_exploration")
             if isinstance(next_steps, list):
-                nxt_clean = _clean_list(next_steps)[:8]
+                nxt_clean = _clean_list(next_steps, limit=6)
                 if nxt_clean:
                     sections_sent = True
-                    await self._text_processor.send_long_text(
-                        message,
-                        "<b>🚀 What to explore next</b>\n"
-                        + "\n".join(f"- {step}" for step in nxt_clean),
-                        parse_mode="HTML",
+                    lines.extend(
+                        [
+                            "",
+                            "<b>🚀 What to explore next</b>",
+                            "\n".join(f"• {step}" for step in nxt_clean),
+                        ]
                     )
 
             caution = insights.get("caution")
             if isinstance(caution, str) and caution.strip():
                 sections_sent = True
-                await self._text_processor.send_long_text(
-                    message,
-                    "<b>⚠️ Caveats</b>\n"
-                    + self._text_processor.sanitize_summary_text(caution.strip()),
-                    parse_mode="HTML",
-                )
+                lines.extend(["", "<b>⚠️ Caveats</b>", _safe_html(caution, max_chars=900)])
 
             if not sections_sent:
                 await self._response_sender.safe_reply(
                     message, "No additional research insights were available."
                 )
+                return
+
+            await self._text_processor.send_long_text(
+                message,
+                "\n".join(lines).strip(),
+                parse_mode="HTML",
+            )
 
         except Exception as exc:  # pragma: no cover - defensive
             raise_if_cancelled(exc)

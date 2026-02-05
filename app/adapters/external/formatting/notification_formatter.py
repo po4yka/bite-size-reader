@@ -593,49 +593,78 @@ class NotificationFormatterImpl:
     async def send_forward_accepted_notification(self, message: Any, title: str) -> None:
         """Send forward request accepted notification."""
         try:
-            await self._response_sender.safe_reply(
-                message,
+            reader = await self._is_reader_mode(message)
+
+            debug_text = (
                 "Forward Request Accepted\n"
                 f"Channel: {title}\n"
                 "Processing with structured outputs...\n"
-                "Status: Generating summary...",
+                "Status: Detecting language..."
             )
+
+            user_text = f"Processing forwarded post from {title}..." if reader else debug_text
+
+            if self._progress_tracker is not None:
+                await self._progress_tracker.update(message, user_text)
+            else:
+                await self._response_sender.safe_reply(message, user_text)
         except Exception as exc:
             raise_if_cancelled(exc)
 
     async def send_forward_language_notification(self, message: Any, detected: str | None) -> None:
         """Send forward language detection notification."""
         try:
-            await self._response_sender.safe_reply(
-                message,
-                f"Language Detection\n"
+            reader = await self._is_reader_mode(message)
+
+            debug_text = (
+                "Language Detection\n"
                 f"Detected: {detected or 'unknown'}\n"
-                f"Processing with structured outputs...\n"
-                f"Status: Sending to AI model...",
+                "Processing with structured outputs...\n"
+                "Status: Sending to AI model..."
             )
+
+            if reader:
+                user_text = f"Detected language: {detected or 'unknown'}. Sending to model..."
+            else:
+                user_text = debug_text
+
+            if self._progress_tracker is not None:
+                await self._progress_tracker.update(message, user_text)
+            else:
+                await self._response_sender.safe_reply(message, user_text)
         except Exception as exc:
             raise_if_cancelled(exc)
 
     async def send_forward_completion_notification(self, message: Any, llm: Any) -> None:
         """Send forward completion notification."""
         try:
+            reader = await self._is_reader_mode(message)
             status_emoji = "OK" if llm.status == "ok" else "Error"
             latency_sec = (llm.latency_ms or 0) / 1000.0
             structured_info = ""
             if hasattr(llm, "structured_output_used") and llm.structured_output_used:
                 mode = getattr(llm, "structured_output_mode", "unknown")
 
-                reader = await self._is_reader_mode(message)
                 if not reader:
                     structured_info = f"\nSchema: {mode.upper()}"
 
-            await self._response_sender.safe_reply(
-                message,
-                f"AI Analysis Complete\n"
+            debug_text = (
+                "AI Analysis Complete\n"
                 f"Status: {status_emoji}\n"
                 f"Time: {latency_sec:.1f}s{structured_info}\n"
-                f"Status: {'Generating summary...' if llm.status == 'ok' else 'Processing error...'}",
+                f"Status: {'Generating summary...' if llm.status == 'ok' else 'Processing error...'}"
             )
+
+            user_text = (
+                f"AI analysis done ({latency_sec:.0f}s). Generating summary..."
+                if reader and llm.status == "ok"
+                else ("AI analysis failed. See details above." if reader else debug_text)
+            )
+
+            if self._progress_tracker is not None:
+                await self._progress_tracker.update(message, user_text)
+            else:
+                await self._response_sender.safe_reply(message, user_text)
         except Exception as exc:
             raise_if_cancelled(exc)
 

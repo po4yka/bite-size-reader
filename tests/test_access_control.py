@@ -61,7 +61,7 @@ def make_bot(tmp_path: str, allowed_ids):
     cfg = _make_config(tmp_path, allowed_ids)
     from app.adapters import telegram_bot as tbmod
 
-    tbmod.Client = object  # type: ignore[misc,assignment]
+    tbmod.Client = object
     tbmod.filters = None
 
     # Mock the LLM client factory to avoid API key validation

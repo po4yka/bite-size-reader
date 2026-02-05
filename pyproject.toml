@@ -55,6 +55,8 @@ ignore = [
   "PLR0911", # too many return statements
   "PLR0912", # too many branches
   "PLR0915", # too many statements
+  "UP046",   # prefer PEP695 type params - project allows Generic/TypeVar style
+  "UP047",   # prefer PEP695 type params - project allows Generic/TypeVar style
   "BLE001",  # blind exception catch - intentional for resilience in many cases
   "FBT001",  # boolean positional arg - acceptable in many contexts
   "FBT002",  # boolean default value - acceptable in many contexts
