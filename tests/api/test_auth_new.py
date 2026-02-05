@@ -3,7 +3,12 @@ from unittest.mock import patch
 import pytest
 
 from app.api.models.auth import AppleLoginRequest, GoogleLoginRequest
-from app.api.routers.auth import endpoints as auth_endpoints, oauth as auth_oauth, secret_auth
+from app.api.routers.auth import (
+    endpoints_me as auth_endpoints_me,
+    endpoints_oauth as auth_endpoints_oauth,
+    oauth as auth_oauth,
+    secret_auth,
+)
 from app.db.database import Database
 from app.db.models import User
 
@@ -32,7 +37,7 @@ async def test_delete_account(tmp_path, monkeypatch: pytest.MonkeyPatch):
     # Mock user context from current_user dependency
     user_context = {"user_id": 123456789, "username": "testuser", "client_id": "com.example.app"}
 
-    response = await auth_endpoints.delete_account(user=user_context)
+    response = await auth_endpoints_me.delete_account(user=user_context)
 
     assert response["data"]["success"] is True
     assert not User.select().where(User.telegram_user_id == 123456789).exists()
@@ -47,7 +52,7 @@ async def test_apple_login(tmp_path, monkeypatch: pytest.MonkeyPatch):
     fake_apple_sub = "test_apple_sub_123"
     mock_claims = {"sub": fake_apple_sub, "email": "test@example.com"}
 
-    with patch.object(auth_endpoints, "verify_apple_id_token", return_value=mock_claims):
+    with patch.object(auth_endpoints_oauth, "verify_apple_id_token", return_value=mock_claims):
         payload = AppleLoginRequest(id_token="apple_test_token", client_id="com.example.app")
 
         # Calculate expected user_id using the same derivation as the code
@@ -59,7 +64,7 @@ async def test_apple_login(tmp_path, monkeypatch: pytest.MonkeyPatch):
 
         assert not User.select().where(User.telegram_user_id == apple_user_id).exists()
 
-        response = await auth_endpoints.apple_login(payload)
+        response = await auth_endpoints_oauth.apple_login(payload)
 
         tokens = response["data"]["tokens"]
         # Response uses camelCase (Pydantic alias)
@@ -80,7 +85,7 @@ async def test_google_login(tmp_path, monkeypatch: pytest.MonkeyPatch):
     fake_google_sub = "test_google_sub_456"
     mock_claims = {"sub": fake_google_sub, "email": "user@gmail.com", "name": "Test User"}
 
-    with patch.object(auth_endpoints, "verify_google_id_token", return_value=mock_claims):
+    with patch.object(auth_endpoints_oauth, "verify_google_id_token", return_value=mock_claims):
         payload = GoogleLoginRequest(id_token="google_test_token", client_id="com.example.app")
 
         # Calculate expected user_id using the same derivation as the code
@@ -92,7 +97,7 @@ async def test_google_login(tmp_path, monkeypatch: pytest.MonkeyPatch):
 
         assert not User.select().where(User.telegram_user_id == google_user_id).exists()
 
-        response = await auth_endpoints.google_login(payload)
+        response = await auth_endpoints_oauth.google_login(payload)
 
         tokens = response["data"]["tokens"]
         # Response uses camelCase (Pydantic alias)

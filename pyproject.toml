@@ -210,6 +210,9 @@ markers = [
     "integration: marks tests as integration tests",
     "unit: marks tests as unit tests",
     "asyncio: marks tests that rely on pytest-asyncio",
+    "chaos: marks chaos/fault-injection tests",
+    "stress: marks stress/load tests",
+    "benchmark: marks performance benchmark tests",
 ]
 asyncio_default_fixture_loop_scope = "function"
 

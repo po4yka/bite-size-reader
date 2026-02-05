@@ -152,6 +152,7 @@ jobs:
             -p xdist \
             -p pytest_rerunfailures \
             -p pytest_asyncio.plugin \
+            -p pytest_benchmark.plugin \
             tests/ \
             -m "not slow and not integration" \
             --cov=app \

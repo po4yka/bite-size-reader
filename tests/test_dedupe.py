@@ -5,10 +5,10 @@ import unittest
 from typing import Any, cast
 from unittest.mock import AsyncMock, patch
 
-from app.adapters.openrouter.openrouter_client import LLMCallResult
 from app.adapters.telegram.telegram_bot import TelegramBot
 from app.core.url_utils import normalize_url, url_hash_sha256
 from app.db.database import Database
+from app.models.llm.llm_models import LLMCallResult
 from tests.conftest import make_test_app_config
 
 
