@@ -1,0 +1,197 @@
+from __future__ import annotations
+
+import logging
+from typing import Any
+
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field, ValidationInfo, field_validator
+
+logger = logging.getLogger(__name__)
+
+
+class RuntimeConfig(BaseModel):
+    model_config = ConfigDict(frozen=True, populate_by_name=True)
+
+    db_path: str = Field(default="/data/app.db", validation_alias="DB_PATH")
+    log_level: str = Field(default="INFO", validation_alias="LOG_LEVEL")
+    request_timeout_sec: int = Field(default=60, validation_alias="REQUEST_TIMEOUT_SEC")
+    preferred_lang: str = Field(default="auto", validation_alias="PREFERRED_LANG")
+    debug_payloads: bool = Field(default=False, validation_alias="DEBUG_PAYLOADS")
+    enable_textacy: bool = Field(default=False, validation_alias="TEXTACY_ENABLED")
+    enable_chunking: bool = Field(default=False, validation_alias="CHUNKING_ENABLED")
+    chunk_max_chars: int = Field(default=200000, validation_alias="CHUNK_MAX_CHARS")
+    log_truncate_length: int = Field(default=1000, validation_alias="LOG_TRUNCATE_LENGTH")
+    topic_search_max_results: int = Field(default=5, validation_alias="TOPIC_SEARCH_MAX_RESULTS")
+    max_concurrent_calls: int = Field(default=4, validation_alias="MAX_CONCURRENT_CALLS")
+    summary_prompt_version: str = Field(default="v1", validation_alias="SUMMARY_PROMPT_VERSION")
+    jwt_secret_key: str = Field(
+        default="", validation_alias=AliasChoices("JWT_SECRET_KEY", "JWT_SECRET")
+    )
+    db_backup_enabled: bool = Field(default=True, validation_alias="DB_BACKUP_ENABLED")
+    db_backup_interval_minutes: int = Field(
+        default=360, validation_alias="DB_BACKUP_INTERVAL_MINUTES"
+    )
+    db_backup_retention: int = Field(default=14, validation_alias="DB_BACKUP_RETENTION")
+    db_backup_dir: str | None = Field(default=None, validation_alias="DB_BACKUP_DIR")
+    enable_hex_container: bool = Field(default=False, validation_alias="ENABLE_HEX_CONTAINER")
+    llm_provider: str = Field(default="openrouter", validation_alias="LLM_PROVIDER")
+    telegram_reply_timeout_sec: float = Field(
+        default=30.0, validation_alias="TELEGRAM_REPLY_TIMEOUT_SEC"
+    )
+
+    @field_validator("llm_provider", mode="before")
+    @classmethod
+    def _validate_llm_provider(cls, value: Any) -> str:
+        provider = str(value or "openrouter").lower().strip()
+        valid_providers = {"openrouter", "openai", "anthropic"}
+        if provider not in valid_providers:
+            msg = f"Invalid LLM provider: {provider}. Must be one of {sorted(valid_providers)}"
+            raise ValueError(msg)
+        return provider
+
+    @field_validator("log_level", mode="before")
+    @classmethod
+    def _validate_log_level(cls, value: Any) -> str:
+        log_level = str(value or "INFO").upper()
+        valid_levels = {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"}
+        if log_level not in valid_levels:
+            msg = f"Invalid log level: {value}. Must be one of {valid_levels}"
+            raise ValueError(msg)
+        return log_level
+
+    @field_validator("request_timeout_sec", mode="before")
+    @classmethod
+    def _validate_timeout(cls, value: Any) -> int:
+        try:
+            timeout = int(str(value or 60))
+        except ValueError as exc:  # pragma: no cover - defensive
+            msg = "Timeout must be a valid integer"
+            raise ValueError(msg) from exc
+        if timeout <= 0:
+            msg = "Timeout must be positive"
+            raise ValueError(msg)
+        if timeout > 3600:
+            msg = "Timeout too large (max 3600 seconds)"
+            raise ValueError(msg)
+        return timeout
+
+    @field_validator("preferred_lang", mode="before")
+    @classmethod
+    def _validate_lang(cls, value: Any) -> str:
+        lang = str(value or "auto")
+        if lang not in {"auto", "en", "ru"}:
+            msg = f"Invalid language: {lang}. Must be one of {{'auto', 'en', 'ru'}}"
+            raise ValueError(msg)
+        return lang
+
+    @field_validator("chunk_max_chars", "log_truncate_length", mode="before")
+    @classmethod
+    def _validate_positive_int(cls, value: Any, info: ValidationInfo) -> int:
+        default = cls.model_fields[info.field_name].default
+        try:
+            parsed = int(str(value if value not in (None, "") else default))
+        except ValueError as exc:  # pragma: no cover - defensive
+            msg = f"{info.field_name.replace('_', ' ')} must be a valid integer"
+            raise ValueError(msg) from exc
+        if parsed <= 0:
+            msg = f"{info.field_name.replace('_', ' ').capitalize()} must be positive"
+            raise ValueError(msg)
+        return parsed
+
+    @field_validator("topic_search_max_results", mode="before")
+    @classmethod
+    def _validate_topic_search_limit(cls, value: Any) -> int:
+        default = cls.model_fields["topic_search_max_results"].default
+        try:
+            parsed = int(str(value if value not in (None, "") else default))
+        except ValueError as exc:  # pragma: no cover - defensive
+            msg = "Topic search max results must be a valid integer"
+            raise ValueError(msg) from exc
+        if parsed <= 0:
+            msg = "Topic search max results must be positive"
+            raise ValueError(msg)
+        if parsed > 10:
+            msg = "Topic search max results must be 10 or fewer"
+            raise ValueError(msg)
+        return parsed
+
+    @field_validator("summary_prompt_version", mode="before")
+    @classmethod
+    def _validate_prompt_version(cls, value: Any) -> str:
+        raw = str(value or "v1").strip()
+        if not raw:
+            msg = "Summary prompt version cannot be empty"
+            raise ValueError(msg)
+        if len(raw) > 30:
+            msg = "Summary prompt version is too long"
+            raise ValueError(msg)
+        if any(ch.isspace() for ch in raw):
+            msg = "Summary prompt version cannot contain whitespace"
+            raise ValueError(msg)
+        return raw
+
+    @field_validator("db_backup_interval_minutes", mode="before")
+    @classmethod
+    def _validate_backup_interval(cls, value: Any) -> int:
+        try:
+            parsed = int(str(value or 360))
+        except ValueError as exc:
+            msg = "DB backup interval (minutes) must be a valid integer"
+            raise ValueError(msg) from exc
+        if parsed < 5 or parsed > 10080:
+            msg = "DB backup interval (minutes) must be between 5 and 10080"
+            raise ValueError(msg)
+        return parsed
+
+    @field_validator("db_backup_retention", mode="before")
+    @classmethod
+    def _validate_backup_retention(cls, value: Any) -> int:
+        try:
+            parsed = int(str(value or 14))
+        except ValueError as exc:
+            msg = "DB backup retention must be a valid integer"
+            raise ValueError(msg) from exc
+        if parsed < 0 or parsed > 1000:
+            msg = "DB backup retention must be between 0 and 1000"
+            raise ValueError(msg)
+        return parsed
+
+    @field_validator("db_backup_dir", mode="before")
+    @classmethod
+    def _validate_backup_dir(cls, value: Any) -> str | None:
+        if value is None:
+            return None
+        trimmed = str(value).strip()
+        if not trimmed:
+            return None
+        if "\x00" in trimmed:
+            msg = "DB backup directory contains invalid characters"
+            raise ValueError(msg)
+        return trimmed
+
+    @field_validator("max_concurrent_calls", mode="before")
+    @classmethod
+    def _validate_max_concurrent_calls(cls, value: Any) -> int:
+        try:
+            parsed = int(str(value or 4))
+        except ValueError as exc:
+            msg = "Max concurrent calls must be a valid integer"
+            raise ValueError(msg) from exc
+        if parsed < 1 or parsed > 100:
+            msg = "Max concurrent calls must be between 1 and 100"
+            raise ValueError(msg)
+        return parsed
+
+    @field_validator("jwt_secret_key", mode="before")
+    @classmethod
+    def _validate_jwt_secret_key(cls, value: Any) -> str:
+        if value in (None, ""):
+            return ""
+        secret = str(value).strip()
+        if len(secret) < 32:
+            logger.warning(
+                "JWT secret key is shorter than 32 characters - this is insecure for production"
+            )
+        if len(secret) > 500:
+            msg = "JWT secret key appears to be too long"
+            raise ValueError(msg)
+        return secret

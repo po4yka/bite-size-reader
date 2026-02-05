@@ -36,3 +36,11 @@ repos:
       - id: check-yaml
       - id: check-toml
       - id: check-merge-conflict
+
+  - repo: local
+    hooks:
+      - id: class-loc-limit
+        name: Disallow classes > 1000 LOC
+        entry: python scripts/check_class_size.py --max-loc 1000 --baseline scripts/class_size_baseline.json
+        language: python
+        types: [python]

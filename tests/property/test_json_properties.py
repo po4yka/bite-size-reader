@@ -12,7 +12,7 @@ hypothesis = pytest.importorskip("hypothesis")
 from hypothesis import given, settings, strategies as st
 
 # Strategy for generating arbitrary summary-like structures
-summary_strategy = st.fixed_dictionaries(
+summary_strategy = st.fixed_dictionaries(  # type: ignore[misc]
     {
         "summary_250": st.text(max_size=500),
         "summary_1000": st.text(max_size=2000),

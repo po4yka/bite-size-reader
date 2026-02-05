@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime  # noqa: TC003 - Pydantic needs this at runtime
+from datetime import datetime
+from enum import Enum
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -29,29 +30,48 @@ def _pyrogram_to_dict(obj: Any) -> dict[str, Any]:
     Returns:
         A dictionary representation of the object with all nested objects converted
     """
-    if obj is None:
-        return {}
-    if isinstance(obj, dict):
-        return obj
-    if not hasattr(obj, "__dict__"):
-        return {}
 
-    result: dict[str, Any] = {}
-    for key, value in obj.__dict__.items():
+    def _convert(value: Any, *, _seen: set[int], _depth: int) -> Any:
         if value is None:
-            result[key] = None
-        elif isinstance(value, str | int | float | bool):
-            result[key] = value
-        elif isinstance(value, list):
-            result[key] = [
-                _pyrogram_to_dict(item) if hasattr(item, "__dict__") else item for item in value
-            ]
-        elif hasattr(value, "__dict__"):
-            # Recursively convert nested Pyrogram objects (e.g., ChatPhoto, User)
-            result[key] = _pyrogram_to_dict(value)
-        else:
-            result[key] = value
-    return result
+            return None
+
+        # Primitive / already-friendly values
+        if isinstance(value, str | int | float | bool | datetime):
+            return value
+
+        if isinstance(value, Enum):
+            return value.value
+
+        if isinstance(value, dict):
+            return {str(k): _convert(v, _seen=_seen, _depth=_depth + 1) for k, v in value.items()}
+
+        if isinstance(value, list | tuple):
+            return [_convert(item, _seen=_seen, _depth=_depth + 1) for item in value]
+
+        if not hasattr(value, "__dict__"):
+            return value
+
+        # Protect against cycles (e.g., channel <-> linked discussion chat) and
+        # excessively deep structures.
+        if _depth >= 8:
+            return {}
+
+        value_id = id(value)
+        if value_id in _seen:
+            return {}
+        _seen.add(value_id)
+
+        result: dict[str, Any] = {}
+        for key, nested in value.__dict__.items():
+            # Skip internal Pyrogram state (_client, raw objects, caches, etc.)
+            if isinstance(key, str) and key.startswith("_"):
+                continue
+            result[str(key)] = _convert(nested, _seen=_seen, _depth=_depth + 1)
+
+        return result
+
+    converted = _convert(obj, _seen=set(), _depth=0)
+    return converted if isinstance(converted, dict) else {}
 
 
 class TelegramMessage(BaseModel):

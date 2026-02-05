@@ -475,6 +475,71 @@ class TestTelegramMessage(unittest.TestCase):
         assert isinstance(message.reply_markup, dict)
         assert message.reply_markup["inline_keyboard"][0][0]["text"] == "Test"
 
+    def test_from_pyrogram_message_forwarded_with_linked_chat_cycle(self):
+        """Ensure channel forwards don't crash when Chat.linked_chat forms a cycle."""
+
+        from pyrogram.enums import ChatType
+        from pyrogram.types import Chat
+
+        class MockMessage:
+            def __init__(self):
+                self.id = 12345
+                self.date = datetime.now()
+                self.text = "Forwarded channel post"
+                self.forward_from_chat = None
+                self.forward_from_message_id = None
+
+        def _make_chat(*, chat_id: int, chat_type: ChatType, title: str):
+            return Chat(
+                client=None,
+                id=chat_id,
+                type=chat_type,
+                is_verified=False,
+                is_restricted=False,
+                is_creator=False,
+                is_scam=False,
+                is_fake=False,
+                is_support=False,
+                title=title,
+                username=None,
+                first_name=None,
+                last_name=None,
+                photo=None,
+                bio=None,
+                description=None,
+                dc_id=None,
+                has_protected_content=None,
+                invite_link=None,
+                pinned_message=None,
+                sticker_set_name=None,
+                can_set_sticker_set=None,
+                members_count=None,
+                restrictions=None,
+                permissions=None,
+                distance=None,
+                linked_chat=None,
+                send_as_chat=None,
+                available_reactions=None,
+            )
+
+        channel = _make_chat(chat_id=-1001, chat_type=ChatType.CHANNEL, title="Test Channel")
+        discussion = _make_chat(
+            chat_id=-2001, chat_type=ChatType.SUPERGROUP, title="Test Discussion"
+        )
+        channel.linked_chat = discussion
+        discussion.linked_chat = channel
+
+        mock_message = MockMessage()
+        mock_message.forward_from_chat = channel
+        mock_message.forward_from_message_id = 54321
+
+        message = TelegramMessage.from_pyrogram_message(mock_message)
+
+        assert message.is_forwarded
+        assert message.forward_from_chat is not None
+        assert message.forward_from_chat.id == -1001
+        assert message.forward_from_message_id == 54321
+
     def test_from_pyrogram_message_forwarded_sender_name(self):
         """Test that privacy-protected forwards (forward_sender_name only) are detected."""
 

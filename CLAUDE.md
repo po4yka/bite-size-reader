@@ -305,7 +305,7 @@ Claude Code hooks provide automatic safety checks. See `docs/claude_code_hooks.m
 3. Add error handling and retry logic (see `app/adapters/openrouter/error_handler.py` for reference)
 4. Add request/response models in `app/models/`
 5. Persist API calls in new DB table (follow `llm_calls` pattern)
-6. Update config (`app/config.py`) with new env vars
+6. Update config (`app/config/`) with new env vars
 
 ### Debugging a Failing Summarization
 
@@ -332,7 +332,7 @@ When making changes, these are the most critical files to understand:
 - **`app/core/summary_schema.py`** -- Summary Pydantic model (full schema)
 - **`app/core/url_utils.py`** -- URL normalization and deduplication
 - **`app/db/models.py`** -- Database schema (ORM models)
-- **`app/config.py`** -- Configuration loading
+- **`app/config/settings.py`** -- Configuration loading
 - **`app/api/main.py`** -- Mobile API entry point
 - **`app/mcp/server.py`** -- MCP server for AI agents
 - **`bot.py`** -- Entrypoint (wires everything together)

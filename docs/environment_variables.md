@@ -1,6 +1,6 @@
 # Environment Variables Reference
 
-Complete reference for all Bite-Size Reader configuration. Source of truth: `app/config.py`.
+Complete reference for all Bite-Size Reader configuration. Source of truth: `app/config/` (entrypoint `app/config/settings.py`).
 
 ## Required
 

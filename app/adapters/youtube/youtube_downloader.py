@@ -3,10 +3,9 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
 from collections.abc import Mapping
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
@@ -17,6 +16,13 @@ import yt_dlp
 from youtube_transcript_api import YouTubeTranscriptApi
 from youtube_transcript_api._errors import NoTranscriptFound, TranscriptsDisabled, VideoUnavailable
 
+from app.adapters.youtube.youtube_downloader_parts import (
+    metadata as _metadata,
+    storage as _storage,
+    transcript_api as _transcript_api,
+    vtt as _vtt,
+    yt_dlp_client as _yt_dlp_client,
+)
 from app.core.async_utils import raise_if_cancelled
 from app.core.lang import detect_language
 from app.core.url_utils import extract_youtube_video_id, normalize_url, url_hash_sha256
@@ -34,97 +40,9 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-# Known ISO 639-1 language codes (subset covering common languages)
-_KNOWN_LANG_CODES = {
-    "af",
-    "am",
-    "ar",
-    "az",
-    "be",
-    "bg",
-    "bn",
-    "bs",
-    "ca",
-    "cs",
-    "cy",
-    "da",
-    "de",
-    "el",
-    "en",
-    "es",
-    "et",
-    "eu",
-    "fa",
-    "fi",
-    "fr",
-    "ga",
-    "gl",
-    "gu",
-    "ha",
-    "he",
-    "hi",
-    "hr",
-    "hu",
-    "hy",
-    "id",
-    "is",
-    "it",
-    "ja",
-    "ka",
-    "kk",
-    "km",
-    "kn",
-    "ko",
-    "ku",
-    "ky",
-    "lb",
-    "lo",
-    "lt",
-    "lv",
-    "mk",
-    "ml",
-    "mn",
-    "mr",
-    "ms",
-    "mt",
-    "my",
-    "nb",
-    "ne",
-    "nl",
-    "nn",
-    "no",
-    "or",
-    "pa",
-    "pl",
-    "ps",
-    "pt",
-    "ro",
-    "ru",
-    "rw",
-    "sd",
-    "si",
-    "sk",
-    "sl",
-    "so",
-    "sq",
-    "sr",
-    "sv",
-    "sw",
-    "ta",
-    "te",
-    "tg",
-    "th",
-    "tk",
-    "tl",
-    "tr",
-    "uk",
-    "ur",
-    "uz",
-    "vi",
-    "zh",
-}
-
-_VALID_QUALITIES = {"240", "360", "480", "720", "1080", "1440", "2160"}
+# Backwards-compatible aliases (private): keep names stable while moving logic out.
+_KNOWN_LANG_CODES = _vtt.KNOWN_LANG_CODES
+_VALID_QUALITIES = _yt_dlp_client.VALID_QUALITIES
 
 
 class YouTubeDownloader:
@@ -408,19 +326,10 @@ class YouTubeDownloader:
             if not download_succeeded and output_dir is not None:
                 try:
                     if output_dir.exists():
-                        deleted_count = 0
-                        for partial in output_dir.glob(f"{video_id}_*"):
-                            try:
-                                partial.unlink()
-                                deleted_count += 1
-                            except OSError:
-                                pass
-                        # Remove empty date directory
-                        try:
-                            if not any(output_dir.iterdir()):
-                                output_dir.rmdir()
-                        except OSError:
-                            pass
+                        deleted_count = _storage.cleanup_partial_download_files(
+                            output_dir=output_dir,
+                            video_id=video_id,
+                        )
                         if deleted_count > 0:
                             logger.info(
                                 "youtube_partial_download_cleaned",
@@ -436,217 +345,39 @@ class YouTubeDownloader:
     async def _extract_transcript_api(
         self, video_id: str, correlation_id: str | None
     ) -> tuple[str, str, bool, str]:
-        """Extract transcript using youtube-transcript-api with a light retry.
-
-        Returns:
-            (transcript_text, language, auto_generated, transcript_source)
-        """
-        last_error: Exception | None = None
-        for attempt in range(2):
-            try:
-                # Preferred languages from config
-                preferred_langs = self.cfg.youtube.subtitle_languages
-
-                # Try to get transcript in preferred language
-                transcript_list = await asyncio.wait_for(
-                    asyncio.to_thread(
-                        cast("Any", YouTubeTranscriptApi).list_transcripts,
-                        video_id,
-                    ),
-                    timeout=30.0,
-                )
-
-                transcript = None
-                auto_generated = False
-                selected_lang = "en"
-
-                # Try manually created transcripts first
-                try:
-                    for lang in preferred_langs:
-                        try:
-                            transcript = transcript_list.find_transcript([lang])
-                            selected_lang = lang
-                            auto_generated = False
-                            logger.info(
-                                "youtube_transcript_manual_found",
-                                extra={
-                                    "video_id": video_id,
-                                    "language": lang,
-                                    "cid": correlation_id,
-                                },
-                            )
-                            break
-                        except NoTranscriptFound:
-                            continue
-                except (TranscriptsDisabled, VideoUnavailable):
-                    # Re-raise these to be handled by outer try-except
-                    raise
-                except Exception as e:
-                    # Log unexpected errors but continue to auto-generated fallback
-                    logger.warning(
-                        "youtube_transcript_manual_search_error",
-                        extra={
-                            "video_id": video_id,
-                            "error": str(e),
-                            "error_type": type(e).__name__,
-                            "cid": correlation_id,
-                        },
-                    )
-
-                # Fallback to auto-generated if no manual transcript found
-                if not transcript:
-                    try:
-                        transcript = transcript_list.find_generated_transcript(preferred_langs)
-                        selected_lang = transcript.language_code
-                        auto_generated = True
-                        logger.info(
-                            "youtube_transcript_auto_found",
-                            extra={
-                                "video_id": video_id,
-                                "language": selected_lang,
-                                "cid": correlation_id,
-                            },
-                        )
-                    except NoTranscriptFound:
-                        logger.warning(
-                            "youtube_transcript_not_found",
-                            extra={"video_id": video_id, "cid": correlation_id},
-                        )
-                        return "", "en", False, "youtube-transcript-api"
-
-                # Fetch transcript data
-                transcript_data = await asyncio.wait_for(
-                    asyncio.to_thread(transcript.fetch),
-                    timeout=30.0,
-                )
-
-                # Format transcript text
-                transcript_text = self._format_transcript(transcript_data)
-
-                logger.info(
-                    "youtube_transcript_extracted",
-                    extra={
-                        "video_id": video_id,
-                        "language": selected_lang,
-                        "auto_generated": auto_generated,
-                        "length": len(transcript_text),
-                        "cid": correlation_id,
-                    },
-                )
-
-                return transcript_text, selected_lang, auto_generated, "youtube-transcript-api"
-
-            except TranscriptsDisabled as e:
-                logger.warning(
-                    "youtube_transcript_disabled",
-                    extra={"video_id": video_id, "error": str(e), "cid": correlation_id},
-                )
-                logger.info(
-                    "youtube_continuing_without_transcript",
-                    extra={"video_id": video_id, "cid": correlation_id},
-                )
-                return "", "en", False, "youtube-transcript-api"
-            except VideoUnavailable as e:
-                logger.error(
-                    "youtube_transcript_video_unavailable",
-                    extra={"video_id": video_id, "error": str(e), "cid": correlation_id},
-                )
-                raise ValueError(
-                    "❌ Video is unavailable or does not exist. The video may have been deleted or made private."
-                ) from e
-            except Exception as e:
-                raise_if_cancelled(e)
-                last_error = e
-                logger.warning(
-                    "youtube_transcript_extraction_failed",
-                    extra={
-                        "video_id": video_id,
-                        "error": str(e),
-                        "attempt": attempt + 1,
-                        "cid": correlation_id,
-                    },
-                )
-                if attempt == 0:
-                    await asyncio.sleep(1)
-                    continue
-                return "", "en", False, "youtube-transcript-api"
-
-        # Should not reach here, but return safe empty result
-        logger.warning(
-            "youtube_transcript_extraction_exhausted",
-            extra={"video_id": video_id, "error": str(last_error), "cid": correlation_id},
+        return await _transcript_api.extract_transcript_via_api(
+            video_id=video_id,
+            preferred_langs=self.cfg.youtube.subtitle_languages,
+            correlation_id=correlation_id,
+            youtube_transcript_api=YouTubeTranscriptApi,
+            no_transcript_found_exc=NoTranscriptFound,
+            transcripts_disabled_exc=TranscriptsDisabled,
+            video_unavailable_exc=VideoUnavailable,
+            raise_if_cancelled=raise_if_cancelled,
+            max_transcript_chars=self._MAX_TRANSCRIPT_CHARS,
+            log=logger,
         )
-        return "", "en", False, "youtube-transcript-api"
 
     _MAX_TRANSCRIPT_CHARS = 500_000  # ~125k tokens, sufficient for most LLMs
 
     def _format_transcript(self, transcript_data: list[dict]) -> str:
-        """Format transcript data into readable text with timestamps.
-
-        Args:
-            transcript_data: List of transcript entries with 'text', 'start', 'duration'
-
-        Returns:
-            Formatted transcript text
-        """
-        lines = []
-        for entry in transcript_data:
-            text = entry.get("text", "").strip()
-            if text:
-                # Don't include timestamps in the final transcript for better LLM processing
-                # Just join all text naturally
-                lines.append(text)
-
-        # Join with spaces and clean up, removing duplicate spaces
-        transcript = " ".join(lines)
-        result = " ".join(transcript.split())
-        if len(result) > self._MAX_TRANSCRIPT_CHARS:
-            logger.warning(
-                "youtube_transcript_truncated",
-                extra={
-                    "original_length": len(result),
-                    "truncated_to": self._MAX_TRANSCRIPT_CHARS,
-                },
-            )
-            result = result[: self._MAX_TRANSCRIPT_CHARS]
-        return result
+        return _transcript_api.format_transcript(
+            transcript_data,
+            max_chars=self._MAX_TRANSCRIPT_CHARS,
+            log=logger,
+        )
 
     def _get_ydl_opts(self, video_id: str, output_path: Path) -> dict:
-        """Get yt-dlp options for 1080p download with subtitles."""
-        raw_quality = self.cfg.youtube.preferred_quality.rstrip("p")  # Remove 'p' suffix
-        if raw_quality not in _VALID_QUALITIES:
-            logger.warning(
-                "youtube_invalid_quality_fallback",
-                extra={"configured": self.cfg.youtube.preferred_quality, "fallback": "1080"},
-            )
-            raw_quality = "1080"
-        quality = raw_quality
-
-        return {
-            # Video format: best video up to configured quality + best audio, merge to mp4
-            "format": f"bestvideo[height<={quality}][ext=mp4]+bestaudio[ext=m4a]/best[height<={quality}]",
-            # Output template: organized by date and video ID
-            "outtmpl": str(output_path / f"{video_id}_%(title)s.%(ext)s"),
-            # Download subtitles/captions
-            "writesubtitles": True,
-            "writeautomaticsub": True,
-            "subtitleslangs": self.cfg.youtube.subtitle_languages,
-            "subtitlesformat": "vtt",
-            # Write video metadata to JSON file
-            "writeinfojson": True,
-            # Write thumbnail
-            "writethumbnail": True,
-            # Prefer FFmpeg for merging (better quality)
-            "prefer_ffmpeg": True,
-            "merge_output_format": "mp4",
-            # Quiet mode (we handle logging)
-            "quiet": True,
-            "no_warnings": False,
-            # Abort on error
-            "ignoreerrors": False,
-            # Max file size check
-            "max_filesize": self.cfg.youtube.max_video_size_mb * 1024 * 1024,
-        }
+        return cast(
+            "dict",
+            _yt_dlp_client.build_ydl_opts(
+                video_id=video_id,
+                output_path=output_path,
+                preferred_quality=self.cfg.youtube.preferred_quality,
+                subtitle_languages=self.cfg.youtube.subtitle_languages,
+                max_video_size_mb=self.cfg.youtube.max_video_size_mb,
+            ),
+        )
 
     def _download_video_sync(
         self,
@@ -661,179 +392,20 @@ class YouTubeDownloader:
 
         This runs in a thread pool to avoid blocking the async event loop.
         """
-        video_id = extract_youtube_video_id(url)
-
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            # Extract info without downloading first (to check size and get metadata)
-            try:
-                info = ydl.extract_info(url, download=False)
-            except yt_dlp.utils.DownloadError as e:
-                error_msg = str(e).lower()
-                logger.error(
-                    "yt_dlp_extract_info_failed",
-                    extra={"url": url, "error": str(e), "cid": correlation_id},
-                )
-
-                # Categorize common errors with user-friendly messages
-                if "sign in to confirm your age" in error_msg or "age-restricted" in error_msg:
-                    raise ValueError(
-                        "❌ This video is age-restricted and cannot be downloaded. "
-                        "YouTube requires login/age verification for this content."
-                    ) from e
-                if "video is not available" in error_msg or "video unavailable" in error_msg:
-                    raise ValueError(
-                        "❌ Video is not available. It may be private, deleted, or geo-blocked in your region."
-                    ) from e
-                if "private video" in error_msg:
-                    raise ValueError("❌ This video is private and cannot be accessed.") from e
-                if "members-only" in error_msg or "join this channel" in error_msg:
-                    raise ValueError(
-                        "❌ This video is members-only content. YouTube Premium or channel membership required."
-                    ) from e
-                if "this live event will begin" in error_msg or "premieres in" in error_msg:
-                    raise ValueError(
-                        "❌ This video is a scheduled premiere or upcoming live stream. "
-                        "Please try again after it starts."
-                    ) from e
-                if "copyright" in error_msg:
-                    raise ValueError("❌ Video unavailable due to copyright restrictions.") from e
-                if "geo" in error_msg or "not available in your country" in error_msg:
-                    raise ValueError(
-                        "❌ This video is geo-blocked and not available in your region."
-                    ) from e
-                # Generic extraction error
-                raise ValueError(f"❌ Failed to extract video information: {str(e)[:200]}") from e
-            except Exception as e:
-                logger.error(
-                    "yt_dlp_extract_info_failed",
-                    extra={"url": url, "error": str(e), "cid": correlation_id},
-                )
-                raise ValueError(
-                    f"❌ Unexpected error extracting video info: {str(e)[:200]}"
-                ) from e
-
-            # Check file size
-            filesize = info.get("filesize") or info.get("filesize_approx", 0)
-            max_size = self.cfg.youtube.max_video_size_mb * 1024 * 1024
-
-            if filesize > max_size:
-                raise ValueError(
-                    f"❌ Video too large: {filesize / 1024 / 1024:.1f}MB exceeds maximum allowed size "
-                    f"({self.cfg.youtube.max_video_size_mb}MB). Try a lower quality setting."
-                )
-
-            # Download video
-            try:
-                ydl.download([url])
-            except yt_dlp.utils.DownloadError as e:
-                error_msg = str(e).lower()
-                logger.error(
-                    "yt_dlp_download_failed",
-                    extra={"url": url, "error": str(e), "cid": correlation_id},
-                )
-
-                # Check for specific download errors
-                if "http error 429" in error_msg or "too many requests" in error_msg:
-                    raise ValueError(
-                        "❌ YouTube rate limit exceeded. Please try again in a few minutes."
-                    ) from e
-                if "http error 403" in error_msg:
-                    raise ValueError(
-                        "❌ Access forbidden. Video may require authentication or is geo-blocked."
-                    ) from e
-                if "http error 404" in error_msg:
-                    raise ValueError(
-                        "❌ Video not found. It may have been deleted or the URL is incorrect."
-                    ) from e
-                if "timed out" in error_msg or "timeout" in error_msg:
-                    raise ValueError(
-                        "❌ Download timed out. Please try again or check your internet connection."
-                    ) from e
-                if "connection" in error_msg:
-                    raise ValueError(
-                        "❌ Network connection error. Please check your internet connection and try again."
-                    ) from e
-                raise ValueError(f"❌ Download failed: {str(e)[:200]}") from e
-            except Exception as e:
-                logger.error(
-                    "yt_dlp_download_failed",
-                    extra={"url": url, "error": str(e), "cid": correlation_id},
-                )
-                raise ValueError(f"❌ Unexpected download error: {str(e)[:200]}") from e
-
-            # Get downloaded file paths
-            video_file = ydl.prepare_filename(info)
-            video_path = Path(video_file)
-
-            # Find subtitle file (may have different language codes)
-            subtitle_file = None
-            for lang in self.cfg.youtube.subtitle_languages:
-                sub_path = video_path.with_suffix(f".{lang}.vtt")
-                if sub_path.exists():
-                    subtitle_file = str(sub_path)
-                    break
-
-            # Clean up extra VTT files for this video
-            for vtt_path in video_path.parent.glob(f"{video_id}_*.vtt"):
-                if subtitle_file and str(vtt_path) == subtitle_file:
-                    continue
-                try:
-                    vtt_path.unlink()
-                except OSError:
-                    pass
-
-            metadata_file = video_path.with_suffix(".info.json")
-            thumbnail_file = None
-            # Thumbnail can have various extensions
-            for ext in [".jpg", ".png", ".webp"]:
-                thumb_path = video_path.with_suffix(ext)
-                if thumb_path.exists():
-                    thumbnail_file = str(thumb_path)
-                    break
-
-            # Load metadata if available
-            if metadata_file.exists():
-                try:
-                    with open(metadata_file, encoding="utf-8") as f:
-                        metadata = json.load(f)
-                except (json.JSONDecodeError, OSError) as exc:
-                    logger.warning(
-                        "youtube_metadata_file_corrupt",
-                        extra={"path": str(metadata_file), "error": str(exc)},
-                    )
-                    metadata = info
-            else:
-                metadata = info
-
-            # Validate video file exists and is non-empty
-            actual_size = video_path.stat().st_size if video_path.exists() else 0
-            if actual_size == 0:
-                raise ValueError(
-                    "Video file missing or empty after download. "
-                    "ffmpeg may have failed to merge video/audio streams."
-                )
-
-            uploader = metadata.get("uploader")
-
-            return {
-                "video_file_path": str(video_file),
-                "subtitle_file_path": subtitle_file,
-                "metadata_file_path": str(metadata_file) if metadata_file.exists() else None,
-                "thumbnail_file_path": thumbnail_file,
-                "video_id": metadata.get("id", video_id),
-                "title": metadata.get("title", "Unknown"),
-                "channel": uploader if uploader is not None else metadata.get("channel", "Unknown"),
-                "channel_id": metadata.get("channel_id"),
-                "duration": metadata.get("duration"),
-                "resolution": f"{metadata.get('height', '?')}p",
-                "file_size": actual_size,
-                "upload_date": metadata.get("upload_date"),
-                "view_count": metadata.get("view_count"),
-                "like_count": metadata.get("like_count"),
-                "vcodec": metadata.get("vcodec"),
-                "acodec": metadata.get("acodec"),
-                "format_id": metadata.get("format_id"),
-            }
+        _ = download_id
+        _ = message
+        _ = silent
+        return cast(
+            "dict",
+            _yt_dlp_client.download_video_sync(
+                url=url,
+                ydl_opts=cast("dict[str, Any]", ydl_opts),
+                subtitle_languages=self.cfg.youtube.subtitle_languages,
+                correlation_id=correlation_id,
+                extract_youtube_video_id=extract_youtube_video_id,
+                yt_dlp_module=yt_dlp,
+            ),
+        )
 
     async def _create_video_request(
         self, message: Any, url: str, norm: str, dedupe: str, correlation_id: str | None
@@ -898,65 +470,20 @@ class YouTubeDownloader:
 
     def _calculate_storage_usage(self) -> int:
         """Calculate total storage used by video-related files in bytes."""
-        total = 0
-        eligible_suffixes = {".mp4", ".info.json", ".vtt", ".jpg", ".png", ".webp"}
-        try:
-            for file_path in self.storage_path.rglob("*"):
-                if file_path.is_file() and file_path.suffix.lower() in eligible_suffixes:
-                    total += file_path.stat().st_size
-        except Exception as e:
-            logger.warning("youtube_storage_calculation_failed", extra={"error": str(e)})
-
-        return total
+        return _storage.calculate_storage_usage(self.storage_path)
 
     def _auto_cleanup_storage(self, current_usage: int, max_storage: int) -> int:
         """Remove old files until under budget or no candidates remain.
 
         Returns reclaimed bytes.
         """
-        reclaimed = 0
-        retention_days = self.cfg.youtube.cleanup_after_days
-        cutoff = datetime.now(UTC) - timedelta(days=retention_days)
-        eligible_suffixes = {".mp4", ".info.json", ".vtt", ".jpg", ".png", ".webp"}
-
-        candidates: list[tuple[Path, int, float]] = []
-        for file_path in self.storage_path.rglob("*"):
-            if not file_path.is_file():
-                continue
-            if file_path.suffix.lower() not in eligible_suffixes:
-                continue
-            try:
-                stat = file_path.stat()
-            except OSError:
-                continue
-            modified = datetime.fromtimestamp(stat.st_mtime, UTC)
-            if modified < cutoff:
-                candidates.append((file_path, stat.st_size, stat.st_mtime))
-
-        candidates.sort(key=lambda x: x[2])  # oldest first
-
-        for path, size, _ in candidates:
-            if current_usage - reclaimed <= max_storage * 0.9:
-                break
-            try:
-                path.unlink()
-                reclaimed += size
-            except OSError as exc:
-                logger.warning(
-                    "youtube_cleanup_delete_failed",
-                    extra={"path": str(path), "error": str(exc)},
-                )
-                continue
-
-        logger.info(
-            "youtube_cleanup_completed",
-            extra={
-                "candidates": len(candidates),
-                "reclaimed_bytes": reclaimed,
-                "retention_days": retention_days,
-            },
+        return _storage.auto_cleanup_storage(
+            self.storage_path,
+            current_usage=current_usage,
+            max_storage=max_storage,
+            retention_days=self.cfg.youtube.cleanup_after_days,
+            now=datetime.now(UTC),
         )
-        return reclaimed
 
     def _load_transcript_from_vtt(
         self, subtitle_path: str | None, correlation_id: str | None
@@ -988,76 +515,18 @@ class YouTubeDownloader:
 
     def _parse_vtt_file(self, path: Path) -> tuple[str, str | None]:
         """Parse a VTT subtitle file into plain text."""
-        lines: list[str] = []
-        lang = None
-
-        # Try to infer language code from filename suffix, e.g., .en.vtt
-        parts = path.name.split(".")
-        if len(parts) >= 3:
-            candidate = parts[-2].lower()
-            lang = candidate if candidate in _KNOWN_LANG_CODES else None
-
-        with path.open(encoding="utf-8") as f:
-            for raw in f:
-                stripped = raw.strip()
-                if not stripped:
-                    continue
-                if stripped.startswith("WEBVTT"):
-                    continue
-                if "-->" in stripped:
-                    continue
-                if stripped.isdigit():
-                    continue
-                lines.append(stripped)
-
-        text = " ".join(lines)
-        return " ".join(text.split()), lang
+        return _vtt.parse_vtt_file(path, known_lang_codes=_KNOWN_LANG_CODES)
 
     def _format_metadata_header(self, metadata: dict) -> str:
         """Create a concise metadata header to give the summarizer context."""
-        title = metadata.get("title")
-        channel = metadata.get("channel")
-        duration = metadata.get("duration")
-        resolution = metadata.get("resolution")
-
-        parts = []
-        if title:
-            parts.append(f"Title: {title}")
-        if channel:
-            parts.append(f"Channel: {channel}")
-        if duration:
-            parts.append(self._format_duration(duration))
-        if resolution:
-            parts.append(f"Resolution: {resolution}")
-
-        return " | ".join(parts)
+        return _metadata.format_metadata_header(metadata)
 
     def _format_duration(self, duration: int | None) -> str:
-        if duration is None:
-            return ""
-        minutes, seconds = divmod(int(duration), 60)
-        hours, minutes = divmod(minutes, 60)
-        if hours:
-            return f"Duration: {hours}h {minutes}m {seconds}s"
-        if minutes:
-            return f"Duration: {minutes}m {seconds}s"
-        return f"Duration: {seconds}s"
+        return _metadata.format_duration(duration)
 
     def _combine_metadata_and_transcript(self, metadata: dict, transcript_text: str) -> str:
         """Prepend metadata header to transcript for better summarization context."""
-        header = self._format_metadata_header(metadata)
-        preamble = (
-            "[Source: YouTube video transcript. "
-            "Summarize this as video content — "
-            "use watch time instead of reading time, "
-            "and set source_type to an appropriate value for video content.]"
-        )
-        parts: list[str] = [preamble]
-        if header:
-            parts.append(header)
-        if transcript_text:
-            parts.append(transcript_text)
-        return "\n\n".join(parts)
+        return _metadata.combine_metadata_and_transcript(metadata, transcript_text)
 
     def _build_metadata_dict(self, download: dict | Any) -> dict:
         """Build metadata dictionary from VideoDownload model or dict."""

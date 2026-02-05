@@ -24,178 +24,47 @@ class SummaryPresenterImpl:
 
     @staticmethod
     def _truncate_plain_text(text: str, max_len: int) -> str:
-        text = re.sub(r"\s+", " ", str(text or "")).strip()
-        if max_len <= 0 or len(text) <= max_len:
-            return text
+        from app.adapters.external.formatting.summary_presenter_parts.card import (
+            truncate_plain_text,
+        )
 
-        # Try to cut on a word boundary near the end for nicer output
-        soft_min = max(0, int(max_len * 0.7))
-        cut = text.rfind(" ", soft_min, max_len)
-        if cut == -1:
-            cut = max_len
-        return text[:cut].rstrip() + "…"
+        return truncate_plain_text(text, max_len)
 
     @staticmethod
     def _extract_domain_from_url(url: str) -> str | None:
-        try:
-            from urllib.parse import urlparse
+        from app.adapters.external.formatting.summary_presenter_parts.card import (
+            extract_domain_from_url,
+        )
 
-            parsed = urlparse(url)
-            host = (parsed.netloc or "").strip()
-            return host or None
-        except Exception:
-            return None
+        return extract_domain_from_url(url)
 
     def _compact_tldr(self, text: str, *, max_sentences: int = 3, max_chars: int = 520) -> str:
         """Return the first 2-3 sentences (best-effort) for the card TL;DR."""
-        cleaned = self._text_processor.sanitize_summary_text(text) if text else ""
-        cleaned = re.sub(r"\s+", " ", cleaned).strip()
-        if not cleaned:
-            return ""
+        from app.adapters.external.formatting.summary_presenter_parts.card import compact_tldr
 
-        sentences = [s.strip() for s in re.split(r"(?<=[.!?…])\s+", cleaned) if s.strip()]
-        compact = " ".join(sentences[:max_sentences]).strip() if sentences else cleaned
-
-        return self._truncate_plain_text(compact, max_chars)
+        return compact_tldr(
+            text,
+            text_processor=self._text_processor,
+            max_sentences=max_sentences,
+            max_chars=max_chars,
+        )
 
     def _build_compact_card_html(
         self, summary_shaped: dict[str, Any], llm: Any, chunks: int | None, *, reader: bool
     ) -> str:
         """Build a compact, scannable summary card in Telegram HTML format."""
+        from app.adapters.external.formatting.summary_presenter_parts.card import (
+            build_compact_card_html,
+        )
 
-        def capped(items: list[str], cap: int, *, sep: str) -> tuple[str, int]:
-            clean = [str(x).strip() for x in items if str(x).strip()]
-            shown = clean[:cap]
-            hidden = max(0, len(clean) - len(shown))
-            return (sep.join(shown), hidden) if shown else ("", 0)
-
-        meta = summary_shaped.get("metadata") or {}
-        title = str(meta.get("title") or "").strip() if isinstance(meta, dict) else ""
-        canonical_url = ""
-        domain = ""
-        if isinstance(meta, dict):
-            canonical_url = str(meta.get("canonical_url") or "").strip()
-            domain = str(meta.get("domain") or "").strip()
-
-        if not domain and canonical_url:
-            domain = self._extract_domain_from_url(canonical_url) or ""
-
-        reading_time = summary_shaped.get("estimated_reading_time_min")
-        reading_time_str = ""
-        try:
-            if reading_time is not None:
-                reading_time_val = int(reading_time)
-                if reading_time_val > 0:
-                    reading_time_str = f"~{reading_time_val} min"
-        except Exception:
-            reading_time_str = ""
-
-        # Title (link) + source + reading time
-        display_title = self._truncate_plain_text(title or domain or "Article", 180)
-        if canonical_url:
-            title_line = (
-                f'<a href="{html.escape(canonical_url, quote=True)}">'
-                f"{html.escape(display_title)}"
-                "</a>"
-            )
-        else:
-            title_line = html.escape(display_title)
-
-        meta_parts: list[str] = []
-        if domain:
-            meta_parts.append(html.escape(domain))
-        if reading_time_str:
-            meta_parts.append(html.escape(reading_time_str))
-        meta_line = " · ".join(meta_parts)
-
-        # TL;DR (2-3 sentences)
-        tldr_raw = str(summary_shaped.get("tldr") or "").strip()
-        if not tldr_raw:
-            tldr_raw = str(summary_shaped.get("summary_250") or "").strip()
-        tldr_compact = self._compact_tldr(tldr_raw)
-
-        # Key takeaways (max 5)
-        takeaways = summary_shaped.get("key_ideas") or []
-        if not isinstance(takeaways, list):
-            takeaways = []
-        takeaways_clean: list[str] = []
-        for item in takeaways:
-            s = str(item or "").strip()
-            if not s:
-                continue
-            s = self._text_processor.sanitize_summary_text(s)
-            s = self._truncate_plain_text(s, 180)
-            takeaways_clean.append(html.escape(s))
-            if len(takeaways_clean) >= 5:
-                break
-
-        # Key stats (top 3-5)
-        key_stats = summary_shaped.get("key_stats") or []
-        stats_lines: list[str] = []
-        if isinstance(key_stats, list) and key_stats:
-            stats_lines = self._data_formatter.format_key_stats_compact(key_stats[:5])
-
-        # Trim & structure metadata (chat view)
-        tags_raw = summary_shaped.get("topic_tags") or []
-        tags: list[str] = tags_raw if isinstance(tags_raw, list) else []
-        tags_shown, tags_hidden = capped(tags, 5, sep=" ")
-
-        entities = summary_shaped.get("entities") or {}
-        people: list[str] = []
-        orgs: list[str] = []
-        places: list[str] = []
-        if isinstance(entities, dict):
-            people = [str(x).strip() for x in (entities.get("people") or []) if str(x).strip()]
-            orgs = [str(x).strip() for x in (entities.get("organizations") or []) if str(x).strip()]
-            places = [str(x).strip() for x in (entities.get("locations") or []) if str(x).strip()]
-
-        people_shown, people_hidden = capped(people, 5, sep=", ")
-        orgs_shown, orgs_hidden = capped(orgs, 5, sep=", ")
-        places_shown, places_hidden = capped(places, 5, sep=", ")
-
-        lines: list[str] = []
-        lines.append(title_line)
-        if meta_line:
-            lines.append(f"<i>{meta_line}</i>")
-
-        if tldr_compact:
-            lines.extend(["", "<b>TL;DR</b>", html.escape(tldr_compact)])
-
-        if takeaways_clean:
-            lines.extend(["", "<b>Key takeaways</b>"])
-            lines.extend([f"• {t}" for t in takeaways_clean])
-
-        if stats_lines:
-            lines.extend(["", "<b>Key stats</b>"])
-            lines.extend(stats_lines[:5])
-
-        meta_lines: list[str] = []
-        if tags_shown:
-            tag_tail = f" (+{tags_hidden})" if tags_hidden else ""
-            meta_lines.append("Tags: " + html.escape(tags_shown + tag_tail))
-        if people_shown:
-            tail = f" (+{people_hidden})" if people_hidden else ""
-            meta_lines.append("People: " + html.escape(people_shown + tail))
-        if orgs_shown:
-            tail = f" (+{orgs_hidden})" if orgs_hidden else ""
-            meta_lines.append("Orgs: " + html.escape(orgs_shown + tail))
-        if places_shown:
-            tail = f" (+{places_hidden})" if places_hidden else ""
-            meta_lines.append("Places: " + html.escape(places_shown + tail))
-
-        if meta_lines:
-            lines.extend(["", "<b>Metadata</b>"])
-            lines.extend(meta_lines)
-
-        # In DEBUG mode, append minimal model/method metadata.
-        if not reader:
-            method = f"Chunked ({chunks} parts)" if chunks else "Single-pass"
-            model_name = getattr(llm, "model", None) or "unknown"
-            lines.extend(
-                ["", f"<i>Model: {html.escape(str(model_name))} · {html.escape(method)}</i>"]
-            )
-
-        return "\n".join(lines).strip() or "✅ Summary Ready"
+        return build_compact_card_html(
+            summary_shaped,
+            llm,
+            chunks,
+            reader=reader,
+            text_processor=self._text_processor,
+            data_formatter=self._data_formatter,
+        )
 
     def __init__(
         self,
@@ -226,65 +95,19 @@ class SummaryPresenterImpl:
 
         Returns a 2D list of button rows for InlineKeyboardMarkup.
         """
-        summary_id_str = str(summary_id)
+        from app.adapters.external.formatting.summary_presenter_parts.actions import (
+            create_action_buttons,
+        )
 
-        # Row 1: More + export options
-        export_row = [
-            {"text": "More", "callback_data": f"more:{summary_id_str}"},
-            {"text": "PDF", "callback_data": f"export:{summary_id_str}:pdf"},
-            {"text": "MD", "callback_data": f"export:{summary_id_str}:md"},
-            {"text": "HTML", "callback_data": f"export:{summary_id_str}:html"},
-        ]
-
-        # Row 2: Actions
-        action_row = [
-            {"text": "Save", "callback_data": f"save:{summary_id_str}"},
-            {"text": "Similar", "callback_data": f"similar:{summary_id_str}"},
-        ]
-
-        # Row 3: Feedback
-        feedback_row = [
-            {"text": "👍", "callback_data": f"rate:{summary_id_str}:1"},
-            {"text": "👎", "callback_data": f"rate:{summary_id_str}:-1"},
-        ]
-
-        return [export_row, action_row, feedback_row]
+        return create_action_buttons(summary_id)
 
     def _create_inline_keyboard(self, summary_id: int | str) -> Any:
         """Create an inline keyboard markup for post-summary actions."""
-        try:
-            from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+        from app.adapters.external.formatting.summary_presenter_parts.actions import (
+            create_inline_keyboard,
+        )
 
-            summary_id_str = str(summary_id)
-
-            # Create keyboard with multiple rows
-            keyboard = [
-                # Row 1: More + export options
-                [
-                    InlineKeyboardButton("More", callback_data=f"more:{summary_id_str}"),
-                    InlineKeyboardButton("PDF", callback_data=f"export:{summary_id_str}:pdf"),
-                    InlineKeyboardButton("MD", callback_data=f"export:{summary_id_str}:md"),
-                    InlineKeyboardButton("HTML", callback_data=f"export:{summary_id_str}:html"),
-                ],
-                # Row 2: Actions
-                [
-                    InlineKeyboardButton("Save", callback_data=f"save:{summary_id_str}"),
-                    InlineKeyboardButton("Similar", callback_data=f"similar:{summary_id_str}"),
-                ],
-                # Row 3: Feedback
-                [
-                    InlineKeyboardButton("👍", callback_data=f"rate:{summary_id_str}:1"),
-                    InlineKeyboardButton("👎", callback_data=f"rate:{summary_id_str}:-1"),
-                ],
-            ]
-
-            return InlineKeyboardMarkup(keyboard)
-        except ImportError:
-            logger.debug("pyrogram_not_available_for_action_buttons")
-            return None
-        except Exception as e:
-            logger.warning("create_action_buttons_failed", extra={"error": str(e)})
-            return None
+        return create_inline_keyboard(summary_id)
 
     async def _send_action_buttons(self, message: Any, summary_id: int | str) -> None:
         """Send action buttons as a separate message after the summary."""
