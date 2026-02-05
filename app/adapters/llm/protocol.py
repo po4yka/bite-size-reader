@@ -34,7 +34,7 @@ class LLMClientProtocol(Protocol):
 
     async def chat(
         self,
-        messages: list[dict[str, str]],
+        messages: list[dict[str, Any]],
         *,
         temperature: float = 0.2,
         max_tokens: int | None = None,

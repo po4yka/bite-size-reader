@@ -64,7 +64,14 @@ class ChromaVectorStore:
         """
         headers = {"Authorization": f"Bearer {self._auth_token}"} if self._auth_token else None
         try:
-            self._client = chromadb.HttpClient(host=self._host, headers=headers)
+            self._client = chromadb.HttpClient(
+                host=self._host,
+                headers=headers,
+                settings=chromadb.Settings(
+                    chroma_query_request_timeout_seconds=self._connection_timeout,
+                    anonymized_telemetry=False,
+                ),
+            )
 
             # Test connection with heartbeat
             self._client.heartbeat()
@@ -72,6 +79,7 @@ class ChromaVectorStore:
             self._collection = self._client.get_or_create_collection(
                 name=self._collection_name,
                 metadata={
+                    "hnsw:space": "cosine",
                     "environment": self._environment,
                     "user_scope": self._user_scope,
                     "version": self._collection_version,
@@ -153,6 +161,8 @@ class ChromaVectorStore:
         and returns without raising an exception.
         """
         if not self._available:
+            self.ensure_available()
+        if not self._available:
             logger.warning(
                 "chroma_upsert_skipped",
                 extra={"reason": "not_available", "count": len(vectors)},
@@ -229,6 +239,8 @@ class ChromaVectorStore:
         results instead of raising an exception.
         """
         if not self._available:
+            self.ensure_available()
+        if not self._available:
             logger.warning(
                 "chroma_query_skipped",
                 extra={"reason": "not_available", "top_k": top_k},
@@ -272,6 +284,8 @@ class ChromaVectorStore:
         When ChromaDB is unavailable, logs a warning and returns.
         """
         if not self._available:
+            self.ensure_available()
+        if not self._available:
             logger.warning(
                 "chroma_delete_skipped",
                 extra={"reason": "not_available", "request_id": request_id},
@@ -291,6 +305,8 @@ class ChromaVectorStore:
 
     def health_check(self) -> bool:
         """Check if ChromaDB is reachable and functioning."""
+        if not self._available:
+            self.ensure_available()
         if not self._available or not self._client:
             return False
         try:
@@ -307,6 +323,7 @@ class ChromaVectorStore:
             self._collection = self._client.get_or_create_collection(
                 name=self._collection_name,
                 metadata={
+                    "hnsw:space": "cosine",
                     "environment": self._environment,
                     "user_scope": self._user_scope,
                     "version": self._collection_version,
@@ -318,6 +335,10 @@ class ChromaVectorStore:
 
     def count(self) -> int:
         """Count the number of items in the collection."""
+        if not self._available:
+            self.ensure_available()
+        if not self._available:
+            return 0
         return self._collection.count()
 
     def close(self) -> None:

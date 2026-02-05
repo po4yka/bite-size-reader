@@ -21,11 +21,12 @@ from app.core.logging_utils import log_exception
 
 if TYPE_CHECKING:
     from app.db.database import Database
+    from app.db.session import DatabaseSessionManager
 
 logger = logging.getLogger(__name__)
 
 
-def upgrade(db: Database) -> None:
+def upgrade(db: Database | DatabaseSessionManager) -> None:
     """Add performance indexes."""
     indexes = [
         # Request table indexes
@@ -170,11 +171,11 @@ def upgrade(db: Database) -> None:
 
     logger.info(
         "index_migration_complete",
-        extra={"created": created_count, "skipped": skipped_count},
+        extra={"indexes_created": created_count, "indexes_skipped": skipped_count},
     )
 
 
-def downgrade(db: Database) -> None:
+def downgrade(db: Database | DatabaseSessionManager) -> None:
     """Remove indexes added by this migration."""
     indexes = [
         "idx_requests_correlation_id",

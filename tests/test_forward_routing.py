@@ -50,7 +50,7 @@ async def test_forward_message_with_url_prefers_forward_flow(
 
     router = MessageRouter(
         cfg=cfg,
-        db=db,
+        db=db,  # type: ignore[arg-type]
         access_controller=access_controller,
         command_processor=command_processor,
         url_handler=url_handler,

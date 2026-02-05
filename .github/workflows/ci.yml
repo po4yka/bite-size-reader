@@ -53,7 +53,7 @@ jobs:
         run: uv pip compile pyproject.toml -o requirements.txt
 
       - name: Compile locked requirements (dev)
-        run: uv pip compile --extra dev pyproject.toml -o requirements-dev.txt
+        run: uv pip compile --extra dev -c requirements.txt pyproject.toml -o requirements-dev.txt
 
       - name: Check lockfile drift
         id: lockcheck
@@ -114,8 +114,12 @@ jobs:
 
       - name: Validate OpenAPI spec
         run: |
+          uv pip install --system openapi-spec-validator
           openapi-spec-validator docs/openapi/mobile_api.yaml
           openapi-spec-validator docs/openapi/mobile_api.json
+
+      - name: Check OpenAPI spec sync with code
+        run: pytest tests/api/test_openapi_sync.py -v --tb=short
 
       - name: Lint (ruff) - comprehensive
         run: ruff check .
@@ -128,6 +132,9 @@ jobs:
 
       - name: Type check (mypy)
         run: mypy app tests --show-error-codes --pretty
+
+      - name: Enforce class size limit
+        run: python scripts/check_class_size.py --max-loc 1000 --baseline scripts/class_size_baseline.json
 
       - name: Check code complexity
         run: |
@@ -145,6 +152,7 @@ jobs:
             -p xdist \
             -p pytest_rerunfailures \
             -p pytest_asyncio.plugin \
+            -p pytest_benchmark.plugin \
             tests/ \
             -m "not slow and not integration" \
             --cov=app \

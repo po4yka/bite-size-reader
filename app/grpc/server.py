@@ -1,61 +1,20 @@
 import asyncio
 import logging
-import signal
-from concurrent import futures
 
-import grpc
-
-from app.api.dependencies import search_resources
 from app.config import load_config
 from app.core.logging_utils import get_logger
-from app.db.session import DatabaseSessionManager
-from app.grpc.service import ProcessingService
-from app.infrastructure.redis import close_redis
-from app.protos import processing_pb2_grpc
+from app.grpc.bootstrap import create_database
+from app.grpc.server_app import ProcessingGrpcServer
 
 logger = get_logger(__name__)
 
 
-async def serve():
+async def serve() -> None:
     cfg = load_config()
 
-    # Initialize DB
-    db = DatabaseSessionManager(
-        path=cfg.database.path,
-        operation_timeout=cfg.database.operation_timeout,
-        max_retries=cfg.database.max_retries,
-        json_max_size=cfg.database.json_max_size,
-        json_max_depth=cfg.database.json_max_depth,
-        json_max_array_length=cfg.database.json_max_array_length,
-        json_max_dict_keys=cfg.database.json_max_dict_keys,
-    )
-    db.database.connect(reuse_if_open=True)
-    logger.info("database_initialized", extra={"db_path": cfg.database.path})
-
-    server = grpc.aio.server(futures.ThreadPoolExecutor(max_workers=10))
-
-    service = ProcessingService(cfg, db)
-    processing_pb2_grpc.add_ProcessingServiceServicer_to_server(service, server)
-
-    listen_addr = "[::]:50051"
-    server.add_insecure_port(listen_addr)
-    logger.info(f"Starting gRPC server on {listen_addr}")
-
+    db = create_database(cfg)
+    server = ProcessingGrpcServer(cfg=cfg, db=db)
     await server.start()
-
-    # Graceful shutdown handler
-    async def shutdown():
-        logger.info("Shutting down gRPC server...")
-        await server.stop(5)
-        await search_resources.shutdown_chroma_search_resources()
-        await close_redis()
-        db.database.close()
-        logger.info("Shutdown complete")
-
-    loop = asyncio.get_event_loop()
-    for sig in (signal.SIGINT, signal.SIGTERM):
-        loop.add_signal_handler(sig, lambda: asyncio.create_task(shutdown()))
-
     await server.wait_for_termination()
 
 

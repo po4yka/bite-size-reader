@@ -165,6 +165,7 @@ class TestCommands(unittest.IsolatedAsyncioTestCase):
                 chat_id=1,
                 user_id=1,
                 input_url="https://example.com",
+                normalized_url="https://example.com",
             )
             bot.db.insert_summary(request_id=request_id, lang="en", json_payload="{}")
             bot.db.insert_audit_log(level="INFO", event="test", details_json="{}")

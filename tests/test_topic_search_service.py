@@ -110,6 +110,7 @@ async def test_local_search_returns_recent_matches(test_database) -> None:
         chat_id=1,
         user_id=1,
         input_url="https://example.com/android",
+        normalized_url="https://example.com/android",
         content_text="Android systems excel at modular design principles.",
     )
     database.insert_summary(
@@ -134,6 +135,7 @@ async def test_local_search_returns_recent_matches(test_database) -> None:
         chat_id=1,
         user_id=1,
         input_url="https://example.com/cooking",
+        normalized_url="https://example.com/cooking",
         content_text="All about pasta.",
     )
     database.insert_summary(
@@ -191,6 +193,7 @@ async def test_local_search_index_finds_older_match(test_database) -> None:
         chat_id=1,
         user_id=1,
         input_url="https://example.com/android-old",
+        normalized_url="https://example.com/android-old",
         content_text="Legacy overview of Android modular design patterns.",
     )
     database.insert_summary(
@@ -215,6 +218,7 @@ async def test_local_search_index_finds_older_match(test_database) -> None:
         chat_id=1,
         user_id=1,
         input_url="https://example.com/cooking-souffle",
+        normalized_url="https://example.com/cooking-souffle",
         content_text="All about baking souffles.",
     )
     database.insert_summary(
@@ -248,6 +252,7 @@ def test_database_populates_topic_search_index(test_database) -> None:
         chat_id=1,
         user_id=1,
         input_url="https://example.com/ai",
+        normalized_url="https://example.com/ai",
         content_text="Artificial intelligence fundamentals.",
     )
     database.insert_summary(

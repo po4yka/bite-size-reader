@@ -18,7 +18,7 @@ def _configure_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("JWT_SECRET_KEY", "test-secret-key-32-characters-long-123456")
     monkeypatch.setenv("ALLOWED_USER_IDS", "123456789")
     monkeypatch.setenv("ALLOWED_CLIENT_IDS", "com.example.app")
-    auth._cfg = None
+    auth._cfg = None  # type: ignore[attr-defined]
 
 
 @pytest.fixture
@@ -49,6 +49,7 @@ async def test_user_stats_with_valid_json_payload(user_stats_db, monkeypatch: py
     request = Request.create(
         user_id=user.telegram_user_id,
         input_url="http://test.com",
+        normalized_url="http://test.com",
         status="completed",
         type="url",
     )
@@ -81,6 +82,7 @@ async def test_user_stats_with_none_json_payload(user_stats_db, monkeypatch: pyt
     request = Request.create(
         user_id=user.telegram_user_id,
         input_url="http://test2.com",
+        normalized_url="http://test2.com",
         status="completed",
         type="url",
     )
@@ -110,6 +112,7 @@ async def test_user_stats_with_string_json_payload(user_stats_db, monkeypatch: p
     request = Request.create(
         user_id=user.telegram_user_id,
         input_url="http://test3.com",
+        normalized_url="http://test3.com",
         status="completed",
         type="url",
     )
@@ -144,6 +147,7 @@ async def test_user_stats_with_invalid_topic_tags(user_stats_db, monkeypatch: py
     request = Request.create(
         user_id=user.telegram_user_id,
         input_url="http://test4.com",
+        normalized_url="http://test4.com",
         status="completed",
         type="url",
     )

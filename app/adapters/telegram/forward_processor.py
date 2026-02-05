@@ -29,6 +29,10 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+# Background tasks (article generation, insights) are killed after this timeout
+# to prevent hung LLM calls from accumulating indefinitely.
+_BACKGROUND_TASK_TIMEOUT_SEC = 300
+
 
 class ForwardProcessor:
     """Refactored forward processor using modular components."""
@@ -49,6 +53,8 @@ class ForwardProcessor:
         self.user_repo = SqliteUserRepositoryAdapter(db)
         self.response_formatter = response_formatter
         self._audit = audit_func
+        self._sem = sem
+        self._llm_summarizer: Any | None = None
 
         # Initialize components
         self.content_processor = ForwardContentProcessor(
@@ -130,14 +136,37 @@ class ForwardProcessor:
                 )
 
         except Exception as e:
-            # Handle unexpected errors
             logger.exception("forward_flow_error", extra={"error": str(e), "cid": correlation_id})
+            try:
+                await self.response_formatter.send_error_notification(
+                    message,
+                    "processing_failed",
+                    correlation_id or "unknown",
+                )
+            except Exception:
+                logger.debug(
+                    "forward_flow_error_notification_failed", extra={"cid": correlation_id}
+                )
 
     def _schedule_background_task(
         self, coro: Coroutine[Any, Any, Any], correlation_id: str | None, label: str
     ) -> asyncio.Task[Any] | None:
+        async def _with_timeout() -> Any:
+            try:
+                return await asyncio.wait_for(coro, timeout=_BACKGROUND_TASK_TIMEOUT_SEC)
+            except TimeoutError:
+                logger.warning(
+                    "background_task_timeout",
+                    extra={
+                        "cid": correlation_id,
+                        "label": label,
+                        "timeout_sec": _BACKGROUND_TASK_TIMEOUT_SEC,
+                    },
+                )
+                return None
+
         try:
-            task: asyncio.Task[Any] = asyncio.create_task(coro)
+            task: asyncio.Task[Any] = asyncio.create_task(_with_timeout())
         except RuntimeError as exc:
             logger.error(
                 "background_task_schedule_failed",
@@ -227,36 +256,38 @@ class ForwardProcessor:
         return True
 
     async def _get_forward_content_text(self, message: Any, req_id: int) -> str | None:
-        """Extract the content text for a forward message."""
+        """Extract the content text for a forward message from the requests table."""
         try:
-            # Get the request details to extract the content
-            request_row = await self.summary_repo.async_get_summary_by_request(req_id)
+            request_row = await self.request_repo.async_get_request_by_id(req_id)
             if not request_row:
                 return None
 
-            # If no summary found, try to get from request directly
             content_text = request_row.get("content_text")
             if isinstance(content_text, str):
                 return content_text
 
-            # Fallback: get from request table directly using async wrapper
-            # to avoid blocking the event loop
-            def _sync_query() -> str | None:
-                with self.db.connect() as conn:
-                    row = conn.execute(
-                        "SELECT content_text FROM requests WHERE id = ?", (req_id,)
-                    ).fetchone()
-                    if row:
-                        return row[0]
-                return None
-
-            return await asyncio.to_thread(_sync_query)
+            return None
         except Exception as exc:
             logger.exception(
                 "get_forward_content_text_failed",
                 extra={"error": str(exc), "req_id": req_id},
             )
             return None
+
+    def _get_llm_summarizer(self) -> Any:
+        """Lazily create a shared LLMSummarizer for background tasks."""
+        if self._llm_summarizer is None:
+            from app.adapters.content.llm_summarizer import LLMSummarizer
+
+            self._llm_summarizer = LLMSummarizer(
+                cfg=self.cfg,
+                db=self.db,
+                openrouter=self.summarizer.openrouter,
+                response_formatter=self.response_formatter,
+                audit_func=self._audit,
+                sem=self._sem,
+            )
+        return self._llm_summarizer
 
     async def _maybe_generate_custom_article(
         self,
@@ -288,17 +319,9 @@ class ForwardProcessor:
             },
         )
 
-        from app.adapters.content.llm_summarizer import LLMSummarizer
         from app.core.async_utils import raise_if_cancelled
 
-        llm_summarizer = LLMSummarizer(
-            cfg=self.cfg,
-            db=self.db,
-            openrouter=self.summarizer.openrouter,
-            response_formatter=self.response_formatter,
-            audit_func=self._audit,
-            sem=self.summarizer._sem,
-        )
+        llm_summarizer = self._get_llm_summarizer()
 
         try:
             await self.response_formatter.safe_reply(
@@ -349,8 +372,6 @@ class ForwardProcessor:
         )
 
         try:
-            from app.adapters.content.llm_summarizer import LLMSummarizer
-
             summary_payload: dict[str, Any] | None = None
             if isinstance(summary, Mapping):
                 summary_payload = dict(summary)
@@ -366,14 +387,7 @@ class ForwardProcessor:
                         extra={"cid": correlation_id, "error": str(exc)},
                     )
 
-            llm_summarizer = LLMSummarizer(
-                cfg=self.cfg,
-                db=self.db,
-                openrouter=self.summarizer.openrouter,
-                response_formatter=self.response_formatter,
-                audit_func=self._audit,
-                sem=self.summarizer._sem,
-            )
+            llm_summarizer = self._get_llm_summarizer()
 
             insights = await llm_summarizer.generate_additional_insights(
                 message,

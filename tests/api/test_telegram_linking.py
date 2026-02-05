@@ -59,11 +59,11 @@ async def test_link_happy_path(tmp_path, monkeypatch: pytest.MonkeyPatch):
     auth_hash = _fake_auth_hash("1000000000:TESTTOKENPLACEHOLDER1234567890ABC", payload)
 
     complete_req = TelegramLinkCompleteRequest(
-        id=payload["id"],
-        auth_date=payload["auth_date"],
+        id=payload["id"],  # type: ignore[arg-type]
+        auth_date=payload["auth_date"],  # type: ignore[arg-type]
         hash=auth_hash,
-        username=payload["username"],
-        client_id=payload["client_id"],
+        username=payload["username"],  # type: ignore[arg-type]
+        client_id=payload["client_id"],  # type: ignore[arg-type]
         nonce=nonce,
     )
     complete_resp = await auth_endpoints.complete_telegram_link(
@@ -98,11 +98,11 @@ async def test_link_invalid_nonce(tmp_path, monkeypatch: pytest.MonkeyPatch):
     auth_hash = _fake_auth_hash("1000000000:TESTTOKENPLACEHOLDER1234567890ABC", payload)
 
     complete_req = TelegramLinkCompleteRequest(
-        id=payload["id"],
-        auth_date=payload["auth_date"],
+        id=payload["id"],  # type: ignore[arg-type]
+        auth_date=payload["auth_date"],  # type: ignore[arg-type]
         hash=auth_hash,
-        username=payload["username"],
-        client_id=payload["client_id"],
+        username=payload["username"],  # type: ignore[arg-type]
+        client_id=payload["client_id"],  # type: ignore[arg-type]
         nonce="bad-nonce",
     )
     with pytest.raises(ValidationError):

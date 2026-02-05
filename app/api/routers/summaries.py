@@ -6,18 +6,27 @@ Provides CRUD operations for summaries.
 
 from datetime import datetime
 from hashlib import sha256
-from typing import Any
+from typing import Any, Literal, cast
 
 from fastapi import APIRouter, Depends, Query
 
 from app.api.exceptions import ResourceNotFoundError
 from app.api.models.requests import UpdateSummaryRequest
 from app.api.models.responses import (
+    DeleteSummaryResponse,
+    PaginationInfo,
     SummaryCompact,
     SummaryContent,
     SummaryContentData,
     SummaryDetail,
+    SummaryDetailProcessing,
+    SummaryDetailRequest,
+    SummaryDetailSource,
+    SummaryDetailSummary,
     SummaryListResponse,
+    SummaryListStats,
+    ToggleFavoriteResponse,
+    UpdateSummaryResponse,
     success_response,
 )
 from app.api.routers.auth import get_current_user
@@ -144,18 +153,18 @@ async def get_summaries(
             )
         )
 
-    pagination = {
-        "total": total,
-        "limit": limit,
-        "offset": offset,
-        "has_more": (offset + limit) < total,
-    }
+    pagination = PaginationInfo(
+        total=total,
+        limit=limit,
+        offset=offset,
+        has_more=(offset + limit) < total,
+    )
 
     return success_response(
         SummaryListResponse(
             summaries=summary_list,
             pagination=pagination,
-            stats={"total_summaries": total, "unread_count": unread_count},
+            stats=SummaryListStats(total_summaries=total, unread_count=unread_count),
         ),
         pagination=pagination,
     )
@@ -303,10 +312,10 @@ async def get_summary(
 
     return success_response(
         SummaryDetail(
-            summary=summary_detail,
-            request=request_detail,
-            source=source_detail,
-            processing=processing_detail,
+            summary=SummaryDetailSummary(**summary_detail),
+            request=SummaryDetailRequest(**request_detail),
+            source=SummaryDetailSource(**source_detail),
+            processing=SummaryDetailProcessing(**processing_detail),
         )
     )
 
@@ -400,9 +409,11 @@ async def get_summary_content(
             content=SummaryContent(
                 summary_id=summary.get("id"),
                 request_id=request_id,
-                format=output_format,
+                format=cast('Literal["markdown", "text", "html"]', output_format),
                 content=content_value,
-                content_type=content_mime,
+                content_type=cast(
+                    'Literal["text/markdown", "text/plain", "text/html"]', content_mime
+                ),
                 lang=summary.get("lang"),
                 source_url=source_url,
                 title=title,
@@ -430,11 +441,11 @@ async def update_summary(
     )
 
     return success_response(
-        {
-            "id": summary_id,
-            "is_read": update.is_read,
-            "updated_at": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
-        }
+        UpdateSummaryResponse(
+            id=summary_id,
+            is_read=update.is_read,
+            updated_at=datetime.now(UTC).isoformat().replace("+00:00", "Z"),
+        )
     )
 
 
@@ -448,10 +459,10 @@ async def delete_summary(
     await SummaryService.delete_summary(user_id=user["user_id"], summary_id=summary_id)
 
     return success_response(
-        {
-            "id": summary_id,
-            "deleted_at": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
-        }
+        DeleteSummaryResponse(
+            id=summary_id,
+            deleted_at=datetime.now(UTC).isoformat().replace("+00:00", "Z"),
+        )
     )
 
 
@@ -464,4 +475,4 @@ async def toggle_favorite(
     is_favorited = await SummaryService.toggle_favorite(
         user_id=user["user_id"], summary_id=summary_id
     )
-    return success_response({"success": True, "is_favorited": is_favorited})
+    return success_response(ToggleFavoriteResponse(success=True, is_favorited=is_favorited))

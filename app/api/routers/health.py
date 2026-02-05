@@ -33,7 +33,7 @@ async def _check_database() -> dict[str, Any]:
 
         # Try to execute a simple query
         config = load_config()
-        db = DatabaseSessionManager(path=config.database.path)
+        db = DatabaseSessionManager(path=config.runtime.db_path)
         db_conn = db.database
         cursor = db_conn.execute_sql("SELECT 1")
         cursor.fetchone()

@@ -8,9 +8,10 @@ import logging
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any
 
 from app.adapters.telegram import telegram_client as telegram_client_module
+from app.core.async_utils import raise_if_cancelled
 from app.core.logging_utils import generate_correlation_id, setup_json_logging
 from app.core.time_utils import UTC
 from app.infrastructure.persistence.sqlite.repositories.audit_log_repository import (
@@ -20,11 +21,10 @@ from app.infrastructure.persistence.sqlite.repositories.audit_log_repository imp
 try:
     from pyrogram import Client, filters
 except ImportError:
-    Client = object
+    Client = object  # type: ignore[assignment,misc]
     filters = None
 
 if TYPE_CHECKING:
-    from app.adapters.content.url_processor import URLProcessor
     from app.config import AppConfig
     from app.db.session import DatabaseSessionManager
 
@@ -100,18 +100,10 @@ class TelegramBot:
         self.vector_store = components.vector_store
         self._container = components.container
 
-        # Adapter ensures legacy hooks like ``_handle_url_flow`` and
-        # subclasses overriding it still observe URL processing
-        # requests, while defaulting to the real processor.
-        self._url_processor_entrypoint = _URLProcessorEntrypoint(self)
-
-        # Route URL handling via the bot instance so legacy tests overriding
-        # ``_handle_url_flow`` keep working.
-        self.message_handler.command_processor.url_processor = cast("URLProcessor", self)
-        self.message_handler.url_handler.url_processor = cast("URLProcessor", self)
-
-        # Update message handler to use entrypoint
-        self.message_handler.url_processor = cast("URLProcessor", self._url_processor_entrypoint)
+        # Point handlers directly at the real url_processor
+        self.message_handler.command_processor.url_processor = self.url_processor
+        self.message_handler.url_handler.url_processor = self.url_processor
+        self.message_handler.url_processor = self.url_processor
 
         # Expose in-memory state containers for unit tests
         self._awaiting_url_users = self.message_handler.url_handler._awaiting_url_users
@@ -180,6 +172,9 @@ class TelegramBot:
                 with contextlib.suppress(asyncio.CancelledError):
                     await self._rate_limiter_cleanup_task
 
+            # Close external clients and drain in-flight tasks
+            await self._shutdown()
+
     def _audit(self, level: str, event: str, details: dict) -> None:
         """Audit log helper (background async)."""
         if not hasattr(self, "audit_repo"):
@@ -202,6 +197,61 @@ class TelegramBot:
             task.add_done_callback(self._audit_tasks.discard)
         except RuntimeError:
             pass
+
+    async def _shutdown(self, drain_timeout: float = 5.0) -> None:
+        """Close external clients and drain in-flight tasks."""
+        # 1. Close Firecrawl client
+        firecrawl = getattr(self, "_firecrawl", None)
+        if firecrawl is not None and hasattr(firecrawl, "aclose"):
+            try:
+                await asyncio.wait_for(firecrawl.aclose(), timeout=drain_timeout)
+            except Exception:
+                logger.warning("shutdown_firecrawl_close_failed", exc_info=True)
+
+        # 2. Close LLM client
+        llm_client = getattr(self, "_llm_client", None)
+        if llm_client is not None and hasattr(llm_client, "aclose"):
+            try:
+                await asyncio.wait_for(llm_client.aclose(), timeout=drain_timeout)
+            except Exception:
+                logger.warning("shutdown_llm_client_close_failed", exc_info=True)
+
+        # 3. Close vector store
+        vector_store = getattr(self, "vector_store", None)
+        if vector_store is not None and hasattr(vector_store, "aclose"):
+            try:
+                await asyncio.wait_for(vector_store.aclose(), timeout=drain_timeout)
+            except Exception:
+                logger.warning("shutdown_vector_store_close_failed", exc_info=True)
+
+        # 4. Close embedding service
+        embedding_service = getattr(self, "embedding_service", None)
+        if embedding_service is not None and hasattr(embedding_service, "aclose"):
+            try:
+                await asyncio.wait_for(embedding_service.aclose(), timeout=drain_timeout)
+            except Exception:
+                logger.warning("shutdown_embedding_service_close_failed", exc_info=True)
+
+        # 5. Drain audit tasks
+        audit_tasks: set[asyncio.Task[None]] = getattr(self, "_audit_tasks", set())
+        if audit_tasks:
+            with contextlib.suppress(Exception):
+                await asyncio.wait_for(
+                    asyncio.gather(*list(audit_tasks), return_exceptions=True),
+                    timeout=drain_timeout,
+                )
+
+        # Catch-all for orphaned OpenRouter connection pool entries that may
+        # not be covered by _llm_client.aclose() (e.g. multiple instances).
+        # 6. Clean up OpenRouter shared client pools
+        try:
+            from app.adapters.openrouter.openrouter_client import OpenRouterClient
+
+            await asyncio.wait_for(OpenRouterClient.cleanup_all_clients(), timeout=drain_timeout)
+        except Exception:
+            logger.warning("shutdown_openrouter_cleanup_failed", exc_info=True)
+
+        logger.info("bot_shutdown_complete")
 
     def _mask_path(self, path: str) -> str:
         """Mask home directory in paths for logging."""
@@ -457,6 +507,20 @@ class TelegramBot:
                         "rate_limiter_cleanup_error",
                         extra={"error": str(exc)},
                     )
+                # Also clean up expired URL handler state
+                try:
+                    if hasattr(self.message_handler, "url_handler"):
+                        url_cleaned = await self.message_handler.url_handler.cleanup_expired_state()
+                        if url_cleaned > 0:
+                            logger.debug(
+                                "url_handler_state_cleanup_completed",
+                                extra={"entries_cleaned": url_cleaned},
+                            )
+                except Exception as exc:
+                    logger.warning(
+                        "url_handler_state_cleanup_error",
+                        extra={"error": str(exc)},
+                    )
         except asyncio.CancelledError:
             logger.info("rate_limiter_cleanup_loop_cancelled")
             raise
@@ -472,6 +536,8 @@ class TelegramBot:
         **extra_kwargs: Any,
     ) -> None:
         """Safely reply to a message (legacy-compatible helper)."""
+        _rt = getattr(getattr(self, "cfg", None), "runtime", None)
+        _timeout: float = getattr(_rt, "telegram_reply_timeout_sec", 30.0)
         try:
             if hasattr(message, "reply_text"):
                 kwargs: dict[str, Any] = {}
@@ -481,10 +547,15 @@ class TelegramBot:
                     kwargs["reply_markup"] = reply_markup
                 if extra_kwargs:
                     kwargs.update(extra_kwargs)
-                await message.reply_text(text, **kwargs)
-        except Exception:
+                await asyncio.wait_for(message.reply_text(text, **kwargs), timeout=_timeout)
+        except TimeoutError:
+            logger.warning(
+                "telegram_reply_timeout",
+                extra={"method": "_safe_reply", "timeout_sec": _timeout},
+            )
+        except Exception as exc:
+            raise_if_cancelled(exc)
             # Swallow in tests; production response path logs and continues.
-            pass
 
     async def _reply_json(
         self,
@@ -497,6 +568,8 @@ class TelegramBot:
 
         Falls back to plain text if document upload fails.
         """
+        _rt = getattr(getattr(self, "cfg", None), "runtime", None)
+        _timeout: float = getattr(_rt, "telegram_reply_timeout_sec", 30.0)
         try:
             pretty = json.dumps(payload, ensure_ascii=False, indent=2)
 
@@ -531,19 +604,35 @@ class TelegramBot:
             if hasattr(message, "reply_document"):
                 bio = io.BytesIO(pretty.encode("utf-8"))
                 bio.name = filename
-                await message.reply_document(bio, caption="📊 Full Summary JSON attached")
+                await asyncio.wait_for(
+                    message.reply_document(bio, caption="📊 Full Summary JSON attached"),
+                    timeout=_timeout,
+                )
                 return
 
             # Fallback to text
             if hasattr(message, "reply_text"):
-                await message.reply_text(f"```json\n{pretty}\n```")
-        except Exception:
+                await asyncio.wait_for(
+                    message.reply_text(f"```json\n{pretty}\n```"), timeout=_timeout
+                )
+        except TimeoutError:
+            logger.warning(
+                "telegram_reply_timeout",
+                extra={"method": "_reply_json", "timeout_sec": _timeout},
+            )
+        except Exception as exc:
+            raise_if_cancelled(exc)
             try:
                 text = json.dumps(payload, ensure_ascii=False)
                 if hasattr(message, "reply_text"):
-                    await message.reply_text(text)
-            except Exception:
-                pass
+                    await asyncio.wait_for(message.reply_text(text), timeout=_timeout)
+            except TimeoutError:
+                logger.warning(
+                    "telegram_reply_timeout",
+                    extra={"method": "_reply_json_fallback", "timeout_sec": _timeout},
+                )
+            except Exception as inner_exc:
+                raise_if_cancelled(inner_exc)
         _ = metadata
 
     async def handle_url_flow(
@@ -629,28 +718,3 @@ class TelegramBot:
                 self.response_formatter._safe_reply_func = value
             else:
                 self.response_formatter._reply_json_func = value
-
-
-class _URLProcessorEntrypoint:
-    """Entrypoint for URL processing used to route requests back through the bot instance."""
-
-    def __init__(self, bot: TelegramBot) -> None:
-        self.bot = bot
-
-    async def handle_url_flow(
-        self,
-        message: Any,
-        url_text: str,
-        *,
-        correlation_id: str | None = None,
-        interaction_id: int | None = None,
-        silent: bool = False,
-    ) -> None:
-        """Process a URL message via the URL processor pipeline via the bot instance."""
-        await self.bot._handle_url_flow(
-            message,
-            url_text,
-            correlation_id=correlation_id,
-            interaction_id=interaction_id,
-            silent=silent,
-        )

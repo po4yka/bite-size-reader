@@ -178,7 +178,7 @@ class TelegramClient:
                 # Set up persistent menu button that shows commands
                 # The default behavior shows the command menu when button is tapped
                 try:
-                    from pyrogram.types import BotMenuButtonCommands
+                    from pyrogram.types import BotMenuButtonCommands  # type: ignore[attr-defined]
 
                     await client_any.set_chat_menu_button(menu_button=BotMenuButtonCommands())
                     logger.debug("menu_button_commands_set")

@@ -26,6 +26,7 @@ from app.api.models.responses import (
     CollectionListResponse,
     CollectionMoveResponse,
     CollectionResponse,
+    PaginationInfo,
     success_response,
 )
 from app.api.routers.auth import get_current_user
@@ -76,12 +77,12 @@ async def get_collections(
         )
         for c in collections
     ]
-    pagination = {
-        "total": len(data),
-        "limit": limit,
-        "offset": offset,
-        "has_more": len(data) == limit,
-    }
+    pagination = PaginationInfo(
+        total=len(data),
+        limit=limit,
+        offset=offset,
+        has_more=len(data) == limit,
+    )
     return success_response(
         CollectionListResponse(collections=data, pagination=pagination),
         pagination=pagination,
@@ -221,12 +222,12 @@ async def list_collection_items(
         )
         for item in items
     ]
-    pagination = {
-        "total": None,
-        "limit": limit,
-        "offset": offset,
-        "has_more": len(payload) == limit,
-    }
+    pagination = PaginationInfo(
+        total=len(payload),
+        limit=limit,
+        offset=offset,
+        has_more=len(payload) == limit,
+    )
     return success_response(
         CollectionItemsResponse(items=payload, pagination=pagination), pagination=pagination
     )

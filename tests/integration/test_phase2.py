@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Test script to verify Phase 2 schema improvements."""
+"""Test script to verify Phase 2 schema improvements.
+
+Since Database.migrate() now runs all pending migrations (including Phase 2),
+this test verifies the constraints are enforced after a standard migration.
+"""
 
 from __future__ import annotations
 
@@ -25,7 +29,11 @@ logger = logging.getLogger(__name__)
 
 
 def test_phase2_migration():
-    """Test Phase 2 schema constraint improvements."""
+    """Test Phase 2 schema constraint improvements.
+
+    Database.migrate() applies all pending migrations automatically,
+    so we verify that Phase 2 constraints are active after migration.
+    """
     print("=" * 70)
     print("Testing Phase 2: Schema Integrity Improvements")
     print("=" * 70)
@@ -35,23 +43,22 @@ def test_phase2_migration():
         db_path = tmp.name
 
     try:
-        print(f"\n✓ Using temporary database: {db_path}")
+        print(f"\n-- Using temporary database: {db_path}")
 
-        # Step 1: Create base schema + Phase 1 indexes (but NOT Phase 2 yet)
-        print("\n[1] Creating base schema and applying Phase 1...")
+        # Step 1: Create base schema and run all migrations
+        print("\n[1] Creating base schema and running all migrations...")
         db = Database(path=db_path)
         db.migrate()
 
         runner = MigrationRunner(db)
 
-        # Only apply Phase 1 (001_add_performance_indexes)
+        # Verify that Phase 2 migration was already applied by db.migrate()
         pending = runner.get_pending_migrations()
-        phase1_migration = [m for m in pending if "001_" in m.name]
-        if phase1_migration:
-            runner.run_migration(phase1_migration[0])
-        print("✓ Base schema and Phase 1 completed (Phase 2 not yet applied)")
+        phase2_pending = [m for m in pending if "002_" in m.name]
+        assert not phase2_pending, "Phase 2 migration should already be applied by db.migrate()"
+        print("-- Base schema and all migrations applied (including Phase 2)")
 
-        # Step 2: Insert test data (including an orphaned LLM call)
+        # Step 2: Insert test data
         print("\n[2] Inserting test data...")
 
         # Import models
@@ -65,7 +72,7 @@ def test_phase2_migration():
             status="ok",
             correlation_id="test-corr-1",
             user_id=user.telegram_user_id,
-            normalized_url="https://example.com",
+            normalized_url="https://example.com/test-phase2",
         )
 
         # Insert a valid LLM call using ORM
@@ -74,104 +81,72 @@ def test_phase2_migration():
         )
         assert llm_call.id is not None
 
-        # Attempt to insert an orphaned LLM call (NULL request_id) using raw SQL.
-        # Newer schemas may already enforce NOT NULL, so gracefully skip if constraint fails.
-        orphan_inserted = False
-        try:
+        # Verify NOT NULL is enforced on llm_calls.request_id
+        with pytest.raises(peewee.IntegrityError):
             db._database.execute_sql("""
                 INSERT INTO llm_calls (request_id, provider, model, status)
                 VALUES (NULL, 'openrouter', 'qwen/qwen3-max', 'orphaned')
             """)
-            orphan_inserted = True
-        except peewee.IntegrityError:
-            print(
-                "ℹ️  Base schema already enforces NOT NULL on llm_calls.request_id; skipping orphan insert test."
-            )
 
-        # Count LLM calls before migration
         result = db.fetchone("SELECT COUNT(*) FROM llm_calls")
-        llm_calls_before = result[0]
-        if orphan_inserted:
-            print(f"✓ Test data created: {llm_calls_before} LLM calls (1 valid, 1 orphaned)")
-        else:
-            print(f"✓ Test data created: {llm_calls_before} LLM call(s) (schema already clean)")
+        llm_calls_count = result[0]
+        print(f"-- Test data created: {llm_calls_count} LLM call(s) (schema enforces NOT NULL)")
 
-        # Step 3: Apply Phase 2 migration (002_add_schema_constraints)
-        print("\n[3] Applying Phase 2 migration...")
-        pending = runner.get_pending_migrations()
-        phase2_migration = [m for m in pending if "002_" in m.name]
-        if not phase2_migration:
-            print("⚠ No Phase 2 migration found!")
-            pytest.fail("Phase 2 migration not found")
-        runner.run_migration(phase2_migration[0])
-        print("✓ Applied Phase 2 migration")
+        # Step 3: Verify Phase 2 constraints are active
+        print("\n[3] Verifying Phase 2 constraints...")
 
-        # Step 4: Verify orphaned LLM calls were cleaned up
-        print("\n[4] Verifying orphaned LLM calls cleanup...")
-        if orphan_inserted:
-            result = db.fetchone("SELECT COUNT(*) FROM llm_calls")
-            llm_calls_after = result[0]
-
-            if llm_calls_after == llm_calls_before - 1:
-                print(f"✓ Orphaned LLM call removed: {llm_calls_before} → {llm_calls_after}")
-            else:
-                print(f"✗ Expected {llm_calls_before - 1} LLM calls, found {llm_calls_after}")
-                pytest.fail(f"Expected {llm_calls_before - 1} LLM calls, found {llm_calls_after}")
-        else:
-            print("✓ Skipped orphan cleanup check (schema already enforced).")
-
-        # Step 5: Test NOT NULL constraint on LLMCall.request
-        print("\n[5] Testing NOT NULL constraint on LLMCall.request...")
+        # Step 3a: Test NOT NULL constraint on LLMCall.request
+        print("\n[3a] Testing NOT NULL constraint on LLMCall.request...")
         try:
             db._database.execute_sql("""
                 INSERT INTO llm_calls (request_id, provider, model, status)
                 VALUES (NULL, 'openrouter', 'qwen/qwen3-max', 'should-fail')
             """)
-            print("✗ NOT NULL constraint NOT enforced (insert succeeded when it should fail)")
+            print("FAIL: NOT NULL constraint NOT enforced (insert succeeded when it should fail)")
             pytest.fail("NOT NULL constraint not enforced on llm_calls.request_id")
         except Exception as e:
             if "NOT NULL" in str(e) or "constraint" in str(e).lower():
-                print("✓ NOT NULL constraint enforced (insert correctly rejected)")
+                print("-- NOT NULL constraint enforced (insert correctly rejected)")
             else:
-                print(f"✗ Unexpected error: {e}")
+                print(f"FAIL: Unexpected error: {e}")
                 pytest.fail(f"Unexpected error testing NOT NULL constraint: {e}")
 
-        # Step 6: Test CHECK constraint for URL requests
-        print("\n[6] Testing CHECK constraint for URL requests...")
+        # Step 3b: Test CHECK constraint for URL requests
+        print("\n[3b] Testing CHECK constraint for URL requests...")
         try:
             # Try to insert URL request without normalized_url
             db._database.execute_sql("""
                 INSERT INTO requests (type, status, correlation_id, user_id, created_at, updated_at, server_version, route_version)
                 VALUES ('url', 'ok', 'test-invalid-url', 123456789, datetime('now'), datetime('now'), 1, 1)
             """)
-            print("✗ CHECK constraint NOT enforced for URL requests")
+            print("FAIL: CHECK constraint NOT enforced for URL requests")
             pytest.fail("URL request CHECK constraint not enforced")
         except Exception as e:
             if "validation" in str(e).lower() or "abort" in str(e).lower():
-                print("✓ CHECK constraint enforced for URL requests")
+                print("-- CHECK constraint enforced for URL requests")
             else:
-                print(f"✗ Unexpected error: {e}")
+                print(f"FAIL: Unexpected error: {e}")
                 pytest.fail(f"Unexpected error testing URL CHECK constraint: {e}")
 
-        # Step 7: Test CHECK constraint for forward requests
-        print("\n[7] Testing CHECK constraint for forward requests...")
+        # Step 3c: Test CHECK constraint for forward requests
+        print("\n[3c] Testing CHECK constraint for forward requests...")
         try:
             # Try to insert forward request without fwd_from_chat_id
             db._database.execute_sql("""
                 INSERT INTO requests (type, status, correlation_id, user_id, fwd_from_msg_id, created_at, updated_at, server_version, route_version)
                 VALUES ('forward', 'ok', 'test-invalid-forward', 123456789, 999, datetime('now'), datetime('now'), 1, 1)
             """)
-            print("✗ CHECK constraint NOT enforced for forward requests")
+            print("FAIL: CHECK constraint NOT enforced for forward requests")
             pytest.fail("Forward request CHECK constraint not enforced")
         except Exception as e:
             if "validation" in str(e).lower() or "abort" in str(e).lower():
-                print("✓ CHECK constraint enforced for forward requests")
+                print("-- CHECK constraint enforced for forward requests")
             else:
-                print(f"✗ Unexpected error: {e}")
+                print(f"FAIL: Unexpected error: {e}")
                 pytest.fail(f"Unexpected error testing forward CHECK constraint: {e}")
 
-        # Step 8: Verify valid requests still work
-        print("\n[8] Verifying valid requests still work...")
+        # Step 4: Verify valid requests still work
+        print("\n[4] Verifying valid requests still work...")
 
         # Valid URL request
         db._database.execute_sql("""
@@ -191,13 +166,13 @@ def test_phase2_migration():
         valid_count = result[0]
 
         if valid_count == 2:
-            print("✓ Valid requests accepted (2 created)")
+            print("-- Valid requests accepted (2 created)")
         else:
-            print(f"✗ Expected 2 valid requests, found {valid_count}")
+            print(f"FAIL: Expected 2 valid requests, found {valid_count}")
             pytest.fail(f"Expected 2 valid requests, found {valid_count}")
 
-        # Step 9: Verify foreign key CASCADE on LLMCall
-        print("\n[9] Verifying CASCADE on DELETE for LLMCall.request...")
+        # Step 5: Verify foreign key CASCADE on LLMCall
+        print("\n[5] Verifying CASCADE on DELETE for LLMCall.request...")
 
         # Create a request with an LLM call
         db._database.execute_sql("""
@@ -225,20 +200,19 @@ def test_phase2_migration():
         llm_after_delete = result[0]
 
         if llm_after_delete == llm_before_delete - 1:
-            print("✓ CASCADE DELETE works (LLM call deleted with request)")
+            print("-- CASCADE DELETE works (LLM call deleted with request)")
         else:
-            print(f"✗ CASCADE DELETE failed: {llm_before_delete} → {llm_after_delete}")
+            print(f"FAIL: CASCADE DELETE failed: {llm_before_delete} -> {llm_after_delete}")
             pytest.fail("CASCADE DELETE failed to remove LLM call")
 
         print("\n" + "=" * 70)
-        print("✓ ALL PHASE 2 TESTS PASSED!")
+        print("ALL PHASE 2 TESTS PASSED")
         print("=" * 70)
         print("\nSchema Improvements:")
-        print("  ✓ LLMCall.request is now NOT NULL")
-        print("  ✓ Orphaned LLM calls cleaned up")
-        print("  ✓ URL requests must have normalized_url")
-        print("  ✓ Forward requests must have fwd_from_chat_id and fwd_from_msg_id")
-        print("  ✓ CASCADE DELETE prevents orphaned LLM calls")
+        print("  - LLMCall.request is now NOT NULL")
+        print("  - URL requests must have normalized_url")
+        print("  - Forward requests must have fwd_from_chat_id and fwd_from_msg_id")
+        print("  - CASCADE DELETE prevents orphaned LLM calls")
 
     finally:
         # Cleanup

@@ -121,15 +121,15 @@ async def test_summary_persistence_deferred_from_llm_flow() -> None:
     # Create workflow with a mock db - the actual db won't be used since we override repos
     workflow = LLMResponseWorkflow(
         cfg=SimpleNamespace(openrouter=SimpleNamespace(model="test-model")),
-        db=SimpleNamespace(),  # Mock db, won't be used
+        db=SimpleNamespace(),  # type: ignore[arg-type]  # Mock db, won't be used
         openrouter=None,
         response_formatter=None,
         audit_func=lambda *args, **kwargs: None,
         sem=lambda: _DummySemaphore(),
     )
     # Override repositories with slow mocks
-    workflow.summary_repo = _SlowSummaryRepo()
-    workflow.request_repo = _SlowRequestRepo()
+    workflow.summary_repo = _SlowSummaryRepo()  # type: ignore[assignment]
+    workflow.request_repo = _SlowRequestRepo()  # type: ignore[assignment]
 
     summary = {"summary_250": "short", "summary_1000": "long form", "tldr": "tldr"}
     llm_stub = SimpleNamespace(status="ok", latency_ms=5, model="m")

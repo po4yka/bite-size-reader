@@ -15,7 +15,11 @@ async def test_toggle_favorite(db, user_factory):
 
     # Manually create summary
     req = Request.create(
-        user_id=user.telegram_user_id, input_url="http://test1.com", status="completed", type="url"
+        user_id=user.telegram_user_id,
+        input_url="http://test1.com",
+        normalized_url="http://test1.com",
+        status="completed",
+        type="url",
     )
 
     summary = Summary.create(
@@ -32,14 +36,14 @@ async def test_toggle_favorite(db, user_factory):
     # Toggle ON
     response = await summaries.toggle_favorite(summary_id=summary.id, user=user_context)
     assert response["success"] is True
-    assert response["data"]["is_favorited"] is True
+    assert response["data"]["isFavorited"] is True
 
     summary = Summary.get_by_id(summary.id)
     assert summary.is_favorited is True
 
     # Toggle OFF
     response = await summaries.toggle_favorite(summary_id=summary.id, user=user_context)
-    assert response["data"]["is_favorited"] is False
+    assert response["data"]["isFavorited"] is False
 
     summary = Summary.get_by_id(summary.id)
     assert summary.is_favorited is False

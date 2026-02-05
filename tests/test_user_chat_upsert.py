@@ -4,11 +4,15 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 import pytest
 
 from app.adapters.telegram.message_persistence import MessagePersistence
 from app.db.database import Database
+
+if TYPE_CHECKING:
+    from collections.abc import Generator
 
 
 @dataclass
@@ -51,7 +55,7 @@ class _DummyMessage:
 
 
 @pytest.fixture
-def db(tmp_path) -> Database:
+def db(tmp_path) -> Generator[Database]:
     from app.db.models import database_proxy
 
     # Save the original database proxy state

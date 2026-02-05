@@ -3,7 +3,7 @@ default_language_version:
 
 repos:
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.13.0
+    rev: v0.15.0
     hooks:
       - id: ruff
         args: ["--fix"]
@@ -25,6 +25,7 @@ repos:
           - --pretty
           - --show-error-codes
           - --ignore-missing-imports
+          - --no-warn-unused-ignores
 
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v6.0.0
@@ -35,3 +36,11 @@ repos:
       - id: check-yaml
       - id: check-toml
       - id: check-merge-conflict
+
+  - repo: local
+    hooks:
+      - id: class-loc-limit
+        name: Disallow classes > 1000 LOC
+        entry: python scripts/check_class_size.py --max-loc 1000 --baseline scripts/class_size_baseline.json
+        language: python
+        types: [python]

@@ -28,6 +28,7 @@ from app.adapters.telegram.command_handlers.execution_context import CommandExec
 from app.adapters.telegram.command_handlers.karakeep_handler import KarakeepHandlerImpl
 from app.adapters.telegram.command_handlers.onboarding_handler import OnboardingHandlerImpl
 from app.adapters.telegram.command_handlers.search_handler import SearchHandlerImpl
+from app.adapters.telegram.command_handlers.settings_handler import SettingsHandlerImpl
 from app.adapters.telegram.command_handlers.url_commands_handler import URLCommandsHandlerImpl
 from app.adapters.telegram.command_handlers.utils import maybe_load_json
 from app.adapters.telegram.task_manager import UserTaskManager
@@ -81,6 +82,7 @@ class CommandProcessor:
         task_manager: UserTaskManager | None = None,
         container: Any | None = None,
         hybrid_search: HybridSearchService | None = None,
+        verbosity_resolver: Any | None = None,
     ) -> None:
         """Initialize the CommandProcessor facade.
 
@@ -148,6 +150,10 @@ class CommandProcessor:
             cfg=cfg,
             db=db,
             response_formatter=response_formatter,
+        )
+
+        self._settings = SettingsHandlerImpl(
+            verbosity_resolver=verbosity_resolver,
         )
 
     def _build_context(
@@ -492,6 +498,22 @@ class CommandProcessor:
         """
         ctx = self._build_context(message, uid, correlation_id, interaction_id, start_time, text)
         await self._karakeep.handle_sync_karakeep(ctx)
+
+    # =========================================================================
+    # Settings delegation
+    # =========================================================================
+
+    async def handle_debug_command(
+        self,
+        message: Any,
+        uid: int,
+        correlation_id: str,
+        interaction_id: int,
+        start_time: float,
+    ) -> None:
+        """Handle /debug command -- toggle verbosity mode."""
+        ctx = self._build_context(message, uid, correlation_id, interaction_id, start_time)
+        await self._settings.handle_debug(ctx)
 
     # =========================================================================
     # Static utilities (backward compatibility)

@@ -70,7 +70,7 @@ class AnthropicRequestBuilder:
     def build_request_body(
         self,
         model: str,
-        messages: list[dict[str, str]],
+        messages: list[dict[str, Any]],
         *,
         temperature: float = 0.2,
         max_tokens: int | None = None,
@@ -125,8 +125,8 @@ class AnthropicRequestBuilder:
         return body
 
     def _extract_system_message(
-        self, messages: list[dict[str, str]]
-    ) -> tuple[str | None, list[dict[str, str]]]:
+        self, messages: list[dict[str, Any]]
+    ) -> tuple[str | None, list[dict[str, Any]]]:
         """Extract system message and return remaining messages.
 
         Anthropic requires system prompt as a top-level parameter, not in messages.
@@ -138,7 +138,7 @@ class AnthropicRequestBuilder:
             Tuple of (system_content, filtered_messages).
         """
         system_content: str | None = None
-        filtered: list[dict[str, str]] = []
+        filtered: list[dict[str, Any]] = []
 
         for msg in messages:
             role = msg.get("role", "")
@@ -152,7 +152,7 @@ class AnthropicRequestBuilder:
 
         return system_content, filtered
 
-    def _convert_messages(self, messages: list[dict[str, str]]) -> list[dict[str, Any]]:
+    def _convert_messages(self, messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """Convert messages to Anthropic format.
 
         Anthropic uses a slightly different format with content as a list of blocks.

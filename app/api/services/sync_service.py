@@ -13,6 +13,7 @@ from app.api.exceptions import (
 from app.api.models.responses import (
     DeltaSyncResponseData,
     FullSyncResponseData,
+    PaginationInfo,
     SyncApplyItemResult,
     SyncApplyResponseData,
     SyncEntityEnvelope,
@@ -135,7 +136,7 @@ class SyncService:
 
         return SyncSessionData(
             session_id=session_id,
-            expires_at=payload["expires_at"],
+            expires_at=str(payload["expires_at"]),
             default_limit=self.cfg.sync.default_limit,
             max_limit=self.cfg.sync.max_limit,
             last_issued_since=0,
@@ -360,12 +361,12 @@ class SyncService:
         next_since: int | None,
         limit: int,
     ) -> FullSyncResponseData:
-        pagination = {
-            "total": len(records),
-            "limit": limit,
-            "offset": 0,
-            "has_more": has_more,
-        }
+        pagination = PaginationInfo(
+            total=len(records),
+            limit=limit,
+            offset=0,
+            has_more=has_more,
+        )
         return FullSyncResponseData(
             session_id=session_id,
             has_more=has_more,

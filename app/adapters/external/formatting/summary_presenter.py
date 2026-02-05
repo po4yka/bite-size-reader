@@ -7,10 +7,14 @@ import logging
 import re
 from typing import TYPE_CHECKING, Any
 
+from app.core.async_utils import raise_if_cancelled
+
 if TYPE_CHECKING:
     from app.adapters.external.formatting.data_formatter import DataFormatterImpl
     from app.adapters.external.formatting.response_sender import ResponseSenderImpl
     from app.adapters.external.formatting.text_processor import TextProcessorImpl
+    from app.core.progress_tracker import ProgressTracker
+    from app.core.verbosity import VerbosityResolver
 
 logger = logging.getLogger(__name__)
 
@@ -18,11 +22,58 @@ logger = logging.getLogger(__name__)
 class SummaryPresenterImpl:
     """Implementation of summary presentation."""
 
+    @staticmethod
+    def _truncate_plain_text(text: str, max_len: int) -> str:
+        from app.adapters.external.formatting.summary_presenter_parts.card import (
+            truncate_plain_text,
+        )
+
+        return truncate_plain_text(text, max_len)
+
+    @staticmethod
+    def _extract_domain_from_url(url: str) -> str | None:
+        from app.adapters.external.formatting.summary_presenter_parts.card import (
+            extract_domain_from_url,
+        )
+
+        return extract_domain_from_url(url)
+
+    def _compact_tldr(self, text: str, *, max_sentences: int = 3, max_chars: int = 520) -> str:
+        """Return the first 2-3 sentences (best-effort) for the card TL;DR."""
+        from app.adapters.external.formatting.summary_presenter_parts.card import compact_tldr
+
+        return compact_tldr(
+            text,
+            text_processor=self._text_processor,
+            max_sentences=max_sentences,
+            max_chars=max_chars,
+        )
+
+    def _build_compact_card_html(
+        self, summary_shaped: dict[str, Any], llm: Any, chunks: int | None, *, reader: bool
+    ) -> str:
+        """Build a compact, scannable summary card in Telegram HTML format."""
+        from app.adapters.external.formatting.summary_presenter_parts.card import (
+            build_compact_card_html,
+        )
+
+        return build_compact_card_html(
+            summary_shaped,
+            llm,
+            chunks,
+            reader=reader,
+            text_processor=self._text_processor,
+            data_formatter=self._data_formatter,
+        )
+
     def __init__(
         self,
         response_sender: ResponseSenderImpl,
         text_processor: TextProcessorImpl,
         data_formatter: DataFormatterImpl,
+        *,
+        verbosity_resolver: VerbosityResolver | None = None,
+        progress_tracker: ProgressTracker | None = None,
     ) -> None:
         """Initialize the summary presenter.
 
@@ -30,73 +81,33 @@ class SummaryPresenterImpl:
             response_sender: Response sender for sending messages.
             text_processor: Text processor for text operations.
             data_formatter: Data formatter for formatting values.
+            verbosity_resolver: Optional resolver for per-user verbosity.
+            progress_tracker: Optional tracker to clear when summary is ready.
         """
         self._response_sender = response_sender
         self._text_processor = text_processor
         self._data_formatter = data_formatter
+        self._verbosity_resolver = verbosity_resolver
+        self._progress_tracker = progress_tracker
 
     def _create_action_buttons(self, summary_id: int | str) -> list[list[dict[str, str]]]:
         """Create inline keyboard buttons for post-summary actions.
 
         Returns a 2D list of button rows for InlineKeyboardMarkup.
         """
-        summary_id_str = str(summary_id)
+        from app.adapters.external.formatting.summary_presenter_parts.actions import (
+            create_action_buttons,
+        )
 
-        # Row 1: Export options
-        export_row = [
-            {"text": "PDF", "callback_data": f"export:{summary_id_str}:pdf"},
-            {"text": "Markdown", "callback_data": f"export:{summary_id_str}:md"},
-            {"text": "HTML", "callback_data": f"export:{summary_id_str}:html"},
-        ]
-
-        # Row 2: Actions
-        action_row = [
-            {"text": "Save", "callback_data": f"save:{summary_id_str}"},
-            {"text": "Similar", "callback_data": f"similar:{summary_id_str}"},
-        ]
-
-        # Row 3: Feedback
-        feedback_row = [
-            {"text": "Rate", "callback_data": f"rate:{summary_id_str}:1"},
-            {"text": "Rate", "callback_data": f"rate:{summary_id_str}:-1"},
-        ]
-
-        return [export_row, action_row, feedback_row]
+        return create_action_buttons(summary_id)
 
     def _create_inline_keyboard(self, summary_id: int | str) -> Any:
         """Create an inline keyboard markup for post-summary actions."""
-        try:
-            from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+        from app.adapters.external.formatting.summary_presenter_parts.actions import (
+            create_inline_keyboard,
+        )
 
-            summary_id_str = str(summary_id)
-
-            # Create keyboard with multiple rows
-            keyboard = [
-                # Row 1: Export options
-                [
-                    InlineKeyboardButton("PDF", callback_data=f"export:{summary_id_str}:pdf"),
-                    InlineKeyboardButton("MD", callback_data=f"export:{summary_id_str}:md"),
-                    InlineKeyboardButton("HTML", callback_data=f"export:{summary_id_str}:html"),
-                ],
-                # Row 2: Actions
-                [
-                    InlineKeyboardButton("Save", callback_data=f"save:{summary_id_str}"),
-                    InlineKeyboardButton("Find Similar", callback_data=f"similar:{summary_id_str}"),
-                ],
-                # Row 3: Feedback
-                [
-                    InlineKeyboardButton("Good", callback_data=f"rate:{summary_id_str}:1"),
-                    InlineKeyboardButton("Bad", callback_data=f"rate:{summary_id_str}:-1"),
-                ],
-            ]
-
-            return InlineKeyboardMarkup(keyboard)
-        except ImportError:
-            logger.debug("pyrogram_not_available_for_action_buttons")
-            return None
-        except Exception as e:
-            logger.warning("create_action_buttons_failed", extra={"error": str(e)})
-            return None
+        return create_inline_keyboard(summary_id)
 
     async def _send_action_buttons(self, message: Any, summary_id: int | str) -> None:
         """Send action buttons as a separate message after the summary."""
@@ -113,6 +124,7 @@ class SummaryPresenterImpl:
                     extra={"summary_id": summary_id},
                 )
         except Exception as e:
+            raise_if_cancelled(e)
             logger.warning(
                 "send_action_buttons_failed",
                 extra={"summary_id": summary_id, "error": str(e)},
@@ -137,18 +149,54 @@ class SummaryPresenterImpl:
             summary_id: Database summary ID for action buttons (optional)
         """
         try:
-            # Optional short header
-            try:
-                method = f"Chunked ({chunks} parts)" if chunks else "Single-pass"
-                model_name = getattr(llm, "model", None)
-                header = (
-                    f"🎉 Summary Ready\n🧠 Model: {model_name or 'unknown'}\n🔧 Method: {method}"
-                )
-                await self._response_sender.safe_reply(message, header)
-            except Exception:
-                pass
+            # Determine verbosity once (default: DEBUG when resolver isn't available)
+            reader = False
+            if self._verbosity_resolver is not None:
+                from app.core.verbosity import VerbosityLevel
 
-            # Combined first message: TL;DR, Tags, Entities, Reading Time, Key Stats, Readability, SEO
+                reader = (
+                    await self._verbosity_resolver.get_verbosity(message)
+                ) == VerbosityLevel.READER
+
+            # In Reader mode (and when a ProgressTracker is available), edit the existing
+            # consolidated "job card" message into the final summary instead of sending
+            # multiple messages.
+            job_card_finalized = False
+
+            try:
+                card_text = self._build_compact_card_html(
+                    summary_shaped,
+                    llm,
+                    chunks,
+                    reader=reader,
+                )
+
+                if self._progress_tracker is not None:
+                    keyboard = self._create_inline_keyboard(summary_id) if summary_id else None
+                    await self._progress_tracker.finalize(
+                        message,
+                        card_text,
+                        parse_mode="HTML",
+                        reply_markup=keyboard,
+                    )
+                    job_card_finalized = True
+
+                    if reader:
+                        return
+            except Exception as exc:
+                raise_if_cancelled(exc)
+
+            # Optional short header (only when we didn't finalize into a job card)
+            if not reader and not job_card_finalized:
+                try:
+                    method = f"Chunked ({chunks} parts)" if chunks else "Single-pass"
+                    model_name = getattr(llm, "model", None)
+                    header = f"Summary Ready\nModel: {model_name or 'unknown'}\nMethod: {method}"
+                    await self._response_sender.safe_reply(message, header)
+                except Exception as exc:
+                    raise_if_cancelled(exc)
+
+            # Combined first message: TL;DR, Tags, Entities, Reading Time, Key Stats, Readability
             combined_lines: list[str] = []
 
             tl_dr = str(summary_shaped.get("summary_250", "")).strip()
@@ -160,7 +208,10 @@ class SummaryPresenterImpl:
                 str(t).strip() for t in (summary_shaped.get("topic_tags") or []) if str(t).strip()
             ]
             if tags:
-                combined_lines.append("🏷️ Tags: " + " ".join(tags))
+                shown = tags[:5]
+                hidden = max(0, len(tags) - len(shown))
+                tail = f" (+{hidden})" if hidden else ""
+                combined_lines.append("🏷️ Tags: " + " ".join(shown) + tail)
                 combined_lines.append("")
 
             entities = summary_shaped.get("entities") or {}
@@ -170,15 +221,23 @@ class SummaryPresenterImpl:
                     str(x).strip() for x in (entities.get("organizations") or []) if str(x).strip()
                 ]
                 locs = [str(x).strip() for x in (entities.get("locations") or []) if str(x).strip()]
-                ent_parts: list[str] = []
-                if people:
-                    ent_parts.append("👤 " + ", ".join(people[:10]))
-                if orgs:
-                    ent_parts.append("🏢 " + ", ".join(orgs[:10]))
-                if locs:
-                    ent_parts.append("🌍 " + ", ".join(locs[:10]))
-                if ent_parts:
-                    combined_lines.append("🧭 Entities: " + " | ".join(ent_parts))
+                if people or orgs or locs:
+                    combined_lines.append("🧭 Entities:")
+                    if people:
+                        shown = people[:5]
+                        hidden = max(0, len(people) - len(shown))
+                        tail = f" (+{hidden})" if hidden else ""
+                        combined_lines.append("• People: " + ", ".join(shown) + tail)
+                    if orgs:
+                        shown = orgs[:5]
+                        hidden = max(0, len(orgs) - len(shown))
+                        tail = f" (+{hidden})" if hidden else ""
+                        combined_lines.append("• Orgs: " + ", ".join(shown) + tail)
+                    if locs:
+                        shown = locs[:5]
+                        hidden = max(0, len(locs) - len(shown))
+                        tail = f" (+{hidden})" if hidden else ""
+                        combined_lines.append("• Places: " + ", ".join(shown) + tail)
                     combined_lines.append("")
 
             reading_time = summary_shaped.get("estimated_reading_time_min")
@@ -198,13 +257,6 @@ class SummaryPresenterImpl:
             readability_line = self._data_formatter.format_readability(readability)
             if readability_line:
                 combined_lines.append(f"🧮 Readability — {readability_line}")
-                combined_lines.append("")
-
-            seo = [
-                str(x).strip() for x in (summary_shaped.get("seo_keywords") or []) if str(x).strip()
-            ]
-            if seo:
-                combined_lines.append("🔎 SEO Keywords: " + ", ".join(seo[:20]))
                 combined_lines.append("")
 
             metadata = summary_shaped.get("metadata") or {}
@@ -239,7 +291,7 @@ class SummaryPresenterImpl:
             if confidence < 1.0 or risk != "low":
                 combined_lines.append("")
 
-            if combined_lines:
+            if combined_lines and not job_card_finalized:
                 # Remove trailing empty lines
                 while combined_lines and not combined_lines[-1]:
                     combined_lines.pop()
@@ -251,6 +303,9 @@ class SummaryPresenterImpl:
                 for k in summary_shaped
                 if ((k.startswith("summary_") and k.split("_", 1)[1].isdigit()) or k == "tldr")
             ]
+            if job_card_finalized:
+                # The card already shows tldr; skip it in the expanded fields
+                summary_fields = [k for k in summary_fields if k != "tldr"]
 
             def _key_num(k: str) -> int:
                 if k == "tldr":
@@ -303,17 +358,18 @@ class SummaryPresenterImpl:
             await self._response_sender.reply_json(message, summary_shaped)
 
             # Add action buttons after summary if summary_id is available
-            if summary_id:
+            if summary_id and not job_card_finalized:
                 await self._send_action_buttons(message, summary_id)
 
-        except Exception:
+        except Exception as exc:
+            raise_if_cancelled(exc)
             # Fallback to simpler format
             try:
                 tl_dr = str(summary_shaped.get("summary_250", "")).strip()
                 if tl_dr:
                     await self._response_sender.safe_reply(message, f"📋 TL;DR:\n{tl_dr}")
-            except Exception:
-                pass
+            except Exception as exc2:
+                raise_if_cancelled(exc2)
 
             await self._response_sender.reply_json(message, summary_shaped)
 
@@ -330,9 +386,18 @@ class SummaryPresenterImpl:
             return
 
         cleaned = self._text_processor.sanitize_summary_text(translated_text.strip())
-        header = "🇷🇺 Перевод резюме"
-        if correlation_id:
-            header += f"\n🆔 Correlation ID: `{correlation_id}`"
+        header = "\u041f\u0435\u0440\u0435\u0432\u043e\u0434 \u0440\u0435\u0437\u044e\u043c\u0435"
+
+        reader = False
+        if self._verbosity_resolver is not None:
+            from app.core.verbosity import VerbosityLevel
+
+            reader = (
+                await self._verbosity_resolver.get_verbosity(message)
+            ) == VerbosityLevel.READER
+
+        if correlation_id and not reader:
+            header += f"\nCorrelation ID: {correlation_id}"
 
         await self._response_sender.safe_reply(message, header)
         await self._text_processor.send_long_text(message, cleaned)
@@ -342,22 +407,52 @@ class SummaryPresenterImpl:
     ) -> None:
         """Send follow-up message summarizing additional research insights."""
         try:
-            header = "🔍 Additional Research Highlights"
+            import html
+
+            # Skip sending in Reader mode (the calling code should already gate on this),
+            # but keep the check here for safety when called directly.
+            if self._verbosity_resolver is not None:
+                from app.core.verbosity import VerbosityLevel
+
+                if (await self._verbosity_resolver.get_verbosity(message)) == VerbosityLevel.READER:
+                    return
+
+            def _cap(text: str, max_chars: int) -> str:
+                cleaned = self._text_processor.sanitize_summary_text(text.strip())
+                if len(cleaned) <= max_chars:
+                    return cleaned
+                return cleaned[: max(0, max_chars - 1)].rstrip() + "…"
+
+            def _safe_html(text: str, *, max_chars: int = 900) -> str:
+                cleaned = _cap(text, max_chars)
+                escaped = html.escape(cleaned)
+                return self._text_processor.linkify_urls(escaped)
+
+            def _clean_list(
+                items: list[Any], *, limit: int, item_max_chars: int = 220
+            ) -> list[str]:
+                cleaned: list[str] = []
+                for item in items:
+                    text = str(item).strip()
+                    if not text:
+                        continue
+                    cleaned.append(_safe_html(text, max_chars=item_max_chars))
+                    if len(cleaned) >= limit:
+                        break
+                return cleaned
+
+            lines: list[str] = ["<b>🔎 Additional Research Highlights</b>"]
             if correlation_id:
-                header += f"\n🆔 Correlation ID: `{correlation_id}`"
-            await self._response_sender.safe_reply(message, header)
+                lines.append(
+                    f"<i>Correlation ID:</i> <code>{html.escape(str(correlation_id))}</code>"
+                )
 
             sections_sent = False
 
             overview = insights.get("topic_overview")
             if isinstance(overview, str) and overview.strip():
                 sections_sent = True
-                await self._text_processor.send_long_text(
-                    message,
-                    "<b>🧭 Overview</b>\n"
-                    + self._text_processor.sanitize_summary_text(overview.strip()),
-                    parse_mode="HTML",
-                )
+                lines.extend(["", "<b>🧭 Overview</b>", _safe_html(overview, max_chars=1200)])
 
             facts_section: list[str] = []
             facts = insights.get("new_facts")
@@ -368,110 +463,98 @@ class SummaryPresenterImpl:
                     fact_text = str(fact.get("fact", "")).strip()
                     if not fact_text:
                         continue
-                    fact_lines = [f"{idx}. {self._text_processor.sanitize_summary_text(fact_text)}"]
+                    fact_lines = [f"<b>{idx}.</b> {_safe_html(fact_text, max_chars=320)}"]
 
                     why_matters = str(fact.get("why_it_matters", "")).strip()
                     if why_matters:
                         fact_lines.append(
-                            f"   • Why it matters: {self._text_processor.sanitize_summary_text(why_matters)}"
+                            f"• <i>Why it matters:</i> {_safe_html(why_matters, max_chars=260)}"
                         )
 
                     source_hint = str(fact.get("source_hint", "")).strip()
                     if source_hint:
                         fact_lines.append(
-                            f"   • Source hint: {self._text_processor.sanitize_summary_text(source_hint)}"
+                            f"• <i>Source hint:</i> {_safe_html(source_hint, max_chars=160)}"
                         )
 
                     confidence = fact.get("confidence")
                     if confidence is not None:
                         try:
                             conf_val = float(confidence)
-                            fact_lines.append(f"   • Confidence: {conf_val:.0%}")
+                            fact_lines.append(f"• <i>Confidence:</i> <code>{conf_val:.0%}</code>")
                         except Exception:
                             fact_lines.append(
-                                f"   • Confidence: {self._text_processor.sanitize_summary_text(str(confidence))}"
+                                f"• <i>Confidence:</i> <code>{html.escape(str(confidence))}</code>"
                             )
 
                     facts_section.append("\n".join(fact_lines))
             if facts_section:
                 sections_sent = True
-                await self._text_processor.send_long_text(
-                    message,
-                    "<b>📌 Fresh Facts</b>\n" + "\n\n".join(facts_section),
-                    parse_mode="HTML",
-                )
-
-            def _clean_list(items: list[Any]) -> list[str]:
-                cleaned: list[str] = []
-                for item in items:
-                    text = str(item).strip()
-                    if not text:
-                        continue
-                    cleaned.append(self._text_processor.sanitize_summary_text(text))
-                return cleaned
+                lines.extend(["", "<b>📌 Fresh Facts</b>", "\n\n".join(facts_section)])
 
             open_questions = insights.get("open_questions")
             if isinstance(open_questions, list):
-                questions = _clean_list(open_questions)[:5]
+                questions = _clean_list(open_questions, limit=5)
                 if questions:
                     sections_sent = True
-                    await self._text_processor.send_long_text(
-                        message,
-                        "<b>❓ Open Questions</b>\n" + "\n".join(f"- {q}" for q in questions),
-                        parse_mode="HTML",
+                    lines.extend(
+                        ["", "<b>❓ Open Questions</b>", "\n".join(f"• {q}" for q in questions)]
                     )
 
             suggested_sources = insights.get("suggested_sources")
             if isinstance(suggested_sources, list):
-                sources = _clean_list(suggested_sources)[:5]
+                sources = _clean_list(suggested_sources, limit=5, item_max_chars=260)
                 if sources:
                     sections_sent = True
-                    await self._text_processor.send_long_text(
-                        message,
-                        "<b>🔗 Suggested Follow-up</b>\n" + "\n".join(f"- {s}" for s in sources),
-                        parse_mode="HTML",
+                    lines.extend(
+                        ["", "<b>🔗 Suggested Follow-up</b>", "\n".join(f"• {s}" for s in sources)]
                     )
 
             expansion = insights.get("expansion_topics")
             if isinstance(expansion, list):
-                exp_clean = _clean_list(expansion)[:8]
+                exp_clean = _clean_list(expansion, limit=6)
                 if exp_clean:
                     sections_sent = True
-                    await self._text_processor.send_long_text(
-                        message,
-                        "<b>🧠 Expansion Topics</b> (beyond the article)\n"
-                        + "\n".join(f"- {item}" for item in exp_clean),
-                        parse_mode="HTML",
+                    lines.extend(
+                        [
+                            "",
+                            "<b>🧠 Expansion Topics</b> (beyond the article)",
+                            "\n".join(f"• {item}" for item in exp_clean),
+                        ]
                     )
 
             next_steps = insights.get("next_exploration")
             if isinstance(next_steps, list):
-                nxt_clean = _clean_list(next_steps)[:8]
+                nxt_clean = _clean_list(next_steps, limit=6)
                 if nxt_clean:
                     sections_sent = True
-                    await self._text_processor.send_long_text(
-                        message,
-                        "<b>🚀 What to explore next</b>\n"
-                        + "\n".join(f"- {step}" for step in nxt_clean),
-                        parse_mode="HTML",
+                    lines.extend(
+                        [
+                            "",
+                            "<b>🚀 What to explore next</b>",
+                            "\n".join(f"• {step}" for step in nxt_clean),
+                        ]
                     )
 
             caution = insights.get("caution")
             if isinstance(caution, str) and caution.strip():
                 sections_sent = True
-                await self._text_processor.send_long_text(
-                    message,
-                    "<b>⚠️ Caveats</b>\n"
-                    + self._text_processor.sanitize_summary_text(caution.strip()),
-                    parse_mode="HTML",
-                )
+                lines.extend(["", "<b>⚠️ Caveats</b>", _safe_html(caution, max_chars=900)])
 
             if not sections_sent:
                 await self._response_sender.safe_reply(
                     message, "No additional research insights were available."
                 )
+                return
+
+            await self._text_processor.send_long_text(
+                message,
+                "\n".join(lines).strip(),
+                parse_mode="HTML",
+            )
 
         except Exception as exc:  # pragma: no cover - defensive
+            raise_if_cancelled(exc)
             logger.error("insights_message_error", extra={"error": str(exc)})
 
     async def send_custom_article(self, message: Any, article: dict[str, Any]) -> None:
@@ -515,8 +598,8 @@ class SummaryPresenterImpl:
                 )
 
             await self._response_sender.reply_json(message, article)
-        except Exception:
-            pass
+        except Exception as exc:
+            raise_if_cancelled(exc)
 
     async def send_forward_summary_response(
         self, message: Any, forward_shaped: dict[str, Any], summary_id: int | str | None = None
@@ -529,7 +612,11 @@ class SummaryPresenterImpl:
             summary_id: Database summary ID for action buttons (optional)
         """
         try:
-            await self._response_sender.safe_reply(message, "🎉 Forward Summary Ready")
+            # Clear progress tracker
+            if self._progress_tracker is not None:
+                self._progress_tracker.clear(message)
+
+            await self._response_sender.safe_reply(message, "Forward Summary Ready")
 
             combined_lines: list[str] = []
             tl_dr = str(forward_shaped.get("summary_250", "")).strip()
@@ -541,7 +628,10 @@ class SummaryPresenterImpl:
                 str(t).strip() for t in (forward_shaped.get("topic_tags") or []) if str(t).strip()
             ]
             if tags:
-                combined_lines.append("🏷️ Tags: " + " ".join(tags))
+                shown = tags[:5]
+                hidden = max(0, len(tags) - len(shown))
+                tail = f" (+{hidden})" if hidden else ""
+                combined_lines.append("🏷️ Tags: " + " ".join(shown) + tail)
                 combined_lines.append("")
 
             entities = forward_shaped.get("entities") or {}
@@ -551,15 +641,23 @@ class SummaryPresenterImpl:
                     str(x).strip() for x in (entities.get("organizations") or []) if str(x).strip()
                 ]
                 locs = [str(x).strip() for x in (entities.get("locations") or []) if str(x).strip()]
-                ent_parts: list[str] = []
-                if people:
-                    ent_parts.append("👤 " + ", ".join(people[:10]))
-                if orgs:
-                    ent_parts.append("🏢 " + ", ".join(orgs[:10]))
-                if locs:
-                    ent_parts.append("🌍 " + ", ".join(locs[:10]))
-                if ent_parts:
-                    combined_lines.append("🧭 Entities: " + " | ".join(ent_parts))
+                if people or orgs or locs:
+                    combined_lines.append("🧭 Entities:")
+                    if people:
+                        shown = people[:5]
+                        hidden = max(0, len(people) - len(shown))
+                        tail = f" (+{hidden})" if hidden else ""
+                        combined_lines.append("• People: " + ", ".join(shown) + tail)
+                    if orgs:
+                        shown = orgs[:5]
+                        hidden = max(0, len(orgs) - len(shown))
+                        tail = f" (+{hidden})" if hidden else ""
+                        combined_lines.append("• Orgs: " + ", ".join(shown) + tail)
+                    if locs:
+                        shown = locs[:5]
+                        hidden = max(0, len(locs) - len(shown))
+                        tail = f" (+{hidden})" if hidden else ""
+                        combined_lines.append("• Places: " + ", ".join(shown) + tail)
                     combined_lines.append("")
 
             reading_time = forward_shaped.get("estimated_reading_time_min")
@@ -579,13 +677,6 @@ class SummaryPresenterImpl:
             readability_line = self._data_formatter.format_readability(readability)
             if readability_line:
                 combined_lines.append(f"🧮 Readability — {readability_line}")
-                combined_lines.append("")
-
-            seo = [
-                str(x).strip() for x in (forward_shaped.get("seo_keywords") or []) if str(x).strip()
-            ]
-            if seo:
-                combined_lines.append("🔎 SEO Keywords: " + ", ".join(seo[:20]))
                 combined_lines.append("")
 
             # Metadata for forward posts
@@ -659,8 +750,8 @@ class SummaryPresenterImpl:
 
             # Send new field messages for forwards
             await self._send_new_field_messages(message, forward_shaped)
-        except Exception:
-            pass
+        except Exception as exc:
+            raise_if_cancelled(exc)
 
         await self._response_sender.reply_json(message, forward_shaped)
 
@@ -771,5 +862,5 @@ class SummaryPresenterImpl:
                         parse_mode="HTML",
                     )
 
-        except Exception:
-            pass
+        except Exception as exc:
+            raise_if_cancelled(exc)

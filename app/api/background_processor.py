@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, Any
 
 from app.adapters.content.url_processor import URLProcessor, _get_system_prompt
 from app.config import AppConfig, load_config
+from app.core.async_utils import raise_if_cancelled
 from app.core.lang import choose_language, detect_language
 from app.core.logging_utils import get_logger, log_exception
 from app.core.url_utils import normalize_url
@@ -351,6 +352,13 @@ class BackgroundProcessor:
         elif handle.source == "local" and handle.local_lock and handle.local_lock.locked():
             handle.local_lock.release()
 
+        # Clean up local lock entry to prevent memory leak
+        if handle.source == "local":
+            request_id = int(handle.key)
+            lock_obj = self._local_locks.get(request_id)
+            if lock_obj is not None and not lock_obj.locked():
+                self._local_locks.pop(request_id, None)
+
     async def _process_url_type(
         self,
         request_id: int,
@@ -475,6 +483,7 @@ class BackgroundProcessor:
             try:
                 return await func()
             except Exception as exc:
+                raise_if_cancelled(exc)
                 last_error = exc
                 delay_ms = min(
                     self._retry.max_delay_ms,

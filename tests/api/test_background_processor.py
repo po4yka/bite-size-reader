@@ -261,3 +261,61 @@ async def test_retries_and_error_status(monkeypatch):
     assert db.summaries.get(3) is None
     assert status_updates[-1] == "error"
     assert failing_summarizer.calls == cfg.background.retry_attempts
+
+
+@pytest.mark.asyncio
+async def test_local_locks_cleaned_after_release():
+    """_local_locks entries must be removed after lock release to prevent memory leak."""
+    from app.api.background_processor import LockHandle
+
+    cfg = DummyCfg()
+    processor = BackgroundProcessor(
+        cfg=cfg,
+        db=StubDB(),
+        url_processor=StubURLProcessor(StubExtractor(), StubSummarizer()),
+        redis=None,
+        semaphore=asyncio.Semaphore(1),
+        audit_func=lambda *_args, **_kwargs: None,
+    )
+
+    request_id = 42
+    lock = asyncio.Lock()
+    await lock.acquire()
+    processor._local_locks[request_id] = lock
+
+    handle = LockHandle(source="local", key=str(request_id), token=None, local_lock=lock)
+    await processor._release_lock(handle)
+
+    assert request_id not in processor._local_locks, (
+        f"_local_locks still contains request_id={request_id} after release"
+    )
+
+
+@pytest.mark.asyncio
+async def test_run_with_backoff_propagates_cancellation():
+    """_run_with_backoff should re-raise CancelledError immediately, not retry."""
+    cfg = DummyCfg()
+    cfg.background.retry_attempts = 3
+    cfg.background.retry_base_delay_ms = 1
+    cfg.background.retry_max_delay_ms = 2
+
+    proc = BackgroundProcessor(
+        cfg=cfg,
+        db=StubDB(),
+        url_processor=StubURLProcessor(StubExtractor(), StubSummarizer()),
+        redis=None,
+        semaphore=asyncio.Semaphore(3),
+        audit_func=lambda *_args, **_kwargs: None,
+    )
+
+    call_count = 0
+
+    async def cancelling_func():
+        nonlocal call_count
+        call_count += 1
+        raise asyncio.CancelledError()
+
+    with pytest.raises(asyncio.CancelledError):
+        await proc._run_with_backoff(cancelling_func, "test_stage", "cid-123")
+
+    assert call_count == 1, "Should not retry on CancelledError"

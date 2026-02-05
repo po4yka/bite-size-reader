@@ -374,9 +374,7 @@ def list_articles(
 
     try:
         query = (
-            Summary.select(Summary, Request)
-            .join(Request)
-            .where(Summary.is_deleted == False)  # noqa: E712
+            Summary.select(Summary, Request).join(Request).where(Summary.is_deleted == False)  # noqa: E712
         )
 
         if is_favorited is not None:
@@ -1259,7 +1257,7 @@ def processing_stats_resource() -> str:
 # ---------------------------------------------------------------------------
 def run_server(
     transport: str = "stdio",
-    host: str = "0.0.0.0",
+    host: str = "0.0.0.0",  # nosec B104 - intentional for Docker
     port: int = 8200,
     db_path: str | None = None,
 ) -> None:
@@ -1275,6 +1273,8 @@ def run_server(
     logger.info("Starting Bite-Size Reader MCP server (transport=%s)", transport)
 
     if transport == "sse":
-        mcp.run(transport="sse", host=host, port=port)
+        mcp.settings.host = host
+        mcp.settings.port = port
+        mcp.run(transport="sse")
     else:
         mcp.run(transport="stdio")

@@ -96,6 +96,44 @@ class DataFormatterImpl:
 
         return formatted
 
+    def format_key_stats_compact(self, key_stats: list[dict[str, Any]]) -> list[str]:
+        """Render key statistics into short bullet-point lines.
+
+        This is intended for compact "card" UIs where source excerpts are too verbose.
+
+        Example:
+            "• GPS satellite speed: <code>14000</code> km/h"
+        """
+        formatted: list[str] = []
+        for entry in key_stats:
+            if not isinstance(entry, dict):
+                continue
+
+            label = str(entry.get("label", "")).strip()
+            if not label:
+                continue
+
+            label_escaped = html.escape(label)
+            value_text = self.format_metric_value(entry.get("value"))
+            unit = str(entry.get("unit", "")).strip()
+
+            detail_parts: list[str] = []
+            if value_text is not None:
+                value_code = f"<code>{html.escape(value_text)}</code>"
+                if unit:
+                    detail_parts.append(f"{value_code} {html.escape(unit)}")
+                else:
+                    detail_parts.append(value_code)
+            elif unit:
+                detail_parts.append(html.escape(unit))
+
+            if detail_parts:
+                formatted.append(f"• {label_escaped}: " + " ".join(detail_parts))
+            else:
+                formatted.append(f"• {label_escaped}")
+
+        return formatted
+
     def format_readability(self, readability: Any) -> str | None:
         """Create a reader-friendly readability summary line with HTML formatting.
 

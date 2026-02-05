@@ -55,6 +55,8 @@ ignore = [
   "PLR0911", # too many return statements
   "PLR0912", # too many branches
   "PLR0915", # too many statements
+  "UP046",   # prefer PEP695 type params - project allows Generic/TypeVar style
+  "UP047",   # prefer PEP695 type params - project allows Generic/TypeVar style
   "BLE001",  # blind exception catch - intentional for resilience in many cases
   "FBT001",  # boolean positional arg - acceptable in many contexts
   "FBT002",  # boolean default value - acceptable in many contexts
@@ -77,6 +79,8 @@ ignore = [
   "B008",    # function call in argument defaults - standard FastAPI pattern
   "PLW0603", # global statement - needed for asyncio semaphore initialization
   "SIM103",  # return condition directly - sometimes if/return is clearer
+  "ASYNC240", # async os.path/pathlib - not applicable, we use asyncio not trio/anyio
+  "PLW0108", # lambda may be unnecessary - false positive for factory patterns
 ]
 
 # Per-file ignores for test files
@@ -142,6 +146,7 @@ dependencies = [
   "scikit-learn>=1.8.0",
   "sentence-transformers>=5.2.2",
   "chromadb>=1.4.1",
+  "loguru>=0.7.3",
   "orjson>=3.11.6",
   "uvloop>=0.22.1",
   # YouTube support
@@ -166,26 +171,34 @@ dependencies = [
   "weasyprint>=68.0",
   # MCP (Model Context Protocol) server for OpenClaw and other AI agent integrations
   "mcp>=1.26,<2",
+  # Attachment processing: image handling + PDF extraction
+  "Pillow>=11.0.0",
+  "pymupdf>=1.25.0",
 ]
 
 [project.optional-dependencies]
 dev = [
+  "hypothesis>=6.0.0",
   "isort>=7.0.0",
-  "pytest>=9.0.2",
-  "pytest-asyncio>=1.3.0",
-  "ruff>=0.14.14",
   "mypy>=1.19.1",
   "pre-commit>=4.5.1",
+  "pytest>=9.0.2",
+  "pytest-asyncio>=1.3.0",
+  "pytest-benchmark>=5.0.0",
+  "pyyaml>=6.0.3",
+  "ruff>=0.14.14",
 ]
 
 [dependency-groups]
 dev = [
+    "hypothesis>=6.0.0",
     "isort>=7.0.0",
     "mypy>=1.19.1",
     "openapi-spec-validator>=0.7.2",
     "pre-commit>=4.5.1",
     "pytest>=9.0.2",
     "pytest-asyncio>=1.3.0",
+    "pytest-benchmark>=5.0.0",
     "pyyaml>=6.0.3",
     "ruff>=0.14.14",
 ]
@@ -199,6 +212,9 @@ markers = [
     "integration: marks tests as integration tests",
     "unit: marks tests as unit tests",
     "asyncio: marks tests that rely on pytest-asyncio",
+    "chaos: marks chaos/fault-injection tests",
+    "stress: marks stress/load tests",
+    "benchmark: marks performance benchmark tests",
 ]
 asyncio_default_fixture_loop_scope = "function"
 

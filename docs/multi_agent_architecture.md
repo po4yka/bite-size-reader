@@ -8,6 +8,7 @@ Agents wrap extraction, summarization, and validation with structured results, r
 - **ValidationAgent** — Enforces `summary_contract` (length caps, deduped tags/entities).
 - **WebSearchAgent** — Analyzes content for knowledge gaps; executes targeted web searches to enrich context.
 - **AgentOrchestrator** — Coordinates extract → summarize → validate and returns final JSON.
+- **SingleAgentOrchestrator** — Lightweight wrapper for executing a single agent with standardized logging and error handling.
 - All inherit `BaseAgent[TInput, TOutput]` with `success`, `output`, `error`, `metadata`.
 
 ```mermaid

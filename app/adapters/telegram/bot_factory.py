@@ -4,6 +4,7 @@ import logging
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+from app.adapters.attachment.attachment_processor import AttachmentProcessor
 from app.adapters.content.url_processor import URLProcessor
 from app.adapters.external.firecrawl_parser import FirecrawlClient
 from app.adapters.external.response_formatter import ResponseFormatter
@@ -26,6 +27,7 @@ if TYPE_CHECKING:
 
     from app.adapters.telegram.telegram_bot import TelegramBot
     from app.config import AppConfig
+    from app.core.verbosity import VerbosityResolver
     from app.db.session import DatabaseSessionManager
 
 logger = logging.getLogger(__name__)
@@ -49,6 +51,7 @@ class BotComponents:
     response_formatter: ResponseFormatter
     url_processor: URLProcessor
     forward_processor: ForwardProcessor
+    attachment_processor: AttachmentProcessor
     message_handler: MessageHandler
     topic_searcher: TopicSearchService
     local_searcher: LocalTopicSearchService
@@ -57,6 +60,7 @@ class BotComponents:
     query_expansion_service: QueryExpansionService
     hybrid_search_service: HybridSearchService
     vector_store: ChromaVectorStore
+    verbosity_resolver: VerbosityResolver | None = None
     container: Any | None = None
 
 
@@ -120,11 +124,21 @@ class BotFactory:
         sem_func: Callable[[], asyncio.Semaphore],
     ) -> BotComponents:
         """Create all bot components and wire them together."""
+        from app.core.verbosity import VerbosityResolver
+        from app.infrastructure.persistence.sqlite.repositories.user_repository import (
+            SqliteUserRepositoryAdapter,
+        )
+
+        user_repo = SqliteUserRepositoryAdapter(db)
+        verbosity_resolver = VerbosityResolver(user_repo)
+
         # Create response formatter (will be wired to telegram_client later)
         response_formatter = ResponseFormatter(
             safe_reply_func=safe_reply_func,
             reply_json_func=reply_json_func,
             telegram_limits=cfg.telegram_limits,
+            verbosity_resolver=verbosity_resolver,
+            admin_log_chat_id=cfg.telegram.admin_log_chat_id,
         )
 
         # Determine topic search limit (moved up for URLProcessor dependency)
@@ -151,6 +165,16 @@ class BotFactory:
 
         # Create forward processor
         forward_processor = ForwardProcessor(
+            cfg=cfg,
+            db=db,
+            openrouter=clients.llm_client,
+            response_formatter=response_formatter,
+            audit_func=audit_func,
+            sem=sem_func,
+        )
+
+        # Create attachment processor
+        attachment_processor = AttachmentProcessor(
             cfg=cfg,
             db=db,
             openrouter=clients.llm_client,
@@ -233,8 +257,6 @@ class BotFactory:
             container = Container(
                 database=db,
                 topic_search_service=local_searcher,
-                content_fetcher=clients.firecrawl,
-                llm_client=clients.llm_client,
                 analytics_service=None,  # No analytics service yet
                 vector_store=vector_store,
                 embedding_generator=embedding_generator,
@@ -268,6 +290,8 @@ class BotFactory:
             local_searcher=local_searcher,
             container=container,
             hybrid_search=hybrid_search_service,
+            attachment_processor=attachment_processor,
+            verbosity_resolver=verbosity_resolver,
         )
 
         return BotComponents(
@@ -275,6 +299,7 @@ class BotFactory:
             response_formatter=response_formatter,
             url_processor=url_processor,
             forward_processor=forward_processor,
+            attachment_processor=attachment_processor,
             message_handler=message_handler,
             topic_searcher=topic_searcher,
             local_searcher=local_searcher,
@@ -283,6 +308,7 @@ class BotFactory:
             query_expansion_service=query_expansion_service,
             hybrid_search_service=hybrid_search_service,
             vector_store=vector_store,
+            verbosity_resolver=verbosity_resolver,
             container=container,
         )
 

@@ -81,7 +81,7 @@ def _make_processor(db_path: str):
 
     processor = ForwardContentProcessor(
         cfg=cfg,
-        db=db,
+        db=db,  # type: ignore[arg-type]
         response_formatter=formatter,
         audit_func=lambda *a, **kw: None,
     )
@@ -423,7 +423,7 @@ class TestForwardProcessorExceptionHandling(unittest.IsolatedAsyncioTestCase):
             sem=lambda: MagicMock(__aenter__=AsyncMock(), __aexit__=AsyncMock()),
         )
 
-        processor.content_processor.process_forward_content = AsyncMock(
+        processor.content_processor.process_forward_content = AsyncMock(  # type: ignore[method-assign]
             side_effect=ValueError("Forwarded message has no text content")
         )
 
@@ -450,11 +450,11 @@ class TestForwardProcessorExceptionHandling(unittest.IsolatedAsyncioTestCase):
             sem=lambda: MagicMock(__aenter__=AsyncMock(), __aexit__=AsyncMock()),
         )
 
-        processor.content_processor.process_forward_content = AsyncMock(
+        processor.content_processor.process_forward_content = AsyncMock(  # type: ignore[method-assign]
             return_value=(1, "prompt", "en", "sys")
         )
-        processor._maybe_reply_with_cached_summary = AsyncMock(return_value=False)
-        processor.summarizer.summarize_forward = AsyncMock(side_effect=RuntimeError("LLM timeout"))
+        processor._maybe_reply_with_cached_summary = AsyncMock(return_value=False)  # type: ignore[method-assign]
+        processor.summarizer.summarize_forward = AsyncMock(side_effect=RuntimeError("LLM timeout"))  # type: ignore[method-assign]
 
         # Should NOT raise
         await processor.handle_forward_flow(MagicMock(), correlation_id="cid", interaction_id=None)
@@ -502,7 +502,11 @@ class TestForwardProcessorCustomArticle(unittest.IsolatedAsyncioTestCase):
         processor = self._make_processor()
         # Pass a string instead of dict
         await processor._maybe_generate_custom_article(
-            MagicMock(), "not a dict", "en", 1, "cid"  # type: ignore[arg-type]
+            MagicMock(),
+            "not a dict",
+            "en",
+            1,
+            "cid",
         )
 
 
@@ -716,8 +720,8 @@ async def test_forward_caption_only_routes_to_forward_flow(
 
     router = MessageRouter(
         cfg=cfg,
-        db=db,
-        access_controller=SimpleNamespace(check_access=AsyncMock(return_value=True)),
+        db=db,  # type: ignore[arg-type]
+        access_controller=SimpleNamespace(check_access=AsyncMock(return_value=True)),  # type: ignore[arg-type]
         command_processor=MagicMock(),
         url_handler=url_handler,
         forward_processor=forward_processor,
@@ -776,8 +780,8 @@ async def test_channel_forward_missing_msg_id_falls_to_user_path(
 
     router = MessageRouter(
         cfg=cfg,
-        db=db,
-        access_controller=SimpleNamespace(check_access=AsyncMock(return_value=True)),
+        db=db,  # type: ignore[arg-type]
+        access_controller=SimpleNamespace(check_access=AsyncMock(return_value=True)),  # type: ignore[arg-type]
         command_processor=MagicMock(),
         url_handler=url_handler,
         forward_processor=forward_processor,
@@ -808,8 +812,8 @@ async def test_channel_forward_missing_msg_id_falls_to_user_path(
 
     # Should NOT go through the channel forward path (needs both chat AND msg_id)
     # And no forward_from or sender_name set, so user forward path also doesn't match
-    # Falls through to URL or default handler
-    assert forward_processor.handle_forward_flow.await_count == 0
+    # But the fallback branch catches forwards with text content (privacy-restricted channels)
+    assert forward_processor.handle_forward_flow.await_count == 1
 
 
 # ===========================================================================
@@ -846,7 +850,7 @@ class TestMessagePersistenceForwardDefaults(unittest.IsolatedAsyncioTestCase):
                 fwd_from_user=SimpleNamespace(first_name="U", last_name=None),
             )
 
-            # Create a request first
+            # Create a request first (user forward -- no chat_id/msg_id pair)
             req_id = await persistence.request_repo.async_create_request(
                 type_="forward",
                 status="pending",
@@ -881,6 +885,8 @@ class TestMessagePersistenceForwardDefaults(unittest.IsolatedAsyncioTestCase):
                 correlation_id="cid",
                 chat_id=99,
                 user_id=7,
+                fwd_from_chat_id=-100,
+                fwd_from_msg_id=456,
             )
 
             await persistence.persist_message_snapshot(req_id, msg)

@@ -248,7 +248,7 @@ class AnthropicClient:
 
     async def chat(
         self,
-        messages: list[dict[str, str]],
+        messages: list[dict[str, Any]],
         *,
         temperature: float = 0.2,
         max_tokens: int | None = None,
@@ -369,7 +369,7 @@ class AnthropicClient:
         self,
         client: httpx.AsyncClient,
         model: str,
-        messages: list[dict[str, str]],
+        messages: list[dict[str, Any]],
         temperature: float,
         max_tokens: int | None,
         top_p: float | None,
@@ -495,7 +495,7 @@ class AnthropicClient:
         model: str,
         latency: int,
         headers: dict[str, str],
-        messages: list[dict[str, str]],
+        messages: list[dict[str, Any]],
         structured_output_used: bool,
     ) -> LLMCallResult:
         """Parse a successful API response.

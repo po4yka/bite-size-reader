@@ -608,7 +608,7 @@ flowchart LR
    - `app/adapters/content/search_context_builder.py` — SearchContextBuilder
    - `app/adapters/content/llm_summarizer.py` — `_maybe_enrich_with_search()` integration
    - `app/prompts/search_analysis_en.txt`, `app/prompts/search_analysis_ru.txt` — Gap analysis prompts
-   - `app/config.py` — `WebSearchConfig`
+   - `app/config/integrations.py` — `WebSearchConfig`
 
 ---
 

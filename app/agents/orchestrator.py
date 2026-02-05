@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-from enum import Enum
+from enum import StrEnum
 from pathlib import Path  # noqa: TC003 - required at runtime for Pydantic
 from typing import TYPE_CHECKING, Any
 
@@ -25,7 +25,7 @@ from app.core.logging_utils import log_exception
 logger = logging.getLogger(__name__)
 
 
-class PipelineStage(str, Enum):
+class PipelineStage(StrEnum):
     """Pipeline execution stages."""
 
     EXTRACTION = "extraction"
@@ -34,7 +34,7 @@ class PipelineStage(str, Enum):
     COMPLETE = "complete"
 
 
-class RetryStrategy(str, Enum):
+class RetryStrategy(StrEnum):
     """Retry strategy types."""
 
     NONE = "none"

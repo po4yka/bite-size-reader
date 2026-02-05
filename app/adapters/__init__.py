@@ -1,12 +1,25 @@
-"""Adapters for external systems: Firecrawl, OpenRouter, Telegram client.
+"""Adapters for external systems (Telegram, Firecrawl, OpenRouter, etc.).
 
-This package re-exports convenience module aliases used by tests and
-downstream code (e.g., ``app.adapters.telegram_bot``) by importing the
-corresponding modules from the structured subpackages.
+Keep package imports lightweight: heavy submodules are exposed via lazy
+attribute loading to avoid importing optional dependencies unless needed.
 """
 
-# Re-export telegram bot module at package level for compatibility with tests
-# that import ``app.adapters.telegram_bot``.
-from .telegram import telegram_bot
+from __future__ import annotations
+
+import importlib
+from typing import Any
 
 __all__ = ["telegram_bot"]
+
+
+def __getattr__(name: str) -> Any:  # pragma: no cover
+    if name != "telegram_bot":
+        msg = f"module {__name__!r} has no attribute {name!r}"
+        raise AttributeError(msg)
+    module = importlib.import_module("app.adapters.telegram.telegram_bot")
+    globals()[name] = module
+    return module
+
+
+def __dir__() -> list[str]:  # pragma: no cover
+    return sorted(list(globals().keys()) + __all__)

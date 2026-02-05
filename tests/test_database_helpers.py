@@ -128,6 +128,7 @@ class TestDatabaseHelpers(unittest.TestCase):
             correlation_id=None,
             chat_id=None,
             user_id=None,
+            normalized_url="https://example.com/crawl-test",
             route_version=1,
         )
         cid = self.db.insert_crawl_result(
@@ -168,6 +169,7 @@ class TestDatabaseHelpers(unittest.TestCase):
             correlation_id=None,
             chat_id=None,
             user_id=None,
+            normalized_url="https://example.com/upsert-test",
             route_version=1,
         )
         v1 = self.db.upsert_summary(request_id=rid, lang="en", json_payload={"a": 1})

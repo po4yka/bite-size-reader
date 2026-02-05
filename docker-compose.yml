@@ -136,7 +136,7 @@ services:
       - no-new-privileges:true
     stop_grace_period: 30s
   chroma:
-    image: bsr-chroma:1.3.5-curl
+    image: bsr-chroma:1.4.1-curl
     build:
       context: .
       dockerfile: Dockerfile.chroma

@@ -15,6 +15,7 @@ from app.config import (
     AnthropicConfig,
     ApiLimitsConfig,
     AppConfig,
+    AttachmentConfig,
     AuthConfig,
     BackgroundProcessorConfig,
     ChromaConfig,
@@ -190,6 +191,7 @@ def make_test_app_config(
             temperature=0.2,
         ),
         "youtube": YouTubeConfig(),
+        "attachment": AttachmentConfig(),
         "runtime": RuntimeConfig(
             db_path=db_path,
             log_level="INFO",

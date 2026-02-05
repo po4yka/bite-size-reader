@@ -302,6 +302,7 @@ class RedisUserRateLimiter:
         self._redis = redis_client
         self._config = config
         self._prefix = prefix
+        self.last_remaining: int = 0
 
     def _window_key(self, user_id: int | str, window_start: int) -> str:
         return f"{self._prefix}:tg_rate:{user_id}:{window_start}"
@@ -311,7 +312,22 @@ class RedisUserRateLimiter:
 
     async def check_and_record(
         self, user_id: int | str, *, cost: int = 1, operation: str = "request"
-    ) -> tuple[bool, str | None, int]:
+    ) -> tuple[bool, str | None]:
+        """Check if user is within rate limits and record the request.
+
+        Args:
+            user_id: Telegram user ID
+            cost: Cost weight for this operation (default: 1)
+            operation: Description of operation for logging
+
+        Returns:
+            Tuple of (allowed, error_message). If allowed is False, error_message explains why.
+
+        Note:
+            After each call, ``self.last_remaining`` holds the number of remaining
+            requests in the current window (or the retry-after value on rejection).
+
+        """
         now = time.time()
         window_start = int(now // self._config.window_seconds) * self._config.window_seconds
         key = self._window_key(user_id, window_start)
@@ -336,7 +352,8 @@ class RedisUserRateLimiter:
                     "timeout_seconds": 5.0,
                 },
             )
-            return True, None, self._config.max_requests
+            self.last_remaining = self._config.max_requests
+            return True, None
         count = int(result[0]) if result else 0
 
         if count > self._config.max_requests:
@@ -353,16 +370,17 @@ class RedisUserRateLimiter:
                     "retry_after": retry_after,
                 },
             )
+            self.last_remaining = retry_after
             return (
                 False,
                 f"🚫 Rate limit exceeded. You can make {self._config.max_requests} requests "
                 f"per {self._config.window_seconds} seconds. "
                 f"Cooldown active for {retry_after} seconds.",
-                retry_after,
             )
 
         remaining = max(self._config.max_requests - count, 0)
-        return True, None, remaining
+        self.last_remaining = remaining
+        return True, None
 
     async def acquire_concurrent_slot(self, user_id: int | str) -> bool:
         key = self._concurrency_key(user_id)

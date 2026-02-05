@@ -44,7 +44,7 @@ def make_bot(tmp_path: str, allowed_ids):
 
     tbmod.Client = object
     tbmod.filters = None
-    return TelegramBot(cfg=cfg, db=db)
+    return TelegramBot(cfg=cfg, db=db)  # type: ignore[arg-type]
 
 
 class TestUserValidationFixes(unittest.IsolatedAsyncioTestCase):
