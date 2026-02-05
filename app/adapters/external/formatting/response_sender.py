@@ -378,10 +378,10 @@ class ResponseSenderImpl:
                 )
                 return False
 
-            # Length check
+            # Length check -- truncate instead of rejecting (consistent with safe_reply)
             if len(text) > self._max_message_chars:
                 logger.warning(
-                    "edit_message_too_long",
+                    "edit_message_too_long_truncating",
                     extra={
                         "length": len(text),
                         "max": self._max_message_chars,
@@ -389,7 +389,7 @@ class ResponseSenderImpl:
                         "message_id": message_id,
                     },
                 )
-                return False
+                text = text[: self._max_message_chars - 10] + "..."
 
             # Rate limiting check
             if not await self._validator.check_rate_limit():

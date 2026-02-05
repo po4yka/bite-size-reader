@@ -173,18 +173,31 @@ class SummaryPresenterImpl:
 
                 if self._progress_tracker is not None:
                     keyboard = self._create_inline_keyboard(summary_id) if summary_id else None
-                    await self._progress_tracker.finalize(
+                    result = await self._progress_tracker.finalize(
                         message,
                         card_text,
                         parse_mode="HTML",
                         reply_markup=keyboard,
                     )
-                    job_card_finalized = True
-
-                    if reader:
-                        return
+                    if result is not None:
+                        job_card_finalized = True
+                        if reader:
+                            return
+                    else:
+                        logger.warning(
+                            "progress_finalize_failed_fallback",
+                            extra={"request_message_id": getattr(message, "id", None)},
+                        )
             except Exception as exc:
                 raise_if_cancelled(exc)
+                logger.warning(
+                    "compact_card_build_failed",
+                    extra={
+                        "error": str(exc),
+                        "error_type": type(exc).__name__,
+                        "request_message_id": getattr(message, "id", None),
+                    },
+                )
 
             # Optional short header (only when we didn't finalize into a job card)
             if not reader and not job_card_finalized:
@@ -612,11 +625,19 @@ class SummaryPresenterImpl:
             summary_id: Database summary ID for action buttons (optional)
         """
         try:
-            # Clear progress tracker
+            # Finalize progress tracker -- edit the progress message into the final header
             if self._progress_tracker is not None:
-                self._progress_tracker.clear(message)
-
-            await self._response_sender.safe_reply(message, "Forward Summary Ready")
+                result = await self._progress_tracker.finalize(
+                    message,
+                    "Forward Summary Ready",
+                )
+                if result is None:
+                    logger.warning(
+                        "forward_progress_finalize_failed",
+                        extra={"request_message_id": getattr(message, "id", None)},
+                    )
+            else:
+                await self._response_sender.safe_reply(message, "Forward Summary Ready")
 
             combined_lines: list[str] = []
             tl_dr = str(forward_shaped.get("summary_250", "")).strip()

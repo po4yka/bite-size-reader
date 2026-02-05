@@ -5,7 +5,45 @@ import sys
 import uuid
 from typing import Any
 
+import orjson
 from loguru import logger as loguru_logger
+
+
+def _json_sink(message: Any) -> None:
+    """Custom loguru sink that writes structured JSON to stdout via orjson."""
+    record = message.record
+    log_entry: dict[str, Any] = {
+        "timestamp": record["time"].strftime("%Y-%m-%dT%H:%M:%S.%f%z"),
+        "level": record["level"].name,
+        "logger": record["name"],
+        "message": record["message"],
+        "module": record["module"],
+        "function": record["function"],
+        "line": record["line"],
+        "process": record["process"].id,
+        "thread": record["thread"].id,
+    }
+    # Merge extra fields (correlation_id, etc.)
+    for k, v in record["extra"].items():
+        if k not in log_entry:
+            log_entry[k] = v
+    # Include exception info when present
+    if record["exception"] is not None:
+        log_entry["exception"] = str(message).rstrip("\n")
+    try:
+        data = orjson.dumps(log_entry)
+    except (TypeError, ValueError):
+        # Fallback: stringify non-serializable values and retry
+        for k, v in log_entry.items():
+            if not isinstance(v, (str, int, float, bool, type(None))):
+                log_entry[k] = repr(v)
+        try:
+            data = orjson.dumps(log_entry)
+        except Exception:
+            # Last resort: emit minimal plain-text line
+            data = f'{{"level":"{record["level"].name}","message":"{record["message"]}"}}'.encode()
+    sys.stdout.buffer.write(data + b"\n")
+    sys.stdout.buffer.flush()
 
 
 def setup_json_logging(
@@ -35,38 +73,20 @@ def setup_json_logging(
     except Exception:  # pragma: no cover
         pass
 
-    # Enhanced loguru format with structured fields
-    log_format = (
-        "{"
-        '"timestamp": "{time:YYYY-MM-DDTHH:mm:ss.SSSZ}", '
-        '"level": "{level}", '
-        '"logger": "{name}", '
-        '"message": "{message}", '
-        '"module": "{module}", '
-        '"function": "{function}", '
-        '"line": {line}, '
-        '"process": {process.id}, '
-        '"thread": {thread.id}'
-        "{extra}"
-        "}"
-    )
-
-    # Add console sink
+    # Add console sink -- custom function builds JSON via orjson
     loguru_logger.add(
-        sys.stdout,
-        format=log_format,
+        _json_sink,
         level=level.upper(),
-        serialize=True,
         enqueue=True,  # Thread-safe logging
         backtrace=True,
         diagnose=True,
     )
 
-    # Add file sink if specified
+    # Add file sink if specified -- serialize=True alone (without a custom format
+    # string) produces loguru's built-in JSON schema, which is safe and correct.
     if log_file:
         loguru_logger.add(
             log_file,
-            format=log_format,
             level=level.upper(),
             serialize=True,
             rotation=max_file_size,
