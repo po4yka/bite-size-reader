@@ -60,7 +60,7 @@ def make_bot(tmp_path: str) -> SpyBot:
     cfg = make_test_app_config(db_path=tmp_path, allowed_user_ids=(1, 55, 66, 77, 88))
     from app.adapters import telegram_bot as tbmod
 
-    tbmod.Client = object
+    tbmod.Client = object  # type: ignore[misc,assignment]
     tbmod.filters = None
     return SpyBot(cfg=cfg, db=Database(tmp_path))  # type: ignore[arg-type]
 

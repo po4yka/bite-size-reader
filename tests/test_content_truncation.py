@@ -39,9 +39,9 @@ def make_bot(tmp_path: str, allowed_ids):
     cfg = make_test_app_config(db_path=tmp_path, allowed_user_ids=tuple(allowed_ids))
     from app.adapters import telegram_bot as tbmod
 
-    tbmod.Client = object
+    tbmod.Client = object  # type: ignore[misc,assignment]
     tbmod.filters = None
-    return TelegramBot(cfg=cfg, db=db)
+    return TelegramBot(cfg=cfg, db=db)  # type: ignore[arg-type]
 
 
 class TestContentTruncation(unittest.IsolatedAsyncioTestCase):

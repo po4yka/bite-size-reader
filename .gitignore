@@ -108,6 +108,9 @@ Thumbs.db
 ehthumbs.db
 Desktop.ini
 
+# --- act (local GitHub Actions runner) ---
+.actrc
+
 # --- Claude Code ---
 # Local Claude Code settings (user-specific)
 .claude/settings.local.json

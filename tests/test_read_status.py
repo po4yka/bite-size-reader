@@ -92,7 +92,7 @@ def make_bot(tmp_path: str) -> ReadStatusBot:
     cfg = make_test_app_config(db_path=tmp_path, allowed_user_ids=(1,))
     from app.adapters import telegram_bot as tbmod
 
-    tbmod.Client = object
+    tbmod.Client = object  # type: ignore[misc,assignment]
     tbmod.filters = None
     return ReadStatusBot(cfg=cfg, db=db)  # type: ignore[arg-type]
 

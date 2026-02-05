@@ -51,7 +51,7 @@ class TestModelValidation(unittest.TestCase):
         }
 
         with patch.dict(os.environ, test_env, clear=True):
-            settings = Settings(_env_file=None)
+            settings = Settings(_env_file=None)  # type: ignore[call-arg]
             cfg = settings.as_app_config()
 
             # fallback/model is a valid model name (alphanumeric + slash)
@@ -75,7 +75,7 @@ class TestModelValidation(unittest.TestCase):
         }
 
         with patch.dict(os.environ, test_env, clear=True):
-            settings = Settings(_env_file=None)
+            settings = Settings(_env_file=None)  # type: ignore[call-arg]
             cfg = settings.as_app_config()
 
             assert cfg.openrouter.max_tokens == 4096
@@ -97,7 +97,7 @@ class TestModelValidation(unittest.TestCase):
         }
 
         with patch.dict(os.environ, test_env, clear=True):
-            settings = Settings(_env_file=None)
+            settings = Settings(_env_file=None)  # type: ignore[call-arg]
             cfg = settings.as_app_config()
 
             # Check that defaults are applied when env vars are not set
@@ -124,9 +124,9 @@ class TestModelValidation(unittest.TestCase):
             # Provide stub telegram credentials directly
             # _env_file and telegram dict are pydantic-settings internals
             settings = Settings(
-                _env_file=None,
+                _env_file=None,  # type: ignore[call-arg]
                 allow_stub_telegram=True,
-                telegram={
+                telegram={  # type: ignore[arg-type]
                     "api_id": 1,
                     "api_hash": "test_api_hash_placeholder_value___",
                     "bot_token": "1000000000:TESTTOKENPLACEHOLDER1234567890ABC",
@@ -154,7 +154,7 @@ class TestModelValidation(unittest.TestCase):
 
         with patch.dict(os.environ, test_env, clear=True):
             with pytest.raises(RuntimeError):
-                Settings(_env_file=None)
+                Settings(_env_file=None)  # type: ignore[call-arg]
 
 
 if __name__ == "__main__":

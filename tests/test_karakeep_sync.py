@@ -273,7 +273,7 @@ class TestApplyBookmarkMetadata(unittest.IsolatedAsyncioTestCase):
             id=bookmark_id,
             url=url,
             favourited=favourited,
-            modified_at=datetime(2025, 6, 1, tzinfo=UTC),
+            modified_at=datetime(2025, 6, 1, tzinfo=UTC),  # type: ignore[call-arg]
         )
 
     def _make_summary_data(

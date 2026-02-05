@@ -54,7 +54,7 @@ def make_bot(tmp_path: str) -> BotSpy:
     cfg = make_test_app_config(db_path=tmp_path, allowed_user_ids=(1, 42))
     from app.adapters import telegram_bot as tbmod
 
-    tbmod.Client = object
+    tbmod.Client = object  # type: ignore[misc,assignment]
     tbmod.filters = None
 
     # Mock the OpenRouter client to avoid API key validation

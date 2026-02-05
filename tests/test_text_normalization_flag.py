@@ -160,7 +160,7 @@ async def test_forward_prompt_normalized_when_flag_enabled(monkeypatch: pytest.M
     # Also mock the chat/user repo methods
     mock_chat_repo = MagicMock()
     mock_chat_repo.async_upsert_chat = AsyncMock()
-    processor.message_persistence.chat_repo = mock_chat_repo
+    processor.message_persistence.chat_repo = mock_chat_repo  # type: ignore[attr-defined]
 
     mock_user_repo = MagicMock()
     mock_user_repo.async_upsert_user = AsyncMock()

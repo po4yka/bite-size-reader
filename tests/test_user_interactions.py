@@ -23,6 +23,8 @@ from app.infrastructure.persistence.sqlite.repositories.user_repository import (
 from tests.conftest import make_test_app_config
 
 if TYPE_CHECKING:
+    from collections.abc import Generator
+
     from app.adapters.telegram.url_handler import URLHandler
 
 
@@ -31,7 +33,7 @@ def _make_config() -> AppConfig:
 
 
 @pytest.fixture
-def db(tmp_path) -> DatabaseSessionManager:
+def db(tmp_path) -> Generator[DatabaseSessionManager]:
     from app.db.models import database_proxy
 
     # Save the original database proxy state

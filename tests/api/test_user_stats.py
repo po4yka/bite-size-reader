@@ -18,7 +18,7 @@ def _configure_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("JWT_SECRET_KEY", "test-secret-key-32-characters-long-123456")
     monkeypatch.setenv("ALLOWED_USER_IDS", "123456789")
     monkeypatch.setenv("ALLOWED_CLIENT_IDS", "com.example.app")
-    auth._cfg = None
+    auth._cfg = None  # type: ignore[attr-defined]
 
 
 @pytest.fixture
