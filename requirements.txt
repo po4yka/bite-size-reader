@@ -444,7 +444,7 @@ tokenizers==0.22.2
     # via
     #   chromadb
     #   transformers
-torch==2.10.0
+torch==2.10.0+cpu
     # via
     #   bite-size-reader (pyproject.toml)
     #   sentence-transformers
