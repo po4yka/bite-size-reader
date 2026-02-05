@@ -31,6 +31,7 @@ if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable, Coroutine, Sequence
 
     from app.db.session import DatabaseSessionManager
+    from app.db.write_queue import DbWriteQueue
 
 logger = logging.getLogger(__name__)
 
@@ -114,6 +115,7 @@ class LLMResponseWorkflow:
         response_formatter: Any,
         audit_func: Callable[[str, str, dict[str, Any]], None],
         sem: Callable[[], Any],
+        db_write_queue: DbWriteQueue | None = None,
     ) -> None:
         """Initialize the workflow.
 
@@ -124,6 +126,9 @@ class LLMResponseWorkflow:
             response_formatter: Formatter for messages.
             audit_func: Function for audit logging.
             sem: Semaphore factory for rate limiting.
+            db_write_queue: Optional background write queue for cancellation-safe
+                DB persistence.  When provided, ``_persist_llm_call`` enqueues
+                writes instead of awaiting them directly.
 
         """
         self.cfg = cfg
@@ -132,6 +137,7 @@ class LLMResponseWorkflow:
         self.response_formatter = response_formatter
         self._audit = audit_func
         self._sem = sem
+        self._db_write_queue = db_write_queue
         self.summary_repo = SqliteSummaryRepositoryAdapter(db)
         self.request_repo = SqliteRequestRepositoryAdapter(db)
         self.llm_repo = SqliteLLMRepositoryAdapter(db)
@@ -934,6 +940,53 @@ class LLMResponseWorkflow:
             raise_if_cancelled(exc)
 
     async def _persist_llm_call(self, llm: Any, req_id: int, correlation_id: str | None) -> None:
+        if self._db_write_queue is not None:
+            # Capture all values needed for the deferred write so the closure
+            # is safe to execute later outside the request scope.
+            _llm = llm
+            _req_id = req_id
+            _cid = correlation_id
+            _model_fallback = self.cfg.openrouter.model
+
+            async def _deferred_persist() -> None:
+                try:
+                    await self.llm_repo.async_insert_llm_call(
+                        request_id=_req_id,
+                        provider="openrouter",
+                        model=_llm.model or _model_fallback,
+                        endpoint=_llm.endpoint,
+                        request_headers_json=_llm.request_headers or {},
+                        request_messages_json=list(_llm.request_messages or []),
+                        response_text=_llm.response_text,
+                        response_json=_llm.response_json or {},
+                        tokens_prompt=_llm.tokens_prompt,
+                        tokens_completion=_llm.tokens_completion,
+                        cost_usd=_llm.cost_usd,
+                        latency_ms=_llm.latency_ms,
+                        status=_llm.status,
+                        error_text=_llm.error_text,
+                        structured_output_used=getattr(_llm, "structured_output_used", None),
+                        structured_output_mode=getattr(_llm, "structured_output_mode", None),
+                        error_context_json=(
+                            getattr(_llm, "error_context", {})
+                            if getattr(_llm, "error_context", None) is not None
+                            else None
+                        ),
+                    )
+                except Exception as exc:
+                    logger.exception(
+                        "persist_llm_error",
+                        extra={"error": str(exc), "cid": _cid},
+                    )
+
+            await self._db_write_queue.enqueue(
+                _deferred_persist,
+                operation_name="persist_llm_call",
+                correlation_id=_cid or "",
+            )
+            return
+
+        # Fallback: direct await (CLI runner, single-URL mode, tests)
         try:
             await self.llm_repo.async_insert_llm_call(
                 request_id=req_id,

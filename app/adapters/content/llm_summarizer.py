@@ -44,6 +44,7 @@ if TYPE_CHECKING:
     from app.adapters.llm import LLMClientProtocol
     from app.config import AppConfig
     from app.db.session import DatabaseSessionManager
+    from app.db.write_queue import DbWriteQueue
     from app.services.topic_search import TopicSearchService
 
 logger = logging.getLogger(__name__)
@@ -61,6 +62,7 @@ class LLMSummarizer:
         audit_func: Callable[[str, str, dict], None],
         sem: Callable[[], Any],
         topic_search: TopicSearchService | None = None,
+        db_write_queue: DbWriteQueue | None = None,
     ) -> None:
         self.cfg = cfg
         self.db = db
@@ -69,6 +71,7 @@ class LLMSummarizer:
         self._audit = audit_func
         self._sem = sem
         self._topic_search = topic_search
+        self._db_write_queue = db_write_queue
         self.summary_repo = SqliteSummaryRepositoryAdapter(db)
         self.request_repo = SqliteRequestRepositoryAdapter(db)
         self.crawl_result_repo = SqliteCrawlResultRepositoryAdapter(db)
@@ -79,6 +82,7 @@ class LLMSummarizer:
             response_formatter=response_formatter,
             audit_func=audit_func,
             sem=sem,
+            db_write_queue=db_write_queue,
         )
         self._cache = RedisCache(cfg)
         self._prompt_version = getattr(cfg.runtime, "summary_prompt_version", "v1")

@@ -195,8 +195,9 @@ class TestBatchProgressFormatter(unittest.TestCase):
         batch = URLBatchStatus.from_urls(["https://a.com", "https://b.com"])
         message = BatchProgressFormatter.format_progress_message(batch)
 
-        assert "Processing 2 links" in message
-        assert "Pending: 2" in message
+        assert "Processing 2 links..." in message
+        assert "[1/2] a.com -- Pending" in message
+        assert "[2/2] b.com -- Pending" in message
         assert "Progress: 0/2 (0%)" in message
 
     def test_format_progress_with_completed(self):
@@ -206,8 +207,8 @@ class TestBatchProgressFormatter(unittest.TestCase):
 
         message = BatchProgressFormatter.format_progress_message(batch)
 
-        assert "Done (1):" in message
-        assert "techcrunch.com" in message
+        assert "[1/2] techcrunch.com -- Done (1s)" in message
+        assert "[2/2] arxiv.org -- Pending" in message
         assert "Progress: 1/2 (50%)" in message
 
     def test_format_progress_with_processing(self):
@@ -217,7 +218,7 @@ class TestBatchProgressFormatter(unittest.TestCase):
 
         message = BatchProgressFormatter.format_progress_message(batch)
 
-        assert "Now: example.com" in message
+        assert "[1/1] example.com -- Processing..." in message
 
     def test_format_progress_with_eta(self):
         """Test progress message shows ETA."""
@@ -236,11 +237,11 @@ class TestBatchProgressFormatter(unittest.TestCase):
 
         message = BatchProgressFormatter.format_completion_message(batch)
 
-        assert "Batch Complete - 2/2 links" in message
-        assert "Successful (2):" in message
-        assert '"Article A"' in message
-        assert '"Article B"' in message
-        assert "Total time:" in message
+        assert "Batch Complete -- 2/2 links" in message
+        assert '1. "Article A" -- a.com' in message
+        assert '2. "Article B" -- b.com' in message
+        assert "Total:" in message
+        assert "Avg:" in message
 
     def test_format_completion_with_failures(self):
         """Test completion message shows failed URLs."""
@@ -250,11 +251,9 @@ class TestBatchProgressFormatter(unittest.TestCase):
 
         message = BatchProgressFormatter.format_completion_message(batch)
 
-        assert "Batch Complete - 1/2 links" in message
-        assert "Successful (1):" in message
-        assert "Failed (1):" in message
-        assert "bad.com" in message
-        assert "Timeout" in message
+        assert "Batch Complete -- 1/2 links" in message
+        assert '1. "Good" -- good.com' in message
+        assert "2. bad.com -- Failed: Timeout" in message
 
     def test_format_completion_truncates_long_titles(self):
         """Test that long titles are truncated."""

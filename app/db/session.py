@@ -188,10 +188,10 @@ class DatabaseSessionManager:
                         # SQLite WAL mode (configured in __post_init__) handles
                         # reader-writer coordination at the database level,
                         # allowing concurrent reads with a single writer.
-                        return await asyncio.to_thread(_op_wrapper)
+                        return await asyncio.shield(asyncio.to_thread(_op_wrapper))
 
                     async with self._rw_lock.write_lock():
-                        return await asyncio.to_thread(_op_wrapper)
+                        return await asyncio.shield(asyncio.to_thread(_op_wrapper))
 
                 return await asyncio.wait_for(_run_with_lock(), timeout=timeout)
 
@@ -313,7 +313,7 @@ class DatabaseSessionManager:
                                     txn.rollback()
                                     raise
 
-                        return await asyncio.to_thread(_execute_in_transaction)
+                        return await asyncio.shield(asyncio.to_thread(_execute_in_transaction))
 
                 return await asyncio.wait_for(_run_transaction(), timeout=timeout)
 

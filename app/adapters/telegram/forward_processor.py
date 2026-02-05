@@ -26,6 +26,7 @@ if TYPE_CHECKING:
     from app.adapters.llm.protocol import LLMClientProtocol
     from app.config import AppConfig
     from app.db.session import DatabaseSessionManager
+    from app.db.write_queue import DbWriteQueue
 
 logger = logging.getLogger(__name__)
 
@@ -45,6 +46,7 @@ class ForwardProcessor:
         response_formatter: ResponseFormatter,
         audit_func: Callable[[str, str, dict], None],
         sem: Callable[[], Any],
+        db_write_queue: DbWriteQueue | None = None,
     ) -> None:
         self.cfg = cfg
         self.db = db
@@ -54,6 +56,7 @@ class ForwardProcessor:
         self.response_formatter = response_formatter
         self._audit = audit_func
         self._sem = sem
+        self._db_write_queue = db_write_queue
         self._llm_summarizer: Any | None = None
 
         # Initialize components
@@ -71,6 +74,7 @@ class ForwardProcessor:
             response_formatter=response_formatter,
             audit_func=audit_func,
             sem=sem,
+            db_write_queue=db_write_queue,
         )
 
     async def handle_forward_flow(
@@ -286,6 +290,7 @@ class ForwardProcessor:
                 response_formatter=self.response_formatter,
                 audit_func=self._audit,
                 sem=self._sem,
+                db_write_queue=self._db_write_queue,
             )
         return self._llm_summarizer
 

@@ -174,6 +174,22 @@ class ProgressTracker:
 
         return completed, self.total
 
+    async def force_update(self) -> None:
+        """Queue a progress update without incrementing the counter.
+
+        Useful for phase changes that affect the display without completing items.
+        """
+        try:
+            # Drop stale update if present
+            try:
+                self._update_queue.get_nowait()
+                self._update_queue.task_done()
+            except asyncio.QueueEmpty:
+                pass
+            self._update_queue.put_nowait((self._completed, self.total))
+        except asyncio.QueueFull:
+            pass  # Best effort
+
     async def process_update_queue(self) -> None:
         """Process queued progress updates in the background.
 

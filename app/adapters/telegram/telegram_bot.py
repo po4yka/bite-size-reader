@@ -27,6 +27,7 @@ except ImportError:
 if TYPE_CHECKING:
     from app.config import AppConfig
     from app.db.session import DatabaseSessionManager
+    from app.db.write_queue import DbWriteQueue
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +39,7 @@ class TelegramBot:
 
     cfg: AppConfig
     db: DatabaseSessionManager
+    db_write_queue: DbWriteQueue | None = None
 
     def __post_init__(self) -> None:
         """Initialize bot components using factory pattern."""
@@ -82,6 +84,7 @@ class TelegramBot:
             safe_reply_func=self._safe_reply,
             reply_json_func=self._reply_json,
             sem_func=self._sem,
+            db_write_queue=self.db_write_queue,
         )
 
         # Assign components to instance attributes

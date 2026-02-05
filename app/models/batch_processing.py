@@ -123,6 +123,8 @@ class URLStatus(Enum):
 
     PENDING = "pending"
     PROCESSING = "processing"
+    EXTRACTING = "extracting"  # Firecrawl content extraction phase
+    ANALYZING = "analyzing"  # LLM summarization phase
     COMPLETE = "complete"
     FAILED = "failed"
 
@@ -208,6 +210,20 @@ class URLBatchStatus:
             entry.status = URLStatus.PROCESSING
             entry.start_time = time.time()
 
+    def mark_extracting(self, url: str) -> None:
+        """Mark a URL as in the content extraction phase (Firecrawl)."""
+        entry = self._find_entry(url)
+        if entry:
+            entry.status = URLStatus.EXTRACTING
+            if entry.start_time is None:
+                entry.start_time = time.time()
+
+    def mark_analyzing(self, url: str) -> None:
+        """Mark a URL as in the LLM analysis phase."""
+        entry = self._find_entry(url)
+        if entry:
+            entry.status = URLStatus.ANALYZING
+
     def mark_complete(
         self,
         url: str,
@@ -291,8 +307,9 @@ class URLBatchStatus:
 
     @property
     def processing(self) -> list[URLStatusEntry]:
-        """List of currently processing entries."""
-        return [e for e in self.entries if e.status == URLStatus.PROCESSING]
+        """List of currently processing entries (any active phase)."""
+        active = {URLStatus.PROCESSING, URLStatus.EXTRACTING, URLStatus.ANALYZING}
+        return [e for e in self.entries if e.status in active]
 
     @property
     def done_count(self) -> int:

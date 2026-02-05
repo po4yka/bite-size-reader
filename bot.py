@@ -6,6 +6,7 @@ import logging
 from app.adapters.telegram.telegram_bot import TelegramBot
 from app.config import load_config
 from app.db.session import DatabaseSessionManager
+from app.db.write_queue import DbWriteQueue
 
 # Use uvloop for better async performance if available
 try:
@@ -34,10 +35,16 @@ async def main() -> None:
     )
     db.migrate()
 
+    db_write_queue = DbWriteQueue(maxsize=256)
+    db_write_queue.start()
+
     # Create bot using factory pattern (while maintaining backward compatibility)
     # The factory is used internally by TelegramBot.__post_init__
-    bot = TelegramBot(cfg=cfg, db=db)
-    await bot.start()
+    bot = TelegramBot(cfg=cfg, db=db, db_write_queue=db_write_queue)
+    try:
+        await bot.start()
+    finally:
+        await db_write_queue.stop()
 
 
 if __name__ == "__main__":

@@ -29,6 +29,7 @@ if TYPE_CHECKING:
     from app.config import AppConfig
     from app.core.verbosity import VerbosityResolver
     from app.db.session import DatabaseSessionManager
+    from app.db.write_queue import DbWriteQueue
 
 logger = logging.getLogger(__name__)
 
@@ -122,6 +123,7 @@ class BotFactory:
         safe_reply_func: Callable,
         reply_json_func: Callable,
         sem_func: Callable[[], asyncio.Semaphore],
+        db_write_queue: DbWriteQueue | None = None,
     ) -> BotComponents:
         """Create all bot components and wire them together."""
         from app.core.verbosity import VerbosityResolver
@@ -161,6 +163,7 @@ class BotFactory:
             audit_func=audit_func,
             sem=sem_func,
             topic_search=topic_searcher if cfg.web_search.enabled else None,
+            db_write_queue=db_write_queue,
         )
 
         # Create forward processor
@@ -171,6 +174,7 @@ class BotFactory:
             response_formatter=response_formatter,
             audit_func=audit_func,
             sem=sem_func,
+            db_write_queue=db_write_queue,
         )
 
         # Create attachment processor
@@ -181,6 +185,7 @@ class BotFactory:
             response_formatter=response_formatter,
             audit_func=audit_func,
             sem=sem_func,
+            db_write_queue=db_write_queue,
         )
 
         # Initialize vector store with graceful degradation

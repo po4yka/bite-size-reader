@@ -27,10 +27,10 @@ logger = logging.getLogger(__name__)
 
 # URL processing configuration
 URL_MAX_CONCURRENT = 4
-URL_MAX_RETRIES = 3
-URL_INITIAL_TIMEOUT_SEC = 30.0
+URL_MAX_RETRIES = 2  # was 3: fewer retries, each with more time
+URL_INITIAL_TIMEOUT_SEC = 90.0  # was 30.0: covers median Firecrawl+LLM+DB
 URL_MAX_TIMEOUT_SEC = 180.0
-URL_BACKOFF_BASE = 2.0
+URL_BACKOFF_BASE = 3.0  # was 2.0: longer backoff between retries
 URL_BACKOFF_MAX = 60.0
 
 
@@ -423,6 +423,14 @@ class URLHandler:
                 # Mark as processing
                 batch_status.mark_processing(url)
 
+                async def phase_callback(phase: str) -> None:
+                    """Update batch status when URL processing phase changes."""
+                    if phase == "extracting":
+                        batch_status.mark_extracting(url)
+                    elif phase == "analyzing":
+                        batch_status.mark_analyzing(url)
+                    await progress_tracker.force_update()
+
                 for attempt in range(URL_MAX_RETRIES + 1):
                     # Calculate timeout with exponential increase per retry
                     current_timeout = min(
@@ -445,7 +453,11 @@ class URLHandler:
                         # Add timeout protection for individual URL processing
                         result = await asyncio.wait_for(
                             self.url_processor.handle_url_flow(
-                                message, url, correlation_id=per_link_cid
+                                message,
+                                url,
+                                correlation_id=per_link_cid,
+                                batch_mode=True,
+                                on_phase_change=phase_callback,
                             ),
                             timeout=current_timeout,
                         )

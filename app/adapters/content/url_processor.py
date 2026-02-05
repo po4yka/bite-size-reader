@@ -22,13 +22,14 @@ from app.infrastructure.persistence.sqlite.repositories.summary_repository impor
 from app.prompts.manager import get_prompt_manager
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Coroutine
+    from collections.abc import Awaitable, Callable, Coroutine
 
     from app.adapters.external.firecrawl_parser import FirecrawlClient
     from app.adapters.external.response_formatter import ResponseFormatter
     from app.adapters.llm.protocol import LLMClientProtocol
     from app.config import AppConfig
     from app.db.session import DatabaseSessionManager
+    from app.db.write_queue import DbWriteQueue
     from app.services.topic_search import TopicSearchService
 
 logger = logging.getLogger(__name__)
@@ -127,11 +128,13 @@ class URLProcessor:
         audit_func: Callable[[str, str, dict], None],
         sem: Callable[[], Any],
         topic_search: TopicSearchService | None = None,
+        db_write_queue: DbWriteQueue | None = None,
     ) -> None:
         self.cfg = cfg
         self.db = db
         self.response_formatter = response_formatter
         self._audit = audit_func
+        self._db_write_queue = db_write_queue
         self.summary_repo = SqliteSummaryRepositoryAdapter(db)
 
         # Initialize modular components
@@ -160,6 +163,7 @@ class URLProcessor:
             audit_func=audit_func,
             sem=sem,
             topic_search=topic_search,
+            db_write_queue=db_write_queue,
         )
 
         self.message_persistence = MessagePersistence(db=db)
@@ -251,11 +255,19 @@ class URLProcessor:
         correlation_id: str | None = None,
         interaction_id: int | None = None,
         silent: bool = False,
+        batch_mode: bool = False,
+        on_phase_change: Callable[[str], Awaitable[None]] | None = None,
     ) -> URLProcessingFlowResult:
         """Handle complete URL processing flow from extraction to summarization.
 
         Args:
             silent: If True, suppress all Telegram responses and only persist to database
+            batch_mode: If True, suppress intermediate notifications and post-summary
+                tasks to reduce message flooding during multi-URL batch processing.
+                The final summary response and error notifications are also suppressed;
+                callers are expected to send a compact batch completion card instead.
+            on_phase_change: Optional async callback invoked when processing enters
+                a new phase (e.g. ``"extracting"``, ``"analyzing"``).
 
         Returns:
             URLProcessingFlowResult with success status and extracted title
@@ -273,6 +285,10 @@ class URLProcessor:
         try:
             norm = normalize_url(url_text)
             dedupe_hash = url_hash_sha256(norm)
+            # Signal phase: extracting content
+            if on_phase_change:
+                await on_phase_change("extracting")
+
             # Extract and process content
             (
                 req_id,
@@ -293,8 +309,8 @@ class URLProcessor:
                 extra={"detected": detected, "chosen": chosen_lang, "cid": correlation_id},
             )
 
-            # Notify: language detected with content preview (skip if silent)
-            if not silent:
+            # Notify: language detected with content preview (skip if silent or batch)
+            if not silent and not batch_mode:
                 content_preview = (
                     content_text[:150] + "..." if len(content_text) > 150 else content_text
                 )
@@ -319,16 +335,17 @@ class URLProcessor:
                 should_chunk = False
                 chunks = None
 
-            # Inform the user how the content will be handled (skip if silent)
-            await self.response_formatter.send_content_analysis_notification(
-                message,
-                len(content_text),
-                max_chars,
-                should_chunk,
-                chunks,
-                self.cfg.openrouter.structured_output_mode,
-                silent=silent,
-            )
+            # Inform the user how the content will be handled (skip if silent or batch)
+            if not batch_mode:
+                await self.response_formatter.send_content_analysis_notification(
+                    message,
+                    len(content_text),
+                    max_chars,
+                    should_chunk,
+                    chunks,
+                    self.cfg.openrouter.structured_output_mode,
+                    silent=silent,
+                )
 
             logger.info(
                 "content_handling",
@@ -339,6 +356,10 @@ class URLProcessor:
                     "chunks": len(chunks) if chunks else 0,
                 },
             )
+
+            # Signal phase: analyzing / summarizing content
+            if on_phase_change:
+                await on_phase_change("analyzing")
 
             # Process content (either chunked or single)
             summary_json: dict[str, Any] | None
@@ -377,7 +398,7 @@ class URLProcessor:
                     "summarization_failed",
                     extra={"cid": correlation_id, "url": url_text},
                 )
-                if not silent:
+                if not silent and not batch_mode:
                     await self.response_formatter.send_error_notification(
                         message,
                         "processing_failed",
@@ -401,8 +422,8 @@ class URLProcessor:
             else:
                 persist_task = None
 
-            # Format and send the response (skip if silent)
-            if not silent:
+            # Format and send the response (skip if silent or batch)
+            if not silent and not batch_mode:
                 llm_result = self.llm_summarizer.last_llm_result or self._create_chunk_llm_stub()
                 # Pass request ID prefixed with 'req:' for action button callbacks
                 await self.response_formatter.send_structured_summary_response(
@@ -413,20 +434,22 @@ class URLProcessor:
                     summary_id=f"req:{req_id}" if req_id else None,
                 )
 
-            await self._schedule_post_summary_tasks(
-                message,
-                content_text,
-                chosen_lang,
-                req_id,
-                correlation_id,
-                summary_json,
-                needs_ru_translation=needs_ru_translation,
-                silent=silent,
-                url_hash=dedupe_hash,
-            )
+            # Skip post-summary background tasks in batch mode to reduce noise
+            if not batch_mode:
+                await self._schedule_post_summary_tasks(
+                    message,
+                    content_text,
+                    chosen_lang,
+                    req_id,
+                    correlation_id,
+                    summary_json,
+                    needs_ru_translation=needs_ru_translation,
+                    silent=silent,
+                    url_hash=dedupe_hash,
+                )
 
-            # For silent mode, we need to ensure persistence completes
-            if silent and persist_task:
+            # For silent or batch mode, we need to ensure persistence completes
+            if (silent or batch_mode) and persist_task:
                 await self._await_persistence_task(persist_task)
 
             # Return result with extracted title
@@ -438,7 +461,7 @@ class URLProcessor:
                 "url_processing_failed",
                 extra={"cid": correlation_id, "url": url_text, "error": str(exc)},
             )
-            if not silent:
+            if not silent and not batch_mode:
                 await self.response_formatter.send_error_notification(
                     message,
                     "processing_failed",

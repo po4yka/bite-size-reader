@@ -1,15 +1,18 @@
 """Formatter for batch URL processing progress and completion messages.
 
-Provides rich, informative messages showing per-URL status, ETA estimates,
-and detailed completion reports with titles and error reasons.
+Provides rich, informative messages showing per-URL status with numbered lines,
+ETA estimates, and detailed completion reports with titles and error reasons.
 """
 
 from __future__ import annotations
 
+import time
 from typing import TYPE_CHECKING
 
+from app.models.batch_processing import URLStatus
+
 if TYPE_CHECKING:
-    from app.models.batch_processing import URLBatchStatus
+    from app.models.batch_processing import URLBatchStatus, URLStatusEntry
 
 
 # Telegram message limit with safety margin
@@ -20,21 +23,25 @@ class BatchProgressFormatter:
     """Formats batch processing progress and completion messages.
 
     Provides multiple display formats:
-    - Detailed: Full per-URL status with titles/errors
-    - Compact: Grouped by status (Done/Now/Pending)
-    - Minimal: Simple counts for very long messages
+    - Detailed: Numbered per-URL status lines with elapsed time
+    - Compact: Summarized counts for long completion messages
+    - Minimal: Simple counts for very long batches
     """
 
     @classmethod
     def format_progress_message(cls, batch: URLBatchStatus) -> str:
-        """Format a progress update message with per-URL status.
+        """Format a progress update message with numbered per-URL status lines.
 
-        Shows:
-        - Completed URLs (by domain)
-        - Currently processing URL
-        - Pending count
-        - Progress percentage
-        - ETA based on average processing time
+        Example output::
+
+            Processing 4 links...
+
+            [1/4] techcrunch.com -- Done (12s)
+            [2/4] arxiv.org -- Analyzing... (5s)
+            [3/4] medium.com -- Pending
+            [4/4] github.io -- Pending
+
+            Progress: 1/4 (25%) | ETA: ~45s
 
         Args:
             batch: Current batch status
@@ -43,50 +50,28 @@ class BatchProgressFormatter:
             Formatted progress message string
         """
         lines: list[str] = []
+        total = batch.total
 
         # Header
-        lines.append(f"Processing {batch.total} links")
+        lines.append(f"Processing {total} links...")
         lines.append("")
 
-        # Completed URLs (show domains)
-        completed = batch.completed
-        if completed:
-            domains = [e.domain or "unknown" for e in completed[:5]]
-            domain_str = ", ".join(domains)
-            if len(completed) > 5:
-                domain_str += f" (+{len(completed) - 5} more)"
-            lines.append(f"Done ({len(completed)}): {domain_str}")
-
-        # Currently processing
-        processing = batch.processing
-        if processing:
-            current = processing[0]
-            lines.append(f"Now: {current.domain or current.url[:30]}")
-
-        # Pending count
-        pending_count = batch.pending_count
-        if pending_count > 0:
-            lines.append(f"Pending: {pending_count}")
+        # Per-URL status lines
+        for index, entry in enumerate(batch.entries, 1):
+            lines.append(cls._format_status_line(index, total, entry))
 
         lines.append("")
 
-        # Progress bar and percentage
+        # Footer: progress + ETA
         done = batch.done_count
-        total = batch.total
         percentage = int((done / total) * 100) if total > 0 else 0
-        lines.append(f"Progress: {done}/{total} ({percentage}%)")
+        footer_parts = [f"Progress: {done}/{total} ({percentage}%)"]
 
-        # ETA calculation
         eta_sec = batch.estimate_remaining_time_sec()
-        avg_ms = batch.average_processing_time_ms()
-
         if eta_sec is not None and eta_sec > 0:
-            eta_str = cls._format_duration(eta_sec)
-            avg_str = cls._format_duration(avg_ms / 1000) if avg_ms > 0 else "?"
-            lines.append(f"ETA: ~{eta_str} | Avg: {avg_str} per link")
-        elif avg_ms > 0:
-            avg_str = cls._format_duration(avg_ms / 1000)
-            lines.append(f"Avg: {avg_str} per link")
+            footer_parts.append(f"ETA: ~{cls._format_duration(eta_sec)}")
+
+        lines.append(" | ".join(footer_parts))
 
         message = "\n".join(lines)
 
@@ -97,14 +82,90 @@ class BatchProgressFormatter:
         return message
 
     @classmethod
-    def format_completion_message(cls, batch: URLBatchStatus) -> str:
-        """Format a completion message with detailed results.
+    def _format_status_line(cls, index: int, total: int, entry: URLStatusEntry) -> str:
+        """Format a single numbered status line for progress display.
 
-        Shows:
-        - Success/failure summary
-        - List of successful URLs with titles
-        - List of failed URLs with error reasons
-        - Total time and average per link
+        Args:
+            index: 1-based index of the entry
+            total: Total number of entries in the batch
+            entry: The URL status entry to format
+
+        Returns:
+            Formatted status line, e.g. ``[2/5] arxiv.org -- Analyzing... (3s)``
+        """
+        prefix = f"[{index}/{total}]"
+        domain = entry.domain or "unknown"
+
+        if entry.status == URLStatus.COMPLETE:
+            elapsed = cls._format_elapsed(entry.processing_time_ms)
+            return f"{prefix} {domain} -- Done{elapsed}"
+
+        if entry.status == URLStatus.FAILED:
+            error = cls._format_error_short(entry.error_type, entry.error_message)
+            elapsed = cls._format_elapsed(entry.processing_time_ms)
+            return f"{prefix} {domain} -- Failed: {error}{elapsed}"
+
+        if entry.status == URLStatus.EXTRACTING:
+            live = cls._format_live_elapsed(entry.start_time)
+            return f"{prefix} {domain} -- Extracting...{live}"
+
+        if entry.status == URLStatus.ANALYZING:
+            live = cls._format_live_elapsed(entry.start_time)
+            return f"{prefix} {domain} -- Analyzing...{live}"
+
+        if entry.status == URLStatus.PROCESSING:
+            live = cls._format_live_elapsed(entry.start_time)
+            return f"{prefix} {domain} -- Processing...{live}"
+
+        # PENDING (default)
+        return f"{prefix} {domain} -- Pending"
+
+    @classmethod
+    def _format_elapsed(cls, processing_time_ms: float) -> str:
+        """Format completed processing time as a parenthesized suffix.
+
+        Args:
+            processing_time_ms: Processing time in milliseconds
+
+        Returns:
+            ``" (12s)"`` if time is positive, otherwise ``""``
+        """
+        if processing_time_ms > 0:
+            seconds = processing_time_ms / 1000
+            return f" ({cls._format_duration(seconds)})"
+        return ""
+
+    @classmethod
+    def _format_live_elapsed(cls, start_time: float | None) -> str:
+        """Format live elapsed time since processing started.
+
+        Args:
+            start_time: Unix timestamp when processing started, or None
+
+        Returns:
+            ``" (5s)"`` if elapsed >= 1 second, otherwise ``""``
+        """
+        if start_time is None:
+            return ""
+        elapsed = time.time() - start_time
+        if elapsed >= 1:
+            return f" ({cls._format_duration(elapsed)})"
+        return ""
+
+    @classmethod
+    def format_completion_message(cls, batch: URLBatchStatus) -> str:
+        """Format a completion message with a unified numbered list.
+
+        Example output::
+
+            Batch Complete -- 3/4 links
+
+            1. "AI advances in 2026" -- techcrunch.com (12s)
+            2. "Attention Is All You Need" -- arxiv.org (18s)
+            3. "Rust vs Go" -- medium.com (15s)
+            4. github.io -- Failed: Timeout (90s)
+
+            Total: 1m 32s | Avg: 15s/link
 
         Args:
             batch: Completed batch status
@@ -117,44 +178,21 @@ class BatchProgressFormatter:
         total = batch.total
         success = batch.success_count
 
-        # Header with summary
-        lines.append(f"Batch Complete - {success}/{total} links")
+        # Header
+        lines.append(f"Batch Complete -- {success}/{total} links")
         lines.append("")
 
-        # Successful URLs
-        completed = batch.completed
-        if completed:
-            lines.append(f"Successful ({len(completed)}):")
-            for i, entry in enumerate(completed[:10], 1):
-                title = entry.title or "Untitled"
-                domain = entry.domain or "unknown"
-                # Truncate title if too long
-                if len(title) > 50:
-                    title = title[:47] + "..."
-                lines.append(f'  {i}. "{title}" - {domain}')
-            if len(completed) > 10:
-                lines.append(f"  ... and {len(completed) - 10} more")
-            lines.append("")
+        # Unified numbered list
+        for index, entry in enumerate(batch.entries, 1):
+            lines.append(cls._format_completion_line(index, entry))
 
-        # Failed URLs
-        failed_entries = batch.failed
-        if failed_entries:
-            lines.append(f"Failed ({len(failed_entries)}):")
-            for i, entry in enumerate(failed_entries[:5], 1):
-                domain = entry.domain or entry.url[:30]
-                error = cls._format_error_short(entry.error_type, entry.error_message)
-                lines.append(f"  {i}. {domain} - {error}")
-            if len(failed_entries) > 5:
-                lines.append(f"  ... and {len(failed_entries) - 5} more")
-            lines.append("")
+        lines.append("")
 
-        # Timing stats
+        # Timing footer
         total_time = batch.total_elapsed_time_sec()
         avg_ms = batch.average_processing_time_ms()
-
-        time_str = cls._format_duration(total_time)
         avg_str = cls._format_duration(avg_ms / 1000) if avg_ms > 0 else "N/A"
-        lines.append(f"Total time: {time_str} | Avg: {avg_str} per link")
+        lines.append(f"Total: {cls._format_duration(total_time)} | Avg: {avg_str}/link")
 
         message = "\n".join(lines)
 
@@ -163,6 +201,34 @@ class BatchProgressFormatter:
             return cls._format_compact_completion(batch)
 
         return message
+
+    @classmethod
+    def _format_completion_line(cls, index: int, entry: URLStatusEntry) -> str:
+        """Format a single numbered line for the completion message.
+
+        Args:
+            index: 1-based index of the entry
+            entry: The URL status entry to format
+
+        Returns:
+            Formatted completion line, e.g.
+            ``1. "Article Title" -- techcrunch.com (12s)``
+        """
+        domain = entry.domain or "unknown"
+        elapsed = cls._format_elapsed(entry.processing_time_ms)
+
+        if entry.status == URLStatus.COMPLETE:
+            title = entry.title or "Untitled"
+            if len(title) > 50:
+                title = title[:47] + "..."
+            return f'{index}. "{title}" -- {domain}{elapsed}'
+
+        if entry.status == URLStatus.FAILED:
+            error = cls._format_error_short(entry.error_type, entry.error_message)
+            return f"{index}. {domain} -- Failed: {error}{elapsed}"
+
+        # Shouldn't happen in a completed batch, but handle gracefully
+        return f"{index}. {domain} -- {entry.status.value}"
 
     @classmethod
     def _format_minimal_progress(cls, batch: URLBatchStatus) -> str:
@@ -187,11 +253,11 @@ class BatchProgressFormatter:
 
         # Header
         if failed == 0:
-            lines.append(f"Batch Complete - All {success} links processed successfully!")
+            lines.append(f"Batch Complete -- All {success} links processed successfully!")
         elif success == 0:
-            lines.append(f"Batch Failed - {failed} links failed")
+            lines.append(f"Batch Failed -- {failed} links failed")
         else:
-            lines.append(f"Batch Complete - {success}/{total} links")
+            lines.append(f"Batch Complete -- {success}/{total} links")
             lines.append(f"({failed} failed)")
 
         # Just show failed domains if any
@@ -209,7 +275,7 @@ class BatchProgressFormatter:
         # Timing
         total_time = batch.total_elapsed_time_sec()
         lines.append("")
-        lines.append(f"Total time: {cls._format_duration(total_time)}")
+        lines.append(f"Total: {cls._format_duration(total_time)}")
 
         return "\n".join(lines)
 
