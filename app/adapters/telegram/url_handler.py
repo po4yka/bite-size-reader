@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 import time
 from typing import TYPE_CHECKING, Any
@@ -409,6 +410,14 @@ class URLHandler:
         # Track domains that exhausted all retries on timeout.
         # URLs from these domains are skipped immediately.
         failed_domains: set[str] = set()
+        # asyncio.Event per domain: set when domain is flagged as failed.
+        # In-flight siblings racing against this event exit immediately.
+        domain_events: dict[str, asyncio.Event] = {}
+
+        def _get_domain_event(domain: str) -> asyncio.Event:
+            if domain not in domain_events:
+                domain_events[domain] = asyncio.Event()
+            return domain_events[domain]
 
         async def process_single_url(
             url: str, progress_tracker: ProgressTracker
@@ -481,17 +490,71 @@ class URLHandler:
                     )
 
                     try:
-                        # Add timeout protection for individual URL processing
-                        result = await asyncio.wait_for(
+                        # Race URL processing against a per-domain cancel event.
+                        # When any sibling URL times out, the event fires and
+                        # all other in-flight URLs for that domain exit immediately
+                        # instead of burning through their own full timeout.
+                        processing_task = asyncio.create_task(
                             self.url_processor.handle_url_flow(
                                 message,
                                 url,
                                 correlation_id=per_link_cid,
                                 batch_mode=True,
                                 on_phase_change=phase_callback,
-                            ),
-                            timeout=current_timeout,
+                            )
                         )
+
+                        tasks_to_race: set[asyncio.Task] = {processing_task}
+                        cancel_task: asyncio.Task | None = None
+                        if url_domain:
+                            cancel_task = asyncio.create_task(_get_domain_event(url_domain).wait())
+                            tasks_to_race.add(cancel_task)
+
+                        try:
+                            done, pending = await asyncio.wait(
+                                tasks_to_race,
+                                timeout=current_timeout,
+                                return_when=asyncio.FIRST_COMPLETED,
+                            )
+                        except asyncio.CancelledError:
+                            processing_task.cancel()
+                            if cancel_task is not None:
+                                cancel_task.cancel()
+                            for t in (processing_task, cancel_task):
+                                if t is not None:
+                                    with contextlib.suppress(asyncio.CancelledError, Exception):
+                                        await t
+                            raise
+
+                        # Cleanup pending tasks (prevent resource leaks)
+                        for t in pending:
+                            t.cancel()
+                        for t in pending:
+                            with contextlib.suppress(asyncio.CancelledError, Exception):
+                                await t
+
+                        if not done:
+                            # Timeout -- raise to enter existing TimeoutError handler
+                            raise TimeoutError(f"Timeout ({int(current_timeout)}s)")
+
+                        if cancel_task is not None and cancel_task in done:
+                            # Sibling timed out on this domain -- abort immediately
+                            last_error = f"Skipped (domain {url_domain} timed out)"
+                            error_type = "domain_timeout"
+                            logger.info(
+                                "domain_cancel_event_triggered",
+                                extra={
+                                    "url": url,
+                                    "domain": url_domain,
+                                    "cid": per_link_cid,
+                                    "attempt": attempt + 1,
+                                    "uid": uid,
+                                },
+                            )
+                            break  # exits retry loop -> falls through to mark_failed
+
+                        # Processing completed (may raise if handle_url_flow raised)
+                        result = processing_task.result()
 
                         # Calculate processing time
                         processing_time_ms = time.time() * 1000 - start_time_ms
@@ -517,6 +580,7 @@ class URLHandler:
                         # Signal other concurrent URLs from this domain to abort early
                         if url_domain:
                             failed_domains.add(url_domain)
+                            _get_domain_event(url_domain).set()  # wake siblings
                         logger.warning(
                             "url_processing_timeout_retry",
                             extra={
