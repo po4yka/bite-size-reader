@@ -132,6 +132,11 @@ class Request(BaseModel):
     server_version = peewee.BigIntegerField(default=_next_server_version)
     is_deleted = peewee.BooleanField(default=False)
     deleted_at = peewee.DateTimeField(null=True)
+    # Error tracking fields for batch processing persistence
+    error_type = peewee.TextField(null=True)  # timeout, network, extraction_failed, etc.
+    error_message = peewee.TextField(null=True)  # Human-readable error description
+    error_timestamp = peewee.DateTimeField(null=True)  # When the error occurred
+    processing_time_ms = peewee.IntegerField(null=True)  # Total processing time in milliseconds
 
     class Meta:
         table_name = "requests"

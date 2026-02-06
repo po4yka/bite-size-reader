@@ -11,8 +11,11 @@ from urllib.parse import urlparse
 
 from app.adapters.external.formatting import BatchProgressFormatter
 from app.core.logging_utils import generate_correlation_id
-from app.core.url_utils import extract_all_urls
+from app.core.url_utils import compute_dedupe_hash, extract_all_urls, normalize_url
 from app.db.user_interactions import async_safe_update_user_interaction
+from app.infrastructure.persistence.sqlite.repositories.request_repository import (
+    SqliteRequestRepositoryAdapter,
+)
 from app.infrastructure.persistence.sqlite.repositories.user_repository import (
     SqliteUserRepositoryAdapter,
 )
@@ -31,10 +34,14 @@ logger = logging.getLogger(__name__)
 # URL processing configuration (defaults when adaptive timeout is disabled)
 URL_MAX_CONCURRENT = 4
 URL_MAX_RETRIES = 2  # was 3: fewer retries, each with more time
-URL_INITIAL_TIMEOUT_SEC = 300.0  # 5 min: allows for slow LLM response generation
-URL_MAX_TIMEOUT_SEC = 600.0  # 10 min: cap for retries with backoff
+URL_INITIAL_TIMEOUT_SEC = 450.0  # 7.5 min: allows for slow LLM response generation
+URL_MAX_TIMEOUT_SEC = 900.0  # 15 min: cap for retries with backoff
 URL_BACKOFF_BASE = 3.0  # was 2.0: longer backoff between retries
 URL_BACKOFF_MAX = 60.0
+
+# Domain fail-fast configuration: require multiple failures before skipping siblings
+# This prevents one slow URL from immediately killing all sibling URLs
+DOMAIN_FAILFAST_THRESHOLD = 2  # Require 2+ failures before skipping domain siblings
 
 
 def _extract_domain(url: str | None) -> str | None:
@@ -63,6 +70,7 @@ class URLHandler:
     ) -> None:
         self.db = db
         self.user_repo = SqliteUserRepositoryAdapter(db)
+        self.request_repo = SqliteRequestRepositoryAdapter(db)
         self.response_formatter = response_formatter
         self.url_processor = url_processor
         self._adaptive_timeout = adaptive_timeout_service
@@ -463,14 +471,53 @@ class URLHandler:
         # Initialize batch status tracker
         batch_status = URLBatchStatus.from_urls(urls)
 
+        # Get chat_id from message
+        chat_id = getattr(message.chat, "id", None)
+
+        # Phase 4: Pre-register all URLs before processing starts
+        # This ensures ALL URLs get database records even if processing fails early
+        url_to_request_id: dict[str, int] = {}
+        for url in urls:
+            try:
+                normalized = normalize_url(url)
+                dedupe_hash = compute_dedupe_hash(url)
+                request_id, is_new = await self.request_repo.async_create_minimal_request(
+                    type_="url",
+                    status="pending",
+                    correlation_id=generate_correlation_id(),
+                    chat_id=chat_id,
+                    user_id=uid,
+                    input_url=url,
+                    normalized_url=normalized,
+                    dedupe_hash=dedupe_hash,
+                )
+                url_to_request_id[url] = request_id
+                logger.debug(
+                    "pre_registered_batch_url",
+                    extra={
+                        "url": url,
+                        "request_id": request_id,
+                        "is_new": is_new,
+                        "uid": uid,
+                    },
+                )
+            except Exception as e:
+                # Log but don't fail the whole batch if pre-registration fails
+                logger.warning(
+                    "batch_url_pre_registration_failed",
+                    extra={"url": url, "error": str(e), "uid": uid},
+                )
+
         # Use semaphore to limit concurrent processing (prevent overwhelming external APIs)
         # Adaptive concurrency: 2-4 concurrent based on batch size
         max_concurrent = max(2, min(URL_MAX_CONCURRENT, len(urls)))
         semaphore = asyncio.Semaphore(max_concurrent)
 
         # Track domains that exhausted all retries on timeout.
-        # URLs from these domains are skipped immediately.
+        # URLs from these domains are skipped immediately (after threshold reached).
         failed_domains: set[str] = set()
+        # Count failures per domain for threshold-based fail-fast
+        domain_failure_counts: dict[str, int] = {}
         # asyncio.Event per domain: set when domain is flagged as failed.
         # In-flight siblings racing against this event exit immediately.
         domain_events: dict[str, asyncio.Event] = {}
@@ -479,6 +526,30 @@ class URLHandler:
             if domain not in domain_events:
                 domain_events[domain] = asyncio.Event()
             return domain_events[domain]
+
+        async def _update_request_error(
+            url: str,
+            status: str,
+            error_type: str,
+            error_message: str,
+            processing_time_ms: float,
+        ) -> None:
+            """Update pre-registered request with error info."""
+            request_id = url_to_request_id.get(url)
+            if request_id:
+                try:
+                    await self.request_repo.async_update_request_error(
+                        request_id=request_id,
+                        status=status,
+                        error_type=error_type,
+                        error_message=error_message[:500] if error_message else None,
+                        processing_time_ms=int(processing_time_ms),
+                    )
+                except Exception as e:
+                    logger.warning(
+                        "failed_to_update_request_error",
+                        extra={"url": url, "request_id": request_id, "error": str(e)},
+                    )
 
         async def process_single_url(
             url: str, progress_tracker: ProgressTracker
@@ -498,21 +569,26 @@ class URLHandler:
                 entry = batch_status._find_entry(url)
                 url_domain = entry.domain if entry else None
 
-                # Domain fail-fast: skip if another URL from this domain already timed out
+                # Domain fail-fast: skip if domain has reached failure threshold
                 if url_domain and url_domain in failed_domains:
                     processing_time_ms = time.time() * 1000 - start_time_ms
+                    skip_error = f"Skipped (domain {url_domain} timed out)"
                     batch_status.mark_failed(
                         url,
                         error_type="domain_timeout",
-                        error_message=f"Skipped (domain {url_domain} timed out)",
+                        error_message=skip_error,
                         processing_time_ms=processing_time_ms,
+                    )
+                    # Update pre-registered request with skip status
+                    await _update_request_error(
+                        url, "skipped", "domain_timeout", skip_error, processing_time_ms
                     )
                     logger.info(
                         "domain_failfast_skipped",
                         extra={"url": url, "domain": url_domain, "uid": uid},
                     )
                     await progress_tracker.increment_and_update()
-                    return url, False, f"Skipped (domain {url_domain} timed out)", None
+                    return url, False, skip_error, None
 
                 # Mark as processing
                 batch_status.mark_processing(url)
@@ -527,7 +603,7 @@ class URLHandler:
 
                 for attempt in range(URL_MAX_RETRIES + 1):
                     # Re-check domain fail-fast before each retry: another concurrent URL
-                    # from this domain may have timed out since we started.
+                    # from this domain may have reached threshold since we started.
                     if attempt > 0 and url_domain and url_domain in failed_domains:
                         last_error = f"Skipped (domain {url_domain} timed out)"
                         error_type = "domain_timeout"
@@ -549,7 +625,7 @@ class URLHandler:
 
                     try:
                         # Race URL processing against a per-domain cancel event.
-                        # When any sibling URL times out, the event fires and
+                        # When domain reaches failure threshold, the event fires and
                         # all other in-flight URLs for that domain exit immediately
                         # instead of burning through their own full timeout.
                         processing_task = asyncio.create_task(
@@ -596,7 +672,7 @@ class URLHandler:
                             raise TimeoutError(f"Timeout ({int(current_timeout)}s)")
 
                         if cancel_task is not None and cancel_task in done:
-                            # Sibling timed out on this domain -- abort immediately
+                            # Sibling reached failure threshold on this domain -- abort
                             last_error = f"Skipped (domain {url_domain} timed out)"
                             error_type = "domain_timeout"
                             logger.info(
@@ -635,10 +711,6 @@ class URLHandler:
                     except TimeoutError:
                         error_type = "timeout"
                         last_error = f"Timeout ({int(current_timeout)}s)"
-                        # Signal other concurrent URLs from this domain to abort early
-                        if url_domain:
-                            failed_domains.add(url_domain)
-                            _get_domain_event(url_domain).set()  # wake siblings
                         logger.warning(
                             "url_processing_timeout_retry",
                             extra={
@@ -655,6 +727,25 @@ class URLHandler:
                             backoff = min(URL_BACKOFF_BASE * (2**attempt), URL_BACKOFF_MAX)
                             await asyncio.sleep(backoff)
                             continue
+
+                        # All retries exhausted - increment domain failure count
+                        # and signal domain fail-fast only if threshold reached
+                        if url_domain:
+                            domain_failure_counts[url_domain] = (
+                                domain_failure_counts.get(url_domain, 0) + 1
+                            )
+                            if domain_failure_counts[url_domain] >= DOMAIN_FAILFAST_THRESHOLD:
+                                failed_domains.add(url_domain)
+                                _get_domain_event(url_domain).set()  # wake siblings
+                                logger.info(
+                                    "domain_failfast_threshold_reached",
+                                    extra={
+                                        "domain": url_domain,
+                                        "failure_count": domain_failure_counts[url_domain],
+                                        "threshold": DOMAIN_FAILFAST_THRESHOLD,
+                                        "uid": uid,
+                                    },
+                                )
 
                     except Exception as e:
                         last_error = str(e)
@@ -715,6 +806,11 @@ class URLHandler:
                     error_type=error_type,
                     error_message=last_error,
                     processing_time_ms=processing_time_ms,
+                )
+
+                # Update pre-registered request with error info
+                await _update_request_error(
+                    url, "error", error_type, last_error, processing_time_ms
                 )
 
                 logger.error(

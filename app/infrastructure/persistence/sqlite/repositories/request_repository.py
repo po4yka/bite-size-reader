@@ -5,6 +5,7 @@ This adapter translates between domain Request models and database records.
 
 from __future__ import annotations
 
+import datetime as _dt
 from datetime import datetime
 from typing import Any
 
@@ -15,6 +16,11 @@ from app.db.models import Request, TelegramMessage, model_to_dict
 from app.db.utils import prepare_json_payload
 from app.domain.models.request import Request as DomainRequest, RequestStatus, RequestType
 from app.infrastructure.persistence.sqlite.base import SqliteBaseRepository
+
+
+def _utcnow() -> _dt.datetime:
+    """Timezone-aware UTC now."""
+    return _dt.datetime.now(UTC)
 
 
 class SqliteRequestRepositoryAdapter(SqliteBaseRepository):
@@ -236,6 +242,94 @@ class SqliteRequestRepositoryAdapter(SqliteBaseRepository):
             Request.update({Request.lang_detected: lang}).where(Request.id == request_id).execute()
 
         await self._execute(_update, operation_name="update_request_lang_detected")
+
+    async def async_update_request_error(
+        self,
+        request_id: int,
+        status: str,
+        error_type: str | None = None,
+        error_message: str | None = None,
+        processing_time_ms: int | None = None,
+    ) -> None:
+        """Update a request with error information.
+
+        Args:
+            request_id: The request ID to update
+            status: New status (e.g., 'error', 'timeout', 'skipped')
+            error_type: Category of error (timeout, network, extraction_failed, etc.)
+            error_message: Human-readable error description
+            processing_time_ms: Total processing time in milliseconds
+        """
+
+        def _update() -> None:
+            update_data: dict[Any, Any] = {
+                Request.status: status,
+                Request.error_timestamp: _utcnow(),
+            }
+            if error_type is not None:
+                update_data[Request.error_type] = error_type
+            if error_message is not None:
+                update_data[Request.error_message] = error_message
+            if processing_time_ms is not None:
+                update_data[Request.processing_time_ms] = processing_time_ms
+            Request.update(update_data).where(Request.id == request_id).execute()
+
+        await self._execute(_update, operation_name="update_request_error")
+
+    async def async_create_minimal_request(
+        self,
+        *,
+        type_: str = "url",
+        status: str = "pending",
+        correlation_id: str | None = None,
+        chat_id: int | None = None,
+        user_id: int | None = None,
+        input_url: str | None = None,
+        normalized_url: str | None = None,
+        dedupe_hash: str | None = None,
+    ) -> tuple[int, bool]:
+        """Create a minimal request record for pre-batch registration.
+
+        This creates a request record with minimal fields before processing starts,
+        ensuring all URLs get database records even if processing fails early.
+
+        Args:
+            type_: Request type (default: 'url')
+            status: Initial status (default: 'pending')
+            correlation_id: Correlation ID for tracing
+            chat_id: Telegram chat ID
+            user_id: Telegram user ID
+            input_url: Original URL from user
+            normalized_url: Normalized URL for deduplication
+            dedupe_hash: SHA256 hash for deduplication
+
+        Returns:
+            Tuple of (request_id, is_new) where is_new is True if a new record was
+            created, False if an existing record was found by dedupe_hash.
+        """
+
+        def _create() -> tuple[int, bool]:
+            try:
+                request = Request.create(
+                    type=type_,
+                    status=status,
+                    correlation_id=correlation_id,
+                    chat_id=chat_id,
+                    user_id=user_id,
+                    input_url=input_url,
+                    normalized_url=normalized_url,
+                    dedupe_hash=dedupe_hash,
+                )
+                return (request.id, True)
+            except peewee.IntegrityError:
+                # Dedupe hash collision - find existing record
+                if dedupe_hash:
+                    existing = Request.get_or_none(Request.dedupe_hash == dedupe_hash)
+                    if existing:
+                        return (existing.id, False)
+                raise
+
+        return await self._execute(_create, operation_name="create_minimal_request")
 
     def to_domain_model(self, db_request: dict[str, Any]) -> DomainRequest:
         """Convert database record to domain model."""

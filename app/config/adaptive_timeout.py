@@ -27,7 +27,7 @@ class AdaptiveTimeoutConfig(BaseModel):
         description="Minimum timeout in seconds (floor)",
     )
     max_timeout_sec: float = Field(
-        default=600.0,
+        default=900.0,
         validation_alias=AliasChoices("ADAPTIVE_TIMEOUT_MAX_SEC", "adaptive_timeout_max_sec"),
         description="Maximum timeout in seconds (cap)",
     )
@@ -104,8 +104,8 @@ class AdaptiveTimeoutConfig(BaseModel):
         if parsed <= 0:
             msg = "Timeout must be positive"
             raise ValueError(msg)
-        if parsed > 3600:
-            msg = "Timeout too large (max 3600 seconds)"
+        if parsed > 1800:
+            msg = "Timeout too large (max 1800 seconds)"
             raise ValueError(msg)
         return parsed
 
