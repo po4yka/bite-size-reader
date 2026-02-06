@@ -169,9 +169,13 @@ class ResponseFormatter:
         """Safely reply to a message and return the message ID."""
         return await self._response_sender.safe_reply_with_id(message, text, parse_mode=parse_mode)
 
-    async def edit_message(self, chat_id: int, message_id: int, text: str) -> bool:
+    async def edit_message(
+        self, chat_id: int, message_id: int, text: str, *, parse_mode: str | None = None
+    ) -> bool:
         """Edit an existing message in Telegram with security checks."""
-        return await self._response_sender.edit_message(chat_id, message_id, text)
+        return await self._response_sender.edit_message(
+            chat_id, message_id, text, parse_mode=parse_mode
+        )
 
     async def reply_json(
         self, message: Any, obj: dict, *, correlation_id: str | None = None, success: bool = True

@@ -830,7 +830,7 @@ class URLHandler:
         try:
             initial_progress_text = BatchProgressFormatter.format_progress_message(batch_status)
             progress_msg_id = await self.response_formatter.safe_reply_with_id(
-                message, initial_progress_text
+                message, initial_progress_text, parse_mode="HTML"
             )
             logger.debug(
                 "initial_progress_message_created",
@@ -870,7 +870,7 @@ class URLHandler:
                 if chat_id and msg_id:
                     # Try to edit the existing message
                     edit_success = await self.response_formatter.edit_message(
-                        chat_id, msg_id, progress_text
+                        chat_id, msg_id, progress_text, parse_mode="HTML"
                     )
 
                     if edit_success:
@@ -980,7 +980,7 @@ class URLHandler:
 
         # Send completion summary with detailed batch results
         completion_message = BatchProgressFormatter.format_completion_message(batch_status)
-        await self.response_formatter.safe_reply(message, completion_message)
+        await self.response_formatter.safe_reply(message, completion_message, parse_mode="HTML")
 
         # Safety check and logging
         expected_total = len(urls)

@@ -22,11 +22,28 @@ MAX_MESSAGE_LENGTH = 3500
 class BatchProgressFormatter:
     """Formats batch processing progress and completion messages.
 
+    All output uses Telegram HTML parse mode. Callers must pass
+    ``parse_mode="HTML"`` when sending/editing these messages.
+
     Provides multiple display formats:
     - Detailed: Numbered per-URL status lines with elapsed time
     - Compact: Summarized counts for long completion messages
     - Minimal: Simple counts for very long batches
     """
+
+    # ------------------------------------------------------------------
+    # HTML helpers
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _html_escape(text: str) -> str:
+        """Escape ``<``, ``>``, and ``&`` for safe Telegram HTML."""
+        return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+    @classmethod
+    def _make_link(cls, url: str, display_text: str) -> str:
+        """Create an HTML ``<a>`` hyperlink safe for Telegram."""
+        return f'<a href="{cls._html_escape(url)}">{cls._html_escape(display_text)}</a>'
 
     @classmethod
     def format_progress_message(cls, batch: URLBatchStatus) -> str:
@@ -83,7 +100,9 @@ class BatchProgressFormatter:
 
     @classmethod
     def _format_status_line(cls, index: int, total: int, entry: URLStatusEntry) -> str:
-        """Format a single numbered status line for progress display.
+        """Format a single numbered status line for progress display (HTML).
+
+        The domain label is rendered as a clickable hyperlink to the original URL.
 
         Args:
             index: 1-based index of the entry
@@ -91,34 +110,36 @@ class BatchProgressFormatter:
             entry: The URL status entry to format
 
         Returns:
-            Formatted status line, e.g. ``[2/5] arxiv.org -- Analyzing... (3s)``
+            HTML-formatted status line, e.g.
+            ``[2/5] <a href="...">arxiv.org</a>  Analyzing... (3s)``
         """
         prefix = f"[{index}/{total}]"
         label = entry.display_label or entry.domain or "unknown"
+        link = cls._make_link(entry.url, label)
 
         if entry.status == URLStatus.COMPLETE:
             elapsed = cls._format_elapsed(entry.processing_time_ms)
-            return f"{prefix} {label} -- Done{elapsed}"
+            return f"{prefix} {link}  Done{elapsed}"
 
         if entry.status == URLStatus.FAILED:
             error = cls._format_error_short(entry.error_type, entry.error_message)
             elapsed = cls._format_elapsed(entry.processing_time_ms)
-            return f"{prefix} {label} -- Failed: {error}{elapsed}"
+            return f"{prefix} {link}  Failed: {cls._html_escape(error)}{elapsed}"
 
         if entry.status == URLStatus.EXTRACTING:
             live = cls._format_live_elapsed(entry.start_time)
-            return f"{prefix} {label} -- Extracting...{live}"
+            return f"{prefix} {link}  Extracting...{live}"
 
         if entry.status == URLStatus.ANALYZING:
             live = cls._format_live_elapsed(entry.start_time)
-            return f"{prefix} {label} -- Analyzing...{live}"
+            return f"{prefix} {link}  Analyzing...{live}"
 
         if entry.status == URLStatus.PROCESSING:
             live = cls._format_live_elapsed(entry.start_time)
-            return f"{prefix} {label} -- Processing...{live}"
+            return f"{prefix} {link}  Processing...{live}"
 
         # PENDING (default)
-        return f"{prefix} {label} -- Pending"
+        return f"{prefix} {link}  Pending"
 
     @classmethod
     def _format_elapsed(cls, processing_time_ms: float) -> str:
@@ -179,10 +200,10 @@ class BatchProgressFormatter:
         success = batch.success_count
 
         # Header
-        lines.append(f"Batch Complete -- {success}/{total} links")
+        lines.append(f"Batch Complete  {success}/{total} links")
         lines.append("")
 
-        # Unified numbered list
+        # Unified numbered list (HTML)
         for index, entry in enumerate(batch.entries, 1):
             lines.append(cls._format_completion_line(index, entry))
 
@@ -204,15 +225,18 @@ class BatchProgressFormatter:
 
     @classmethod
     def _format_completion_line(cls, index: int, entry: URLStatusEntry) -> str:
-        """Format a single numbered line for the completion message.
+        """Format a single numbered line for the completion message (HTML).
+
+        Successful entries use the article title as clickable link text.
+        Failed entries use the domain/slug label as a clickable link.
 
         Args:
             index: 1-based index of the entry
             entry: The URL status entry to format
 
         Returns:
-            Formatted completion line, e.g.
-            ``1. "Article Title" -- techcrunch.com (12s)``
+            HTML-formatted completion line, e.g.
+            ``1. <a href="...">Article Title</a> (12s)``
         """
         label = entry.display_label or entry.domain or "unknown"
         elapsed = cls._format_elapsed(entry.processing_time_ms)
@@ -221,14 +245,16 @@ class BatchProgressFormatter:
             title = entry.title or "Untitled"
             if len(title) > 50:
                 title = title[:47] + "..."
-            return f'{index}. "{title}" -- {label}{elapsed}'
+            link = cls._make_link(entry.url, title)
+            return f"{index}. {link}{elapsed}"
 
         if entry.status == URLStatus.FAILED:
             error = cls._format_error_short(entry.error_type, entry.error_message)
-            return f"{index}. {label} -- Failed: {error}{elapsed}"
+            link = cls._make_link(entry.url, label)
+            return f"{index}. {link}  Failed: {cls._html_escape(error)}{elapsed}"
 
         # Shouldn't happen in a completed batch, but handle gracefully
-        return f"{index}. {label} -- {entry.status.value}"
+        return f"{index}. {cls._html_escape(label)}  {cls._html_escape(entry.status.value)}"
 
     @classmethod
     def _format_minimal_progress(cls, batch: URLBatchStatus) -> str:
@@ -244,7 +270,7 @@ class BatchProgressFormatter:
 
     @classmethod
     def _format_compact_completion(cls, batch: URLBatchStatus) -> str:
-        """Format compact completion message when detailed is too long."""
+        """Format compact completion message when detailed is too long (HTML)."""
         total = batch.total
         success = batch.success_count
         failed = batch.fail_count
@@ -253,11 +279,11 @@ class BatchProgressFormatter:
 
         # Header
         if failed == 0:
-            lines.append(f"Batch Complete -- All {success} links processed successfully!")
+            lines.append(f"Batch Complete  All {success} links processed successfully!")
         elif success == 0:
-            lines.append(f"Batch Failed -- {failed} links failed")
+            lines.append(f"Batch Failed  {failed} links failed")
         else:
-            lines.append(f"Batch Complete -- {success}/{total} links")
+            lines.append(f"Batch Complete  {success}/{total} links")
             lines.append(f"({failed} failed)")
 
         # Just show failed domains if any
@@ -268,7 +294,8 @@ class BatchProgressFormatter:
             for entry in failed_entries[:3]:
                 label = entry.display_label or entry.domain or entry.url[:20]
                 error = cls._format_error_short(entry.error_type, entry.error_message)
-                lines.append(f"  - {label}: {error}")
+                link = cls._make_link(entry.url, label)
+                lines.append(f"  - {link}: {cls._html_escape(error)}")
             if len(failed_entries) > 3:
                 lines.append(f"  ... and {len(failed_entries) - 3} more")
 
