@@ -245,35 +245,62 @@ class SummarizationAgent(BaseAgent[SummarizationInput, SummarizationOutput]):
         if not errors:
             return ""
 
-        prompt = "\n\n🔄 CORRECTIONS NEEDED FROM PREVIOUS ATTEMPT:\n"
+        prompt = "\n\nCORRECTIONS NEEDED FROM PREVIOUS ATTEMPT:\n"
 
         # Group errors by type
         char_limit_errors = [e for e in errors if "chars" in e.lower() or "character" in e.lower()]
         tag_errors = [e for e in errors if "tag" in e.lower() or "#" in e]
         field_errors = [e for e in errors if "missing" in e.lower() or "required" in e.lower()]
         json_errors = [e for e in errors if "json" in e.lower()]
+        other_errors = [
+            e
+            for e in errors
+            if e not in char_limit_errors
+            and e not in tag_errors
+            and e not in field_errors
+            and e not in json_errors
+        ]
 
         if char_limit_errors:
-            prompt += "\n📏 Character Limits:\n"
+            prompt += "\nCharacter Limits:\n"
             for error in char_limit_errors:
-                prompt += f"  • {error}\n"
+                prompt += f"  - {error}\n"
+            prompt += (
+                "  FIX: summary_250 must be a single sentence, max 250 chars, "
+                "ending at sentence boundary (. ! ?). "
+                "summary_1000 must be 3-5 sentences, max 1000 chars.\n"
+            )
 
         if tag_errors:
-            prompt += "\n🏷️ Topic Tags:\n"
+            prompt += "\nTopic Tags:\n"
             for error in tag_errors:
-                prompt += f"  • {error}\n"
+                prompt += f"  - {error}\n"
+            prompt += (
+                "  FIX: Each tag must be lowercase with # prefix, "
+                "e.g. #machine-learning, #python. Max 10 tags.\n"
+            )
 
         if field_errors:
-            prompt += "\n📋 Required Fields:\n"
+            prompt += "\nRequired Fields:\n"
             for error in field_errors:
-                prompt += f"  • {error}\n"
+                prompt += f"  - {error}\n"
+            prompt += "  FIX: Include all required fields with non-empty values.\n"
 
         if json_errors:
-            prompt += "\n🔧 JSON Structure:\n"
+            prompt += "\nJSON Structure:\n"
             for error in json_errors:
-                prompt += f"  • {error}\n"
+                prompt += f"  - {error}\n"
+            prompt += (
+                "  FIX: Output ONLY a valid JSON object. No prose, code fences, "
+                "or text outside the JSON.\n"
+            )
 
-        prompt += "\nPlease generate a new summary that addresses ALL of these issues.\n"
+        if other_errors:
+            prompt += "\nOther Issues:\n"
+            for error in other_errors:
+                prompt += f"  - {error}\n"
+
+        prompt += "\nGenerate a corrected summary that addresses ALL issues above.\n"
 
         return prompt
 

@@ -1,0 +1,112 @@
+{
+  "content_type": "opinion",
+  "description": "Example summary for an opinion/editorial piece about remote work",
+  "input_snippet": "Three years after the great remote work experiment began, I believe we have enough evidence to declare that fully remote work is not the utopia its proponents promised. While flexibility has its merits, the erosion of spontaneous collaboration, mentorship, and company culture cannot be ignored...",
+  "expected_output": {
+    "summary_250": "An editorial argues that fully remote work has undermined collaboration and mentorship, proposing hybrid models as the pragmatic middle ground after three years of evidence.",
+    "summary_1000": "The author contends that three years of remote work data reveal significant downsides that early enthusiasm overlooked. Spontaneous hallway conversations, which historically drove cross-team innovation, have declined sharply. Junior employees report feeling isolated and lacking the informal mentorship that in-office proximity provides. However, the piece acknowledges that commute elimination and schedule flexibility represent genuine worker gains. The editorial concludes that hybrid arrangements offering 2-3 office days per week balance productivity, culture, and employee satisfaction most effectively.",
+    "tldr": "This editorial takes stock of three years of widespread remote work and argues that the fully remote model falls short of its promise.\n\nWhile acknowledging real benefits like eliminated commutes and greater schedule autonomy, the author presents evidence that remote-first cultures suffer from reduced spontaneous collaboration, weaker mentorship pipelines for junior staff, and eroding company culture. Internal surveys from multiple firms show declining engagement scores and rising turnover among employees under 30.\n\nThe piece advocates for structured hybrid models with 2-3 mandatory office days per week, citing companies like Salesforce and Dropbox as successful case studies. The author warns that companies clinging to fully remote policies risk long-term talent development gaps.",
+    "key_ideas": [
+      "Fully remote work has measurable downsides in collaboration and mentorship",
+      "Junior employees are disproportionately affected by lack of in-person interaction",
+      "Hybrid models with 2-3 office days offer the best balance",
+      "Company culture erodes without intentional in-person touchpoints",
+      "Employee engagement scores have declined at fully remote companies"
+    ],
+    "topic_tags": ["#remote-work", "#hybrid-work", "#workplace-culture", "#mentorship", "#employee-engagement"],
+    "entities": {
+      "people": [],
+      "organizations": ["Salesforce", "Dropbox"],
+      "locations": []
+    },
+    "estimated_reading_time_min": 6,
+    "source_type": "opinion",
+    "temporal_freshness": "evergreen",
+    "key_stats": [],
+    "answered_questions": [
+      "Is fully remote work sustainable long-term?",
+      "What are the downsides of remote work for junior employees?",
+      "How many office days per week does the author recommend?"
+    ],
+    "readability": {
+      "method": "Flesch-Kincaid",
+      "score": 52.3,
+      "level": "Fairly Difficult"
+    },
+    "seo_keywords": ["remote work debate", "hybrid work model", "workplace culture", "employee mentorship", "return to office", "remote work downsides", "hybrid schedule"],
+    "metadata": {
+      "title": "The Remote Work Mirage: Why Hybrid Is the Answer",
+      "canonical_url": null,
+      "domain": "example.com",
+      "author": "Workplace Strategy Editor",
+      "published_at": null,
+      "last_updated": null
+    },
+    "extractive_quotes": [
+      {
+        "text": "fully remote work is not the utopia its proponents promised",
+        "source_span": "paragraph 1"
+      }
+    ],
+    "highlights": [
+      "Remote work reduces spontaneous cross-team collaboration",
+      "Junior staff lack informal mentorship opportunities",
+      "Engagement scores decline at fully remote companies",
+      "Hybrid models with 2-3 office days are recommended",
+      "Commute elimination remains a genuine employee benefit"
+    ],
+    "questions_answered": [
+      {
+        "question": "What is the author's main argument about remote work?",
+        "answer": "Fully remote work has undermined collaboration and mentorship; hybrid is better."
+      }
+    ],
+    "categories": ["workplace", "opinion", "management"],
+    "topic_taxonomy": [
+      {"label": "Workplace Strategy", "score": 0.93, "path": "Business/Management/Workplace"},
+      {"label": "Remote Work", "score": 0.90, "path": "Business/Trends/Remote"},
+      {"label": "Employee Development", "score": 0.75, "path": "HR/Training/Mentorship"}
+    ],
+    "hallucination_risk": "med",
+    "confidence": 0.78,
+    "forwarded_post_extras": null,
+    "key_points_to_remember": [
+      "Author advocates hybrid over fully remote",
+      "Junior employees disproportionately impacted",
+      "2-3 office days per week recommended"
+    ],
+    "insights": {
+      "topic_overview": "The remote work debate has shifted from binary remote-vs-office to nuanced hybrid arrangements as organizations accumulate multi-year data.",
+      "new_facts": [
+        {
+          "fact": "Companies with structured hybrid policies report higher retention than fully remote peers",
+          "why_it_matters": "Challenges the assumption that maximum flexibility maximizes retention",
+          "source_hint": "Workplace survey data",
+          "confidence": 0.70
+        }
+      ],
+      "open_questions": [
+        "Do hybrid mandates work equally well across industries?",
+        "How do fully remote companies that invest in async culture compare?"
+      ],
+      "suggested_sources": [],
+      "expansion_topics": ["async communication tools", "distributed team management"],
+      "next_exploration": ["Compare retention data across remote, hybrid, and office-first companies"],
+      "caution": "Opinion piece -- claims reflect the author's interpretation of selective evidence"
+    },
+    "article_id": "remote-work-opinion-hybrid",
+    "query_expansion_keywords": [
+      "remote work pros cons", "hybrid work benefits", "return to office debate",
+      "remote work culture", "mentorship remote teams", "employee engagement remote",
+      "hybrid work schedule", "remote work loneliness", "office collaboration",
+      "work from home downsides"
+    ],
+    "semantic_boosters": [
+      "Fully remote work reduces spontaneous collaboration that drives innovation.",
+      "Junior employees in remote-first companies report weaker mentorship experiences.",
+      "Hybrid models with 2-3 office days balance flexibility and culture.",
+      "Employee engagement scores have declined at companies that went fully remote."
+    ],
+    "semantic_chunks": []
+  }
+}

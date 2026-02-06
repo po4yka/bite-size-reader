@@ -1,0 +1,120 @@
+{
+  "content_type": "blog",
+  "description": "Example summary for a personal/company blog post about engineering culture",
+  "input_snippet": "At Stripe, we believe that the best engineering cultures are built on writing. Not just code, but documents, proposals, and post-mortems. When engineers write well, they think more clearly, communicate more effectively, and build better systems. Here's how our culture of writing has shaped the way we build software...",
+  "expected_output": {
+    "summary_250": "Stripe's engineering blog explains how a writing-first culture drives clearer thinking, better communication, and stronger software systems across engineering teams.",
+    "summary_1000": "Stripe's engineering team attributes much of its technical culture to a deliberate emphasis on writing. Engineers write design documents before coding, post-mortems after incidents, and weekly status updates that force structured reflection. The practice improves decision quality by requiring authors to think through edge cases and trade-offs on paper. Cross-team knowledge sharing happens through an internal document repository that anyone can search and comment on. New engineers onboard faster because institutional knowledge is written rather than locked in people's heads.",
+    "tldr": "This blog post from Stripe's engineering team describes how writing is a core pillar of their technical culture and why they believe it produces better software.\n\nDesign documents precede all significant engineering work. Engineers must articulate the problem, proposed solution, alternatives considered, and risks in writing before any code is written. This process catches misunderstandings early and creates a durable record of decision rationale. Post-mortems follow a blameless template that captures timeline, root cause, contributing factors, and action items.\n\nThe company maintains a searchable internal repository of all documents, enabling cross-team discovery. Weekly engineering updates force structured self-reflection and surface blockers quickly. New hires consistently report that the document culture accelerated their onboarding because institutional knowledge was explicit and accessible rather than tribal.",
+    "key_ideas": [
+      "Design documents must be written before significant coding work begins",
+      "Writing forces engineers to think through edge cases and trade-offs explicitly",
+      "Blameless post-mortem templates capture root causes and action items",
+      "Internal document repository enables cross-team knowledge discovery",
+      "New engineers onboard faster when institutional knowledge is documented"
+    ],
+    "topic_tags": ["#engineering-culture", "#technical-writing", "#stripe", "#design-docs", "#post-mortems"],
+    "entities": {
+      "people": [],
+      "organizations": ["Stripe"],
+      "locations": []
+    },
+    "estimated_reading_time_min": 8,
+    "source_type": "blog",
+    "temporal_freshness": "evergreen",
+    "key_stats": [],
+    "answered_questions": [
+      "How does Stripe use writing in engineering?",
+      "What are the benefits of design documents?",
+      "How does a writing culture help new engineers?"
+    ],
+    "readability": {
+      "method": "Flesch-Kincaid",
+      "score": 58.5,
+      "level": "Fairly Difficult"
+    },
+    "seo_keywords": ["engineering culture", "technical writing", "design documents", "post-mortem template", "stripe engineering", "documentation culture", "engineering onboarding"],
+    "metadata": {
+      "title": "How Writing Shapes Engineering Culture at Stripe",
+      "canonical_url": null,
+      "domain": "stripe.com",
+      "author": "Stripe Engineering",
+      "published_at": null,
+      "last_updated": null
+    },
+    "extractive_quotes": [
+      {
+        "text": "the best engineering cultures are built on writing",
+        "source_span": "paragraph 1"
+      },
+      {
+        "text": "When engineers write well, they think more clearly, communicate more effectively, and build better systems",
+        "source_span": "paragraph 1"
+      }
+    ],
+    "highlights": [
+      "Design docs precede all significant engineering work at Stripe",
+      "Writing forces explicit thinking about edge cases and trade-offs",
+      "Blameless post-mortems follow a standardized template",
+      "Searchable internal doc repository enables knowledge discovery",
+      "Documentation accelerates new hire onboarding significantly"
+    ],
+    "questions_answered": [
+      {
+        "question": "Why does Stripe emphasize writing in engineering?",
+        "answer": "Writing forces clearer thinking, catches design issues early, and creates durable knowledge."
+      },
+      {
+        "question": "What types of documents do Stripe engineers write?",
+        "answer": "Design documents, post-mortems, and weekly status updates."
+      }
+    ],
+    "categories": ["engineering", "culture", "best-practices"],
+    "topic_taxonomy": [
+      {"label": "Engineering Culture", "score": 0.95, "path": "Engineering/Culture/Practices"},
+      {"label": "Technical Writing", "score": 0.88, "path": "Engineering/Communication/Writing"},
+      {"label": "Knowledge Management", "score": 0.78, "path": "Business/Operations/Knowledge"}
+    ],
+    "hallucination_risk": "low",
+    "confidence": 0.88,
+    "forwarded_post_extras": null,
+    "key_points_to_remember": [
+      "Write design docs before coding to catch issues early",
+      "Blameless post-mortems improve system reliability over time",
+      "Explicit documentation beats tribal knowledge for onboarding"
+    ],
+    "insights": {
+      "topic_overview": "Writing-first engineering cultures like Stripe's reflect a broader industry trend toward documentation-driven development and decision-making.",
+      "new_facts": [
+        {
+          "fact": "Companies with strong documentation practices report 40% faster onboarding for new engineers",
+          "why_it_matters": "Reduces the hidden cost of tribal knowledge and improves team scalability",
+          "source_hint": "Industry surveys on engineering productivity",
+          "confidence": 0.65
+        }
+      ],
+      "open_questions": [
+        "How to maintain documentation quality as teams scale?",
+        "What tools best support a writing-first engineering culture?"
+      ],
+      "suggested_sources": ["Google's engineering documentation practices", "Amazon's writing culture essays"],
+      "expansion_topics": ["ADRs (Architecture Decision Records)", "RFCs in engineering organizations"],
+      "next_exploration": ["Compare documentation practices across top tech companies"],
+      "caution": null
+    },
+    "article_id": "stripe-writing-culture",
+    "query_expansion_keywords": [
+      "engineering culture writing", "design document template", "stripe engineering blog",
+      "post-mortem template", "documentation culture", "technical writing engineers",
+      "engineering onboarding", "knowledge management engineering", "blameless post-mortem",
+      "writing driven development"
+    ],
+    "semantic_boosters": [
+      "Stripe requires design documents before significant engineering work begins.",
+      "Writing forces engineers to articulate trade-offs and edge cases explicitly.",
+      "Blameless post-mortem templates capture root causes and drive reliability improvements.",
+      "A searchable internal document repository enables cross-team knowledge sharing."
+    ],
+    "semantic_chunks": []
+  }
+}

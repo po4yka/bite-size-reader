@@ -1,0 +1,105 @@
+"""Content cleaning pipeline for pre-LLM processing.
+
+Cleans raw Firecrawl markdown to improve signal-to-noise ratio before
+sending to the LLM. The original content is preserved in crawl_results;
+this module only processes the copy sent for summarization.
+"""
+
+from __future__ import annotations
+
+import re
+from collections import Counter
+
+
+def clean_content_for_llm(text: str) -> str:
+    """Apply all cleaning steps to content before LLM summarization.
+
+    Args:
+        text: Raw markdown content from Firecrawl or similar extraction.
+
+    Returns:
+        Cleaned content with noise removed.
+    """
+    if not text or not text.strip():
+        return text
+
+    text = _collapse_whitespace(text)
+    text = _strip_markdown_link_urls(text)
+    text = _remove_boilerplate_sections(text)
+    text = _remove_repeated_nav_items(text)
+    text = _truncate_after_comments(text)
+
+    return text.strip()
+
+
+def _collapse_whitespace(text: str) -> str:
+    """Collapse runs of >2 blank lines to exactly 2."""
+    return re.sub(r"\n{3,}", "\n\n", text)
+
+
+def _strip_markdown_link_urls(text: str) -> str:
+    """Replace [text](url) with just text, keeping link text readable."""
+    return re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", text)
+
+
+_BOILERPLATE_HEADINGS = re.compile(
+    r"^#{1,4}\s*(?:"
+    r"related\s+(?:articles?|posts?|stories?|content|links?|reads?)"
+    r"|you\s+(?:may|might|could)\s+(?:also\s+)?(?:like|enjoy|read)"
+    r"|(?:more|other|similar)\s+(?:articles?|posts?|stories?|reads?)"
+    r"|(?:comments?|leave\s+a\s+(?:reply|comment))"
+    r"|(?:share\s+this|subscribe|newsletter|sign\s*up)"
+    r"|(?:advertisement|sponsored|promoted)"
+    r"|(?:footer|sidebar|navigation|breadcrumb)"
+    r")\s*$",
+    re.IGNORECASE | re.MULTILINE,
+)
+
+
+def _remove_boilerplate_sections(text: str) -> str:
+    """Remove sections starting with boilerplate headings until next heading or EOF."""
+    lines = text.split("\n")
+    result: list[str] = []
+    skipping = False
+
+    for line in lines:
+        if _BOILERPLATE_HEADINGS.match(line.strip()):
+            skipping = True
+            continue
+        # Stop skipping at the next real heading
+        if skipping and re.match(r"^#{1,4}\s+\S", line):
+            skipping = False
+        if not skipping:
+            result.append(line)
+
+    return "\n".join(result)
+
+
+def _remove_repeated_nav_items(text: str, threshold: int = 3) -> str:
+    """Remove lines appearing 3+ times (typical of navigation/menu items)."""
+    lines = text.split("\n")
+    counter: Counter[str] = Counter()
+    for line in lines:
+        stripped = line.strip()
+        if stripped:
+            counter[stripped] += 1
+
+    repeated = {line for line, count in counter.items() if count >= threshold}
+    if not repeated:
+        return text
+
+    return "\n".join(line for line in lines if line.strip() not in repeated)
+
+
+_COMMENT_SECTION_MARKERS = re.compile(
+    r"^(?:#{1,4}\s+)?(?:\d+\s+)?(?:comments?|responses?|replies?|discussion)\s*$",
+    re.IGNORECASE | re.MULTILINE,
+)
+
+
+def _truncate_after_comments(text: str) -> str:
+    """Truncate content after comment section markers."""
+    match = _COMMENT_SECTION_MARKERS.search(text)
+    if match:
+        return text[: match.start()].rstrip()
+    return text

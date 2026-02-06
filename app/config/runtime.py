@@ -41,6 +41,9 @@ class RuntimeConfig(BaseModel):
         default=30.0, validation_alias="SEMAPHORE_ACQUIRE_TIMEOUT_SEC"
     )
     json_parse_timeout_sec: float = Field(default=60.0, validation_alias="JSON_PARSE_TIMEOUT_SEC")
+    summary_two_pass_enabled: bool = Field(
+        default=False, validation_alias="SUMMARY_TWO_PASS_ENABLED"
+    )
 
     @field_validator("llm_provider", mode="before")
     @classmethod

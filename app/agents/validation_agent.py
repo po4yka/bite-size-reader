@@ -80,7 +80,10 @@ class ValidationAgent(BaseAgent[ValidationInput, ValidationOutput]):
 
             missing_fields = [f for f in required_fields if f not in summary]
             if missing_fields:
-                errors.append(f"Missing required fields: {', '.join(missing_fields)}")
+                errors.append(
+                    f"Missing required fields: {', '.join(missing_fields)}. "
+                    "Include all listed fields with non-empty values in the JSON output."
+                )
 
             # Character limit validation
             if "summary_250" in summary:
@@ -88,7 +91,7 @@ class ValidationAgent(BaseAgent[ValidationInput, ValidationOutput]):
                 if length_250 > 250:
                     errors.append(
                         f"summary_250 exceeds limit: {length_250} chars (max 250). "
-                        f"Truncate to last sentence boundary before 250 chars."
+                        "Rewrite as a single sentence under 250 characters ending at . ! or ?"
                     )
                 elif length_250 < 50:
                     warnings.append(f"summary_250 very short: {length_250} chars")
@@ -98,7 +101,7 @@ class ValidationAgent(BaseAgent[ValidationInput, ValidationOutput]):
                 if length_1000 > 1000:
                     errors.append(
                         f"summary_1000 exceeds limit: {length_1000} chars (max 1000). "
-                        f"Truncate to last sentence boundary before 1000 chars."
+                        "Rewrite as 3-5 sentences under 1000 characters total."
                     )
                 elif length_1000 < 100:
                     warnings.append(f"summary_1000 very short: {length_1000} chars")
@@ -111,7 +114,10 @@ class ValidationAgent(BaseAgent[ValidationInput, ValidationOutput]):
                 else:
                     invalid_tags = [t for t in tags if not str(t).startswith("#")]
                     if invalid_tags:
-                        errors.append(f"Topic tags missing '#' prefix: {', '.join(invalid_tags)}")
+                        errors.append(
+                            f"Topic tags missing '#' prefix: {', '.join(invalid_tags)}. "
+                            "Each tag must be lowercase with # prefix, e.g. #machine-learning"
+                        )
 
                     if len(tags) > 10:
                         warnings.append(f"Many topic tags: {len(tags)} (recommend ≤10)")
@@ -147,7 +153,8 @@ class ValidationAgent(BaseAgent[ValidationInput, ValidationOutput]):
                         elif not isinstance(stat["value"], int | float):
                             errors.append(
                                 f"key_stats[{idx}].value must be numeric, "
-                                f"got {type(stat['value']).__name__}"
+                                f"got {type(stat['value']).__name__}. "
+                                "value must be a number (42, 3.14), not a string like 'N/A'"
                             )
 
             # Readability validation
@@ -157,9 +164,15 @@ class ValidationAgent(BaseAgent[ValidationInput, ValidationOutput]):
                     errors.append("readability must be a dictionary")
                 else:
                     if "score" not in readability:
-                        errors.append("readability.score is required")
+                        errors.append(
+                            "readability.score is required. "
+                            "Provide a numeric Flesch-Kincaid score, e.g. 65.0"
+                        )
                     elif not isinstance(readability["score"], int | float):
-                        errors.append("readability.score must be numeric")
+                        errors.append(
+                            "readability.score must be numeric. "
+                            "Provide a Flesch-Kincaid score as a number, e.g. 65.0"
+                        )
 
                     if "level" not in readability:
                         warnings.append("readability.level missing (recommended)")
@@ -170,7 +183,8 @@ class ValidationAgent(BaseAgent[ValidationInput, ValidationOutput]):
                 if not isinstance(reading_time, int):
                     errors.append(
                         f"estimated_reading_time_min must be integer, "
-                        f"got {type(reading_time).__name__}"
+                        f"got {type(reading_time).__name__}. "
+                        "Provide a whole number of minutes, e.g. 5"
                     )
                 elif reading_time < 1:
                     warnings.append(f"estimated_reading_time_min very low: {reading_time}")
@@ -182,7 +196,8 @@ class ValidationAgent(BaseAgent[ValidationInput, ValidationOutput]):
                 if source_type not in valid_source_types:
                     errors.append(
                         f"source_type must be one of: {', '.join(sorted(valid_source_types))}. "
-                        f"Got: '{summary['source_type']}'"
+                        f"Got: '{summary['source_type']}'. "
+                        "Choose exactly one value from the allowed list."
                     )
 
             valid_freshness = {"breaking", "recent", "evergreen"}
@@ -191,7 +206,8 @@ class ValidationAgent(BaseAgent[ValidationInput, ValidationOutput]):
                 if freshness not in valid_freshness:
                     errors.append(
                         f"temporal_freshness must be one of: {', '.join(sorted(valid_freshness))}. "
-                        f"Got: '{summary['temporal_freshness']}'"
+                        f"Got: '{summary['temporal_freshness']}'. "
+                        "Choose exactly one value from the allowed list."
                     )
 
             # Cross-field validation: summary distinctness

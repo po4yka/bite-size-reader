@@ -1,0 +1,127 @@
+{
+  "content_type": "tutorial",
+  "description": "Example summary for a technical tutorial on containerizing a Python application",
+  "input_snippet": "In this guide, you'll learn how to containerize a Python web application using Docker. We'll cover writing a Dockerfile, managing dependencies with pip, configuring environment variables, and deploying to a container registry. Prerequisites: Python 3.11+, Docker Desktop installed, basic command-line knowledge...",
+  "expected_output": {
+    "summary_250": "A step-by-step guide to containerizing Python web apps with Docker, covering Dockerfile creation, dependency management, environment configuration, and registry deployment.",
+    "summary_1000": "This tutorial walks through the complete process of containerizing a Python web application using Docker. Starting with prerequisites (Python 3.11+, Docker Desktop), it covers writing an optimized multi-stage Dockerfile that separates build and runtime layers. The guide demonstrates managing pip dependencies via requirements.txt with hash pinning for reproducibility. Environment variable configuration uses .env files locally and Docker secrets in production. Final sections cover building images, running containers with health checks, and pushing to Docker Hub or GitHub Container Registry.",
+    "tldr": "This comprehensive tutorial covers end-to-end Docker containerization for Python web applications.\n\nThe guide begins with prerequisites: Python 3.11+, Docker Desktop, and basic terminal familiarity. It then walks through writing a multi-stage Dockerfile that uses a slim base image (python:3.11-slim) to minimize image size. Dependencies are installed via pip with --no-cache-dir to reduce layer size, and requirements.txt uses hash pinning for supply chain security.\n\nEnvironment variable management is handled through .env files for local development and Docker secrets for production deployments. The tutorial includes a working docker-compose.yml for multi-container setups with PostgreSQL. It concludes with building tagged images, running containers with health check endpoints, and pushing to Docker Hub or GHCR with proper versioning tags.",
+    "key_ideas": [
+      "Multi-stage Dockerfile separates build dependencies from runtime",
+      "Use python:3.11-slim base image to minimize container size",
+      "Pin dependency hashes in requirements.txt for supply chain security",
+      "Configure environment variables with .env locally and Docker secrets in production",
+      "Include health check endpoints for container orchestration",
+      "Tag images with semantic versioning before pushing to registries"
+    ],
+    "topic_tags": ["#docker", "#python", "#containerization", "#devops", "#tutorial"],
+    "entities": {
+      "people": [],
+      "organizations": ["Docker", "GitHub"],
+      "locations": []
+    },
+    "estimated_reading_time_min": 12,
+    "source_type": "tutorial",
+    "temporal_freshness": "evergreen",
+    "key_stats": [
+      {
+        "label": "Minimum Python version required",
+        "value": 3.11,
+        "unit": null,
+        "source_excerpt": "Prerequisites: Python 3.11+"
+      }
+    ],
+    "answered_questions": [
+      "How do I write a Dockerfile for a Python app?",
+      "How do I manage environment variables in Docker?",
+      "How do I push Docker images to a registry?",
+      "What base image should I use for Python containers?"
+    ],
+    "readability": {
+      "method": "Flesch-Kincaid",
+      "score": 55.0,
+      "level": "Fairly Difficult"
+    },
+    "seo_keywords": ["docker python tutorial", "containerize python app", "dockerfile python", "docker compose python", "python docker best practices", "multi-stage dockerfile", "docker hub push"],
+    "metadata": {
+      "title": "Containerizing Python Apps with Docker: A Complete Guide",
+      "canonical_url": null,
+      "domain": "example.com",
+      "author": null,
+      "published_at": null,
+      "last_updated": null
+    },
+    "extractive_quotes": [
+      {
+        "text": "Prerequisites: Python 3.11+, Docker Desktop installed, basic command-line knowledge",
+        "source_span": "introduction"
+      }
+    ],
+    "highlights": [
+      "Use multi-stage builds to reduce image size",
+      "Pin dependencies with hashes for security",
+      "Use .env files locally, Docker secrets in production",
+      "Include health checks for orchestration readiness",
+      "Tag images with semantic versions before pushing",
+      "Use --no-cache-dir with pip to reduce layers"
+    ],
+    "questions_answered": [
+      {
+        "question": "What prerequisites are needed?",
+        "answer": "Python 3.11+, Docker Desktop, and basic command-line knowledge"
+      },
+      {
+        "question": "How to minimize Docker image size for Python?",
+        "answer": "Use python:3.11-slim base image, multi-stage builds, and --no-cache-dir flag"
+      }
+    ],
+    "categories": ["devops", "tutorial", "python", "containerization"],
+    "topic_taxonomy": [
+      {"label": "DevOps", "score": 0.95, "path": "Engineering/DevOps/Containers"},
+      {"label": "Python Development", "score": 0.85, "path": "Programming/Python"},
+      {"label": "Deployment", "score": 0.80, "path": "Engineering/Deployment/Docker"}
+    ],
+    "hallucination_risk": "low",
+    "confidence": 0.90,
+    "forwarded_post_extras": null,
+    "key_points_to_remember": [
+      "Always use slim base images for production",
+      "Multi-stage builds separate build and runtime dependencies",
+      "Pin dependency hashes for supply chain security",
+      "Health checks are essential for orchestrated environments"
+    ],
+    "insights": {
+      "topic_overview": "Docker containerization has become the standard deployment method for Python web applications, with multi-stage builds and slim images as established best practices.",
+      "new_facts": [
+        {
+          "fact": "Multi-stage Dockerfiles can reduce Python image size by 60-80% compared to standard builds",
+          "why_it_matters": "Smaller images mean faster deployments and reduced attack surface",
+          "source_hint": "Docker best practices documentation",
+          "confidence": 0.85
+        }
+      ],
+      "open_questions": [
+        "How does this approach compare to distroless Python images?",
+        "What are the trade-offs of using Alpine vs slim base images?"
+      ],
+      "suggested_sources": ["Docker official documentation", "Python Docker best practices guide"],
+      "expansion_topics": ["Kubernetes deployment", "CI/CD pipeline integration"],
+      "next_exploration": ["Try distroless images for further size reduction"],
+      "caution": null
+    },
+    "article_id": "docker-python-tutorial",
+    "query_expansion_keywords": [
+      "docker python tutorial", "containerize python", "python dockerfile",
+      "docker compose python", "multi-stage build python", "python slim image",
+      "docker environment variables", "docker secrets python", "push docker hub",
+      "python container best practices"
+    ],
+    "semantic_boosters": [
+      "Multi-stage Dockerfiles separate build dependencies from the runtime image.",
+      "Using python:3.11-slim as a base image minimizes container size.",
+      "Hash-pinned requirements.txt prevents supply chain attacks in containers.",
+      "Docker secrets should replace .env files for production deployments."
+    ],
+    "semantic_chunks": []
+  }
+}

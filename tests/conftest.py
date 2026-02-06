@@ -12,6 +12,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from app.config import (
+    AdaptiveTimeoutConfig,
     AnthropicConfig,
     ApiLimitsConfig,
     AppConfig,
@@ -213,6 +214,7 @@ def make_test_app_config(
         "anthropic": AnthropicConfig(),
         "circuit_breaker": CircuitBreakerConfig(),
         "web_search": WebSearchConfig(),
+        "adaptive_timeout": AdaptiveTimeoutConfig(),
     }
     defaults.update(overrides)
     return AppConfig(**defaults)

@@ -23,8 +23,10 @@ from app.adapters.content.llm_summarizer_insights import (
 from app.adapters.content.llm_summarizer_metadata import LLMSummaryMetadataHelper
 from app.adapters.content.llm_summarizer_semantic import LLMSemanticHelper
 from app.adapters.content.llm_summarizer_text import coerce_string_list, truncate_content_text
+from app.core.content_cleaner import clean_content_for_llm
 from app.core.json_utils import extract_json
 from app.core.lang import LANG_RU
+from app.core.token_utils import count_tokens
 from app.db.user_interactions import async_safe_update_user_interaction
 from app.infrastructure.cache.redis_cache import RedisCache
 from app.infrastructure.persistence.sqlite.repositories.crawl_result_repository import (
@@ -48,6 +50,32 @@ if TYPE_CHECKING:
     from app.services.topic_search import TopicSearchService
 
 logger = logging.getLogger(__name__)
+
+
+def _detect_content_type_hint(content: str) -> str:
+    """Detect content type from text heuristics and return a 1-line hint.
+
+    Costs ~15 tokens when triggered. No LLM call.
+    """
+    lower = content[:2000].lower()
+    if any(kw in lower for kw in ("abstract", "methodology", "doi:", "et al.", "arxiv")):
+        return "CONTENT HINT: Research paper. Focus on methodology, findings, and limitations.\n"
+    if any(
+        kw in lower for kw in ("step 1", "how to", "tutorial", "prerequisites", "getting started")
+    ):
+        return "CONTENT HINT: Tutorial. Focus on steps, prerequisites, and outcomes.\n"
+    if any(
+        kw in lower
+        for kw in ("breaking:", "reuters", "reported today", "press release", "associated press")
+    ):
+        return "CONTENT HINT: News article. Focus on who, what, when, where, why.\n"
+    if any(
+        kw in lower for kw in ("in my opinion", "i think", "i believe", "editorial", "commentary")
+    ):
+        return (
+            "CONTENT HINT: Opinion piece. Focus on the author's thesis and supporting arguments.\n"
+        )
+    return ""
 
 
 class LLMSummarizer:
@@ -148,7 +176,7 @@ class LLMSummarizer:
         content_for_summary = content_text
         model_override = None
         if len(content_text) > max_chars:
-            if self.cfg.openrouter.long_context_model or "":
+            if self.cfg.openrouter.long_context_model:
                 model_override = self.cfg.openrouter.long_context_model
             else:
                 content_for_summary = truncate_content_text(content_text, max_chars)
@@ -162,14 +190,19 @@ class LLMSummarizer:
                     },
                 )
 
+        # Clean content to remove boilerplate before LLM input
+        content_for_summary = clean_content_for_llm(content_for_summary)
+
         # Optionally enrich with web search context
         search_context = await self._maybe_enrich_with_search(
             content_for_summary, chosen_lang, correlation_id
         )
 
+        content_hint = _detect_content_type_hint(content_for_summary)
         user_content = (
             f"Analyze the following content and output ONLY a valid JSON object that matches the system contract exactly. "
             f"Respond in {'Russian' if chosen_lang == LANG_RU else 'English'}. Do NOT include any text outside the JSON.\n\n"
+            f"{content_hint}"
             f"CONTENT START\n{content_for_summary}\nCONTENT END"
         )
 
@@ -435,6 +468,13 @@ class LLMSummarizer:
             on_success=_on_success,
             defer_persistence=defer_persistence,
         )
+
+        # Two-pass enrichment: merge enrichment fields into core summary
+        if summary and getattr(self.cfg.runtime, "summary_two_pass_enabled", False):
+            summary = await self._enrich_summary_two_pass(
+                summary, content_for_summary, chosen_lang, correlation_id
+            )
+
         if summary and url_hash:
             chosen_model = getattr(self._last_llm_result, "model", model_for_cache)
             await self._cache_helper.write_summary_cache(
@@ -476,7 +516,7 @@ class LLMSummarizer:
         model_override = None
         max_chars_threshold = 50000
         if len(content_text) > max_chars_threshold:
-            if self.cfg.openrouter.long_context_model or "":
+            if self.cfg.openrouter.long_context_model:
                 model_override = self.cfg.openrouter.long_context_model
             else:
                 content_for_summary = truncate_content_text(content_text, max_chars_threshold)
@@ -490,7 +530,11 @@ class LLMSummarizer:
                     },
                 )
 
+        # Clean content to remove boilerplate before LLM input
+        content_for_summary = clean_content_for_llm(content_for_summary)
+
         # Build user prompt with optional feedback
+        content_hint = _detect_content_type_hint(content_for_summary)
         user_content = (
             f"Analyze the following content and output ONLY a valid JSON object that matches the system contract exactly. "
             f"Respond in {'Russian' if chosen_lang == LANG_RU else 'English'}. Do NOT include any text outside the JSON.\n\n"
@@ -499,7 +543,7 @@ class LLMSummarizer:
         if feedback_instructions:
             user_content += f"{feedback_instructions}\n\n"
 
-        user_content += f"CONTENT START\n{content_for_summary}\nCONTENT END"
+        user_content += f"{content_hint}CONTENT START\n{content_for_summary}\nCONTENT END"
 
         self._log_llm_content_validation(
             content_for_summary, system_prompt, user_content, correlation_id
@@ -616,10 +660,11 @@ class LLMSummarizer:
 
         Optimized formula: summaries rarely exceed 4K tokens, so we use a more
         conservative budget to reduce costs (10-20% savings).
+        Uses tiktoken for accurate counting when available, falls back to heuristic.
         """
         configured = self.cfg.openrouter.max_tokens
 
-        approx_input_tokens = max(1, len(content_text) // 3)
+        approx_input_tokens = count_tokens(content_text)
 
         # Conservative budget: summary output rarely exceeds 4K tokens
         dynamic_budget = max(4096, min(12288, approx_input_tokens // 2 + 2048))
@@ -647,6 +692,113 @@ class LLMSummarizer:
             },
         )
         return selected
+
+    async def _enrich_summary_two_pass(
+        self,
+        summary: dict[str, Any],
+        content_text: str,
+        chosen_lang: str,
+        correlation_id: str | None,
+    ) -> dict[str, Any]:
+        """Run a second LLM pass to generate enrichment fields.
+
+        Feature-flagged via SUMMARY_TWO_PASS_ENABLED. Merges enrichment fields
+        into the existing summary without overwriting core fields.
+        """
+        try:
+            from pathlib import Path
+
+            prompt_dir = Path(__file__).resolve().parent.parent.parent / "prompts"
+            lang_suffix = "ru" if chosen_lang == LANG_RU else "en"
+            prompt_path = prompt_dir / f"enrichment_system_{lang_suffix}.txt"
+
+            enrichment_prompt = prompt_path.read_text(encoding="utf-8")
+
+            # Build user message with core summary context
+            from app.core.json_utils import dumps as json_dumps
+
+            core_fields = {
+                "summary_250",
+                "summary_1000",
+                "tldr",
+                "key_ideas",
+                "topic_tags",
+                "entities",
+                "source_type",
+            }
+            core_summary_text = json_dumps(
+                {k: v for k, v in summary.items() if k in core_fields},
+                indent=2,
+            )
+            user_content = (
+                f"Respond in {'Russian' if chosen_lang == LANG_RU else 'English'}.\n\n"
+                f"CORE SUMMARY (already generated, do not modify):\n{core_summary_text}\n\n"
+                f"ORIGINAL CONTENT START\n{content_text[:30000]}\nORIGINAL CONTENT END"
+            )
+
+            messages = [
+                {"role": "system", "content": enrichment_prompt},
+                {"role": "user", "content": user_content},
+            ]
+
+            async with self._sem():
+                llm_result = await self.openrouter.chat(
+                    messages,
+                    response_format=self._workflow.build_structured_response_format(
+                        mode="json_object"
+                    ),
+                    max_tokens=4096,
+                    temperature=self.cfg.openrouter.temperature,
+                    top_p=self.cfg.openrouter.top_p,
+                    request_id=None,
+                )
+
+            if llm_result.status != "ok":
+                logger.warning(
+                    "two_pass_enrichment_failed",
+                    extra={"cid": correlation_id, "error": llm_result.error_text},
+                )
+                return summary
+
+            enrichment = self._parse_summary_from_llm_result(llm_result)
+            if not enrichment:
+                logger.warning(
+                    "two_pass_enrichment_parse_failed",
+                    extra={"cid": correlation_id},
+                )
+                return summary
+
+            # Merge enrichment fields into summary without overwriting core fields
+            enrichment_keys = {
+                "answered_questions",
+                "seo_keywords",
+                "extractive_quotes",
+                "highlights",
+                "categories",
+                "key_points_to_remember",
+                "questions_answered",
+                "topic_taxonomy",
+            }
+            for key in enrichment_keys:
+                value = enrichment.get(key)
+                if value:
+                    summary[key] = value
+
+            logger.info(
+                "two_pass_enrichment_merged",
+                extra={
+                    "cid": correlation_id,
+                    "enriched_fields": [k for k in enrichment_keys if k in enrichment],
+                },
+            )
+            return summary
+
+        except Exception as e:
+            logger.warning(
+                "two_pass_enrichment_error",
+                extra={"cid": correlation_id, "error": str(e)},
+            )
+            return summary
 
     async def generate_custom_article(
         self,

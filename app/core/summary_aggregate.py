@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import contextlib
+import re
 from typing import Any
 
 
@@ -18,6 +19,37 @@ def _dedupe_list(items: list[str], limit: int | None = None) -> list[str]:
             if limit is not None and len(out) >= limit:
                 break
     return out
+
+
+def _extract_sentences(text: str) -> list[str]:
+    """Split text into sentences, filtering short fragments."""
+    parts = re.split(r"(?<=[.!?])\s+", text.strip())
+    return [s.strip() for s in parts if len(s.strip()) > 15]
+
+
+def _dedupe_sentences(parts: list[str]) -> str:
+    """Join text parts with sentence-level deduplication."""
+    seen: set[str] = set()
+    result_sentences: list[str] = []
+    for part in parts:
+        for sentence in _extract_sentences(part):
+            key = sentence.lower().strip()
+            if key not in seen:
+                seen.add(key)
+                result_sentences.append(sentence)
+    return " ".join(result_sentences)
+
+
+def _select_best_summary_250(parts: list[str]) -> str:
+    """Select the single most informative chunk summary for summary_250.
+
+    Picks the longest non-duplicate entry (most informative single sentence).
+    """
+    deduped = _dedupe_list(parts)
+    if not deduped:
+        return ""
+    # Select the longest (most informative) entry
+    return max(deduped, key=len)
 
 
 def _merge_entities(a: dict[str, Any], b: dict[str, Any]) -> dict[str, Any]:
@@ -167,9 +199,14 @@ def aggregate_chunk_summaries(summaries: list[dict[str, Any]]) -> dict[str, Any]
         except Exception:
             continue
 
-    s250_joined = "; ".join(_dedupe_list(s250_parts))
-    s1000_joined = "\n".join(_dedupe_list(s1000_parts))
-    tldr_joined = "\n".join(_dedupe_list(tldr_parts))
+    # For summary_250: select the single best chunk summary (most informative)
+    s250_joined = _select_best_summary_250(s250_parts)
+    # For summary_1000/tldr: deduplicate at sentence level for coherence
+    s1000_joined = _dedupe_sentences(_dedupe_list(s1000_parts))
+    tldr_joined = _dedupe_sentences(_dedupe_list(tldr_parts))
+    # Ensure tldr is always longer than summary_1000
+    if tldr_joined and s1000_joined and len(tldr_joined) <= len(s1000_joined):
+        tldr_joined = s1000_joined + " " + tldr_joined
     insights = {
         "topic_overview": "\n\n".join(_dedupe_list(topic_overview_parts, limit=3)),
         "new_facts": list(fact_map.values())[:8],

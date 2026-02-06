@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib
 import re
 from typing import Any
 
@@ -111,5 +112,18 @@ def extract_json(text: str) -> dict[str, Any] | None:
         parsed = _try_parse(snippet)
         if parsed is not None:
             return parsed
+
+    # Last resort: use json_repair library (lazy import, matching json_validation.py pattern)
+    try:
+        module = importlib.import_module("json_repair")
+        repair_func = getattr(module, "repair_json", None)
+        if callable(repair_func):
+            repaired = repair_func(candidate)
+            if isinstance(repaired, str):
+                parsed = _try_parse(repaired.strip())
+                if parsed is not None:
+                    return parsed
+    except Exception:
+        pass
 
     return None
