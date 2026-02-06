@@ -297,6 +297,8 @@ class LLMSummarizer:
             )
 
         async def _on_llm_error(llm_result: Any, details: str | None) -> None:
+            if silent:
+                return
             await self.response_formatter.send_error_notification(
                 message,
                 "llm_error",
@@ -305,6 +307,8 @@ class LLMSummarizer:
             )
 
         async def _on_repair_failure() -> None:
+            if silent:
+                return
             await self.response_formatter.send_error_notification(
                 message,
                 "processing_failed",
@@ -313,6 +317,8 @@ class LLMSummarizer:
             )
 
         async def _on_parsing_failure() -> None:
+            if silent:
+                return
             await self.response_formatter.send_error_notification(
                 message,
                 "processing_failed",

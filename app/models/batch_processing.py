@@ -149,6 +149,7 @@ class URLStatusEntry:
     url: str
     status: URLStatus = URLStatus.PENDING
     domain: str | None = None
+    display_label: str | None = None
     title: str | None = None
     error_type: str | None = None
     error_message: str | None = None
@@ -156,9 +157,11 @@ class URLStatusEntry:
     start_time: float | None = None
 
     def __post_init__(self) -> None:
-        """Extract domain from URL on creation."""
+        """Extract domain and display label from URL on creation."""
         if self.domain is None:
             self.domain = self._extract_domain(self.url)
+        if self.display_label is None:
+            self.display_label = self._extract_display_label(self.url)
 
     @staticmethod
     def _extract_domain(url: str) -> str:
@@ -172,6 +175,48 @@ class URLStatusEntry:
             return host
         except Exception:
             return url[:30]
+
+    @staticmethod
+    def _extract_display_label(url: str, max_length: int = 40) -> str:
+        """Extract a display-friendly label that distinguishes same-domain URLs.
+
+        Includes the last path segment (slug) to differentiate URLs from the same
+        domain, e.g. ``habr.com/.../123456`` instead of just ``habr.com``.
+
+        Args:
+            url: The URL to extract the label from
+            max_length: Maximum length of the returned label
+
+        Returns:
+            A compact, human-readable label like ``habr.com/.../123456``
+        """
+        try:
+            parsed = urlparse(url if "://" in url else f"https://{url}")
+            host = parsed.hostname or parsed.netloc or url
+            if host.startswith("www."):
+                host = host[4:]
+
+            # Get non-empty path segments
+            path = parsed.path.rstrip("/")
+            segments = [s for s in path.split("/") if s]
+
+            if not segments:
+                return host
+
+            slug = segments[-1]
+
+            label = f"{host}/{slug}" if len(segments) == 1 else f"{host}/.../{slug}"
+
+            # Truncate long slugs while keeping the label readable
+            if len(label) > max_length:
+                # Keep host + "/.../" prefix, truncate the slug
+                prefix = f"{host}/.../"
+                available = max_length - len(prefix) - 3  # 3 for "..."
+                label = f"{prefix}{slug[:available]}..." if available > 0 else label[:max_length]
+
+            return label
+        except Exception:
+            return url[:max_length]
 
 
 @dataclass

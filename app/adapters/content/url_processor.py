@@ -272,12 +272,16 @@ class URLProcessor:
         Returns:
             URLProcessingFlowResult with success status and extracted title
         """
+        # In batch mode, suppress individual per-URL notifications from sub-components.
+        # The batch progress message handles status display via on_phase_change callback.
+        notify_silent = silent or batch_mode
+
         cached_result = await self._maybe_reply_with_cached_summary(
             message,
             url_text,
             correlation_id=correlation_id,
             interaction_id=interaction_id,
-            silent=silent,
+            silent=notify_silent,
         )
         if cached_result is not None:
             return cached_result
@@ -296,7 +300,7 @@ class URLProcessor:
                 _content_source,
                 detected,
             ) = await self.content_extractor.extract_and_process_content(
-                message, url_text, correlation_id, interaction_id, silent
+                message, url_text, correlation_id, interaction_id, notify_silent
             )
 
             # Choose language and load system prompt
@@ -390,7 +394,7 @@ class URLProcessor:
                     interaction_id,
                     url_hash=dedupe_hash,
                     url=url_text,
-                    silent=silent,
+                    silent=notify_silent,
                 )
 
             if summary_json is None:

@@ -54,6 +54,51 @@ class TestURLStatusEntry(unittest.TestCase):
         entry = URLStatusEntry(url="https://example.com", domain="custom.com")
         assert entry.domain == "custom.com"
 
+    def test_display_label_multi_segment_path(self):
+        """Test display label with multi-segment path shows slug."""
+        entry = URLStatusEntry(url="https://habr.com/ru/articles/123456/")
+        assert entry.display_label == "habr.com/.../123456"
+
+    def test_display_label_deep_path(self):
+        """Test display label with deep path collapses to slug."""
+        entry = URLStatusEntry(url="https://habr.com/ru/companies/co/blog/789/")
+        assert entry.display_label == "habr.com/.../789"
+
+    def test_display_label_root_path_only(self):
+        """Test display label with root path returns domain only."""
+        entry = URLStatusEntry(url="https://example.com/")
+        assert entry.display_label == "example.com"
+
+    def test_display_label_no_path(self):
+        """Test display label with no path returns domain only."""
+        entry = URLStatusEntry(url="https://example.com")
+        assert entry.display_label == "example.com"
+
+    def test_display_label_single_segment(self):
+        """Test display label with single path segment."""
+        entry = URLStatusEntry(url="https://example.com/article")
+        assert entry.display_label == "example.com/article"
+
+    def test_display_label_long_slug_truncation(self):
+        """Test that long slugs are truncated in display label."""
+        long_slug = "a" * 60
+        entry = URLStatusEntry(url=f"https://medium.com/@user/{long_slug}")
+        assert len(entry.display_label) <= 40
+        assert entry.display_label.endswith("...")
+
+    def test_display_label_same_domain_different_paths(self):
+        """Test that same-domain URLs produce different labels."""
+        entry1 = URLStatusEntry(url="https://habr.com/ru/articles/111/")
+        entry2 = URLStatusEntry(url="https://habr.com/ru/articles/222/")
+        assert entry1.display_label != entry2.display_label
+        assert "111" in entry1.display_label
+        assert "222" in entry2.display_label
+
+    def test_display_label_strips_www(self):
+        """Test that www. is stripped from display label."""
+        entry = URLStatusEntry(url="https://www.example.com/page")
+        assert entry.display_label == "example.com/page"
+
 
 class TestURLBatchStatus(unittest.TestCase):
     """Test suite for URLBatchStatus class."""
@@ -201,24 +246,24 @@ class TestBatchProgressFormatter(unittest.TestCase):
         assert "Progress: 0/2 (0%)" in message
 
     def test_format_progress_with_completed(self):
-        """Test progress message shows completed domains."""
+        """Test progress message shows completed entries with display labels."""
         batch = URLBatchStatus.from_urls(["https://techcrunch.com/a", "https://arxiv.org/b"])
         batch.mark_complete("https://techcrunch.com/a", title="Article", processing_time_ms=1000)
 
         message = BatchProgressFormatter.format_progress_message(batch)
 
-        assert "[1/2] techcrunch.com -- Done (1s)" in message
-        assert "[2/2] arxiv.org -- Pending" in message
+        assert "[1/2] techcrunch.com/a -- Done (1s)" in message
+        assert "[2/2] arxiv.org/b -- Pending" in message
         assert "Progress: 1/2 (50%)" in message
 
     def test_format_progress_with_processing(self):
-        """Test progress message shows currently processing URL."""
+        """Test progress message shows currently processing URL with display label."""
         batch = URLBatchStatus.from_urls(["https://example.com/article"])
         batch.mark_processing("https://example.com/article")
 
         message = BatchProgressFormatter.format_progress_message(batch)
 
-        assert "[1/1] example.com -- Processing..." in message
+        assert "[1/1] example.com/article -- Processing..." in message
 
     def test_format_progress_with_eta(self):
         """Test progress message shows ETA."""

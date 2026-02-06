@@ -94,31 +94,31 @@ class BatchProgressFormatter:
             Formatted status line, e.g. ``[2/5] arxiv.org -- Analyzing... (3s)``
         """
         prefix = f"[{index}/{total}]"
-        domain = entry.domain or "unknown"
+        label = entry.display_label or entry.domain or "unknown"
 
         if entry.status == URLStatus.COMPLETE:
             elapsed = cls._format_elapsed(entry.processing_time_ms)
-            return f"{prefix} {domain} -- Done{elapsed}"
+            return f"{prefix} {label} -- Done{elapsed}"
 
         if entry.status == URLStatus.FAILED:
             error = cls._format_error_short(entry.error_type, entry.error_message)
             elapsed = cls._format_elapsed(entry.processing_time_ms)
-            return f"{prefix} {domain} -- Failed: {error}{elapsed}"
+            return f"{prefix} {label} -- Failed: {error}{elapsed}"
 
         if entry.status == URLStatus.EXTRACTING:
             live = cls._format_live_elapsed(entry.start_time)
-            return f"{prefix} {domain} -- Extracting...{live}"
+            return f"{prefix} {label} -- Extracting...{live}"
 
         if entry.status == URLStatus.ANALYZING:
             live = cls._format_live_elapsed(entry.start_time)
-            return f"{prefix} {domain} -- Analyzing...{live}"
+            return f"{prefix} {label} -- Analyzing...{live}"
 
         if entry.status == URLStatus.PROCESSING:
             live = cls._format_live_elapsed(entry.start_time)
-            return f"{prefix} {domain} -- Processing...{live}"
+            return f"{prefix} {label} -- Processing...{live}"
 
         # PENDING (default)
-        return f"{prefix} {domain} -- Pending"
+        return f"{prefix} {label} -- Pending"
 
     @classmethod
     def _format_elapsed(cls, processing_time_ms: float) -> str:
@@ -214,21 +214,21 @@ class BatchProgressFormatter:
             Formatted completion line, e.g.
             ``1. "Article Title" -- techcrunch.com (12s)``
         """
-        domain = entry.domain or "unknown"
+        label = entry.display_label or entry.domain or "unknown"
         elapsed = cls._format_elapsed(entry.processing_time_ms)
 
         if entry.status == URLStatus.COMPLETE:
             title = entry.title or "Untitled"
             if len(title) > 50:
                 title = title[:47] + "..."
-            return f'{index}. "{title}" -- {domain}{elapsed}'
+            return f'{index}. "{title}" -- {label}{elapsed}'
 
         if entry.status == URLStatus.FAILED:
             error = cls._format_error_short(entry.error_type, entry.error_message)
-            return f"{index}. {domain} -- Failed: {error}{elapsed}"
+            return f"{index}. {label} -- Failed: {error}{elapsed}"
 
         # Shouldn't happen in a completed batch, but handle gracefully
-        return f"{index}. {domain} -- {entry.status.value}"
+        return f"{index}. {label} -- {entry.status.value}"
 
     @classmethod
     def _format_minimal_progress(cls, batch: URLBatchStatus) -> str:
@@ -266,9 +266,9 @@ class BatchProgressFormatter:
             lines.append("")
             lines.append("Failed:")
             for entry in failed_entries[:3]:
-                domain = entry.domain or entry.url[:20]
+                label = entry.display_label or entry.domain or entry.url[:20]
                 error = cls._format_error_short(entry.error_type, entry.error_message)
-                lines.append(f"  - {domain}: {error}")
+                lines.append(f"  - {label}: {error}")
             if len(failed_entries) > 3:
                 lines.append(f"  ... and {len(failed_entries) - 3} more")
 
