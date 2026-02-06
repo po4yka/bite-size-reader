@@ -236,34 +236,37 @@ class TestBatchProgressFormatter(unittest.TestCase):
     """Test suite for BatchProgressFormatter."""
 
     def test_format_progress_empty_batch(self):
-        """Test progress message for batch at start."""
+        """Test progress message for batch at start (HTML)."""
         batch = URLBatchStatus.from_urls(["https://a.com", "https://b.com"])
         message = BatchProgressFormatter.format_progress_message(batch)
 
         assert "Processing 2 links..." in message
-        assert "[1/2] a.com -- Pending" in message
-        assert "[2/2] b.com -- Pending" in message
+        assert '<a href="https://a.com">a.com</a>  Pending' in message
+        assert '<a href="https://b.com">b.com</a>  Pending' in message
         assert "Progress: 0/2 (0%)" in message
 
     def test_format_progress_with_completed(self):
-        """Test progress message shows completed entries with display labels."""
+        """Test progress message shows completed entries as HTML links."""
         batch = URLBatchStatus.from_urls(["https://techcrunch.com/a", "https://arxiv.org/b"])
         batch.mark_complete("https://techcrunch.com/a", title="Article", processing_time_ms=1000)
 
         message = BatchProgressFormatter.format_progress_message(batch)
 
-        assert "[1/2] techcrunch.com/a -- Done (1s)" in message
-        assert "[2/2] arxiv.org/b -- Pending" in message
+        assert '<a href="https://techcrunch.com/a">techcrunch.com/a</a>  Done (1s)' in message
+        assert '<a href="https://arxiv.org/b">arxiv.org/b</a>  Pending' in message
         assert "Progress: 1/2 (50%)" in message
 
     def test_format_progress_with_processing(self):
-        """Test progress message shows currently processing URL with display label."""
+        """Test progress message shows currently processing URL as HTML link."""
         batch = URLBatchStatus.from_urls(["https://example.com/article"])
         batch.mark_processing("https://example.com/article")
 
         message = BatchProgressFormatter.format_progress_message(batch)
 
-        assert "[1/1] example.com/article -- Processing..." in message
+        assert (
+            '<a href="https://example.com/article">example.com/article</a>  Processing...'
+            in message
+        )
 
     def test_format_progress_with_eta(self):
         """Test progress message shows ETA."""
@@ -275,30 +278,30 @@ class TestBatchProgressFormatter(unittest.TestCase):
         assert "ETA:" in message or "Avg:" in message
 
     def test_format_completion_all_success(self):
-        """Test completion message with all successful."""
+        """Test completion message with all successful (HTML links)."""
         batch = URLBatchStatus.from_urls(["https://a.com", "https://b.com"])
         batch.mark_complete("https://a.com", title="Article A", processing_time_ms=1000)
         batch.mark_complete("https://b.com", title="Article B", processing_time_ms=2000)
 
         message = BatchProgressFormatter.format_completion_message(batch)
 
-        assert "Batch Complete -- 2/2 links" in message
-        assert '1. "Article A" -- a.com' in message
-        assert '2. "Article B" -- b.com' in message
+        assert "Batch Complete  2/2 links" in message
+        assert '1. <a href="https://a.com">Article A</a>' in message
+        assert '2. <a href="https://b.com">Article B</a>' in message
         assert "Total:" in message
         assert "Avg:" in message
 
     def test_format_completion_with_failures(self):
-        """Test completion message shows failed URLs."""
+        """Test completion message shows failed URLs as HTML links."""
         batch = URLBatchStatus.from_urls(["https://good.com", "https://bad.com"])
         batch.mark_complete("https://good.com", title="Good", processing_time_ms=1000)
         batch.mark_failed("https://bad.com", "timeout", "Timeout (30s)", processing_time_ms=30000)
 
         message = BatchProgressFormatter.format_completion_message(batch)
 
-        assert "Batch Complete -- 1/2 links" in message
-        assert '1. "Good" -- good.com' in message
-        assert "2. bad.com -- Failed: Timeout" in message
+        assert "Batch Complete  1/2 links" in message
+        assert '1. <a href="https://good.com">Good</a>' in message
+        assert '2. <a href="https://bad.com">bad.com</a>  Failed: Timeout' in message
 
     def test_format_completion_truncates_long_titles(self):
         """Test that long titles are truncated."""
