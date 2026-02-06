@@ -456,6 +456,13 @@ class URLHandler:
                     await progress_tracker.force_update()
 
                 for attempt in range(URL_MAX_RETRIES + 1):
+                    # Re-check domain fail-fast before each retry: another concurrent URL
+                    # from this domain may have timed out since we started.
+                    if attempt > 0 and url_domain and url_domain in failed_domains:
+                        last_error = f"Skipped (domain {url_domain} timed out)"
+                        error_type = "domain_timeout"
+                        break
+
                     # Calculate timeout with exponential increase per retry
                     current_timeout = min(
                         URL_INITIAL_TIMEOUT_SEC * (1.5**attempt),
@@ -507,6 +514,9 @@ class URLHandler:
                     except TimeoutError:
                         error_type = "timeout"
                         last_error = f"Timeout ({int(current_timeout)}s)"
+                        # Signal other concurrent URLs from this domain to abort early
+                        if url_domain:
+                            failed_domains.add(url_domain)
                         logger.warning(
                             "url_processing_timeout_retry",
                             extra={
@@ -584,14 +594,6 @@ class URLHandler:
                     error_message=last_error,
                     processing_time_ms=processing_time_ms,
                 )
-
-                # Add domain to fail-fast set on timeout exhaustion
-                if error_type == "timeout" and url_domain:
-                    failed_domains.add(url_domain)
-                    logger.info(
-                        "domain_added_to_failfast",
-                        extra={"domain": url_domain, "url": url, "uid": uid},
-                    )
 
                 logger.error(
                     "url_processing_all_retries_exhausted",
