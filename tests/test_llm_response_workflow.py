@@ -33,6 +33,9 @@ class LLMResponseWorkflowTests(unittest.IsolatedAsyncioTestCase):
         self.cfg.openrouter.top_p = 1.0
         self.cfg.openrouter.max_tokens = 4096
         self.cfg.openrouter.structured_output_mode = "json_object"
+        # Mock runtime config timeouts used by semaphore/parsing wrappers
+        self.cfg.runtime.semaphore_acquire_timeout_sec = 30.0
+        self.cfg.runtime.json_parse_timeout_sec = 60.0
 
         self.db = MagicMock()
         self.response_formatter = MagicMock()

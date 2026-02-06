@@ -122,8 +122,14 @@ class TestSummaryWorkflowLoopCancelledError:
         sem_ctx.__aenter__ = AsyncMock(return_value=None)
         sem_ctx.__aexit__ = AsyncMock(return_value=False)
 
+        mock_cfg = MagicMock(
+            openrouter=MagicMock(model="test", structured_output_mode="json_object")
+        )
+        mock_cfg.runtime.semaphore_acquire_timeout_sec = 30.0
+        mock_cfg.runtime.json_parse_timeout_sec = 60.0
+
         wf = LLMResponseWorkflow(
-            cfg=MagicMock(openrouter=MagicMock(model="test", structured_output_mode="json_object")),
+            cfg=mock_cfg,
             db=MagicMock(),
             openrouter=AsyncMock(),
             response_formatter=MagicMock(),

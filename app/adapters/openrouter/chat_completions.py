@@ -154,6 +154,7 @@ async def chat(
                 # Determine response format mode for this model
                 rf_mode_current = builder_rf_mode_original
                 response_format_current = response_format_initial
+                truncation_count = 0  # Track truncations per model
 
                 # Retry logic for each model
                 for attempt in range(self.error_handler._max_retries + 1):
@@ -196,6 +197,25 @@ async def chat(
                             # Handle truncation recovery - increase max_tokens
                             truncation_recovery = result.get("truncation_recovery")
                             if truncation_recovery:
+                                truncation_count += 1
+                                # Fail faster: after 2 truncations, skip to next model
+                                if truncation_count >= 2:
+                                    logger.warning(
+                                        "truncation_limit_reached",
+                                        extra={
+                                            "model": model,
+                                            "count": truncation_count,
+                                            "request_id": request_id,
+                                        },
+                                    )
+                                    last_error_text = "repeated_truncation"
+                                    last_error_context = {
+                                        "status_code": None,
+                                        "message": "Repeated truncation - trying next model",
+                                        "truncation_count": truncation_count,
+                                    }
+                                    break  # Try next model
+
                                 new_max = truncation_recovery.get("suggested_max_tokens")
                                 if new_max and (
                                     not request.max_tokens or new_max > request.max_tokens
@@ -207,6 +227,7 @@ async def chat(
                                             "original_max": request.max_tokens,
                                             "new_max": new_max,
                                             "attempt": attempt + 1,
+                                            "truncation_count": truncation_count,
                                         },
                                     )
                                     # Create new request with increased max_tokens
@@ -553,8 +574,28 @@ async def _handle_successful_response(
     max_tokens: int | None = None,
 ) -> dict[str, Any]:
     """Handle successful API response."""
+    logger.debug(
+        "processing_successful_response",
+        extra={
+            "model": model,
+            "latency_ms": latency,
+            "request_id": request_id,
+            "rf_mode": rf_mode_current,
+            "stage": "entry",
+        },
+    )
+
     # Extract response data
     text, usage, cost_usd = self.response_processor.extract_response_data(data, rf_included)
+
+    logger.debug(
+        "processing_successful_response",
+        extra={
+            "request_id": request_id,
+            "stage": "checking_truncation",
+            "text_len": len(text) if text else 0,
+        },
+    )
 
     # Check for truncation
     truncated, truncated_finish, truncated_native = self.response_processor.is_completion_truncated(
@@ -626,6 +667,14 @@ async def _handle_successful_response(
 
     # Validate structured output if expected
     if rf_included and response_format_current:
+        logger.debug(
+            "processing_successful_response",
+            extra={
+                "request_id": request_id,
+                "stage": "validating_structured_output",
+                "rf_mode": rf_mode_current,
+            },
+        )
         is_valid, processed_text = self.response_processor.validate_structured_response(
             text, rf_included, response_format_current
         )

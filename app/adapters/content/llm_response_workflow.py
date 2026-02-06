@@ -300,16 +300,29 @@ class LLMResponseWorkflow:
         await self._persist_llm_call(llm, req_id, correlation_id)
 
     async def _invoke_llm(self, request: LLMRequestConfig, req_id: int) -> Any:
-        async with self._sem():
-            return await self.openrouter.chat(
-                request.messages,
-                temperature=request.temperature,
-                max_tokens=request.max_tokens,
-                top_p=request.top_p,
-                request_id=req_id,
-                response_format=request.response_format,
-                model_override=request.model_override,
+        timeout_sec = getattr(self.cfg.runtime, "semaphore_acquire_timeout_sec", 30.0)
+        try:
+            async with asyncio.timeout(timeout_sec):
+                async with self._sem():
+                    logger.debug(
+                        "llm_semaphore_acquired",
+                        extra={"req_id": req_id, "model": request.model_override},
+                    )
+                    return await self.openrouter.chat(
+                        request.messages,
+                        temperature=request.temperature,
+                        max_tokens=request.max_tokens,
+                        top_p=request.top_p,
+                        request_id=req_id,
+                        response_format=request.response_format,
+                        model_override=request.model_override,
+                    )
+        except TimeoutError:
+            logger.error(
+                "llm_semaphore_acquire_timeout",
+                extra={"req_id": req_id, "timeout_sec": timeout_sec},
             )
+            raise
 
     async def _process_attempt(
         self,
@@ -364,7 +377,19 @@ class LLMResponseWorkflow:
                 await self.request_repo.async_update_request_status(req_id, "error")
             return None
 
-        parse_result = parse_summary_response(llm.response_json, llm.response_text)
+        json_parse_timeout = getattr(self.cfg.runtime, "json_parse_timeout_sec", 60.0)
+        try:
+            parse_result = await asyncio.wait_for(
+                asyncio.to_thread(parse_summary_response, llm.response_json, llm.response_text),
+                timeout=json_parse_timeout,
+            )
+        except TimeoutError:
+            logger.error(
+                "json_parse_timeout",
+                extra={"cid": correlation_id, "timeout_sec": json_parse_timeout},
+            )
+            self._set_failure_context(llm, "json_parse_timeout")
+            return None
         shaped = parse_result.shaped if parse_result else None
 
         if shaped is None:
@@ -623,16 +648,29 @@ class LLMResponseWorkflow:
 
             repair_messages.append({"role": "user", "content": prompt})
 
-            async with self._sem():
-                repair = await self.openrouter.chat(
-                    repair_messages,
-                    temperature=request_config.temperature,
-                    max_tokens=repair_context.repair_max_tokens,
-                    top_p=request_config.top_p,
-                    request_id=req_id,
-                    response_format=repair_context.repair_response_format,
-                    model_override=request_config.model_override,
+            timeout_sec = getattr(self.cfg.runtime, "semaphore_acquire_timeout_sec", 30.0)
+            try:
+                async with asyncio.timeout(timeout_sec):
+                    async with self._sem():
+                        logger.debug(
+                            "repair_semaphore_acquired",
+                            extra={"req_id": req_id, "cid": correlation_id},
+                        )
+                        repair = await self.openrouter.chat(
+                            repair_messages,
+                            temperature=request_config.temperature,
+                            max_tokens=repair_context.repair_max_tokens,
+                            top_p=request_config.top_p,
+                            request_id=req_id,
+                            response_format=repair_context.repair_response_format,
+                            model_override=request_config.model_override,
+                        )
+            except TimeoutError:
+                logger.error(
+                    "repair_semaphore_acquire_timeout",
+                    extra={"req_id": req_id, "cid": correlation_id, "timeout_sec": timeout_sec},
                 )
+                raise
 
             if repair.status == "ok":
                 repair_result = parse_summary_response(repair.response_json, repair.response_text)

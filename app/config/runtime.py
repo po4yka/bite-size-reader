@@ -37,6 +37,10 @@ class RuntimeConfig(BaseModel):
     telegram_reply_timeout_sec: float = Field(
         default=30.0, validation_alias="TELEGRAM_REPLY_TIMEOUT_SEC"
     )
+    semaphore_acquire_timeout_sec: float = Field(
+        default=30.0, validation_alias="SEMAPHORE_ACQUIRE_TIMEOUT_SEC"
+    )
+    json_parse_timeout_sec: float = Field(default=60.0, validation_alias="JSON_PARSE_TIMEOUT_SEC")
 
     @field_validator("llm_provider", mode="before")
     @classmethod
