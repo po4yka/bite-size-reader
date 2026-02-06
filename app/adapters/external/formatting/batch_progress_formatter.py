@@ -287,6 +287,8 @@ class BatchProgressFormatter:
             if error_message and "after" in error_message.lower():
                 return error_message
             return "Timeout"
+        if error_type == "domain_timeout":
+            return "Skipped (domain timeout)"
         if error_type == "network":
             return "Network error"
         if error_type == "validation":

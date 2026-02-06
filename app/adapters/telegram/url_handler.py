@@ -406,6 +406,10 @@ class URLHandler:
         max_concurrent = max(2, min(URL_MAX_CONCURRENT, len(urls)))
         semaphore = asyncio.Semaphore(max_concurrent)
 
+        # Track domains that exhausted all retries on timeout.
+        # URLs from these domains are skipped immediately.
+        failed_domains: set[str] = set()
+
         async def process_single_url(
             url: str, progress_tracker: ProgressTracker
         ) -> tuple[str, bool, str, str | None]:
@@ -419,6 +423,26 @@ class URLHandler:
                 last_error = ""
                 error_type = "unknown"
                 start_time_ms = time.time() * 1000
+
+                # Resolve domain for fail-fast tracking
+                entry = batch_status._find_entry(url)
+                url_domain = entry.domain if entry else None
+
+                # Domain fail-fast: skip if another URL from this domain already timed out
+                if url_domain and url_domain in failed_domains:
+                    processing_time_ms = time.time() * 1000 - start_time_ms
+                    batch_status.mark_failed(
+                        url,
+                        error_type="domain_timeout",
+                        error_message=f"Skipped (domain {url_domain} timed out)",
+                        processing_time_ms=processing_time_ms,
+                    )
+                    logger.info(
+                        "domain_failfast_skipped",
+                        extra={"url": url, "domain": url_domain, "uid": uid},
+                    )
+                    await progress_tracker.increment_and_update()
+                    return url, False, f"Skipped (domain {url_domain} timed out)", None
 
                 # Mark as processing
                 batch_status.mark_processing(url)
@@ -560,6 +584,14 @@ class URLHandler:
                     error_message=last_error,
                     processing_time_ms=processing_time_ms,
                 )
+
+                # Add domain to fail-fast set on timeout exhaustion
+                if error_type == "timeout" and url_domain:
+                    failed_domains.add(url_domain)
+                    logger.info(
+                        "domain_added_to_failfast",
+                        extra={"domain": url_domain, "url": url, "uid": uid},
+                    )
 
                 logger.error(
                     "url_processing_all_retries_exhausted",
