@@ -13,6 +13,7 @@ from app.adapters.telegram.forward_processor import ForwardProcessor
 from app.adapters.telegram.message_handler import MessageHandler
 from app.adapters.telegram.telegram_client import TelegramClient
 from app.infrastructure.vector.chroma_store import ChromaVectorStore
+from app.services.adaptive_timeout import AdaptiveTimeoutService
 from app.services.chroma_vector_search_service import ChromaVectorSearchService
 from app.services.embedding_service import EmbeddingService
 from app.services.hybrid_search_service import HybridSearchService
@@ -61,6 +62,7 @@ class BotComponents:
     query_expansion_service: QueryExpansionService
     hybrid_search_service: HybridSearchService
     vector_store: ChromaVectorStore
+    adaptive_timeout_service: AdaptiveTimeoutService | None = None
     verbosity_resolver: VerbosityResolver | None = None
     container: Any | None = None
 
@@ -284,6 +286,30 @@ class BotFactory:
         # Wire response formatter to telegram client
         response_formatter._telegram_client = telegram_client
 
+        # Create adaptive timeout service for intelligent timeout estimation
+        adaptive_timeout_service: AdaptiveTimeoutService | None = None
+        if hasattr(cfg, "adaptive_timeout"):
+            try:
+                adaptive_timeout_service = AdaptiveTimeoutService(
+                    config=cfg.adaptive_timeout,
+                    session_manager=db,
+                )
+                logger.info(
+                    "adaptive_timeout_service_initialized",
+                    extra={
+                        "enabled": cfg.adaptive_timeout.enabled,
+                        "default_timeout_sec": cfg.adaptive_timeout.default_timeout_sec,
+                        "min_timeout_sec": cfg.adaptive_timeout.min_timeout_sec,
+                        "max_timeout_sec": cfg.adaptive_timeout.max_timeout_sec,
+                    },
+                )
+            except Exception as e:
+                logger.warning(
+                    "adaptive_timeout_service_init_failed",
+                    extra={"error": str(e)},
+                )
+                adaptive_timeout_service = None
+
         # Create message handler (will be wired with URL processor entrypoint by TelegramBot)
         message_handler = MessageHandler(
             cfg=cfg,
@@ -297,6 +323,7 @@ class BotFactory:
             hybrid_search=hybrid_search_service,
             attachment_processor=attachment_processor,
             verbosity_resolver=verbosity_resolver,
+            adaptive_timeout_service=adaptive_timeout_service,
         )
 
         return BotComponents(
@@ -313,6 +340,7 @@ class BotFactory:
             query_expansion_service=query_expansion_service,
             hybrid_search_service=hybrid_search_service,
             vector_store=vector_store,
+            adaptive_timeout_service=adaptive_timeout_service,
             verbosity_resolver=verbosity_resolver,
             container=container,
         )

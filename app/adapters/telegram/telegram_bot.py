@@ -150,6 +150,23 @@ class TelegramBot:
             name="rate_limiter_cleanup_loop",
         )
 
+        # Warm the adaptive timeout cache with historical data
+        adaptive_timeout = getattr(self._container, "adaptive_timeout_service", None)
+        if adaptive_timeout is None:
+            # Try getting from message handler's url handler
+            url_handler = getattr(self.message_handler, "url_handler", None)
+            if url_handler is not None:
+                adaptive_timeout = getattr(url_handler, "_adaptive_timeout", None)
+        if adaptive_timeout is not None:
+            try:
+                await adaptive_timeout.warm_cache()
+                logger.info("adaptive_timeout_cache_warmed_on_startup")
+            except Exception as e:
+                logger.warning(
+                    "adaptive_timeout_warmup_failed_on_startup",
+                    extra={"error": str(e)},
+                )
+
         # Start background scheduler for periodic tasks (e.g., Karakeep sync)
         await self._scheduler.start()
 

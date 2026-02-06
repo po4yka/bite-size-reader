@@ -22,6 +22,7 @@ if TYPE_CHECKING:
     from app.adapters.telegram.forward_processor import ForwardProcessor
     from app.config import AppConfig
     from app.db.session import DatabaseSessionManager
+    from app.services.adaptive_timeout import AdaptiveTimeoutService
     from app.services.hybrid_search_service import HybridSearchService
     from app.services.topic_search import LocalTopicSearchService, TopicSearchService
 
@@ -44,6 +45,7 @@ class MessageHandler:
         hybrid_search: HybridSearchService | None = None,
         attachment_processor: AttachmentProcessor | None = None,
         verbosity_resolver: Any | None = None,
+        adaptive_timeout_service: AdaptiveTimeoutService | None = None,
     ) -> None:
         self.cfg = cfg
         self.db = db
@@ -62,6 +64,7 @@ class MessageHandler:
             db=db,
             response_formatter=response_formatter,
             url_processor=url_processor,
+            adaptive_timeout_service=adaptive_timeout_service,
         )
         # Expose url_processor for legacy integrations/tests
         self.url_processor = url_processor

@@ -12,6 +12,7 @@ from pydantic import AliasChoices, BaseModel, Field, ValidationError, model_vali
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from ._validators import _parse_allowed_user_ids
+from .adaptive_timeout import AdaptiveTimeoutConfig
 from .api import ApiLimitsConfig, AuthConfig, SyncConfig
 from .background import BackgroundProcessorConfig
 from .circuit_breaker import CircuitBreakerConfig
@@ -50,6 +51,7 @@ class AppConfig:
     karakeep: KarakeepConfig
     circuit_breaker: CircuitBreakerConfig
     web_search: WebSearchConfig
+    adaptive_timeout: AdaptiveTimeoutConfig
 
 
 class Settings(BaseSettings):
@@ -89,6 +91,7 @@ class Settings(BaseSettings):
     circuit_breaker: CircuitBreakerConfig = Field(default_factory=CircuitBreakerConfig)
     web_search: WebSearchConfig = Field(default_factory=WebSearchConfig)
     mcp: McpConfig = Field(default_factory=McpConfig)
+    adaptive_timeout: AdaptiveTimeoutConfig = Field(default_factory=AdaptiveTimeoutConfig)
 
     @model_validator(mode="before")
     @classmethod
@@ -183,6 +186,7 @@ class Settings(BaseSettings):
             karakeep=self.karakeep,
             circuit_breaker=self.circuit_breaker,
             web_search=self.web_search,
+            adaptive_timeout=self.adaptive_timeout,
         )
 
 

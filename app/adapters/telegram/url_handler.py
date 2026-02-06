@@ -7,6 +7,7 @@ import contextlib
 import logging
 import time
 from typing import TYPE_CHECKING, Any
+from urllib.parse import urlparse
 
 from app.adapters.external.formatting import BatchProgressFormatter
 from app.core.logging_utils import generate_correlation_id
@@ -22,17 +23,32 @@ if TYPE_CHECKING:
     from app.adapters.content.url_processor import URLProcessor
     from app.adapters.external.response_formatter import ResponseFormatter
     from app.db.session import DatabaseSessionManager
+    from app.services.adaptive_timeout import AdaptiveTimeoutService
 
 logger = logging.getLogger(__name__)
 
 
-# URL processing configuration
+# URL processing configuration (defaults when adaptive timeout is disabled)
 URL_MAX_CONCURRENT = 4
 URL_MAX_RETRIES = 2  # was 3: fewer retries, each with more time
-URL_INITIAL_TIMEOUT_SEC = 90.0  # was 30.0: covers median Firecrawl+LLM+DB
-URL_MAX_TIMEOUT_SEC = 180.0
+URL_INITIAL_TIMEOUT_SEC = 300.0  # 5 min: allows for slow LLM response generation
+URL_MAX_TIMEOUT_SEC = 600.0  # 10 min: cap for retries with backoff
 URL_BACKOFF_BASE = 3.0  # was 2.0: longer backoff between retries
 URL_BACKOFF_MAX = 60.0
+
+
+def _extract_domain(url: str | None) -> str | None:
+    """Extract domain from URL, normalizing www prefix."""
+    if not url:
+        return None
+    try:
+        parsed = urlparse(url)
+        domain = parsed.netloc or parsed.path.split("/")[0]
+        if domain.startswith("www."):
+            domain = domain[4:]
+        return domain.lower() if domain else None
+    except Exception:
+        return None
 
 
 class URLHandler:
@@ -43,11 +59,13 @@ class URLHandler:
         db: DatabaseSessionManager,
         response_formatter: ResponseFormatter,
         url_processor: URLProcessor,
+        adaptive_timeout_service: AdaptiveTimeoutService | None = None,
     ) -> None:
         self.db = db
         self.user_repo = SqliteUserRepositoryAdapter(db)
         self.response_formatter = response_formatter
         self.url_processor = url_processor
+        self._adaptive_timeout = adaptive_timeout_service
 
         # Lock to protect shared state from concurrent access
         self._state_lock = asyncio.Lock()
@@ -320,6 +338,49 @@ class URLHandler:
         """Check if text is a negative response."""
         return text in {"n", "no", "-", "cancel", "stop", "нет", "не"}
 
+    async def _compute_url_timeout(self, url: str, attempt: int = 0) -> float:
+        """Compute timeout for URL processing, using adaptive timeout if available.
+
+        Args:
+            url: The URL being processed
+            attempt: Current retry attempt (0-indexed)
+
+        Returns:
+            Timeout in seconds, applying exponential backoff for retries
+        """
+        # Get base timeout from adaptive service or use static default
+        if self._adaptive_timeout and self._adaptive_timeout.enabled:
+            try:
+                domain = _extract_domain(url)
+                estimate = await self._adaptive_timeout.get_timeout(url=url, domain=domain)
+                base_timeout = estimate.timeout_sec
+
+                logger.debug(
+                    "adaptive_timeout_selected",
+                    extra={
+                        "url": url,
+                        "domain": domain,
+                        "base_timeout_sec": base_timeout,
+                        "source": estimate.source,
+                        "confidence": estimate.confidence,
+                        "attempt": attempt,
+                    },
+                )
+            except Exception as e:
+                logger.warning(
+                    "adaptive_timeout_error_using_default",
+                    extra={"url": url, "error": str(e)},
+                )
+                base_timeout = URL_INITIAL_TIMEOUT_SEC
+        else:
+            base_timeout = URL_INITIAL_TIMEOUT_SEC
+
+        # Apply exponential backoff for retries (1.5x per attempt)
+        current_timeout = base_timeout * (1.5**attempt)
+
+        # Clamp to max timeout
+        return min(current_timeout, URL_MAX_TIMEOUT_SEC)
+
     async def _apply_url_security_checks(
         self, message: Any, urls: list[str], uid: int
     ) -> list[str]:
@@ -472,11 +533,8 @@ class URLHandler:
                         error_type = "domain_timeout"
                         break
 
-                    # Calculate timeout with exponential increase per retry
-                    current_timeout = min(
-                        URL_INITIAL_TIMEOUT_SEC * (1.5**attempt),
-                        URL_MAX_TIMEOUT_SEC,
-                    )
+                    # Calculate timeout using adaptive service with exponential backoff
+                    current_timeout = await self._compute_url_timeout(url, attempt)
 
                     logger.debug(
                         "processing_link_parallel",

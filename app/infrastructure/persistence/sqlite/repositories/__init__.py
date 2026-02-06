@@ -16,6 +16,10 @@ from app.infrastructure.persistence.sqlite.repositories.crawl_result_repository 
 from app.infrastructure.persistence.sqlite.repositories.embedding_repository import (
     SqliteEmbeddingRepositoryAdapter,
 )
+from app.infrastructure.persistence.sqlite.repositories.latency_stats_repository import (
+    LatencyStats,
+    SqliteLatencyStatsRepositoryAdapter,
+)
 from app.infrastructure.persistence.sqlite.repositories.llm_repository import (
     SqliteLLMRepositoryAdapter,
 )
@@ -36,11 +40,13 @@ from app.infrastructure.persistence.sqlite.repositories.video_download_repositor
 )
 
 __all__ = [
+    "LatencyStats",
     "SqliteAuditLogRepositoryAdapter",
     "SqliteCollectionRepositoryAdapter",
     "SqliteCrawlResultRepositoryAdapter",
     "SqliteEmbeddingRepositoryAdapter",
     "SqliteLLMRepositoryAdapter",
+    "SqliteLatencyStatsRepositoryAdapter",
     "SqliteRequestRepositoryAdapter",
     "SqliteSummaryRepositoryAdapter",
     "SqliteTelegramMessageRepositoryAdapter",

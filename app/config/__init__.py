@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from ._validators import validate_model_name
+from .adaptive_timeout import AdaptiveTimeoutConfig
 from .api import ApiLimitsConfig, AuthConfig, SyncConfig
 from .background import BackgroundProcessorConfig
 from .circuit_breaker import CircuitBreakerConfig
@@ -16,6 +17,7 @@ from .settings import AppConfig, Config, ConfigHelper, Settings, load_config
 from .telegram import TelegramConfig, TelegramLimitsConfig
 
 __all__ = [
+    "AdaptiveTimeoutConfig",
     "AnthropicConfig",
     "ApiLimitsConfig",
     "AppConfig",
