@@ -5,9 +5,14 @@ from __future__ import annotations
 import logging
 import time
 from enum import Enum
-from typing import Any
+from typing import TYPE_CHECKING, Any, TypeVar
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 logger = logging.getLogger(__name__)
+
+T = TypeVar("T")
 
 
 class CircuitState(Enum):
@@ -16,6 +21,10 @@ class CircuitState(Enum):
     CLOSED = "closed"  # Normal operation
     OPEN = "open"  # Failures exceeded threshold, blocking requests
     HALF_OPEN = "half_open"  # Testing if service recovered
+
+
+class CircuitBreakerOpenError(Exception):
+    """Raised when an operation is blocked by an open circuit breaker."""
 
 
 class CircuitBreaker:
@@ -28,22 +37,6 @@ class CircuitBreaker:
     - CLOSED: Normal operation, requests are processed
     - OPEN: Too many failures, requests are blocked
     - HALF_OPEN: Testing recovery, limited requests allowed
-
-    Example:
-        ```python
-        breaker = CircuitBreaker(failure_threshold=10, timeout=60.0)
-
-        if not breaker.can_proceed():
-            logger.warning("Circuit breaker is open, skipping request")
-            return
-
-        try:
-            result = await process_request()
-            breaker.record_success()
-        except Exception:
-            breaker.record_failure()
-            raise
-        ```
     """
 
     def __init__(
@@ -186,3 +179,29 @@ class CircuitBreaker:
             "opened_at": self.opened_at,
             "last_failure_time": self.last_failure_time,
         }
+
+    async def call(self, func: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
+        """Execute a function protected by the circuit breaker.
+
+        Args:
+            func: Async function to execute
+            *args: Positional args for func
+            **kwargs: Keyword args for func
+
+        Returns:
+            Result of func
+
+        Raises:
+            CircuitBreakerOpenError: If circuit is open
+            Exception: If func fails (and failure is recorded)
+        """
+        if not self.can_proceed():
+            raise CircuitBreakerOpenError(f"Circuit breaker is {self.state.value}")
+
+        try:
+            result = await func(*args, **kwargs)
+            self.record_success()
+            return result
+        except Exception:
+            self.record_failure()
+            raise

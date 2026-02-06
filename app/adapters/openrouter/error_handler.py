@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any
 
 from app.core.backoff import sleep_backoff as _sleep_backoff
 from app.models.llm.llm_models import LLMCallResult
+from app.utils.retry_utils import is_retryable_status_code
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -38,8 +39,8 @@ class ErrorHandler:
         if attempt >= self._max_retries:
             return False
 
-        # Retryable errors (429, 5xx)
-        return status_code == 429 or status_code >= 500
+        # Retryable errors (408, 429, 5xx)
+        return is_retryable_status_code(status_code)
 
     def is_non_retryable_error(self, status_code: int) -> bool:
         """Check if error is non-retryable."""

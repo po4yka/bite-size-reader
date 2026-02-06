@@ -4,14 +4,26 @@ This module provides utilities for retrying operations that may fail due to
 transient errors like network issues, rate limits, or temporary API outages.
 """
 
-import asyncio
 import logging
 from collections.abc import Callable
 from typing import Any, TypeVar
 
+from app.core.backoff import sleep_backoff
+
 logger = logging.getLogger(__name__)
 
 T = TypeVar("T")
+
+
+def is_retryable_status_code(status_code: int) -> bool:
+    """Check if an HTTP status code represents a retryable error.
+
+    Retryable codes:
+    - 408: Request Timeout
+    - 429: Too Many Requests
+    - 5xx: Server Errors
+    """
+    return status_code in {408, 429} or status_code >= 500
 
 
 def is_transient_error(error: Exception) -> bool:
@@ -25,10 +37,27 @@ def is_transient_error(error: Exception) -> bool:
 
     Transient errors include:
     - Network-related errors (connection, timeout, DNS)
-    - Rate limiting errors
+    - Rate limiting errors (429)
     - Temporary server errors (5xx)
+    - Timeout errors (408)
     - Message not modified errors (safe to ignore)
     """
+    # Check for HTTP status codes (e.g., httpx.HTTPStatusError, aiohttp.ClientResponseError)
+    if hasattr(error, "response") and hasattr(error.response, "status_code"):
+        try:
+            if is_retryable_status_code(int(error.response.status_code)):
+                return True
+        except (ValueError, TypeError):
+            pass
+
+    # Check for status_code attribute directly (some exceptions like FastAPI HTTPException)
+    if hasattr(error, "status_code"):
+        try:
+            if is_retryable_status_code(int(error.status_code)):
+                return True
+        except (ValueError, TypeError):
+            pass
+
     error_str = str(error).lower()
 
     # Transient error keywords
@@ -46,6 +75,7 @@ def is_transient_error(error: Exception) -> bool:
         "gateway timeout",
         "try again",
         "retry",
+        "deadline exceeded",
     ]
 
     # Check if error message contains transient keywords
@@ -63,6 +93,9 @@ def is_transient_error(error: Exception) -> bool:
         "connectionerror",
         "networkerror",
         "httperror",
+        "serviceunavailable",
+        "gatewaytimeout",
+        "deadlineexceeded",
     ]
 
     return any(exc_type in exception_type for exc_type in transient_types)
@@ -73,7 +106,7 @@ async def retry_with_backoff(
     *args: Any,
     max_retries: int = 3,
     initial_delay: float = 0.5,
-    max_delay: float = 10.0,
+    max_delay: float = 60.0,
     backoff_factor: float = 2.0,
     **kwargs: Any,
 ) -> tuple[Any, bool]:
@@ -84,32 +117,15 @@ async def retry_with_backoff(
         *args: Positional arguments to pass to func
         max_retries: Maximum number of retry attempts (default: 3)
         initial_delay: Initial delay in seconds between retries (default: 0.5)
-        max_delay: Maximum delay in seconds between retries (default: 10.0)
-        backoff_factor: Factor to multiply delay by after each retry (default: 2.0)
+        max_delay: Maximum delay in seconds between retries (default: 60.0)
+        backoff_factor: Deprecated/Ignored. The underlying sleep_backoff uses base 2.
         **kwargs: Keyword arguments to pass to func
 
     Returns:
         Tuple of (result, success):
         - result: The function's return value, or None if all retries failed
         - success: True if function succeeded, False if all retries exhausted
-
-    Example:
-        >>> async def unstable_api_call(url: str) -> dict:
-        ...     # May fail with transient errors
-        ...     return await fetch(url)
-        >>>
-        >>> result, success = await retry_with_backoff(
-        ...     unstable_api_call,
-        ...     "https://api.example.com/data",
-        ...     max_retries=3
-        ... )
-        >>> if success:
-        ...     print(f"Got result: {result}")
-        ... else:
-        ...     print("Failed after all retries")
     """
-    delay = initial_delay
-
     for attempt in range(max_retries + 1):
         try:
             result = await func(*args, **kwargs)
@@ -146,8 +162,6 @@ async def retry_with_backoff(
                 )
                 return None, False
 
-            actual_delay = min(delay, max_delay)
-
             logger.debug(
                 "retrying_after_transient_error",
                 extra={
@@ -155,14 +169,12 @@ async def retry_with_backoff(
                     "error": str(e),
                     "attempt": attempt + 1,
                     "max_retries": max_retries,
-                    "delay_seconds": actual_delay,
+                    "backoff_base": initial_delay,
                 },
             )
 
-            await asyncio.sleep(actual_delay)
-
-            # Increase delay for next attempt (exponential backoff)
-            delay *= backoff_factor
+            # Use centralized backoff with jitter
+            await sleep_backoff(attempt, backoff_base=initial_delay, max_delay=max_delay)
 
     # Should never reach here, but just in case
     return None, False
@@ -192,7 +204,6 @@ async def retry_telegram_operation(
     - max_retries: 3
     - initial_delay: 0.5 seconds
     - max_delay: 5.0 seconds
-    - backoff_factor: 2.0
     """
     logger.debug(
         "attempting_telegram_operation",
@@ -205,7 +216,6 @@ async def retry_telegram_operation(
         max_retries=3,
         initial_delay=0.5,
         max_delay=5.0,
-        backoff_factor=2.0,
         **kwargs,
     )
 

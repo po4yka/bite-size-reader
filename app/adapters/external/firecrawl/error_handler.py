@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING, Any
 
 from app.adapters.external.firecrawl.models import FirecrawlSearchResult
 from app.core.backoff import sleep_backoff as _sleep_backoff
+from app.utils.retry_utils import is_retryable_status_code
 
 if TYPE_CHECKING:
     import json
@@ -70,11 +71,8 @@ class ErrorHandler:
         """
         if attempt >= self._max_retries:
             return False
-        # Retry on rate limit or server errors
-        if status_code == 429 or status_code >= 500:
-            return True
-        # Retry on timeout errors (HTTP 408 Request Timeout)
-        if status_code == 408:
+        # Retry on standard retryable status codes (408, 429, 5xx)
+        if is_retryable_status_code(status_code):
             return True
         # Retry if error text indicates a timeout
         if error_text:
@@ -123,6 +121,7 @@ class ErrorHandler:
                 return delay, False
             return None, False
 
+        # Server errors (5xx) - toggle mobile/pdf
         if resp.status_code >= 500:
             if attempt < self._max_retries:
                 delay = self._backoff_base * (2**attempt)
