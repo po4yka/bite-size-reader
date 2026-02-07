@@ -129,6 +129,13 @@ class ContentExtractor:
                 markdown=crawl.content_markdown,
                 error=crawl.error_text,
                 metadata_json=crawl.metadata_json,
+                source_url=crawl.source_url,
+                http_status=crawl.http_status,
+                status=crawl.status,
+                endpoint=crawl.endpoint,
+                latency_ms=crawl.latency_ms,
+                correlation_id=crawl.correlation_id,
+                options_json=crawl.options_json,
             )
         except Exception as e:  # noqa: BLE001
             raise_if_cancelled(e)

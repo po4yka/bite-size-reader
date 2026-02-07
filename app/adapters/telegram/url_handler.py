@@ -669,7 +669,9 @@ class URLHandler:
 
                         if not done:
                             # Timeout -- raise to enter existing TimeoutError handler
-                            raise TimeoutError(f"Timeout ({int(current_timeout)}s)")
+                            raise TimeoutError(
+                                f"Timed out after {int(current_timeout)}s (ID: {per_link_cid[:8]})"
+                            )
 
                         if cancel_task is not None and cancel_task in done:
                             # Sibling reached failure threshold on this domain -- abort
@@ -710,7 +712,9 @@ class URLHandler:
 
                     except TimeoutError:
                         error_type = "timeout"
-                        last_error = f"Timeout ({int(current_timeout)}s)"
+                        last_error = (
+                            f"Timed out after {int(current_timeout)}s (ID: {per_link_cid[:8]})"
+                        )
                         logger.warning(
                             "url_processing_timeout_retry",
                             extra={

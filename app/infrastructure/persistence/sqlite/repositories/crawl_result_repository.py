@@ -27,22 +27,32 @@ class SqliteCrawlResultRepositoryAdapter(SqliteBaseRepository):
         markdown: str | None = None,
         error: str | None = None,
         metadata_json: dict[str, Any] | None = None,
+        *,
+        source_url: str | None = None,
+        http_status: int | None = None,
+        status: str | None = None,
+        endpoint: str | None = None,
+        latency_ms: int | None = None,
+        correlation_id: str | None = None,
+        options_json: dict[str, Any] | None = None,
     ) -> int:
         """Insert a crawl result."""
 
         def _insert() -> int:
             try:
-                # We map the simplified protocol arguments to the database model
-                # Note: Many fields present in database.py are not in the protocol signature
-                # We default them or extract from metadata if needed
                 result = CrawlResult.create(
                     request=request_id,
                     firecrawl_success=success,
                     content_markdown=markdown,
                     error_text=error,
                     metadata_json=prepare_json_payload(metadata_json, default={}),
-                    # Set defaults for fields required by schema but missing from protocol
-                    # (Assuming Peewee model handles defaults or nullable fields correctly)
+                    source_url=source_url,
+                    http_status=http_status,
+                    status=status,
+                    endpoint=endpoint,
+                    latency_ms=latency_ms,
+                    correlation_id=correlation_id,
+                    options_json=prepare_json_payload(options_json, default=None),
                 )
                 return result.id
             except peewee.IntegrityError:

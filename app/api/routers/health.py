@@ -45,12 +45,19 @@ async def _check_database() -> dict[str, Any]:
         )
         size_bytes = cursor.fetchone()[0] if cursor else 0
 
-        return {
+        # Run quick integrity check
+        integrity_ok, integrity_result = db.check_integrity()
+
+        result: dict[str, Any] = {
             "status": "healthy",
             "latency_ms": round(latency_ms, 2),
             "size_bytes": size_bytes,
             "size_mb": round(size_bytes / (1024 * 1024), 2) if size_bytes else 0,
+            "integrity_ok": integrity_ok,
         }
+        if not integrity_ok:
+            result["integrity_detail"] = integrity_result
+        return result
     except Exception as exc:
         latency_ms = (time.perf_counter() - start) * 1000
         logger.debug(

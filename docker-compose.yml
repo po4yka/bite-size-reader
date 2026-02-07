@@ -26,10 +26,10 @@ services:
       resources:
         limits:
           memory: 1G
-          cpus: "0.50"
+          cpus: "0.75"
         reservations:
           memory: 512M
-          cpus: "0.25"
+          cpus: "0.50"
     healthcheck:
       test: ["CMD", "python", "-c", "import sqlite3, os; conn = sqlite3.connect(os.getenv('DB_PATH', '/data/app.db'), timeout=5); conn.execute('SELECT 1').fetchone(); conn.close()"]
       interval: 30s

@@ -406,10 +406,23 @@ class MessageRouter:
                         "audit_error_type": type(audit_error).__name__,
                     },
                 )
-            await self.response_formatter.safe_reply(
-                message,
-                f"An unexpected error occurred. Error ID: {correlation_id}. Please try again.",
-            )
+            # Classify the error for a more helpful user-facing message
+            error_lower = str(e).lower()
+            short_id = correlation_id[:8]
+            if "timeout" in error_lower or isinstance(e, TimeoutError):
+                user_error_msg = (
+                    f"Request timed out (ID: {short_id}). "
+                    "The article may be too large or the service is slow. Please try again."
+                )
+            elif "rate limit" in error_lower or "429" in str(e):
+                user_error_msg = f"Service is busy (ID: {short_id}). Please retry in a few minutes."
+            elif "connection" in error_lower or "network" in error_lower:
+                user_error_msg = (
+                    f"Network error (ID: {short_id}). Please check your connection and retry."
+                )
+            else:
+                user_error_msg = f"An unexpected error occurred (ID: {short_id}). Please try again."
+            await self.response_formatter.safe_reply(message, user_error_msg)
             if interaction_id:
                 await async_safe_update_user_interaction(
                     self.user_repo,

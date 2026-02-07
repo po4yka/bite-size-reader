@@ -268,18 +268,25 @@ async def chat(
                             return result["error_result"]
 
                     except httpx.TimeoutException as e:
-                        # Handle timeout specifically
+                        # Handle timeout -- skip directly to next model
+                        # instead of burning retries on the same slow model
                         last_error_text = f"Request timeout: {e!s}"
                         last_error_context = {
                             "status_code": None,
                             "message": "Request timeout",
                             "api_error": str(e),
+                            "timeout": True,
                         }
-                        # Timeout should be retried if within retry limits
-                        if attempt < self.error_handler._max_retries:
-                            await self.error_handler.sleep_backoff(attempt)
-                            continue
-                        break  # Try next model
+                        logger.warning(
+                            "timeout_fallback_to_next_model",
+                            extra={
+                                "model": model,
+                                "attempt": attempt,
+                                "request_id": request_id,
+                                "error": str(e),
+                            },
+                        )
+                        break  # Try next model immediately
                     except httpx.ConnectError as e:
                         # Handle connection errors specifically
                         last_error_text = f"Connection error: {e!s}"
@@ -541,8 +548,13 @@ async def _attempt_request(
             "success": False,
             "error_text": "Request timeout",
             "latency": latency,
-            "should_retry": attempt < self.error_handler._max_retries,
-            "backoff_needed": True,
+            "model_reported": model,
+            "error_context": {
+                "status_code": None,
+                "message": "Request timeout",
+                "timeout": True,
+            },
+            "should_try_next_model": True,
         }
     except Exception as e:
         raise_if_cancelled(e)
@@ -900,8 +912,8 @@ async def _handle_error_response(
             ),
         }
 
-    # 404: Try next model if available
-    if self.error_handler.should_try_next_model(status_code):
+    # 404 / 408 / 504 / timeout text: Try next model if available
+    if self.error_handler.should_try_next_model(status_code, error_message):
         # Handle structured output parameter errors
         api_error_lower = (
             str(error_context.get("api_error", "")).lower()

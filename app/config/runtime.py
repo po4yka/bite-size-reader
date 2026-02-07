@@ -17,7 +17,7 @@ class RuntimeConfig(BaseModel):
     preferred_lang: str = Field(default="auto", validation_alias="PREFERRED_LANG")
     debug_payloads: bool = Field(default=False, validation_alias="DEBUG_PAYLOADS")
     enable_textacy: bool = Field(default=False, validation_alias="TEXTACY_ENABLED")
-    enable_chunking: bool = Field(default=False, validation_alias="CHUNKING_ENABLED")
+    enable_chunking: bool = Field(default=True, validation_alias="CHUNKING_ENABLED")
     chunk_max_chars: int = Field(default=200000, validation_alias="CHUNK_MAX_CHARS")
     log_truncate_length: int = Field(default=1000, validation_alias="LOG_TRUNCATE_LENGTH")
     topic_search_max_results: int = Field(default=5, validation_alias="TOPIC_SEARCH_MAX_RESULTS")
@@ -41,10 +41,14 @@ class RuntimeConfig(BaseModel):
         default=30.0, validation_alias="SEMAPHORE_ACQUIRE_TIMEOUT_SEC"
     )
     llm_call_timeout_sec: float = Field(default=180.0, validation_alias="LLM_CALL_TIMEOUT_SEC")
+    llm_call_max_retries: int = Field(default=2, validation_alias="LLM_CALL_MAX_RETRIES")
     json_parse_timeout_sec: float = Field(default=60.0, validation_alias="JSON_PARSE_TIMEOUT_SEC")
     summary_two_pass_enabled: bool = Field(
         default=False, validation_alias="SUMMARY_TWO_PASS_ENABLED"
     )
+    rate_limit_max_requests: int = Field(default=10, validation_alias="RATE_LIMIT_MAX_REQUESTS")
+    rate_limit_window_seconds: int = Field(default=60, validation_alias="RATE_LIMIT_WINDOW_SECONDS")
+    rate_limit_max_concurrent: int = Field(default=3, validation_alias="RATE_LIMIT_MAX_CONCURRENT")
 
     @field_validator("llm_provider", mode="before")
     @classmethod
@@ -196,6 +200,19 @@ class RuntimeConfig(BaseModel):
             raise ValueError(msg)
         return trimmed
 
+    @field_validator("llm_call_max_retries", mode="before")
+    @classmethod
+    def _validate_llm_call_max_retries(cls, value: Any) -> int:
+        try:
+            parsed = int(str(value or 2))
+        except ValueError as exc:
+            msg = "LLM call max retries must be a valid integer"
+            raise ValueError(msg) from exc
+        if parsed < 0 or parsed > 5:
+            msg = "LLM call max retries must be between 0 and 5"
+            raise ValueError(msg)
+        return parsed
+
     @field_validator("max_concurrent_calls", mode="before")
     @classmethod
     def _validate_max_concurrent_calls(cls, value: Any) -> int:
@@ -206,6 +223,45 @@ class RuntimeConfig(BaseModel):
             raise ValueError(msg) from exc
         if parsed < 1 or parsed > 100:
             msg = "Max concurrent calls must be between 1 and 100"
+            raise ValueError(msg)
+        return parsed
+
+    @field_validator("rate_limit_max_requests", mode="before")
+    @classmethod
+    def _validate_rate_limit_max_requests(cls, value: Any) -> int:
+        try:
+            parsed = int(str(value if value not in (None, "") else 10))
+        except ValueError as exc:
+            msg = "Rate limit max requests must be a valid integer"
+            raise ValueError(msg) from exc
+        if parsed < 1 or parsed > 100:
+            msg = "Rate limit max requests must be between 1 and 100"
+            raise ValueError(msg)
+        return parsed
+
+    @field_validator("rate_limit_window_seconds", mode="before")
+    @classmethod
+    def _validate_rate_limit_window_seconds(cls, value: Any) -> int:
+        try:
+            parsed = int(str(value if value not in (None, "") else 60))
+        except ValueError as exc:
+            msg = "Rate limit window seconds must be a valid integer"
+            raise ValueError(msg) from exc
+        if parsed < 10 or parsed > 3600:
+            msg = "Rate limit window seconds must be between 10 and 3600"
+            raise ValueError(msg)
+        return parsed
+
+    @field_validator("rate_limit_max_concurrent", mode="before")
+    @classmethod
+    def _validate_rate_limit_max_concurrent(cls, value: Any) -> int:
+        try:
+            parsed = int(str(value if value not in (None, "") else 3))
+        except ValueError as exc:
+            msg = "Rate limit max concurrent must be a valid integer"
+            raise ValueError(msg) from exc
+        if parsed < 1 or parsed > 20:
+            msg = "Rate limit max concurrent must be between 1 and 20"
             raise ValueError(msg)
         return parsed
 

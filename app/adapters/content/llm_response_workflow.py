@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Any
 from pydantic import BaseModel, ConfigDict
 
 from app.core.async_utils import raise_if_cancelled
+from app.core.backoff import sleep_backoff
 from app.core.json_utils import extract_json
 from app.core.summary_contract import validate_and_shape_summary
 from app.db.user_interactions import async_safe_update_user_interaction
@@ -116,6 +117,7 @@ class LLMResponseWorkflow:
         audit_func: Callable[[str, str, dict[str, Any]], None],
         sem: Callable[[], Any],
         db_write_queue: DbWriteQueue | None = None,
+        adaptive_timeout_service: Any | None = None,
     ) -> None:
         """Initialize the workflow.
 
@@ -129,6 +131,10 @@ class LLMResponseWorkflow:
             db_write_queue: Optional background write queue for cancellation-safe
                 DB persistence.  When provided, ``_persist_llm_call`` enqueues
                 writes instead of awaiting them directly.
+            adaptive_timeout_service: Optional adaptive timeout service.  When
+                provided, ``_invoke_llm`` queries ``get_llm_timeout()`` to
+                dynamically size LLM call timeouts from historical latency data
+                instead of using the fixed ``llm_call_timeout_sec``.
 
         """
         self.cfg = cfg
@@ -138,6 +144,7 @@ class LLMResponseWorkflow:
         self._audit = audit_func
         self._sem = sem
         self._db_write_queue = db_write_queue
+        self._adaptive_timeout = adaptive_timeout_service
         self.summary_repo = SqliteSummaryRepositoryAdapter(db)
         self.request_repo = SqliteRequestRepositoryAdapter(db)
         self.llm_repo = SqliteLLMRepositoryAdapter(db)
@@ -314,50 +321,103 @@ class LLMResponseWorkflow:
         """Public helper to persist an LLM call."""
         await self._persist_llm_call(llm, req_id, correlation_id)
 
+    async def _resolve_llm_timeout(self, model: str | None) -> tuple[float, str]:
+        """Determine the LLM call timeout, preferring the adaptive service.
+
+        Returns:
+            (timeout_sec, source) where source is "adaptive" or "fixed".
+        """
+        fixed_timeout = float(getattr(self.cfg.runtime, "llm_call_timeout_sec", 180.0))
+
+        if self._adaptive_timeout is not None:
+            try:
+                adaptive_val = await self._adaptive_timeout.get_llm_timeout(model=model)
+                if adaptive_val and adaptive_val > 0:
+                    return float(adaptive_val), "adaptive"
+            except Exception as exc:
+                logger.warning(
+                    "adaptive_timeout_lookup_failed",
+                    extra={"model": model, "error": str(exc)},
+                )
+
+        return fixed_timeout, "fixed"
+
     async def _invoke_llm(self, request: LLMRequestConfig, req_id: int) -> Any:
         sem_timeout = getattr(self.cfg.runtime, "semaphore_acquire_timeout_sec", 30.0)
-        llm_timeout = getattr(self.cfg.runtime, "llm_call_timeout_sec", 180.0)
+        llm_timeout, timeout_source = await self._resolve_llm_timeout(request.model_override)
+        max_retries = getattr(self.cfg.runtime, "llm_call_max_retries", 2)
 
-        # Phase 1: Acquire semaphore with short timeout
-        sem_cm = self._sem()
-        try:
-            async with asyncio.timeout(sem_timeout):
-                await sem_cm.__aenter__()
-        except TimeoutError:
-            logger.error(
-                "llm_semaphore_acquire_timeout",
-                extra={"req_id": req_id, "timeout_sec": sem_timeout},
-            )
-            raise
+        logger.debug(
+            "llm_timeout_resolved",
+            extra={
+                "req_id": req_id,
+                "model": request.model_override,
+                "llm_timeout_sec": llm_timeout,
+                "timeout_source": timeout_source,
+            },
+        )
 
-        # Phase 2: LLM call with longer timeout, semaphore held
-        try:
-            logger.debug(
-                "llm_semaphore_acquired",
-                extra={"req_id": req_id, "model": request.model_override},
-            )
-            async with asyncio.timeout(llm_timeout):
-                return await self.openrouter.chat(
-                    request.messages,
-                    temperature=request.temperature,
-                    max_tokens=request.max_tokens,
-                    top_p=request.top_p,
-                    request_id=req_id,
-                    response_format=request.response_format,
-                    model_override=request.model_override,
+        for attempt in range(max_retries + 1):
+            # Phase 1: Acquire semaphore with short timeout
+            sem_cm = self._sem()
+            try:
+                async with asyncio.timeout(sem_timeout):
+                    await sem_cm.__aenter__()
+            except TimeoutError:
+                logger.error(
+                    "llm_semaphore_acquire_timeout",
+                    extra={"req_id": req_id, "timeout_sec": sem_timeout, "attempt": attempt},
                 )
-        except TimeoutError:
-            logger.error(
-                "llm_call_timeout",
-                extra={
-                    "req_id": req_id,
-                    "llm_timeout_sec": llm_timeout,
-                    "model": request.model_override,
-                },
-            )
-            raise
-        finally:
-            await sem_cm.__aexit__(None, None, None)
+                raise
+
+            # Phase 2: LLM call with longer timeout, semaphore held
+            try:
+                logger.debug(
+                    "llm_semaphore_acquired",
+                    extra={"req_id": req_id, "model": request.model_override},
+                )
+                async with asyncio.timeout(llm_timeout):
+                    return await self.openrouter.chat(
+                        request.messages,
+                        temperature=request.temperature,
+                        max_tokens=request.max_tokens,
+                        top_p=request.top_p,
+                        request_id=req_id,
+                        response_format=request.response_format,
+                        model_override=request.model_override,
+                    )
+            except TimeoutError:
+                if attempt < max_retries:
+                    logger.warning(
+                        "llm_call_timeout_retrying",
+                        extra={
+                            "req_id": req_id,
+                            "llm_timeout_sec": llm_timeout,
+                            "timeout_source": timeout_source,
+                            "model": request.model_override,
+                            "attempt": attempt + 1,
+                            "max_retries": max_retries,
+                        },
+                    )
+                    await sleep_backoff(attempt, backoff_base=2.0, max_delay=30.0)
+                    continue
+                logger.error(
+                    "llm_call_timeout",
+                    extra={
+                        "req_id": req_id,
+                        "llm_timeout_sec": llm_timeout,
+                        "timeout_source": timeout_source,
+                        "model": request.model_override,
+                        "attempts_exhausted": max_retries + 1,
+                    },
+                )
+                raise
+            finally:
+                await sem_cm.__aexit__(None, None, None)
+
+        # Unreachable, but satisfies type checker
+        msg = "LLM invoke loop exited unexpectedly"
+        raise RuntimeError(msg)
 
     async def _process_attempt(
         self,

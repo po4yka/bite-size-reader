@@ -427,6 +427,30 @@ class DatabaseSessionManager:
             conn.backup(dest_conn)
             dest_conn.commit()
 
+            # Verify backup integrity with quick_check
+            try:
+                cursor = dest_conn.execute("PRAGMA quick_check")
+                row = cursor.fetchone()
+                backup_check = row[0] if row else "unknown"
+                backup_ok = backup_check == "ok"
+            except sqlite3.DatabaseError as check_err:
+                backup_ok = False
+                backup_check = str(check_err)
+
+            if backup_ok:
+                self._logger.info(
+                    "db_backup_integrity_verified",
+                    extra={"dest": self._mask_path(str(destination))},
+                )
+            else:
+                self._logger.warning(
+                    "db_backup_integrity_failed",
+                    extra={
+                        "dest": self._mask_path(str(destination)),
+                        "quick_check_result": backup_check,
+                    },
+                )
+
         self._logger.info(
             "db_backup_copy_created",
             extra={
@@ -435,6 +459,35 @@ class DatabaseSessionManager:
             },
         )
         return destination
+
+    def check_integrity(self) -> tuple[bool, str]:
+        """Run a fast integrity check on the database.
+
+        Uses ``PRAGMA quick_check`` which is significantly faster than a full
+        ``integrity_check`` -- suitable for frequent health-check calls.
+
+        Returns:
+            A tuple of ``(is_ok, result_text)`` where *is_ok* is True when the
+            database reports no issues.
+        """
+        try:
+            with self._database.connection_context():
+                cursor = self._database.execute_sql("PRAGMA quick_check")
+                row = cursor.fetchone()
+                result = row[0] if row else "unknown"
+                is_ok = result == "ok"
+                if not is_ok:
+                    self._logger.warning(
+                        "db_quick_check_issue",
+                        extra={"result": result, "path": self._mask_path(self.path)},
+                    )
+                return is_ok, str(result)
+        except (peewee.DatabaseError, sqlite3.DatabaseError) as exc:
+            self._logger.error(
+                "db_quick_check_failed",
+                extra={"error": str(exc), "path": self._mask_path(self.path)},
+            )
+            return False, str(exc)
 
     def get_database_overview(self) -> dict[str, Any]:
         """Return diagnostic overview of database tables and counts."""

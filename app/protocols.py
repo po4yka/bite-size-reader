@@ -147,6 +147,14 @@ class CrawlResultRepository(Protocol):
         markdown: str | None = None,
         error: str | None = None,
         metadata_json: dict[str, Any] | None = None,
+        *,
+        source_url: str | None = None,
+        http_status: int | None = None,
+        status: str | None = None,
+        endpoint: str | None = None,
+        latency_ms: int | None = None,
+        correlation_id: str | None = None,
+        options_json: dict[str, Any] | None = None,
     ) -> int:
         """Insert a crawl result.
 

@@ -37,6 +37,7 @@ class LLMResponseWorkflowTests(unittest.IsolatedAsyncioTestCase):
         # Mock runtime config timeouts used by semaphore/parsing wrappers
         self.cfg.runtime.semaphore_acquire_timeout_sec = 30.0
         self.cfg.runtime.llm_call_timeout_sec = 180.0
+        self.cfg.runtime.llm_call_max_retries = 2
         self.cfg.runtime.json_parse_timeout_sec = 60.0
 
         self.db = MagicMock()
@@ -328,6 +329,7 @@ class LLMResponseWorkflowTests(unittest.IsolatedAsyncioTestCase):
         """LLM call timeout fires even when semaphore is acquired quickly."""
         self.cfg.runtime.llm_call_timeout_sec = 0.05  # 50ms
         self.cfg.runtime.semaphore_acquire_timeout_sec = 30.0
+        self.cfg.runtime.llm_call_max_retries = 0  # No retries for this test
 
         # Recreate workflow with updated config
         self.workflow = LLMResponseWorkflow(

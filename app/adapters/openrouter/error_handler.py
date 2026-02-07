@@ -46,9 +46,24 @@ class ErrorHandler:
         """Check if error is non-retryable."""
         return status_code in (400, 401, 402, 403)
 
-    def should_try_next_model(self, status_code: int) -> bool:
-        """Determine if we should try the next model in fallback list."""
-        return status_code == 404
+    def should_try_next_model(
+        self,
+        status_code: int,
+        error_text: str | None = None,
+    ) -> bool:
+        """Determine if we should try the next model in fallback list.
+
+        Triggers model fallback for:
+        - 404: Model not found / no endpoints
+        - 408: Request timeout (server-side)
+        - 504: Gateway timeout (upstream provider slow)
+        - Any error whose text contains "timeout" (case-insensitive)
+        """
+        if status_code in (404, 408, 504):
+            return True
+        if error_text and "timeout" in error_text.lower():
+            return True
+        return False
 
     async def handle_rate_limit(self, response_headers: Any) -> None:
         """Handle rate limiting with proper delay."""
