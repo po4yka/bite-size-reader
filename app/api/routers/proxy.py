@@ -15,6 +15,8 @@ from app.core.logging_utils import get_logger, log_exception
 logger = get_logger(__name__)
 router = APIRouter()
 
+_MAX_PROXY_RESPONSE_BYTES = 10 * 1024 * 1024  # 10 MB
+
 # Private/internal IP ranges that should be blocked to prevent SSRF
 BLOCKED_NETWORKS = [
     ip_network("10.0.0.0/8"),  # Private Class A
@@ -35,6 +37,20 @@ BLOCKED_NETWORKS = [
     ip_network("fc00::/7"),  # IPv6 private
     ip_network("fe80::/10"),  # IPv6 link-local
 ]
+
+
+async def _limited_stream(response: httpx.Response, max_bytes: int):
+    """Wrap an httpx streaming response with a cumulative size limit."""
+    total = 0
+    async for chunk in response.aiter_bytes():
+        total += len(chunk)
+        if total > max_bytes:
+            logger.warning(
+                "proxy_response_size_exceeded",
+                extra={"total_bytes": total, "max_bytes": max_bytes},
+            )
+            break
+        yield chunk
 
 
 def _resolve_host_ips(hostname: str) -> list[str]:
@@ -138,7 +154,7 @@ async def proxy_image(url: str = Query(..., description="URL of the image to pro
                 raise HTTPException(status_code=400, detail="URL does not point to an image")
 
             return StreamingResponse(
-                resp.aiter_bytes(),
+                _limited_stream(resp, _MAX_PROXY_RESPONSE_BYTES),
                 media_type=content_type,
                 headers={
                     "Cache-Control": "public, max-age=86400",  # Cache for 1 day

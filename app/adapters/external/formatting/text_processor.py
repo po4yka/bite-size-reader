@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import html
+import logging
 import re
 import unicodedata
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from app.adapters.external.formatting.response_sender import ResponseSenderImpl
@@ -81,6 +84,7 @@ class TextProcessorImpl:
         try:
             s = unicodedata.normalize("NFC", text)
         except Exception:
+            logger.debug("unicode_normalization_failed", exc_info=True)
             s = text
         # Remove control and non-printable chars
         s = "".join(ch for ch in s if unicodedata.category(ch)[0] != "C")

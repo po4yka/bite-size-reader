@@ -120,7 +120,13 @@ async def test_summary_persistence_deferred_from_llm_flow() -> None:
 
     # Create workflow with a mock db - the actual db won't be used since we override repos
     workflow = LLMResponseWorkflow(
-        cfg=SimpleNamespace(openrouter=SimpleNamespace(model="test-model")),
+        cfg=SimpleNamespace(
+            openrouter=SimpleNamespace(model="test-model"),
+            runtime=SimpleNamespace(
+                semaphore_acquire_timeout_sec=30.0,
+                llm_call_timeout_sec=180.0,
+            ),
+        ),
         db=SimpleNamespace(),  # type: ignore[arg-type]  # Mock db, won't be used
         openrouter=None,
         response_formatter=None,

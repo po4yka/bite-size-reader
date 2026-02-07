@@ -113,7 +113,7 @@ class LLMSummarizer:
             db_write_queue=db_write_queue,
         )
         self._cache = RedisCache(cfg)
-        self._prompt_version = getattr(cfg.runtime, "summary_prompt_version", "v1")
+        self._prompt_version = cfg.runtime.summary_prompt_version
         self._semantic_helper = LLMSemanticHelper()
         self._cache_helper = LLMSummaryCache(
             cache=self._cache,
@@ -470,7 +470,7 @@ class LLMSummarizer:
         )
 
         # Two-pass enrichment: merge enrichment fields into core summary
-        if summary and getattr(self.cfg.runtime, "summary_two_pass_enabled", False):
+        if summary and self.cfg.runtime.summary_two_pass_enabled:
             summary = await self._enrich_summary_two_pass(
                 summary, content_for_summary, chosen_lang, correlation_id
             )

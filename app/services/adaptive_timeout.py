@@ -134,6 +134,7 @@ def _extract_domain(url: str | None) -> str | None:
             domain = domain[4:]
         return domain.lower() if domain else None
     except Exception:
+        logger.debug("adaptive_timeout_domain_extraction_failed", exc_info=True)
         return None
 
 

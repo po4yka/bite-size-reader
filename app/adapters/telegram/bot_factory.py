@@ -200,8 +200,8 @@ class BotFactory:
                 environment=cfg.vector_store.environment,
                 user_scope=cfg.vector_store.user_scope,
                 collection_version=cfg.vector_store.collection_version,
-                required=getattr(cfg.vector_store, "required", False),
-                connection_timeout=getattr(cfg.vector_store, "connection_timeout", 10.0),
+                required=cfg.vector_store.required,
+                connection_timeout=cfg.vector_store.connection_timeout,
             )
             if not vector_store.available:
                 logger.warning(
@@ -258,7 +258,7 @@ class BotFactory:
 
         # Optional hexagonal architecture container
         container = None
-        if getattr(cfg.runtime, "enable_hex_container", False):
+        if cfg.runtime.enable_hex_container:
             from app.di.container import Container
 
             container = Container(
@@ -288,7 +288,7 @@ class BotFactory:
 
         # Create adaptive timeout service for intelligent timeout estimation
         adaptive_timeout_service: AdaptiveTimeoutService | None = None
-        if hasattr(cfg, "adaptive_timeout"):
+        if cfg.adaptive_timeout is not None:
             try:
                 adaptive_timeout_service = AdaptiveTimeoutService(
                     config=cfg.adaptive_timeout,
@@ -359,8 +359,7 @@ class BotFactory:
     @staticmethod
     def _get_topic_search_limit(cfg: AppConfig) -> int:
         """Return a sanitized topic search limit from runtime config."""
-        runtime = getattr(cfg, "runtime", None)
-        raw_value = getattr(runtime, "topic_search_max_results", DEFAULT_TOPIC_SEARCH_MAX_RESULTS)
+        raw_value = cfg.runtime.topic_search_max_results
 
         try:
             limit = int(raw_value)

@@ -326,6 +326,7 @@ class SummaryPresenterImpl:
                 try:
                     return int(k.split("_", 1)[1])
                 except Exception:
+                    logger.debug("sort_key_extraction_failed", exc_info=True)
                     return 0
 
             for key in sorted(summary_fields, key=_key_num):
@@ -496,6 +497,7 @@ class SummaryPresenterImpl:
                             conf_val = float(confidence)
                             fact_lines.append(f"• <i>Confidence:</i> <code>{conf_val:.0%}</code>")
                         except Exception:
+                            logger.debug("confidence_score_conversion_failed", exc_info=True)
                             fact_lines.append(
                                 f"• <i>Confidence:</i> <code>{html.escape(str(confidence))}</code>"
                             )
@@ -568,7 +570,7 @@ class SummaryPresenterImpl:
 
         except Exception as exc:  # pragma: no cover - defensive
             raise_if_cancelled(exc)
-            logger.error("insights_message_error", extra={"error": str(exc)})
+            logger.error("insights_message_error", extra={"error": str(exc), "cid": correlation_id})
 
     async def send_custom_article(self, message: Any, article: dict[str, Any]) -> None:
         """Send the custom generated article with a nice header and downloadable JSON."""
@@ -747,6 +749,7 @@ class SummaryPresenterImpl:
                 try:
                     return int(k.split("_", 1)[1])
                 except Exception:
+                    logger.debug("sort_key_extraction_failed", exc_info=True)
                     return 0
 
             for key in sorted(summary_fields, key=_key_num_f):

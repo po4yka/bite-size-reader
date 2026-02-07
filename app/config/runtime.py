@@ -105,6 +105,26 @@ class RuntimeConfig(BaseModel):
             raise ValueError(msg)
         return parsed
 
+    @field_validator(
+        "telegram_reply_timeout_sec",
+        "semaphore_acquire_timeout_sec",
+        "llm_call_timeout_sec",
+        "json_parse_timeout_sec",
+        mode="before",
+    )
+    @classmethod
+    def _validate_timeout_float(cls, value: Any, info: ValidationInfo) -> float:
+        default = cls.model_fields[info.field_name].default
+        try:
+            parsed = float(str(value if value not in (None, "") else default))
+        except (ValueError, TypeError) as exc:
+            msg = f"{info.field_name} must be a valid number"
+            raise ValueError(msg) from exc
+        if parsed < 0.1 or parsed > 3600.0:
+            msg = f"{info.field_name} must be between 0.1 and 3600 seconds, got {parsed}"
+            raise ValueError(msg)
+        return parsed
+
     @field_validator("topic_search_max_results", mode="before")
     @classmethod
     def _validate_topic_search_limit(cls, value: Any) -> int:

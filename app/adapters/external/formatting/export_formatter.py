@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import html
 import logging
+import os
 import tempfile
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
@@ -122,8 +123,16 @@ class ExportFormatter:
                 delete=False,
                 encoding="utf-8",
             )
-            fd.write(content)
-            fd.close()
+            try:
+                fd.write(content)
+                fd.close()
+            except Exception:
+                fd.close()
+                try:
+                    os.unlink(fd.name)
+                except OSError:
+                    pass
+                raise
 
             logger.info(
                 "export_markdown_generated",
@@ -154,8 +163,16 @@ class ExportFormatter:
                 delete=False,
                 encoding="utf-8",
             )
-            fd.write(content)
-            fd.close()
+            try:
+                fd.write(content)
+                fd.close()
+            except Exception:
+                fd.close()
+                try:
+                    os.unlink(fd.name)
+                except OSError:
+                    pass
+                raise
 
             logger.info(
                 "export_html_generated",
@@ -191,7 +208,14 @@ class ExportFormatter:
                 )
                 pdf_file.close()
 
-                HTML(string=html_content).write_pdf(pdf_file.name)
+                try:
+                    HTML(string=html_content).write_pdf(pdf_file.name)
+                except Exception:
+                    try:
+                        os.unlink(pdf_file.name)
+                    except OSError:
+                        pass
+                    raise
 
                 logger.info(
                     "export_pdf_generated_weasyprint",
@@ -218,8 +242,16 @@ class ExportFormatter:
                     delete=False,
                     encoding="utf-8",
                 )
-                fd.write(html_content_with_note)
-                fd.close()
+                try:
+                    fd.write(html_content_with_note)
+                    fd.close()
+                except Exception:
+                    fd.close()
+                    try:
+                        os.unlink(fd.name)
+                    except OSError:
+                        pass
+                    raise
 
                 # Change extension to indicate it's not a real PDF
                 html_filename = filename.replace(".pdf", ".html")

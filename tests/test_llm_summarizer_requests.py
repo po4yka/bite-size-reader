@@ -36,7 +36,7 @@ class LLMSummarizerRequestTests(unittest.IsolatedAsyncioTestCase):
                 require_parameters=True,
                 auto_fallback_structured=True,
             ),
-            runtime=SimpleNamespace(summary_prompt_version="v1"),
+            runtime=SimpleNamespace(summary_prompt_version="v1", summary_two_pass_enabled=False),
             web_search=SimpleNamespace(enabled=False),
             redis=SimpleNamespace(
                 enabled=False,

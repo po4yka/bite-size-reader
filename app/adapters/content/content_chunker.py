@@ -191,8 +191,15 @@ class ContentChunker:
                     raise_if_cancelled(exc)
             return None
 
+        _chunk_concurrency = getattr(self.cfg.runtime, "max_concurrent_calls", 4)
+        _chunk_sem = asyncio.Semaphore(_chunk_concurrency)
+
+        async def _bounded_process(idx: int, chunk: str) -> dict[str, Any] | None:
+            async with _chunk_sem:
+                return await _process_chunk(idx, chunk)
+
         tasks = [
-            asyncio.create_task(_process_chunk(idx, chunk))
+            asyncio.create_task(_bounded_process(idx, chunk))
             for idx, chunk in enumerate(chunks, start=1)
         ]
         results = await asyncio.gather(*tasks, return_exceptions=True)

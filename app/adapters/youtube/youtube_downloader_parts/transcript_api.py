@@ -4,10 +4,14 @@ import asyncio
 import logging
 from typing import TYPE_CHECKING, Any, cast
 
+from app.core.backoff import sleep_backoff
+
 if TYPE_CHECKING:
     from collections.abc import Callable
 
 logger = logging.getLogger(__name__)
+
+_TRANSCRIPT_MAX_RETRIES = 3
 
 
 def format_transcript(
@@ -51,7 +55,7 @@ async def extract_transcript_via_api(
     last_error: Exception | None = None
     logger_ = log or logger
 
-    for attempt in range(2):
+    for attempt in range(_TRANSCRIPT_MAX_RETRIES):
         try:
             transcript_list = await asyncio.wait_for(
                 asyncio.to_thread(
@@ -166,8 +170,8 @@ async def extract_transcript_via_api(
                     "cid": correlation_id,
                 },
             )
-            if attempt == 0:
-                await asyncio.sleep(1)
+            if attempt < _TRANSCRIPT_MAX_RETRIES - 1:
+                await sleep_backoff(attempt, backoff_base=1.0, max_delay=10.0)
                 continue
             return "", "en", False, "youtube-transcript-api"
 

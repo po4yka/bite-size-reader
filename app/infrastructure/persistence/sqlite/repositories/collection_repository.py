@@ -350,19 +350,21 @@ class SqliteCollectionRepositoryAdapter(SqliteBaseRepository):
                 return
             summary_ids = [item["summary_id"] for item in item_positions]
             existing = {
-                row.summary_id: row
-                for row in CollectionItem.select().where(
+                row.summary_id
+                for row in CollectionItem.select(CollectionItem.summary_id).where(
                     (CollectionItem.collection == collection)
                     & (CollectionItem.summary_id.in_(summary_ids))
                 )
             }
-            for item in item_positions:
-                row = existing.get(item["summary_id"])
-                if row:
-                    row.position = item["position"]
-                    row.save()
-            collection.updated_at = _now()
-            collection.save()
+            with self._session.database.atomic():
+                for item in item_positions:
+                    if item["summary_id"] in existing:
+                        CollectionItem.update(position=item["position"]).where(
+                            (CollectionItem.collection == collection)
+                            & (CollectionItem.summary_id == item["summary_id"])
+                        ).execute()
+                collection.updated_at = _now()
+                collection.save()
 
         await self._execute(_reorder, operation_name="reorder_collection_items")
 
@@ -673,8 +675,8 @@ class SqliteCollectionRepositoryAdapter(SqliteBaseRepository):
         def _reorder() -> None:
             ids = [item["collection_id"] for item in item_positions]
             existing = {
-                col.id: col
-                for col in Collection.select().where(
+                col.id
+                for col in Collection.select(Collection.id).where(
                     (Collection.id.in_(ids))
                     & (~Collection.is_deleted)
                     & (
@@ -684,11 +686,12 @@ class SqliteCollectionRepositoryAdapter(SqliteBaseRepository):
                     )
                 )
             }
-            for item in item_positions:
-                col = existing.get(item["collection_id"])
-                if col:
-                    col.position = item["position"]
-                    col.save()
+            with self._session.database.atomic():
+                for item in item_positions:
+                    if item["collection_id"] in existing:
+                        Collection.update(position=item["position"]).where(
+                            Collection.id == item["collection_id"]
+                        ).execute()
 
         await self._execute(_reorder, operation_name="reorder_collections")
 

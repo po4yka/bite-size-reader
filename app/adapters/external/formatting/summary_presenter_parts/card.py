@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import html
+import logging
 import re
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 
 def truncate_plain_text(text: str, max_len: int) -> str:
@@ -27,6 +30,7 @@ def extract_domain_from_url(url: str) -> str | None:
         host = (parsed.netloc or "").strip()
         return host or None
     except Exception:
+        logger.debug("domain_extraction_failed", exc_info=True)
         return None
 
 
@@ -81,6 +85,7 @@ def build_compact_card_html(
             if reading_time_val > 0:
                 reading_time_str = f"~{reading_time_val} min"
     except Exception:
+        logger.debug("reading_time_conversion_failed", exc_info=True)
         reading_time_str = ""
 
     display_title = truncate_plain_text(title or domain or "Article", 180)

@@ -2,12 +2,14 @@
 FastAPI authentication dependencies.
 """
 
+import logging
 from typing import Any
 
 try:
     from fastapi import Depends
     from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 except Exception:  # pragma: no cover - fallback for environments without compatible FastAPI
+    logging.getLogger(__name__).debug("fastapi_security_import_failed", exc_info=True)
 
     class HTTPAuthorizationCredentials:  # type: ignore[no-redef]
         ...

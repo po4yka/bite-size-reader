@@ -315,7 +315,9 @@ class ContentExtractor:
             )
         except Exception as e:  # noqa: BLE001
             raise_if_cancelled(e)
-            logger.error("persist_lang_detected_error", extra={"error": str(e)})
+            logger.error(
+                "persist_lang_detected_error", extra={"error": str(e), "cid": correlation_id}
+            )
 
         return req_id, content_text, content_source, detected
 

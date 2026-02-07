@@ -22,7 +22,7 @@ class RedisCache:
         self.cfg = cfg
         self._client = None
         self._lock = asyncio.Lock()
-        timeout = getattr(cfg.redis, "cache_timeout_sec", 0.3) or 0.3
+        timeout = cfg.redis.cache_timeout_sec or 0.3
         self._timeout = max(0.05, float(timeout))
 
     @property

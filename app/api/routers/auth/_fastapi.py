@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any, TypeVar
+
+logger = logging.getLogger(__name__)
 
 TFn = TypeVar("TFn", bound=Callable[..., Any])
 
@@ -11,6 +14,7 @@ else:
     try:
         from fastapi import APIRouter, Depends
     except Exception:  # pragma: no cover - fallback for environments without compatible FastAPI
+        logger.debug("fastapi_import_failed", exc_info=True)
 
         class APIRouter:
             def __init__(self, *_: Any, **__: Any) -> None:

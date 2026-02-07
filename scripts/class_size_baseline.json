@@ -1,5 +1,5 @@
 {
-  "app/adapters/content/content_extractor.py::ContentExtractor": 1110,
-  "app/adapters/content/llm_response_workflow.py::LLMResponseWorkflow": 1010,
+  "app/adapters/content/content_extractor.py::ContentExtractor": 1115,
+  "app/adapters/content/llm_response_workflow.py::LLMResponseWorkflow": 1020,
   "app/db/database.py::Database": 1150
 }

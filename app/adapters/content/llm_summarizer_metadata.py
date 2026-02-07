@@ -454,4 +454,5 @@ class LLMSummaryMetadataHelper:
             netloc = netloc.removeprefix("www.")
             return netloc or None
         except Exception:
+            logger.debug("domain_extraction_failed", exc_info=True)
             return None

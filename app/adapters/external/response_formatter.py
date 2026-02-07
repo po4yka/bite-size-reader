@@ -18,6 +18,7 @@ the original API signatures for backward compatibility.
 
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING, Any
 
 from app.adapters.external.formatting.data_formatter import DataFormatterImpl
@@ -33,6 +34,8 @@ if TYPE_CHECKING:
 
     from app.core.verbosity import VerbosityResolver
     from app.services.topic_search import TopicArticle
+
+logger = logging.getLogger(__name__)
 
 
 class ResponseFormatter:
@@ -141,6 +144,7 @@ class ResponseFormatter:
 
             return (await self._verbosity_resolver.get_verbosity(message)) == VerbosityLevel.READER
         except Exception:
+            logger.debug("verbosity_level_import_failed", exc_info=True)
             return False
 
     def __setattr__(self, name: str, value: Any) -> None:

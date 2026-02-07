@@ -56,5 +56,6 @@ def create_inline_keyboard(summary_id: int | str) -> Any:
         logger.debug("pyrogram_not_available_for_action_buttons")
         return None
     except Exception as exc:
+        # TODO(po4yka): pass correlation_id for traceability
         logger.warning("create_action_buttons_failed", extra={"error": str(exc)})
         return None
