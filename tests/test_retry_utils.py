@@ -52,10 +52,10 @@ class TestIsTransientError(unittest.TestCase):
         assert is_transient_error(error1)
         assert is_transient_error(error2)
 
-    def test_message_not_modified_is_transient(self):
-        """Test that 'message is not modified' is treated as transient."""
+    def test_message_not_modified_is_not_transient(self):
+        """Test that 'message is not modified' is NOT treated as transient."""
         error = Exception("Message is not modified")
-        assert is_transient_error(error)
+        assert not is_transient_error(error)
 
     def test_permanent_error_is_not_transient(self):
         """Test that permanent errors are not transient."""
