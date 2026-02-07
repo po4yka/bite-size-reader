@@ -3,18 +3,21 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 import time
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-import httpx
+if TYPE_CHECKING:
+    from collections.abc import Awaitable, Callable
 
+from app.adapters.external.formatting import BatchProgressFormatter
 from app.core.async_utils import raise_if_cancelled
 from app.core.logging_utils import generate_correlation_id
+from app.core.url_utils import compute_dedupe_hash, normalize_url
 from app.db.user_interactions import async_safe_update_user_interaction
+from app.models.batch_processing import URLBatchStatus
 from app.security.file_validation import FileValidationError
-from app.utils.circuit_breaker import CircuitBreaker
-from app.utils.message_formatter import create_progress_bar, format_progress_message
 from app.utils.progress_tracker import ProgressTracker
 
 logger = logging.getLogger(__name__)
@@ -114,24 +117,30 @@ async def handle_document_file(
         except Exception as exc:
             raise_if_cancelled(exc)
         # Create a dedicated progress message that we will edit in-place
+        # We use a simple placeholder first, then process_url_batch will update it with BatchProgressFormatter
         progress_message_id = await router.response_formatter.safe_reply_with_id(
             message,
-            f"🔄 Processing links: 0/{len(urls)}\n{create_progress_bar(0, len(urls))}",
+            f"🔄 Preparing to process {len(urls)} links...",
         )
         logger.debug(
             "document_file_processing_started",
             extra={"url_count": len(urls)},
         )
 
-        # Process URLs with optimized parallel processing and memory management
-        await process_urls_sequentially(
-            router,
-            message,
-            urls,
-            correlation_id,
-            interaction_id,
-            start_time,
-            progress_message_id,
+        # Process URLs with optimized parallel processing and detailed status tracking
+        uid = message.from_user.id if message.from_user else 0
+        await process_url_batch(
+            message=message,
+            urls=urls,
+            uid=uid,
+            correlation_id=correlation_id,
+            url_processor=router._url_processor,
+            response_formatter=router.response_formatter,
+            request_repo=router.url_handler.request_repo,
+            user_repo=router.user_repo,
+            interaction_id=interaction_id,
+            start_time=start_time,
+            initial_message_id=progress_message_id,
         )
 
         # Ensure we do not hit rate limiter after the last progress edit
@@ -271,491 +280,369 @@ def parse_txt_file(router: Any, file_path: str) -> list[str]:
     return urls
 
 
-async def process_urls_sequentially(
-    router: Any,
+async def process_url_batch(
     message: Any,
     urls: list[str],
+    uid: int,
     correlation_id: str,
-    interaction_id: int,
-    start_time: float,
-    progress_message_id: int | None = None,
+    url_processor: Any,  # URLProcessor
+    response_formatter: Any,  # ResponseFormatter
+    request_repo: Any,  # SqliteRequestRepositoryAdapter
+    user_repo: Any,  # SqliteUserRepositoryAdapter
+    interaction_id: int | None = None,
+    start_time: float | None = None,
+    initial_message_id: int | None = None,
+    max_concurrent: int = 4,
+    max_retries: int = 2,
+    compute_timeout_func: Callable[[str, int], Awaitable[float]] | None = None,
 ) -> None:
-    """Process URLs with optimized parallel processing and batch progress updates."""
-    total = len(urls)
-    semaphore = asyncio.Semaphore(min(5, total))
+    """Process multiple URLs in parallel with controlled concurrency and detailed status tracking.
 
-    failure_threshold = min(10, max(3, total // 3))
-    circuit_breaker = CircuitBreaker(
-        failure_threshold=failure_threshold,
-        timeout=60.0,
-        success_threshold=3,
-    )
+    This unified implementation handles both .txt file processing and multi-link text messages.
+    """
+    if not urls:
+        return
 
-    async def process_single_url(
-        url: str, progress_tracker: ProgressTracker, max_retries: int = 3
-    ) -> tuple[str, bool, str]:
-        """Process a single URL with retry logic and return (url, success, error_message)."""
+    # Initialize batch status tracker
+    batch_status = URLBatchStatus.from_urls(urls)
 
-        async with semaphore:
-            if not circuit_breaker.can_proceed():
-                error_msg = "Circuit breaker open - service unavailable"
-                logger.warning(
-                    "circuit_breaker_blocked_request",
-                    extra={
-                        "url": url,
-                        "breaker_stats": circuit_breaker.get_stats(),
-                    },
-                )
-                breaker_result: tuple[str, bool, str] = (url, False, error_msg)
-                try:
-                    return breaker_result
-                finally:
-                    await progress_tracker.increment_and_update()
+    # Get chat_id from message
+    chat_id = getattr(message.chat, "id", None)
 
-            per_link_cid = generate_correlation_id()
-            logger.info(
-                "processing_url_from_file",
-                extra={"url": url, "cid": per_link_cid},
+    # Pre-register all URLs before processing starts
+    # This ensures ALL URLs get database records even if processing fails early
+    url_to_request_id: dict[str, int] = {}
+    for url in urls:
+        try:
+            normalized = normalize_url(url)
+            dedupe_hash = compute_dedupe_hash(url)
+            request_id, is_new = await request_repo.async_create_minimal_request(
+                type_="url",
+                status="pending",
+                correlation_id=generate_correlation_id(),
+                chat_id=chat_id,
+                user_id=uid,
+                input_url=url,
+                normalized_url=normalized,
+                dedupe_hash=dedupe_hash,
+            )
+            url_to_request_id[url] = request_id
+            logger.debug(
+                "pre_registered_batch_url",
+                extra={
+                    "url": url,
+                    "request_id": request_id,
+                    "is_new": is_new,
+                    "uid": uid,
+                },
+            )
+        except Exception as e:
+            # Log but don't fail the whole batch if pre-registration fails
+            logger.warning(
+                "batch_url_pre_registration_failed",
+                extra={"url": url, "error": str(e), "uid": uid},
             )
 
-            final_result: tuple[str, bool, str] | None = None
+    # Use semaphore to limit concurrent processing
+    semaphore = asyncio.Semaphore(max_concurrent)
 
+    # Track domains that exhausted all retries on timeout
+    failed_domains: set[str] = set()
+    # Count failures per domain for threshold-based fail-fast
+    domain_failure_counts: dict[str, int] = {}
+    domain_events: dict[str, asyncio.Event] = {}
+    domain_failfast_threshold = 2
+
+    def _get_domain_event(domain: str) -> asyncio.Event:
+        if domain not in domain_events:
+            domain_events[domain] = asyncio.Event()
+        return domain_events[domain]
+
+    async def _update_request_error(
+        url: str,
+        status: str,
+        error_type: str,
+        error_message: str,
+        processing_time_ms: float,
+    ) -> None:
+        """Update pre-registered request with error info."""
+        request_id = url_to_request_id.get(url)
+        if request_id:
             try:
-                for attempt in range(1, max_retries + 1):
-                    try:
-                        result = await asyncio.wait_for(
-                            process_url_silently(
-                                router, message, url, per_link_cid, interaction_id
-                            ),
-                            timeout=600,
-                        )
+                await request_repo.async_update_request_error(
+                    request_id=request_id,
+                    status=status,
+                    error_type=error_type,
+                    error_message=error_message[:500] if error_message else None,
+                    processing_time_ms=int(processing_time_ms),
+                )
+            except Exception as e:
+                logger.warning(
+                    "failed_to_update_request_error",
+                    extra={"url": url, "request_id": request_id, "error": str(e)},
+                )
 
-                        if result.success:
-                            logger.debug(
-                                "process_single_url_success",
-                                extra={
-                                    "url": url,
-                                    "cid": per_link_cid,
-                                    "attempt": attempt,
-                                    "processing_time_ms": result.processing_time_ms,
-                                },
-                            )
-                            circuit_breaker.record_success()
-                            return (url, True, "")
+    async def process_single_url(
+        url: str, progress_tracker: ProgressTracker
+    ) -> tuple[str, bool, str, str | None]:
+        """Process a single URL with retry and exponential backoff."""
+        async with semaphore:
+            per_link_cid = generate_correlation_id()
+            last_error = ""
+            error_type = "unknown"
+            start_time_ms = time.time() * 1000
 
-                        if not result.retry_possible or attempt >= max_retries:
-                            logger.debug(
-                                "process_single_url_failure_final",
-                                extra={
-                                    "url": url,
-                                    "cid": per_link_cid,
-                                    "attempt": attempt,
-                                    "error_type": result.error_type,
-                                    "retry_possible": result.retry_possible,
-                                },
-                            )
-                            circuit_breaker.record_failure()
-                            error_msg = result.error_message or "URL processing failed"
-                            return (url, False, error_msg)
+            # Resolve domain for fail-fast tracking
+            entry = batch_status._find_entry(url)
+            url_domain = entry.domain if entry else None
 
-                        wait_time = 2 ** (attempt - 1)
-                        logger.info(
-                            "retrying_url_processing",
-                            extra={
-                                "url": url,
-                                "cid": per_link_cid,
-                                "attempt": attempt,
-                                "max_retries": max_retries,
-                                "wait_time": wait_time,
-                                "error_type": result.error_type,
-                            },
-                        )
-                        await asyncio.sleep(wait_time)
+            # Domain fail-fast
+            if url_domain and url_domain in failed_domains:
+                processing_time_ms = time.time() * 1000 - start_time_ms
+                skip_error = f"Skipped (domain {url_domain} timed out)"
+                batch_status.mark_failed(
+                    url,
+                    error_type="domain_timeout",
+                    error_message=skip_error,
+                    processing_time_ms=processing_time_ms,
+                )
+                await _update_request_error(
+                    url, "skipped", "domain_timeout", skip_error, processing_time_ms
+                )
+                logger.info(
+                    "domain_failfast_skipped",
+                    extra={"url": url, "domain": url_domain, "uid": uid},
+                )
+                await progress_tracker.increment_and_update()
+                return url, False, skip_error, None
 
-                    except TimeoutError:
-                        error_msg = f"Timeout after 10 minutes (attempt {attempt}/{max_retries})"
-                        logger.error(
-                            "url_processing_timeout",
-                            extra={"url": url, "cid": per_link_cid, "attempt": attempt},
-                        )
+            # Mark as processing
+            batch_status.mark_processing(url)
 
-                        if attempt < max_retries:
-                            wait_time = 2 ** (attempt - 1)
-                            logger.info(
-                                "retrying_after_timeout",
-                                extra={"url": url, "wait_time": wait_time},
-                            )
-                            await asyncio.sleep(wait_time)
-                            continue
-                        circuit_breaker.record_failure()
-                        return (url, False, error_msg)
+            async def phase_callback(phase: str) -> None:
+                """Update batch status when URL processing phase changes."""
+                if phase == "extracting":
+                    batch_status.mark_extracting(url)
+                elif phase == "analyzing":
+                    batch_status.mark_analyzing(url)
+                elif phase == "retrying":
+                    batch_status.mark_retrying(url)
+                await progress_tracker.force_update()
 
-                    except Exception as exc:
-                        error_msg = f"{type(exc).__name__}: {exc!s}"
-                        logger.error(
-                            "url_processing_exception",
-                            extra={
-                                "url": url,
-                                "cid": per_link_cid,
-                                "attempt": attempt,
-                                "error_type": type(exc).__name__,
-                            },
-                        )
+            for attempt in range(max_retries + 1):
+                if attempt > 0 and url_domain and url_domain in failed_domains:
+                    last_error = f"Skipped (domain {url_domain} timed out)"
+                    error_type = "domain_timeout"
+                    break
 
-                        circuit_breaker.record_failure()
-                        return (url, False, error_msg)
+                # Calculate timeout
+                if compute_timeout_func:
+                    current_timeout = await compute_timeout_func(url, attempt)
+                else:
+                    # Default timeout with backoff
+                    current_timeout = min(450.0 * (1.5**attempt), 900.0)
 
-                error_msg = f"Processing failed after {max_retries} attempts"
-                circuit_breaker.record_failure()
-                return (url, False, error_msg)
-
-            except asyncio.CancelledError:
-                raise
-
-            finally:
-                if final_result is not None:
-                    await progress_tracker.increment_and_update()
-
-    async def progress_formatter(current: int, total_count: int, msg_id: int | None) -> int | None:
-        return await send_progress_update(router, message, current, total_count, msg_id)
-
-    progress_tracker = ProgressTracker(
-        total=total,
-        progress_formatter=progress_formatter,
-        initial_message_id=progress_message_id,
-        small_batch_threshold=10,
-    )
-
-    batch_size = min(5, total)
-
-    async def process_batches():
-        """Process URL batches with progress tracking."""
-        from app.models.batch_processing import FailedURLDetail
-
-        batch_successful = 0
-        batch_failed = 0
-        batch_failed_urls: list[FailedURLDetail] = []
-
-        for batch_start in range(0, total, batch_size):
-            batch_end = min(batch_start + batch_size, total)
-            batch_urls = urls[batch_start:batch_end]
-
-            batch_tasks = [process_single_url(url, progress_tracker) for url in batch_urls]
-
-            batch_results = await asyncio.gather(*batch_tasks, return_exceptions=True)
-
-            for result in batch_results:
                 logger.debug(
-                    "batch_result_debug",
+                    "processing_link_parallel",
                     extra={
-                        "result_type": type(result).__name__,
-                        "result_value": (
-                            str(result)[:200] if not isinstance(result, Exception) else str(result)
-                        ),
-                        "is_tuple": isinstance(result, tuple),
-                        "tuple_len": len(result) if isinstance(result, tuple) else 0,
-                        "cid": correlation_id,
+                        "uid": uid,
+                        "url": url,
+                        "cid": per_link_cid,
+                        "attempt": attempt + 1,
+                        "timeout_sec": current_timeout,
                     },
                 )
 
-                if isinstance(result, Exception):
-                    if isinstance(result, asyncio.CancelledError):
-                        raise result
-                    batch_failed += 1
-                    logger.error(
-                        "unexpected_task_exception",
-                        extra={"error": str(result), "cid": correlation_id},
-                    )
-                    batch_failed_urls.append(
-                        FailedURLDetail(
-                            url="Unknown URL",
-                            error_type=type(result).__name__,
-                            error_message=str(result),
-                            retry_recommended=False,
-                            attempts=1,
+                try:
+                    processing_task = asyncio.create_task(
+                        url_processor.handle_url_flow(
+                            message,
+                            url,
+                            correlation_id=per_link_cid,
+                            batch_mode=True,
+                            on_phase_change=phase_callback,
                         )
                     )
-                elif isinstance(result, tuple) and len(result) == 3:
-                    url, success, error_msg = result
-                    if success:
-                        batch_successful += 1
+
+                    tasks_to_race: set[asyncio.Task] = {processing_task}
+                    cancel_task: asyncio.Task | None = None
+                    if url_domain:
+                        cancel_task = asyncio.create_task(_get_domain_event(url_domain).wait())
+                        tasks_to_race.add(cancel_task)
+
+                    try:
+                        done, pending = await asyncio.wait(
+                            tasks_to_race,
+                            timeout=current_timeout,
+                            return_when=asyncio.FIRST_COMPLETED,
+                        )
+                    except asyncio.CancelledError:
+                        processing_task.cancel()
+                        if cancel_task is not None:
+                            cancel_task.cancel()
+                        for t in (processing_task, cancel_task):
+                            if t is not None:
+                                with contextlib.suppress(asyncio.CancelledError, Exception):
+                                    await t
+                        raise
+
+                    for t in pending:
+                        t.cancel()
+                    for t in pending:
+                        with contextlib.suppress(asyncio.CancelledError, Exception):
+                            await t
+
+                    if not done:
+                        raise TimeoutError(
+                            f"Timed out after {int(current_timeout)}s (ID: {per_link_cid[:8]})"
+                        )
+
+                    if cancel_task is not None and cancel_task in done:
+                        last_error = f"Skipped (domain {url_domain} timed out)"
+                        error_type = "domain_timeout"
+                        break
+
+                    result = processing_task.result()
+                    processing_time_ms = time.time() * 1000 - start_time_ms
+                    title = None
+                    if result and hasattr(result, "title"):
+                        title = result.title
+
+                    batch_status.mark_complete(
+                        url, title=title, processing_time_ms=processing_time_ms
+                    )
+                    await progress_tracker.increment_and_update()
+                    return url, True, "", title
+
+                except TimeoutError:
+                    error_type = "timeout"
+                    last_error = f"Timed out after {int(current_timeout)}s (ID: {per_link_cid[:8]})"
+                    if attempt < max_retries:
+                        backoff = min(3.0 * (2**attempt), 60.0)
+                        await asyncio.sleep(backoff)
+                        continue
+
+                    if url_domain:
+                        domain_failure_counts[url_domain] = (
+                            domain_failure_counts.get(url_domain, 0) + 1
+                        )
+                        if domain_failure_counts[url_domain] >= domain_failfast_threshold:
+                            failed_domains.add(url_domain)
+                            _get_domain_event(url_domain).set()
+
+                except Exception as e:
+                    last_error = str(e)
+                    transient_keywords = [
+                        "timeout",
+                        "connection",
+                        "network",
+                        "rate limit",
+                        "503",
+                        "502",
+                        "429",
+                    ]
+                    is_transient = any(kw in last_error.lower() for kw in transient_keywords)
+
+                    if "timeout" in last_error.lower():
+                        error_type = "timeout"
+                    elif "connection" in last_error.lower() or "network" in last_error.lower():
+                        error_type = "network"
+                    elif "429" in last_error or "rate limit" in last_error.lower():
+                        error_type = "rate_limit"
                     else:
-                        batch_failed += 1
-                        error_type = "unknown"
-                        retry_recommended = False
-                        if "timeout" in error_msg.lower():
-                            error_type = "timeout"
-                            retry_recommended = True
-                        elif "circuit breaker" in error_msg.lower():
-                            error_type = "circuit_breaker"
-                            retry_recommended = True
-                        elif "network" in error_msg.lower():
-                            error_type = "network"
-                            retry_recommended = True
-                        elif "validation" in error_msg.lower():
-                            error_type = "validation"
-                            retry_recommended = False
-                        elif "service_unavailable" in error_msg.lower():
-                            error_type = "service_unavailable"
-                            retry_recommended = True
+                        error_type = "error"
 
-                        batch_failed_urls.append(
-                            FailedURLDetail(
-                                url=url,
-                                error_type=error_type,
-                                error_message=error_msg,
-                                retry_recommended=retry_recommended,
-                                attempts=1,
-                            )
-                        )
+                    if is_transient and attempt < max_retries:
+                        backoff = min(3.0 * (2**attempt), 60.0)
+                        await asyncio.sleep(backoff)
+                        continue
+                    break
 
-            if batch_start + batch_size < total:
-                delay = 0.3 if total > 10 else 0.2
-                await asyncio.sleep(delay)
+            processing_time_ms = time.time() * 1000 - start_time_ms
+            batch_status.mark_failed(
+                url,
+                error_type=error_type,
+                error_message=last_error,
+                processing_time_ms=processing_time_ms,
+            )
+            await _update_request_error(url, "error", error_type, last_error, processing_time_ms)
+            await progress_tracker.increment_and_update()
+            return url, False, last_error, None
 
-        return batch_successful, batch_failed, batch_failed_urls
+    # Create progress tracker with batch-aware formatter
+    async def progress_formatter(current: int, total_count: int, msg_id: int | None) -> int | None:
+        try:
+            progress_text = BatchProgressFormatter.format_progress_message(batch_status)
+            chat_id = getattr(message.chat, "id", None)
+            if chat_id and msg_id:
+                edit_success = await response_formatter.edit_message(
+                    chat_id, msg_id, progress_text, parse_mode="HTML"
+                )
+                if edit_success:
+                    return msg_id
+            return msg_id
+        except Exception:
+            return msg_id
 
-    if total == 0:
-        return
+    # If initial_message_id is not provided, send the initial message
+    if initial_message_id is None:
+        try:
+            initial_text = BatchProgressFormatter.format_progress_message(batch_status)
+            initial_message_id = await response_formatter.safe_reply_with_id(
+                message, initial_text, parse_mode="HTML"
+            )
+        except Exception:
+            initial_message_id = None
 
-    max_batch_time = max(600, total * 60)
-    try:
-        successful, failed, failed_urls = await asyncio.wait_for(
-            process_batches(), timeout=max_batch_time
-        )
-    except TimeoutError:
-        logger.error("batch_processing_timeout", extra={"total": total, "cid": correlation_id})
-        await router.response_formatter.safe_reply(
-            message,
-            f"❌ Batch processing timed out after {max_batch_time // 60} minutes. "
-            "Some URLs may not have been processed.",
-        )
-        return
-
-    completed = successful + failed
-
-    if completed < total:
-        logger.warning(
-            "batch_processing_incomplete",
-            extra={
-                "expected_total": total,
-                "actual_completed": completed,
-                "successful": successful,
-                "failed": failed,
-                "cid": correlation_id,
-            },
-        )
-        await router.response_formatter.safe_reply(
-            message,
-            f"⚠️ Processing incomplete: {completed}/{total} URLs processed. "
-            f"{total - completed} URLs may have been skipped.",
-        )
-
-    if failed_urls:
-        from app.models.batch_processing import FailedURLDetail
-
-        failed_summary = ", ".join([f.url for f in failed_urls[:5]])
-        if len(failed_urls) > 5:
-            failed_summary += f" and {len(failed_urls) - 5} more"
-
-        failed_detail = "\n".join(
-            [
-                f"• {f.url} ({f.error_type})"
-                for f in failed_urls[:5]
-                if isinstance(f, FailedURLDetail)
-            ]
-        )
-        if len(failed_urls) > 5:
-            failed_detail += f"\n... and {len(failed_urls) - 5} more"
-
-        await router.response_formatter.safe_reply(
-            message,
-            "❌ Some URLs failed to process:\n"
-            f"{failed_detail}\n\n"
-            "You can retry these URLs individually.",
-        )
-
-    if completed != total:
-        logger.error(
-            "batch_processing_count_mismatch",
-            extra={
-                "expected_total": total,
-                "actual_completed": completed,
-                "successful": successful,
-                "failed": len(failed_urls),
-            },
-        )
-        await router.response_formatter.safe_reply(
-            message,
-            f"⚠️ Processing completed with count mismatch. Expected {total}, processed {completed}.",
-        )
-
-    logger.info(
-        "batch_processing_complete",
-        extra={
-            "total": total,
-            "completed": completed,
-            "successful": successful,
-            "failed": len(failed_urls),
-            "failed_urls": failed_urls[:5],
-            "processing_time_ms": int((time.time() - start_time) * 1000),
-            "count_match": completed == total,
-        },
+    progress_tracker = ProgressTracker(
+        total=len(urls),
+        progress_formatter=progress_formatter,
+        initial_message_id=initial_message_id,
+        small_batch_threshold=5,
     )
 
-    if interaction_id:
+    progress_task = asyncio.create_task(progress_tracker.process_update_queue())
+
+    async def heartbeat() -> None:
+        """Force periodic UI updates to show live elapsed time."""
+        while not progress_tracker.is_complete:
+            try:
+                await asyncio.sleep(5)
+                await progress_tracker.force_update()
+            except asyncio.CancelledError:
+                break
+            except Exception:
+                logger.debug("progress_heartbeat_failed", exc_info=True)
+
+    heartbeat_task = asyncio.create_task(heartbeat())
+
+    try:
+        batch_size = min(5, len(urls))
+        for batch_start in range(0, len(urls), batch_size):
+            batch_end = min(batch_start + batch_size, len(urls))
+            batch_urls = urls[batch_start:batch_end]
+            batch_tasks = [process_single_url(url, progress_tracker) for url in batch_urls]
+            await asyncio.gather(*batch_tasks, return_exceptions=True)
+            if batch_end < len(urls):
+                await asyncio.sleep(0.1)
+    finally:
+        heartbeat_task.cancel()
+        progress_tracker.mark_complete()
+        await progress_task
+
+    # Send completion message
+    completion_message = BatchProgressFormatter.format_completion_message(batch_status)
+    await response_formatter.safe_reply(message, completion_message, parse_mode="HTML")
+
+    if interaction_id and start_time:
         await async_safe_update_user_interaction(
-            router.user_repo,
+            user_repo,
             interaction_id=interaction_id,
             response_sent=True,
-            response_type="batch_processing_complete",
+            response_type="batch_complete",
             start_time=start_time,
             logger_=logger,
         )
-
-
-async def process_url_silently(
-    router: Any,
-    message: Any,
-    url: str,
-    correlation_id: str,
-    interaction_id: int,
-):
-    """Process a single URL without sending Telegram responses."""
-    import time as _time
-
-    from app.models.batch_processing import URLProcessingResult
-
-    start_time = _time.time()
-
-    try:
-        await router._url_processor.handle_url_flow(
-            message,
-            url,
-            correlation_id=correlation_id,
-            interaction_id=interaction_id,
-            silent=True,
-        )
-        processing_time = (_time.time() - start_time) * 1000
-        return URLProcessingResult.success_result(url, processing_time_ms=processing_time)
-
-    except TimeoutError as exc:
-        raise_if_cancelled(exc)
-        logger.error(
-            "url_processing_timeout",
-            extra={"url": url, "cid": correlation_id, "error": str(exc)},
-        )
-        return URLProcessingResult.timeout_result(url, timeout_sec=600)
-
-    except (httpx.NetworkError, httpx.ConnectError, httpx.TimeoutException) as exc:
-        raise_if_cancelled(exc)
-        logger.error(
-            "url_processing_network_error",
-            extra={"url": url, "cid": correlation_id, "error": str(exc)},
-        )
-        return URLProcessingResult.network_error_result(url, exc)
-
-    except ValueError as exc:
-        raise_if_cancelled(exc)
-        logger.error(
-            "url_processing_validation_error",
-            extra={"url": url, "cid": correlation_id, "error": str(exc)},
-        )
-        return URLProcessingResult.validation_error_result(url, exc)
-
-    except Exception as exc:
-        raise_if_cancelled(exc)
-        logger.error(
-            "url_processing_failed",
-            extra={
-                "url": url,
-                "cid": correlation_id,
-                "error": str(exc),
-                "error_type": type(exc).__name__,
-            },
-        )
-        return URLProcessingResult.generic_error_result(url, exc)
-
-
-async def send_progress_update(
-    router: Any,
-    message: Any,
-    current: int,
-    total: int,
-    message_id: int | None = None,
-) -> int | None:
-    """Send or edit the Telegram progress message."""
-    progress_text = format_progress_message(current, total, context="links", show_bar=True)
-
-    chat_id = getattr(message.chat, "id", None)
-
-    if message_id is not None and chat_id is not None:
-        edit_success = await router.response_formatter.edit_message(
-            chat_id, message_id, progress_text
-        )
-
-        if edit_success:
-            logger.debug(
-                "progress_update_edited",
-                extra={
-                    "current": current,
-                    "total": total,
-                    "message_id": message_id,
-                    "text_length": len(progress_text),
-                },
-            )
-            return message_id
-        logger.warning(
-            "progress_update_edit_failed",
-            extra={
-                "current": current,
-                "total": total,
-                "message_id": message_id,
-                "fallback": "will_send_new_message",
-            },
-        )
-    elif message_id is not None:
-        logger.warning(
-            "progress_update_no_chat_id",
-            extra={"message_id": message_id, "current": current, "total": total},
-        )
-
-    try:
-        new_message_id = await router.response_formatter.safe_reply_with_id(message, progress_text)
-    except Exception as send_error:
-        logger.warning(
-            "progress_update_send_failed",
-            extra={
-                "error": str(send_error),
-                "current": current,
-                "total": total,
-                "message_id": message_id,
-            },
-        )
-        return message_id
-
-    if new_message_id is None:
-        logger.debug(
-            "progress_update_sent_without_id",
-            extra={
-                "current": current,
-                "total": total,
-                "text_length": len(progress_text),
-                "previous_message_id": message_id,
-            },
-        )
-    else:
-        logger.debug(
-            "progress_update_sent",
-            extra={
-                "current": current,
-                "total": total,
-                "message_id": new_message_id,
-                "text_length": len(progress_text),
-            },
-        )
-
-    return new_message_id
 
 
 def should_notify_rate_limit(router: Any, uid: int) -> bool:
