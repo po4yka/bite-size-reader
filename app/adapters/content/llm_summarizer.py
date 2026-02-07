@@ -171,7 +171,7 @@ class LLMSummarizer:
         url: str | None = None,
         silent: bool = False,
         defer_persistence: bool = False,
-        on_phase_change: Callable[[str], Awaitable[None]] | None = None,
+        on_phase_change: Callable[[str, str | None], Awaitable[None]] | None = None,
     ) -> dict[str, Any] | None:
         """Summarize content using LLM and return shaped summary."""
         # Validate content before sending to LLM
@@ -302,10 +302,13 @@ class LLMSummarizer:
 
         # Smart Tiering: If we have flash models configured, use them as intermediate fallbacks
         flash_models = []
-        if self.cfg.openrouter.flash_model:
-            flash_models.append(self.cfg.openrouter.flash_model)
-        if self.cfg.openrouter.flash_fallback_models:
-            flash_models.extend(self.cfg.openrouter.flash_fallback_models)
+        flash_model = getattr(self.cfg.openrouter, "flash_model", None)
+        if flash_model:
+            flash_models.append(flash_model)
+
+        flash_fallback_models = getattr(self.cfg.openrouter, "flash_fallback_models", [])
+        if flash_fallback_models:
+            flash_models.extend(flash_fallback_models)
 
         added_flash_models = set()
         for f_model in flash_models:
@@ -390,7 +393,7 @@ class LLMSummarizer:
 
         async def _on_retry() -> None:
             if on_phase_change:
-                await on_phase_change("retrying")
+                await on_phase_change("retrying", None)
 
         notifications = LLMWorkflowNotifications(
             completion=_on_completion,

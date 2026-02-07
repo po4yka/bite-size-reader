@@ -101,21 +101,34 @@ class ResponseSenderImpl:
 
         try:
             msg_any: Any = message
-            kwargs = {}
-            if parse_mode:
-                kwargs["parse_mode"] = parse_mode
-            if reply_markup:
-                kwargs["reply_markup"] = reply_markup
-            if disable_web_page_preview is not None:
-                kwargs["disable_web_page_preview"] = disable_web_page_preview
-            await msg_any.reply_text(text, **kwargs)
-            try:
-                logger.debug(
-                    "reply_text_sent",
-                    extra={"length": len(text), "has_buttons": reply_markup is not None},
+
+            # Define send operation for retry logic
+            async def do_send() -> Any:
+                kwargs: dict[str, Any] = {}
+                if parse_mode:
+                    kwargs["parse_mode"] = parse_mode
+                if reply_markup:
+                    kwargs["reply_markup"] = reply_markup
+                if disable_web_page_preview is not None:
+                    kwargs["disable_web_page_preview"] = disable_web_page_preview
+                return await msg_any.reply_text(text, **kwargs)
+
+            # Retry the send operation with exponential backoff
+            _, success = await retry_telegram_operation(do_send, operation_name="safe_reply")
+
+            if success:
+                try:
+                    logger.debug(
+                        "reply_text_sent",
+                        extra={"length": len(text), "has_buttons": reply_markup is not None},
+                    )
+                except Exception:
+                    pass
+            else:
+                logger.warning(
+                    "safe_reply_retry_failed",
+                    extra={"text_length": len(text)},
                 )
-            except Exception:
-                pass
         except Exception as e:
             raise_if_cancelled(e)
             logger.error(
@@ -437,7 +450,10 @@ class ResponseSenderImpl:
                         return False
 
                     # Define API call for retry logic
+                    last_error_exc: Exception | None = None
+
                     async def do_edit() -> None:
+                        nonlocal last_error_exc
                         kwargs: dict[str, Any] = {
                             "chat_id": chat_id,
                             "message_id": message_id,
@@ -449,7 +465,12 @@ class ResponseSenderImpl:
                             kwargs["reply_markup"] = reply_markup
                         if disable_web_page_preview is not None:
                             kwargs["disable_web_page_preview"] = disable_web_page_preview
-                        await client.edit_message_text(**kwargs)
+
+                        try:
+                            await client.edit_message_text(**kwargs)
+                        except Exception as e:
+                            last_error_exc = e
+                            raise
 
                     # Retry the API call with exponential backoff
                     _, success = await retry_telegram_operation(
@@ -462,6 +483,20 @@ class ResponseSenderImpl:
                             extra={"chat_id": chat_id, "message_id": message_id},
                         )
                         return True
+
+                    # Handle "message not modified" as success
+                    if last_error_exc:
+                        exc_str = str(last_error_exc).lower()
+                        if (
+                            "message is not modified" in exc_str
+                            or "message_not_modified" in exc_str
+                        ):
+                            logger.debug(
+                                "edit_message_not_modified_success",
+                                extra={"chat_id": chat_id, "message_id": message_id},
+                            )
+                            return True
+
                     logger.warning(
                         "edit_message_retry_failed",
                         extra={"chat_id": chat_id, "message_id": message_id},

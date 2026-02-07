@@ -485,14 +485,16 @@ async def process_url_batch(
             # Mark as processing
             batch_status.mark_processing(url)
 
-            async def phase_callback(phase: str) -> None:
+            async def phase_callback(phase: str, title: str | None = None) -> None:
                 """Update batch status when URL processing phase changes."""
                 if phase == "extracting":
                     batch_status.mark_extracting(url)
                 elif phase == "analyzing":
-                    batch_status.mark_analyzing(url)
+                    batch_status.mark_analyzing(url, title=title)
                 elif phase == "retrying":
                     batch_status.mark_retrying(url)
+                elif phase == "waiting":
+                    batch_status.mark_retry_waiting(url)
                 await progress_tracker.force_update()
 
             for attempt in range(max_retries + 1):
@@ -584,6 +586,8 @@ async def process_url_batch(
                     error_type = "timeout"
                     last_error = f"Timed out after {int(current_timeout)}s (ID: {per_link_cid[:8]})"
                     if attempt < max_retries:
+                        batch_status.mark_retry_waiting(url)
+                        await progress_tracker.force_update()
                         backoff = min(3.0 * (2**attempt), 60.0)
                         await asyncio.sleep(backoff)
                         continue
@@ -696,6 +700,10 @@ async def process_url_batch(
             await asyncio.wait_for(progress_task, timeout=10.0)
         except Exception:
             progress_task.cancel()
+
+    # Small delay to avoid hitting Telegram's per-chat rate limit (30 messages/sec)
+    # when switching from frequent edits to the final summary reply.
+    await asyncio.sleep(0.8)
 
     # Send completion message
     completion_message = BatchProgressFormatter.format_completion_message(batch_status)

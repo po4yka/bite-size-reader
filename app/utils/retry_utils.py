@@ -40,25 +40,35 @@ def is_transient_error(error: Exception) -> bool:
     - Rate limiting errors (429)
     - Temporary server errors (5xx)
     - Timeout errors (408)
-    - Message not modified errors (safe to ignore)
     """
     # Check for HTTP status codes (e.g., httpx.HTTPStatusError, aiohttp.ClientResponseError)
     if hasattr(error, "response") and hasattr(error.response, "status_code"):
         try:
-            if is_retryable_status_code(int(error.response.status_code)):
+            status_code = int(error.response.status_code)
+            if is_retryable_status_code(status_code):
                 return True
+            # Message is not modified (400) is NOT transient/retryable
+            if status_code == 400 and "not modified" in str(error).lower():
+                return False
         except (ValueError, TypeError):
             pass
 
-    # Check for status_code attribute directly (some exceptions like FastAPI HTTPException)
+    # Check for status_code attribute directly
     if hasattr(error, "status_code"):
         try:
-            if is_retryable_status_code(int(error.status_code)):
+            status_code = int(error.status_code)
+            if is_retryable_status_code(status_code):
                 return True
+            if status_code == 400 and "not modified" in str(error).lower():
+                return False
         except (ValueError, TypeError):
             pass
 
     error_str = str(error).lower()
+
+    # "Message is not modified" is a common Telegram error that should NOT be retried
+    if "message is not modified" in error_str or "message_not_modified" in error_str:
+        return False
 
     # Transient error keywords
     transient_keywords = [
@@ -76,6 +86,8 @@ def is_transient_error(error: Exception) -> bool:
         "try again",
         "retry",
         "deadline exceeded",
+        "flood",
+        "retry after",
     ]
 
     # Check if error message contains transient keywords

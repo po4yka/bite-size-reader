@@ -125,7 +125,8 @@ class URLStatus(Enum):
     PROCESSING = "processing"
     EXTRACTING = "extracting"  # Firecrawl content extraction phase
     ANALYZING = "analyzing"  # LLM summarization phase
-    RETRYING = "retrying"  # Retrying due to error (e.g. timeout)
+    RETRYING = "retrying"  # Actively retrying
+    RETRY_WAITING = "retry_waiting"  # Waiting for backoff cooldown
     COMPLETE = "complete"
     CACHED = "cached"  # Reused existing summary
     FAILED = "failed"
@@ -265,17 +266,25 @@ class URLBatchStatus:
             if entry.start_time is None:
                 entry.start_time = time.time()
 
-    def mark_analyzing(self, url: str) -> None:
+    def mark_analyzing(self, url: str, title: str | None = None) -> None:
         """Mark a URL as in the LLM analysis phase."""
         entry = self._find_entry(url)
         if entry:
             entry.status = URLStatus.ANALYZING
+            if title:
+                entry.title = title
 
     def mark_retrying(self, url: str) -> None:
         """Mark a URL as being retried."""
         entry = self._find_entry(url)
         if entry:
             entry.status = URLStatus.RETRYING
+
+    def mark_retry_waiting(self, url: str) -> None:
+        """Mark a URL as waiting for a retry cooldown."""
+        entry = self._find_entry(url)
+        if entry:
+            entry.status = URLStatus.RETRY_WAITING
 
     def mark_complete(
         self,
