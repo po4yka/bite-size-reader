@@ -49,7 +49,12 @@ async def handle_document_file(
         # Download and parse the file
         file_path = await download_file(router, message)
         if not file_path:
-            await router.response_formatter.safe_reply(message, "Failed to download the file.")
+            await router.response_formatter.send_error_notification(
+                message,
+                "unexpected_error",
+                correlation_id,
+                details="Failed to download the uploaded file from Telegram servers.",
+            )
             return
 
         # Parse URLs from the file with security validation
@@ -66,7 +71,12 @@ async def handle_document_file(
             return
 
         if not urls:
-            await router.response_formatter.safe_reply(message, "No valid URLs found in the file.")
+            await router.response_formatter.send_error_notification(
+                message,
+                "no_urls_found",
+                correlation_id,
+                details="No valid links starting with http:// or https:// were detected in the file.",
+            )
             return
 
         # Security check: limit batch size
@@ -155,8 +165,11 @@ async def handle_document_file(
 
     except Exception:
         logger.exception("document_file_processing_error", extra={"cid": correlation_id})
-        await router.response_formatter.safe_reply(
-            message, "An error occurred while processing the file."
+        await router.response_formatter.send_error_notification(
+            message,
+            "unexpected_error",
+            correlation_id,
+            details="An error occurred while parsing or downloading the uploaded file.",
         )
     finally:
         # Clean up downloaded file with retry logic

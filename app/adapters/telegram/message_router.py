@@ -222,11 +222,11 @@ class MessageRouter:
                         "max_allowed": MAX_TEXT_LENGTH,
                     },
                 )
-                await self.response_formatter.safe_reply(
+                await self.response_formatter.send_error_notification(
                     message,
-                    f"❌ Message too long ({len(text):,} characters). "
-                    f"Maximum allowed: {MAX_TEXT_LENGTH:,} characters. "
-                    "Please split into smaller messages or use a file upload.",
+                    "message_too_long",
+                    correlation_id,
+                    details=f"The message is {len(text):,} characters long, which exceeds the limit of {MAX_TEXT_LENGTH:,}.",
                 )
                 return
 
@@ -408,21 +408,40 @@ class MessageRouter:
                 )
             # Classify the error for a more helpful user-facing message
             error_lower = str(e).lower()
-            short_id = correlation_id[:8]
+
             if "timeout" in error_lower or isinstance(e, TimeoutError):
-                user_error_msg = (
-                    f"Request timed out (ID: {short_id}). "
-                    "The article may be too large or the service is slow. Please try again."
+                await self.response_formatter.send_error_notification(
+                    message,
+                    "timeout",
+                    correlation_id,
+                    details="The request timed out. The article might be too large or the service is temporarily slow.",
                 )
             elif "rate limit" in error_lower or "429" in str(e):
-                user_error_msg = f"Service is busy (ID: {short_id}). Please retry in a few minutes."
-            elif "connection" in error_lower or "network" in error_lower:
-                user_error_msg = (
-                    f"Network error (ID: {short_id}). Please check your connection and retry."
+                await self.response_formatter.send_error_notification(
+                    message,
+                    "rate_limit",
+                    correlation_id,
+                    details="The service is currently busy. Please retry in a few minutes.",
+                )
+            elif any(kw in error_lower for kw in ("connection", "network", "unreachable")):
+                await self.response_formatter.send_error_notification(
+                    message,
+                    "network_error",
+                    correlation_id,
+                    details="A network error occurred. Please check your connection or try again later.",
+                )
+            elif "database" in error_lower or "sqlite" in error_lower or "disk" in error_lower:
+                await self.response_formatter.send_error_notification(
+                    message,
+                    "database_error",
+                    correlation_id,
+                    details="An internal database error occurred. This is usually temporary.",
                 )
             else:
-                user_error_msg = f"An unexpected error occurred (ID: {short_id}). Please try again."
-            await self.response_formatter.safe_reply(message, user_error_msg)
+                await self.response_formatter.send_error_notification(
+                    message, "unexpected_error", correlation_id
+                )
+
             if interaction_id:
                 await async_safe_update_user_interaction(
                     self.user_repo,

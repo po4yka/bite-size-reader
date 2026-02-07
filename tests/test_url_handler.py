@@ -23,6 +23,7 @@ async def test_handle_awaited_url_rejects_invalid_links() -> None:
         SimpleNamespace(
             MAX_BATCH_URLS=5,
             safe_reply=safe_reply_mock,
+            send_error_notification=AsyncMock(),
             _validate_url=MagicMock(return_value=(False, "bad")),
         ),
     )
@@ -48,7 +49,9 @@ async def test_handle_awaited_url_rejects_invalid_links() -> None:
         start_time=0.0,
     )
 
-    assert safe_reply_mock.await_count == 1
+    # Use cast to Any to satisfy mypy for AsyncMock attributes
+    assert cast("Any", response_formatter.send_error_notification).await_count == 1
+    assert safe_reply_mock.await_count == 0
     assert handle_url_flow_mock.await_count == 0
 
 
@@ -60,6 +63,7 @@ async def test_handle_awaited_url_filters_invalid_before_processing() -> None:
         SimpleNamespace(
             MAX_BATCH_URLS=5,
             safe_reply=safe_reply_mock,
+            send_error_notification=AsyncMock(),
             _validate_url=MagicMock(side_effect=[(True, ""), (False, "bad")]),
         ),
     )
@@ -98,7 +102,9 @@ def _make_handler() -> URLHandler:
         db=cast("Database", SimpleNamespace()),  # type: ignore[arg-type]
         response_formatter=cast(
             "ResponseFormatter",
-            SimpleNamespace(MAX_BATCH_URLS=5, safe_reply=AsyncMock()),
+            SimpleNamespace(
+                MAX_BATCH_URLS=5, safe_reply=AsyncMock(), send_error_notification=AsyncMock()
+            ),
         ),
         url_processor=cast("URLProcessor", SimpleNamespace()),
     )

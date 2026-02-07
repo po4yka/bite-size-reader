@@ -121,9 +121,11 @@ class CallbackHandler:
                 "callback_handler_error",
                 extra={"action": action, "uid": uid, "error": str(e), "cid": correlation_id},
             )
-            await self.response_formatter.safe_reply(
+            await self.response_formatter.send_error_notification(
                 message,
-                f"An error occurred. Error ID: {correlation_id}",
+                "unexpected_error",
+                correlation_id,
+                details="The button action could not be completed.",
             )
             return True
 

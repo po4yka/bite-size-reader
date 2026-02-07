@@ -88,7 +88,9 @@ class AccessController:
                         "failed_attempts": failed_count,
                     },
                 )
-                await self._maybe_notify_blocked(uid, message, current_time)
+                await self._maybe_notify_blocked(
+                    uid, message, current_time, correlation_id=correlation_id
+                )
                 return False
 
             # Block window expired - reset counters so the user gets a fresh set of attempts
@@ -126,9 +128,10 @@ class AccessController:
                 uid,
                 message,
                 current_time,
+                correlation_id=correlation_id,
                 force=True,
                 message_text=(
-                    f"❌ Access blocked after {failed_count} failed attempts. "
+                    f"Access blocked after {failed_count} failed attempts. "
                     f"Try again in {self.BLOCK_DURATION_SECONDS // 60} minutes."
                 ),
             )
@@ -137,7 +140,9 @@ class AccessController:
         with contextlib.suppress(Exception):
             self._audit("WARN", "access_denied", {"uid": uid, "cid": correlation_id})
 
-        if await self._maybe_notify_denied(uid, message, current_time):
+        if await self._maybe_notify_denied(
+            uid, message, current_time, correlation_id=correlation_id
+        ):
             logger.info("access_denied", extra={"uid": uid, "cid": correlation_id})
 
         if interaction_id:
@@ -159,6 +164,7 @@ class AccessController:
         message: Any,
         current_time: float,
         *,
+        correlation_id: str,
         force: bool = False,
         message_text: str | None = None,
     ) -> None:
@@ -166,23 +172,22 @@ class AccessController:
         deadline = self._block_notified_until.get(uid, 0.0)
         if force or current_time >= deadline:
             with contextlib.suppress(Exception):
-                await self.response_formatter.safe_reply(
-                    message,
-                    message_text
-                    or "❌ Access temporarily blocked due to too many failed attempts. Please try again later.",
+                await self.response_formatter.send_error_notification(
+                    message, "access_blocked", correlation_id, details=message_text
                 )
             self._block_notified_until[uid] = current_time + self.BLOCK_DURATION_SECONDS
 
-    async def _maybe_notify_denied(self, uid: int, message: Any, current_time: float) -> bool:
+    async def _maybe_notify_denied(
+        self, uid: int, message: Any, current_time: float, *, correlation_id: str
+    ) -> bool:
         """Send access denied notification with cooldown."""
         deadline = self._deny_notified_until.get(uid, 0.0)
         if current_time < deadline:
             return False
 
         with contextlib.suppress(Exception):
-            await self.response_formatter.safe_reply(
-                message,
-                f"❌ Access denied. User ID {uid} is not authorized to use this bot.",
+            await self.response_formatter.send_error_notification(
+                message, "access_denied", correlation_id, details=str(uid)
             )
         self._deny_notified_until[uid] = current_time + self.DENY_NOTIFICATION_COOLDOWN_SECONDS
         return True

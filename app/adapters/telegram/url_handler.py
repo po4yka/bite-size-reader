@@ -123,7 +123,7 @@ class URLHandler:
         return min(current_timeout, URL_MAX_TIMEOUT_SEC)
 
     async def _apply_url_security_checks(
-        self, message: Any, urls: list[str], uid: int
+        self, message: Any, urls: list[str], uid: int, correlation_id: str
     ) -> list[str]:
         """Apply shared security checks for URLs from Telegram messages."""
         if not urls:
@@ -157,8 +157,11 @@ class URLHandler:
                 )
 
         if not valid_urls:
-            await self.response_formatter.safe_reply(
-                message, "❌ No valid URLs found after security checks."
+            await self.response_formatter.send_error_notification(
+                message,
+                "no_urls_found",
+                correlation_id,
+                details="All submitted URLs failed security or validation checks.",
             )
         return valid_urls
 
@@ -259,7 +262,7 @@ class URLHandler:
         async with self._state_lock:
             self._awaiting_url_users.pop(uid, None)
 
-        urls = await self._apply_url_security_checks(message, urls, uid)
+        urls = await self._apply_url_security_checks(message, urls, uid, correlation_id)
         if not urls:
             return
 
@@ -289,7 +292,7 @@ class URLHandler:
     ) -> None:
         """Handle direct URL message with security validation."""
         urls = extract_all_urls(text)
-        urls = await self._apply_url_security_checks(message, urls, uid)
+        urls = await self._apply_url_security_checks(message, urls, uid, correlation_id)
         if not urls:
             return
 

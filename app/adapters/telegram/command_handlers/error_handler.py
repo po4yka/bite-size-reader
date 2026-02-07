@@ -65,7 +65,9 @@ async def command_error_handler(
         logger.exception(log_event, extra={"cid": ctx.correlation_id})
 
         # Send error message to user
-        await ctx.response_formatter.safe_reply(ctx.message, user_message)
+        await ctx.response_formatter.send_error_notification(
+            ctx.message, "unexpected_error", ctx.correlation_id, details=user_message
+        )
 
         # Track the failed interaction
         if ctx.interaction_id:
@@ -111,7 +113,9 @@ async def handle_command_exception(
     logger.exception(log_event, extra={"cid": ctx.correlation_id})
 
     # Send error message to user
-    await ctx.response_formatter.safe_reply(ctx.message, user_message)
+    await ctx.response_formatter.send_error_notification(
+        ctx.message, "unexpected_error", ctx.correlation_id, details=user_message
+    )
 
     # Track the failed interaction
     if ctx.interaction_id:

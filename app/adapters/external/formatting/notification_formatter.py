@@ -736,103 +736,195 @@ class NotificationFormatterImpl:
                 await self._response_sender.safe_reply(message, text)
 
             if error_type == "firecrawl_error":
-                details_block = f"\n\n{details}" if details else ""
+                details_block = f"\n\n<i>Details: {details}</i>" if details else ""
                 error_text = (
-                    "Content Extraction Failed\n"
-                    "Unable to extract readable content\n"
-                    f"Error ID: {correlation_id}"
+                    "❌ <b>Content Extraction Failed</b>\n\n"
+                    "I was unable to extract readable content from the provided URL.\n\n"
+                    f"<b>Error ID:</b> <code>{correlation_id}</code>"
                     f"{details_block}\n\n"
-                    "Possible Solutions:\n"
-                    "- Try a different URL\n"
-                    "- Check if content is publicly accessible\n"
-                    "- Ensure URL points to text-based content"
+                    "<b>Possible Solutions:</b>\n"
+                    "• Try a different URL\n"
+                    "• Check if the content is publicly accessible (no paywall)\n"
+                    "• Ensure the URL points to a text-based article"
                 )
-                await _emit(error_text)
+                if self._progress_tracker is not None:
+                    self._progress_tracker.clear(message)
+                await self._response_sender.safe_reply(message, error_text, parse_mode="HTML")
                 await self._admin_log(error_text, correlation_id=correlation_id)
             elif error_type == "empty_content":
                 error_text = (
-                    f"Content Extraction Failed\n\n"
-                    f"Possible Causes:\n"
-                    f"- Website blocking automated access\n"
-                    f"- Content behind paywall/login\n"
-                    f"- Non-text content (images, videos)\n"
-                    f"- Temporary server issues\n"
-                    f"- Invalid or inaccessible URL\n\n"
-                    f"Suggestions:\n"
-                    f"- Try a different URL\n"
-                    f"- Check if content is publicly accessible\n"
-                    f"- Ensure URL points to text-based content\n\n"
-                    f"Error ID: {correlation_id}"
+                    "❌ <b>No Content Found</b>\n\n"
+                    "The extraction process completed, but no meaningful text was found.\n\n"
+                    "<b>Common Causes:</b>\n"
+                    "• Website blocking automated access\n"
+                    "• Content behind paywall or login\n"
+                    "• Non-text content (images, videos only)\n"
+                    "• Temporary server issues at the source\n\n"
+                    "<b>Suggestions:</b>\n"
+                    "• Try a different URL\n"
+                    "• Check if the article is readable in a private browser tab\n\n"
+                    f"<b>Error ID:</b> <code>{correlation_id}</code>"
                 )
-                await _emit(error_text)
+                if self._progress_tracker is not None:
+                    self._progress_tracker.clear(message)
+                await self._response_sender.safe_reply(message, error_text, parse_mode="HTML")
                 await self._admin_log(error_text, correlation_id=correlation_id)
             elif error_type == "processing_failed":
-                detail_block = f"\nReason: {details}" if details else ""
-                if self._safe_reply_func is not None:
-                    await self._safe_reply_func(
-                        message,
-                        f"Invalid summary format. Error ID: {correlation_id}{detail_block}",
-                    )
-                else:
-                    message_parts = [
-                        "Processing Failed",
-                        f"Invalid summary format despite smart fallbacks{detail_block}",
-                        "",
-                        "What happened:",
-                        "- The AI models returned data that couldn't be processed",
-                        "- All automatic repair attempts were unsuccessful",
-                        "",
-                        "Try:",
-                        "- Submit the URL again",
-                        "- Try a different article from the same source",
-                        "",
-                        f"Error ID: {correlation_id}",
-                    ]
-                    error_text = "\n".join(message_parts)
-                    await _emit(error_text)
-                    await self._admin_log(error_text, correlation_id=correlation_id)
+                detail_block = f"\n\n<i>Reason: {details}</i>" if details else ""
+                error_text = (
+                    "⚙️ <b>Processing Failed</b>\n\n"
+                    "I couldn't generate a valid summary despite multiple attempts.\n\n"
+                    "<b>What happened:</b>\n"
+                    "• The AI models returned data that couldn't be parsed\n"
+                    "• Automatic repair attempts were unsuccessful\n\n"
+                    "<b>Try:</b>\n"
+                    "• Submit the URL again in a few minutes\n"
+                    "• Try a different article from the same source\n\n"
+                    f"<b>Error ID:</b> <code>{correlation_id}</code>"
+                    f"{detail_block}"
+                )
+                if self._progress_tracker is not None:
+                    self._progress_tracker.clear(message)
+                await self._response_sender.safe_reply(message, error_text, parse_mode="HTML")
+                await self._admin_log(error_text, correlation_id=correlation_id)
             elif error_type == "llm_error":
                 models_info = ""
                 error_info = details or ""
 
                 if "Tried" in error_info and "model(s):" in error_info:
                     lines = error_info.split("\n")
-                    models_info = lines[0] if lines else ""
+                    models_info = f"\n• {lines[0]}" if lines else ""
                     error_detail = "\n".join(lines[1:]) if len(lines) > 1 else ""
                 else:
-                    error_detail = f"\nProvider response: {details}" if details else ""
+                    error_detail = f"\n\n<i>Provider response: {details}</i>" if details else ""
 
-                message_parts = [
-                    "Processing Failed",
-                    "All AI models failed despite automatic fallbacks",
-                ]
+                error_text = (
+                    "🤖 <b>AI Analysis Failed</b>\n\n"
+                    "All AI models failed to process the content despite automatic fallbacks."
+                )
 
                 if models_info:
-                    message_parts.append(models_info)
+                    error_text += f"\n\n<b>Models attempted:</b>{models_info}"
+
+                error_text += (
+                    "\n\n<b>Possible Solutions:</b>\n"
+                    "• Try again in a few moments\n"
+                    "• The content might be too complex or unusual\n"
+                    "• Contact support if this happens repeatedly\n\n"
+                    f"<b>Error ID:</b> <code>{correlation_id}</code>"
+                )
 
                 if error_detail:
-                    message_parts.append(error_detail)
+                    error_text += f"{error_detail}"
 
-                message_parts.extend(
-                    [
-                        "",
-                        "Possible Solutions:",
-                        "- Check your account balance/credits",
-                        "- Try again in a few moments",
-                        "- Contact support if the issue persists",
-                        "",
-                        f"Error ID: {correlation_id}",
-                    ]
-                )
-                error_text = "\n".join(message_parts)
-                await _emit(error_text)
+                if self._progress_tracker is not None:
+                    self._progress_tracker.clear(message)
+                await self._response_sender.safe_reply(message, error_text, parse_mode="HTML")
                 await self._admin_log(error_text, correlation_id=correlation_id)
-            else:
-                # Generic error
+            elif error_type == "unexpected_error":
+                details_block = f"\n\n<i>Details: {details}</i>" if details else ""
                 error_text = (
-                    f"Error Occurred\n{details or 'Unknown error'}\nError ID: {correlation_id}"
+                    "⚠️ <b>An unexpected error occurred</b>\n\n"
+                    "The system encountered an internal problem while processing your request.\n\n"
+                    f"<b>Error ID:</b> <code>{correlation_id}</code>\n"
+                    "<b>Status:</b> Please try again in a moment. If the issue persists, "
+                    "try a different URL or contact support."
+                    f"{details_block}"
                 )
-                await _emit(error_text)
+                if self._progress_tracker is not None:
+                    self._progress_tracker.clear(message)
+                await self._response_sender.safe_reply(message, error_text, parse_mode="HTML")
+                await self._admin_log(error_text, correlation_id=correlation_id)
+            elif error_type == "timeout":
+                error_text = (
+                    "⏱ <b>Request Timed Out</b>\n\n"
+                    f"{details or 'The operation took too long to complete.'}\n\n"
+                    "<b>Try:</b>\n"
+                    "• Submitting a smaller article\n"
+                    "• Waiting a few moments before retrying\n\n"
+                    f"<b>Error ID:</b> <code>{correlation_id}</code>"
+                )
+                if self._progress_tracker is not None:
+                    self._progress_tracker.clear(message)
+                await self._response_sender.safe_reply(message, error_text, parse_mode="HTML")
+                await self._admin_log(error_text, correlation_id=correlation_id)
+            elif error_type == "rate_limit":
+                error_text = (
+                    "⏳ <b>Service is Busy</b>\n\n"
+                    f"{details or 'You have reached the rate limit.'}\n\n"
+                    "<b>Status:</b> Please wait a minute before sending more requests.\n\n"
+                    f"<b>Error ID:</b> <code>{correlation_id}</code>"
+                )
+                if self._progress_tracker is not None:
+                    self._progress_tracker.clear(message)
+                await self._response_sender.safe_reply(message, error_text, parse_mode="HTML")
+                await self._admin_log(error_text, correlation_id=correlation_id)
+            elif error_type == "network_error":
+                error_text = (
+                    "🌐 <b>Network Error</b>\n\n"
+                    f"{details or 'A connection problem occurred.'}\n\n"
+                    "<b>Try:</b>\n"
+                    "• Checking your internet connection\n"
+                    "• Retrying in a few moments\n\n"
+                    f"<b>Error ID:</b> <code>{correlation_id}</code>"
+                )
+                if self._progress_tracker is not None:
+                    self._progress_tracker.clear(message)
+                await self._response_sender.safe_reply(message, error_text, parse_mode="HTML")
+                await self._admin_log(error_text, correlation_id=correlation_id)
+            elif error_type == "database_error":
+                error_text = (
+                    "💾 <b>Database Error</b>\n\n"
+                    f"{details or 'An internal storage error occurred.'}\n\n"
+                    "<b>Status:</b> This is an internal issue. Our team has been notified.\n\n"
+                    f"<b>Error ID:</b> <code>{correlation_id}</code>"
+                )
+                if self._progress_tracker is not None:
+                    self._progress_tracker.clear(message)
+                await self._response_sender.safe_reply(message, error_text, parse_mode="HTML")
+                await self._admin_log(error_text, correlation_id=correlation_id)
+            elif error_type == "access_denied":
+                error_text = (
+                    "🛑 <b>Access Denied</b>\n\n"
+                    f"User ID <code>{details or 'unknown'}</code> is not authorized to use this bot.\n\n"
+                    "If you believe this is an error, please contact the administrator."
+                )
+                await self._response_sender.safe_reply(message, error_text, parse_mode="HTML")
+            elif error_type == "access_blocked":
+                error_text = (
+                    "🚫 <b>Access Blocked</b>\n\n"
+                    f"{details or 'Too many failed access attempts.'}\n\n"
+                    "<b>Status:</b> Please try again later."
+                )
+                await self._response_sender.safe_reply(message, error_text, parse_mode="HTML")
+            elif error_type == "message_too_long":
+                error_text = (
+                    "📏 <b>Message Too Long</b>\n\n"
+                    f"{details or 'The message exceeds the maximum allowed length.'}\n\n"
+                    "<b>Suggestions:</b>\n"
+                    "• Split the content into smaller messages\n"
+                    "• Upload a .txt file with the content instead"
+                )
+                await self._response_sender.safe_reply(message, error_text, parse_mode="HTML")
+            elif error_type == "no_urls_found":
+                error_text = (
+                    "🔗 <b>No URLs Found</b>\n\n"
+                    f"{details or 'I couldn’t find any valid URLs to process.'}\n\n"
+                    "<b>Try:</b>\n"
+                    "• Ensuring URLs start with http:// or https://\n"
+                    "• Checking for typos in the address"
+                )
+                await self._response_sender.safe_reply(message, error_text, parse_mode="HTML")
+            else:
+                # Generic error fallback
+                error_text = (
+                    f"<b>Error Occurred</b>\n"
+                    f"{details or 'Unknown error'}\n\n"
+                    f"<b>Error ID:</b> <code>{correlation_id}</code>"
+                )
+                if self._progress_tracker is not None:
+                    self._progress_tracker.clear(message)
+                await self._response_sender.safe_reply(message, error_text, parse_mode="HTML")
                 await self._admin_log(error_text, correlation_id=correlation_id)
         except Exception as exc:
             raise_if_cancelled(exc)
