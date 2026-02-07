@@ -30,7 +30,7 @@ def create_action_buttons(summary_id: int | str) -> list[list[dict[str, str]]]:
     return [export_row, action_row, feedback_row]
 
 
-def create_inline_keyboard(summary_id: int | str) -> Any:
+def create_inline_keyboard(summary_id: int | str, correlation_id: str | None = None) -> Any:
     try:
         from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
@@ -56,6 +56,8 @@ def create_inline_keyboard(summary_id: int | str) -> Any:
         logger.debug("pyrogram_not_available_for_action_buttons")
         return None
     except Exception as exc:
-        # TODO(po4yka): pass correlation_id for traceability
-        logger.warning("create_action_buttons_failed", extra={"error": str(exc)})
+        logger.warning(
+            "create_action_buttons_failed",
+            extra={"error": str(exc), "cid": correlation_id},
+        )
         return None

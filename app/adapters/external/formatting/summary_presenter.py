@@ -101,18 +101,22 @@ class SummaryPresenterImpl:
 
         return create_action_buttons(summary_id)
 
-    def _create_inline_keyboard(self, summary_id: int | str) -> Any:
+    def _create_inline_keyboard(
+        self, summary_id: int | str, correlation_id: str | None = None
+    ) -> Any:
         """Create an inline keyboard markup for post-summary actions."""
         from app.adapters.external.formatting.summary_presenter_parts.actions import (
             create_inline_keyboard,
         )
 
-        return create_inline_keyboard(summary_id)
+        return create_inline_keyboard(summary_id, correlation_id)
 
-    async def _send_action_buttons(self, message: Any, summary_id: int | str) -> None:
+    async def _send_action_buttons(
+        self, message: Any, summary_id: int | str, correlation_id: str | None = None
+    ) -> None:
         """Send action buttons as a separate message after the summary."""
         try:
-            keyboard = self._create_inline_keyboard(summary_id)
+            keyboard = self._create_inline_keyboard(summary_id, correlation_id)
             if keyboard:
                 await self._response_sender.safe_reply(
                     message,
@@ -137,6 +141,7 @@ class SummaryPresenterImpl:
         llm: Any,
         chunks: int | None = None,
         summary_id: int | str | None = None,
+        correlation_id: str | None = None,
     ) -> None:
         """Send summary where each top-level JSON field is a separate message,
         then attach the full JSON as a .json document with a descriptive filename.
@@ -147,6 +152,7 @@ class SummaryPresenterImpl:
             llm: LLM instance (for model name)
             chunks: Number of chunks used (optional)
             summary_id: Database summary ID for action buttons (optional)
+            correlation_id: Request correlation ID for tracing (optional)
         """
         try:
             # Determine verbosity once (default: DEBUG when resolver isn't available)
@@ -373,7 +379,7 @@ class SummaryPresenterImpl:
 
             # Add action buttons after summary if summary_id is available
             if summary_id and not job_card_finalized:
-                await self._send_action_buttons(message, summary_id)
+                await self._send_action_buttons(message, summary_id, correlation_id)
 
         except Exception as exc:
             raise_if_cancelled(exc)
@@ -389,7 +395,7 @@ class SummaryPresenterImpl:
 
             # Still try to add action buttons in fallback
             if summary_id:
-                await self._send_action_buttons(message, summary_id)
+                await self._send_action_buttons(message, summary_id, correlation_id)
 
     async def send_russian_translation(
         self, message: Any, translated_text: str, correlation_id: str | None = None

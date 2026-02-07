@@ -471,6 +471,7 @@ class URLProcessor:
                     llm_result,
                     chunks=len(chunks) if should_chunk and chunks else None,
                     summary_id=f"req:{req_id}" if req_id else None,
+                    correlation_id=correlation_id,
                 )
 
             # Skip post-summary background tasks in batch mode to reduce noise

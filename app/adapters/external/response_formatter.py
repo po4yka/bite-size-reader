@@ -397,10 +397,16 @@ class ResponseFormatter:
         llm: Any,
         chunks: int | None = None,
         summary_id: int | str | None = None,
+        correlation_id: str | None = None,
     ) -> None:
         """Send summary where each top-level JSON field is a separate message."""
         await self._summary_presenter.send_structured_summary_response(
-            message, summary_shaped, llm, chunks, summary_id=summary_id
+            message,
+            summary_shaped,
+            llm,
+            chunks,
+            summary_id=summary_id,
+            correlation_id=correlation_id,
         )
 
     async def send_forward_summary_response(
