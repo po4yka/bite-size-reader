@@ -12,6 +12,7 @@ if TYPE_CHECKING:
     from app.adapters.external.response_formatter import ResponseFormatter
     from app.adapters.telegram.url_handler import URLHandler
     from app.db.session import DatabaseSessionManager
+    from app.services.hybrid_search_service import HybridSearchService
 
 logger = logging.getLogger(__name__)
 
@@ -39,10 +40,12 @@ class CallbackHandler:
         db: DatabaseSessionManager,
         response_formatter: ResponseFormatter,
         url_handler: URLHandler | None = None,
+        hybrid_search: HybridSearchService | None = None,
     ) -> None:
         self.db = db
         self.response_formatter = response_formatter
         self.url_handler = url_handler
+        self.hybrid_search = hybrid_search
         # Rate limit: track recent clicks per user (debounce)
         self._recent_clicks: dict[tuple[int, str], float] = {}
         self._click_cooldown_seconds = 1.0
@@ -244,12 +247,65 @@ class CallbackHandler:
             return False
 
         summary_id = ":".join(parts[1:]).strip()
+        summary_data = await self._load_summary_payload(summary_id, correlation_id=correlation_id)
+        if not summary_data:
+            await self.response_formatter.safe_reply(message, "Summary not found.")
+            return True
+
+        if summary_data.get("lang") == "ru":
+            await self.response_formatter.safe_reply(message, "This summary is already in Russian.")
+            return True
+
+        if not self.url_handler or not hasattr(self.url_handler, "url_processor"):
+            await self.response_formatter.send_error_notification(
+                message,
+                "unexpected_error",
+                correlation_id,
+                details="Translation service is temporarily unavailable.",
+            )
+            return True
+
         await self.response_formatter.safe_reply(
-            message,
-            "Translation feature coming soon. Use /help for available commands.",
+            message, "Translation feature request received. Processing..."
         )
+
+        try:
+            # We need the request_id to perform translation
+            request_id = summary_data.get("request_id")
+            if not isinstance(request_id, int):
+                raise ValueError("Invalid request ID for translation")
+
+            # Call translation service via URL processor
+            translated_text = await self.url_handler.url_processor.translate_summary_to_ru(
+                summary=summary_data,
+                req_id=request_id,
+                correlation_id=correlation_id,
+                source_lang=summary_data.get("lang"),
+            )
+
+            if translated_text:
+                await self.response_formatter.send_russian_translation(
+                    message, translated_text, correlation_id=correlation_id
+                )
+            else:
+                await self.response_formatter.safe_reply(
+                    message, "Translation failed to generate meaningful output."
+                )
+
+        except Exception as e:
+            logger.exception(
+                "translation_failed",
+                extra={"summary_id": summary_id, "error": str(e), "cid": correlation_id},
+            )
+            await self.response_formatter.send_error_notification(
+                message,
+                "unexpected_error",
+                correlation_id,
+                details="An error occurred during translation.",
+            )
+
         logger.info(
-            "translate_requested",
+            "translate_completed",
             extra={"summary_id": summary_id, "uid": uid, "cid": correlation_id},
         )
         return True
@@ -266,12 +322,91 @@ class CallbackHandler:
             return False
 
         summary_id = ":".join(parts[1:]).strip()
+        summary_data = await self._load_summary_payload(summary_id, correlation_id=correlation_id)
+        if not summary_data:
+            await self.response_formatter.safe_reply(message, "Summary not found.")
+            return True
+
+        if not self.hybrid_search:
+            await self.response_formatter.safe_reply(
+                message,
+                "Search service is currently unavailable.",
+            )
+            return True
+
+        # Construct query from summary metadata
+        meta = summary_data.get("metadata") or {}
+        title = str(meta.get("title") or "")
+
+        # Also try key ideas or tags
+        key_ideas = summary_data.get("key_ideas") or []
+        tags = summary_data.get("topic_tags") or []
+
+        query_parts = []
+        if title:
+            query_parts.append(title)
+
+        # Add top 2 tags if available
+        if tags and isinstance(tags, list):
+            query_parts.extend([str(t) for t in tags[:2] if str(t).strip()])
+
+        if not query_parts and key_ideas and isinstance(key_ideas, list):
+            # Fallback to first key idea if no title/tags
+            first_idea = str(key_ideas[0]) if key_ideas else ""
+            if first_idea:
+                query_parts.append(first_idea[:100])
+
+        query = " ".join(query_parts).strip()
+        if not query:
+            await self.response_formatter.safe_reply(
+                message, "Not enough information to perform similarity search."
+            )
+            return True
+
         await self.response_formatter.safe_reply(
             message,
-            "Find similar feature coming soon. Use /search <query> to search your summaries.",
+            f"🔍 Finding similar summaries for: <b>{html.escape(title or 'this item')}</b>...",
+            parse_mode="HTML",
         )
+
+        try:
+            # Exclude current item from results if possible (not supported by search API yet,
+            # but we can filter manually if needed, though usually semantic search handles it)
+            results = await self.hybrid_search.search(query, correlation_id=correlation_id)
+
+            # Filter out the current summary if it appears in results
+            current_url = summary_data.get("url")
+            filtered_results = []
+            for r in results:
+                # Basic check to avoid showing the exact same item
+                if current_url and r.url == current_url:
+                    continue
+                filtered_results.append(r)
+
+            if not filtered_results:
+                await self.response_formatter.safe_reply(message, "No similar summaries found.")
+            else:
+                await self.response_formatter.send_topic_search_results(
+                    message,
+                    topic=f"Similar to: {title[:30]}...",
+                    articles=filtered_results,
+                    source="hybrid",
+                )
+
+        except Exception as e:
+            logger.exception(
+                "find_similar_failed",
+                extra={"summary_id": summary_id, "error": str(e), "cid": correlation_id},
+            )
+            await self.response_formatter.send_error_notification(
+                message,
+                "unexpected_error",
+                correlation_id,
+                details="An error occurred while searching for similar content.",
+            )
+
         logger.info(
-            "find_similar_requested",
+            "find_similar_completed",
             extra={"summary_id": summary_id, "uid": uid, "cid": correlation_id},
         )
         return True

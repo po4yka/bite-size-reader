@@ -87,15 +87,21 @@ class URLCommandsHandlerImpl:
         urls = extract_all_urls(ctx.text)
 
         if len(urls) > 1:
-            # Multiple URLs - ask for confirmation
-            buttons = [
-                {"text": "✅ Yes", "callback_data": "multi_confirm_yes"},
-                {"text": "❌ No", "callback_data": "multi_confirm_no"},
-            ]
-            keyboard = self._formatter.create_inline_keyboard(buttons)
-            await self._formatter.safe_reply(
-                ctx.message, f"Process {len(urls)} links?", reply_markup=keyboard
-            )
+            # Multiple URLs - ask for confirmation using handler's rich format if available
+            if self._url_handler is not None:
+                await self._url_handler._request_multi_link_confirmation(
+                    ctx.message, ctx.uid, urls, ctx.interaction_id, ctx.start_time
+                )
+            else:
+                # Fallback to simple buttons if no handler
+                buttons = [
+                    {"text": "✅ Yes", "callback_data": "multi_confirm_yes"},
+                    {"text": "❌ No", "callback_data": "multi_confirm_no"},
+                ]
+                keyboard = self._formatter.create_inline_keyboard(buttons)
+                await self._formatter.safe_reply(
+                    ctx.message, f"Process {len(urls)} links?", reply_markup=keyboard
+                )
             logger.debug("awaiting_multi_confirm", extra={"uid": ctx.uid, "count": len(urls)})
 
             if ctx.interaction_id:
@@ -164,7 +170,10 @@ class URLCommandsHandlerImpl:
                 )
             return
 
-        await self._formatter.safe_reply(ctx.message, f"Processing {len(urls)} links...")
+        # Use a single progress message that updates in-place
+        progress_message_id = await self._formatter.safe_reply_with_id(
+            ctx.message, f"🚀 Preparing to process {len(urls)} links..."
+        )
 
         if ctx.interaction_id:
             await async_safe_update_user_interaction(
@@ -176,11 +185,25 @@ class URLCommandsHandlerImpl:
                 logger_=logger,
             )
 
-        # Process each URL
-        for u in urls:
-            per_link_cid = generate_correlation_id()
-            logger.debug("processing_link", extra={"uid": ctx.uid, "url": u, "cid": per_link_cid})
-            await self._url_processor.handle_url_flow(ctx.message, u, correlation_id=per_link_cid)
+        # Use unified batch processor if url_handler is available, otherwise sequential
+        if self._url_handler is not None:
+            await self._url_handler._process_multiple_urls_parallel(
+                ctx.message,
+                urls,
+                ctx.uid,
+                ctx.correlation_id,
+                initial_message_id=progress_message_id,
+            )
+        else:
+            # Fallback to sequential if handler not available
+            for u in urls:
+                per_link_cid = generate_correlation_id()
+                logger.debug(
+                    "processing_link_seq", extra={"uid": ctx.uid, "url": u, "cid": per_link_cid}
+                )
+                await self._url_processor.handle_url_flow(
+                    ctx.message, u, correlation_id=per_link_cid
+                )
 
     @audit_command("command_cancel")
     async def handle_cancel(self, ctx: CommandExecutionContext) -> None:

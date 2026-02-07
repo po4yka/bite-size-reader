@@ -875,3 +875,21 @@ class URLProcessor:
                 "custom_article_flow_error",
                 extra={"cid": correlation_id, "error": str(exc)},
             )
+
+    async def translate_summary_to_ru(
+        self,
+        summary: dict[str, Any],
+        *,
+        req_id: int,
+        correlation_id: str | None = None,
+        url_hash: str | None = None,
+        source_lang: str | None = None,
+    ) -> str | None:
+        """Translate a shaped summary to fluent Russian."""
+        return await self.llm_summarizer.translate_summary_to_ru(
+            summary,
+            req_id=req_id,
+            correlation_id=correlation_id,
+            url_hash=url_hash,
+            source_lang=source_lang,
+        )

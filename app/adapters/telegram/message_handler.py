@@ -102,6 +102,7 @@ class MessageHandler:
             db=db,
             response_formatter=response_formatter,
             url_handler=self.url_handler,
+            hybrid_search=hybrid_search,
         )
 
     async def handle_message(self, message: Any) -> None:

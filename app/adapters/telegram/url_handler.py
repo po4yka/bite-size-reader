@@ -177,12 +177,35 @@ class URLHandler:
             self._pending_multi_links[uid] = (urls, time.time())
         # Create inline keyboard buttons for confirmation
         buttons = [
-            {"text": "✅ Yes", "callback_data": "multi_confirm_yes"},
-            {"text": "❌ No", "callback_data": "multi_confirm_no"},
+            {"text": "✅ Yes, process all", "callback_data": "multi_confirm_yes"},
+            {"text": "❌ No, cancel", "callback_data": "multi_confirm_no"},
         ]
         keyboard = self.response_formatter.create_inline_keyboard(buttons)
+
+        # Build a list of domains for the confirmation message
+        domains = []
+        for url in urls[:5]:
+            try:
+                parsed = urlparse(url)
+                domain = parsed.netloc or parsed.path.split("/")[0]
+                if domain.startswith("www."):
+                    domain = domain[4:]
+                domains.append(f"• {domain}")
+            except Exception:
+                domains.append(f"• {url[:30]}...")
+
+        domain_list = "\n".join(domains)
+        if len(urls) > 5:
+            domain_list += f"\n• ... and {len(urls) - 5} more"
+
+        confirm_text = (
+            f"📥 <b>Found {len(urls)} links:</b>\n\n"
+            f"{domain_list}\n\n"
+            f"Would you like me to process all of them in parallel?"
+        )
+
         await self.response_formatter.safe_reply(
-            message, f"Process {len(urls)} links?", reply_markup=keyboard
+            message, confirm_text, reply_markup=keyboard, parse_mode="HTML"
         )
         logger.debug("awaiting_multi_confirm", extra={"uid": uid, "count": len(urls)})
         if interaction_id:
@@ -201,6 +224,7 @@ class URLHandler:
         urls: list[str],
         uid: int,
         correlation_id: str,
+        initial_message_id: int | None = None,
     ) -> None:
         """Process multiple URLs in parallel with controlled concurrency and detailed status tracking."""
         # Adaptive concurrency: 2-4 concurrent based on batch size
@@ -223,6 +247,7 @@ class URLHandler:
             max_concurrent=max_concurrent,
             max_retries=URL_MAX_RETRIES,
             compute_timeout_func=compute_timeout,
+            initial_message_id=initial_message_id,
         )
 
     async def add_awaiting_user(self, uid: int) -> None:
@@ -267,8 +292,11 @@ class URLHandler:
             return
 
         if len(urls) > 1:
-            await self._request_multi_link_confirmation(
-                message, uid, urls, interaction_id, start_time
+            progress_message_id = await self.response_formatter.safe_reply_with_id(
+                message, f"🚀 Preparing to process {len(urls)} links..."
+            )
+            await self._process_multiple_urls_parallel(
+                message, urls, uid, correlation_id, initial_message_id=progress_message_id
             )
             return
 
@@ -297,8 +325,11 @@ class URLHandler:
             return
 
         if len(urls) > 1:
-            await self._request_multi_link_confirmation(
-                message, uid, urls, interaction_id, start_time
+            progress_message_id = await self.response_formatter.safe_reply_with_id(
+                message, f"🚀 Preparing to process {len(urls)} links..."
+            )
+            await self._process_multiple_urls_parallel(
+                message, urls, uid, correlation_id, initial_message_id=progress_message_id
             )
             return
 
@@ -363,9 +394,11 @@ class URLHandler:
                 )
                 return
 
-            await self.response_formatter.safe_reply(
-                message, f"🚀 Processing {len(urls)} links in parallel..."
+            # Send initial progress message and get its ID
+            progress_message_id = await self.response_formatter.safe_reply_with_id(
+                message, f"🚀 Preparing to process {len(urls)} links..."
             )
+
             if interaction_id:
                 await async_safe_update_user_interaction(
                     self.user_repo,
@@ -377,7 +410,9 @@ class URLHandler:
                 )
 
             # Process URLs in parallel with controlled concurrency
-            await self._process_multiple_urls_parallel(message, urls, uid, correlation_id)
+            await self._process_multiple_urls_parallel(
+                message, urls, uid, correlation_id, initial_message_id=progress_message_id
+            )
             return
 
         if self._is_negative(normalized):
