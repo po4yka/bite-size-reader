@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any
 from urllib.parse import urlparse
 
 from app.adapters.telegram.message_router_helpers import process_url_batch
+from app.core.url_utils import extract_all_urls
 from app.db.user_interactions import async_safe_update_user_interaction
 from app.infrastructure.persistence.sqlite.repositories.request_repository import (
     SqliteRequestRepositoryAdapter,
@@ -73,6 +74,8 @@ class URLHandler:
         # Lock to protect shared state from concurrent access
         self._state_lock = asyncio.Lock()
         # In-memory state with timestamps for TTL expiry
+        self._state_ttl_sec = 120  # 2 minutes
+        # uid -> timestamp when added
         self._awaiting_url_users: dict[int, float] = {}
         self._pending_multi_links: dict[int, tuple[list[str], float]] = {}
 
@@ -218,3 +221,228 @@ class URLHandler:
             max_retries=URL_MAX_RETRIES,
             compute_timeout_func=compute_timeout,
         )
+
+    async def add_awaiting_user(self, uid: int) -> None:
+        """Add user to awaiting URL list."""
+        async with self._state_lock:
+            self._awaiting_url_users[uid] = time.time()
+
+    async def add_pending_multi_links(self, uid: int, urls: list[str]) -> None:
+        """Add user to pending multi-links confirmation."""
+        async with self._state_lock:
+            self._pending_multi_links[uid] = (urls, time.time())
+
+    async def cancel_pending_requests(self, uid: int) -> tuple[bool, bool]:
+        """Cancel any pending URL or multi-link confirmation requests for a user."""
+        async with self._state_lock:
+            awaiting_cancelled = uid in self._awaiting_url_users
+            if awaiting_cancelled:
+                self._awaiting_url_users.pop(uid, None)
+
+            multi_cancelled = uid in self._pending_multi_links
+            if multi_cancelled:
+                self._pending_multi_links.pop(uid, None)
+
+            return awaiting_cancelled, multi_cancelled
+
+    async def handle_awaited_url(
+        self,
+        message: Any,
+        text: str,
+        uid: int,
+        correlation_id: str,
+        interaction_id: int,
+        start_time: float,
+    ) -> None:
+        """Handle URL sent after /summarize command."""
+        urls = extract_all_urls(text)
+        async with self._state_lock:
+            self._awaiting_url_users.pop(uid, None)
+
+        urls = await self._apply_url_security_checks(message, urls, uid)
+        if not urls:
+            return
+
+        if len(urls) > 1:
+            await self._request_multi_link_confirmation(
+                message, uid, urls, interaction_id, start_time
+            )
+            return
+
+        if len(urls) == 1:
+            logger.debug("received_awaited_url", extra={"uid": uid})
+            await self.url_processor.handle_url_flow(
+                message,
+                urls[0],
+                correlation_id=correlation_id,
+                interaction_id=interaction_id,
+            )
+
+    async def handle_direct_url(
+        self,
+        message: Any,
+        text: str,
+        uid: int,
+        correlation_id: str,
+        interaction_id: int,
+        start_time: float,
+    ) -> None:
+        """Handle direct URL message with security validation."""
+        urls = extract_all_urls(text)
+        urls = await self._apply_url_security_checks(message, urls, uid)
+        if not urls:
+            return
+
+        if len(urls) > 1:
+            await self._request_multi_link_confirmation(
+                message, uid, urls, interaction_id, start_time
+            )
+            return
+
+        if len(urls) == 1:
+            await self.url_processor.handle_url_flow(
+                message,
+                urls[0],
+                correlation_id=correlation_id,
+                interaction_id=interaction_id,
+            )
+
+    async def handle_multi_link_confirmation(
+        self,
+        message: Any,
+        text: str,
+        uid: int,
+        correlation_id: str,
+        interaction_id: int,
+        start_time: float,
+    ) -> None:
+        """Handle yes/no confirmation for multiple links with optimized parallel processing."""
+        normalized = self._normalize_response(text)
+
+        if self._is_affirmative(normalized):
+            # CRITICAL: Keep lock held during state validation to prevent race conditions
+            async with self._state_lock:
+                entry = self._pending_multi_links.get(uid)
+
+                # Unpack timestamped entry
+                urls: list[str] | None = None
+                if entry is not None:
+                    urls = entry[0]
+
+                # Validate state while holding lock
+                if not urls:
+                    logger.warning(
+                        "multi_confirm_missing_state", extra={"uid": uid, "cid": correlation_id}
+                    )
+                else:
+                    # Validate URLs while holding lock
+                    is_valid = isinstance(urls, list) and all(
+                        isinstance(url, str) and url.strip() for url in urls
+                    )
+
+                    if not is_valid:
+                        logger.warning(
+                            "multi_confirm_invalid_state",
+                            extra={
+                                "uid": uid,
+                                "cid": correlation_id,
+                            },
+                        )
+                        self._pending_multi_links.pop(uid, None)
+                        urls = None
+                    else:
+                        self._pending_multi_links.pop(uid, None)
+
+            if not urls:
+                await self.response_formatter.safe_reply(
+                    message,
+                    "ℹ️ No pending multi-link request to confirm. Please send the links again.",
+                )
+                return
+
+            await self.response_formatter.safe_reply(
+                message, f"🚀 Processing {len(urls)} links in parallel..."
+            )
+            if interaction_id:
+                await async_safe_update_user_interaction(
+                    self.user_repo,
+                    interaction_id=interaction_id,
+                    response_sent=True,
+                    response_type="processing",
+                    start_time=start_time,
+                    logger_=logger,
+                )
+
+            # Process URLs in parallel with controlled concurrency
+            await self._process_multiple_urls_parallel(message, urls, uid, correlation_id)
+            return
+
+        if self._is_negative(normalized):
+            async with self._state_lock:
+                self._pending_multi_links.pop(uid, None)
+            await self.response_formatter.safe_reply(message, "Cancelled.")
+            if interaction_id:
+                await async_safe_update_user_interaction(
+                    self.user_repo,
+                    interaction_id=interaction_id,
+                    response_sent=True,
+                    response_type="cancelled",
+                    start_time=start_time,
+                    logger_=logger,
+                )
+
+    async def is_awaiting_url(self, uid: int) -> bool:
+        """Check if user is awaiting a URL (respects TTL)."""
+        async with self._state_lock:
+            ts = self._awaiting_url_users.get(uid)
+            if ts is None:
+                return False
+            if time.time() - ts > self._state_ttl_sec:
+                self._awaiting_url_users.pop(uid, None)
+                return False
+            return True
+
+    async def has_pending_multi_links(self, uid: int) -> bool:
+        """Check if user has pending multi-link confirmation (respects TTL)."""
+        async with self._state_lock:
+            entry = self._pending_multi_links.get(uid)
+            if entry is None:
+                return False
+            if time.time() - entry[1] > self._state_ttl_sec:
+                self._pending_multi_links.pop(uid, None)
+                return False
+            return True
+
+    async def cleanup_expired_state(self) -> int:
+        """Remove expired awaiting/pending entries. Returns count removed."""
+        async with self._state_lock:
+            now = time.time()
+            cleaned = 0
+            expired_awaiting = [
+                uid
+                for uid, ts in self._awaiting_url_users.items()
+                if now - ts > self._state_ttl_sec
+            ]
+            for uid in expired_awaiting:
+                del self._awaiting_url_users[uid]
+                cleaned += 1
+            expired_multi = [
+                uid
+                for uid, (_, ts) in self._pending_multi_links.items()
+                if now - ts > self._state_ttl_sec
+            ]
+            for uid in expired_multi:
+                del self._pending_multi_links[uid]
+                cleaned += 1
+            return cleaned
+
+    def _normalize_response(self, text: str) -> str:
+        return text.strip().lower()
+
+    def _is_affirmative(self, text: str) -> bool:
+        """Check if text is an affirmative response."""
+        return text in {"y", "yes", "+", "ok", "okay", "sure", "да", "ага", "угу", "👍", "✅"}
+
+    def _is_negative(self, text: str) -> bool:
+        """Check if text is a negative response."""
+        return text in {"n", "no", "-", "cancel", "stop", "нет", "не"}
