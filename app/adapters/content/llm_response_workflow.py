@@ -73,6 +73,7 @@ class LLMWorkflowNotifications(BaseModel):
     llm_error: Any | None = None  # Callable[[Any, str | None], Awaitable[None]]
     repair_failure: Any | None = None  # Callable[[], Awaitable[None]]
     parsing_failure: Any | None = None  # Callable[[], Awaitable[None]]
+    retry: Any | None = None  # Callable[[], Awaitable[None]]
 
 
 class LLMInteractionConfig(BaseModel):
@@ -220,7 +221,8 @@ class LLMResponseWorkflow:
         for attempt_index, attempt in enumerate(requests):
             is_last_attempt = attempt_index == total_attempts - 1
 
-            llm = await self._invoke_llm(attempt, req_id)
+            on_retry = notifications.retry if notifications else None
+            llm = await self._invoke_llm(attempt, req_id, on_retry=on_retry)
 
             if on_attempt is not None:
                 await on_attempt(llm)
@@ -342,7 +344,9 @@ class LLMResponseWorkflow:
 
         return fixed_timeout, "fixed"
 
-    async def _invoke_llm(self, request: LLMRequestConfig, req_id: int) -> Any:
+    async def _invoke_llm(
+        self, request: LLMRequestConfig, req_id: int, on_retry: Any | None = None
+    ) -> Any:
         sem_timeout = getattr(self.cfg.runtime, "semaphore_acquire_timeout_sec", 30.0)
         llm_timeout, timeout_source = await self._resolve_llm_timeout(request.model_override)
         max_retries = getattr(self.cfg.runtime, "llm_call_max_retries", 2)
@@ -399,6 +403,12 @@ class LLMResponseWorkflow:
                             "max_retries": max_retries,
                         },
                     )
+                    if on_retry:
+                        try:
+                            await on_retry()
+                        except Exception:
+                            logger.exception("llm_on_retry_callback_failed")
+
                     await sleep_backoff(attempt, backoff_base=2.0, max_delay=30.0)
                     continue
                 logger.error(

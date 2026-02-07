@@ -32,6 +32,13 @@ class OpenRouterConfig(BaseModel):
     long_context_model: str | None = Field(
         default="moonshotai/kimi-k2.5", validation_alias="OPENROUTER_LONG_CONTEXT_MODEL"
     )
+    flash_model: str = Field(
+        default="google/gemini-3-flash", validation_alias="OPENROUTER_FLASH_MODEL"
+    )
+    flash_fallback_models: tuple[str, ...] = Field(
+        default_factory=lambda: ("anthropic/claude-4.5-haiku",),
+        validation_alias="OPENROUTER_FLASH_FALLBACK_MODELS",
+    )
     summary_temperature_relaxed: float | None = Field(
         default=None, validation_alias="OPENROUTER_SUMMARY_TEMPERATURE_RELAXED"
     )
@@ -89,7 +96,7 @@ class OpenRouterConfig(BaseModel):
     def _validate_model(cls, value: Any) -> str:
         return validate_model_name(str(value or ""))
 
-    @field_validator("fallback_models", mode="before")
+    @field_validator("fallback_models", "flash_fallback_models", mode="before")
     @classmethod
     def _parse_fallback_models(cls, value: Any) -> tuple[str, ...]:
         if value in (None, ""):
@@ -107,7 +114,7 @@ class OpenRouterConfig(BaseModel):
                 continue
         return tuple(validated)
 
-    @field_validator("long_context_model", mode="before")
+    @field_validator("long_context_model", "flash_model", mode="before")
     @classmethod
     def _validate_long_context_model(cls, value: Any) -> str | None:
         if value in (None, ""):

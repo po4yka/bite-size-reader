@@ -224,6 +224,7 @@ class AdaptiveTimeoutService:
         """Estimate timeout based on content length.
 
         Longer content requires more LLM processing time.
+        Formula: 60s base + ~1s per 1000 chars.
         """
         if content_length is None or content_length <= 0:
             return TimeoutEstimate(
@@ -232,11 +233,9 @@ class AdaptiveTimeoutService:
                 source="default",
             )
 
-        # Base timeout + additional time per 10k characters
-        estimated = (
-            self._config.content_base_timeout_sec
-            + (content_length / 10000) * self._config.content_per_10k_chars_sec
-        )
+        # Base timeout + additional time per 1000 characters
+        # 60s base overhead + 1s per 1000 chars
+        estimated = 60.0 + (content_length / 1000) * 1.0
 
         # Clamp to bounds
         timeout = max(
@@ -283,6 +282,18 @@ class AdaptiveTimeoutService:
         if domain:
             estimate = await self._get_combined_domain_timeout(domain)
             if estimate:
+                # If we have content length, ensure timeout covers it
+                if content_length and content_length > 0:
+                    content_est = self._content_length_estimate(content_length)
+                    if content_est.timeout_sec > estimate.timeout_sec:
+                        estimate = TimeoutEstimate(
+                            timeout_sec=content_est.timeout_sec,
+                            confidence=estimate.confidence,
+                            source=f"{estimate.source}+content",
+                            sample_count=estimate.sample_count,
+                            p95_ms=estimate.p95_ms,
+                        )
+
                 logger.debug(
                     "adaptive_timeout_computed",
                     extra={

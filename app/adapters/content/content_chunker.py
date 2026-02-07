@@ -214,11 +214,98 @@ class ContentChunker:
             if isinstance(result, dict):
                 chunk_summaries.append(result)
 
-        # Aggregate chunk summaries into final
+        # Aggregate chunk summaries into final draft
         if chunk_summaries:
             aggregated = aggregate_chunk_summaries(chunk_summaries)
+
+            # Recursive Summarization: Synthesize the final summary from the aggregated chunks
+            # This ensures the final output is cohesive and not just a concatenation of parts
+            synthesized = await self._synthesize_chunks(
+                aggregated, system_prompt, chosen_lang, req_id, correlation_id
+            )
+            if synthesized:
+                return validate_and_shape_summary(synthesized)
+
+            # Fallback to aggregated if synthesis fails
             return validate_and_shape_summary(aggregated)
         return None
+
+    async def _synthesize_chunks(
+        self,
+        aggregated: dict[str, Any],
+        system_prompt: str,
+        chosen_lang: str,
+        req_id: int,
+        correlation_id: str | None,
+    ) -> dict[str, Any] | None:
+        """Synthesize a final cohesive summary from aggregated chunk summaries."""
+        # Convert aggregated dict to a text representation for the LLM
+        # We focus on the key components: tldr, summary_250, key_ideas
+        context_text = (
+            f"TLDR DRAFT:\n{aggregated.get('tldr', '')}\n\n"
+            f"DETAILED SUMMARY DRAFT:\n{aggregated.get('summary_250', '')}\n\n"
+            f"KEY IDEAS DRAFT:\n{json.dumps(aggregated.get('key_ideas', []), ensure_ascii=False)}"
+        )
+
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {
+                "role": "user",
+                "content": (
+                    f"Synthesize the following draft summaries (generated from article chunks) into a single, cohesive, high-quality summary. "
+                    f"Ensure the flow is natural and redundant information is removed. "
+                    f"Output ONLY a valid JSON object matching the schema.\n"
+                    f"Respond in {'Russian' if chosen_lang == LANG_RU else 'English'}.\n\n"
+                    f"DRAFT CONTENT START\n{context_text}\nDRAFT CONTENT END"
+                ),
+            },
+        ]
+
+        async with self._sem():
+            # Use structured output format
+            response_format_cf = self._build_structured_response_format()
+            resp = await self.openrouter.chat(
+                messages,
+                temperature=self.cfg.openrouter.temperature,
+                max_tokens=self.cfg.openrouter.max_tokens or 4096,
+                top_p=self.cfg.openrouter.top_p,
+                request_id=req_id,
+                response_format=response_format_cf,
+            )
+
+        if resp.status != "ok":
+            logger.warning(
+                "synthesis_llm_error",
+                extra={
+                    "cid": correlation_id,
+                    "status": resp.status,
+                    "error": resp.error_text,
+                },
+            )
+            return None
+
+        # Parse response (reuse existing parsing logic pattern)
+        parsed: dict[str, Any] | None = None
+        try:
+            if resp.response_json and isinstance(resp.response_json, dict):
+                ch = resp.response_json.get("choices") or []
+                if ch and isinstance(ch[0], dict):
+                    msg0 = ch[0].get("message") or {}
+                    p = msg0.get("parsed")
+                    if p is not None:
+                        parsed = p if isinstance(p, dict) else None
+        except Exception as exc:
+            raise_if_cancelled(exc)
+            parsed = None
+
+        if parsed is None:
+            try:
+                if (resp.response_text or "").strip():
+                    parsed = json.loads((resp.response_text or "").strip().strip("` "))
+            except Exception:
+                pass
+
+        return parsed
 
     def _build_structured_response_format(self) -> dict[str, Any]:
         """Build response format configuration for structured outputs."""

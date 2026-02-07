@@ -27,12 +27,12 @@ class AdaptiveTimeoutConfig(BaseModel):
         description="Minimum timeout in seconds (floor)",
     )
     max_timeout_sec: float = Field(
-        default=900.0,
+        default=1800.0,
         validation_alias=AliasChoices("ADAPTIVE_TIMEOUT_MAX_SEC", "adaptive_timeout_max_sec"),
         description="Maximum timeout in seconds (cap)",
     )
     default_timeout_sec: float = Field(
-        default=300.0,
+        default=900.0,
         validation_alias=AliasChoices(
             "ADAPTIVE_TIMEOUT_DEFAULT_SEC", "adaptive_timeout_default_sec"
         ),

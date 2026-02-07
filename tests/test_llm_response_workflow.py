@@ -375,6 +375,34 @@ class LLMResponseWorkflowTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(TimeoutError):
             await workflow._invoke_llm(self.request, req_id=902)
 
+    async def test_llm_call_timeout_retry_triggers_callback(self) -> None:
+        """Verify that the on_retry callback is invoked during LLM timeouts."""
+        self.cfg.runtime.llm_call_timeout_sec = 0.05  # 50ms
+        self.cfg.runtime.llm_call_max_retries = 2
+
+        # Recreate workflow with updated config
+        self.workflow = LLMResponseWorkflow(
+            cfg=self.cfg,
+            db=self.db,
+            openrouter=self.openrouter,
+            response_formatter=self.response_formatter,
+            audit_func=lambda *args, **kwargs: None,
+            sem=lambda: _DummySemaphore(),
+        )
+
+        retry_callback = AsyncMock()
+
+        async def slow_chat(*args, **kwargs):
+            await asyncio.sleep(0.1)  # Longer than timeout
+
+        self.openrouter.chat = AsyncMock(side_effect=slow_chat)
+
+        with self.assertRaises(TimeoutError):
+            await self.workflow._invoke_llm(self.request, req_id=903, on_retry=retry_callback)
+
+        # Should have retried 2 times -> called callback 2 times
+        assert retry_callback.await_count == 2
+
     @staticmethod
     def _to_json(payload: dict[str, str]) -> str:
         items = ", ".join(f'"{k}": "{v}"' for k, v in payload.items())

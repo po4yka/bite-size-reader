@@ -34,8 +34,8 @@ logger = logging.getLogger(__name__)
 # URL processing configuration (defaults when adaptive timeout is disabled)
 URL_MAX_CONCURRENT = 4
 URL_MAX_RETRIES = 2  # was 3: fewer retries, each with more time
-URL_INITIAL_TIMEOUT_SEC = 450.0  # 7.5 min: allows for slow LLM response generation
-URL_MAX_TIMEOUT_SEC = 900.0  # 15 min: cap for retries with backoff
+URL_INITIAL_TIMEOUT_SEC = 900.0  # 15 min: allows for slow LLM response generation
+URL_MAX_TIMEOUT_SEC = 1800.0  # 30 min: cap for retries with backoff
 URL_BACKOFF_BASE = 3.0  # was 2.0: longer backoff between retries
 URL_BACKOFF_MAX = 60.0
 
@@ -599,6 +599,8 @@ class URLHandler:
                         batch_status.mark_extracting(url)
                     elif phase == "analyzing":
                         batch_status.mark_analyzing(url)
+                    elif phase == "retrying":
+                        batch_status.mark_retrying(url)
                     await progress_tracker.force_update()
 
                 for attempt in range(URL_MAX_RETRIES + 1):
@@ -961,6 +963,20 @@ class URLHandler:
 
         # Run batch processing and progress updates concurrently
         progress_task = asyncio.create_task(progress_tracker.process_update_queue())
+
+        async def heartbeat() -> None:
+            """Force periodic UI updates to show live elapsed time."""
+            while not progress_tracker.is_complete:
+                try:
+                    await asyncio.sleep(5)
+                    await progress_tracker.force_update()
+                except asyncio.CancelledError:
+                    break
+                except Exception:
+                    logger.debug("progress_heartbeat_failed", exc_info=True)
+
+        heartbeat_task = asyncio.create_task(heartbeat())
+
         try:
             await process_batches()
         except asyncio.CancelledError:
@@ -971,6 +987,7 @@ class URLHandler:
                 extra={"error": str(e), "uid": uid, "url_count": len(urls)},
             )
         finally:
+            heartbeat_task.cancel()
             progress_tracker.mark_complete()
             try:
                 await progress_task

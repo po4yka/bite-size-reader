@@ -134,6 +134,10 @@ class BatchProgressFormatter:
             live = cls._format_live_elapsed(entry.start_time)
             return f"{prefix} {link}  Analyzing...{live}"
 
+        if entry.status == URLStatus.RETRYING:
+            live = cls._format_live_elapsed(entry.start_time)
+            return f"{prefix} {link}  Retrying (Timeout)...{live}"
+
         if entry.status == URLStatus.PROCESSING:
             live = cls._format_live_elapsed(entry.start_time)
             return f"{prefix} {link}  Processing...{live}"

@@ -40,7 +40,7 @@ from app.infrastructure.persistence.sqlite.repositories.summary_repository impor
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Awaitable, Callable
 
     from app.adapters.external.response_formatter import ResponseFormatter
     from app.adapters.llm import LLMClientProtocol
@@ -166,6 +166,7 @@ class LLMSummarizer:
         url: str | None = None,
         silent: bool = False,
         defer_persistence: bool = False,
+        on_phase_change: Callable[[str], Awaitable[None]] | None = None,
     ) -> dict[str, Any] | None:
         """Summarize content using LLM and return shaped summary."""
         # Validate content before sending to LLM
@@ -293,17 +294,40 @@ class LLMSummarizer:
         fallback_models = [
             model for model in self.cfg.openrouter.fallback_models if model and model != base_model
         ]
+
+        # Smart Tiering: If we have flash models configured, use them as intermediate fallbacks
+        flash_models = []
+        if self.cfg.openrouter.flash_model:
+            flash_models.append(self.cfg.openrouter.flash_model)
+        if self.cfg.openrouter.flash_fallback_models:
+            flash_models.extend(self.cfg.openrouter.flash_fallback_models)
+
+        added_flash_models = set()
+        for f_model in flash_models:
+            if f_model and f_model != base_model and f_model not in added_flash_models:
+                _add_request(
+                    preset="json_object_flash",
+                    model_name=f_model,
+                    response_format=response_format_json_object,
+                    max_tokens=max_tokens_json_object,
+                    temperature=json_temperature,
+                    top_p=json_top_p,
+                )
+                added_flash_models.add(f_model)
+
         if fallback_models:
             # Only use first fallback model to limit cost
             fallback_model = fallback_models[0]
-            _add_request(
-                preset="json_object_fallback",
-                model_name=fallback_model,
-                response_format=response_format_json_object,
-                max_tokens=max_tokens_json_object,
-                temperature=json_temperature,
-                top_p=json_top_p,
-            )
+            # Avoid adding if it's already in flash models
+            if fallback_model not in added_flash_models:
+                _add_request(
+                    preset="json_object_fallback",
+                    model_name=fallback_model,
+                    response_format=response_format_json_object,
+                    max_tokens=max_tokens_json_object,
+                    temperature=json_temperature,
+                    top_p=json_top_p,
+                )
 
         repair_context = LLMRepairContext(
             base_messages=[
@@ -359,11 +383,16 @@ class LLMSummarizer:
                 details="Model did not produce valid summary output after retries",
             )
 
+        async def _on_retry() -> None:
+            if on_phase_change:
+                await on_phase_change("retrying")
+
         notifications = LLMWorkflowNotifications(
             completion=_on_completion,
             llm_error=_on_llm_error,
             repair_failure=_on_repair_failure,
             parsing_failure=_on_parsing_failure,
+            retry=_on_retry,
         )
 
         def _insights_from_summary(summary: dict[str, Any]) -> dict[str, Any] | None:

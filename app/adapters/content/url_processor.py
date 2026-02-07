@@ -395,6 +395,7 @@ class URLProcessor:
                     url_hash=dedupe_hash,
                     url=url_text,
                     silent=notify_silent,
+                    on_phase_change=on_phase_change,
                 )
 
             if summary_json is None:
