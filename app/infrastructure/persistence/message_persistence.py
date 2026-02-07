@@ -174,12 +174,18 @@ class MessagePersistence:
 
         # Detect common media types and collect file_ids
         try:
-            if getattr(message, "photo", None) is not None:
+            photo = getattr(message, "photo", None)
+            if photo is not None:
                 media_type = "photo"
-                photo = message.photo
-                fid = getattr(photo, "file_id", None)
-                if fid:
-                    media_file_ids.append(fid)
+                # Pyrogram photos are lists of PhotoSize objects; get the largest one (last)
+                if isinstance(photo, list) and photo:
+                    fid = getattr(photo[-1], "file_id", None)
+                    if fid:
+                        media_file_ids.append(fid)
+                else:
+                    fid = getattr(photo, "file_id", None)
+                    if fid:
+                        media_file_ids.append(fid)
             elif getattr(message, "video", None) is not None:
                 media_type = "video"
                 fid = getattr(message.video, "file_id", None)

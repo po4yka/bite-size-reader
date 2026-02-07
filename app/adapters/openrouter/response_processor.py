@@ -107,7 +107,10 @@ class ResponseProcessor:
                     else:
                         append_text(stripped)
 
-                def walk_content(part: Any) -> None:
+                def walk_content(part: Any, depth: int = 0) -> None:
+                    if depth > 10:  # Safety limit for recursion
+                        return
+
                     if isinstance(part, dict):
                         for key in ("json", "parsed", "arguments", "output"):
                             if key in part:
@@ -120,14 +123,14 @@ class ResponseProcessor:
                         tool_calls = part.get("tool_calls")
                         if isinstance(tool_calls, list):
                             for call in tool_calls:
-                                walk_content(call)
+                                walk_content(call, depth + 1)
 
                         for key in ("text", "content", "reasoning"):
                             value = part.get(key)
                             if isinstance(value, str):
                                 maybe_append_text_or_json(value)
                             elif isinstance(value, list | dict):
-                                walk_content(value)
+                                walk_content(value, depth + 1)
 
                         for key in ("data", "payload", "message"):
                             nested = part.get(key)
@@ -136,7 +139,7 @@ class ResponseProcessor:
 
                     elif isinstance(part, list):
                         for item in part:
-                            walk_content(item)
+                            walk_content(item, depth + 1)
                     elif isinstance(part, str):
                         append_text(part)
 
@@ -207,12 +210,23 @@ class ResponseProcessor:
         # Calculate cost if enabled
         if self._enable_stats:
             try:
+                # Usage cost may be directly in usage or inside choices
                 raw = data.get("usage", {})
-                if isinstance(raw, dict) and raw.get("total_cost") is not None:
-                    cost_usd = float(raw.get("total_cost", 0.0))
-                else:
-                    cost_usd = None
-            except Exception:
+                if isinstance(raw, dict):
+                    # Direct check for OpenRouter's total_cost
+                    cost_val = raw.get("total_cost")
+                    if cost_val is not None:
+                        cost_usd = float(cost_val)
+                    # Support other providers standard field names
+                    elif raw.get("cost") is not None:
+                        cost_usd = float(raw["cost"])
+
+                # Check for cost in choices (some local model gateways do this)
+                if cost_usd is None and choices:
+                    cost_val = choices[0].get("cost")
+                    if cost_val is not None:
+                        cost_usd = float(cost_val)
+            except (TypeError, ValueError):
                 cost_usd = None
 
         return text, usage, cost_usd
@@ -252,7 +266,11 @@ class ResponseProcessor:
 
         # Extract cache discount if available
         try:
+            # Discount may be at top level or inside usage
             discount_val = response.get("cache_discount")
+            if discount_val is None:
+                discount_val = usage.get("cache_discount")
+
             if discount_val is not None:
                 cache_discount = float(discount_val)
         except (TypeError, ValueError):

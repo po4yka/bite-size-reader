@@ -37,6 +37,10 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+class ConcurrencyTimeoutError(TimeoutError):
+    """Raised when an LLM processing slot cannot be acquired within the timeout."""
+
+
 class LLMRequestConfig(BaseModel):
     """Configuration for a single LLM attempt."""
 
@@ -150,6 +154,7 @@ class LLMResponseWorkflow:
         self.request_repo = SqliteRequestRepositoryAdapter(db)
         self.llm_repo = SqliteLLMRepositoryAdapter(db)
         self.user_repo = SqliteUserRepositoryAdapter(db)
+        self._background_tasks: set[asyncio.Task[Any]] = set()
 
         try:
             sem_timeout = float(getattr(cfg.runtime, "semaphore_acquire_timeout_sec", 30.0))
@@ -172,6 +177,8 @@ class LLMResponseWorkflow:
         """Run a persistence task in the background and log errors."""
         try:
             task: asyncio.Task[Any] = asyncio.create_task(coro)
+            self._background_tasks.add(task)
+            task.add_done_callback(self._background_tasks.discard)
         except RuntimeError as exc:
             logger.error(
                 "background_task_schedule_failed",
@@ -191,6 +198,24 @@ class LLMResponseWorkflow:
 
         task.add_done_callback(_log_task_error)
         return task
+
+    async def aclose(self, timeout: float = 5.0) -> None:
+        """Wait for all background tasks to complete."""
+        if not self._background_tasks:
+            return
+
+        tasks = list(self._background_tasks)
+        if tasks:
+            try:
+                await asyncio.wait_for(
+                    asyncio.gather(*tasks, return_exceptions=True), timeout=timeout
+                )
+            except TimeoutError:
+                logger.warning(
+                    "llm_workflow_shutdown_timeout", extra={"pending": len(self._background_tasks)}
+                )
+            except Exception as e:
+                logger.error("llm_workflow_shutdown_error", extra={"error": str(e)})
 
     async def execute_summary_workflow(
         self,
@@ -372,7 +397,8 @@ class LLMResponseWorkflow:
                     "llm_semaphore_acquire_timeout",
                     extra={"req_id": req_id, "timeout_sec": sem_timeout, "attempt": attempt},
                 )
-                raise
+                msg = f"Failed to acquire processing slot within {sem_timeout}s"
+                raise ConcurrencyTimeoutError(msg) from None
 
             # Phase 2: LLM call with longer timeout, semaphore held
             try:

@@ -151,6 +151,11 @@ class LLMSummarizer:
         )
         self._last_llm_result: Any | None = None
 
+    @property
+    def workflow(self) -> LLMResponseWorkflow:
+        """Access the internal LLM interaction workflow."""
+        return self._workflow
+
     async def summarize_content(
         self,
         message: Any,

@@ -11,6 +11,7 @@ import time
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
+from app.adapters.content.llm_response_workflow import ConcurrencyTimeoutError
 from app.adapters.telegram.message_router_helpers import (
     handle_document_file,
     is_duplicate_message,
@@ -409,7 +410,14 @@ class MessageRouter:
             # Classify the error for a more helpful user-facing message
             error_lower = str(e).lower()
 
-            if "timeout" in error_lower or isinstance(e, TimeoutError):
+            if isinstance(e, ConcurrencyTimeoutError):
+                await self.response_formatter.send_error_notification(
+                    message,
+                    "rate_limit",
+                    correlation_id,
+                    details="The system is currently handling too many requests. Please try again in a few moments.",
+                )
+            elif "timeout" in error_lower or isinstance(e, TimeoutError):
                 await self.response_formatter.send_error_notification(
                     message,
                     "timeout",

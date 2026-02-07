@@ -220,6 +220,13 @@ class TelegramBot:
 
     async def _shutdown(self, drain_timeout: float = 5.0) -> None:
         """Close external clients and drain in-flight tasks."""
+        # 0. Close URL processor (drains background tasks)
+        if hasattr(self, "url_processor") and hasattr(self.url_processor, "aclose"):
+            try:
+                await self.url_processor.aclose(timeout=drain_timeout)
+            except Exception:
+                logger.warning("shutdown_url_processor_close_failed", exc_info=True)
+
         # 1. Close Firecrawl client
         firecrawl = getattr(self, "_firecrawl", None)
         if firecrawl is not None and hasattr(firecrawl, "aclose"):

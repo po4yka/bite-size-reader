@@ -398,11 +398,11 @@ class TelegramMessage(BaseModel):
                         from_user = TelegramUser(
                             id=int(user_id),
                             is_bot=getattr(from_user_data, "is_bot", False),
-                            first_name=getattr(from_user_data, "first_name", ""),
-                            last_name=from_user_data.last_name,
-                            username=from_user_data.username,
-                            language_code=from_user_data.language_code,
-                            is_premium=from_user_data.is_premium,
+                            first_name=getattr(from_user_data, "first_name", "Unknown"),
+                            last_name=getattr(from_user_data, "last_name", None),
+                            username=getattr(from_user_data, "username", None),
+                            language_code=getattr(from_user_data, "language_code", None),
+                            is_premium=getattr(from_user_data, "is_premium", None),
                             added_to_attachment_menu=getattr(
                                 from_user_data, "added_to_attachment_menu", None
                             ),

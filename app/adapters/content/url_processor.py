@@ -167,6 +167,8 @@ class URLProcessor:
         )
 
         self.message_persistence = MessagePersistence(db=db)
+        # Registry for tracking background tasks to prevent GC and ensure shutdown
+        self._background_tasks: set[asyncio.Task[Any]] = set()
 
     def _schedule_persistence_task(
         self, coro: Coroutine[Any, Any, Any], correlation_id: str | None, label: str
@@ -174,6 +176,8 @@ class URLProcessor:
         """Run a persistence task without blocking the main flow."""
         try:
             task: asyncio.Task[Any] = asyncio.create_task(coro)
+            self._background_tasks.add(task)
+            task.add_done_callback(self._background_tasks.discard)
         except RuntimeError as exc:
             logger.error(
                 "persistence_task_schedule_failed",
@@ -200,6 +204,8 @@ class URLProcessor:
         """Run a background task without blocking the main flow."""
         try:
             task: asyncio.Task[Any] = asyncio.create_task(coro)
+            self._background_tasks.add(task)
+            task.add_done_callback(self._background_tasks.discard)
         except RuntimeError as exc:
             logger.error(
                 "background_task_schedule_failed",
@@ -219,6 +225,34 @@ class URLProcessor:
 
         task.add_done_callback(_log_task_error)
         return task
+
+    async def aclose(self, timeout: float = 5.0) -> None:
+        """Wait for all background tasks to complete before closing."""
+        # 1. Drain workflow tasks via summarizer
+        if hasattr(self, "llm_summarizer") and hasattr(self.llm_summarizer, "workflow"):
+            await self.llm_summarizer.workflow.aclose(timeout=timeout)
+
+        # 2. Drain local background tasks
+        if not self._background_tasks:
+            return
+
+        logger.info(
+            "url_processor_shutdown_draining", extra={"task_count": len(self._background_tasks)}
+        )
+        # Create a list because discard() modifies the set
+        tasks = list(self._background_tasks)
+        if tasks:
+            try:
+                await asyncio.wait_for(
+                    asyncio.gather(*tasks, return_exceptions=True), timeout=timeout
+                )
+            except TimeoutError:
+                logger.warning(
+                    "url_processor_shutdown_timeout", extra={"pending": len(self._background_tasks)}
+                )
+            except Exception as e:
+                logger.error("url_processor_shutdown_error", extra={"error": str(e)})
+        logger.info("url_processor_shutdown_complete")
 
     async def _await_persistence_task(self, task: asyncio.Task | None) -> None:
         """Await a scheduled persistence task when required (silent flows)."""
