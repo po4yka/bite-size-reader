@@ -118,7 +118,11 @@ class ResponseSenderImpl:
                 pass
         except Exception as e:
             raise_if_cancelled(e)
-            logger.error("reply_failed", extra={"error": str(e), "text_length": len(text)})
+            logger.error(
+                "reply_failed",
+                exc_info=True,
+                extra={"error": str(e), "text_length": len(text)},
+            )
 
     async def safe_reply_with_id(
         self,
@@ -473,6 +477,7 @@ class ResponseSenderImpl:
             raise_if_cancelled(e)
             logger.warning(
                 "edit_message_failed",
+                exc_info=True,
                 extra={"error": str(e), "chat_id": chat_id, "message_id": message_id},
             )
             return False

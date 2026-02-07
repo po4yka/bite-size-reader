@@ -278,6 +278,54 @@ class CommandProcessor:
         ctx = self._build_context(message, uid, correlation_id, interaction_id, start_time)
         await self._admin.handle_dbverify(ctx)
 
+    async def handle_clearcache_command(
+        self,
+        message: Any,
+        uid: int,
+        correlation_id: str,
+        interaction_id: int,
+        start_time: float,
+    ) -> None:
+        """Handle /clearcache command.
+
+        Args:
+            message: The Pyrogram message object.
+            uid: The user ID.
+            correlation_id: Request correlation ID.
+            interaction_id: Database interaction ID.
+            start_time: Processing start timestamp.
+        """
+        from app.db.user_interactions import async_safe_update_user_interaction
+
+        try:
+            count = await self.url_processor.clear_cache()
+            await self.response_formatter.safe_reply(
+                message, f"✅ Cache cleared. Removed {count} keys."
+            )
+            if interaction_id:
+                await async_safe_update_user_interaction(
+                    self.user_repo,
+                    interaction_id=interaction_id,
+                    response_sent=True,
+                    response_type="cache_cleared",
+                    start_time=start_time,
+                    logger_=logger,
+                )
+        except Exception as exc:
+            logger.error("cache_clear_failed", extra={"error": str(exc), "uid": uid})
+            await self.response_formatter.safe_reply(message, f"❌ Failed to clear cache: {exc}")
+            if interaction_id:
+                await async_safe_update_user_interaction(
+                    self.user_repo,
+                    interaction_id=interaction_id,
+                    response_sent=True,
+                    response_type="error",
+                    error_occurred=True,
+                    error_message=str(exc),
+                    start_time=start_time,
+                    logger_=logger,
+                )
+
     # =========================================================================
     # URL commands delegation
     # =========================================================================

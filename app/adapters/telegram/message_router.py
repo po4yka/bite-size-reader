@@ -534,6 +534,12 @@ class MessageRouter:
             )
             return
 
+        if text.startswith("/clearcache"):
+            await self.command_processor.handle_clearcache_command(
+                message, uid, correlation_id, interaction_id, start_time
+            )
+            return
+
         for local_command in ("/finddb", "/findlocal"):
             if text.startswith(local_command):
                 await self.command_processor.handle_find_local_command(

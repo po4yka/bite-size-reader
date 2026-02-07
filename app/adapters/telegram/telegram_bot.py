@@ -167,6 +167,13 @@ class TelegramBot:
                     extra={"error": str(e)},
                 )
 
+        # Clear cache on startup to prevent stale processing issues
+        try:
+            cleaned = await self.url_processor.clear_cache()
+            logger.info("startup_cache_cleared", extra={"count": cleaned})
+        except Exception as e:
+            logger.warning("startup_cache_clear_failed", extra={"error": str(e)})
+
         # Start background scheduler for periodic tasks (e.g., Karakeep sync)
         await self._scheduler.start()
 

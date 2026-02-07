@@ -894,3 +894,9 @@ class URLProcessor:
             url_hash=url_hash,
             source_lang=source_lang,
         )
+
+    async def clear_cache(self) -> int:
+        """Clear the extraction cache."""
+        if hasattr(self.content_extractor, "_cache"):
+            return await self.content_extractor._cache.clear()
+        return 0

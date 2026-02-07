@@ -357,6 +357,13 @@ async def process_url_batch(
                         "batch_url_cache_hit",
                         extra={"url": url, "request_id": req_id, "uid": uid},
                     )
+                    # Audit the cache hit so it's visible in logs
+                    if hasattr(url_processor, "_audit"):
+                        url_processor._audit(
+                            "INFO",
+                            "batch_url_cache_hit",
+                            {"url": url, "request_id": req_id, "uid": uid},
+                        )
                     continue
 
             request_id, is_new = await request_repo.async_create_minimal_request(
@@ -390,6 +397,10 @@ async def process_url_batch(
 
     # Use semaphore to limit concurrent processing
     semaphore = asyncio.Semaphore(max_concurrent)
+
+    # Add a small delay to ensure the initial message is sent and visible
+    # This prevents race conditions where we try to edit/reply too quickly
+    await asyncio.sleep(0.5)
 
     # Track domains that exhausted all retries on timeout
     failed_domains: set[str] = set()
@@ -434,6 +445,8 @@ async def process_url_batch(
         # If already marked as cached during pre-registration, skip processing
         entry = batch_status._find_entry(url)
         if entry and entry.status == URLStatus.CACHED:
+            # Add a tiny delay for cached items to allow UI updates to flow
+            await asyncio.sleep(0.1)
             await progress_tracker.increment_and_update()
             return url, True, "", entry.title
 
