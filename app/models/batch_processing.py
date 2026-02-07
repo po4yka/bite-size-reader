@@ -127,6 +127,7 @@ class URLStatus(Enum):
     ANALYZING = "analyzing"  # LLM summarization phase
     RETRYING = "retrying"  # Retrying due to error (e.g. timeout)
     COMPLETE = "complete"
+    CACHED = "cached"  # Reused existing summary
     FAILED = "failed"
 
 
@@ -305,6 +306,24 @@ class URLBatchStatus:
             if entry.processing_time_ms > 0:
                 self._processing_times.append(entry.processing_time_ms)
 
+    def mark_cached(
+        self,
+        url: str,
+        *,
+        title: str | None = None,
+    ) -> None:
+        """Mark a URL as successfully reused from cache.
+
+        Args:
+            url: The URL that was found in cache
+            title: Optional article title for display
+        """
+        entry = self._find_entry(url)
+        if entry:
+            entry.status = URLStatus.CACHED
+            entry.title = title
+            entry.processing_time_ms = 0.0
+
     def mark_failed(
         self,
         url: str,
@@ -344,8 +363,8 @@ class URLBatchStatus:
 
     @property
     def completed(self) -> list[URLStatusEntry]:
-        """List of successfully completed entries."""
-        return [e for e in self.entries if e.status == URLStatus.COMPLETE]
+        """List of successfully completed entries (including cached)."""
+        return [e for e in self.entries if e.status in {URLStatus.COMPLETE, URLStatus.CACHED}]
 
     @property
     def failed(self) -> list[URLStatusEntry]:
@@ -365,12 +384,12 @@ class URLBatchStatus:
 
     @property
     def done_count(self) -> int:
-        """Number of URLs that are done (completed + failed)."""
+        """Number of URLs that are done (completed + cached + failed)."""
         return len(self.completed) + len(self.failed)
 
     @property
     def success_count(self) -> int:
-        """Number of successfully completed URLs."""
+        """Number of successfully completed URLs (including cached)."""
         return len(self.completed)
 
     @property

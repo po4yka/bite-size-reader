@@ -121,6 +121,9 @@ class BatchProgressFormatter:
             elapsed = cls._format_elapsed(entry.processing_time_ms)
             return f"{prefix} {link}  Done{elapsed}"
 
+        if entry.status == URLStatus.CACHED:
+            return f"{prefix} {link}  Cached"
+
         if entry.status == URLStatus.FAILED:
             error = cls._format_error_short(entry.error_type, entry.error_message)
             elapsed = cls._format_elapsed(entry.processing_time_ms)
@@ -245,12 +248,13 @@ class BatchProgressFormatter:
         label = entry.display_label or entry.domain or "unknown"
         elapsed = cls._format_elapsed(entry.processing_time_ms)
 
-        if entry.status == URLStatus.COMPLETE:
+        if entry.status in {URLStatus.COMPLETE, URLStatus.CACHED}:
             title = entry.title or "Untitled"
             if len(title) > 50:
                 title = title[:47] + "..."
             link = cls._make_link(entry.url, title)
-            return f"{index}. {link}{elapsed}"
+            suffix = " (cached)" if entry.status == URLStatus.CACHED else elapsed
+            return f"{index}. {link}{suffix}"
 
         if entry.status == URLStatus.FAILED:
             error = cls._format_error_short(entry.error_type, entry.error_message)

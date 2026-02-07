@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import json
 import logging
 import time
 from typing import TYPE_CHECKING, Any
@@ -16,7 +17,7 @@ from app.core.async_utils import raise_if_cancelled
 from app.core.logging_utils import generate_correlation_id
 from app.core.url_utils import compute_dedupe_hash, normalize_url
 from app.db.user_interactions import async_safe_update_user_interaction
-from app.models.batch_processing import URLBatchStatus
+from app.models.batch_processing import URLBatchStatus, URLStatus
 from app.security.file_validation import FileValidationError
 from app.utils.progress_tracker import ProgressTracker
 
@@ -316,19 +317,48 @@ async def process_url_batch(
     if not urls:
         return
 
-    # Initialize batch status tracker
-    batch_status = URLBatchStatus.from_urls(urls)
+    # Pre-register all URLs before processing starts
+    # This ensures ALL URLs get database records even if processing fails early
+    url_to_request_id: dict[str, int] = {}
+    urls_to_process: list[str] = []
 
     # Get chat_id from message
     chat_id = getattr(message.chat, "id", None)
 
-    # Pre-register all URLs before processing starts
-    # This ensures ALL URLs get database records even if processing fails early
-    url_to_request_id: dict[str, int] = {}
+    # Initialize batch status tracker
+    batch_status = URLBatchStatus.from_urls(urls)
+
     for url in urls:
         try:
             normalized = normalize_url(url)
             dedupe_hash = compute_dedupe_hash(url)
+
+            # Check if we already have a successful summary for this URL
+            existing_request = await request_repo.async_get_request_by_dedupe_hash(dedupe_hash)
+            if existing_request and existing_request.get("status") == "ok":
+                req_id = existing_request.get("id")
+                # Double check summary table
+                summary = await url_processor.summary_repo.async_get_summary_by_request(req_id)
+                if summary:
+                    # Extract title from cached summary
+                    payload = summary.get("json_payload")
+                    if isinstance(payload, str):
+                        try:
+                            payload = json.loads(payload)
+                        except Exception:
+                            payload = {}
+
+                    from app.adapters.content.url_processor import URLProcessingFlowResult
+
+                    title = URLProcessingFlowResult.from_summary(payload).title
+
+                    batch_status.mark_cached(url, title=title)
+                    logger.debug(
+                        "batch_url_cache_hit",
+                        extra={"url": url, "request_id": req_id, "uid": uid},
+                    )
+                    continue
+
             request_id, is_new = await request_repo.async_create_minimal_request(
                 type_="url",
                 status="pending",
@@ -340,6 +370,7 @@ async def process_url_batch(
                 dedupe_hash=dedupe_hash,
             )
             url_to_request_id[url] = request_id
+            urls_to_process.append(url)
             logger.debug(
                 "pre_registered_batch_url",
                 extra={
@@ -355,6 +386,7 @@ async def process_url_batch(
                 "batch_url_pre_registration_failed",
                 extra={"url": url, "error": str(e), "uid": uid},
             )
+            urls_to_process.append(url)
 
     # Use semaphore to limit concurrent processing
     semaphore = asyncio.Semaphore(max_concurrent)
@@ -399,6 +431,12 @@ async def process_url_batch(
         url: str, progress_tracker: ProgressTracker
     ) -> tuple[str, bool, str, str | None]:
         """Process a single URL with retry and exponential backoff."""
+        # If already marked as cached during pre-registration, skip processing
+        entry = batch_status._find_entry(url)
+        if entry and entry.status == URLStatus.CACHED:
+            await progress_tracker.increment_and_update()
+            return url, True, "", entry.title
+
         async with semaphore:
             per_link_cid = generate_correlation_id()
             last_error = ""
@@ -406,7 +444,8 @@ async def process_url_batch(
             start_time_ms = time.time() * 1000
 
             # Resolve domain for fail-fast tracking
-            entry = batch_status._find_entry(url)
+            if entry is None:
+                entry = batch_status._find_entry(url)
             url_domain = entry.domain if entry else None
 
             # Domain fail-fast
@@ -630,14 +669,9 @@ async def process_url_batch(
     heartbeat_task = asyncio.create_task(heartbeat())
 
     try:
-        batch_size = min(5, len(urls))
-        for batch_start in range(0, len(urls), batch_size):
-            batch_end = min(batch_start + batch_size, len(urls))
-            batch_urls = urls[batch_start:batch_end]
-            batch_tasks = [process_single_url(url, progress_tracker) for url in batch_urls]
-            await asyncio.gather(*batch_tasks, return_exceptions=True)
-            if batch_end < len(urls):
-                await asyncio.sleep(0.1)
+        # Create tasks for ALL URLs (including cached ones for consistent status reporting)
+        all_tasks = [process_single_url(url, progress_tracker) for url in urls]
+        await asyncio.gather(*all_tasks, return_exceptions=True)
     finally:
         heartbeat_task.cancel()
         progress_tracker.mark_complete()
