@@ -282,7 +282,11 @@ class ResponseSenderImpl:
             return None
         except Exception as e:
             raise_if_cancelled(e)
-            logger.error("reply_failed", extra={"error": str(e), "text_length": len(text)})
+            logger.error(
+                "reply_failed",
+                exc_info=True,
+                extra={"error": str(e), "text_length": len(text)},
+            )
             return None
 
     async def edit_or_send(

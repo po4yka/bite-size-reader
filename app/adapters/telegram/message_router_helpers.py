@@ -445,8 +445,9 @@ async def process_url_batch(
         # If already marked as cached during pre-registration, skip processing
         entry = batch_status._find_entry(url)
         if entry and entry.status == URLStatus.CACHED:
-            # Add a tiny delay for cached items to allow UI updates to flow
-            await asyncio.sleep(0.1)
+            # Add a small delay for cached items to allow UI updates to flow and avoid rate limits
+            # 0.5s * 4 links = ~2s, which is a safe interval for Telegram edits
+            await asyncio.sleep(0.5)
             await progress_tracker.increment_and_update()
             return url, True, "", entry.title
 
@@ -663,7 +664,9 @@ async def process_url_batch(
         total=len(urls),
         progress_formatter=progress_formatter,
         initial_message_id=initial_message_id,
-        small_batch_threshold=5,
+        update_interval=2.0,
+        small_batch_threshold=0,
+        progress_threshold_percentage=25.0,
     )
 
     progress_task = asyncio.create_task(progress_tracker.process_update_queue())
@@ -688,10 +691,18 @@ async def process_url_batch(
     finally:
         heartbeat_task.cancel()
         progress_tracker.mark_complete()
-        await progress_task
+        try:
+            # Allow more time for final progress updates to sync, especially if rate limited
+            await asyncio.wait_for(progress_task, timeout=10.0)
+        except Exception:
+            progress_task.cancel()
 
     # Send completion message
     completion_message = BatchProgressFormatter.format_completion_message(batch_status)
+    logger.info(
+        "sending_batch_completion",
+        extra={"uid": uid, "total": len(urls), "success": batch_status.success_count},
+    )
     await response_formatter.safe_reply(message, completion_message, parse_mode="HTML")
 
     if interaction_id and start_time:

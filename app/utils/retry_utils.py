@@ -82,10 +82,6 @@ def is_transient_error(error: Exception) -> bool:
     if any(keyword in error_str for keyword in transient_keywords):
         return True
 
-    # "Message is not modified" is not really an error, safe to treat as transient
-    if "message is not modified" in error_str:
-        return True
-
     # Check exception types
     exception_type = type(error).__name__.lower()
     transient_types = [
