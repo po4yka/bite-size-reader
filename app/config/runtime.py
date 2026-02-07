@@ -40,6 +40,7 @@ class RuntimeConfig(BaseModel):
     semaphore_acquire_timeout_sec: float = Field(
         default=30.0, validation_alias="SEMAPHORE_ACQUIRE_TIMEOUT_SEC"
     )
+    llm_call_timeout_sec: float = Field(default=180.0, validation_alias="LLM_CALL_TIMEOUT_SEC")
     json_parse_timeout_sec: float = Field(default=60.0, validation_alias="JSON_PARSE_TIMEOUT_SEC")
     summary_two_pass_enabled: bool = Field(
         default=False, validation_alias="SUMMARY_TWO_PASS_ENABLED"

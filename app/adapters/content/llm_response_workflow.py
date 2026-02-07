@@ -143,6 +143,21 @@ class LLMResponseWorkflow:
         self.llm_repo = SqliteLLMRepositoryAdapter(db)
         self.user_repo = SqliteUserRepositoryAdapter(db)
 
+        try:
+            sem_timeout = float(getattr(cfg.runtime, "semaphore_acquire_timeout_sec", 30.0))
+            llm_timeout = float(getattr(cfg.runtime, "llm_call_timeout_sec", 180.0))
+            if sem_timeout > llm_timeout:
+                logger.warning(
+                    "timeout_config_suspicious",
+                    extra={
+                        "semaphore_timeout": sem_timeout,
+                        "llm_call_timeout": llm_timeout,
+                        "hint": "semaphore timeout should be shorter than LLM call timeout",
+                    },
+                )
+        except (TypeError, ValueError):
+            pass
+
     def _schedule_background_task(
         self, coro: Coroutine[Any, Any, Any], label: str, correlation_id: str | None
     ) -> asyncio.Task[Any] | None:
@@ -300,27 +315,40 @@ class LLMResponseWorkflow:
         await self._persist_llm_call(llm, req_id, correlation_id)
 
     async def _invoke_llm(self, request: LLMRequestConfig, req_id: int) -> Any:
-        timeout_sec = getattr(self.cfg.runtime, "semaphore_acquire_timeout_sec", 30.0)
+        sem_timeout = getattr(self.cfg.runtime, "semaphore_acquire_timeout_sec", 30.0)
+        llm_timeout = getattr(self.cfg.runtime, "llm_call_timeout_sec", 180.0)
         try:
-            async with asyncio.timeout(timeout_sec):
+            async with asyncio.timeout(sem_timeout):
                 async with self._sem():
                     logger.debug(
                         "llm_semaphore_acquired",
                         extra={"req_id": req_id, "model": request.model_override},
                     )
-                    return await self.openrouter.chat(
-                        request.messages,
-                        temperature=request.temperature,
-                        max_tokens=request.max_tokens,
-                        top_p=request.top_p,
-                        request_id=req_id,
-                        response_format=request.response_format,
-                        model_override=request.model_override,
-                    )
+                    try:
+                        async with asyncio.timeout(llm_timeout):
+                            return await self.openrouter.chat(
+                                request.messages,
+                                temperature=request.temperature,
+                                max_tokens=request.max_tokens,
+                                top_p=request.top_p,
+                                request_id=req_id,
+                                response_format=request.response_format,
+                                model_override=request.model_override,
+                            )
+                    except TimeoutError:
+                        logger.error(
+                            "llm_call_timeout",
+                            extra={
+                                "req_id": req_id,
+                                "llm_timeout_sec": llm_timeout,
+                                "model": request.model_override,
+                            },
+                        )
+                        raise
         except TimeoutError:
             logger.error(
                 "llm_semaphore_acquire_timeout",
-                extra={"req_id": req_id, "timeout_sec": timeout_sec},
+                extra={"req_id": req_id, "timeout_sec": sem_timeout},
             )
             raise
 
@@ -648,27 +676,45 @@ class LLMResponseWorkflow:
 
             repair_messages.append({"role": "user", "content": prompt})
 
-            timeout_sec = getattr(self.cfg.runtime, "semaphore_acquire_timeout_sec", 30.0)
+            sem_timeout = getattr(self.cfg.runtime, "semaphore_acquire_timeout_sec", 30.0)
+            llm_timeout = getattr(self.cfg.runtime, "llm_call_timeout_sec", 180.0)
             try:
-                async with asyncio.timeout(timeout_sec):
+                async with asyncio.timeout(sem_timeout):
                     async with self._sem():
                         logger.debug(
                             "repair_semaphore_acquired",
                             extra={"req_id": req_id, "cid": correlation_id},
                         )
-                        repair = await self.openrouter.chat(
-                            repair_messages,
-                            temperature=request_config.temperature,
-                            max_tokens=repair_context.repair_max_tokens,
-                            top_p=request_config.top_p,
-                            request_id=req_id,
-                            response_format=repair_context.repair_response_format,
-                            model_override=request_config.model_override,
-                        )
+                        try:
+                            async with asyncio.timeout(llm_timeout):
+                                repair = await self.openrouter.chat(
+                                    repair_messages,
+                                    temperature=request_config.temperature,
+                                    max_tokens=repair_context.repair_max_tokens,
+                                    top_p=request_config.top_p,
+                                    request_id=req_id,
+                                    response_format=repair_context.repair_response_format,
+                                    model_override=request_config.model_override,
+                                )
+                        except TimeoutError:
+                            logger.error(
+                                "repair_llm_call_timeout",
+                                extra={
+                                    "req_id": req_id,
+                                    "cid": correlation_id,
+                                    "llm_timeout_sec": llm_timeout,
+                                    "model": request_config.model_override,
+                                },
+                            )
+                            raise
             except TimeoutError:
                 logger.error(
                     "repair_semaphore_acquire_timeout",
-                    extra={"req_id": req_id, "cid": correlation_id, "timeout_sec": timeout_sec},
+                    extra={
+                        "req_id": req_id,
+                        "cid": correlation_id,
+                        "timeout_sec": sem_timeout,
+                    },
                 )
                 raise
 

@@ -1,3 +1,4 @@
+import asyncio
 import unittest
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
@@ -35,6 +36,7 @@ class LLMResponseWorkflowTests(unittest.IsolatedAsyncioTestCase):
         self.cfg.openrouter.structured_output_mode = "json_object"
         # Mock runtime config timeouts used by semaphore/parsing wrappers
         self.cfg.runtime.semaphore_acquire_timeout_sec = 30.0
+        self.cfg.runtime.llm_call_timeout_sec = 180.0
         self.cfg.runtime.json_parse_timeout_sec = 60.0
 
         self.db = MagicMock()
@@ -321,6 +323,55 @@ class LLMResponseWorkflowTests(unittest.IsolatedAsyncioTestCase):
             structured_output_mode="json_object",
             error_context=None,
         )
+
+    async def test_llm_call_timeout_fires_independently(self) -> None:
+        """LLM call timeout fires even when semaphore is acquired quickly."""
+        self.cfg.runtime.llm_call_timeout_sec = 0.05  # 50ms
+        self.cfg.runtime.semaphore_acquire_timeout_sec = 30.0
+
+        # Recreate workflow with updated config
+        self.workflow = LLMResponseWorkflow(
+            cfg=self.cfg,
+            db=self.db,
+            openrouter=self.openrouter,
+            response_formatter=self.response_formatter,
+            audit_func=lambda *args, **kwargs: None,
+            sem=lambda: _DummySemaphore(),
+        )
+
+        async def slow_chat(*args, **kwargs):
+            await asyncio.sleep(1.0)
+
+        self.openrouter.chat = AsyncMock(side_effect=slow_chat)
+
+        with self.assertRaises(TimeoutError):
+            await self.workflow._invoke_llm(self.request, req_id=901)
+
+    async def test_semaphore_timeout_fires_when_semaphore_blocked(self) -> None:
+        """Semaphore timeout fires when the semaphore cannot be acquired in time."""
+        self.cfg.runtime.semaphore_acquire_timeout_sec = 0.05  # 50ms
+        self.cfg.runtime.llm_call_timeout_sec = 180.0
+
+        class _BlockingSemaphore:
+            async def __aenter__(self):
+                await asyncio.sleep(1.0)
+
+            async def __aexit__(self, *args):
+                return None
+
+        workflow = LLMResponseWorkflow(
+            cfg=self.cfg,
+            db=self.db,
+            openrouter=self.openrouter,
+            response_formatter=self.response_formatter,
+            audit_func=lambda *args, **kwargs: None,
+            sem=lambda: _BlockingSemaphore(),
+        )
+
+        self.openrouter.chat = AsyncMock(return_value=self._llm_response({"tldr": "ok"}))
+
+        with self.assertRaises(TimeoutError):
+            await workflow._invoke_llm(self.request, req_id=902)
 
     @staticmethod
     def _to_json(payload: dict[str, str]) -> str:

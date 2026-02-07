@@ -126,6 +126,7 @@ class TestSummaryWorkflowLoopCancelledError:
             openrouter=MagicMock(model="test", structured_output_mode="json_object")
         )
         mock_cfg.runtime.semaphore_acquire_timeout_sec = 30.0
+        mock_cfg.runtime.llm_call_timeout_sec = 180.0
         mock_cfg.runtime.json_parse_timeout_sec = 60.0
 
         wf = LLMResponseWorkflow(
