@@ -153,7 +153,8 @@ class URLHandler:
                 valid_urls.append(url)
             else:
                 logger.warning(
-                    "invalid_url_submitted", extra={"url": url, "error": error_msg, "uid": uid}
+                    "invalid_url_submitted",
+                    extra={"url": url, "error": error_msg, "uid": uid, "cid": correlation_id},
                 )
 
         if not valid_urls:
@@ -172,6 +173,7 @@ class URLHandler:
         urls: list[str],
         interaction_id: int,
         start_time: float,
+        correlation_id: str,
     ) -> None:
         async with self._state_lock:
             self._pending_multi_links[uid] = (urls, time.time())
@@ -207,7 +209,10 @@ class URLHandler:
         await self.response_formatter.safe_reply(
             message, confirm_text, reply_markup=keyboard, parse_mode="HTML"
         )
-        logger.debug("awaiting_multi_confirm", extra={"uid": uid, "count": len(urls)})
+        logger.debug(
+            "awaiting_multi_confirm",
+            extra={"uid": uid, "count": len(urls), "cid": correlation_id},
+        )
         if interaction_id:
             await async_safe_update_user_interaction(
                 self.user_repo,
@@ -301,7 +306,7 @@ class URLHandler:
             return
 
         if len(urls) == 1:
-            logger.debug("received_awaited_url", extra={"uid": uid})
+            logger.debug("received_awaited_url", extra={"uid": uid, "cid": correlation_id})
             await self.url_processor.handle_url_flow(
                 message,
                 urls[0],

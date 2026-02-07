@@ -137,42 +137,83 @@ class DataFormatterImpl:
     def format_readability(self, readability: Any) -> str | None:
         """Create a reader-friendly readability summary line with HTML formatting.
 
+        Supports both single dict and list of dicts for multiple methods.
+
         Returns HTML-formatted string where:
         - Method name is displayed (e.g., "Flesch-Kincaid")
-        - Score (numeric) is wrapped in <code> tags (e.g., "<code>12.4</code>")
+        - Score (numeric) is wrapped in <code> tags
         - Level is displayed (e.g., "College")
-        - Example: "Flesch-Kincaid • Score: <code>12.4</code> • Level: College"
 
         Args:
-            readability: Dict with optional 'method', 'score', 'level' keys.
+            readability: Dict or List of dicts with 'method', 'score', 'level'.
 
         Returns:
             HTML-formatted readability summary string, or None if no valid data.
         """
-        if not isinstance(readability, dict):
+        if not readability:
             return None
 
-        method_raw = str(readability.get("method", "")).strip()
-        method_display = html.escape(method_raw[:1].upper() + method_raw[1:]) if method_raw else ""
+        entries = readability if isinstance(readability, list) else [readability]
+        formatted_entries: list[str] = []
 
-        score = self.format_metric_value(readability.get("score"))
-        level_raw = str(readability.get("level", "")).strip()
-        level_display = html.escape(level_raw[:1].upper() + level_raw[1:]) if level_raw else ""
+        for entry in entries:
+            if not isinstance(entry, dict):
+                continue
 
-        detail_parts: list[str] = []
-        if score is not None:
-            # Wrap score in <code> tags
-            score_code = f"<code>{html.escape(score)}</code>"
-            detail_parts.append(f"Score: {score_code}")
-        if level_display:
-            detail_parts.append(f"Level: {level_display}")
+            method_raw = str(entry.get("method", "")).strip()
+            method_display = (
+                html.escape(method_raw[:1].upper() + method_raw[1:]) if method_raw else ""
+            )
 
-        details = " • ".join(detail_parts)
-        if method_display and details:
-            return f"{method_display} • {details}"
-        if method_display:
-            return method_display
-        return details or None
+            score = self.format_metric_value(entry.get("score"))
+            level_raw = str(entry.get("level", "")).strip()
+            level_display = html.escape(level_raw[:1].upper() + level_raw[1:]) if level_raw else ""
+
+            detail_parts: list[str] = []
+            if score is not None:
+                score_code = f"<code>{html.escape(score)}</code>"
+                detail_parts.append(f"Score: {score_code}")
+            if level_display:
+                detail_parts.append(f"Level: {level_display}")
+
+            details = " • ".join(detail_parts)
+            if method_display and details:
+                formatted_entries.append(f"{method_display}: {details}")
+            elif method_display:
+                formatted_entries.append(method_display)
+            elif details:
+                formatted_entries.append(details)
+
+        if not formatted_entries:
+            return None
+
+        return " | ".join(formatted_entries)
+
+    def normalize_metric_names(self, metrics: dict[str, Any]) -> dict[str, Any]:
+        """Standardize varied field names from different LLMs into a canonical format.
+
+        Common variations handled:
+        - reading_time -> estimated_reading_time_min
+        - complexity -> readability_score
+        - word_count -> word_count_approx
+        """
+        mapping = {
+            "reading_time": "estimated_reading_time_min",
+            "time_to_read": "estimated_reading_time_min",
+            "complexity": "readability_score",
+            "readability": "readability_score",
+            "words": "word_count_approx",
+            "word_count": "word_count_approx",
+            "lang": "language",
+            "detected_language": "language",
+        }
+
+        normalized = {}
+        for key, value in metrics.items():
+            canonical_key = mapping.get(key.lower(), key)
+            normalized[canonical_key] = value
+
+        return normalized
 
     def format_firecrawl_options(self, options: dict[str, Any] | None) -> str | None:
         """Format Firecrawl options into a display string."""

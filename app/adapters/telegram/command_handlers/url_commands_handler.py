@@ -90,7 +90,12 @@ class URLCommandsHandlerImpl:
             # Multiple URLs - ask for confirmation using handler's rich format if available
             if self._url_handler is not None:
                 await self._url_handler._request_multi_link_confirmation(
-                    ctx.message, ctx.uid, urls, ctx.interaction_id, ctx.start_time
+                    ctx.message,
+                    ctx.uid,
+                    urls,
+                    ctx.interaction_id,
+                    ctx.start_time,
+                    ctx.correlation_id,
                 )
             else:
                 # Fallback to simple buttons if no handler

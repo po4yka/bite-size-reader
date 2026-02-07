@@ -88,6 +88,7 @@ async def retry_with_backoff(
     max_delay: float = DEFAULT_MAX_DELAY,
     jitter: float = DEFAULT_JITTER,
     operation_name: str = "operation",
+    correlation_id: str | None = None,
 ) -> T:
     """Execute an async function with exponential backoff retry.
 
@@ -98,6 +99,7 @@ async def retry_with_backoff(
         max_delay: Maximum delay between retries
         jitter: Random jitter factor to add to delay
         operation_name: Name of operation for logging
+        correlation_id: Optional correlation ID for tracing
 
     Returns:
         Result of the function
@@ -125,6 +127,7 @@ async def retry_with_backoff(
                         "operation": operation_name,
                         "attempts": attempt + 1,
                         "error": str(e),
+                        "cid": correlation_id,
                     },
                 )
                 raise KarakeepClientError(
@@ -140,6 +143,7 @@ async def retry_with_backoff(
                     "max_retries": max_retries,
                     "delay_seconds": round(delay, 2),
                     "error": str(e),
+                    "cid": correlation_id,
                 },
             )
             await asyncio.sleep(delay)
@@ -176,6 +180,7 @@ class KarakeepClient:
         retry_base_delay: float = DEFAULT_BASE_DELAY,
         retry_max_delay: float = DEFAULT_MAX_DELAY,
         endpoint_timeouts: dict[str, float] | None = None,
+        correlation_id: str | None = None,
     ) -> None:
         """Initialize Karakeep client.
 
@@ -187,6 +192,7 @@ class KarakeepClient:
             retry_base_delay: Base delay between retries in seconds
             retry_max_delay: Maximum delay between retries in seconds
             endpoint_timeouts: Custom per-endpoint timeouts (overrides defaults)
+            correlation_id: Optional correlation ID for tracing
         """
         self.api_url = api_url.rstrip("/")
         self.api_key = api_key
@@ -199,6 +205,7 @@ class KarakeepClient:
         if endpoint_timeouts:
             self.endpoint_timeouts.update(endpoint_timeouts)
         self._client: httpx.AsyncClient | None = None
+        self._correlation_id = correlation_id
 
     def get_timeout(self, endpoint: str) -> float:
         """Get timeout for a specific endpoint.
@@ -240,12 +247,14 @@ class KarakeepClient:
         self,
         func: Callable[[], Awaitable[T]],
         operation_name: str,
+        correlation_id: str | None = None,
     ) -> T:
         """Execute a function with retry logic.
 
         Args:
             func: Async function to execute
             operation_name: Name of operation for logging
+            correlation_id: Optional correlation ID for tracing
 
         Returns:
             Result of the function
@@ -256,6 +265,7 @@ class KarakeepClient:
             base_delay=self.retry_base_delay,
             max_delay=self.retry_max_delay,
             operation_name=operation_name,
+            correlation_id=correlation_id or self._correlation_id,
         )
 
     async def get_bookmarks(
@@ -264,6 +274,7 @@ class KarakeepClient:
         cursor: str | None = None,
         archived: bool | None = None,
         favourited: bool | None = None,
+        correlation_id: str | None = None,
     ) -> KarakeepBookmarkList:
         """Get paginated list of bookmarks.
 
@@ -272,6 +283,7 @@ class KarakeepClient:
             cursor: Pagination cursor for next page
             archived: Filter by archived status
             favourited: Filter by favourited status
+            correlation_id: Optional correlation ID for tracing
 
         Returns:
             Paginated list of bookmarks
@@ -292,18 +304,20 @@ class KarakeepClient:
             data = response.json()
             return KarakeepBookmarkList.model_validate(data)
 
-        return await self._with_retry(_fetch, "get_bookmarks")
+        return await self._with_retry(_fetch, "get_bookmarks", correlation_id=correlation_id)
 
     async def get_all_bookmarks(
         self,
         archived: bool | None = None,
         favourited: bool | None = None,
+        correlation_id: str | None = None,
     ) -> list[KarakeepBookmark]:
         """Get all bookmarks (handles pagination).
 
         Args:
             archived: Filter by archived status
             favourited: Filter by favourited status
+            correlation_id: Optional correlation ID for tracing
 
         Returns:
             List of all bookmarks
@@ -317,6 +331,7 @@ class KarakeepClient:
                 cursor=cursor,
                 archived=archived,
                 favourited=favourited,
+                correlation_id=correlation_id,
             )
             all_bookmarks.extend(result.bookmarks)
 
@@ -324,14 +339,20 @@ class KarakeepClient:
                 break
             cursor = result.next_cursor
 
-        logger.info("karakeep_fetched_all_bookmarks", extra={"count": len(all_bookmarks)})
+        logger.info(
+            "karakeep_fetched_all_bookmarks",
+            extra={"count": len(all_bookmarks), "cid": correlation_id or self._correlation_id},
+        )
         return all_bookmarks
 
-    async def get_bookmark(self, bookmark_id: str) -> KarakeepBookmark:
+    async def get_bookmark(
+        self, bookmark_id: str, correlation_id: str | None = None
+    ) -> KarakeepBookmark:
         """Get a single bookmark by ID.
 
         Args:
             bookmark_id: Bookmark ID
+            correlation_id: Optional correlation ID for tracing
 
         Returns:
             Bookmark details
@@ -344,13 +365,16 @@ class KarakeepClient:
             response.raise_for_status()
             return KarakeepBookmark.model_validate(response.json())
 
-        return await self._with_retry(_fetch, f"get_bookmark({bookmark_id})")
+        return await self._with_retry(
+            _fetch, f"get_bookmark({bookmark_id})", correlation_id=correlation_id
+        )
 
     async def create_bookmark(
         self,
         url: str,
         title: str | None = None,
         note: str | None = None,
+        correlation_id: str | None = None,
     ) -> KarakeepBookmark:
         """Create a new bookmark.
 
@@ -358,6 +382,7 @@ class KarakeepClient:
             url: URL to bookmark
             title: Optional title
             note: Optional note/description
+            correlation_id: Optional correlation ID for tracing
 
         Returns:
             Created bookmark
@@ -377,10 +402,13 @@ class KarakeepClient:
                 timeout=timeout,
             )
             response.raise_for_status()
-            logger.info("karakeep_bookmark_created", extra={"url": url})
+            logger.info(
+                "karakeep_bookmark_created",
+                extra={"url": url, "cid": correlation_id or self._correlation_id},
+            )
             return KarakeepBookmark.model_validate(response.json())
 
-        return await self._with_retry(_create, "create_bookmark")
+        return await self._with_retry(_create, "create_bookmark", correlation_id=correlation_id)
 
     async def update_bookmark(
         self,
@@ -389,6 +417,7 @@ class KarakeepClient:
         note: str | None = None,
         archived: bool | None = None,
         favourited: bool | None = None,
+        correlation_id: str | None = None,
     ) -> KarakeepBookmark:
         """Update a bookmark.
 
@@ -398,6 +427,7 @@ class KarakeepClient:
             note: New note
             archived: Archive status
             favourited: Favourite status
+            correlation_id: Optional correlation ID for tracing
 
         Returns:
             Updated bookmark
@@ -421,29 +451,40 @@ class KarakeepClient:
             response.raise_for_status()
             return KarakeepBookmark.model_validate(response.json())
 
-        return await self._with_retry(_update, f"update_bookmark({bookmark_id})")
+        return await self._with_retry(
+            _update, f"update_bookmark({bookmark_id})", correlation_id=correlation_id
+        )
 
-    async def delete_bookmark(self, bookmark_id: str) -> None:
+    async def delete_bookmark(self, bookmark_id: str, correlation_id: str | None = None) -> None:
         """Delete a bookmark.
 
         Args:
             bookmark_id: Bookmark ID
+            correlation_id: Optional correlation ID for tracing
         """
         timeout = self.get_timeout("delete_bookmark")
 
         async def _delete() -> None:
             response = await self.client.delete(f"/bookmarks/{bookmark_id}", timeout=timeout)
             response.raise_for_status()
-            logger.info("karakeep_bookmark_deleted", extra={"bookmark_id": bookmark_id})
+            logger.info(
+                "karakeep_bookmark_deleted",
+                extra={"bookmark_id": bookmark_id, "cid": correlation_id or self._correlation_id},
+            )
 
-        await self._with_retry(_delete, f"delete_bookmark({bookmark_id})")
+        await self._with_retry(
+            _delete, f"delete_bookmark({bookmark_id})", correlation_id=correlation_id
+        )
 
-    async def attach_tags(self, bookmark_id: str, tags: list[str]) -> None:
+    async def attach_tags(
+        self, bookmark_id: str, tags: list[str], correlation_id: str | None = None
+    ) -> None:
         """Attach tags to a bookmark.
 
         Args:
             bookmark_id: Bookmark ID
             tags: List of tag names to attach
+            correlation_id: Optional correlation ID for tracing
         """
         request = AttachTagRequest(tags=[{"tagName": tag} for tag in tags])
         timeout = self.get_timeout("attach_tags")
@@ -455,16 +496,28 @@ class KarakeepClient:
                 timeout=timeout,
             )
             response.raise_for_status()
-            logger.debug("karakeep_tags_attached", extra={"bookmark_id": bookmark_id, "tags": tags})
+            logger.debug(
+                "karakeep_tags_attached",
+                extra={
+                    "bookmark_id": bookmark_id,
+                    "tags": tags,
+                    "cid": correlation_id or self._correlation_id,
+                },
+            )
 
-        await self._with_retry(_attach, f"attach_tags({bookmark_id})")
+        await self._with_retry(
+            _attach, f"attach_tags({bookmark_id})", correlation_id=correlation_id
+        )
 
-    async def detach_tag(self, bookmark_id: str, tag_id: str) -> None:
+    async def detach_tag(
+        self, bookmark_id: str, tag_id: str, correlation_id: str | None = None
+    ) -> None:
         """Detach a tag from a bookmark.
 
         Args:
             bookmark_id: Bookmark ID
             tag_id: Tag ID to detach
+            correlation_id: Optional correlation ID for tracing
         """
         timeout = self.get_timeout("detach_tag")
 
@@ -474,10 +527,15 @@ class KarakeepClient:
             )
             response.raise_for_status()
 
-        await self._with_retry(_detach, f"detach_tag({bookmark_id}, {tag_id})")
+        await self._with_retry(
+            _detach, f"detach_tag({bookmark_id}, {tag_id})", correlation_id=correlation_id
+        )
 
-    async def get_tags(self) -> list[KarakeepTag]:
+    async def get_tags(self, correlation_id: str | None = None) -> list[KarakeepTag]:
         """Get all tags.
+
+        Args:
+            correlation_id: Optional correlation ID for tracing
 
         Returns:
             List of all tags
@@ -490,14 +548,17 @@ class KarakeepClient:
             data = response.json()
             return [KarakeepTag.model_validate(tag) for tag in data.get("tags", [])]
 
-        return await self._with_retry(_fetch, "get_tags")
+        return await self._with_retry(_fetch, "get_tags", correlation_id=correlation_id)
 
-    async def search_bookmarks(self, query: str, limit: int = 20) -> list[KarakeepBookmark]:
+    async def search_bookmarks(
+        self, query: str, limit: int = 20, correlation_id: str | None = None
+    ) -> list[KarakeepBookmark]:
         """Search bookmarks.
 
         Args:
             query: Search query
             limit: Maximum results
+            correlation_id: Optional correlation ID for tracing
 
         Returns:
             List of matching bookmarks
@@ -514,20 +575,23 @@ class KarakeepClient:
             data = response.json()
             return [KarakeepBookmark.model_validate(b) for b in data.get("bookmarks", [])]
 
-        return await self._with_retry(_search, "search_bookmarks")
+        return await self._with_retry(_search, "search_bookmarks", correlation_id=correlation_id)
 
-    async def find_bookmark_by_url(self, url: str) -> KarakeepBookmark | None:
+    async def find_bookmark_by_url(
+        self, url: str, correlation_id: str | None = None
+    ) -> KarakeepBookmark | None:
         """Find a bookmark by URL.
 
         Args:
             url: URL to search for
+            correlation_id: Optional correlation ID for tracing
 
         Returns:
             Bookmark if found, None otherwise
         """
         # Search by URL - Karakeep might index URLs
         try:
-            bookmarks = await self.search_bookmarks(url, limit=5)
+            bookmarks = await self.search_bookmarks(url, limit=5, correlation_id=correlation_id)
             for bookmark in bookmarks:
                 if bookmark.url == url:
                     return bookmark
@@ -535,27 +599,38 @@ class KarakeepClient:
             # Retries exhausted or non-retryable error
             logger.warning(
                 "karakeep_find_by_url_failed",
-                extra={"url": url, "error": str(e)},
+                extra={"url": url, "error": str(e), "cid": correlation_id or self._correlation_id},
             )
         except httpx.HTTPStatusError as e:
             # Non-retryable HTTP error (4xx)
             logger.warning(
                 "karakeep_find_by_url_http_error",
-                extra={"url": url, "status_code": e.response.status_code, "error": str(e)},
+                extra={
+                    "url": url,
+                    "status_code": e.response.status_code,
+                    "error": str(e),
+                    "cid": correlation_id or self._correlation_id,
+                },
             )
 
         return None
 
-    async def health_check(self) -> bool:
+    async def health_check(self, correlation_id: str | None = None) -> bool:
         """Check if Karakeep API is accessible.
+
+        Args:
+            correlation_id: Optional correlation ID for tracing
 
         Returns:
             True if healthy
         """
         try:
             # Try to fetch first page of bookmarks as health check
-            await self.get_bookmarks(limit=1)
+            await self.get_bookmarks(limit=1, correlation_id=correlation_id)
             return True
         except Exception as e:
-            logger.warning("karakeep_health_check_failed", extra={"error": str(e)})
+            logger.warning(
+                "karakeep_health_check_failed",
+                extra={"error": str(e), "cid": correlation_id or self._correlation_id},
+            )
             return False

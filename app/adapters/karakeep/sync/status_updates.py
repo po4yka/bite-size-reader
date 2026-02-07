@@ -119,7 +119,7 @@ class StatusUpdateSynchronizer:
                         if bsr_fav != kk_fav:
                             updated, success, retryable, error = await self._retry.run(
                                 lambda bid=bookmark.id, fav=bsr_fav: client.update_bookmark(  # type: ignore[misc]
-                                    bid, favourited=fav
+                                    bid, favourited=fav, correlation_id=correlation_id
                                 ),
                                 operation_name="update_bookmark_favourite",
                                 correlation_id=correlation_id,
@@ -146,7 +146,7 @@ class StatusUpdateSynchronizer:
                         if tags_to_add:
                             updated, success, retryable, error = await self._retry.run(
                                 lambda bid=bookmark.id, tags=tags_to_add: client.attach_tags(  # type: ignore[misc]
-                                    bid, tags
+                                    bid, tags, correlation_id=correlation_id
                                 ),
                                 operation_name="attach_tags",
                                 correlation_id=correlation_id,
@@ -172,7 +172,9 @@ class StatusUpdateSynchronizer:
 
                         for tag_id in tags_to_remove:
                             _, success, retryable, error = await self._retry.run(
-                                lambda bid=bookmark.id, tid=tag_id: client.detach_tag(bid, tid),  # type: ignore[misc]
+                                lambda bid=bookmark.id, tid=tag_id: client.detach_tag(  # type: ignore[misc]
+                                    bid, tid, correlation_id=correlation_id
+                                ),
                                 operation_name="detach_tag",
                                 correlation_id=correlation_id,
                             )

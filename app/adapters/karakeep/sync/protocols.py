@@ -16,14 +16,23 @@ if TYPE_CHECKING:
 
 
 class KarakeepClientProtocol(Protocol):
-    async def health_check(self) -> bool: ...
+    async def health_check(self, correlation_id: str | None = None) -> bool: ...
 
-    async def get_bookmarks(self, *, limit: int, cursor: str | None = None) -> Any: ...
+    async def get_bookmarks(
+        self, *, limit: int, cursor: str | None = None, correlation_id: str | None = None
+    ) -> Any: ...
 
-    async def get_all_bookmarks(self) -> list[KarakeepBookmark]: ...
+    async def get_all_bookmarks(
+        self, correlation_id: str | None = None
+    ) -> list[KarakeepBookmark]: ...
 
     async def create_bookmark(
-        self, *, url: str, title: str | None, note: str | None
+        self,
+        *,
+        url: str,
+        title: str | None,
+        note: str | None,
+        correlation_id: str | None = None,
     ) -> KarakeepBookmark: ...
 
     async def update_bookmark(
@@ -34,13 +43,20 @@ class KarakeepClientProtocol(Protocol):
         note: str | None = None,
         archived: bool | None = None,
         favourited: bool | None = None,
+        correlation_id: str | None = None,
     ) -> KarakeepBookmark: ...
 
-    async def attach_tags(self, bookmark_id: str, tags: list[str]) -> None: ...
+    async def attach_tags(
+        self, bookmark_id: str, tags: list[str], correlation_id: str | None = None
+    ) -> None: ...
 
-    async def detach_tag(self, bookmark_id: str, tag_id: str) -> None: ...
+    async def detach_tag(
+        self, bookmark_id: str, tag_id: str, correlation_id: str | None = None
+    ) -> None: ...
 
-    async def delete_bookmark(self, bookmark_id: str) -> None: ...
+    async def delete_bookmark(
+        self, bookmark_id: str, correlation_id: str | None = None
+    ) -> None: ...
 
 
 class KarakeepClientFactory(Protocol):

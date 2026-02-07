@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import time
 from contextlib import asynccontextmanager
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from app.adapters.karakeep.client import KarakeepClient, KarakeepClientError
 from app.adapters.karakeep.models import FullSyncResult, SyncResult
@@ -75,8 +75,10 @@ class KarakeepSyncService:
         async with self._cache.scope():
             yield
 
-    async def _ensure_healthy(self, client: KarakeepClientProtocol, errors: list[str]) -> bool:
-        if not await client.health_check():
+    async def _ensure_healthy(
+        self, client: KarakeepClientProtocol, errors: list[str], correlation_id: str | None = None
+    ) -> bool:
+        if not await client.health_check(correlation_id=correlation_id):
             errors.append("Karakeep API health check failed")
             return False
         return True
@@ -93,8 +95,11 @@ class KarakeepSyncService:
 
         result = SyncResult(direction="bsr_to_karakeep")
         try:
-            async with self._client_factory(self.api_url, self.api_key) as client:
-                if not await self._ensure_healthy(client, result.errors):
+            async with self._client_factory(self.api_url, self.api_key) as client_raw:
+                client = cast("KarakeepClientProtocol", client_raw)
+                if not await self._ensure_healthy(
+                    client, result.errors, correlation_id=correlation_id
+                ):
                     record_error(result, "Karakeep API health check failed", retryable=True)
                     logger.error(
                         "karakeep_sync_health_check_failed",
@@ -124,8 +129,11 @@ class KarakeepSyncService:
 
         result = SyncResult(direction="karakeep_to_bsr")
         try:
-            async with self._client_factory(self.api_url, self.api_key) as client:
-                if not await self._ensure_healthy(client, result.errors):
+            async with self._client_factory(self.api_url, self.api_key) as client_raw:
+                client = cast("KarakeepClientProtocol", client_raw)
+                if not await self._ensure_healthy(
+                    client, result.errors, correlation_id=correlation_id
+                ):
                     record_error(result, "Karakeep API health check failed", retryable=True)
                     logger.error(
                         "karakeep_sync_health_check_failed",
@@ -209,8 +217,9 @@ class KarakeepSyncService:
         }
 
         try:
-            async with self._client_factory(self.api_url, self.api_key) as client:
-                if not await self._ensure_healthy(client, errors):
+            async with self._client_factory(self.api_url, self.api_key) as client_raw:
+                client = cast("KarakeepClientProtocol", client_raw)
+                if not await self._ensure_healthy(client, errors, correlation_id=correlation_id):
                     return preview
                 return await self._previewer.preview(
                     client,
@@ -230,8 +239,9 @@ class KarakeepSyncService:
 
         errors: list[str] = []
         try:
-            async with self._client_factory(self.api_url, self.api_key) as client:
-                if not await self._ensure_healthy(client, errors):
+            async with self._client_factory(self.api_url, self.api_key) as client_raw:
+                client = cast("KarakeepClientProtocol", client_raw)
+                if not await self._ensure_healthy(client, errors, correlation_id=correlation_id):
                     logger.error(
                         "karakeep_status_sync_health_check_failed",
                         extra={"correlation_id": correlation_id},

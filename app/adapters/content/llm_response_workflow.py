@@ -612,6 +612,12 @@ class LLMResponseWorkflow:
         on_success: Callable[[dict[str, Any], Any], Awaitable[None]] | None,
         defer_persistence: bool,
     ) -> dict[str, Any]:
+        # Normalize metric names before processing
+        from app.adapters.external.formatting.data_formatter import DataFormatterImpl
+
+        formatter = DataFormatterImpl()
+        summary = formatter.normalize_metric_names(summary)
+
         if ensure_summary is not None:
             summary = await ensure_summary(summary)
 
