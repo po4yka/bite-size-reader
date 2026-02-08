@@ -485,12 +485,19 @@ async def process_url_batch(
             # Mark as processing
             batch_status.mark_processing(url)
 
-            async def phase_callback(phase: str, title: str | None = None) -> None:
+            async def phase_callback(
+                phase: str,
+                title: str | None = None,
+                content_length: int | None = None,
+                model: str | None = None,
+            ) -> None:
                 """Update batch status when URL processing phase changes."""
                 if phase == "extracting":
                     batch_status.mark_extracting(url)
                 elif phase == "analyzing":
-                    batch_status.mark_analyzing(url, title=title)
+                    batch_status.mark_analyzing(
+                        url, title=title, content_length=content_length, model=model
+                    )
                 elif phase == "retrying":
                     batch_status.mark_retrying(url)
                 elif phase == "waiting":

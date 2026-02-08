@@ -290,7 +290,8 @@ class URLProcessor:
         interaction_id: int | None = None,
         silent: bool = False,
         batch_mode: bool = False,
-        on_phase_change: Callable[[str, str | None], Awaitable[None]] | None = None,
+        on_phase_change: Callable[[str, str | None, int | None, str | None], Awaitable[None]]
+        | None = None,
     ) -> URLProcessingFlowResult:
         """Handle complete URL processing flow from extraction to summarization.
 
@@ -325,7 +326,7 @@ class URLProcessor:
             dedupe_hash = url_hash_sha256(norm)
             # Signal phase: extracting content
             if on_phase_change:
-                await on_phase_change("extracting", None)
+                await on_phase_change("extracting", None, None, None)
 
             # Extract and process content
             (
@@ -398,7 +399,9 @@ class URLProcessor:
 
             # Signal phase: analyzing / summarizing content
             if on_phase_change:
-                await on_phase_change("analyzing", title)
+                await on_phase_change(
+                    "analyzing", title, len(content_text), self.cfg.openrouter.model
+                )
 
             # Process content (either chunked or single)
             summary_json: dict[str, Any] | None

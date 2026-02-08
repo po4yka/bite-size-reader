@@ -93,8 +93,19 @@ class BatchProgressFormatter:
                     label = label[:37] + "..."
                 phase_emoji = "📥" if entry.status == URLStatus.EXTRACTING else "🧠"
                 phase_name = "Extracting" if entry.status == URLStatus.EXTRACTING else "Analyzing"
+                detail = ""
+                if entry.status == URLStatus.ANALYZING:
+                    parts = []
+                    if entry.model:
+                        m = entry.model.split("/")[-1]
+                        parts.append(f"model: {m}")
+                    if entry.content_length:
+                        parts.append(f"size: {entry.content_length:,} chars")
+                    if parts:
+                        detail = f" ({', '.join(parts)})"
+
                 lines.append(
-                    f"{phase_emoji} <b>{phase_name}:</b> {cls._html_escape(label)} {spinner}"
+                    f"{phase_emoji} <b>{phase_name}:</b> {cls._html_escape(label)}{detail} {spinner}"
                 )
             lines.append("")
 
@@ -180,7 +191,11 @@ class BatchProgressFormatter:
             live = cls._format_live_elapsed(entry.start_time)
             label = entry.title or label
             link = cls._make_link(entry.url, label)
-            return f"{prefix} {link}  🧠 Analyzing...{live} {cls._get_spinner()}"
+            detail = ""
+            if entry.model:
+                m = entry.model.split("/")[-1]
+                detail = f" [{m}]"
+            return f"{prefix} {link}  🧠 Analyzing{detail}...{live} {cls._get_spinner()}"
 
         if entry.status == URLStatus.RETRYING:
             live = cls._format_live_elapsed(entry.start_time)

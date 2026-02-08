@@ -171,7 +171,8 @@ class LLMSummarizer:
         url: str | None = None,
         silent: bool = False,
         defer_persistence: bool = False,
-        on_phase_change: Callable[[str, str | None], Awaitable[None]] | None = None,
+        on_phase_change: Callable[[str, str | None, int | None, str | None], Awaitable[None]]
+        | None = None,
     ) -> dict[str, Any] | None:
         """Summarize content using LLM and return shaped summary."""
         # Validate content before sending to LLM
@@ -393,7 +394,7 @@ class LLMSummarizer:
 
         async def _on_retry() -> None:
             if on_phase_change:
-                await on_phase_change("retrying", None)
+                await on_phase_change("retrying", None, None, None)
 
         notifications = LLMWorkflowNotifications(
             completion=_on_completion,

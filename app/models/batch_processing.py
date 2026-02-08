@@ -158,6 +158,8 @@ class URLStatusEntry:
     error_message: str | None = None
     processing_time_ms: float = 0.0
     start_time: float | None = None
+    content_length: int | None = None
+    model: str | None = None
 
     def __post_init__(self) -> None:
         """Extract domain and display label from URL on creation."""
@@ -273,13 +275,23 @@ class URLBatchStatus:
                 entry.start_time = time.time()
             self._update_timestamp()
 
-    def mark_analyzing(self, url: str, title: str | None = None) -> None:
+    def mark_analyzing(
+        self,
+        url: str,
+        title: str | None = None,
+        content_length: int | None = None,
+        model: str | None = None,
+    ) -> None:
         """Mark a URL as in the LLM analysis phase."""
         entry = self._find_entry(url)
         if entry:
             entry.status = URLStatus.ANALYZING
             if title:
                 entry.title = title
+            if content_length:
+                entry.content_length = content_length
+            if model:
+                entry.model = model
             self._update_timestamp()
 
     def mark_retrying(self, url: str) -> None:
