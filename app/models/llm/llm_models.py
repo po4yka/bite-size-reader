@@ -73,7 +73,7 @@ class ChatRequest(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    messages: list[dict[str, str]] = Field(
+    messages: list[dict[str, Any]] = Field(
         description="Conversation messages to send to the chat endpoint."
     )
     temperature: float = Field(
