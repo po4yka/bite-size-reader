@@ -2,11 +2,16 @@
 
 from __future__ import annotations
 
+import asyncio
+import contextlib
 import logging
 import os
 import tempfile
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from collections.abc import Awaitable, Callable
 
 from app.adapters.attachment.image_extractor import ImageExtractor
 from app.adapters.attachment.pdf_extractor import PDFExtractor
@@ -108,7 +113,23 @@ class AttachmentProcessor:
         interaction_id: int | None = None,
     ) -> None:
         """Main entry point for processing an attachment message."""
+        from app.utils.progress_tracker import ProgressTracker
+
         file_path: str | None = None
+        progress_tracker: ProgressTracker | None = None
+        current_status_text: str = ""
+
+        async def progress_formatter(current: int, total: int, msg_id: int | None) -> int | None:
+            if not msg_id:
+                return msg_id
+            chat_id = getattr(message.chat, "id", None)
+            if not chat_id:
+                return msg_id
+            await self.response_formatter.edit_message(
+                chat_id, msg_id, current_status_text, parse_mode="HTML"
+            )
+            return msg_id
+
         try:
             # Classify the attachment
             file_type, mime_type, file_name = self._classify_attachment(message)
@@ -127,14 +148,37 @@ class AttachmentProcessor:
 
             # Notify user we're processing
             type_label = "image" if file_type == "image" else "PDF document"
-            await self.response_formatter.safe_reply(
+            current_status_text = f"📥 <b>Processing {type_label}...</b>"
+            progress_msg_id = await self.response_formatter.safe_reply_with_id(
                 message,
-                f"Processing {type_label}...",
+                current_status_text,
+                parse_mode="HTML",
             )
+            if progress_msg_id:
+                progress_tracker = ProgressTracker(
+                    total=1,
+                    progress_formatter=progress_formatter,
+                    initial_message_id=progress_msg_id,
+                    update_interval=0.5,
+                )
+                progress_task = asyncio.create_task(progress_tracker.process_update_queue())
+
+            async def status_updater(text: str) -> None:
+                nonlocal current_status_text
+                current_status_text = text
+                if progress_tracker:
+                    await progress_tracker.force_update()
 
             # Download the file
+            if progress_tracker:
+                await status_updater(f"📥 <b>Downloading {type_label}...</b>")
+
             file_path = await self._download_attachment(message)
             if not file_path:
+                if progress_tracker:
+                    progress_tracker.mark_complete()
+                    if "progress_task" in locals():
+                        await progress_task
                 await self.response_formatter.send_error_notification(
                     message,
                     "processing_failed",
@@ -167,14 +211,35 @@ class AttachmentProcessor:
             # Process based on type
             if file_type == "image":
                 result = await self._process_image(
-                    file_path, caption, chosen_lang, req_id, correlation_id, interaction_id, message
+                    file_path,
+                    caption,
+                    chosen_lang,
+                    req_id,
+                    correlation_id,
+                    interaction_id,
+                    message,
+                    progress_tracker=progress_tracker,
+                    status_updater=status_updater,
                 )
             else:
                 result = await self._process_pdf(
-                    file_path, caption, chosen_lang, req_id, correlation_id, interaction_id, message
+                    file_path,
+                    caption,
+                    chosen_lang,
+                    req_id,
+                    correlation_id,
+                    interaction_id,
+                    message,
+                    progress_tracker=progress_tracker,
+                    status_updater=status_updater,
                 )
 
             if result:
+                if progress_tracker:
+                    progress_tracker.mark_complete()
+                    if "progress_task" in locals():
+                        await progress_task
+
                 # Update attachment record with success details
                 await self._update_attachment_status(req_id, "completed", result)
 
@@ -196,6 +261,12 @@ class AttachmentProcessor:
                     )
 
         except Exception as exc:
+            if progress_tracker:
+                progress_tracker.mark_complete()
+                if "progress_task" in locals():
+                    with contextlib.suppress(Exception):
+                        await progress_task
+
             logger.exception(
                 "attachment_flow_error",
                 extra={"error": str(exc), "cid": correlation_id},
@@ -360,9 +431,14 @@ class AttachmentProcessor:
         correlation_id: str | None,
         interaction_id: int | None,
         message: Any,
+        progress_tracker: Any | None = None,
+        status_updater: Callable[[str], Awaitable[None]] | None = None,
     ) -> dict[str, Any] | None:
         """Process an image attachment via vision LLM."""
         attachment_cfg = self.cfg.attachment
+
+        if status_updater:
+            await status_updater("🖼 <b>Processing image...</b>")
 
         try:
             image_content = ImageExtractor.extract(
@@ -396,6 +472,8 @@ class AttachmentProcessor:
             chosen_lang=chosen_lang,
             message=message,
             model_override=attachment_cfg.vision_model,
+            progress_tracker=progress_tracker,
+            status_updater=status_updater,
         )
 
     async def _process_pdf(
@@ -407,16 +485,26 @@ class AttachmentProcessor:
         correlation_id: str | None,
         interaction_id: int | None,
         message: Any,
+        progress_tracker: Any | None = None,
+        status_updater: Callable[[str], Awaitable[None]] | None = None,
     ) -> dict[str, Any] | None:
         """Process a PDF attachment."""
         attachment_cfg = self.cfg.attachment
 
         try:
+
+            async def on_pdf_progress(text: str) -> None:
+                if status_updater:
+                    await status_updater(f"📄 <b>PDF:</b> {text}")
+
             pdf_content = PDFExtractor.extract(
                 file_path,
                 max_pages=attachment_cfg.max_pdf_pages,
                 max_vision_pages=attachment_cfg.max_vision_pages_per_pdf,
                 image_max_dimension=attachment_cfg.image_max_dimension,
+                on_progress=lambda t: asyncio.run_coroutine_threadsafe(
+                    on_pdf_progress(t), asyncio.get_event_loop()
+                ),
             )
         except ValueError as exc:
             logger.warning(
@@ -483,6 +571,8 @@ class AttachmentProcessor:
             chosen_lang=chosen_lang,
             message=message,
             model_override=model_override,
+            progress_tracker=progress_tracker,
+            status_updater=status_updater,
         )
 
     async def _update_pdf_metadata(self, req_id: int, pdf_content: Any) -> None:
@@ -523,6 +613,8 @@ class AttachmentProcessor:
         chosen_lang: str,
         message: Any,
         model_override: str | None = None,
+        progress_tracker: Any | None = None,
+        status_updater: Callable[[str], Awaitable[None]] | None = None,
     ) -> dict[str, Any] | None:
         """Run the standard LLM summary workflow."""
         max_tokens = 6144
@@ -570,12 +662,21 @@ class AttachmentProcessor:
                 correlation_id or "unknown",
             )
 
+        async def _on_retry() -> None:
+            if status_updater:
+                await status_updater("🧠 <b>AI analysis failed, retrying...</b>")
+
         notifications = LLMWorkflowNotifications(
             completion=_on_completion,
             llm_error=_on_llm_error,
             repair_failure=_on_processing_failure,
             parsing_failure=_on_processing_failure,
+            retry=_on_retry,
         )
+
+        if status_updater:
+            model_label = (model_override or self.cfg.openrouter.model).split("/")[-1]
+            await status_updater(f"🧠 <b>Analyzing with AI ({model_label})...</b>")
 
         interaction_config = LLMInteractionConfig(
             interaction_id=interaction_id,

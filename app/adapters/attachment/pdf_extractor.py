@@ -5,6 +5,10 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 import fitz  # PyMuPDF
 
@@ -35,6 +39,7 @@ class PDFExtractor:
         sparse_threshold: int = 100,
         max_vision_pages: int = 5,
         image_max_dimension: int = 2048,
+        on_progress: Callable[[str], Any] | None = None,
     ) -> PDFContent:
         """Extract text and optionally render sparse/scanned pages from a PDF.
 
@@ -44,6 +49,7 @@ class PDFExtractor:
             sparse_threshold: Pages with fewer characters than this are considered sparse/scanned.
             max_vision_pages: Maximum number of sparse pages to render as images for vision LLM.
             image_max_dimension: Maximum dimension for rendered page images.
+            on_progress: Optional callback for progress updates.
 
         Returns:
             PDFContent with extracted text and optional page images.
@@ -71,11 +77,17 @@ class PDFExtractor:
             pages_to_process = min(total_pages, max_pages)
             truncated = total_pages > max_pages
 
+            if on_progress:
+                on_progress(f"Reading {pages_to_process} pages...")
+
             text_parts: list[str] = []
             sparse_page_indices: list[int] = []
 
             # Pass 1: Extract text and identify sparse pages
             for page_idx in range(pages_to_process):
+                if on_progress and page_idx % 10 == 0:
+                    on_progress(f"Extracting text: page {page_idx + 1}/{pages_to_process}...")
+
                 page = doc[page_idx]
                 page_text = page.get_text().strip()
                 text_parts.append(page_text)
@@ -94,7 +106,9 @@ class PDFExtractor:
             image_pages: list[ImageContent] = []
             vision_pages = sparse_page_indices[:max_vision_pages]
 
-            for page_idx in vision_pages:
+            for i, page_idx in enumerate(vision_pages):
+                if on_progress:
+                    on_progress(f"Rendering page {i + 1}/{len(vision_pages)} for vision...")
                 try:
                     page = doc[page_idx]
                     # Render at 150 DPI for balance between quality and size
