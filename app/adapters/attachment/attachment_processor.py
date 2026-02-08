@@ -517,6 +517,30 @@ class AttachmentProcessor:
         # Update attachment record with PDF metadata
         await self._update_pdf_metadata(req_id, pdf_content)
 
+        # Build metadata header for the prompt
+        metadata_parts = []
+        md = pdf_content.metadata
+        if md.get("title"):
+            metadata_parts.append(f"Title: {md['title']}")
+        if md.get("author"):
+            metadata_parts.append(f"Author: {md['author']}")
+        if md.get("subject"):
+            metadata_parts.append(f"Subject: {md['subject']}")
+        if md.get("keywords"):
+            metadata_parts.append(f"Keywords: {md['keywords']}")
+
+        if pdf_content.toc:
+            toc_lines = []
+            for lvl, title, page in pdf_content.toc[:30]:  # Limit TOC entries
+                indent = "  " * (lvl - 1)
+                toc_lines.append(f"{indent}- {title} (page {page})")
+            if toc_lines:
+                metadata_parts.append("Table of Contents:\n" + "\n".join(toc_lines))
+
+        metadata_header = ""
+        if metadata_parts:
+            metadata_header = "Document Metadata:\n" + "\n".join(metadata_parts) + "\n\n"
+
         system_prompt = _load_prompt("pdf_analysis", chosen_lang)
         lang_label = "Russian" if chosen_lang == LANG_RU else "English"
 
@@ -530,6 +554,7 @@ class AttachmentProcessor:
             if pdf_content.text.strip():
                 # Hybrid: has some text plus scanned pages
                 text = pdf_content.text[:_MAX_PDF_TEXT_CHARS]
+                text = f"{metadata_header}{text}"
                 user_caption = caption or f"Summarize this PDF document. Respond in {lang_label}."
                 if caption:
                     user_caption = f"{caption}\n\nRespond in {lang_label}."
@@ -544,12 +569,19 @@ class AttachmentProcessor:
                 )
                 if caption:
                     user_caption = f"{caption}\n\nRespond in {lang_label}."
+
+                # Prepend metadata to the first message if vision only
+                scanned_caption = (
+                    f"{metadata_header}{user_caption}" if metadata_header else user_caption
+                )
+
                 messages = build_multi_image_vision_messages(
-                    system_prompt, image_uris, caption=user_caption
+                    system_prompt, image_uris, caption=scanned_caption
                 )
         else:
             # Text-rich PDF: use regular text-based summarization
             text = pdf_content.text[:_MAX_PDF_TEXT_CHARS]
+            text = f"{metadata_header}{text}"
             truncation_note = ""
             if pdf_content.truncated:
                 truncation_note = f"\n\n[Document truncated: showing {self.cfg.attachment.max_pdf_pages} of {pdf_content.page_count} pages]"

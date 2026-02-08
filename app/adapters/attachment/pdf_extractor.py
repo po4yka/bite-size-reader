@@ -26,6 +26,8 @@ class PDFContent:
     image_pages: list[ImageContent] = field(default_factory=list)
     is_scanned: bool = False
     truncated: bool = False
+    metadata: dict[str, Any] = field(default_factory=dict)
+    toc: list[list[Any]] = field(default_factory=list)
 
 
 class PDFExtractor:
@@ -76,12 +78,15 @@ class PDFExtractor:
             total_pages = len(doc)
             pages_to_process = min(total_pages, max_pages)
             truncated = total_pages > max_pages
+            metadata = doc.metadata or {}
+            toc = doc.get_toc() or []
 
             if on_progress:
                 on_progress(f"Reading {pages_to_process} pages...")
 
             text_parts: list[str] = []
             sparse_page_indices: list[int] = []
+            links: list[str] = []
 
             # Pass 1: Extract text and identify sparse pages
             for page_idx in range(pages_to_process):
@@ -89,15 +94,42 @@ class PDFExtractor:
                     on_progress(f"Extracting text: page {page_idx + 1}/{pages_to_process}...")
 
                 page = doc[page_idx]
-                page_text = page.get_text().strip()
+                # Use block-based extraction for better layout preservation
+                blocks = page.get_text("blocks")
+                # Sort blocks by vertical then horizontal position
+                blocks.sort(key=lambda b: (b[1], b[0]))
+
+                page_text_parts = []
+                for b in blocks:
+                    block_text = b[4].strip()
+                    if block_text:
+                        page_text_parts.append(block_text)
+
+                page_text = "\n".join(page_text_parts)
                 text_parts.append(page_text)
+
+                # Collect links
+                for link in page.get_links():
+                    if "uri" in link:
+                        links.append(link["uri"])
 
                 if len(page_text) < sparse_threshold:
                     sparse_page_indices.append(page_idx)
 
+            # De-duplicate links while preserving order
+            unique_links: list[str] = []
+            seen_links = set()
+            for link_uri in links:
+                if link_uri not in seen_links:
+                    seen_links.add(link_uri)
+                    unique_links.append(link_uri)
+
             full_text = "\n\n".join(
                 f"--- Page {i + 1} ---\n{text}" for i, text in enumerate(text_parts) if text
             )
+
+            if unique_links:
+                full_text += "\n\n--- Extracted Links ---\n" + "\n".join(unique_links[:20])
 
             # Determine if the PDF is predominantly scanned/image-based
             is_scanned = len(sparse_page_indices) > pages_to_process * 0.5
@@ -111,8 +143,8 @@ class PDFExtractor:
                     on_progress(f"Rendering page {i + 1}/{len(vision_pages)} for vision...")
                 try:
                     page = doc[page_idx]
-                    # Render at 150 DPI for balance between quality and size
-                    pix = page.get_pixmap(dpi=150)
+                    # Render at 200 DPI for better quality (OCR-ready for Vision models)
+                    pix = page.get_pixmap(dpi=200)
                     img_bytes = pix.tobytes("png")
                     image_content = ImageExtractor.extract_from_bytes(
                         img_bytes, max_dimension=image_max_dimension
@@ -144,6 +176,8 @@ class PDFExtractor:
                 image_pages=image_pages,
                 is_scanned=is_scanned,
                 truncated=truncated,
+                metadata=metadata,
+                toc=toc,
             )
         finally:
             doc.close()
