@@ -668,7 +668,7 @@ async def process_url_batch(
         total=len(urls),
         progress_formatter=progress_formatter,
         initial_message_id=initial_message_id,
-        update_interval=2.0,
+        update_interval=1.0,
         small_batch_threshold=0,
         progress_threshold_percentage=25.0,
     )
@@ -679,7 +679,7 @@ async def process_url_batch(
         """Force periodic UI updates to show live elapsed time."""
         while not progress_tracker.is_complete:
             try:
-                await asyncio.sleep(5)
+                await asyncio.sleep(3)
                 await progress_tracker.force_update()
             except asyncio.CancelledError:
                 break

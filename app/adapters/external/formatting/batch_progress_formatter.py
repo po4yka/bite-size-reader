@@ -46,12 +46,21 @@ class BatchProgressFormatter:
         return f'<a href="{cls._html_escape(url)}">{cls._html_escape(display_text)}</a>'
 
     @classmethod
+    def _get_spinner(cls, timestamp: float | None = None) -> str:
+        """Get an 'animated' spinner based on current time or provided timestamp."""
+        # Use provided timestamp or current time
+        t = timestamp or time.time()
+        # 4 frames, changes every 0.5s (2 frames per second)
+        frames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
+        return frames[int(t * 2) % len(frames)]
+
+    @classmethod
     def format_progress_message(cls, batch: URLBatchStatus) -> str:
         """Format a progress update message with numbered per-URL status lines.
 
         Example output::
 
-            Processing 4 links...
+            Processing 4 links... ⠙
 
             [1/4] techcrunch.com -- Done (12s)
             [2/4] arxiv.org -- Analyzing... (5s)
@@ -59,6 +68,7 @@ class BatchProgressFormatter:
             [4/4] github.io -- Pending
 
             Progress: 2/4 (50%) | ETA: ~30s
+            Updated 2s ago
 
         Args:
             batch: Current batch status
@@ -68,9 +78,10 @@ class BatchProgressFormatter:
         """
         lines: list[str] = []
         total = batch.total
+        spinner = cls._get_spinner()
 
         # Header
-        lines.append(f"<b>Processing {total} links...</b>")
+        lines.append(f"<b>Processing {total} links...</b> {spinner}")
         lines.append("")
 
         # Active work indicator (prominent top section)
@@ -82,7 +93,9 @@ class BatchProgressFormatter:
                     label = label[:37] + "..."
                 phase_emoji = "📥" if entry.status == URLStatus.EXTRACTING else "🧠"
                 phase_name = "Extracting" if entry.status == URLStatus.EXTRACTING else "Analyzing"
-                lines.append(f"{phase_emoji} <b>{phase_name}:</b> {cls._html_escape(label)}")
+                lines.append(
+                    f"{phase_emoji} <b>{phase_name}:</b> {cls._html_escape(label)} {spinner}"
+                )
             lines.append("")
 
         # Per-URL status lines
@@ -101,6 +114,13 @@ class BatchProgressFormatter:
             footer_parts.append(f"ETA: ~{cls._format_duration(eta_sec)}")
 
         lines.append(" | ".join(footer_parts))
+
+        # Add "Last updated" info
+        updated_ago = int(time.time() - batch.last_updated)
+        if updated_ago > 0:
+            lines.append(f"<i>Updated {updated_ago}s ago</i>")
+        else:
+            lines.append("<i>Just updated</i>")
 
         # Add hint for slow processing
         active = batch.processing
@@ -154,24 +174,24 @@ class BatchProgressFormatter:
 
         if entry.status == URLStatus.EXTRACTING:
             live = cls._format_live_elapsed(entry.start_time)
-            return f"{prefix} {link}  📥 Extracting...{live}"
+            return f"{prefix} {link}  📥 Extracting...{live} {cls._get_spinner()}"
 
         if entry.status == URLStatus.ANALYZING:
             live = cls._format_live_elapsed(entry.start_time)
             label = entry.title or label
             link = cls._make_link(entry.url, label)
-            return f"{prefix} {link}  🧠 Analyzing...{live}"
+            return f"{prefix} {link}  🧠 Analyzing...{live} {cls._get_spinner()}"
 
         if entry.status == URLStatus.RETRYING:
             live = cls._format_live_elapsed(entry.start_time)
-            return f"{prefix} {link}  🔄 Retrying...{live}"
+            return f"{prefix} {link}  🔄 Retrying...{live} {cls._get_spinner()}"
 
         if entry.status == URLStatus.RETRY_WAITING:
-            return f"{prefix} {link}  ⏳ Waiting to retry..."
+            return f"{prefix} {link}  ⏳ Waiting to retry... {cls._get_spinner()}"
 
         if entry.status == URLStatus.PROCESSING:
             live = cls._format_live_elapsed(entry.start_time)
-            return f"{prefix} {link}  ⏳ Processing...{live}"
+            return f"{prefix} {link}  ⏳ Processing...{live} {cls._get_spinner()}"
 
         # PENDING (default)
         return f"{prefix} {link}  💤 Pending"
@@ -235,7 +255,9 @@ class BatchProgressFormatter:
         success = batch.success_count
 
         # Header
-        lines.append(f"Batch Complete  {success}/{total} links")
+        total_time = batch.total_elapsed_time_sec()
+        duration_str = cls._format_duration(total_time)
+        lines.append(f"<b>Batch Complete</b>  {success}/{total} links ({duration_str})")
         lines.append("")
 
         # Unified numbered list (HTML)

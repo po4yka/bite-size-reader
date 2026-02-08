@@ -454,10 +454,15 @@ class ResponseSenderImpl:
 
                     async def do_edit() -> None:
                         nonlocal last_error_exc
+                        local_text = text
+                        if parse_mode == "HTML" and "Updated at" not in local_text:
+                            now = datetime.now(UTC).strftime("%H:%M:%S")
+                            local_text += f"\n\n<i>Updated at {now} UTC</i>"
+
                         kwargs: dict[str, Any] = {
                             "chat_id": chat_id,
                             "message_id": message_id,
-                            "text": text,
+                            "text": local_text,
                         }
                         if parse_mode is not None:
                             kwargs["parse_mode"] = parse_mode
