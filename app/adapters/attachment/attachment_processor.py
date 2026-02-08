@@ -546,10 +546,22 @@ class AttachmentProcessor:
 
         model_override: str | None = None
 
-        if pdf_content.is_scanned and pdf_content.image_pages:
-            # Scanned PDF: use vision model on rendered pages
+        # Collect images for analysis: both rendered scanned pages and embedded images
+        all_image_uris = [img.data_uri for img in pdf_content.image_pages]
+
+        # Add embedded images (up to a reasonable limit)
+        for img in pdf_content.embedded_images:
+            if len(all_image_uris) >= 10:  # Safety cap for multimodal context
+                break
+            all_image_uris.append(img.data_uri)
+
+        if all_image_uris:
+            # If we have any images (scanned or embedded), we use the vision model
             model_override = attachment_cfg.vision_model
-            image_uris = [img.data_uri for img in pdf_content.image_pages]
+
+        if pdf_content.is_scanned and pdf_content.image_pages:
+            # Scanned PDF: focus on rendered pages but include embedded ones if any
+            image_uris = all_image_uris
 
             if pdf_content.text.strip():
                 # Hybrid: has some text plus scanned pages
@@ -594,6 +606,12 @@ class AttachmentProcessor:
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_content},
             ]
+
+            # If we have embedded images in a text-rich PDF, use vision messages instead
+            if all_image_uris:
+                messages = build_text_with_images_messages(
+                    system_prompt, text, all_image_uris, caption=caption
+                )
 
         return await self._run_llm_workflow(
             messages=messages,

@@ -335,6 +335,7 @@ class URLProcessor:
                 _content_source,
                 detected,
                 title,
+                images,
             ) = await self.content_extractor.extract_and_process_content(
                 message, url_text, correlation_id, interaction_id, notify_silent
             )
@@ -434,6 +435,7 @@ class URLProcessor:
                     url=url_text,
                     silent=notify_silent,
                     on_phase_change=on_phase_change,
+                    images=images,
                 )
 
             if summary_json is None:

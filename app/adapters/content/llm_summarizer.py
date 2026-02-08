@@ -173,6 +173,7 @@ class LLMSummarizer:
         defer_persistence: bool = False,
         on_phase_change: Callable[[str, str | None, int | None, str | None], Awaitable[None]]
         | None = None,
+        images: list[str] | None = None,
     ) -> dict[str, Any] | None:
         """Summarize content using LLM and return shaped summary."""
         # Validate content before sending to LLM
@@ -182,6 +183,11 @@ class LLMSummarizer:
 
         content_for_summary = content_text
         model_override = None
+
+        # Use vision-capable model if images are provided
+        if images:
+            model_override = self.cfg.attachment.vision_model
+
         if len(content_text) > max_chars:
             if self.cfg.openrouter.long_context_model:
                 model_override = self.cfg.openrouter.long_context_model
@@ -225,6 +231,18 @@ class LLMSummarizer:
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_content},
         ]
+
+        if images:
+            content_parts: list[dict[str, Any]] = [
+                {"type": "text", "text": user_content},
+            ]
+            for uri in images:
+                content_parts.append({"type": "image_url", "image_url": {"url": uri}})
+
+            messages = [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": content_parts},  # type: ignore[dict-item]
+            ]
 
         base_model = model_override or self.cfg.openrouter.model
 
@@ -938,19 +956,7 @@ class LLMSummarizer:
     async def _maybe_enrich_with_search(
         self, content_text: str, chosen_lang: str, correlation_id: str | None
     ) -> str:
-        """Optionally enrich content with web search context.
-
-        This method checks if web search enrichment is enabled and beneficial,
-        then executes targeted searches to provide additional context for summarization.
-
-        Args:
-            content_text: The article content to analyze
-            chosen_lang: Target language for the summary
-            correlation_id: Optional correlation ID for tracing
-
-        Returns:
-            Formatted search context string, or empty string if search not needed/available
-        """
+        """Enrich content with web search context if enabled and beneficial."""
         # Skip if web search is disabled
         if not self.cfg.web_search.enabled:
             return ""

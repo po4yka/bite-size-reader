@@ -24,6 +24,7 @@ class PDFContent:
     text: str
     page_count: int
     image_pages: list[ImageContent] = field(default_factory=list)
+    embedded_images: list[ImageContent] = field(default_factory=list)
     is_scanned: bool = False
     truncated: bool = False
     metadata: dict[str, Any] = field(default_factory=dict)
@@ -41,6 +42,7 @@ class PDFExtractor:
         sparse_threshold: int = 100,
         max_vision_pages: int = 5,
         image_max_dimension: int = 2048,
+        min_image_dimension: int = 200,
         on_progress: Callable[[str], Any] | None = None,
     ) -> PDFContent:
         """Extract text and optionally render sparse/scanned pages from a PDF.
@@ -87,11 +89,13 @@ class PDFExtractor:
             text_parts: list[str] = []
             sparse_page_indices: list[int] = []
             links: list[str] = []
+            embedded_images: list[ImageContent] = []
+            seen_image_xrefs = set()
 
-            # Pass 1: Extract text and identify sparse pages
+            # Pass 1: Extract text, links, and identify sparse pages
             for page_idx in range(pages_to_process):
                 if on_progress and page_idx % 10 == 0:
-                    on_progress(f"Extracting text: page {page_idx + 1}/{pages_to_process}...")
+                    on_progress(f"Extracting content: page {page_idx + 1}/{pages_to_process}...")
 
                 page = doc[page_idx]
                 # Use block-based extraction for better layout preservation
@@ -113,8 +117,46 @@ class PDFExtractor:
                     if "uri" in link:
                         links.append(link["uri"])
 
+                # Extract embedded images
+                for img in page.get_images():
+                    xref = img[0]
+                    width, height = img[2], img[3]
+
+                    if xref in seen_image_xrefs:
+                        continue
+                    if width < min_image_dimension or height < min_image_dimension:
+                        continue
+
+                    seen_image_xrefs.add(xref)
+
+                    try:
+                        # Extract and convert image
+                        pix = fitz.Pixmap(doc, xref)
+
+                        # Handle CMYK/alpha mismatch
+                        if pix.n - pix.alpha < 4:
+                            # Convert to RGB
+                            pix = fitz.Pixmap(fitz.csRGB, pix)
+
+                        img_bytes = pix.tobytes("png")
+
+                        image_content = ImageExtractor.extract_from_bytes(
+                            img_bytes, max_dimension=image_max_dimension
+                        )
+                        embedded_images.append(image_content)
+
+                    except Exception as exc:
+                        logger.warning(
+                            "pdf_embedded_image_extract_failed",
+                            extra={"xref": xref, "error": str(exc)},
+                        )
+
                 if len(page_text) < sparse_threshold:
                     sparse_page_indices.append(page_idx)
+
+            # Limit embedded images to top 5 largest by file size to avoid overloading context
+            embedded_images.sort(key=lambda img: img.file_size_bytes, reverse=True)
+            embedded_images = embedded_images[:5]
 
             # De-duplicate links while preserving order
             unique_links: list[str] = []
@@ -174,6 +216,7 @@ class PDFExtractor:
                 text=full_text,
                 page_count=total_pages,
                 image_pages=image_pages,
+                embedded_images=embedded_images,
                 is_scanned=is_scanned,
                 truncated=truncated,
                 metadata=metadata,

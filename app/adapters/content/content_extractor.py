@@ -9,13 +9,13 @@ import asyncio
 import json
 import logging
 import re
-from collections import Counter
 from collections.abc import Callable, Mapping
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any
 
 import httpx
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.adapters.content.quality_filters import detect_low_value_content
 from app.adapters.external.firecrawl_parser import FirecrawlClient, FirecrawlResult
 from app.config import AppConfig
 from app.core.async_utils import raise_if_cancelled
@@ -35,14 +35,6 @@ logger = logging.getLogger(__name__)
 
 # Route versioning constants
 URL_ROUTE_VERSION = 1
-
-LowValueReason = Literal[
-    "empty_after_cleaning",
-    "overlay_content_detected",
-    "content_too_short",
-    "content_low_variation",
-    "content_high_repetition",
-]
 
 
 class ContentExtractor:
@@ -144,7 +136,7 @@ class ContentExtractor:
             crawl = await self.firecrawl.scrape_markdown(url, request_id=None)
 
         # Check content quality
-        quality_issue = self._detect_low_value_content(crawl)
+        quality_issue = detect_low_value_content(crawl)
         if quality_issue:
             reason = quality_issue["reason"]
             logger.warning(
@@ -226,8 +218,8 @@ class ContentExtractor:
         correlation_id: str | None = None,
         interaction_id: int | None = None,
         silent: bool = False,
-    ) -> tuple[int, str, str, str, str | None]:
-        """Extract content from URL and return (req_id, content_text, content_source, detected_lang, title)."""
+    ) -> tuple[int, str, str, str, str | None, list[str]]:
+        """Extract content from URL and return (req_id, content_text, content_source, detected_lang, title, images)."""
         from app.core.url_utils import is_youtube_url
 
         norm = normalize_url(url_text)
@@ -249,7 +241,7 @@ class ContentExtractor:
                 message, url_text, norm, correlation_id, interaction_id, silent
             )
             title = video_metadata.get("title") if isinstance(video_metadata, dict) else None
-            return req_id, transcript_text, content_source, detected_lang, title
+            return req_id, transcript_text, content_source, detected_lang, title, []
 
         # Regular web content flow
         dedupe = url_hash_sha256(norm)
@@ -263,7 +255,12 @@ class ContentExtractor:
         req_id = await self._handle_request_dedupe_or_create(
             message, url_text, norm, dedupe, correlation_id
         )
-        content_text, content_source, title = await self._extract_or_reuse_content_with_title(
+        (
+            content_text,
+            content_source,
+            title,
+            images,
+        ) = await self._extract_or_reuse_content_with_title(
             message, req_id, url_text, dedupe, correlation_id, interaction_id, silent=silent
         )
         detected = detect_language(content_text or "")
@@ -276,7 +273,7 @@ class ContentExtractor:
             logger.error(
                 "persist_lang_detected_error", extra={"error": str(e), "cid": correlation_id}
             )
-        return req_id, content_text, content_source, detected, title
+        return req_id, content_text, content_source, detected, title, images
 
     async def _handle_request_dedupe_or_create(
         self, message: Any, url_text: str, norm: str, dedupe: str, correlation_id: str | None
@@ -403,7 +400,7 @@ class ContentExtractor:
         correlation_id: str | None,
         interaction_id: int | None,
         silent: bool = False,
-    ) -> tuple[str, str, str | None]:
+    ) -> tuple[str, str, str | None, list[str]]:
         """Extract content from Firecrawl or reuse existing crawl result."""
         existing_crawl = (
             await self.message_persistence.crawl_repo.async_get_crawl_result_by_request(req_id)
@@ -415,10 +412,15 @@ class ContentExtractor:
         if existing_crawl and (
             existing_crawl.get("content_markdown") or existing_crawl.get("content_html")
         ):
-            content_text, content_source, title = await self._process_existing_crawl_with_title(
+            (
+                content_text,
+                content_source,
+                title,
+                images,
+            ) = await self._process_existing_crawl_with_title(
                 message, existing_crawl, correlation_id, silent
             )
-            return content_text, content_source, title
+            return content_text, content_source, title, images
         else:
             return await self._perform_new_crawl_with_title(
                 message,
@@ -432,7 +434,7 @@ class ContentExtractor:
 
     async def _process_existing_crawl_with_title(
         self, message: Any, existing_crawl: dict, correlation_id: str | None, silent: bool = False
-    ) -> tuple[str, str, str | None]:
+    ) -> tuple[str, str, str | None, list[str]]:
         """Process existing crawl result."""
         md = existing_crawl.get("content_markdown")
         html = existing_crawl.get("content_html")
@@ -448,6 +450,19 @@ class ContentExtractor:
 
         if isinstance(metadata, dict):
             title = metadata.get("title") or metadata.get("og:title")
+
+        # Extract images using metadata/markdown helper
+        # We need to wrap existing_crawl dict into something _extract_images can use
+        from app.adapters.external.firecrawl.models import FirecrawlResult
+
+        crawl_obj = FirecrawlResult(
+            status="ok",
+            content_markdown=md,
+            content_html=html,
+            metadata_json=metadata,
+            source_url=existing_crawl.get("source_url"),
+        )
+        images = self._extract_images(crawl_obj)
 
         # Process content with HTML fallback for empty markdown
         if md and md.strip():
@@ -511,7 +526,7 @@ class ContentExtractor:
             silent=silent,
         )
 
-        return content_text, content_source, title
+        return content_text, content_source, title, images
 
     async def _perform_new_crawl_with_title(
         self,
@@ -522,7 +537,7 @@ class ContentExtractor:
         correlation_id: str | None,
         interaction_id: int | None,
         silent: bool = False,
-    ) -> tuple[str, str, str | None]:
+    ) -> tuple[str, str, str | None, list[str]]:
         """Perform new Firecrawl extraction."""
         persist_task: asyncio.Task[None] | None = None
 
@@ -549,7 +564,12 @@ class ContentExtractor:
                 silent=silent,
             )
             persist_task = self._schedule_crawl_persistence(req_id, cached_crawl, correlation_id)
-            content_text, content_source, title = await self._process_successful_crawl_with_title(
+            (
+                content_text,
+                content_source,
+                title,
+                images,
+            ) = await self._process_successful_crawl_with_title(
                 message, cached_crawl, correlation_id, silent
             )
             if persist_task:
@@ -559,7 +579,7 @@ class ContentExtractor:
                     logger.warning(
                         "persist_wait_failed", extra={"cid": correlation_id, "error": str(e)}
                     )
-            return content_text, content_source, title
+            return content_text, content_source, title, images
 
         # Notify: starting Firecrawl with progress indicator
         await self.response_formatter.send_firecrawl_start_notification(
@@ -569,7 +589,7 @@ class ContentExtractor:
         async with self._sem():
             crawl = await self.firecrawl.scrape_markdown(url_text, request_id=req_id)
 
-        quality_issue = self._detect_low_value_content(crawl)
+        quality_issue = detect_low_value_content(crawl)
         if quality_issue:
             metrics = quality_issue["metrics"]
             reason_label = quality_issue["reason"]
@@ -696,6 +716,7 @@ class ContentExtractor:
                     content_text,
                     content_source,
                     title,
+                    images,
                 ) = await self._process_successful_crawl_with_title(
                     message, salvage_crawl, correlation_id, silent
                 )
@@ -708,7 +729,7 @@ class ContentExtractor:
                             "salvage_persist_wait_failed",
                             extra={"cid": correlation_id, "error": str(e)},
                         )
-                return content_text, content_source, title
+                return content_text, content_source, title, images
 
             if persist_task:
                 try:
@@ -735,74 +756,6 @@ class ContentExtractor:
             message, crawl, correlation_id, silent
         )
 
-    def _detect_low_value_content(self, crawl: FirecrawlResult) -> dict[str, Any] | None:
-        """Detect low-value Firecrawl responses that should halt processing."""
-
-        text_candidates: list[str] = []
-        if crawl.content_markdown and crawl.content_markdown.strip():
-            text_candidates.append(clean_markdown_article_text(crawl.content_markdown))
-        if crawl.content_html and crawl.content_html.strip():
-            text_candidates.append(html_to_text(crawl.content_html))
-
-        primary_text = next((t for t in text_candidates if t and t.strip()), "")
-        normalized = re.sub(r"\s+", " ", primary_text).strip()
-
-        words_raw = re.findall(r"[0-9A-Za-zÀ-ÖØ-öø-ÿ']+", normalized)
-        words = [w.lower() for w in words_raw if w]
-        word_count = len(words)
-        unique_word_count = len(set(words))
-
-        top_word: str | None = None
-        top_ratio = 0.0
-        if words:
-            counter = Counter(words)
-            top_word, top_count = counter.most_common(1)[0]
-            top_ratio = top_count / word_count if word_count else 0.0
-
-        overlay_terms = {
-            "accept",
-            "close",
-            "cookie",
-            "cookies",
-            "consent",
-            "login",
-            "signin",
-            "signup",
-            "subscribe",
-        }
-        overlay_ratio = (
-            sum(1 for w in words if w in overlay_terms) / word_count if word_count else 0.0
-        )
-
-        reason: LowValueReason | None = None
-        if not normalized or word_count == 0:
-            reason = "empty_after_cleaning"
-        elif overlay_ratio >= 0.7 and len(normalized) < 600:
-            reason = "overlay_content_detected"
-        elif len(normalized) < 48 and word_count <= 2:
-            reason = "content_too_short"
-        elif len(normalized) < 120 and (
-            unique_word_count <= 3 or (word_count >= 4 and top_ratio >= 0.8)
-        ):
-            reason = "content_low_variation"
-        elif word_count >= 6 and top_ratio >= 0.92:
-            reason = "content_high_repetition"
-
-        if reason:
-            return {
-                "reason": reason,
-                "preview": normalized[:200],
-                "metrics": {
-                    "char_length": len(normalized),
-                    "word_count": word_count,
-                    "unique_word_count": unique_word_count,
-                    "top_word": top_word,
-                    "top_ratio": top_ratio,
-                    "overlay_ratio": overlay_ratio,
-                },
-            }
-        return None
-
     async def _get_cached_crawl(
         self, dedupe_hash: str, correlation_id: str | None
     ) -> FirecrawlResult | None:
@@ -827,7 +780,7 @@ class ContentExtractor:
             )
             return None
 
-        if self._detect_low_value_content(crawl):
+        if detect_low_value_content(crawl):
             logger.debug(
                 "firecrawl_cache_low_value_skipped",
                 extra={"cid": correlation_id, "hash": dedupe_hash},
@@ -975,18 +928,56 @@ class ContentExtractor:
             )
             return None
 
+    def _extract_images(self, crawl: FirecrawlResult) -> list[str]:
+        """Extract image URLs from Firecrawl result metadata and markdown."""
+        images: list[str] = []
+        seen = set()
+
+        # 1. From metadata (screenshots/images field)
+        if crawl.metadata_json and "screenshots" in crawl.metadata_json:
+            shots = crawl.metadata_json["screenshots"]
+            if isinstance(shots, list):
+                for shot in shots:
+                    if isinstance(shot, str) and shot.startswith("http"):
+                        if shot not in seen:
+                            seen.add(shot)
+                            images.append(shot)
+            elif isinstance(shots, str) and shots.startswith("http"):
+                if shots not in seen:
+                    seen.add(shots)
+                    images.append(shots)
+
+        # 2. From markdown ![alt](url)
+        if crawl.content_markdown:
+            # Match standard markdown images
+            matches = re.findall(r"!\[[^\]]*\]\((https?://[^\s\)]+)\)", crawl.content_markdown)
+            for url in matches:
+                # Basic filter: skip common UI/tracking patterns
+                if any(
+                    x in url.lower() for x in ["icon", "logo", "tracker", "pixel", ".svg", ".ico"]
+                ):
+                    continue
+                if url not in seen:
+                    seen.add(url)
+                    images.append(url)
+
+        return images[:5]  # Limit to top 5 images
+
     async def _process_successful_crawl_with_title(
         self,
         message: Any,
         crawl: FirecrawlResult,
         correlation_id: str | None,
         silent: bool = False,
-    ) -> tuple[str, str, str | None]:
+    ) -> tuple[str, str, str | None, list[str]]:
         """Process successful Firecrawl result."""
         # Extract title from metadata
         title = None
         if crawl.metadata_json:
             title = crawl.metadata_json.get("title") or crawl.metadata_json.get("og:title")
+
+        # Extract images before cleaning markdown
+        images = self._extract_images(crawl)
 
         # Notify: Firecrawl success
         excerpt_len = (len(crawl.content_markdown) if crawl.content_markdown else 0) or (
@@ -1045,7 +1036,7 @@ class ContentExtractor:
         except (AttributeError, RuntimeError) as e:
             logger.debug("normalization_skipped", extra={"reason": str(e)})
 
-        return content_text, content_source, title
+        return content_text, content_source, title, images
 
     async def _persist_message_snapshot(self, request_id: int, message: Any) -> None:
         """Persist message snapshot to database."""
