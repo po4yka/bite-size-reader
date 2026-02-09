@@ -31,6 +31,12 @@ venv.bak/
 # Pytest cache
 .pytest_cache/
 
+# Coverage reports
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+
 # Hypothesis test database
 .hypothesis/
 
