@@ -621,7 +621,7 @@ let summaries = try await client.getSummaries(limit: 10)
 
 ## See Also
 
-- [First Mobile API Client Tutorial](../tutorials/first-mobile-api-client.md) - Step-by-step guide
+- [First Mobile API Client Tutorial](tutorials/first-mobile-api-client.md) - Step-by-step guide
 - [OpenAPI Schema](openapi/) - Machine-readable API spec
 - [SPEC.md](SPEC.md) - Technical specification
 - [TROUBLESHOOTING § Mobile API Issues](TROUBLESHOOTING.md#mobile-api-issues)

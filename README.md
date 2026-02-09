@@ -409,7 +409,7 @@ GitHub Actions workflow `.github/workflows/ci.yml` enforces:
 
 | Document | Description | Audience |
 |----------|-------------|----------|
-| [SPEC.md](SPEC.md) | Full technical specification (canonical) | **Developers** |
+| [SPEC.md](docs/SPEC.md) | Full technical specification (canonical) | **Developers** |
 | [CLAUDE.md](CLAUDE.md) | AI assistant codebase guide | **AI Assistants, Developers** |
 | [HEXAGONAL_ARCHITECTURE_QUICKSTART.md](docs/HEXAGONAL_ARCHITECTURE_QUICKSTART.md) | Architecture patterns | **Developers** |
 | [multi_agent_architecture.md](docs/multi_agent_architecture.md) | Multi-agent LLM pipeline | **Developers** |

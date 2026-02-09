@@ -96,9 +96,6 @@ Everything runs in one Docker container; code lives on GitHub. Access is restric
 - **PyroTGFork (Pyrogram fork)** — async MTProto framework for Telegram (user/bot).
   Fork site — https://telegramplayground.github.io/pyrogram/
   Setup/Updates/Examples — `start/` pages on the same site (e.g., `/start/setup.html`, `/start/updates.html`, `/start/examples/`).
-  Upstream Pyrogram reference (types like `Message`, forwarding fields):
-  Client — https://docs.pyrogram.org/api/client
-  Message — https://docs.pyrogram.org/api/types/Message
 
 > Note: Pyrogram upstream is no longer maintained; this project uses the **PyroTGFork** mirror/documentation while keeping APIs compatible.
 
@@ -906,6 +903,3 @@ sequenceDiagram
 ### PyroTGFork / Pyrogram
 
 - Client, handlers, updates, examples: https://telegramplayground.github.io/pyrogram/
-- Upstream references for types/methods:
-  - Client: https://docs.pyrogram.org/api/client
-  - Message (forwarding fields): https://docs.pyrogram.org/api/types/Message
