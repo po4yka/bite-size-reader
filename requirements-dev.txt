@@ -427,7 +427,7 @@ platformdirs==4.5.1
     # via virtualenv
 pluggy==1.6.0
     # via pytest
-posthog==5.4.0
+posthog==7.8.3
     # via
     #   -c requirements.txt
     #   chromadb
