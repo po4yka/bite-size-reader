@@ -39,15 +39,9 @@ class NotRequired(metaclass=_NotRequiredMeta):
 
 import enum
 import typing
-from datetime import timezone
 
-enum.StrEnum = StrEnum  # type: ignore[misc,assignment,attr-defined]
-typing.NotRequired = NotRequired  # type: ignore[assignment,attr-defined]
-
-# Mock UTC for datetime module
-import datetime as dt_module
-
-dt_module.UTC = timezone.utc  # type: ignore[attr-defined]  # noqa: UP017
+enum.StrEnum = StrEnum  # type: ignore[misc,assignment]
+typing.NotRequired = NotRequired  # type: ignore[assignment]
 
 from app.db.database import Database
 from app.db.models import Request, Summary, User, database_proxy
