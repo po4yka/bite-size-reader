@@ -5,6 +5,7 @@ This document helps AI assistants (like Claude) understand and work effectively 
 ## Project Overview
 
 **Bite-Size Reader** is an async Telegram bot that:
+
 - Accepts web article URLs and summarizes them using Firecrawl (content extraction) + OpenRouter (LLM summarization)
 - Accepts YouTube video URLs, downloads them in 1080p, extracts transcripts, and generates summaries
 - Accepts forwarded channel posts and summarizes them directly
@@ -13,6 +14,7 @@ This document helps AI assistants (like Claude) understand and work effectively 
 - Runs as a single Docker container with owner-only access control
 
 **Tech Stack:**
+
 - Python 3.13+
 - Pyrogram (async Telegram MTProto)
 - Firecrawl API (content extraction for web articles)
@@ -178,6 +180,7 @@ python -m app.cli.summary --accept-multiple --json-path out.json --log-level DEB
 ### CI/CD
 
 GitHub Actions (`.github/workflows/ci.yml`) enforces:
+
 - Lockfile freshness (rebuilds from `pyproject.toml`)
 - Lint (ruff), format check (ruff format, isort), type check (mypy)
 - Unit tests with coverage (pytest, 80% threshold)
@@ -372,6 +375,7 @@ Full reference: `docs/environment_variables.md`
 **Last Updated:** 2026-02-04
 
 For questions about the codebase, always refer to:
+
 1. This file (CLAUDE.md) for AI assistant guidance
 2. SPEC.md for technical specification
 3. README.md for user-facing documentation

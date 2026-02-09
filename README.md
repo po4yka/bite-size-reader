@@ -88,6 +88,7 @@ The bot ingests updates via a lightweight `TelegramClient`, normalizes them thro
 **🚀 5-Minute Setup**: Follow the [Quickstart Tutorial](docs/tutorials/quickstart.md) for step-by-step Docker setup.
 
 **Manual Setup**:
+
 - Copy `.env.example` to `.env` and fill required secrets
 - Build and run with Docker
 - See [DEPLOYMENT.md](docs/DEPLOYMENT.md) for full setup, deployment, and update instructions
@@ -205,18 +206,21 @@ OPENROUTER_MODEL=deepseek/deepseek-v3.2  # Primary LLM model
 ## Performance Tips
 
 **Speed up summarization**:
+
 - ⚡ **Use faster models**: `qwen/qwen3-max` (faster than DeepSeek), `google/gemini-2.0-flash-001:free` (free)
 - 🔄 **Enable Redis caching**: Cache repeated URLs, reduce API calls
 - 📦 **Increase concurrency**: `MAX_CONCURRENT_CALLS=5` (default: 3)
 - 🎯 **Disable optional features**: Set `WEB_SEARCH_ENABLED=false`, `SUMMARY_TWO_PASS_ENABLED=false`
 
 **Reduce costs**:
+
 - 💰 **Use free models**: `google/gemini-2.0-flash-001:free`, `deepseek/deepseek-r1:free` (via OpenRouter)
 - 🔄 **Enable caching**: Avoid re-processing same URLs
 - 🎛 **Adjust token limits**: `MAX_CONTENT_LENGTH_TOKENS=30000` (default: 50000)
 - 📊 **Monitor usage**: Track costs at [OpenRouter Dashboard](https://openrouter.ai/account)
 
 **Optimize storage**:
+
 - 🧹 **Auto-cleanup YouTube**: `YOUTUBE_AUTO_CLEANUP_DAYS=7` (delete old videos)
 - 📏 **Set storage limits**: `YOUTUBE_MAX_STORAGE_GB=10`
 - 💾 **Database maintenance**: Periodic `VACUUM` and index rebuilding
@@ -274,6 +278,7 @@ The bot automatically detects YouTube URLs and processes them differently from r
 **Supported URL formats:** Standard watch, short (`youtu.be`), shorts, live, embed, mobile (`m.youtube.com`), YouTube Music, legacy `/v/`.
 
 **Processing workflow:**
+
 1. Extract video ID from URL (handles query parameters in any order)
 2. Extract transcript via `youtube-transcript-api` (prefers manual, falls back to auto-generated)
 3. Download video in configured quality (default 1080p) via `yt-dlp`
@@ -359,6 +364,7 @@ Hooks run in this order to minimize churn: Ruff (check with `--fix`, format), is
 ## CI
 
 GitHub Actions workflow `.github/workflows/ci.yml` enforces:
+
 - Lockfile freshness (rebuilds from `pyproject.toml` and checks diff)
 - Lint (ruff), format check (ruff format, isort), type check (mypy)
 - Unit tests with coverage (pytest, 80% threshold)

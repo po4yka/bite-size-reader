@@ -7,6 +7,7 @@ Hooks in `.claude/settings.json` provide automatic safety checks and environment
 ### File Protection (Write | Edit)
 
 Blocks modifications to protected files:
+
 - `data/app.db` -- production database
 - `.env` -- secrets
 - `requirements.txt` / `requirements-dev.txt` -- locked dependencies
@@ -16,6 +17,7 @@ Also warns on dangerous Python patterns: `eval(`, `exec(`, `os.system`, `__impor
 ### Bash Safety
 
 Blocks destructive shell commands:
+
 - `rm -rf /`, `rm -rf $HOME`, `rm -rf ~`, `rm -rf /data`
 - Direct disk writes (`>/dev/sd*`, `dd if=...of=/dev/`)
 - Filesystem creation (`mkfs`)
@@ -27,6 +29,7 @@ Warns on risky operations: installing packages outside requirements, force-pushi
 ## SessionStart Hook
 
 Runs at session start to validate the development environment:
+
 - Python version and virtual environment status
 - Core dependencies installed
 - `.env` file exists with required API keys
@@ -44,6 +47,7 @@ Skips non-Python files and files in `venv`/`build`/`dist` directories.
 ## UserPromptSubmit Hook
 
 Automatically injects helpful context based on prompt keywords:
+
 - **correlation / error id**: Database query patterns for tracing
 - **database / sqlite**: Points to `data/app.db` and database-inspection skill
 - **summary validate**: Links to `app/core/summary_contract.py`

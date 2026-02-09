@@ -10,11 +10,12 @@
 
 ---
 
-### Task 1: Add TTL eviction to BackgroundProcessor._local_locks
+## Task 1: Add TTL eviction to BackgroundProcessor._local_locks
 
 `_local_locks: dict[int, asyncio.Lock]` grows per `request_id` and is never cleaned. Over time this leaks memory proportional to total requests processed.
 
 **Files:**
+
 - Modify: `app/api/background_processor.py:78` and `_release_lock` method
 - Test: `tests/api/test_background_processor.py`
 
@@ -87,11 +88,12 @@ git commit -m "fix(background): clean up _local_locks after release to prevent m
 
 ---
 
-### Task 2: Add TTL expiry to URLHandler._awaiting_url_users and _pending_multi_links
+### Task 2: Add TTL expiry to URLHandler._awaiting_url_users and_pending_multi_links
 
 Users who send `/summarize` but never follow up with a URL remain in `_awaiting_url_users` forever. Similarly `_pending_multi_links` entries for abandoned confirmations never expire.
 
 **Files:**
+
 - Modify: `app/adapters/telegram/url_handler.py:37-56`
 - Test: `tests/test_url_handler.py`
 
@@ -173,6 +175,7 @@ Expected: FAIL -- methods don't exist yet
 In `app/adapters/telegram/url_handler.py`, change the state storage from bare sets/dicts to timestamped entries:
 
 Replace lines 53-56:
+
 ```python
         # Simple in-memory state: users awaiting a URL after /summarize
         self._awaiting_url_users: set[int] = set()
@@ -181,6 +184,7 @@ Replace lines 53-56:
 ```
 
 With:
+
 ```python
         # In-memory state with timestamps for TTL expiry
         self._state_ttl_sec = 120  # 2 minutes
@@ -193,6 +197,7 @@ With:
 Then update all methods that read/write these dicts:
 
 `add_awaiting_user`:
+
 ```python
     async def add_awaiting_user(self, uid: int) -> None:
         async with self._state_lock:
@@ -200,6 +205,7 @@ Then update all methods that read/write these dicts:
 ```
 
 `add_pending_multi_links`:
+
 ```python
     async def add_pending_multi_links(self, uid: int, urls: list[str]) -> None:
         async with self._state_lock:
@@ -207,6 +213,7 @@ Then update all methods that read/write these dicts:
 ```
 
 `cancel_pending_requests` -- update to work with new types:
+
 ```python
     async def cancel_pending_requests(self, uid: int) -> tuple[bool, bool]:
         async with self._state_lock:
@@ -222,12 +229,14 @@ Then update all methods that read/write these dicts:
 ```
 
 `handle_awaited_url` -- line 92-93, change discard to pop:
+
 ```python
         async with self._state_lock:
             self._awaiting_url_users.pop(uid, None)
 ```
 
 Add new query methods:
+
 ```python
     async def is_awaiting_url(self, uid: int) -> bool:
         async with self._state_lock:
@@ -317,6 +326,7 @@ git commit -m "fix(telegram): add TTL expiry to URL handler state to prevent mem
 `_rate_limit_notified_until` is cleaned only when the rate limiter cleanup runs, but it accumulates user IDs without bounds between runs.
 
 **Files:**
+
 - Modify: `app/adapters/telegram/message_router.py:134-140`
 - Test: `tests/test_rate_limiter.py` (or new test file)
 
@@ -421,6 +431,7 @@ git commit -m "fix(telegram): clean up expired notification and message-dedup st
 The retry loop catches all `Exception` including `asyncio.CancelledError`, causing cancelled tasks to retry instead of propagating cancellation.
 
 **Files:**
+
 - Modify: `app/api/background_processor.py:467-503`
 - Test: `tests/api/test_background_processor.py`
 

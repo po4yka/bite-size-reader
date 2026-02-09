@@ -3,6 +3,7 @@
 Agents wrap extraction, summarization, and validation with structured results, retries, and observability.
 
 ## Roles
+
 - **ContentExtractionAgent** — Firecrawl/YouTube fetch; persists crawl artifacts.
 - **SummarizationAgent** — OpenRouter call with self-correction loop; tracks tokens/cost/latency.
 - **ValidationAgent** — Enforces `summary_contract` (length caps, deduped tags/entities).
@@ -21,6 +22,7 @@ flowchart LR
 ```
 
 ## Feedback loop (summarization)
+
 ```mermaid
 sequenceDiagram
   participant Summ as SummarizationAgent
@@ -39,23 +41,30 @@ sequenceDiagram
 ```
 
 ## Usage
+
 - Extraction:
+
 ```python
 agent = ContentExtractionAgent(content_extractor, correlation_id="abc123")
 result = await agent.execute(ExtractionInput(url="https://example.com", correlation_id="abc123"))
 ```
+
 - Full pipeline:
+
 ```python
 orchestrator = AgentOrchestrator(extraction_agent, summarization_agent)
 result = await orchestrator.execute(OrchestratorInput(url="https://example.com", correlation_id="abc123"))
 ```
+
 `result.output` carries validated summary JSON; `metadata` tracks attempts, latencies, tokens, cost.
 
 ## Integration
+
 - Used in `app/application/use_cases/summarize_url.py` and by the API background processor.
 - Wraps `ContentExtractor`/`LLMSummarizer`, adds retries, validation, and correlation-aware logging.
 
 ## Testing
+
 - Unit: mock Firecrawl/LLM; assert retries and validation errors are surfaced.
 - Integration: orchestrator with fixtures; expect `validation_attempts > 1` when schema errors injected.
 
@@ -74,6 +83,7 @@ flowchart LR
 ```
 
 ### Input/Output
+
 ```python
 class WebSearchAgentInput(BaseModel):
     content: str           # Article content to analyze
@@ -89,6 +99,7 @@ class WebSearchAgentOutput(BaseModel):
 ```
 
 ### Usage
+
 ```python
 from app.agents.web_search_agent import WebSearchAgent, WebSearchAgentInput
 
@@ -110,12 +121,14 @@ if result.success and result.output.context:
 ```
 
 ### Integration
+
 - Integrated into `LLMSummarizer._maybe_enrich_with_search()`
 - Called before main summarization when enabled
 - Uses `SearchContextBuilder` to format results as markdown
 - Gracefully handles failures (continues without enrichment)
 
 ## Files
+
 - `app/agents/base_agent.py`
 - `app/agents/content_extraction_agent.py`
 - `app/agents/summarization_agent.py`

@@ -101,6 +101,7 @@ sqlite3 /data/app.db "SELECT SUM(cost_usd) as total_cost FROM llm_calls WHERE co
 ## Usage Tips
 
 1. **Format output nicely**:
+
    ```bash
    sqlite3 /data/app.db << EOF
    .mode column
@@ -110,6 +111,7 @@ sqlite3 /data/app.db "SELECT SUM(cost_usd) as total_cost FROM llm_calls WHERE co
    ```
 
 2. **Export to JSON**:
+
    ```bash
    sqlite3 /data/app.db << EOF
    .mode json
@@ -118,11 +120,13 @@ sqlite3 /data/app.db "SELECT SUM(cost_usd) as total_cost FROM llm_calls WHERE co
    ```
 
 3. **Pretty print JSON payloads**:
+
    ```bash
    sqlite3 /data/app.db "SELECT json_payload FROM summaries WHERE request_id = '<correlation_id>';" | python -m json.tool
    ```
 
 4. **Search by URL pattern**:
+
    ```bash
    sqlite3 /data/app.db "SELECT id, input_url, status FROM requests WHERE input_url LIKE '%example.com%';"
    ```

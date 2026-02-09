@@ -193,6 +193,7 @@ EOF
 ### Command Processing
 
 See `app/adapters/telegram/command_processor.py`:
+
 - Commands are defined in `app/adapters/telegram/commands.py`
 - Routing logic in `app/adapters/telegram/message_router.py`
 - State management in `app/adapters/telegram/task_manager.py`
@@ -333,6 +334,7 @@ export DEBUG_PAYLOADS=1
 ### 2. Check Correlation IDs
 
 Every request generates a unique correlation ID:
+
 ```bash
 # Find in logs
 grep "correlation_id" logs/*.log
@@ -355,6 +357,7 @@ EOF
 ### 4. Test Prompts
 
 LLM prompts are in `app/prompts/`:
+
 - `en/summary.txt` — English summary prompt
 - `ru/summary.txt` — Russian summary prompt
 

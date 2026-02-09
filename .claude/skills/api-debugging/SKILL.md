@@ -12,15 +12,18 @@ Helps debug and troubleshoot Firecrawl and OpenRouter API integrations.
 ## Firecrawl API
 
 ### Endpoints
+
 - **Base URL**: `https://api.firecrawl.dev`
 - **Scrape endpoint**: `POST /v1/scrape`
 
 ### Official Documentation
+
 - **Features**: https://docs.firecrawl.dev/features/scrape
 - **API Reference**: https://docs.firecrawl.dev/api-reference/endpoint/scrape
 - **Advanced Guide**: https://docs.firecrawl.dev/advanced-scraping-guide
 
 ### Integration Location
+
 - **Client**: `app/adapters/content/content_extractor.py`
 - **Parser**: `app/adapters/external/firecrawl_parser.py`
 - **DB Storage**: `crawl_results` table
@@ -69,6 +72,7 @@ EOF
 ### Retry Logic
 
 Check `app/adapters/content/content_extractor.py`:
+
 - 3 retries with exponential backoff on 5xx/timeout
 - Toggle `mobile` emulation on PDF failures
 - Check `parsers` configuration
@@ -99,15 +103,18 @@ curl -X POST https://api.firecrawl.dev/v1/scrape \
 ## OpenRouter API
 
 ### Endpoints
+
 - **Base URL**: `https://openrouter.ai`
 - **Chat completions**: `POST /api/v1/chat/completions`
 
 ### Official Documentation
+
 - **Overview**: https://openrouter.ai/docs/api-reference/overview
 - **Chat Completions**: https://openrouter.ai/docs/api-reference/chat-completion
 - **Quickstart**: https://openrouter.ai/docs/quickstart
 
 ### Integration Location
+
 - **Client**: `app/adapters/openrouter/openrouter_client.py`
 - **Request Builder**: `app/adapters/openrouter/request_builder.py`
 - **Response Processor**: `app/adapters/openrouter/response_processor.py`
@@ -182,6 +189,7 @@ sqlite3 /data/app.db "
 ### Model Fallback Chain
 
 Check `app/adapters/openrouter/error_handler.py`:
+
 - Primary model configured in `OPENROUTER_MODEL`
 - Fallback cascade for structured output failures
 - Long-context model support for large articles
@@ -226,6 +234,7 @@ export REQUEST_TIMEOUT_SEC=60
 ### Check Concurrency Implementation
 
 See `app/adapters/content/url_processor.py`:
+
 - Semaphore-based rate limiting
 - Concurrent calls for chunked content
 - Sequential processing for multi-URL requests
@@ -235,6 +244,7 @@ See `app/adapters/content/url_processor.py`:
 ### 1. "Firecrawl returns empty content"
 
 Check:
+
 ```bash
 # View raw response
 sqlite3 /data/app.db "
@@ -250,6 +260,7 @@ grep -r "parsers.*pdf" app/adapters/content/
 ### 2. "LLM returns invalid JSON"
 
 Check `app/core/json_utils.py`:
+
 - Uses `json_repair` library to fix malformed output
 - Falls back through multiple parsing strategies
 - Logs repair attempts with correlation ID

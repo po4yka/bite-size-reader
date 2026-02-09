@@ -42,24 +42,29 @@ All summaries must conform to this strict schema:
 ## Validation Rules
 
 ### Character Limits
+
 - `summary_250`: HARD CAP at 250 characters, must end on sentence/phrase boundary
 - `summary_1000`: HARD CAP at 1000 characters, multi-sentence overview
 
 ### Topic Tags
+
 - Must have leading `#` character
 - Deduplicated (case-sensitive)
 - Maximum 10 tags recommended
 
 ### Entities
+
 - Lists must be deduplicated (case-insensitive)
 - Valid categories: `people`, `organizations`, `locations`
 
 ### Key Stats
+
 - `value` must be numeric (int or float)
 - `label` and `source_excerpt` are required strings
 - `unit` is optional string
 
 ### Readability
+
 - `method` typically "Flesch-Kincaid" or "Flesch Reading Ease"
 - `score` is numeric
 - `level` maps score to reading level (e.g., "College", "High School")
@@ -137,6 +142,7 @@ EOF
 **Problem**: `summary_250` or `summary_1000` too long
 
 **Solution**: Truncate at sentence boundary
+
 ```python
 def truncate_at_sentence(text, max_len):
     if len(text) <= max_len:
@@ -154,6 +160,7 @@ def truncate_at_sentence(text, max_len):
 **Problem**: Topic tags without leading `#`
 
 **Solution**: Prefix all tags
+
 ```python
 tags = [f"#{tag}" if not tag.startswith('#') else tag for tag in tags]
 ```
@@ -163,6 +170,7 @@ tags = [f"#{tag}" if not tag.startswith('#') else tag for tag in tags]
 **Problem**: Case-insensitive duplicates in entity lists
 
 **Solution**: Deduplicate preserving case
+
 ```python
 def dedupe_entities(items):
     seen = set()
@@ -179,6 +187,7 @@ def dedupe_entities(items):
 **Problem**: Missing required fields or wrong types
 
 **Solution**: Validate each stat
+
 ```python
 for stat in key_stats:
     assert 'label' in stat, "Missing label"
