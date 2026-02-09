@@ -61,7 +61,7 @@ class TestDomainFailFastFormatting(unittest.TestCase):
     """Verify domain_timeout error type formats correctly."""
 
     def test_domain_timeout_error_format(self):
-        """domain_timeout error type displays as 'Skipped (domain timeout)'."""
+        """domain_timeout error type displays as 'Skipped (slow site)'."""
         from app.adapters.external.formatting.batch_progress_formatter import (
             BatchProgressFormatter,
         )
@@ -69,16 +69,16 @@ class TestDomainFailFastFormatting(unittest.TestCase):
         result = BatchProgressFormatter._format_error_short(
             "domain_timeout", "Skipped (domain habr.com timed out)"
         )
-        assert result == "Skipped (domain timeout)"
+        assert result == "Skipped (slow site)"
 
     def test_regular_timeout_unaffected(self):
-        """Regular timeout formatting is unchanged."""
+        """Regular timeout formatting shows 'Timed out'."""
         from app.adapters.external.formatting.batch_progress_formatter import (
             BatchProgressFormatter,
         )
 
         result = BatchProgressFormatter._format_error_short("timeout", None)
-        assert result == "Timeout"
+        assert result == "Timed out"
 
 
 # ---------------------------------------------------------------------------

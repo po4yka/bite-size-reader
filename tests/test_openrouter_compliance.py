@@ -470,6 +470,8 @@ class TestOpenRouterCompliance(unittest.TestCase):
 
     def test_parameter_validation(self) -> None:
         """Test parameter validation."""
+        from pydantic_core import ValidationError as PydanticValidationError
+
         from app.adapters.openrouter.exceptions import ValidationError
 
         # Test invalid temperature
@@ -484,8 +486,8 @@ class TestOpenRouterCompliance(unittest.TestCase):
         with pytest.raises(ValidationError):
             asyncio.run(self.client.chat([{"role": "user", "content": "Hello"}], top_p=1.5))
 
-        # Test invalid stream
-        with pytest.raises(ValidationError):
+        # Test invalid stream - Pydantic catches this before our custom validation
+        with pytest.raises(PydanticValidationError):
             asyncio.run(self.client.chat([{"role": "user", "content": "Hello"}], stream="true"))  # type: ignore[arg-type]
 
     def test_message_validation(self) -> None:

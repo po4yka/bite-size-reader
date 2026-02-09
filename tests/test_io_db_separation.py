@@ -78,8 +78,8 @@ async def test_firecrawl_persistence_runs_in_background() -> None:
     extractor._persist_crawl_result = MethodType(slow_persist, extractor)
     extractor._cache = SimpleNamespace(enabled=False)
 
-    content_text, content_source = await asyncio.wait_for(
-        extractor._perform_new_crawl(
+    content_text, content_source, _title, _images = await asyncio.wait_for(
+        extractor._perform_new_crawl_with_title(
             message=SimpleNamespace(),
             req_id=1,
             url_text="https://example.com",
