@@ -21,14 +21,11 @@ from pathlib import Path
 from typing import Any
 
 import peewee
-from peewee import JOIN, fn
 from playhouse.sqlite_ext import SqliteExtDatabase
 
+from app.db.database_diagnostics import DatabaseDiagnostics
 from app.db.models import (
     ALL_MODELS,
-    CrawlResult,
-    Request,
-    Summary,
     database_proxy,
 )
 from app.db.rw_lock import AsyncRWLock
@@ -79,6 +76,7 @@ class DatabaseSessionManager:
     _logger: logging.Logger = field(default_factory=lambda: logging.getLogger(__name__))
     _database: peewee.SqliteDatabase = field(init=False)
     _rw_lock: AsyncRWLock = field(init=False)
+    _diagnostics: DatabaseDiagnostics = field(init=False)
     _topic_search_index_delete_warned: bool = field(default=False, init=False)
 
     # Configuration values
@@ -106,6 +104,7 @@ class DatabaseSessionManager:
 
         # Initialize read-write lock for thread-safe database access
         self._rw_lock = AsyncRWLock()
+        self._diagnostics = DatabaseDiagnostics(self._database, self._logger)
 
     @property
     def database(self) -> peewee.SqliteDatabase:
@@ -491,25 +490,7 @@ class DatabaseSessionManager:
 
     def get_database_overview(self) -> dict[str, Any]:
         """Return diagnostic overview of database tables and counts."""
-        overview: dict[str, Any] = {"tables": {}}
-        try:
-            with self._database.connection_context():
-                for table in sorted(self._database.get_tables()):
-                    overview["tables"][table] = self._count_table_rows(table)
-
-                if "requests" in overview["tables"]:
-                    status_rows = list(
-                        Request.select(Request.status, fn.COUNT(Request.id).alias("cnt"))
-                        .group_by(Request.status)
-                        .dicts()
-                    )
-                    overview["requests_by_status"] = {
-                        str(row["status"] or "unknown"): int(row["cnt"]) for row in status_rows
-                    }
-        except peewee.DatabaseError as exc:
-            self._logger.error("db_overview_failed", extra={"error": str(exc)})
-
-        return overview
+        return self._diagnostics.get_database_overview()
 
     def verify_processing_integrity(
         self,
@@ -518,17 +499,10 @@ class DatabaseSessionManager:
         limit: int | None = None,
     ) -> dict[str, Any]:
         """Perform deep integrity check on processed summaries."""
-        query = (
-            Request.select(Request, Summary, CrawlResult)
-            .join(Summary, JOIN.LEFT_OUTER, on=(Summary.request == Request.id))
-            .switch(Request)
-            .join(CrawlResult, JOIN.LEFT_OUTER, on=(CrawlResult.request == Request.id))
-            .order_by(Request.id.desc())
+        return self._diagnostics.verify_processing_integrity(
+            required_fields=required_fields,
+            limit=limit,
         )
-        if limit:
-            query = query.limit(limit)
-
-        return {"checked": query.count()}
 
     # -- Internal helpers -------------------------------------------------
 

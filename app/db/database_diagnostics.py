@@ -8,12 +8,11 @@ from typing import TYPE_CHECKING, Any
 import peewee
 from peewee import JOIN, fn
 
+from app.db.json_utils import decode_json_field
 from app.db.models import ALL_MODELS, CrawlResult, Request, Summary
 
 if TYPE_CHECKING:
     import logging
-
-    from app.db.database import Database
 
 
 class DatabaseDiagnostics:
@@ -21,11 +20,9 @@ class DatabaseDiagnostics:
 
     def __init__(
         self,
-        db: Database,
         database: peewee.SqliteDatabase,
         logger: logging.Logger,
     ) -> None:
-        self._db = db
         self._database = database
         self._logger = logger
 
@@ -170,9 +167,9 @@ class DatabaseDiagnostics:
         if limit_clause is not None:
             query = query.limit(limit_clause)
 
-        rows = list(query.dicts())
-        posts["checked"] = len(rows)
-        posts["links"]["posts_with_links"] = len(rows)
+        total_rows = query.count()
+        posts["checked"] = total_rows
+        posts["links"]["posts_with_links"] = total_rows
 
         reprocess_map: dict[int, dict[str, Any]] = {}
 
@@ -209,14 +206,14 @@ class DatabaseDiagnostics:
                 reprocess_map[request_id] = entry
             entry["reasons"].add(reason)
 
-        for row in rows:
+        for row in query.dicts():
             request_id = int(row["request_id"])
             row_type = str(row.get("request_type") or "unknown")
             row_status = str(row.get("request_status") or "unknown")
             summary_raw = row.get("summary_json")
             links_raw = row.get("links_json")
 
-            summary_payload, summary_error = self._db._decode_json_field(summary_raw)
+            summary_payload, summary_error = decode_json_field(summary_raw)
             if summary_payload is not None:
                 posts["with_summary"] += 1
             else:
@@ -327,7 +324,7 @@ class DatabaseDiagnostics:
         return "unknown"
 
     def _count_links_entries(self, links_json: Any) -> tuple[int, bool, str | None]:
-        parsed, error = self._db._decode_json_field(links_json)
+        parsed, error = decode_json_field(links_json)
         if error:
             return 0, False, error
         if parsed is None:
