@@ -23,13 +23,11 @@ class NotRequired(metaclass=_NotRequiredMeta):
     """Compatibility shim for NotRequired (Python 3.11+)."""
 
 
-import datetime as dt_module
 import enum
 import typing
 
 enum.StrEnum = StrEnum  # type: ignore[misc,assignment]
 typing.NotRequired = NotRequired  # type: ignore[assignment]
-dt_module.UTC = dt_module.UTC  # type: ignore[attr-defined]
 
 from app.api.routers.auth import create_access_token
 from app.core.time_utils import UTC

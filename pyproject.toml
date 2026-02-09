@@ -98,6 +98,7 @@ ignore = [
   "PT009",   # unittest assertions - can be migrated later
   "PT027",   # unittest-style assertRaises - using unittest.TestCase
   "UP042",   # StrEnum compatibility shim for Python 3.10
+  "UP017",   # datetime.UTC compatibility shim for Python 3.10
   "PT012",   # pytest.raises complex statements - acceptable in integration tests
   "DTZ001",  # datetime() without tz - testing naive datetime handling
   "DTZ005",  # datetime.now without tz - acceptable in tests

@@ -1,20 +1,9 @@
 import json
-from enum import Enum
 
 import fakeredis.aioredis
 import pytest
 from starlette.requests import Request
 from starlette.responses import Response
-
-
-# Python 3.10 compatibility shim (must be before app imports)
-class StrEnum(str, Enum):
-    """Compatibility shim for StrEnum (Python 3.11+)."""
-
-
-import enum
-
-enum.StrEnum = StrEnum  # type: ignore[misc,assignment]
 
 from app.api import middleware
 from app.api.services.sync_service import SyncService

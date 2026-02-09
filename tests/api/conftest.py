@@ -1,9 +1,29 @@
 import importlib
 import logging
 import sys
+from enum import Enum
+from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
+
+
+# Python 3.10 compatibility shims (must be before app imports)
+class StrEnum(str, Enum):
+    """Compatibility shim for StrEnum (Python 3.11+)."""
+
+
+class _NotRequiredMeta(type):
+    def __getitem__(cls, item: Any) -> Any:
+        return item
+
+
+class NotRequired(metaclass=_NotRequiredMeta):
+    """Compatibility shim for NotRequired (Python 3.11+)."""
+
+
+# Note: These shims are also set up in tests/conftest.py (root)
+# No need to set them up again here as conftest.py is loaded first
 
 from app.db.database import Database
 from app.db.models import Request, Summary, User, database_proxy
