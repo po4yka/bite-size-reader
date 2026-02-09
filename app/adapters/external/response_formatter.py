@@ -32,6 +32,7 @@ from app.adapters.external.formatting.text_processor import TextProcessorImpl
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable, Sequence
 
+    from app.core.progress_tracker import ProgressTracker
     from app.core.verbosity import VerbosityResolver
     from app.services.topic_search import TopicArticle
 
@@ -134,6 +135,11 @@ class ResponseFormatter:
         # Expose internal state for backward compatibility with existing code
         self._last_message_time: float = 0.0
         self._notified_error_ids: set[str] = set()
+
+    @property
+    def progress_tracker(self) -> ProgressTracker:
+        """Expose progress tracker for single-URL progress messages."""
+        return self._progress_tracker
 
     async def is_reader_mode(self, message: Any) -> bool:
         """Return True when the user prefers Reader (consolidated) UX."""

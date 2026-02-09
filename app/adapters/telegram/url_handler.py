@@ -10,6 +10,7 @@ from urllib.parse import urlparse
 
 from app.adapters.telegram.message_router_helpers import process_url_batch
 from app.core.url_utils import extract_all_urls
+from app.core.verbosity import VerbosityLevel
 from app.db.user_interactions import async_safe_update_user_interaction
 from app.infrastructure.persistence.sqlite.repositories.request_repository import (
     SqliteRequestRepositoryAdapter,
@@ -21,6 +22,7 @@ from app.infrastructure.persistence.sqlite.repositories.user_repository import (
 if TYPE_CHECKING:
     from app.adapters.content.url_processor import URLProcessor
     from app.adapters.external.response_formatter import ResponseFormatter
+    from app.core.verbosity import VerbosityResolver
     from app.db.session import DatabaseSessionManager
     from app.services.adaptive_timeout import AdaptiveTimeoutService
 
@@ -63,6 +65,7 @@ class URLHandler:
         response_formatter: ResponseFormatter,
         url_processor: URLProcessor,
         adaptive_timeout_service: AdaptiveTimeoutService | None = None,
+        verbosity_resolver: VerbosityResolver | None = None,
     ) -> None:
         self.db = db
         self.user_repo = SqliteUserRepositoryAdapter(db)
@@ -70,6 +73,7 @@ class URLHandler:
         self.response_formatter = response_formatter
         self.url_processor = url_processor
         self._adaptive_timeout = adaptive_timeout_service
+        self.verbosity_resolver = verbosity_resolver
 
         # Lock to protect shared state from concurrent access
         self._state_lock = asyncio.Lock()
@@ -307,11 +311,21 @@ class URLHandler:
 
         if len(urls) == 1:
             logger.debug("received_awaited_url", extra={"uid": uid, "cid": correlation_id})
+
+            # Determine if Reader mode (progress tracker) or Debug mode (typing indicators)
+            progress_tracker = None
+            if self.verbosity_resolver:
+                verbosity = await self.verbosity_resolver.get_verbosity(message)
+                if verbosity == VerbosityLevel.READER:
+                    # Use existing progress tracker for editable progress messages
+                    progress_tracker = self.response_formatter.progress_tracker
+
             await self.url_processor.handle_url_flow(
                 message,
                 urls[0],
                 correlation_id=correlation_id,
                 interaction_id=interaction_id,
+                progress_tracker=progress_tracker,
             )
 
     async def handle_direct_url(
@@ -339,11 +353,20 @@ class URLHandler:
             return
 
         if len(urls) == 1:
+            # Determine if Reader mode (progress tracker) or Debug mode (typing indicators)
+            progress_tracker = None
+            if self.verbosity_resolver:
+                verbosity = await self.verbosity_resolver.get_verbosity(message)
+                if verbosity == VerbosityLevel.READER:
+                    # Use existing progress tracker for editable progress messages
+                    progress_tracker = self.response_formatter.progress_tracker
+
             await self.url_processor.handle_url_flow(
                 message,
                 urls[0],
                 correlation_id=correlation_id,
                 interaction_id=interaction_id,
+                progress_tracker=progress_tracker,
             )
 
     async def handle_multi_link_confirmation(

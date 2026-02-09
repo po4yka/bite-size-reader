@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import time
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
@@ -23,6 +24,9 @@ from app.adapters.content.llm_summarizer_insights import (
 from app.adapters.content.llm_summarizer_metadata import LLMSummaryMetadataHelper
 from app.adapters.content.llm_summarizer_semantic import LLMSemanticHelper
 from app.adapters.content.llm_summarizer_text import coerce_string_list, truncate_content_text
+from app.adapters.external.formatting.single_url_progress_formatter import (
+    SingleURLProgressFormatter,
+)
 from app.core.content_cleaner import clean_content_for_llm
 from app.core.json_utils import extract_json
 from app.core.lang import LANG_RU
@@ -38,6 +42,7 @@ from app.infrastructure.persistence.sqlite.repositories.request_repository impor
 from app.infrastructure.persistence.sqlite.repositories.summary_repository import (
     SqliteSummaryRepositoryAdapter,
 )
+from app.utils.progress_message_updater import ProgressMessageUpdater
 from app.utils.typing_indicator import typing_indicator
 
 if TYPE_CHECKING:
@@ -46,6 +51,7 @@ if TYPE_CHECKING:
     from app.adapters.external.response_formatter import ResponseFormatter
     from app.adapters.llm import LLMClientProtocol
     from app.config import AppConfig
+    from app.core.progress_tracker import ProgressTracker
     from app.db.session import DatabaseSessionManager
     from app.db.write_queue import DbWriteQueue
     from app.services.topic_search import TopicSearchService
@@ -175,6 +181,7 @@ class LLMSummarizer:
         on_phase_change: Callable[[str, str | None, int | None, str | None], Awaitable[None]]
         | None = None,
         images: list[str] | None = None,
+        progress_tracker: ProgressTracker | None = None,
     ) -> dict[str, Any] | None:
         """Summarize content using LLM and return shaped summary."""
         # Validate content before sending to LLM
@@ -511,8 +518,31 @@ class LLMSummarizer:
             silent=silent,
         )
 
-        # Send typing indicator during LLM analysis (can take 30-60s)
-        async with typing_indicator(self.response_formatter, message, action="typing"):
+        # Choose between progress tracker (Reader mode) or typing indicator (Debug mode)
+        use_progress = progress_tracker is not None
+        updater = None
+        typing_ctx = None
+        start_time = time.time()
+
+        try:
+            if use_progress:
+                # Reader mode: editable progress message with elapsed time
+                updater = ProgressMessageUpdater(progress_tracker, message)
+
+                def analyzing_formatter(elapsed: float) -> str:
+                    return SingleURLProgressFormatter.format_llm_progress(
+                        content_length=len(content_for_summary),
+                        model=model_for_cache,
+                        elapsed_sec=elapsed,
+                        phase="analyzing",
+                    )
+
+                await updater.start(analyzing_formatter)
+            else:
+                # Debug mode: typing indicator (existing behavior)
+                typing_ctx = typing_indicator(self.response_formatter, message, action="typing")
+                await typing_ctx.__aenter__()
+
             summary = await self._workflow.execute_summary_workflow(
                 message=message,
                 req_id=req_id,
@@ -528,11 +558,51 @@ class LLMSummarizer:
                 defer_persistence=defer_persistence,
             )
 
-        # Two-pass enrichment: merge enrichment fields into core summary
-        if summary and self.cfg.runtime.summary_two_pass_enabled:
-            summary = await self._enrich_summary_two_pass(
-                summary, content_for_summary, chosen_lang, correlation_id
-            )
+            # Two-pass enrichment: merge enrichment fields into core summary
+            if summary and self.cfg.runtime.summary_two_pass_enabled:
+                if use_progress and updater:
+                    # Update formatter to show "enriching" phase
+                    def enriching_formatter(elapsed: float) -> str:
+                        return SingleURLProgressFormatter.format_llm_progress(
+                            content_length=len(content_for_summary),
+                            model=model_for_cache,
+                            elapsed_sec=elapsed,
+                            phase="enriching",
+                        )
+
+                    await updater.update_formatter(enriching_formatter)
+
+                summary = await self._enrich_summary_two_pass(
+                    summary, content_for_summary, chosen_lang, correlation_id
+                )
+
+            # Finalize progress message or stop typing indicator
+            elapsed_total = time.time() - start_time
+            if use_progress and updater:
+                success_msg = SingleURLProgressFormatter.format_llm_complete(
+                    model=model_for_cache,
+                    elapsed_sec=elapsed_total,
+                    success=summary is not None,
+                    correlation_id=correlation_id if summary is None else None,
+                )
+                await updater.finalize(success_msg)
+            elif typing_ctx:
+                await typing_ctx.__aexit__(None, None, None)
+
+        except Exception:
+            # Cleanup on error
+            if use_progress and updater:
+                error_msg = SingleURLProgressFormatter.format_llm_complete(
+                    model=model_for_cache,
+                    elapsed_sec=time.time() - start_time,
+                    success=False,
+                    error_msg="Processing failed",
+                    correlation_id=correlation_id,
+                )
+                await updater.finalize(error_msg)
+            elif typing_ctx:
+                await typing_ctx.__aexit__(None, None, None)
+            raise
 
         if summary and url_hash:
             chosen_model = getattr(self._last_llm_result, "model", model_for_cache)

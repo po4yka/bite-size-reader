@@ -28,6 +28,7 @@ if TYPE_CHECKING:
     from app.adapters.external.response_formatter import ResponseFormatter
     from app.adapters.llm.protocol import LLMClientProtocol
     from app.config import AppConfig
+    from app.core.progress_tracker import ProgressTracker
     from app.db.session import DatabaseSessionManager
     from app.db.write_queue import DbWriteQueue
     from app.services.topic_search import TopicSearchService
@@ -292,6 +293,7 @@ class URLProcessor:
         batch_mode: bool = False,
         on_phase_change: Callable[[str, str | None, int | None, str | None], Awaitable[None]]
         | None = None,
+        progress_tracker: ProgressTracker | None = None,
     ) -> URLProcessingFlowResult:
         """Handle complete URL processing flow from extraction to summarization.
 
@@ -337,7 +339,7 @@ class URLProcessor:
                 title,
                 images,
             ) = await self.content_extractor.extract_and_process_content(
-                message, url_text, correlation_id, interaction_id, notify_silent
+                message, url_text, correlation_id, interaction_id, notify_silent, progress_tracker
             )
 
             # Choose language and load system prompt
@@ -436,6 +438,7 @@ class URLProcessor:
                     silent=notify_silent,
                     on_phase_change=on_phase_change,
                     images=images,
+                    progress_tracker=progress_tracker,
                 )
 
             if summary_json is None:

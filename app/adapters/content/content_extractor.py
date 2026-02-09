@@ -31,6 +31,7 @@ from app.utils.typing_indicator import typing_indicator
 if TYPE_CHECKING:
     from app.adapters.external.response_formatter import ResponseFormatter
     from app.adapters.youtube.youtube_downloader import YouTubeDownloader
+    from app.core.progress_tracker import ProgressTracker
 
 logger = logging.getLogger(__name__)
 
@@ -219,6 +220,7 @@ class ContentExtractor:
         correlation_id: str | None = None,
         interaction_id: int | None = None,
         silent: bool = False,
+        progress_tracker: ProgressTracker | None = None,
     ) -> tuple[int, str, str, str, str | None, list[str]]:
         """Extract content from URL and return (req_id, content_text, content_source, detected_lang, title, images)."""
         from app.core.url_utils import is_youtube_url
@@ -239,7 +241,7 @@ class ContentExtractor:
                 detected_lang,
                 video_metadata,
             ) = await self._extract_youtube_content(
-                message, url_text, norm, correlation_id, interaction_id, silent
+                message, url_text, norm, correlation_id, interaction_id, silent, progress_tracker
             )
             title = video_metadata.get("title") if isinstance(video_metadata, dict) else None
             return req_id, transcript_text, content_source, detected_lang, title, []
@@ -1053,6 +1055,7 @@ class ContentExtractor:
         correlation_id: str | None,
         interaction_id: int | None,
         silent: bool = False,
+        progress_tracker: ProgressTracker | None = None,
     ) -> tuple[int, str, str, str, dict[str, Any]]:
         """Extract YouTube video transcript and download video.
 
@@ -1087,7 +1090,7 @@ class ContentExtractor:
                 detected_lang,
                 video_metadata,
             ) = await self._youtube_downloader.download_and_extract(
-                message, url_text, correlation_id, interaction_id, silent
+                message, url_text, correlation_id, interaction_id, silent, progress_tracker
             )
 
             logger.info(

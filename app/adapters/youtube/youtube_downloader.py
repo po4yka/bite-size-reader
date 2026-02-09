@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from collections.abc import Mapping
 from datetime import UTC, datetime
 from pathlib import Path
@@ -16,6 +17,9 @@ import yt_dlp
 from youtube_transcript_api import YouTubeTranscriptApi
 from youtube_transcript_api._errors import NoTranscriptFound, TranscriptsDisabled, VideoUnavailable
 
+from app.adapters.external.formatting.single_url_progress_formatter import (
+    SingleURLProgressFormatter,
+)
 from app.adapters.youtube.youtube_downloader_parts import (
     metadata as _metadata,
     storage as _storage,
@@ -32,11 +36,13 @@ from app.infrastructure.persistence.sqlite.repositories.request_repository impor
 from app.infrastructure.persistence.sqlite.repositories.video_download_repository import (
     SqliteVideoDownloadRepositoryAdapter,
 )
+from app.utils.progress_message_updater import ProgressMessageUpdater
 from app.utils.typing_indicator import typing_indicator
 
 if TYPE_CHECKING:
     from app.adapters.external.response_formatter import ResponseFormatter
     from app.config import AppConfig
+    from app.core.progress_tracker import ProgressTracker
     from app.db.session import DatabaseSessionManager
 
 logger = logging.getLogger(__name__)
@@ -81,6 +87,7 @@ class YouTubeDownloader:
         correlation_id: str | None = None,
         interaction_id: int | None = None,
         silent: bool = False,
+        progress_tracker: ProgressTracker | None = None,
     ) -> tuple[int, str, str, str, dict]:
         """Download video and extract transcript.
 
@@ -186,8 +193,37 @@ class YouTubeDownloader:
                     message, url, silent=silent
                 )
 
-            # Send typing indicator during download (can take 1-5 minutes)
-            async with typing_indicator(self.response_formatter, message, action="upload_video"):
+            # Choose between progress tracker (Reader mode) or typing indicator (Debug mode)
+            use_progress = progress_tracker is not None
+            updater = None
+            typing_ctx = None
+            start_time = time.time()
+            completed_stages: list[tuple[str, float]] = []
+            stage_start = time.time()
+
+            try:
+                if use_progress:
+                    # Reader mode: editable progress message with stage breakdown
+                    updater = ProgressMessageUpdater(progress_tracker, message)
+
+                    def stage1_formatter(elapsed: float) -> str:
+                        return SingleURLProgressFormatter.format_youtube_progress(
+                            video_id=video_id,
+                            stage=1,
+                            stage_name="Extracting transcript",
+                            stage_elapsed_sec=elapsed,
+                            completed_stages=[],
+                            total_elapsed_sec=elapsed,
+                        )
+
+                    await updater.start(stage1_formatter)
+                else:
+                    # Debug mode: typing indicator (existing behavior)
+                    typing_ctx = typing_indicator(
+                        self.response_formatter, message, action="upload_video"
+                    )
+                    await typing_ctx.__aenter__()
+
                 # Step 1: Extract transcript using youtube-transcript-api (with retries)
                 (
                     transcript_text,
@@ -195,6 +231,25 @@ class YouTubeDownloader:
                     auto_generated,
                     transcript_source,
                 ) = await self._extract_transcript_api(video_id, correlation_id)
+
+                # Mark stage 1 complete
+                if use_progress:
+                    stage_duration = time.time() - stage_start
+                    completed_stages.append(("Transcript extracted", stage_duration))
+                    stage_start = time.time()
+
+                    # Update to stage 2
+                    def stage2_formatter(elapsed: float) -> str:
+                        return SingleURLProgressFormatter.format_youtube_progress(
+                            video_id=video_id,
+                            stage=2,
+                            stage_name="Downloading video",
+                            stage_elapsed_sec=elapsed,
+                            completed_stages=completed_stages,
+                            total_elapsed_sec=sum(d for _, d in completed_stages) + elapsed,
+                        )
+
+                    await updater.update_formatter(stage2_formatter)
 
                 # Step 2: Download video with yt-dlp
                 output_dir = self.storage_path / datetime.now().strftime("%Y%m%d")
@@ -216,8 +271,29 @@ class YouTubeDownloader:
                     timeout=600.0,
                 )
 
+                # Mark stage 2 complete
+                if use_progress:
+                    stage_duration = time.time() - stage_start
+                    completed_stages.append(("Video downloaded", stage_duration))
+                    stage_start = time.time()
+
                 # Fallback to downloaded VTT subtitles if API transcript is missing
                 if not transcript_text:
+                    # Update to stage 3 (VTT fallback)
+                    if use_progress:
+
+                        def stage3_formatter(elapsed: float) -> str:
+                            return SingleURLProgressFormatter.format_youtube_progress(
+                                video_id=video_id,
+                                stage=3,
+                                stage_name="Processing subtitles",
+                                stage_elapsed_sec=elapsed,
+                                completed_stages=completed_stages,
+                                total_elapsed_sec=sum(d for _, d in completed_stages) + elapsed,
+                            )
+
+                        await updater.update_formatter(stage3_formatter)
+
                     vtt_text, vtt_lang = self._load_transcript_from_vtt(
                         video_metadata.get("subtitle_file_path"), correlation_id
                     )
@@ -234,6 +310,11 @@ class YouTubeDownloader:
                                 "cid": correlation_id,
                             },
                         )
+
+                        # Mark stage 3 complete
+                        if use_progress:
+                            stage_duration = time.time() - stage_start
+                            completed_stages.append(("Subtitles processed", stage_duration))
 
                 if not transcript_text:
                     raise ValueError(
@@ -275,8 +356,18 @@ class YouTubeDownloader:
                 await self.request_repo.async_update_request_status(req_id, "ok")
                 await self.request_repo.async_update_request_lang_detected(req_id, detected_lang)
 
-                # Notify user: download complete
-                if not silent:
+                # Finalize progress message or notify completion
+                total_elapsed = time.time() - start_time
+                if use_progress and updater:
+                    success_msg = SingleURLProgressFormatter.format_youtube_complete(
+                        title=video_metadata["title"],
+                        size_mb=video_metadata["file_size"] / (1024 * 1024),
+                        total_elapsed_sec=total_elapsed,
+                        success=True,
+                    )
+                    await updater.finalize(success_msg)
+                elif not silent:
+                    # Debug mode: send completion notification
                     await self.response_formatter.send_youtube_download_complete_notification(
                         message,
                         video_metadata["title"],
@@ -284,6 +375,9 @@ class YouTubeDownloader:
                         video_metadata["file_size"] / (1024 * 1024),  # MB
                         silent=silent,
                     )
+
+                if typing_ctx:
+                    await typing_ctx.__aexit__(None, None, None)
 
                 self._audit(
                     "INFO",
@@ -299,6 +393,28 @@ class YouTubeDownloader:
 
                 download_succeeded = True
                 return req_id, combined_text, transcript_source, detected_lang, video_metadata
+
+            except Exception as e:
+                # Cleanup on error
+                if use_progress and updater:
+                    # Determine which stage failed
+                    num_completed = len(completed_stages)
+                    failed_stage = (
+                        f"Stage {num_completed + 1}/3" if num_completed < 3 else "Processing"
+                    )
+                    error_msg = SingleURLProgressFormatter.format_youtube_complete(
+                        title="",
+                        size_mb=0,
+                        total_elapsed_sec=time.time() - start_time,
+                        success=False,
+                        error_msg=str(e),
+                        correlation_id=correlation_id,
+                        failed_stage=failed_stage,
+                    )
+                    await updater.finalize(error_msg)
+                elif typing_ctx:
+                    await typing_ctx.__aexit__(None, None, None)
+                raise
 
         except Exception as e:
             raise_if_cancelled(e)

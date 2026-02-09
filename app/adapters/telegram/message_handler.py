@@ -65,6 +65,7 @@ class MessageHandler:
             response_formatter=response_formatter,
             url_processor=url_processor,
             adaptive_timeout_service=adaptive_timeout_service,
+            verbosity_resolver=verbosity_resolver,
         )
         # Expose url_processor for legacy integrations/tests
         self.url_processor = url_processor
