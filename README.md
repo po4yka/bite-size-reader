@@ -1,6 +1,35 @@
 # Bite-Size Reader
 
-Async Telegram bot that summarizes web articles and YouTube videos. For articles, it uses Firecrawl + OpenRouter; for YouTube videos, it downloads the video (1080p) and extracts transcripts. Also supports summarizing forwarded channel posts. Returns a strict JSON summary and stores artifacts in SQLite. See SPEC.md for full details.
+Async Telegram bot that summarizes web articles and YouTube videos into structured JSON. For articles, it uses Firecrawl + OpenRouter; for YouTube videos, it downloads the video (1080p) and extracts transcripts. Also supports summarizing forwarded channel posts. Returns a strict JSON summary and stores artifacts in SQLite.
+
+**🚀 New to Bite-Size Reader?** Start with the [5-Minute Quickstart Tutorial](docs/tutorials/quickstart.md)
+
+**❓ Have Questions?** Check the [FAQ](docs/FAQ.md) or [Troubleshooting Guide](docs/TROUBLESHOOTING.md)
+
+**📚 All Documentation** → [Documentation Hub](docs/README.md)
+
+---
+
+## Table of Contents
+
+- [Architecture Overview](#architecture-overview)
+- [Quick Start](#quick-start)
+- [Common Use Cases](#common-use-cases)
+- [Commands and Usage](#commands-and-usage)
+- [Environment Configuration](#environment)
+- [Performance Tips](#performance-tips)
+- [Repository Layout](#repository-layout)
+- [YouTube Video Support](#youtube-video-support)
+- [Web Search Enrichment](#web-search-enrichment-optional)
+- [Mobile API](#mobile-api)
+- [MCP Server](#mcp-server)
+- [Redis Caching](#redis-caching)
+- [Karakeep Integration](#karakeep-integration)
+- [Local CLI Summary Runner](#local-cli-summary-runner)
+- [Development](#dev-tooling)
+- [Documentation](#documentation)
+
+---
 
 ## Architecture overview
 
@@ -56,9 +85,32 @@ The bot ingests updates via a lightweight `TelegramClient`, normalizes them thro
 
 ## Quick start
 
-- Copy `.env.example` to `.env` and fill required secrets.
-- Build and run with Docker.
-- See `docs/DEPLOYMENT.md` for full setup, deployment, and update instructions.
+**🚀 5-Minute Setup**: Follow the [Quickstart Tutorial](docs/tutorials/quickstart.md) for step-by-step Docker setup.
+
+**Manual Setup**:
+- Copy `.env.example` to `.env` and fill required secrets
+- Build and run with Docker
+- See [DEPLOYMENT.md](docs/DEPLOYMENT.md) for full setup, deployment, and update instructions
+
+---
+
+## Common Use Cases
+
+**I want to...**
+
+| Goal | How | Documentation |
+|------|-----|---------------|
+| **Summarize web articles** | Send URL to Telegram bot | [Quickstart Tutorial](docs/tutorials/quickstart.md) |
+| **Summarize YouTube videos** | Send YouTube URL (transcript extracted) | [Configure YouTube](docs/how-to/configure-youtube-download.md) |
+| **Search past summaries** | `/search <query>` command | [FAQ § Search](docs/FAQ.md#can-i-search-my-summaries) |
+| **Get real-time context** | Enable web search enrichment | [Enable Web Search](docs/how-to/enable-web-search.md) |
+| **Speed up responses** | Enable Redis caching | [Setup Redis](docs/how-to/setup-redis-caching.md) |
+| **Build mobile app** | Use Mobile API (JWT auth) | [MOBILE_API_SPEC.md](docs/MOBILE_API_SPEC.md) |
+| **Integrate with AI agents** | Use MCP server | [MCP Server Guide](docs/mcp_server.md) |
+| **Reduce API costs** | Use free models, caching | [FAQ § Cost Optimization](docs/FAQ.md#cost-optimization) |
+| **Self-host privately** | Docker deployment | [DEPLOYMENT.md](docs/DEPLOYMENT.md) |
+
+---
 
 ## Docker
 
@@ -112,32 +164,66 @@ Multiple URLs in one message: bot asks "Process N links?"; reply "yes/no". Each 
 
 ## Environment
 
-### Required
+### ✅ Required (Essential for Basic Functionality)
 
 ```bash
-API_ID=...                 # Telegram API ID
-API_HASH=...               # Telegram API hash
-BOT_TOKEN=...              # Telegram bot token
-ALLOWED_USER_IDS=123456789 # Comma-separated owner IDs
-FIRECRAWL_API_KEY=...      # Firecrawl API key
-OPENROUTER_API_KEY=...     # OpenRouter API key
-OPENROUTER_MODEL=deepseek/deepseek-v3.2
+API_ID=...                          # Telegram API ID (from https://my.telegram.org/apps)
+API_HASH=...                        # Telegram API hash
+BOT_TOKEN=...                       # Telegram bot token (from @BotFather)
+ALLOWED_USER_IDS=123456789          # Comma-separated Telegram user IDs (your ID)
+FIRECRAWL_API_KEY=...               # Firecrawl API key (free tier: 500 credits/month)
+OPENROUTER_API_KEY=...              # OpenRouter API key (or use OPENAI_API_KEY/ANTHROPIC_API_KEY)
+OPENROUTER_MODEL=deepseek/deepseek-v3.2  # Primary LLM model
 ```
 
-### Optional subsystems
+### 🔧 Optional (Enable Features as Needed)
 
-| Subsystem | Key variables |
-|-----------|--------------|
-| YouTube | `YOUTUBE_DOWNLOAD_ENABLED=true`, `YOUTUBE_PREFERRED_QUALITY=1080p`, `YOUTUBE_STORAGE_PATH=/data/videos` |
-| Web Search | `WEB_SEARCH_ENABLED=false`, `WEB_SEARCH_MAX_QUERIES=3` |
-| Redis | `REDIS_ENABLED=true`, `REDIS_URL` or `REDIS_HOST`/`REDIS_PORT` |
-| ChromaDB | `CHROMA_HOST=http://localhost:8000`, `CHROMA_AUTH_TOKEN` |
-| MCP Server | `MCP_ENABLED=false`, `MCP_TRANSPORT=stdio`, `MCP_PORT=8200` |
-| Mobile API | `JWT_SECRET_KEY`, `ALLOWED_CLIENT_IDS`, `API_RATE_LIMIT_*` |
-| Karakeep | `KARAKEEP_ENABLED=false`, `KARAKEEP_API_URL`, `KARAKEEP_API_KEY` |
-| Runtime | `DB_PATH=/data/app.db`, `LOG_LEVEL=INFO`, `DEBUG_PAYLOADS=0`, `MAX_CONCURRENT_CALLS=4` |
+| Subsystem | Key Variables | When to Enable |
+|-----------|--------------|---------------|
+| **YouTube** | `YOUTUBE_DOWNLOAD_ENABLED=true`<br>`YOUTUBE_PREFERRED_QUALITY=1080p`<br>`YOUTUBE_STORAGE_PATH=/data/videos` | Summarize YouTube videos |
+| **Web Search** | `WEB_SEARCH_ENABLED=false`<br>`WEB_SEARCH_MAX_QUERIES=3` | Add real-time context to summaries |
+| **Redis** | `REDIS_ENABLED=true`<br>`REDIS_URL` or `REDIS_HOST`/`REDIS_PORT` | Cache responses, speed up bot |
+| **ChromaDB** | `CHROMA_HOST=http://localhost:8000`<br>`CHROMA_AUTH_TOKEN` | Semantic search |
+| **MCP Server** | `MCP_ENABLED=false`<br>`MCP_TRANSPORT=stdio`<br>`MCP_PORT=8200` | AI agent integration (Claude Desktop) |
+| **Mobile API** | `JWT_SECRET_KEY`<br>`ALLOWED_CLIENT_IDS`<br>`API_RATE_LIMIT_*` | Build mobile clients |
+| **Karakeep** | `KARAKEEP_ENABLED=false`<br>`KARAKEEP_API_URL`<br>`KARAKEEP_API_KEY` | Bookmark sync |
 
-Full reference: `docs/environment_variables.md`
+### ⚙️ Advanced (Fine-Tuning)
+
+| Category | Key Variables | Purpose |
+|----------|--------------|---------|
+| **Runtime** | `DB_PATH=/data/app.db`<br>`LOG_LEVEL=INFO`<br>`DEBUG_PAYLOADS=0`<br>`MAX_CONCURRENT_CALLS=4` | Performance tuning |
+| **LLM Providers** | `LLM_PROVIDER=openrouter`<br>`OPENAI_API_KEY`<br>`ANTHROPIC_API_KEY` | Switch LLM providers |
+| **Fallbacks** | `OPENROUTER_FALLBACK_MODELS=...`<br>`OPENAI_FALLBACK_MODELS=...` | Model fallback chains |
+
+**📖 Full Reference**: [environment_variables.md](docs/environment_variables.md) (250+ variables documented)
+
+**❓ Configuration Help**: [FAQ § Configuration](docs/FAQ.md#configuration) | [TROUBLESHOOTING § Configuration](docs/TROUBLESHOOTING.md#configuration-issues)
+
+---
+
+## Performance Tips
+
+**Speed up summarization**:
+- ⚡ **Use faster models**: `qwen/qwen3-max` (faster than DeepSeek), `google/gemini-2.0-flash-001:free` (free)
+- 🔄 **Enable Redis caching**: Cache repeated URLs, reduce API calls
+- 📦 **Increase concurrency**: `MAX_CONCURRENT_CALLS=5` (default: 3)
+- 🎯 **Disable optional features**: Set `WEB_SEARCH_ENABLED=false`, `SUMMARY_TWO_PASS_ENABLED=false`
+
+**Reduce costs**:
+- 💰 **Use free models**: `google/gemini-2.0-flash-001:free`, `deepseek/deepseek-r1:free` (via OpenRouter)
+- 🔄 **Enable caching**: Avoid re-processing same URLs
+- 🎛 **Adjust token limits**: `MAX_CONTENT_LENGTH_TOKENS=30000` (default: 50000)
+- 📊 **Monitor usage**: Track costs at [OpenRouter Dashboard](https://openrouter.ai/account)
+
+**Optimize storage**:
+- 🧹 **Auto-cleanup YouTube**: `YOUTUBE_AUTO_CLEANUP_DAYS=7` (delete old videos)
+- 📏 **Set storage limits**: `YOUTUBE_MAX_STORAGE_GB=10`
+- 💾 **Database maintenance**: Periodic `VACUUM` and index rebuilding
+
+**See detailed optimization guide**: [How to Optimize Performance](docs/how-to/optimize-performance.md) | [FAQ § Performance](docs/FAQ.md#performance)
+
+---
 
 ## Repository layout
 
@@ -301,17 +387,41 @@ GitHub Actions workflow `.github/workflows/ci.yml` enforces:
 
 ## Documentation
 
+**📚 Documentation Hub**: [docs/README.md](docs/README.md) - All docs organized by audience and task
+
+### Essential Guides
+
+| Document | Description | Audience |
+|----------|-------------|----------|
+| [Quickstart Tutorial](docs/tutorials/quickstart.md) | Get first summary in 5 minutes | **Users** |
+| [FAQ](docs/FAQ.md) | Frequently asked questions | **All** |
+| [TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) | Debugging guide with correlation IDs | **All** |
+| [DEPLOYMENT.md](docs/DEPLOYMENT.md) | Setup and deployment guide | **Operators** |
+| [environment_variables.md](docs/environment_variables.md) | Complete config reference (250+ vars) | **All** |
+
+### Technical Documentation
+
+| Document | Description | Audience |
+|----------|-------------|----------|
+| [SPEC.md](SPEC.md) | Full technical specification (canonical) | **Developers** |
+| [CLAUDE.md](CLAUDE.md) | AI assistant codebase guide | **AI Assistants, Developers** |
+| [HEXAGONAL_ARCHITECTURE_QUICKSTART.md](docs/HEXAGONAL_ARCHITECTURE_QUICKSTART.md) | Architecture patterns | **Developers** |
+| [multi_agent_architecture.md](docs/multi_agent_architecture.md) | Multi-agent LLM pipeline | **Developers** |
+| [ADRs](docs/adr/README.md) | Architecture decision records | **Developers** |
+
+### Integration Guides
+
+| Document | Description | Audience |
+|----------|-------------|----------|
+| [MOBILE_API_SPEC.md](docs/MOBILE_API_SPEC.md) | REST API specification | **Integrators** |
+| [mcp_server.md](docs/mcp_server.md) | MCP server (AI agents) | **Integrators** |
+| [claude_code_hooks.md](docs/claude_code_hooks.md) | Development safety hooks | **Developers** |
+
+### Version History
+
 | Document | Description |
 |----------|-------------|
-| `SPEC.md` | Full technical specification (canonical reference) |
-| `CLAUDE.md` | AI assistant guide for the codebase |
-| `docs/DEPLOYMENT.md` | Setup and deployment guide |
-| `docs/environment_variables.md` | Complete environment variable reference |
-| `docs/mcp_server.md` | MCP server tools, resources, and configuration |
-| `docs/claude_code_hooks.md` | Claude Code safety hooks |
-| `docs/multi_agent_architecture.md` | Multi-agent system design |
-| `docs/MOBILE_API_SPEC.md` | Mobile API specification |
-| `docs/HEXAGONAL_ARCHITECTURE_QUICKSTART.md` | Architecture patterns guide |
+| [CHANGELOG.md](CHANGELOG.md) | Version history and release notes |
 
 ## Notes
 
