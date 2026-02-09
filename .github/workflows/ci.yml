@@ -116,13 +116,11 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  build-and-check:
+  lint-and-format:
+    name: Lint and Format Checks
     needs: prepare-environment
     runs-on: ubuntu-latest
-    timeout-minutes: 30
-    strategy:
-      matrix:
-        python-version: ["3.13"]
+    timeout-minutes: 10
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -136,7 +134,18 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
-          python-version: ${{ matrix.python-version }}
+          python-version: "3.13"
+
+      - name: Cache Python environment
+        id: cache-python-env
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/uv
+            ~/.cache/pip
+          key: python-lint-${{ runner.os }}-${{ hashFiles('requirements.txt', 'requirements-dev.txt') }}
+          restore-keys: |
+            python-lint-${{ runner.os }}-
 
       - name: Install uv (fast Python package manager)
         uses: astral-sh/setup-uv@v7
@@ -149,9 +158,6 @@ jobs:
 
       - name: Install dependencies
         run: uv pip sync --system requirements.txt requirements-dev.txt
-
-      - name: Install additional test/coverage tools
-        run: uv pip install --system pytest-cov pytest-xdist pytest-rerunfailures pytest-asyncio coverage[toml]
 
       - name: Validate OpenAPI spec
         run: |
@@ -171,9 +177,6 @@ jobs:
       - name: Import sort check (isort)
         run: isort --check-only .
 
-      - name: Type check (mypy)
-        run: mypy app tests --show-error-codes --pretty
-
       - name: Enforce class size limit
         run: python scripts/check_class_size.py --max-loc 1000 --baseline scripts/class_size_baseline.json
 
@@ -183,6 +186,109 @@ jobs:
           uv pip install --system radon
           radon cc app --min B --show-complexity --no-assert
           radon mi app --min B
+
+  type-check:
+    name: Type Check (mypy)
+    needs: prepare-environment
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download compiled requirements
+        uses: actions/download-artifact@v4
+        with:
+          name: compiled-requirements
+          path: .
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Cache Python environment
+        id: cache-python-env
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/uv
+            ~/.cache/pip
+          key: python-type-${{ runner.os }}-${{ hashFiles('requirements.txt', 'requirements-dev.txt') }}
+          restore-keys: |
+            python-type-${{ runner.os }}-
+
+      - name: Cache mypy
+        uses: actions/cache@v4
+        with:
+          path: .mypy_cache
+          key: mypy-${{ runner.os }}-${{ hashFiles('**/*.py', 'pyproject.toml') }}
+          restore-keys: |
+            mypy-${{ runner.os }}-
+
+      - name: Install uv (fast Python package manager)
+        uses: astral-sh/setup-uv@v7
+        with:
+          version: "0.8.17"
+          enable-cache: true
+          cache-dependency-glob: |
+            pyproject.toml
+            uv.lock
+
+      - name: Install dependencies
+        run: uv pip sync --system requirements.txt requirements-dev.txt
+
+      - name: Type check (mypy)
+        run: mypy app tests --show-error-codes --pretty --cache-dir .mypy_cache
+
+  test:
+    name: Unit Tests and Coverage
+    needs: prepare-environment
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      matrix:
+        python-version: ["3.13"]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download compiled requirements
+        uses: actions/download-artifact@v4
+        with:
+          name: compiled-requirements
+          path: .
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Cache Python environment
+        id: cache-python-env
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/uv
+            ~/.cache/pip
+          key: python-test-${{ runner.os }}-${{ hashFiles('requirements.txt', 'requirements-dev.txt') }}
+          restore-keys: |
+            python-test-${{ runner.os }}-
+
+      - name: Install uv (fast Python package manager)
+        uses: astral-sh/setup-uv@v7
+        with:
+          version: "0.8.17"
+          enable-cache: true
+          cache-dependency-glob: |
+            pyproject.toml
+            uv.lock
+
+      - name: Install dependencies
+        run: uv pip sync --system requirements.txt requirements-dev.txt
+
+      - name: Install additional test/coverage tools
+        run: uv pip install --system pytest-cov pytest-xdist pytest-rerunfailures pytest-asyncio coverage[toml]
 
       - name: Run unit tests with coverage
         env:
@@ -254,10 +360,18 @@ jobs:
         if: ${{ needs.prepare-environment.outputs.lock_drift == 'true' }}
         run: echo "::warning::Lockfiles are out of date. Run 'make lock-uv' locally or trigger 'Update Lockfiles' workflow."
 
-  docker-image:
-    needs: build-and-check
+  docker-image-bot:
+    name: Docker Image (Bot)
+    needs: prepare-environment
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    # Skip Docker build for PRs unless Dockerfile or dependencies changed
+    if: |
+      github.ref == 'refs/heads/main' ||
+      contains(github.event.head_commit.message, '[docker]') ||
+      contains(join(github.event.commits.*.modified, ','), 'Dockerfile') ||
+      contains(join(github.event.commits.*.modified, ','), 'pyproject.toml') ||
+      contains(join(github.event.commits.*.modified, ','), 'uv.lock')
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -294,8 +408,63 @@ jobs:
           push: ${{ github.event_name != 'pull_request' && vars.PUBLISH_DOCKER == 'true' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: |
+            type=gha,scope=bot-builder
+            type=gha,scope=bot-runtime
+          cache-to: type=gha,mode=max,scope=bot-builder
+
+  docker-image-api:
+    name: Docker Image (API)
+    needs: prepare-environment
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # Skip Docker build for PRs unless Dockerfile.api or dependencies changed
+    if: |
+      github.ref == 'refs/heads/main' ||
+      contains(github.event.head_commit.message, '[docker]') ||
+      contains(join(github.event.commits.*.modified, ','), 'Dockerfile.api') ||
+      contains(join(github.event.commits.*.modified, ','), 'pyproject.toml') ||
+      contains(join(github.event.commits.*.modified, ','), 'uv.lock')
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        if: ${{ github.event_name != 'pull_request' && vars.PUBLISH_DOCKER == 'true' }}
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate image tags
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: |
+            ghcr.io/${{ github.repository }}-api
+          tags: |
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+            type=sha,format=long
+
+      - name: Build (and optionally push) API Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile.api
+          push: ${{ github.event_name != 'pull_request' && vars.PUBLISH_DOCKER == 'true' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: |
+            type=gha,scope=api-builder
+            type=gha,scope=api-runtime
+          cache-to: type=gha,mode=max,scope=api-builder
 
   security:
     needs: prepare-environment
@@ -418,7 +587,7 @@ jobs:
 
   integration-tests:
     name: Integration Tests
-    needs: [prepare-environment, build-and-check]
+    needs: [prepare-environment, test]
     runs-on: ubuntu-latest
     timeout-minutes: 25
     if: github.event_name == 'push' || github.event.pull_request.draft == false
@@ -482,7 +651,7 @@ jobs:
   pr-summary:
     name: PR Summary
     if: github.event_name == 'pull_request'
-    needs: [prepare-environment, build-and-check, security, secrets]
+    needs: [prepare-environment, lint-and-format, type-check, test, security, secrets]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -536,7 +705,7 @@ jobs:
   status-check:
     name: CI Status Check
     if: always()
-    needs: [prepare-environment, build-and-check, docker-image, security, secrets, integration-tests]
+    needs: [prepare-environment, lint-and-format, type-check, test, docker-image-bot, docker-image-api, security, secrets, integration-tests]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -550,8 +719,18 @@ jobs:
             exit 1
           fi
 
-          if [[ "${{ needs.build-and-check.result }}" != "success" ]]; then
-            echo "::error::build-and-check job failed"
+          if [[ "${{ needs.lint-and-format.result }}" != "success" ]]; then
+            echo "::error::lint-and-format job failed"
+            exit 1
+          fi
+
+          if [[ "${{ needs.type-check.result }}" != "success" ]]; then
+            echo "::error::type-check job failed"
+            exit 1
+          fi
+
+          if [[ "${{ needs.test.result }}" != "success" ]]; then
+            echo "::error::test job failed"
             exit 1
           fi
 
@@ -565,9 +744,14 @@ jobs:
             exit 1
           fi
 
-          # Docker build can be skipped for PRs, but must succeed if run
-          if [[ "${{ needs.docker-image.result }}" == "failure" ]]; then
-            echo "::error::docker-image job failed"
+          # Docker builds can be skipped for PRs, but must succeed if run
+          if [[ "${{ needs.docker-image-bot.result }}" == "failure" ]]; then
+            echo "::error::docker-image-bot job failed"
+            exit 1
+          fi
+
+          if [[ "${{ needs.docker-image-api.result }}" == "failure" ]]; then
+            echo "::error::docker-image-api job failed"
             exit 1
           fi
 
