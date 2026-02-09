@@ -466,10 +466,97 @@ jobs:
             type=gha,scope=api-runtime
           cache-to: type=gha,mode=max,scope=api-builder
 
-  security:
+  bandit-scan:
+    name: Security - Bandit (SAST)
     needs: prepare-environment
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+
+      - name: Cache Python environment
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/uv
+            ~/.cache/pip
+          key: python-bandit-${{ runner.os }}
+          restore-keys: |
+            python-bandit-${{ runner.os }}-
+
+      - name: Install bandit
+        run: pip install --no-cache-dir bandit
+
+      - name: Run Bandit (SAST)
+        run: bandit -r app -ll
+
+  pip-audit-scan:
+    name: Security - pip-audit (Dependencies)
+    needs: prepare-environment
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download compiled requirements
+        uses: actions/download-artifact@v4
+        with:
+          name: compiled-requirements
+          path: .
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+
+      - name: Cache Python environment
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/uv
+            ~/.cache/pip
+          key: python-pip-audit-${{ runner.os }}
+          restore-keys: |
+            python-pip-audit-${{ runner.os }}-
+
+      - name: Install pip-audit
+        run: pip install --no-cache-dir pip-audit
+
+      - name: Prepare audit requirements
+        run: |
+          # Filter out spaCy language models that aren't available on PyPI
+          cat requirements.txt requirements-dev.txt | \
+            grep -v "en-core-web-sm" | \
+            grep -v "ru-core-news-sm" | \
+            # Torch does not yet publish Python 3.13 wheels to PyPI; skip it for auditing
+            grep -v "^torch==" | \
+            sort -u > requirements-audit.txt
+
+          # Add base spaCy and textacy packages for auditing
+          echo "spacy>=3.7,<4" >> requirements-audit.txt
+          echo "textacy>=0.13,<0.14" >> requirements-audit.txt
+
+      - name: Run pip-audit
+        run: pip-audit -r requirements-audit.txt --strict
+
+  safety-scan:
+    name: Security - Safety (Dependencies)
+    needs: prepare-environment
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       contents: read
       security-events: write
@@ -497,32 +584,22 @@ jobs:
             pyproject.toml
             uv.lock
 
-      - name: Install project and security tools
+      - name: Cache Python environment
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/uv
+            ~/.cache/pip
+          key: python-safety-${{ runner.os }}-${{ hashFiles('requirements.txt', 'requirements-dev.txt') }}
+          restore-keys: |
+            python-safety-${{ runner.os }}-
+
+      - name: Install dependencies and safety
         run: |
           uv pip sync --system requirements.txt requirements-dev.txt
-          uv pip install --system bandit pip-audit safety
+          uv pip install --system safety
 
-      - name: Bandit (SAST)
-        run: bandit -r app -ll
-
-      - name: pip-audit (dependencies)
-        run: |
-          # Filter out spaCy language models that aren't available on PyPI
-          cat requirements.txt requirements-dev.txt | \
-            grep -v "en-core-web-sm" | \
-            grep -v "ru-core-news-sm" | \
-            # Torch does not yet publish Python 3.13 wheels to PyPI; skip it for auditing
-            grep -v "^torch==" | \
-            sort -u > requirements-audit.txt
-
-          # Add base spaCy and textacy packages for auditing
-          echo "spacy>=3.7,<4" >> requirements-audit.txt
-          echo "textacy>=0.13,<0.14" >> requirements-audit.txt
-
-          # Run security audit on PyPI packages only
-          pip-audit -r requirements-audit.txt --strict
-
-      - name: Safety (dependencies)
+      - name: Run Safety
         run: safety check --full-report
 
   secrets:
@@ -651,7 +728,7 @@ jobs:
   pr-summary:
     name: PR Summary
     if: github.event_name == 'pull_request'
-    needs: [prepare-environment, lint-and-format, type-check, test, security, secrets]
+    needs: [prepare-environment, lint-and-format, type-check, test, bandit-scan, pip-audit-scan, safety-scan, secrets]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -705,7 +782,7 @@ jobs:
   status-check:
     name: CI Status Check
     if: always()
-    needs: [prepare-environment, lint-and-format, type-check, test, docker-image-bot, docker-image-api, security, secrets, integration-tests]
+    needs: [prepare-environment, lint-and-format, type-check, test, docker-image-bot, docker-image-api, bandit-scan, pip-audit-scan, safety-scan, secrets, integration-tests]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -734,8 +811,19 @@ jobs:
             exit 1
           fi
 
-          if [[ "${{ needs.security.result }}" != "success" ]]; then
-            echo "::error::security job failed"
+          # Security scans (parallel)
+          if [[ "${{ needs.bandit-scan.result }}" != "success" ]]; then
+            echo "::error::bandit-scan job failed"
+            exit 1
+          fi
+
+          if [[ "${{ needs.pip-audit-scan.result }}" != "success" ]]; then
+            echo "::error::pip-audit-scan job failed"
+            exit 1
+          fi
+
+          if [[ "${{ needs.safety-scan.result }}" != "success" ]]; then
+            echo "::error::safety-scan job failed"
             exit 1
           fi
 

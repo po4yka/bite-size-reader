@@ -135,6 +135,7 @@ name = "bite-size-reader"
 version = "0.1.0"
 description = "Telegram bot that summarizes URLs and forwarded posts via Firecrawl + OpenRouter"
 requires-python = ">=3.13"
+# Core dependencies: Telegram bot, HTTP, database, NLP, logging
 dependencies = [
   "httpx[http2]>=0.28.1",
   "pyrogram>=2.0.106",
@@ -145,40 +146,60 @@ dependencies = [
   "trafilatura>=2.0.0",
   "spacy>=3.8.11,<4",
   "json-repair>=0.55.1",
-  "scikit-learn>=1.8.0",
-  "sentence-transformers>=5.2.2",
-  "chromadb>=1.4.1",
   "loguru>=0.7.3",
   "orjson>=3.11.6",
   "uvloop>=0.22.1",
-  # YouTube support
-  "yt-dlp>=2026.1.31",
-  "youtube-transcript-api>=1.2.4",
-  # Mobile API
-  "fastapi>=0.128.0",
-  "uvicorn[standard]>=0.40.0",
-  "starlette>=0.50.0",
-  "pyjwt>=2.11.0",
-  "python-multipart>=0.0.22",
   # spaCy language models
   "en-core-web-sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl",
   "ru-core-news-sm @ https://github.com/explosion/spacy-models/releases/download/ru_core_news_sm-3.8.0/ru_core_news_sm-3.8.0-py3-none-any.whl",
   "redis>=7.1.0",
   "fakeredis>=2.33.0",
-  "torch>=2.10.0",
-  "transformers>=5.0.0",
-  # Background task scheduling
-  "apscheduler>=3.11.2,<4.0.0",
-  # PDF export (optional - graceful degradation if not available)
-  "weasyprint>=68.0",
-  # MCP (Model Context Protocol) server for OpenClaw and other AI agent integrations
-  "mcp>=1.26,<2",
   # Attachment processing: image handling + PDF extraction
   "Pillow>=11.0.0",
   "pymupdf>=1.25.0",
 ]
 
 [project.optional-dependencies]
+# Mobile REST API dependencies (FastAPI, JWT auth)
+api = [
+  "fastapi>=0.128.0",
+  "uvicorn[standard]>=0.40.0",
+  "starlette>=0.50.0",
+  "pyjwt>=2.11.0",
+  "python-multipart>=0.0.22",
+]
+
+# Machine learning dependencies (embeddings, vector search, transformers)
+ml = [
+  "torch>=2.10.0",
+  "transformers>=5.0.0",
+  "scikit-learn>=1.8.0",
+  "sentence-transformers>=5.2.2",
+  "chromadb>=1.4.1",
+]
+
+# YouTube video download and transcript extraction
+youtube = [
+  "yt-dlp>=2026.1.31",
+  "youtube-transcript-api>=1.2.4",
+]
+
+# PDF export functionality
+export = [
+  "weasyprint>=68.0",
+]
+
+# Background task scheduling
+scheduler = [
+  "apscheduler>=3.11.2,<4.0.0",
+]
+
+# MCP (Model Context Protocol) server for AI agent integrations
+mcp = [
+  "mcp>=1.26,<2",
+]
+
+# Development dependencies
 dev = [
   "hypothesis>=6.0.0",
   "isort>=7.0.0",

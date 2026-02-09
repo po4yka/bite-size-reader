@@ -26,9 +26,9 @@ RUN --mount=type=cache,target=/root/.cache/pip \
 
 COPY pyproject.toml uv.lock ./
 
-# Build virtual environment with all dependencies
+# Build virtual environment with API dependencies only (no ML/torch/chromadb)
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --frozen --no-dev
+    uv sync --frozen --no-dev --extra api
 
 # Stage 2: Runtime - Minimal runtime environment (no build tools)
 FROM python:3.13-slim AS runtime
