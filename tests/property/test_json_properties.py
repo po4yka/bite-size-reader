@@ -12,7 +12,7 @@ hypothesis = pytest.importorskip("hypothesis")
 from hypothesis import given, settings, strategies as st
 
 # Strategy for generating arbitrary summary-like structures
-summary_strategy = st.fixed_dictionaries(
+summary_strategy: st.SearchStrategy[dict[str, object]] = st.fixed_dictionaries(
     {
         "summary_250": st.text(max_size=500),
         "summary_1000": st.text(max_size=2000),
@@ -20,7 +20,6 @@ summary_strategy = st.fixed_dictionaries(
     },
     optional={
         "key_ideas": st.lists(st.text(max_size=200), max_size=10),
-        "topic_tags": st.lists(st.text(max_size=50), max_size=10),
         "entities": st.fixed_dictionaries(
             {},
             optional={
@@ -31,6 +30,7 @@ summary_strategy = st.fixed_dictionaries(
         ),
         "estimated_reading_time_min": st.integers(min_value=0, max_value=1000),
         "seo_keywords": st.lists(st.text(max_size=50), max_size=10),
+        "topic_tags": st.lists(st.text(max_size=50), max_size=10),
     },
 )
 

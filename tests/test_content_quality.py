@@ -8,6 +8,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from app.adapters.content.content_extractor import ContentExtractor
+from app.adapters.content.quality_filters import detect_low_value_content
 from app.adapters.external.firecrawl_parser import FirecrawlResult
 
 if TYPE_CHECKING:
@@ -101,7 +102,7 @@ async def test_low_value_content_triggers_failure() -> None:
     extractor.message_persistence.crawl_repo = mock_crawl_repo
 
     with pytest.raises(ValueError) as exc_info:
-        await extractor._perform_new_crawl(
+        await extractor._perform_new_crawl_with_title(
             message=SimpleNamespace(),
             req_id=42,
             url_text="https://example.com",
@@ -123,15 +124,9 @@ async def test_low_value_content_triggers_failure() -> None:
 
 
 def test_detect_low_value_content_allows_substantive_text() -> None:
-    db = MagicMock()
-    response_formatter = MagicMock()
-    firecrawl = MagicMock()
-
-    extractor = _make_extractor(db, response_formatter, firecrawl)
-
     result = _firecrawl_result(
         markdown="# Heading\n\nThis short article explains the basics of Obsidian vault design.",
         html=None,
     )
 
-    assert extractor._detect_low_value_content(result) is None
+    assert detect_low_value_content(result) is None

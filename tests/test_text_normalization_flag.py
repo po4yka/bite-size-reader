@@ -69,7 +69,12 @@ async def test_reused_crawl_is_normalized_when_flag_enabled() -> None:
         "options_json": {"formats": ["markdown"]},
     }
 
-    content_text, content_source = await extractor._process_existing_crawl(
+    (
+        content_text,
+        content_source,
+        _title,
+        _images,
+    ) = await extractor._process_existing_crawl_with_title(
         message=SimpleNamespace(),
         existing_crawl=existing_crawl,
         correlation_id="cid-1",
@@ -112,7 +117,12 @@ async def test_successful_crawl_with_html_fallback_normalizes_text() -> None:
         correlation_id="cid-2",
     )
 
-    content_text, content_source = await extractor._process_successful_crawl(
+    (
+        content_text,
+        content_source,
+        _title,
+        _images,
+    ) = await extractor._process_successful_crawl_with_title(
         message=SimpleNamespace(), crawl=crawl, correlation_id="cid-2", silent=False
     )
 
