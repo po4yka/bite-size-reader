@@ -152,9 +152,9 @@ jobs:
             -p xdist \
             -p pytest_rerunfailures \
             -p pytest_asyncio.plugin \
-            -p pytest_benchmark.plugin \
             tests/ \
             -m "not slow and not integration" \
+            --ignore=tests/benchmarks \
             --cov=app \
             --cov-report=term-missing:skip-covered \
             --cov-report=xml \
@@ -168,6 +168,16 @@ jobs:
             --reruns=3 \
             --reruns-delay=1 \
             -n auto
+
+          # Run benchmarks separately without parallel execution
+          pytest \
+            tests/benchmarks/ \
+            -p pytest_benchmark.plugin \
+            --verbose \
+            --tb=short \
+            --benchmark-only \
+            --benchmark-disable-gc \
+            --benchmark-warmup=on
 
       - name: Upload test results
         if: always()

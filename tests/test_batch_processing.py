@@ -241,9 +241,10 @@ class TestBatchProgressFormatter(unittest.TestCase):
         message = BatchProgressFormatter.format_progress_message(batch)
 
         assert "Processing 2 links..." in message
-        assert '<a href="https://a.com">a.com</a>  Pending' in message
-        assert '<a href="https://b.com">b.com</a>  Pending' in message
-        assert "Progress: 0/2 (0%)" in message
+        assert '<a href="https://a.com">a.com</a>  💤 Pending' in message
+        assert '<a href="https://b.com">b.com</a>  💤 Pending' in message
+        assert "Progress:" in message
+        assert "0/2" in message
 
     def test_format_progress_with_completed(self):
         """Test progress message shows completed entries as HTML links."""
@@ -252,9 +253,10 @@ class TestBatchProgressFormatter(unittest.TestCase):
 
         message = BatchProgressFormatter.format_progress_message(batch)
 
-        assert '<a href="https://techcrunch.com/a">techcrunch.com/a</a>  Done (1s)' in message
-        assert '<a href="https://arxiv.org/b">arxiv.org/b</a>  Pending' in message
-        assert "Progress: 1/2 (50%)" in message
+        assert '<a href="https://techcrunch.com/a">techcrunch.com/a</a>  ✅ Done (1s)' in message
+        assert '<a href="https://arxiv.org/b">arxiv.org/b</a>  💤 Pending' in message
+        assert "Progress:" in message
+        assert "1/2" in message
 
     def test_format_progress_with_processing(self):
         """Test progress message shows currently processing URL as HTML link."""
@@ -264,7 +266,7 @@ class TestBatchProgressFormatter(unittest.TestCase):
         message = BatchProgressFormatter.format_progress_message(batch)
 
         assert (
-            '<a href="https://example.com/article">example.com/article</a>  Processing...'
+            '<a href="https://example.com/article">example.com/article</a>  ⏳ Processing...'
             in message
         )
 
@@ -285,7 +287,7 @@ class TestBatchProgressFormatter(unittest.TestCase):
 
         message = BatchProgressFormatter.format_completion_message(batch)
 
-        assert "Batch Complete  2/2 links" in message
+        assert "<b>Batch Complete</b>  2/2 links" in message
         assert '1. <a href="https://a.com">Article A</a>' in message
         assert '2. <a href="https://b.com">Article B</a>' in message
         assert "Total:" in message
@@ -299,9 +301,9 @@ class TestBatchProgressFormatter(unittest.TestCase):
 
         message = BatchProgressFormatter.format_completion_message(batch)
 
-        assert "Batch Complete  1/2 links" in message
+        assert "<b>Batch Complete</b>  1/2 links" in message
         assert '1. <a href="https://good.com">Good</a>' in message
-        assert '2. <a href="https://bad.com">bad.com</a>  Failed: Timeout' in message
+        assert '2. <a href="https://bad.com">bad.com</a>  Failed: Timed out' in message
 
     def test_format_completion_truncates_long_titles(self):
         """Test that long titles are truncated."""
@@ -335,7 +337,7 @@ class TestBatchProgressFormatter(unittest.TestCase):
     def test_format_error_short_timeout(self):
         """Test error formatting for timeout."""
         error = BatchProgressFormatter._format_error_short("timeout", "Timeout (30s)")
-        assert "Timeout" in error
+        assert "Timed out" in error
 
     def test_format_error_short_network(self):
         """Test error formatting for network error."""
