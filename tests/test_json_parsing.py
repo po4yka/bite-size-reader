@@ -265,8 +265,9 @@ class TestJsonParsing(unittest.TestCase):
             _setup_openrouter_mock(bot, mock_openrouter_instance)
 
             bot._safe_reply = AsyncMock()  # type: ignore[method-assign]
-            # Also update the notification formatter's internal reference
+            # Also update the notification formatter's internal references
             bot.response_formatter._notification_formatter._safe_reply_func = bot._safe_reply
+            bot.response_formatter._notification_formatter._response_sender.safe_reply = bot._safe_reply  # type: ignore[method-assign]
 
             message = MagicMock()
             await bot._handle_url_flow(message, "http://example.com")
@@ -274,7 +275,9 @@ class TestJsonParsing(unittest.TestCase):
             messages = [
                 call.args[1] for call in bot._safe_reply.await_args_list if len(call.args) >= 2
             ]
-            assert any("Invalid summary format" in str(msg) for msg in messages)
+            # Updated: error message changed from "Invalid summary format" to "Processing Failed"
+            # The test triggers "repair_failure" (not llm_error) which sends "Processing Failed"
+            assert any("Processing Failed" in str(msg) for msg in messages)
 
         asyncio.run(run_test())
 

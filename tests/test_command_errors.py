@@ -24,17 +24,11 @@ class FakeMessage:
         self.id = 999
         self.message_id = 999
 
-    async def reply_text(self, text):
+    async def reply_text(self, text, **kwargs):
         self._replies.append(text)
 
 
-class BoomBot(TelegramBot):
-    async def _handle_url_flow(self, message, url_text: str, **_: object):
-        msg = "boom"
-        raise RuntimeError(msg)
-
-
-def make_bot(tmp_path: str) -> BoomBot:
+def make_bot(tmp_path: str) -> TelegramBot:
     db = Database(tmp_path)
     db.migrate()
     cfg = make_test_app_config(db_path=tmp_path, allowed_user_ids=(1,))
@@ -46,7 +40,7 @@ def make_bot(tmp_path: str) -> BoomBot:
     # Mock the OpenRouter client to avoid API key validation
     with patch("app.adapters.openrouter.openrouter_client.OpenRouterClient") as mock_openrouter:
         mock_openrouter.return_value = AsyncMock()
-        return BoomBot(cfg=cfg, db=db)  # type: ignore[arg-type]
+        return TelegramBot(cfg=cfg, db=db)  # type: ignore[arg-type]
 
 
 class TestCommandErrors(unittest.IsolatedAsyncioTestCase):
@@ -54,6 +48,15 @@ class TestCommandErrors(unittest.IsolatedAsyncioTestCase):
         with tempfile.TemporaryDirectory() as tmp:
             bot = make_bot(os.path.join(tmp, "app.db"))
             msg = FakeMessage("/summarize https://example.com")
+
+            # Mock url_processor.handle_url_flow to raise an error
+            original_handle_url_flow = bot.url_processor.handle_url_flow
+
+            async def boom_url_flow(*args, **kwargs):
+                raise RuntimeError("boom")
+
+            bot.url_processor.handle_url_flow = boom_url_flow
+
             await bot._on_message(msg)
             assert any("error" in r.lower() for r in msg._replies)
 

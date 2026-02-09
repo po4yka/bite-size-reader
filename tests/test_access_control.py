@@ -25,7 +25,7 @@ class FakeMessage:
         self.id = 101
         self.message_id = 101
 
-    async def reply_text(self, text):
+    async def reply_text(self, text, **kwargs):
         self._replies.append(text)
 
 

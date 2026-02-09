@@ -16,10 +16,14 @@ class TestContentWalkLogging(unittest.TestCase):
         """When walk_content raises, a debug log 'content_walk_failed' must be emitted."""
         proc = ResponseProcessor(enable_stats=False)
 
-        # Self-referencing list triggers RecursionError inside walk_content
-        evil_list: list = []
-        evil_list.append(evil_list)
-        message_obj: dict = {"content": evil_list}
+        # Create a dict that raises an exception when checking if a key exists
+        class BadDict(dict):
+            """A dict whose __contains__ raises an exception."""
+
+            def __contains__(self, key):
+                raise RuntimeError("Intentional error for testing")
+
+        message_obj: dict = {"content": [BadDict()]}
 
         with self.assertLogs(
             "app.adapters.openrouter.response_processor", level=logging.DEBUG

@@ -344,11 +344,9 @@ class URLHandler:
             return
 
         if len(urls) > 1:
-            progress_message_id = await self.response_formatter.safe_reply_with_id(
-                message, f"🚀 Preparing to process {len(urls)} links..."
-            )
-            await self._process_multiple_urls_parallel(
-                message, urls, uid, correlation_id, initial_message_id=progress_message_id
+            # Request confirmation for multiple URLs
+            await self._request_multi_link_confirmation(
+                message, uid, urls, interaction_id, start_time, correlation_id
             )
             return
 
