@@ -28,7 +28,7 @@ from app.adapters.content.llm_response_workflow import (
     LLMSummaryPersistenceSettings,
     LLMWorkflowNotifications,
 )
-from app.core.lang import LANG_RU, choose_language, detect_language
+from app.core.lang import LANG_AUTO, LANG_RU, choose_language, detect_language
 from app.db.user_interactions import async_safe_update_user_interaction
 from app.infrastructure.persistence.sqlite.repositories.request_repository import (
     SqliteRequestRepositoryAdapter,
@@ -195,7 +195,9 @@ class AttachmentProcessor:
 
             # Detect language from caption or default
             text_for_lang = caption or ""
-            detected = detect_language(text_for_lang) if text_for_lang else "en"
+            user_lang_code = getattr(getattr(message, "from_user", None), "language_code", None)
+            user_lang = user_lang_code[:2] if user_lang_code else "en"
+            detected = detect_language(text_for_lang) if text_for_lang else user_lang
             chosen_lang = choose_language(self.cfg.runtime.preferred_lang, detected)
 
             # Create attachment processing record
@@ -497,14 +499,14 @@ class AttachmentProcessor:
                 if status_updater:
                     await status_updater(f"📄 <b>PDF:</b> {text}")
 
-            pdf_content = PDFExtractor.extract(
+            loop = asyncio.get_running_loop()
+            pdf_content = await asyncio.to_thread(
+                PDFExtractor.extract,
                 file_path,
                 max_pages=attachment_cfg.max_pdf_pages,
                 max_vision_pages=attachment_cfg.max_vision_pages_per_pdf,
                 image_max_dimension=attachment_cfg.image_max_dimension,
-                on_progress=lambda t: asyncio.run_coroutine_threadsafe(
-                    on_pdf_progress(t), asyncio.get_event_loop()
-                ),
+                on_progress=lambda t: asyncio.run_coroutine_threadsafe(on_pdf_progress(t), loop),
             )
         except ValueError as exc:
             logger.warning(
@@ -516,6 +518,13 @@ class AttachmentProcessor:
 
         # Update attachment record with PDF metadata
         await self._update_pdf_metadata(req_id, pdf_content)
+
+        # Better language detection from content if no caption was provided and we are in auto mode
+        if not caption and self.cfg.runtime.preferred_lang == LANG_AUTO:
+            content_text = pdf_content.text[:2000]
+            if content_text.strip():
+                detected = detect_language(content_text)
+                chosen_lang = choose_language(self.cfg.runtime.preferred_lang, detected)
 
         # Build metadata header for the prompt
         metadata_parts = []
