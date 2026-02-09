@@ -852,6 +852,29 @@ class SummaryPresenterImpl:
                     parse_mode="HTML",
                 )
 
+            # Insights: Caution/Caveats
+            insights = shaped.get("insights")
+            if isinstance(insights, dict):
+                caution = str(insights.get("caution") or "").strip()
+                if caution:
+                    await self._text_processor.send_long_text(
+                        message,
+                        f"<b>⚠️ Caveats</b>\n{html.escape(caution)}",
+                        parse_mode="HTML",
+                    )
+
+                critique = insights.get("critique")
+                if isinstance(critique, list) and critique:
+                    crit_lines = [
+                        f"• {html.escape(str(c).strip())}" for c in critique if str(c).strip()
+                    ]
+                    if crit_lines:
+                        await self._text_processor.send_long_text(
+                            message,
+                            "<b>🤔 Critical Analysis</b>\n" + "\n".join(crit_lines[:5]),
+                            parse_mode="HTML",
+                        )
+
             # Topic taxonomy (if present and not empty)
             taxonomy = shaped.get("topic_taxonomy") or []
             if isinstance(taxonomy, list) and taxonomy:
