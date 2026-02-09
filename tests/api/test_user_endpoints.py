@@ -24,7 +24,7 @@ sys.modules["redis.asyncio"] = MagicMock()
 from typing import Any
 
 
-class StrEnum(str, Enum):  # noqa: UP042
+class StrEnum(str, Enum):
     """Compatibility shim for StrEnum (Python 3.11+)."""
 
 
