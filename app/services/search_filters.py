@@ -75,10 +75,14 @@ class SearchFilters:
 
         # Language filter
         if self.languages:
-            # Language is not directly on TopicArticle, would need to be added
-            # or fetched from summary metadata
-            # For now, skip language filtering at this level
-            pass
+            # Check if result has language attribute (e.g. VectorSearchResult)
+            # TopicArticle currently does not have language, so we skip filtering for it
+            language = getattr(result, "language", None)
+            if language:
+                # Case-insensitive match
+                lang_lower = str(language).lower()
+                if not any(lang.lower() == lang_lower for lang in self.languages):
+                    return False
 
         return True
 
