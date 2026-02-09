@@ -751,6 +751,31 @@ def _shape_insights(raw: Any) -> dict[str, Any]:
     return shaped
 
 
+def _shape_quality(raw: Any) -> dict[str, Any]:
+    shaped: dict[str, Any] = {
+        "author_bias": None,
+        "emotional_tone": None,
+        "missing_perspectives": [],
+        "evidence_quality": None,
+    }
+
+    if not isinstance(raw, dict):
+        return shaped
+
+    bias = str(raw.get("author_bias") or "").strip()
+    shaped["author_bias"] = bias if bias else None
+
+    tone = str(raw.get("emotional_tone") or "").strip()
+    shaped["emotional_tone"] = tone if tone else None
+
+    evidence = str(raw.get("evidence_quality") or "").strip()
+    shaped["evidence_quality"] = evidence if evidence else None
+
+    shaped["missing_perspectives"] = _clean_string_list(raw.get("missing_perspectives"))
+
+    return shaped
+
+
 def _normalize_field_names(payload: SummaryJSON) -> SummaryJSON:
     """Normalize field names from camelCase to snake_case.
 
@@ -932,6 +957,7 @@ def validate_and_shape_summary(payload: SummaryJSON) -> SummaryJSON:
             logger.debug("keyword_extraction_failed", extra={"error": str(e)})
 
     p["insights"] = _shape_insights(p.get("insights"))
+    p["quality"] = _shape_quality(p.get("quality"))
 
     # Clean extractive_quotes before Pydantic
     p["extractive_quotes"] = [

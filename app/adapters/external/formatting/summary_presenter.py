@@ -875,6 +875,36 @@ class SummaryPresenterImpl:
                             parse_mode="HTML",
                         )
 
+            # Perspective & Quality
+            quality = shaped.get("quality")
+            if isinstance(quality, dict):
+                q_lines = []
+                bias = str(quality.get("author_bias") or "").strip()
+                tone = str(quality.get("emotional_tone") or "").strip()
+                evidence = str(quality.get("evidence_quality") or "").strip()
+                missing = quality.get("missing_perspectives")
+
+                if bias:
+                    q_lines.append(f"• <b>Bias:</b> {html.escape(bias)}")
+                if tone:
+                    q_lines.append(f"• <b>Tone:</b> {html.escape(tone)}")
+                if evidence:
+                    q_lines.append(f"• <b>Evidence:</b> {html.escape(evidence)}")
+
+                if isinstance(missing, list) and missing:
+                    clean_missing = [str(m).strip() for m in missing if str(m).strip()]
+                    if clean_missing:
+                        q_lines.append("• <b>Missing Context:</b>")
+                        for m in clean_missing[:3]:
+                            q_lines.append(f"  - {html.escape(m)}")
+
+                if q_lines:
+                    await self._text_processor.send_long_text(
+                        message,
+                        "<b>⚖️ Perspective & Quality</b>\n" + "\n".join(q_lines),
+                        parse_mode="HTML",
+                    )
+
             # Topic taxonomy (if present and not empty)
             taxonomy = shaped.get("topic_taxonomy") or []
             if isinstance(taxonomy, list) and taxonomy:

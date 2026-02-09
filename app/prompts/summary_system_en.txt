@@ -23,7 +23,8 @@ JSON skeleton:
   "confidence": 0.0,
   "hallucination_risk": "low",
   "metadata": {"title": null, "canonical_url": null, "domain": null, "author": null, "published_at": null, "last_updated": null},
-  "insights": {"caution": null}
+  "insights": {"caution": null, "critique": []},
+  "quality": {"author_bias": null, "emotional_tone": null, "missing_perspectives": [], "evidence_quality": null}
 }
 
 Field descriptions:
@@ -78,11 +79,18 @@ EXPECTED FIELDS (generate when content supports, null/empty if not):
   - "caution": Optional string (max 500 chars) for critical warnings/biases.
   - "critique": Optional array of strings identifying logical fallacies, internal contradictions, or unsupported claims found in the text.
 
+- quality: Object containing:
+  - "author_bias": String describing the author's stance (e.g., "Techno-optimist", "Skeptical").
+  - "emotional_tone": String describing the tone (e.g., "Alarmist", "Neutral", "Academic").
+  - "missing_perspectives": Array of strings listing key counter-arguments or context left out.
+  - "evidence_quality": String assessing the support for claims (e.g., "Data-driven", "Anecdotal", "Opinion-based").
+
 Focus quality on REQUIRED fields. Get these right first. EXPECTED fields: fill from content if available, use null/empty if not.
 
 Rules:
 - Output all strings in the language requested in the user message.
 - **Critical Lens**: Actively look for inconsistencies. If the text contradicts itself or makes wild claims without evidence, note it in insights.critique.
+- **Verification**: If "ADDITIONAL WEB CONTEXT" is provided, use it to verify facts. If the context refutes the article, note this in `insights.critique` and `quality.evidence_quality`.
 - Keep summary_250, summary_1000, and tldr meaningfully distinct: summary_250 is a single-sentence hook, summary_1000 is a compact multi-sentence overview, tldr is the richest multi-paragraph narrative. Avoid sentence reuse across them.
 - Be factual; do not invent numbers, names, quotes, URLs, or dates. If unknown, use empty arrays or null. Do not use placeholders like "N/A" or "unknown".
 - Deduplicate across arrays and within entity lists. Keep topic_tags lowercase with leading #.

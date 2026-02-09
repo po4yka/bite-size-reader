@@ -224,6 +224,13 @@ class TemporalFreshness(StrEnum):
     EVERGREEN = "evergreen"
 
 
+class QualityAssessment(BaseModel):
+    author_bias: str | None = None
+    emotional_tone: str | None = None
+    missing_perspectives: list[str] = Field(default_factory=list)
+    evidence_quality: str | None = None
+
+
 # ---------------------------------------------------------------------------
 # Main summary model
 # ---------------------------------------------------------------------------
@@ -264,6 +271,7 @@ class SummaryModel(BaseModel):
     forwarded_post_extras: ForwardedPostExtras | None = None
     key_points_to_remember: list[str] = Field(default_factory=list)
     insights: Insights = Field(default_factory=Insights)
+    quality: QualityAssessment = Field(default_factory=QualityAssessment)
 
     # ------------------------------------------------------------------
     # model_validator: normalize field names and backfill summaries
