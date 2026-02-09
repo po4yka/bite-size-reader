@@ -14,6 +14,7 @@ from app.adapters.content.llm_response_workflow import (
     LLMWorkflowNotifications,
 )
 from app.core.lang import LANG_RU
+from app.utils.typing_indicator import typing_indicator
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -183,13 +184,15 @@ class ForwardSummarizer:
             is_read=True,
         )
 
-        return await self._workflow.execute_summary_workflow(
-            message=message,
-            req_id=req_id,
-            correlation_id=correlation_id,
-            interaction_config=interaction_config,
-            persistence=persistence,
-            repair_context=repair_context,
-            requests=requests,
-            notifications=notifications,
-        )
+        # Send typing indicator during forward summarization (can take 30-60s)
+        async with typing_indicator(self.response_formatter, message, action="typing"):
+            return await self._workflow.execute_summary_workflow(
+                message=message,
+                req_id=req_id,
+                correlation_id=correlation_id,
+                interaction_config=interaction_config,
+                persistence=persistence,
+                repair_context=repair_context,
+                requests=requests,
+                notifications=notifications,
+            )

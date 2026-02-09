@@ -26,6 +26,7 @@ from app.db.session import DatabaseSessionManager
 from app.db.utils import prepare_json_payload
 from app.infrastructure.cache.redis_cache import RedisCache
 from app.infrastructure.persistence.message_persistence import MessagePersistence
+from app.utils.typing_indicator import typing_indicator
 
 if TYPE_CHECKING:
     from app.adapters.external.response_formatter import ResponseFormatter
@@ -586,8 +587,10 @@ class ContentExtractor:
             message, url=url_text, silent=silent
         )
 
-        async with self._sem():
-            crawl = await self.firecrawl.scrape_markdown(url_text, request_id=req_id)
+        # Send typing indicator while extracting content (Firecrawl can take 10-30s)
+        async with typing_indicator(self.response_formatter, message, action="typing"):
+            async with self._sem():
+                crawl = await self.firecrawl.scrape_markdown(url_text, request_id=req_id)
 
         quality_issue = detect_low_value_content(crawl)
         if quality_issue:

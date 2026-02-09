@@ -526,6 +526,65 @@ class ResponseSenderImpl:
             )
             return False
 
+    async def send_chat_action(
+        self,
+        chat_id: int,
+        action: str = "typing",
+    ) -> bool:
+        """Send a chat action (typing indicator) to Telegram.
+
+        Args:
+            chat_id: The chat ID to send the action to
+            action: The action type. Valid values:
+                - "typing" - typing text
+                - "upload_photo" - uploading photo
+                - "upload_video" - uploading video
+                - "upload_document" - uploading document
+                - "upload_audio" - uploading audio
+                - "find_location" - finding location
+                - "record_voice" - recording voice
+                - "record_video" - recording video
+                - "choose_sticker" - choosing sticker
+
+        Returns:
+            True if the action was sent successfully, False otherwise
+        """
+        try:
+            if not isinstance(chat_id, int) or chat_id == 0:
+                logger.debug("send_chat_action_invalid_chat_id", extra={"chat_id": chat_id})
+                return False
+
+            if self._telegram_client and hasattr(self._telegram_client, "client"):
+                client = self._telegram_client.client
+                if client and hasattr(client, "send_chat_action"):
+                    try:
+                        await client.send_chat_action(chat_id=chat_id, action=action)
+                        logger.debug(
+                            "chat_action_sent",
+                            extra={"chat_id": chat_id, "action": action},
+                        )
+                        return True
+                    except Exception as e:
+                        # Don't log as error - typing indicators are non-critical
+                        logger.debug(
+                            "chat_action_send_failed",
+                            extra={"chat_id": chat_id, "action": action, "error": str(e)},
+                        )
+                        return False
+                else:
+                    logger.debug("chat_action_no_client_method", extra={"chat_id": chat_id})
+                    return False
+            else:
+                logger.debug("chat_action_no_telegram_client", extra={"chat_id": chat_id})
+                return False
+        except Exception as e:
+            raise_if_cancelled(e)
+            logger.debug(
+                "chat_action_exception",
+                extra={"chat_id": chat_id, "action": action, "error": str(e)},
+            )
+            return False
+
     async def reply_json(
         self, message: Any, obj: dict, *, correlation_id: str | None = None, success: bool = True
     ) -> None:

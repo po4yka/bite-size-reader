@@ -32,6 +32,7 @@ from app.infrastructure.persistence.sqlite.repositories.request_repository impor
 from app.infrastructure.persistence.sqlite.repositories.video_download_repository import (
     SqliteVideoDownloadRepositoryAdapter,
 )
+from app.utils.typing_indicator import typing_indicator
 
 if TYPE_CHECKING:
     from app.adapters.external.response_formatter import ResponseFormatter
@@ -185,115 +186,119 @@ class YouTubeDownloader:
                     message, url, silent=silent
                 )
 
-            # Step 1: Extract transcript using youtube-transcript-api (with retries)
-            (
-                transcript_text,
-                transcript_lang,
-                auto_generated,
-                transcript_source,
-            ) = await self._extract_transcript_api(video_id, correlation_id)
+            # Send typing indicator during download (can take 1-5 minutes)
+            async with typing_indicator(self.response_formatter, message, action="upload_video"):
+                # Step 1: Extract transcript using youtube-transcript-api (with retries)
+                (
+                    transcript_text,
+                    transcript_lang,
+                    auto_generated,
+                    transcript_source,
+                ) = await self._extract_transcript_api(video_id, correlation_id)
 
-            # Step 2: Download video with yt-dlp
-            output_dir = self.storage_path / datetime.now().strftime("%Y%m%d")
-            output_dir.mkdir(parents=True, exist_ok=True)
+                # Step 2: Download video with yt-dlp
+                output_dir = self.storage_path / datetime.now().strftime("%Y%m%d")
+                output_dir.mkdir(parents=True, exist_ok=True)
 
-            ydl_opts = self._get_ydl_opts(video_id, output_dir)
+                ydl_opts = self._get_ydl_opts(video_id, output_dir)
 
-            # Download in thread pool (yt-dlp is sync); timeout prevents hangs
-            video_metadata = await asyncio.wait_for(
-                asyncio.to_thread(
-                    self._download_video_sync,
-                    url,
-                    ydl_opts,
-                    download_id,
-                    message,
-                    silent,
-                    correlation_id,
-                ),
-                timeout=600.0,
-            )
-
-            # Fallback to downloaded VTT subtitles if API transcript is missing
-            if not transcript_text:
-                vtt_text, vtt_lang = self._load_transcript_from_vtt(
-                    video_metadata.get("subtitle_file_path"), correlation_id
+                # Download in thread pool (yt-dlp is sync); timeout prevents hangs
+                video_metadata = await asyncio.wait_for(
+                    asyncio.to_thread(
+                        self._download_video_sync,
+                        url,
+                        ydl_opts,
+                        download_id,
+                        message,
+                        silent,
+                        correlation_id,
+                    ),
+                    timeout=600.0,
                 )
-                if vtt_text:
-                    transcript_text = vtt_text
-                    transcript_lang = vtt_lang or transcript_lang
-                    transcript_source = "vtt"
-                    _ = auto_generated  # Mark as used/shadowed if we switch to VTT
-                    logger.info(
-                        "youtube_transcript_vtt_fallback_success",
-                        extra={
-                            "video_id": video_id,
-                            "subtitle_lang": transcript_lang,
-                            "cid": correlation_id,
-                        },
+
+                # Fallback to downloaded VTT subtitles if API transcript is missing
+                if not transcript_text:
+                    vtt_text, vtt_lang = self._load_transcript_from_vtt(
+                        video_metadata.get("subtitle_file_path"), correlation_id
+                    )
+                    if vtt_text:
+                        transcript_text = vtt_text
+                        transcript_lang = vtt_lang or transcript_lang
+                        transcript_source = "vtt"
+                        _ = auto_generated  # Mark as used/shadowed if we switch to VTT
+                        logger.info(
+                            "youtube_transcript_vtt_fallback_success",
+                            extra={
+                                "video_id": video_id,
+                                "subtitle_lang": transcript_lang,
+                                "cid": correlation_id,
+                            },
+                        )
+
+                if not transcript_text:
+                    raise ValueError(
+                        f"❌ No transcript or subtitles available for this video. "
+                        f"Error ID: {correlation_id or 'unknown'}"
                     )
 
-            if not transcript_text:
-                raise ValueError(
-                    f"❌ No transcript or subtitles available for this video. "
-                    f"Error ID: {correlation_id or 'unknown'}"
+                # Detect language from transcript
+                detected_lang = detect_language(transcript_text or "")
+                combined_text = self._combine_metadata_and_transcript(
+                    video_metadata, transcript_text
                 )
 
-            # Detect language from transcript
-            detected_lang = detect_language(transcript_text or "")
-            combined_text = self._combine_metadata_and_transcript(video_metadata, transcript_text)
-
-            # Update database with complete metadata + transcript
-            await self.video_repo.async_update_video_download(
-                download_id,
-                title=video_metadata.get("title"),
-                channel=video_metadata.get("channel"),
-                channel_id=video_metadata.get("channel_id"),
-                duration_sec=video_metadata.get("duration"),
-                upload_date=video_metadata.get("upload_date"),
-                view_count=video_metadata.get("view_count"),
-                like_count=video_metadata.get("like_count"),
-                resolution=video_metadata.get("resolution"),
-                file_size_bytes=video_metadata.get("file_size"),
-                video_codec=video_metadata.get("vcodec"),
-                audio_codec=video_metadata.get("acodec"),
-                format_id=video_metadata.get("format_id"),
-                transcript_text=transcript_text,
-                subtitle_language=transcript_lang,
-                auto_generated=auto_generated,
-                transcript_source=transcript_source,
-            )
-
-            # Mark download as completed so cached lookups work
-            await self.video_repo.async_update_video_download_status(download_id, "completed")
-
-            # Update request status
-            await self.request_repo.async_update_request_status(req_id, "ok")
-            await self.request_repo.async_update_request_lang_detected(req_id, detected_lang)
-
-            # Notify user: download complete
-            if not silent:
-                await self.response_formatter.send_youtube_download_complete_notification(
-                    message,
-                    video_metadata["title"],
-                    video_metadata["resolution"],
-                    video_metadata["file_size"] / (1024 * 1024),  # MB
-                    silent=silent,
+                # Update database with complete metadata + transcript
+                await self.video_repo.async_update_video_download(
+                    download_id,
+                    title=video_metadata.get("title"),
+                    channel=video_metadata.get("channel"),
+                    channel_id=video_metadata.get("channel_id"),
+                    duration_sec=video_metadata.get("duration"),
+                    upload_date=video_metadata.get("upload_date"),
+                    view_count=video_metadata.get("view_count"),
+                    like_count=video_metadata.get("like_count"),
+                    resolution=video_metadata.get("resolution"),
+                    file_size_bytes=video_metadata.get("file_size"),
+                    video_codec=video_metadata.get("vcodec"),
+                    audio_codec=video_metadata.get("acodec"),
+                    format_id=video_metadata.get("format_id"),
+                    transcript_text=transcript_text,
+                    subtitle_language=transcript_lang,
+                    auto_generated=auto_generated,
+                    transcript_source=transcript_source,
                 )
 
-            self._audit(
-                "INFO",
-                "youtube_download_complete",
-                {
-                    "video_id": video_id,
-                    "request_id": req_id,
-                    "download_id": download_id,
-                    "file_size_mb": video_metadata["file_size"] / (1024 * 1024),
-                    "cid": correlation_id,
-                },
-            )
+                # Mark download as completed so cached lookups work
+                await self.video_repo.async_update_video_download_status(download_id, "completed")
 
-            download_succeeded = True
-            return req_id, combined_text, transcript_source, detected_lang, video_metadata
+                # Update request status
+                await self.request_repo.async_update_request_status(req_id, "ok")
+                await self.request_repo.async_update_request_lang_detected(req_id, detected_lang)
+
+                # Notify user: download complete
+                if not silent:
+                    await self.response_formatter.send_youtube_download_complete_notification(
+                        message,
+                        video_metadata["title"],
+                        video_metadata["resolution"],
+                        video_metadata["file_size"] / (1024 * 1024),  # MB
+                        silent=silent,
+                    )
+
+                self._audit(
+                    "INFO",
+                    "youtube_download_complete",
+                    {
+                        "video_id": video_id,
+                        "request_id": req_id,
+                        "download_id": download_id,
+                        "file_size_mb": video_metadata["file_size"] / (1024 * 1024),
+                        "cid": correlation_id,
+                    },
+                )
+
+                download_succeeded = True
+                return req_id, combined_text, transcript_source, detected_lang, video_metadata
 
         except Exception as e:
             raise_if_cancelled(e)

@@ -181,6 +181,22 @@ class ResponseFormatter:
             chat_id, message_id, text, parse_mode=parse_mode
         )
 
+    async def send_chat_action(
+        self,
+        chat_id: int,
+        action: str = "typing",
+    ) -> bool:
+        """Send a chat action (typing indicator) to Telegram.
+
+        Args:
+            chat_id: The chat ID to send the action to
+            action: The action type (typing, upload_photo, upload_video, upload_document, etc.)
+
+        Returns:
+            True if the action was sent successfully, False otherwise
+        """
+        return await self._response_sender.send_chat_action(chat_id, action)
+
     async def reply_json(
         self, message: Any, obj: dict, *, correlation_id: str | None = None, success: bool = True
     ) -> None:
