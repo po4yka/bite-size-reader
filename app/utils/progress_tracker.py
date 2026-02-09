@@ -8,26 +8,24 @@ import asyncio
 import logging
 import time
 from collections.abc import Callable
-from typing import Any, Protocol
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
 
-class ProgressFormatter(Protocol):
-    """Protocol for formatting progress messages."""
+ProgressFormatter = Callable[[int, int, int | None], Any]
+"""Type alias for progress formatter functions.
 
-    async def format_and_send(self, current: int, total: int, message_id: int | None) -> int | None:
-        """Format and send/edit a progress message.
+Expected signature: async (current: int, total: int, message_id: int | None) -> int | None
 
-        Args:
-            current: Current progress count
-            total: Total items to process
-            message_id: Optional message ID to edit
+Args:
+    current: Current progress count
+    total: Total items to process
+    message_id: Optional message ID to edit
 
-        Returns:
-            Message ID for future edits, or None if unavailable
-        """
-        ...
+Returns:
+    Message ID for future edits, or None if unavailable
+"""
 
 
 class ProgressTracker:
@@ -72,7 +70,7 @@ class ProgressTracker:
     def __init__(
         self,
         total: int,
-        progress_formatter: Callable[[int, int, int | None], Any],
+        progress_formatter: ProgressFormatter,
         initial_message_id: int | None = None,
         *,
         update_interval: float = 1.0,
@@ -83,7 +81,7 @@ class ProgressTracker:
 
         Args:
             total: Total number of items to process
-            progress_formatter: Async function to format and send progress updates
+            progress_formatter: Async callable to format and send progress updates
             initial_message_id: Optional initial message ID for edits
             update_interval: Minimum time in seconds between updates (default: 1.0)
             small_batch_threshold: Batch size threshold for more frequent updates (default: 10)
