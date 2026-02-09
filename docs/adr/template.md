@@ -2,7 +2,7 @@
 
 **Date:** YYYY-MM-DD
 
-**Status:** [Proposed | Accepted | Deprecated | Superseded by [ADR-YYYY](YYYY-title.md)]
+**Status:** [Proposed | Accepted | Deprecated | Superseded by ADR-YYYY]
 
 **Deciders:** [List of people involved in the decision]
 
@@ -87,8 +87,8 @@
 
 ## Related Decisions
 
-- [ADR-YYYY](YYYY-title.md) - [Brief description of relationship]
-- [ADR-ZZZZ](ZZZZ-title.md) - [Brief description of relationship]
+- ADR-YYYY - [Brief description of relationship]
+- ADR-ZZZZ - [Brief description of relationship]
 
 ## Implementation Notes
 

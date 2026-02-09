@@ -68,7 +68,7 @@ def downgrade(db: Database) -> None:
     logger.info("Migration rolled back")
 ```
 
-3. **Test migration**:
+1. **Test migration**:
 
 ```bash
 # Dry run first
