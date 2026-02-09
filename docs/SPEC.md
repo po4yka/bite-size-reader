@@ -1,8 +1,62 @@
 # Bite‑Size Reader — Technical Specification
 
+**Version:** 3.0
+**Last Updated:** 2026-02-09
+
+---
+
+## Table of Contents
+
+- [Summary](#summary)
+- [Goals & Non‑Goals](#goals--non‑goals)
+  - [Goals](#goals)
+  - [Non‑Goals](#non‑goals)
+- [External Systems & Authoritative Docs](#external-systems--authoritative-docs)
+- [User & Access Control](#user--access-control)
+- [High‑level Architecture](#high‑level-architecture)
+  - [Telegram Message Routing](#telegram-message-routing)
+- [Inputs & Outputs](#inputs--outputs)
+  - [Inputs](#inputs)
+  - [Output to Telegram](#output-to-telegram)
+  - [Response Envelopes](#response-envelopes-api--cli--telegram-attachments)
+- [Summary JSON Contract (Canonical)](#summary-json-contract-canonical)
+- [Data Model (SQLite)](#data-model-sqlite)
+  - [Tables](#tables)
+  - [UML — Data (Mermaid Class Diagram)](#uml--data-mermaid-class-diagram)
+- [Processing Pipelines](#processing-pipelines)
+  - [URL Flow](#url-flow)
+  - [Forwarded Message Flow](#forwarded-message-flow)
+  - [YouTube Video Flow](#youtube-video-flow)
+  - [Web Search Enrichment Flow (Optional)](#web-search-enrichment-flow-optional)
+- [URL Normalization & Deduplication](#url-normalization--deduplication)
+- [Error Handling & Retries](#error-handling--retries)
+- [Observability](#observability)
+- [Performance](#performance)
+- [Security](#security)
+- [Configuration (Env)](#configuration-env)
+- [Dockerization](#dockerization)
+- [Local CLI Harness](#local-cli-harness)
+- [Testing](#testing)
+- [Repository Layout](#repository-layout)
+- [Mobile API (app/api)](#mobile-api-appapi)
+  - [Contract](#contract)
+  - [Core Endpoints](#core-endpoints)
+  - [Sync Semantics](#sync-semantics)
+  - [Rate Limiting & Redis](#rate-limiting--redis)
+  - [Data Model Notes (API-Specific Fields)](#data-model-notes-api-specific-fields)
+  - [Background Processing (Requests → Summaries)](#background-processing-requests--summaries)
+- [Future Work](#future-work)
+- [Appendix — API Specifics (Quick References)](#appendix--api-specifics-quick-references)
+  - [Firecrawl (/scrape)](#firecrawl-scrape)
+  - [OpenRouter (Chat Completions)](#openrouter-chat-completions)
+  - [PyroTGFork / Pyrogram](#pyrotgfork--pyrogram)
+
+---
+
 ## Summary
 
 Telegram service that accepts either:
+
 1) a **web article URL** -> parses it with **Firecrawl** to get clean Markdown/HTML/metadata -> summarizes via **OpenRouter** Chat Completions -> replies with a **strict JSON summary** -> persists *all* artifacts in SQLite.
 2) a **YouTube video URL** -> downloads video (1080p) with **yt-dlp**, extracts transcript with **youtube-transcript-api** -> summarizes via **OpenRouter** -> replies with JSON summary -> persists *video metadata, file paths, and transcript* in SQLite.
 3) a **forwarded channel message** -> summarizes via **OpenRouter** -> replies with JSON summary -> persists *full Telegram message snapshot* and raw LLM call.
@@ -12,6 +66,7 @@ Everything runs in one Docker container; code lives on GitHub. Access is restric
 ## Goals & Non‑Goals
 
 ### Goals
+
 - Robust URL -> content -> LLM -> JSON summary pipeline.
 - End‑to‑end data capture: Telegram request, full Firecrawl output, raw LLM response, final JSON summary.
 - Deterministic **Summary JSON contract** with validation (length caps, types, dedupe).
@@ -20,6 +75,7 @@ Everything runs in one Docker container; code lives on GitHub. Access is restric
 - Single‑user security hardening (whitelist).
 
 ### Non‑Goals
+
 - Multi‑tenant access control.
 - Long‑term vector search, RAG, or analytics dashboards (can be future work).
 - Real‑time streaming summaries.
@@ -139,14 +195,17 @@ sequenceDiagram
 ## Inputs & Outputs
 
 ### Inputs
+
 - **URL message**: text contains a valid URL -> “URL flow”.
 - **Forwarded channel post**: `forward_from_chat`, `forward_from_message_id`, `forward_date` present -> “Forward flow”.
 - Optional: language preference switch (ru/en) via config; default is language detection of input.
 
 ### Output to Telegram
+
 - A **single JSON object** (Summary JSON contract below), sent as a code block or file (when large).
 
 ### Response envelopes (API / CLI / Telegram attachments)
+
 - All outward JSON responses use a **SuccessResponse/ErrorResponse** envelope:
   - `success: bool`
   - `data` (for success) or `error { code, message, details?, correlation_id }`
@@ -160,6 +219,7 @@ sequenceDiagram
 ## Summary JSON contract (canonical)
 
 **Object fields (strict):**
+
 ```json
 {
   "summary_250": "string, <= 250 chars",
@@ -201,6 +261,7 @@ sequenceDiagram
 ```
 
 **Validation rules**
+
 - `summary_250`: hard cap; end on sentence/phrase boundary.
 - `summary_1000`: hard cap; multi-sentence overview that expands on `summary_250` while staying within 1000 characters.
 - `tldr`: no hard cap but should remain purposeful and avoid rambling.
@@ -218,6 +279,7 @@ sequenceDiagram
 ## Data model (SQLite)
 
 ### Tables
+
 - **users**:
   `telegram_user_id (PK) | username | is_owner | created_at`
 
@@ -225,6 +287,7 @@ sequenceDiagram
   `chat_id (PK) | type | title | username | created_at`
 
 - **requests** *(one per submission)*:
+
   ```
   id (PK)
   created_at
@@ -243,6 +306,7 @@ sequenceDiagram
   ```
 
 - **telegram_messages** *(full snapshot)*:
+
   ```
   id (PK)
   request_id (FK, unique)
@@ -262,6 +326,7 @@ sequenceDiagram
   ```
 
 - **crawl_results** *(Firecrawl /scrape)*:
+
   ```
   id (PK)
   request_id (FK, unique)
@@ -286,6 +351,7 @@ sequenceDiagram
   ```
 
 - **video_downloads** *(YouTube video downloads with yt-dlp and youtube-transcript-api)*:
+
   ```
   id (PK)
   request_id (FK, unique)
@@ -318,6 +384,7 @@ sequenceDiagram
   ```
 
 - **llm_calls** *(OpenRouter Chat Completions)*:
+
   ```
   id (PK)
   request_id (FK)
@@ -340,6 +407,7 @@ sequenceDiagram
   ```
 
 - **summaries** *(what we send back)*:
+
   ```
   id (PK)
   request_id (FK, unique)
@@ -356,6 +424,7 @@ sequenceDiagram
   `audit_logs(ts, level, event, details_json)`
 
 ### UML — Data (Mermaid class diagram)
+
 ```mermaid
 classDiagram
   class User {
@@ -485,6 +554,7 @@ classDiagram
 ## Processing pipelines
 
 ### URL flow
+
 1) `MessageRouter` classifies the interaction, persists a `requests` row (`type='url'`), normalizes the URL, and records the `dedupe_hash` via `MessagePersistence`.
 2) `URLProcessor.content_extractor` invokes **Firecrawl `/v2/scrape`**:
    - **Formats**: markdown/html by default; optional links/summary/images plus v2 object formats for `json` (prompt/schema) and `screenshot` (full-page, quality, viewport) via config.
@@ -501,11 +571,13 @@ classDiagram
 8) Emit audit logs (start/end, retries, errors) with the correlation ID for full traceability.
 
 ### Forwarded message flow
+
 1) `MessageRouter` detects forwarded metadata, snapshots the full Telegram message via `MessagePersistence`, and writes a `requests` row (`type='forward'`).
 2) `ForwardProcessor` builds an LLM prompt from the snapshot (channel name/title + text/caption) and calls **OpenRouter** with the same structured output pipeline used for URLs.
 3) Persist the LLM payload, validated Summary JSON, and audit events; reply via `ResponseFormatter`.
 
 ### YouTube video flow
+
 1) `ContentExtractor` detects YouTube URLs via `url_utils.is_youtube_url()` and routes to `YouTubeDownloader`.
 2) **YouTube URL patterns** supported (all major formats):
    - Standard: `youtube.com/watch?v=VIDEO_ID` (handles query params in any order, e.g., `?feature=share&v=ID`)
@@ -764,11 +836,13 @@ sequenceDiagram
 ```
 
 ### Contract
+
 - Envelopes only: `success`, `data` or `error`, `meta{timestamp,version}`, `correlation_id` echoed in headers and errors.
 - Errors standardized (401/403/404/409/410/422/429/500) with retry hints where applicable.
 - Auth: JWT via `POST /v1/auth/telegram-login` (Telegram login verification) and `POST /v1/auth/refresh`. Optional client gating via `ALLOWED_CLIENT_IDS`.
 
 ### Core endpoints
+
 - Summaries: `GET /v1/summaries`, `GET /v1/summaries/{id}`, `PATCH /v1/summaries/{id}` (`is_read`), `DELETE /v1/summaries/{id}` (soft delete).
 - Requests: `POST /v1/requests` (url|forward), `GET /v1/requests/{id}`, `GET /v1/requests/{id}/status`, `POST /v1/requests/{id}/retry`.
 - Search/Topics: `GET /v1/search`, `GET /v1/topics/trending`, `GET /v1/topics/related`.
@@ -776,6 +850,7 @@ sequenceDiagram
 - User: `GET /v1/user/preferences`, `PATCH /v1/user/preferences`, `GET /v1/user/stats`.
 
 ### Sync semantics
+
 - Full: `GET /v1/sync/full` returns session + chunk URLs (chunk_size 1..500).
 - Chunks: `GET /v1/sync/full/{sync_id}/chunk/{n}`.
 - Delta: `GET /v1/sync/delta?since=` returns `changes{created,updated,deleted}`, `sync_timestamp`, `has_more`, `next_since`.
@@ -783,16 +858,19 @@ sequenceDiagram
 - Tombstones: deletes surface via `deleted` in delta; clients should persist tombstones.
 
 ### Rate limiting & Redis
+
 - Defaults: summaries 200 rpm, requests 10 rpm, search 50 rpm, default 100 rpm; headers `X-RateLimit-*`, 429 with `Retry-After`.
 - Redis-backed limits and sync sessions; fallback to in-process if Redis disabled or unavailable (unless `REDIS_REQUIRED`/`API_RATE_LIMIT_REQUIRED`/`BACKGROUND_REDIS_LOCK_REQUIRED` are set).
 - Redis knobs: `REDIS_ENABLED`, `REDIS_URL` or host/port/db, `REDIS_PREFIX`, `REDIS_REQUIRED`, `REDIS_SOCKET_TIMEOUT`. Cache knobs: `REDIS_CACHE_ENABLED`, `REDIS_FIRECRAWL_TTL_SECONDS`, `REDIS_LLM_TTL_SECONDS`, `SUMMARY_PROMPT_VERSION`.
 
 ### Data model notes (API-specific fields)
+
 - Users: `preferences_json`, `is_owner` flag, optional client metadata.
 - Summaries: `is_read`, `is_deleted`, `deleted_at`, `version`, `json_payload` (contract).
 - Requests: `status`, `route_version`, dedupe hash, forward metadata; linked crawl/video/LLM records as in core schema.
 
 ### Background processing (requests → summaries)
+
 - `app/api/background_processor.py` uses `BackgroundProcessor` from `app/di/background.py` to run the same Firecrawl/YouTube → OpenRouter pipeline.
 - Idempotent Redis lock `bsr:bg:req:{id}` with TTL (`BACKGROUND_LOCK_TTL_MS`, default 300000); skips if held when `BACKGROUND_LOCK_SKIP_ON_HELD` is true.
 - Retries: exponential backoff (`BACKGROUND_RETRY_ATTEMPTS` default 3, `BACKGROUND_RETRY_BASE_DELAY_MS` 500, `BACKGROUND_RETRY_MAX_DELAY_MS` 5000, jitter 0.2).
@@ -807,6 +885,7 @@ sequenceDiagram
 ## Appendix — API specifics (quick references)
 
 ### Firecrawl (/scrape)
+
 - Converts URL to **markdown**; can also return **html**, **structured**, **screenshots**. Handles proxies, caching, dynamic content, PDFs.
 - Consider `mobile` emulation and `parsers: ["pdf"]`.
 - Docs:
@@ -815,6 +894,7 @@ sequenceDiagram
   - Guide: https://docs.firecrawl.dev/advanced-scraping-guide
 
 ### OpenRouter (Chat Completions)
+
 - Endpoint: `POST https://openrouter.ai/api/v1/chat/completions`
 - Headers: `Authorization: Bearer <KEY>`; optional `HTTP-Referer`, `X-Title`.
 - Body: OpenAI‑style `messages` array and `model`.
@@ -824,6 +904,7 @@ sequenceDiagram
   - Quickstart: https://openrouter.ai/docs/quickstart
 
 ### PyroTGFork / Pyrogram
+
 - Client, handlers, updates, examples: https://telegramplayground.github.io/pyrogram/
 - Upstream references for types/methods:
   - Client: https://docs.pyrogram.org/api/client

@@ -2,7 +2,102 @@
 
 Complete reference for all Bite-Size Reader configuration. Source of truth: `app/config/` (entrypoint `app/config/settings.py`).
 
-## Required
+**Total Variables**: 250+
+**Last Updated**: 2026-02-09
+
+---
+
+## Variable Tiers
+
+Variables are categorized by priority:
+
+- **[REQUIRED]** - Essential for basic functionality, bot won't start without these
+- **[OPTIONAL]** - Enable specific features (YouTube, web search, caching, etc.)
+- **[ADVANCED]** - Fine-tuning and optimization, safe to use defaults
+
+**New to Bite-Size Reader?** Start with [Quick Configuration Profiles](#quick-configuration-profiles) below.
+
+---
+
+## Quick Configuration Profiles
+
+### Minimal Setup (Local Development)
+
+```bash
+# [REQUIRED] - Telegram
+API_ID=your_api_id
+API_HASH=your_api_hash
+BOT_TOKEN=your_bot_token
+ALLOWED_USER_IDS=your_user_id
+
+# [REQUIRED] - Content Extraction & LLM
+FIRECRAWL_API_KEY=your_firecrawl_key
+OPENROUTER_API_KEY=your_openrouter_key
+OPENROUTER_MODEL=deepseek/deepseek-v3.2
+
+# [OPTIONAL] - Database
+DB_PATH=/data/app.db
+LOG_LEVEL=INFO
+```
+
+**Use case**: Testing locally, minimal API costs, no optional features.
+
+### Production (No Optional Features)
+
+```bash
+# All Minimal Setup variables above, plus:
+
+# [OPTIONAL] - Performance
+MAX_CONCURRENT_CALLS=4
+RATE_LIMIT_DELAY_SECONDS=0.5
+
+# [OPTIONAL] - Logging
+LOG_LEVEL=INFO
+DEBUG_PAYLOADS=0
+STRUCTURED_LOGGING=true
+
+# [OPTIONAL] - Database
+DB_TIMEOUT=30
+```
+
+**Use case**: Stable production deployment, no caching/search/YouTube.
+
+### Full-Featured Production
+
+```bash
+# All Production variables above, plus:
+
+# [OPTIONAL] - YouTube Support
+YOUTUBE_DOWNLOAD_ENABLED=true
+YOUTUBE_PREFERRED_QUALITY=1080p
+YOUTUBE_STORAGE_PATH=/data/videos
+YOUTUBE_AUTO_CLEANUP_DAYS=7
+
+# [OPTIONAL] - Web Search Enrichment
+WEB_SEARCH_ENABLED=true
+WEB_SEARCH_PROVIDER=duckduckgo
+WEB_SEARCH_MAX_QUERIES=3
+
+# [OPTIONAL] - Redis Caching
+REDIS_ENABLED=true
+REDIS_URL=redis://localhost:6379/0
+REDIS_CACHE_TTL_SECONDS=3600
+
+# [OPTIONAL] - ChromaDB Search
+CHROMA_HOST=localhost
+CHROMA_PORT=8000
+ENABLE_CHROMA=true
+
+# [OPTIONAL] - Mobile API
+JWT_SECRET_KEY=your_secret_key
+API_RATE_LIMIT_PER_MINUTE=100
+```
+
+**Use case**: Full features, high performance, multi-device access.
+
+---
+
+## [REQUIRED] Core Variables
 
 | Variable | Description |
 |----------|-------------|
@@ -13,7 +108,7 @@ Complete reference for all Bite-Size Reader configuration. Source of truth: `app
 | `FIRECRAWL_API_KEY` | Firecrawl API key |
 | `OPENROUTER_API_KEY` | OpenRouter API key |
 
-## LLM Provider Selection
+## [OPTIONAL] LLM Provider Selection
 
 | Variable | Default | Description |
 |----------|---------|-------------|
@@ -28,7 +123,7 @@ Complete reference for all Bite-Size Reader configuration. Source of truth: `app
 | `ANTHROPIC_FALLBACK_MODELS` | `claude-3-5-haiku-20241022` | Comma-separated fallback models |
 | `ANTHROPIC_ENABLE_STRUCTURED_OUTPUTS` | `true` | Enable structured output mode |
 
-## OpenRouter
+## [REQUIRED] OpenRouter (Default LLM Provider)
 
 | Variable | Default | Description |
 |----------|---------|-------------|
@@ -56,7 +151,7 @@ Complete reference for all Bite-Size Reader configuration. Source of truth: `app
 | `OPENROUTER_CACHE_SYSTEM_PROMPT` | `true` | Cache system message for reuse |
 | `OPENROUTER_CACHE_LARGE_CONTENT_THRESHOLD` | `4096` | Min tokens to auto-cache (Gemini requires 4096) |
 
-## Firecrawl
+## [ADVANCED] Firecrawl (Content Extraction)
 
 | Variable | Default | Description |
 |----------|---------|-------------|
@@ -261,3 +356,168 @@ Complete reference for all Bite-Size Reader configuration. Source of truth: `app
 | `SUMMARY_PROMPT_VERSION` | `v1` | Summary prompt template version |
 | `ENABLE_HEX_CONTAINER` | `false` | Enable hexagonal architecture container |
 | `TELEGRAM_REPLY_TIMEOUT_SEC` | `30.0` | Timeout for Telegram reply operations |
+
+---
+
+## Configuration Validation Checklist
+
+Use this checklist to verify your configuration before deploying:
+
+### ✅ Essential Configuration
+
+- [ ] **Telegram API credentials set**: `API_ID`, `API_HASH`, `BOT_TOKEN`
+- [ ] **User whitelist configured**: `ALLOWED_USER_IDS` contains your Telegram user ID
+- [ ] **Firecrawl API key valid**: Test with `curl -H "Authorization: Bearer $FIRECRAWL_API_KEY" https://api.firecrawl.dev/v1/account`
+- [ ] **OpenRouter API key valid**: Test with `curl -H "Authorization: Bearer $OPENROUTER_API_KEY" https://openrouter.ai/api/v1/models`
+- [ ] **OpenRouter model specified**: `OPENROUTER_MODEL` set to valid model (e.g., `deepseek/deepseek-v3.2`)
+
+### ✅ Optional Features (If Enabled)
+
+- [ ] **YouTube**: `YOUTUBE_DOWNLOAD_ENABLED=true` → ffmpeg installed
+- [ ] **Web Search**: `WEB_SEARCH_ENABLED=true` → Firecrawl search API accessible
+- [ ] **Redis**: `REDIS_ENABLED=true` → Redis server running at `REDIS_URL`
+- [ ] **ChromaDB**: `ENABLE_CHROMA=true` → ChromaDB server running at `CHROMA_HOST:CHROMA_PORT`
+- [ ] **Mobile API**: `JWT_SECRET_KEY` set → Strong secret (32+ characters)
+- [ ] **MCP Server**: `MCP_ENABLED=true` → Claude Desktop config updated
+
+### ✅ Performance & Storage
+
+- [ ] **Database path writable**: `DB_PATH` directory exists and is writable
+- [ ] **YouTube storage configured**: `YOUTUBE_STORAGE_PATH` has sufficient space
+- [ ] **Concurrency tuned**: `MAX_CONCURRENT_CALLS` appropriate for your rate limits
+- [ ] **Log level set**: `LOG_LEVEL=INFO` for production (DEBUG for troubleshooting)
+
+### ✅ Security
+
+- [ ] **API keys not in git**: `.env` file in `.gitignore`
+- [ ] **Access control enabled**: `ALLOWED_USER_IDS` restricts access
+- [ ] **JWT secret strong**: `JWT_SECRET_KEY` is 32+ random characters
+- [ ] **Debug mode off**: `DEBUG_PAYLOADS=0` in production
+
+---
+
+## Common Configuration Mistakes
+
+### 1. Wrong Telegram User ID
+
+**Symptom**: Bot replies "Access denied" when you message it
+
+**Fix**:
+
+```bash
+# Message @userinfobot on Telegram to get your user ID
+# Then update .env:
+ALLOWED_USER_IDS=123456789
+```
+
+### 2. Invalid API Keys
+
+**Symptom**: All summaries fail with "401 Unauthorized" or "Invalid API key"
+
+**Fix**: Regenerate keys at:
+
+- Firecrawl: https://firecrawl.dev/account
+- OpenRouter: https://openrouter.ai/keys
+
+### 3. Mixing LLM Providers
+
+**Symptom**: Bot starts but summaries fail with "Model not found"
+
+**Fix**: Ensure provider and API key match:
+
+```bash
+# For OpenRouter
+LLM_PROVIDER=openrouter
+OPENROUTER_API_KEY=sk-or-...
+
+# For OpenAI
+LLM_PROVIDER=openai
+OPENAI_API_KEY=sk-...
+
+# For Anthropic
+LLM_PROVIDER=anthropic
+ANTHROPIC_API_KEY=sk-ant-...
+```
+
+### 4. Redis Connection Failures
+
+**Symptom**: Warning logs about Redis but bot still works
+
+**Fix**: Redis is optional. Either:
+
+- Start Redis server: `docker run -d -p 6379:6379 redis:7-alpine`
+- Or disable: `REDIS_ENABLED=false`
+
+### 5. YouTube ffmpeg Missing
+
+**Symptom**: YouTube downloads fail with "ffmpeg not found"
+
+**Fix**:
+
+```bash
+# macOS
+brew install ffmpeg
+
+# Ubuntu/Debian
+sudo apt-get install ffmpeg
+
+# Docker (already included in image)
+```
+
+---
+
+## Environment Variable Precedence
+
+Variables are loaded in this order (later overrides earlier):
+
+1. **Default values** (in `app/config/settings.py`)
+2. **System environment** (`export VAR=value`)
+3. **`.env` file** (in project root or specified via `--env-file`)
+4. **CLI arguments** (for CLI tools only, e.g., `--log-level DEBUG`)
+
+**Best Practice**: Use `.env` file for all configuration (easier to manage and version-control-friendly).
+
+---
+
+## Testing Your Configuration
+
+```bash
+# Validate environment variables are loaded correctly
+python -c "from app.config.settings import RuntimeConfig; config = RuntimeConfig(); print('Config loaded successfully!')"
+
+# Test Firecrawl connection
+curl -H "Authorization: Bearer $FIRECRAWL_API_KEY" \
+     -X POST https://api.firecrawl.dev/v1/scrape \
+     -H "Content-Type: application/json" \
+     -d '{"url":"https://example.com"}' | jq .
+
+# Test OpenRouter connection
+curl -H "Authorization: Bearer $OPENROUTER_API_KEY" \
+     -X POST https://openrouter.ai/api/v1/chat/completions \
+     -H "Content-Type: application/json" \
+     -d '{
+       "model": "deepseek/deepseek-v3.2",
+       "messages": [{"role": "user", "content": "Hello"}]
+     }' | jq .
+
+# Test Redis connection (if enabled)
+redis-cli -u $REDIS_URL ping
+
+# Test ChromaDB connection (if enabled)
+curl http://$CHROMA_HOST:$CHROMA_PORT/api/v1/heartbeat
+```
+
+---
+
+## Related Documentation
+
+- [Quickstart Tutorial](tutorials/quickstart.md) - Step-by-step setup guide
+- [FAQ § Configuration](FAQ.md#configuration) - Common configuration questions
+- [TROUBLESHOOTING § Configuration](TROUBLESHOOTING.md#configuration-issues) - Fix config problems
+- [DEPLOYMENT.md](DEPLOYMENT.md) - Production deployment guide
+
+---
+
+**Last Updated**: 2026-02-09
+
+**Found an error or have a question?** [Open an issue](https://github.com/po4yka/bite-size-reader/issues) or check [FAQ](FAQ.md).

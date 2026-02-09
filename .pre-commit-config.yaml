@@ -37,6 +37,13 @@ repos:
       - id: check-toml
       - id: check-merge-conflict
 
+  - repo: https://github.com/DavidAnson/markdownlint-cli2
+    rev: v0.17.1
+    hooks:
+      - id: markdownlint-cli2
+        name: Lint Markdown files
+        args: ["--fix"]
+
   - repo: local
     hooks:
       - id: class-loc-limit

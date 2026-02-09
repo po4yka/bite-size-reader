@@ -75,6 +75,47 @@ jobs:
             requirements-dev.txt
           retention-days: 1
 
+  markdown-lint:
+    name: Lint Markdown
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Lint Markdown files
+        uses: DavidAnson/markdownlint-cli2-action@v19
+        with:
+          globs: |
+            **/*.md
+            #node_modules
+            #.venv
+
+  link-check:
+    name: Check Markdown Links
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check links in Markdown files
+        uses: lycheeverse/lychee-action@v2
+        with:
+          args: |
+            --verbose
+            --no-progress
+            --accept 200,204,301,302,429
+            --timeout 10
+            --max-retries 3
+            --exclude 'localhost|127\.0\.0\.1|example\.com|https://github\.com/.*/pull/|https://github\.com/.*/issues/'
+            --exclude-path .venv
+            --exclude-path node_modules
+            '**/*.md'
+          fail: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   build-and-check:
     needs: prepare-environment
     runs-on: ubuntu-latest
