@@ -7,6 +7,30 @@ from unittest.mock import AsyncMock
 from app.utils.retry_utils import is_transient_error, retry_telegram_operation, retry_with_backoff
 
 
+class MockHTTPResponse:
+    """Mock HTTP response object with status_code attribute."""
+
+    def __init__(self, status_code: int, message: str = ""):
+        self.status_code = status_code
+        self.message = message
+
+
+class MockHTTPExceptionWithResponse(Exception):
+    """Mock HTTP exception with response attribute."""
+
+    def __init__(self, response: MockHTTPResponse, message: str = ""):
+        super().__init__(message)
+        self.response = response
+
+
+class MockHTTPExceptionWithStatus(Exception):
+    """Mock HTTP exception with direct status_code attribute."""
+
+    def __init__(self, status_code: int, message: str = ""):
+        super().__init__(message)
+        self.status_code = status_code
+
+
 class TestIsTransientError(unittest.TestCase):
     """Test suite for transient error detection."""
 
@@ -76,6 +100,125 @@ class TestIsTransientError(unittest.TestCase):
         """Test that 404 errors are not transient."""
         error = Exception("404 Not Found")
         assert not is_transient_error(error)
+
+    def test_http_error_with_429_status_is_transient(self):
+        """Test HTTP error with 429 status code via response.status_code."""
+        response = MockHTTPResponse(429, "Too Many Requests")
+        error = MockHTTPExceptionWithResponse(response, "Rate limit exceeded")
+        assert is_transient_error(error)
+
+    def test_http_error_with_408_status_is_transient(self):
+        """Test HTTP error with 408 Request Timeout via response.status_code."""
+        response = MockHTTPResponse(408, "Request Timeout")
+        error = MockHTTPExceptionWithResponse(response)
+        assert is_transient_error(error)
+
+    def test_http_error_with_500_status_is_transient(self):
+        """Test HTTP error with 500 Internal Server Error via response.status_code."""
+        response = MockHTTPResponse(500, "Internal Server Error")
+        error = MockHTTPExceptionWithResponse(response)
+        assert is_transient_error(error)
+
+    def test_http_error_with_502_status_is_transient(self):
+        """Test HTTP error with 502 Bad Gateway via response.status_code."""
+        response = MockHTTPResponse(502)
+        error = MockHTTPExceptionWithResponse(response, "Bad Gateway")
+        assert is_transient_error(error)
+
+    def test_http_error_with_503_status_is_transient(self):
+        """Test HTTP error with 503 Service Unavailable via response.status_code."""
+        response = MockHTTPResponse(503)
+        error = MockHTTPExceptionWithResponse(response)
+        assert is_transient_error(error)
+
+    def test_http_error_with_504_status_is_transient(self):
+        """Test HTTP error with 504 Gateway Timeout via response.status_code."""
+        response = MockHTTPResponse(504)
+        error = MockHTTPExceptionWithResponse(response)
+        assert is_transient_error(error)
+
+    def test_http_error_with_400_not_modified_is_not_transient(self):
+        """Test HTTP 400 'not modified' error is not transient."""
+        response = MockHTTPResponse(400, "Message is not modified")
+        error = MockHTTPExceptionWithResponse(response, "Message is not modified")
+        assert not is_transient_error(error)
+
+    def test_http_error_with_404_is_not_transient(self):
+        """Test HTTP 404 error is not transient via response.status_code."""
+        response = MockHTTPResponse(404, "Not Found")
+        error = MockHTTPExceptionWithResponse(response, "Resource not found")
+        assert not is_transient_error(error)
+
+    def test_http_error_with_401_is_not_transient(self):
+        """Test HTTP 401 error is not transient via response.status_code."""
+        response = MockHTTPResponse(401, "Unauthorized")
+        error = MockHTTPExceptionWithResponse(response, "Unauthorized access")
+        assert not is_transient_error(error)
+
+    def test_http_error_with_invalid_status_code_type(self):
+        """Test HTTP error with invalid status_code type doesn't crash."""
+        response = MockHTTPResponse("not_a_number")  # Invalid type
+        error = MockHTTPExceptionWithResponse(response, "Invalid status")
+        # Should not crash, falls back to string checking
+        result = is_transient_error(error)
+        assert isinstance(result, bool)
+
+    def test_direct_status_code_429_is_transient(self):
+        """Test error with direct status_code attribute (429)."""
+        error = MockHTTPExceptionWithStatus(429, "Rate limit")
+        assert is_transient_error(error)
+
+    def test_direct_status_code_408_is_transient(self):
+        """Test error with direct status_code attribute (408)."""
+        error = MockHTTPExceptionWithStatus(408, "Timeout")
+        assert is_transient_error(error)
+
+    def test_direct_status_code_500_is_transient(self):
+        """Test error with direct status_code attribute (500)."""
+        error = MockHTTPExceptionWithStatus(500, "Server error")
+        assert is_transient_error(error)
+
+    def test_direct_status_code_503_is_transient(self):
+        """Test error with direct status_code attribute (503)."""
+        error = MockHTTPExceptionWithStatus(503, "Service unavailable")
+        assert is_transient_error(error)
+
+    def test_direct_status_code_400_not_modified_is_not_transient(self):
+        """Test direct status_code 400 with 'not modified' message is not transient."""
+        error = MockHTTPExceptionWithStatus(400, "Message is not modified")
+        assert not is_transient_error(error)
+
+    def test_direct_status_code_404_is_not_transient(self):
+        """Test error with direct status_code 404 is not transient."""
+        error = MockHTTPExceptionWithStatus(404, "Not found")
+        assert not is_transient_error(error)
+
+    def test_direct_status_code_invalid_type(self):
+        """Test error with invalid direct status_code type doesn't crash."""
+        error = MockHTTPExceptionWithStatus("invalid", "Some error message")
+        # Should not crash, falls back to string checking
+        result = is_transient_error(error)
+        assert isinstance(result, bool)
+
+    def test_message_not_modified_lowercase(self):
+        """Test message_not_modified in lowercase is not transient."""
+        error = Exception("message_not_modified")
+        assert not is_transient_error(error)
+
+    def test_deadline_exceeded_is_transient(self):
+        """Test deadline exceeded errors are transient."""
+        error = Exception("deadline exceeded")
+        assert is_transient_error(error)
+
+    def test_flood_error_is_transient(self):
+        """Test flood errors are transient."""
+        error = Exception("Flood wait 5 seconds")
+        assert is_transient_error(error)
+
+    def test_retry_after_is_transient(self):
+        """Test 'retry after' errors are transient."""
+        error = Exception("Retry after 30 seconds")
+        assert is_transient_error(error)
 
 
 class TestRetryWithBackoff(unittest.IsolatedAsyncioTestCase):
