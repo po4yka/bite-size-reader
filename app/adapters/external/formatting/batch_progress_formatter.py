@@ -46,19 +46,29 @@ class BatchProgressFormatter:
         return f'<a href="{cls._html_escape(url)}">{cls._html_escape(display_text)}</a>'
 
     @classmethod
+    def _get_spinner(cls, timestamp: float | None = None) -> str:
+        """Get an 'animated' spinner based on current time or provided timestamp."""
+        # Use provided timestamp or current time
+        t = timestamp or time.time()
+        # 4 frames, changes every 0.5s (2 frames per second)
+        frames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
+        return frames[int(t * 2) % len(frames)]
+
+    @classmethod
     def format_progress_message(cls, batch: URLBatchStatus) -> str:
         """Format a progress update message with numbered per-URL status lines.
 
         Example output::
 
-            Processing 4 links...
+            Processing 4 links... ⠙
 
             [1/4] techcrunch.com -- Done (12s)
             [2/4] arxiv.org -- Analyzing... (5s)
-            [3/4] medium.com -- Pending
+            [Cache] medium.com -- Done
             [4/4] github.io -- Pending
 
-            Progress: 1/4 (25%) | ETA: ~45s
+            Progress: 2/4 (50%) | ETA: ~30s
+            Updated 2s ago
 
         Args:
             batch: Current batch status
@@ -68,10 +78,36 @@ class BatchProgressFormatter:
         """
         lines: list[str] = []
         total = batch.total
+        spinner = cls._get_spinner()
 
         # Header
-        lines.append(f"Processing {total} links...")
+        lines.append(f"<b>Processing {total} links...</b> {spinner}")
         lines.append("")
+
+        # Active work indicator (prominent top section)
+        active = batch.processing
+        if active:
+            for entry in active[:2]:  # Show top 2 active tasks
+                label = entry.title or entry.display_label or entry.domain
+                if len(label) > 40:
+                    label = label[:37] + "..."
+                phase_emoji = "📥" if entry.status == URLStatus.EXTRACTING else "🧠"
+                phase_name = "Extracting" if entry.status == URLStatus.EXTRACTING else "Analyzing"
+                detail = ""
+                if entry.status == URLStatus.ANALYZING:
+                    parts = []
+                    if entry.model:
+                        m = entry.model.split("/")[-1]
+                        parts.append(f"model: {m}")
+                    if entry.content_length:
+                        parts.append(f"size: {entry.content_length:,} chars")
+                    if parts:
+                        detail = f" ({', '.join(parts)})"
+
+                lines.append(
+                    f"{phase_emoji} <b>{phase_name}:</b> {cls._html_escape(label)}{detail} {spinner}"
+                )
+            lines.append("")
 
         # Per-URL status lines
         for index, entry in enumerate(batch.entries, 1):
@@ -82,13 +118,28 @@ class BatchProgressFormatter:
         # Footer: progress + ETA
         done = batch.done_count
         percentage = int((done / total) * 100) if total > 0 else 0
-        footer_parts = [f"Progress: {done}/{total} ({percentage}%)"]
+        footer_parts = [f"Progress: <b>{done}/{total}</b> ({percentage}%)"]
 
         eta_sec = batch.estimate_remaining_time_sec()
         if eta_sec is not None and eta_sec > 0:
             footer_parts.append(f"ETA: ~{cls._format_duration(eta_sec)}")
 
         lines.append(" | ".join(footer_parts))
+
+        # Add "Last updated" info
+        updated_ago = int(time.time() - batch.last_updated)
+        if updated_ago > 0:
+            lines.append(f"<i>Updated {updated_ago}s ago</i>")
+        else:
+            lines.append("<i>Just updated</i>")
+
+        # Add hint for slow processing
+        active = batch.processing
+        if active:
+            max_active_time = max((time.time() - (e.start_time or time.time())) for e in active)
+            if max_active_time > 60:
+                lines.append("")
+                lines.append("<i>⌛ Heavily loaded source or complex content. Still working...</i>")
 
         message = "\n".join(lines)
 
@@ -103,6 +154,7 @@ class BatchProgressFormatter:
         """Format a single numbered status line for progress display (HTML).
 
         The domain label is rendered as a clickable hyperlink to the original URL.
+        Cached items use "[Cache]" prefix instead of numbers.
 
         Args:
             index: 1-based index of the entry
@@ -113,40 +165,51 @@ class BatchProgressFormatter:
             HTML-formatted status line, e.g.
             ``[2/5] <a href="...">arxiv.org</a>  Analyzing... (3s)``
         """
-        prefix = f"[{index}/{total}]"
+        is_cached = entry.status == URLStatus.CACHED
+        prefix = "<code>[Cache]</code>" if is_cached else f"<code>[{index}/{total}]</code>"
+
         label = entry.display_label or entry.domain or "unknown"
         link = cls._make_link(entry.url, label)
 
         if entry.status == URLStatus.COMPLETE:
             elapsed = cls._format_elapsed(entry.processing_time_ms)
-            return f"{prefix} {link}  Done{elapsed}"
+            return f"{prefix} {link}  ✅ Done{elapsed}"
 
         if entry.status == URLStatus.CACHED:
-            return f"{prefix} {link}  Cached"
+            return f"{prefix} {link}  ✅ Done (cached)"
 
         if entry.status == URLStatus.FAILED:
             error = cls._format_error_short(entry.error_type, entry.error_message)
             elapsed = cls._format_elapsed(entry.processing_time_ms)
-            return f"{prefix} {link}  Failed: {cls._html_escape(error)}{elapsed}"
+            return f"{prefix} {link}  ❌ Failed: {cls._html_escape(error)}{elapsed}"
 
         if entry.status == URLStatus.EXTRACTING:
             live = cls._format_live_elapsed(entry.start_time)
-            return f"{prefix} {link}  Extracting...{live}"
+            return f"{prefix} {link}  📥 Extracting...{live} {cls._get_spinner()}"
 
         if entry.status == URLStatus.ANALYZING:
             live = cls._format_live_elapsed(entry.start_time)
-            return f"{prefix} {link}  Analyzing...{live}"
+            label = entry.title or label
+            link = cls._make_link(entry.url, label)
+            detail = ""
+            if entry.model:
+                m = entry.model.split("/")[-1]
+                detail = f" [{m}]"
+            return f"{prefix} {link}  🧠 Analyzing{detail}...{live} {cls._get_spinner()}"
 
         if entry.status == URLStatus.RETRYING:
             live = cls._format_live_elapsed(entry.start_time)
-            return f"{prefix} {link}  Retrying (Timeout)...{live}"
+            return f"{prefix} {link}  🔄 Retrying...{live} {cls._get_spinner()}"
+
+        if entry.status == URLStatus.RETRY_WAITING:
+            return f"{prefix} {link}  ⏳ Waiting to retry... {cls._get_spinner()}"
 
         if entry.status == URLStatus.PROCESSING:
             live = cls._format_live_elapsed(entry.start_time)
-            return f"{prefix} {link}  Processing...{live}"
+            return f"{prefix} {link}  ⏳ Processing...{live} {cls._get_spinner()}"
 
         # PENDING (default)
-        return f"{prefix} {link}  Pending"
+        return f"{prefix} {link}  💤 Pending"
 
     @classmethod
     def _format_elapsed(cls, processing_time_ms: float) -> str:
@@ -207,7 +270,9 @@ class BatchProgressFormatter:
         success = batch.success_count
 
         # Header
-        lines.append(f"Batch Complete  {success}/{total} links")
+        total_time = batch.total_elapsed_time_sec()
+        duration_str = cls._format_duration(total_time)
+        lines.append(f"<b>Batch Complete</b>  {success}/{total} links ({duration_str})")
         lines.append("")
 
         # Unified numbered list (HTML)
@@ -317,26 +382,47 @@ class BatchProgressFormatter:
     @classmethod
     def _format_error_short(cls, error_type: str | None, error_message: str | None) -> str:
         """Format error for compact display."""
-        if error_type == "timeout":
-            # Extract timeout duration if present
-            if error_message and "after" in error_message.lower():
-                return error_message
-            return "Timeout"
-        if error_type == "domain_timeout":
-            return "Skipped (domain timeout)"
-        if error_type == "network":
+        if not error_type and not error_message:
+            return "Unknown error"
+
+        e_type = str(error_type).lower() if error_type else ""
+        e_msg = str(error_message).lower() if error_message else ""
+
+        if e_type == "timeout":
+            if "after" in e_msg:
+                return f"Timed out ({e_msg.split('after ')[-1]})"
+            return "Timed out"
+
+        if e_type == "domain_timeout":
+            return "Skipped (slow site)"
+
+        if e_type == "network":
+            if "403" in e_msg:
+                return "Access Denied (403)"
+            if "404" in e_msg:
+                return "Not Found (404)"
             return "Network error"
-        if error_type == "validation":
+
+        if e_type == "validation":
             return "Invalid URL"
-        if error_type in {"rate_limit", "429"}:
+
+        if e_type in {"rate_limit", "429"}:
             return "Rate limited"
+
+        if "refused" in e_msg:
+            return "Connection refused"
+
+        if "cloudflare" in e_msg:
+            return "Blocked by Cloudflare"
+
         if error_message:
             # Truncate long error messages
             msg = str(error_message)
             if len(msg) > 30:
                 return msg[:27] + "..."
             return msg
-        return error_type or "Unknown error"
+
+        return error_type or "Error"
 
     @classmethod
     def _format_duration(cls, seconds: float) -> str:

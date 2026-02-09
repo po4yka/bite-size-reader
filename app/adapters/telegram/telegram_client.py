@@ -124,6 +124,8 @@ class TelegramClient:
                 BotCommand("start", "Welcome and instructions"),
                 BotCommand("dbinfo", "Show database stats"),
                 BotCommand("dbverify", "Verify database integrity"),
+                BotCommand("clearcache", "Clear internal cache"),
+                BotCommand("sync_karakeep", "Sync bookmarks from Karakeep"),
             ]
             commands_ru = [
                 BotCommand("summarize", "Суммировать ссылку"),
@@ -136,6 +138,8 @@ class TelegramClient:
                 BotCommand("start", "Приветствие"),
                 BotCommand("dbinfo", "Статистика БД"),
                 BotCommand("dbverify", "Проверка БД"),
+                BotCommand("clearcache", "Очистить кэш"),
+                BotCommand("sync_karakeep", "Синхронизация Karakeep"),
             ]
             try:
                 client_any: Any = self.client

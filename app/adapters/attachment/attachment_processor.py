@@ -2,11 +2,16 @@
 
 from __future__ import annotations
 
+import asyncio
+import contextlib
 import logging
 import os
 import tempfile
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from collections.abc import Awaitable, Callable
 
 from app.adapters.attachment.image_extractor import ImageExtractor
 from app.adapters.attachment.pdf_extractor import PDFExtractor
@@ -23,7 +28,7 @@ from app.adapters.content.llm_response_workflow import (
     LLMSummaryPersistenceSettings,
     LLMWorkflowNotifications,
 )
-from app.core.lang import LANG_RU, choose_language, detect_language
+from app.core.lang import LANG_AUTO, LANG_RU, choose_language, detect_language
 from app.db.user_interactions import async_safe_update_user_interaction
 from app.infrastructure.persistence.sqlite.repositories.request_repository import (
     SqliteRequestRepositoryAdapter,
@@ -108,7 +113,23 @@ class AttachmentProcessor:
         interaction_id: int | None = None,
     ) -> None:
         """Main entry point for processing an attachment message."""
+        from app.utils.progress_tracker import ProgressTracker
+
         file_path: str | None = None
+        progress_tracker: ProgressTracker | None = None
+        current_status_text: str = ""
+
+        async def progress_formatter(current: int, total: int, msg_id: int | None) -> int | None:
+            if not msg_id:
+                return msg_id
+            chat_id = getattr(message.chat, "id", None)
+            if not chat_id:
+                return msg_id
+            await self.response_formatter.edit_message(
+                chat_id, msg_id, current_status_text, parse_mode="HTML"
+            )
+            return msg_id
+
         try:
             # Classify the attachment
             file_type, mime_type, file_name = self._classify_attachment(message)
@@ -127,14 +148,37 @@ class AttachmentProcessor:
 
             # Notify user we're processing
             type_label = "image" if file_type == "image" else "PDF document"
-            await self.response_formatter.safe_reply(
+            current_status_text = f"📥 <b>Processing {type_label}...</b>"
+            progress_msg_id = await self.response_formatter.safe_reply_with_id(
                 message,
-                f"Processing {type_label}...",
+                current_status_text,
+                parse_mode="HTML",
             )
+            if progress_msg_id:
+                progress_tracker = ProgressTracker(
+                    total=1,
+                    progress_formatter=progress_formatter,
+                    initial_message_id=progress_msg_id,
+                    update_interval=0.5,
+                )
+                progress_task = asyncio.create_task(progress_tracker.process_update_queue())
+
+            async def status_updater(text: str) -> None:
+                nonlocal current_status_text
+                current_status_text = text
+                if progress_tracker:
+                    await progress_tracker.force_update()
 
             # Download the file
+            if progress_tracker:
+                await status_updater(f"📥 <b>Downloading {type_label}...</b>")
+
             file_path = await self._download_attachment(message)
             if not file_path:
+                if progress_tracker:
+                    progress_tracker.mark_complete()
+                    if "progress_task" in locals():
+                        await progress_task
                 await self.response_formatter.send_error_notification(
                     message,
                     "processing_failed",
@@ -151,7 +195,9 @@ class AttachmentProcessor:
 
             # Detect language from caption or default
             text_for_lang = caption or ""
-            detected = detect_language(text_for_lang) if text_for_lang else "en"
+            user_lang_code = getattr(getattr(message, "from_user", None), "language_code", None)
+            user_lang = user_lang_code[:2] if user_lang_code else "en"
+            detected = detect_language(text_for_lang) if text_for_lang else user_lang
             chosen_lang = choose_language(self.cfg.runtime.preferred_lang, detected)
 
             # Create attachment processing record
@@ -167,14 +213,35 @@ class AttachmentProcessor:
             # Process based on type
             if file_type == "image":
                 result = await self._process_image(
-                    file_path, caption, chosen_lang, req_id, correlation_id, interaction_id, message
+                    file_path,
+                    caption,
+                    chosen_lang,
+                    req_id,
+                    correlation_id,
+                    interaction_id,
+                    message,
+                    progress_tracker=progress_tracker,
+                    status_updater=status_updater,
                 )
             else:
                 result = await self._process_pdf(
-                    file_path, caption, chosen_lang, req_id, correlation_id, interaction_id, message
+                    file_path,
+                    caption,
+                    chosen_lang,
+                    req_id,
+                    correlation_id,
+                    interaction_id,
+                    message,
+                    progress_tracker=progress_tracker,
+                    status_updater=status_updater,
                 )
 
             if result:
+                if progress_tracker:
+                    progress_tracker.mark_complete()
+                    if "progress_task" in locals():
+                        await progress_task
+
                 # Update attachment record with success details
                 await self._update_attachment_status(req_id, "completed", result)
 
@@ -196,6 +263,12 @@ class AttachmentProcessor:
                     )
 
         except Exception as exc:
+            if progress_tracker:
+                progress_tracker.mark_complete()
+                if "progress_task" in locals():
+                    with contextlib.suppress(Exception):
+                        await progress_task
+
             logger.exception(
                 "attachment_flow_error",
                 extra={"error": str(exc), "cid": correlation_id},
@@ -360,9 +433,14 @@ class AttachmentProcessor:
         correlation_id: str | None,
         interaction_id: int | None,
         message: Any,
+        progress_tracker: Any | None = None,
+        status_updater: Callable[[str], Awaitable[None]] | None = None,
     ) -> dict[str, Any] | None:
         """Process an image attachment via vision LLM."""
         attachment_cfg = self.cfg.attachment
+
+        if status_updater:
+            await status_updater("🖼 <b>Processing image...</b>")
 
         try:
             image_content = ImageExtractor.extract(
@@ -396,6 +474,8 @@ class AttachmentProcessor:
             chosen_lang=chosen_lang,
             message=message,
             model_override=attachment_cfg.vision_model,
+            progress_tracker=progress_tracker,
+            status_updater=status_updater,
         )
 
     async def _process_pdf(
@@ -407,16 +487,26 @@ class AttachmentProcessor:
         correlation_id: str | None,
         interaction_id: int | None,
         message: Any,
+        progress_tracker: Any | None = None,
+        status_updater: Callable[[str], Awaitable[None]] | None = None,
     ) -> dict[str, Any] | None:
         """Process a PDF attachment."""
         attachment_cfg = self.cfg.attachment
 
         try:
-            pdf_content = PDFExtractor.extract(
+
+            async def on_pdf_progress(text: str) -> None:
+                if status_updater:
+                    await status_updater(f"📄 <b>PDF:</b> {text}")
+
+            loop = asyncio.get_running_loop()
+            pdf_content = await asyncio.to_thread(
+                PDFExtractor.extract,
                 file_path,
                 max_pages=attachment_cfg.max_pdf_pages,
                 max_vision_pages=attachment_cfg.max_vision_pages_per_pdf,
                 image_max_dimension=attachment_cfg.image_max_dimension,
+                on_progress=lambda t: asyncio.run_coroutine_threadsafe(on_pdf_progress(t), loop),
             )
         except ValueError as exc:
             logger.warning(
@@ -429,19 +519,63 @@ class AttachmentProcessor:
         # Update attachment record with PDF metadata
         await self._update_pdf_metadata(req_id, pdf_content)
 
+        # Better language detection from content if no caption was provided and we are in auto mode
+        if not caption and self.cfg.runtime.preferred_lang == LANG_AUTO:
+            content_text = pdf_content.text[:2000]
+            if content_text.strip():
+                detected = detect_language(content_text)
+                chosen_lang = choose_language(self.cfg.runtime.preferred_lang, detected)
+
+        # Build metadata header for the prompt
+        metadata_parts = []
+        md = pdf_content.metadata
+        if md.get("title"):
+            metadata_parts.append(f"Title: {md['title']}")
+        if md.get("author"):
+            metadata_parts.append(f"Author: {md['author']}")
+        if md.get("subject"):
+            metadata_parts.append(f"Subject: {md['subject']}")
+        if md.get("keywords"):
+            metadata_parts.append(f"Keywords: {md['keywords']}")
+
+        if pdf_content.toc:
+            toc_lines = []
+            for lvl, title, page in pdf_content.toc[:30]:  # Limit TOC entries
+                indent = "  " * (lvl - 1)
+                toc_lines.append(f"{indent}- {title} (page {page})")
+            if toc_lines:
+                metadata_parts.append("Table of Contents:\n" + "\n".join(toc_lines))
+
+        metadata_header = ""
+        if metadata_parts:
+            metadata_header = "Document Metadata:\n" + "\n".join(metadata_parts) + "\n\n"
+
         system_prompt = _load_prompt("pdf_analysis", chosen_lang)
         lang_label = "Russian" if chosen_lang == LANG_RU else "English"
 
         model_override: str | None = None
 
-        if pdf_content.is_scanned and pdf_content.image_pages:
-            # Scanned PDF: use vision model on rendered pages
+        # Collect images for analysis: both rendered scanned pages and embedded images
+        all_image_uris = [img.data_uri for img in pdf_content.image_pages]
+
+        # Add embedded images (up to a reasonable limit)
+        for img in pdf_content.embedded_images:
+            if len(all_image_uris) >= 10:  # Safety cap for multimodal context
+                break
+            all_image_uris.append(img.data_uri)
+
+        if all_image_uris:
+            # If we have any images (scanned or embedded), we use the vision model
             model_override = attachment_cfg.vision_model
-            image_uris = [img.data_uri for img in pdf_content.image_pages]
+
+        if pdf_content.is_scanned and pdf_content.image_pages:
+            # Scanned PDF: focus on rendered pages but include embedded ones if any
+            image_uris = all_image_uris
 
             if pdf_content.text.strip():
                 # Hybrid: has some text plus scanned pages
                 text = pdf_content.text[:_MAX_PDF_TEXT_CHARS]
+                text = f"{metadata_header}{text}"
                 user_caption = caption or f"Summarize this PDF document. Respond in {lang_label}."
                 if caption:
                     user_caption = f"{caption}\n\nRespond in {lang_label}."
@@ -456,12 +590,19 @@ class AttachmentProcessor:
                 )
                 if caption:
                     user_caption = f"{caption}\n\nRespond in {lang_label}."
+
+                # Prepend metadata to the first message if vision only
+                scanned_caption = (
+                    f"{metadata_header}{user_caption}" if metadata_header else user_caption
+                )
+
                 messages = build_multi_image_vision_messages(
-                    system_prompt, image_uris, caption=user_caption
+                    system_prompt, image_uris, caption=scanned_caption
                 )
         else:
             # Text-rich PDF: use regular text-based summarization
             text = pdf_content.text[:_MAX_PDF_TEXT_CHARS]
+            text = f"{metadata_header}{text}"
             truncation_note = ""
             if pdf_content.truncated:
                 truncation_note = f"\n\n[Document truncated: showing {self.cfg.attachment.max_pdf_pages} of {pdf_content.page_count} pages]"
@@ -475,6 +616,12 @@ class AttachmentProcessor:
                 {"role": "user", "content": user_content},
             ]
 
+            # If we have embedded images in a text-rich PDF, use vision messages instead
+            if all_image_uris:
+                messages = build_text_with_images_messages(
+                    system_prompt, text, all_image_uris, caption=caption
+                )
+
         return await self._run_llm_workflow(
             messages=messages,
             req_id=req_id,
@@ -483,6 +630,8 @@ class AttachmentProcessor:
             chosen_lang=chosen_lang,
             message=message,
             model_override=model_override,
+            progress_tracker=progress_tracker,
+            status_updater=status_updater,
         )
 
     async def _update_pdf_metadata(self, req_id: int, pdf_content: Any) -> None:
@@ -523,6 +672,8 @@ class AttachmentProcessor:
         chosen_lang: str,
         message: Any,
         model_override: str | None = None,
+        progress_tracker: Any | None = None,
+        status_updater: Callable[[str], Awaitable[None]] | None = None,
     ) -> dict[str, Any] | None:
         """Run the standard LLM summary workflow."""
         max_tokens = 6144
@@ -570,12 +721,21 @@ class AttachmentProcessor:
                 correlation_id or "unknown",
             )
 
+        async def _on_retry() -> None:
+            if status_updater:
+                await status_updater("🧠 <b>AI analysis failed, retrying...</b>")
+
         notifications = LLMWorkflowNotifications(
             completion=_on_completion,
             llm_error=_on_llm_error,
             repair_failure=_on_processing_failure,
             parsing_failure=_on_processing_failure,
+            retry=_on_retry,
         )
+
+        if status_updater:
+            model_label = (model_override or self.cfg.openrouter.model).split("/")[-1]
+            await status_updater(f"🧠 <b>Analyzing with AI ({model_label})...</b>")
 
         interaction_config = LLMInteractionConfig(
             interaction_id=interaction_id,

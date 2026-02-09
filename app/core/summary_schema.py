@@ -176,6 +176,7 @@ class Insights(BaseModel):
     expansion_topics: list[str] = Field(default_factory=list)
     next_exploration: list[str] = Field(default_factory=list)
     caution: str | None = None
+    critique: list[str] = Field(default_factory=list)
 
 
 class TopicTaxonomy(BaseModel):

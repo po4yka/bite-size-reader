@@ -502,7 +502,12 @@ class NotificationFormatterImpl:
             reader = await self._is_reader_mode(message)
 
             if reader and self._progress_tracker is not None:
-                user_text = "Analyzing with AI..."
+                model_name = model.rsplit("/", maxsplit=1)[-1]
+                user_text = (
+                    f"🧠 <b>Analyzing with AI</b> ({model_name})\n"
+                    f"📝 Content: {content_len:,} chars\n"
+                    f"⌛ Est. time: 30-60s..."
+                )
             else:
                 user_text = debug_text
 

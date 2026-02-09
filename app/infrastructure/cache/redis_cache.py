@@ -106,3 +106,23 @@ class RedisCache:
                 extra={"key": key, "error": str(exc)},
             )
             return False
+
+    async def clear(self) -> int:
+        """Clear all cached keys matching the prefix."""
+        client = await self._get_client()
+        if not client:
+            return 0
+
+        pattern = f"{self.cfg.redis.prefix}:*"
+        try:
+            keys = await client.keys(pattern)
+            if keys:
+                await client.delete(*keys)
+            return len(keys)
+        except Exception as exc:
+            logger.warning(
+                "redis_cache_clear_failed",
+                exc_info=True,
+                extra={"pattern": pattern, "error": str(exc)},
+            )
+            return 0

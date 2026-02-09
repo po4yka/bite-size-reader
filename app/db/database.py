@@ -132,7 +132,7 @@ class Database:
             json_max_dict_keys=self.json_max_dict_keys,
         )
         self._database = self._mgr.database
-        self._diagnostics = DatabaseDiagnostics(self, self._database, self._logger)
+        self._diagnostics = DatabaseDiagnostics(self._database, self._logger)
         self._maintenance = DatabaseMaintenance(self._database, self.path, self._logger)
         self._topic_search = TopicSearchIndexManager(self._database, self._logger)
         self._video_downloads = VideoDownloadManager(self._logger)

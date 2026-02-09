@@ -742,6 +742,7 @@ def _shape_insights(raw: Any) -> dict[str, Any]:
     shaped["suggested_sources"] = _clean_string_list(raw.get("suggested_sources"))
     shaped["expansion_topics"] = _clean_string_list(raw.get("expansion_topics"))
     shaped["next_exploration"] = _clean_string_list(raw.get("next_exploration"))
+    shaped["critique"] = _clean_string_list(raw.get("critique"))
 
     caution_raw = raw.get("caution")
     caution_value = str(caution_raw).strip() if caution_raw is not None else ""

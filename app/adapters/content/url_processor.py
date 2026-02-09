@@ -290,7 +290,8 @@ class URLProcessor:
         interaction_id: int | None = None,
         silent: bool = False,
         batch_mode: bool = False,
-        on_phase_change: Callable[[str], Awaitable[None]] | None = None,
+        on_phase_change: Callable[[str, str | None, int | None, str | None], Awaitable[None]]
+        | None = None,
     ) -> URLProcessingFlowResult:
         """Handle complete URL processing flow from extraction to summarization.
 
@@ -325,7 +326,7 @@ class URLProcessor:
             dedupe_hash = url_hash_sha256(norm)
             # Signal phase: extracting content
             if on_phase_change:
-                await on_phase_change("extracting")
+                await on_phase_change("extracting", None, None, None)
 
             # Extract and process content
             (
@@ -333,6 +334,8 @@ class URLProcessor:
                 content_text,
                 _content_source,
                 detected,
+                title,
+                images,
             ) = await self.content_extractor.extract_and_process_content(
                 message, url_text, correlation_id, interaction_id, notify_silent
             )
@@ -397,7 +400,9 @@ class URLProcessor:
 
             # Signal phase: analyzing / summarizing content
             if on_phase_change:
-                await on_phase_change("analyzing")
+                await on_phase_change(
+                    "analyzing", title, len(content_text), self.cfg.openrouter.model
+                )
 
             # Process content (either chunked or single)
             summary_json: dict[str, Any] | None
@@ -430,6 +435,7 @@ class URLProcessor:
                     url=url_text,
                     silent=notify_silent,
                     on_phase_change=on_phase_change,
+                    images=images,
                 )
 
             if summary_json is None:
@@ -894,3 +900,9 @@ class URLProcessor:
             url_hash=url_hash,
             source_lang=source_lang,
         )
+
+    async def clear_cache(self) -> int:
+        """Clear the extraction cache."""
+        if hasattr(self.content_extractor, "_cache"):
+            return await self.content_extractor._cache.clear()
+        return 0

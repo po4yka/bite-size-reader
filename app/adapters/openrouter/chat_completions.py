@@ -64,25 +64,17 @@ async def chat(
             context={"messages_type": type(messages).__name__},
         )
 
-    # Create and validate request with specific error handling
-    try:
-        request = ChatRequest(
-            messages=messages,
-            temperature=temperature,
-            max_tokens=max_tokens,
-            top_p=top_p,
-            stream=stream,
-            request_id=request_id,
-            response_format=response_format,
-            model_override=model_override,
-        )
-    except Exception as e:
-        raise_if_cancelled(e)
-        msg = f"Invalid chat request parameters: {e}"
-        raise ValidationError(
-            msg,
-            context={"original_error": str(e), "messages_count": len(messages)},
-        ) from e
+    # Create request without strict validation
+    request = ChatRequest(
+        messages=messages,
+        temperature=temperature,
+        max_tokens=max_tokens,
+        top_p=top_p,
+        stream=stream,
+        request_id=request_id,
+        response_format=response_format,
+        model_override=model_override,
+    )
 
     # Pre-process and validate with specific error handling
     try:

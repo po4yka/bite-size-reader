@@ -357,6 +357,13 @@ async def process_url_batch(
                         "batch_url_cache_hit",
                         extra={"url": url, "request_id": req_id, "uid": uid},
                     )
+                    # Audit the cache hit so it's visible in logs
+                    if hasattr(url_processor, "_audit"):
+                        url_processor._audit(
+                            "INFO",
+                            "batch_url_cache_hit",
+                            {"url": url, "request_id": req_id, "uid": uid},
+                        )
                     continue
 
             request_id, is_new = await request_repo.async_create_minimal_request(
@@ -390,6 +397,10 @@ async def process_url_batch(
 
     # Use semaphore to limit concurrent processing
     semaphore = asyncio.Semaphore(max_concurrent)
+
+    # Add a small delay to ensure the initial message is sent and visible
+    # This prevents race conditions where we try to edit/reply too quickly
+    await asyncio.sleep(0.5)
 
     # Track domains that exhausted all retries on timeout
     failed_domains: set[str] = set()
@@ -434,6 +445,9 @@ async def process_url_batch(
         # If already marked as cached during pre-registration, skip processing
         entry = batch_status._find_entry(url)
         if entry and entry.status == URLStatus.CACHED:
+            # Add a small delay for cached items to allow UI updates to flow and avoid rate limits
+            # 0.5s * 4 links = ~2s, which is a safe interval for Telegram edits
+            await asyncio.sleep(0.5)
             await progress_tracker.increment_and_update()
             return url, True, "", entry.title
 
@@ -471,14 +485,23 @@ async def process_url_batch(
             # Mark as processing
             batch_status.mark_processing(url)
 
-            async def phase_callback(phase: str) -> None:
+            async def phase_callback(
+                phase: str,
+                title: str | None = None,
+                content_length: int | None = None,
+                model: str | None = None,
+            ) -> None:
                 """Update batch status when URL processing phase changes."""
                 if phase == "extracting":
                     batch_status.mark_extracting(url)
                 elif phase == "analyzing":
-                    batch_status.mark_analyzing(url)
+                    batch_status.mark_analyzing(
+                        url, title=title, content_length=content_length, model=model
+                    )
                 elif phase == "retrying":
                     batch_status.mark_retrying(url)
+                elif phase == "waiting":
+                    batch_status.mark_retry_waiting(url)
                 await progress_tracker.force_update()
 
             for attempt in range(max_retries + 1):
@@ -570,6 +593,8 @@ async def process_url_batch(
                     error_type = "timeout"
                     last_error = f"Timed out after {int(current_timeout)}s (ID: {per_link_cid[:8]})"
                     if attempt < max_retries:
+                        batch_status.mark_retry_waiting(url)
+                        await progress_tracker.force_update()
                         backoff = min(3.0 * (2**attempt), 60.0)
                         await asyncio.sleep(backoff)
                         continue
@@ -650,7 +675,9 @@ async def process_url_batch(
         total=len(urls),
         progress_formatter=progress_formatter,
         initial_message_id=initial_message_id,
-        small_batch_threshold=5,
+        update_interval=1.0,
+        small_batch_threshold=0,
+        progress_threshold_percentage=25.0,
     )
 
     progress_task = asyncio.create_task(progress_tracker.process_update_queue())
@@ -659,7 +686,7 @@ async def process_url_batch(
         """Force periodic UI updates to show live elapsed time."""
         while not progress_tracker.is_complete:
             try:
-                await asyncio.sleep(5)
+                await asyncio.sleep(3)
                 await progress_tracker.force_update()
             except asyncio.CancelledError:
                 break
@@ -675,10 +702,22 @@ async def process_url_batch(
     finally:
         heartbeat_task.cancel()
         progress_tracker.mark_complete()
-        await progress_task
+        try:
+            # Allow more time for final progress updates to sync, especially if rate limited
+            await asyncio.wait_for(progress_task, timeout=10.0)
+        except Exception:
+            progress_task.cancel()
+
+    # Small delay to avoid hitting Telegram's per-chat rate limit (30 messages/sec)
+    # when switching from frequent edits to the final summary reply.
+    await asyncio.sleep(0.8)
 
     # Send completion message
     completion_message = BatchProgressFormatter.format_completion_message(batch_status)
+    logger.info(
+        "sending_batch_completion",
+        extra={"uid": uid, "total": len(urls), "success": batch_status.success_count},
+    )
     await response_formatter.safe_reply(message, completion_message, parse_mode="HTML")
 
     if interaction_id and start_time:

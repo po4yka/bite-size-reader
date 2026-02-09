@@ -125,7 +125,8 @@ class URLStatus(Enum):
     PROCESSING = "processing"
     EXTRACTING = "extracting"  # Firecrawl content extraction phase
     ANALYZING = "analyzing"  # LLM summarization phase
-    RETRYING = "retrying"  # Retrying due to error (e.g. timeout)
+    RETRYING = "retrying"  # Actively retrying
+    RETRY_WAITING = "retry_waiting"  # Waiting for backoff cooldown
     COMPLETE = "complete"
     CACHED = "cached"  # Reused existing summary
     FAILED = "failed"
@@ -157,6 +158,8 @@ class URLStatusEntry:
     error_message: str | None = None
     processing_time_ms: float = 0.0
     start_time: float | None = None
+    content_length: int | None = None
+    model: str | None = None
 
     def __post_init__(self) -> None:
         """Extract domain and display label from URL on creation."""
@@ -235,6 +238,7 @@ class URLBatchStatus:
 
     entries: list[URLStatusEntry] = field(default_factory=list)
     batch_start_time: float = field(default_factory=time.time)
+    last_updated: float = field(default_factory=time.time)
     _processing_times: list[float] = field(default_factory=list, repr=False)
 
     @classmethod
@@ -242,6 +246,10 @@ class URLBatchStatus:
         """Create a batch status tracker from a list of URLs."""
         entries = [URLStatusEntry(url=url) for url in urls]
         return cls(entries=entries)
+
+    def _update_timestamp(self) -> None:
+        """Update last_updated timestamp."""
+        self.last_updated = time.time()
 
     def _find_entry(self, url: str) -> URLStatusEntry | None:
         """Find entry by URL."""
@@ -256,6 +264,7 @@ class URLBatchStatus:
         if entry:
             entry.status = URLStatus.PROCESSING
             entry.start_time = time.time()
+            self._update_timestamp()
 
     def mark_extracting(self, url: str) -> None:
         """Mark a URL as in the content extraction phase (Firecrawl)."""
@@ -264,18 +273,40 @@ class URLBatchStatus:
             entry.status = URLStatus.EXTRACTING
             if entry.start_time is None:
                 entry.start_time = time.time()
+            self._update_timestamp()
 
-    def mark_analyzing(self, url: str) -> None:
+    def mark_analyzing(
+        self,
+        url: str,
+        title: str | None = None,
+        content_length: int | None = None,
+        model: str | None = None,
+    ) -> None:
         """Mark a URL as in the LLM analysis phase."""
         entry = self._find_entry(url)
         if entry:
             entry.status = URLStatus.ANALYZING
+            if title:
+                entry.title = title
+            if content_length:
+                entry.content_length = content_length
+            if model:
+                entry.model = model
+            self._update_timestamp()
 
     def mark_retrying(self, url: str) -> None:
         """Mark a URL as being retried."""
         entry = self._find_entry(url)
         if entry:
             entry.status = URLStatus.RETRYING
+            self._update_timestamp()
+
+    def mark_retry_waiting(self, url: str) -> None:
+        """Mark a URL as waiting for a retry cooldown."""
+        entry = self._find_entry(url)
+        if entry:
+            entry.status = URLStatus.RETRY_WAITING
+            self._update_timestamp()
 
     def mark_complete(
         self,
@@ -284,27 +315,18 @@ class URLBatchStatus:
         title: str | None = None,
         processing_time_ms: float | None = None,
     ) -> None:
-        """Mark a URL as successfully completed.
-
-        Args:
-            url: The URL that completed
-            title: Optional article title for display
-            processing_time_ms: Optional explicit processing time
-        """
+        """Mark a URL as successfully completed."""
         entry = self._find_entry(url)
         if entry:
             entry.status = URLStatus.COMPLETE
             entry.title = title
-
-            # Calculate processing time
             if processing_time_ms is not None:
                 entry.processing_time_ms = processing_time_ms
             elif entry.start_time:
                 entry.processing_time_ms = (time.time() - entry.start_time) * 1000
-
-            # Track for ETA calculation
             if entry.processing_time_ms > 0:
                 self._processing_times.append(entry.processing_time_ms)
+            self._update_timestamp()
 
     def mark_cached(
         self,
@@ -312,17 +334,13 @@ class URLBatchStatus:
         *,
         title: str | None = None,
     ) -> None:
-        """Mark a URL as successfully reused from cache.
-
-        Args:
-            url: The URL that was found in cache
-            title: Optional article title for display
-        """
+        """Mark a URL as successfully reused from cache."""
         entry = self._find_entry(url)
         if entry:
             entry.status = URLStatus.CACHED
             entry.title = title
             entry.processing_time_ms = 0.0
+            self._update_timestamp()
 
     def mark_failed(
         self,
@@ -332,29 +350,19 @@ class URLBatchStatus:
         *,
         processing_time_ms: float | None = None,
     ) -> None:
-        """Mark a URL as failed.
-
-        Args:
-            url: The URL that failed
-            error_type: Type of error (e.g., "timeout", "network")
-            error_message: Human-readable error message
-            processing_time_ms: Optional explicit processing time
-        """
+        """Mark a URL as failed."""
         entry = self._find_entry(url)
         if entry:
             entry.status = URLStatus.FAILED
             entry.error_type = error_type
             entry.error_message = error_message
-
-            # Calculate processing time
             if processing_time_ms is not None:
                 entry.processing_time_ms = processing_time_ms
             elif entry.start_time:
                 entry.processing_time_ms = (time.time() - entry.start_time) * 1000
-
-            # Track for ETA calculation (even failures contribute to timing)
             if entry.processing_time_ms > 0:
                 self._processing_times.append(entry.processing_time_ms)
+            self._update_timestamp()
 
     @property
     def total(self) -> int:

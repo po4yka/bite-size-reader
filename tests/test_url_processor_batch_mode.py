@@ -48,7 +48,7 @@ def _make_processor(
     if content_extractor is None:
         content_extractor = AsyncMock()
         content_extractor.extract_and_process_content = AsyncMock(
-            return_value=(1, "Test content for the article.", "firecrawl", "en")
+            return_value=(1, "Test content for the article.", "firecrawl", "en", "Test Title", [])
         )
     proc.content_extractor = content_extractor
 
@@ -303,7 +303,12 @@ class TestOnPhaseChangeCallback(unittest.IsolatedAsyncioTestCase):
         proc = _make_processor(response_formatter=formatter)
         phases: list[str] = []
 
-        async def track_phase(phase: str) -> None:
+        async def track_phase(
+            phase: str,
+            title: str | None = None,
+            content_length: int | None = None,
+            model: str | None = None,
+        ) -> None:
             phases.append(phase)
 
         with (
@@ -349,7 +354,12 @@ class TestOnPhaseChangeCallback(unittest.IsolatedAsyncioTestCase):
         proc = _make_processor(response_formatter=formatter)
         phases: list[str] = []
 
-        async def track_phase(phase: str) -> None:
+        async def track_phase(
+            phase: str,
+            title: str | None = None,
+            content_length: int | None = None,
+            model: str | None = None,
+        ) -> None:
             phases.append(phase)
 
         with patch(_PATCH_LANG, return_value="en"), patch(_PATCH_PROMPT, return_value="prompt"):

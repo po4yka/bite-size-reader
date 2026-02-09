@@ -9,13 +9,13 @@ import asyncio
 import json
 import logging
 import re
-from collections import Counter
 from collections.abc import Callable, Mapping
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any
 
 import httpx
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.adapters.content.quality_filters import detect_low_value_content
 from app.adapters.external.firecrawl_parser import FirecrawlClient, FirecrawlResult
 from app.config import AppConfig
 from app.core.async_utils import raise_if_cancelled
@@ -35,37 +35,6 @@ logger = logging.getLogger(__name__)
 
 # Route versioning constants
 URL_ROUTE_VERSION = 1
-
-LowValueReason = Literal[
-    "empty_after_cleaning",
-    "overlay_content_detected",
-    "content_too_short",
-    "content_low_variation",
-    "content_high_repetition",
-]
-
-
-class LowValueContentMetrics(BaseModel):
-    """Simple container describing crawl content quality metrics."""
-
-    model_config = ConfigDict(frozen=True)
-
-    char_length: int = Field(ge=0)
-    word_count: int = Field(ge=0)
-    unique_word_count: int = Field(ge=0)
-    top_word: str | None = None
-    top_ratio: float = Field(ge=0.0, le=1.0)
-    overlay_ratio: float = Field(ge=0.0, le=1.0)
-
-
-class LowValueContentIssue(BaseModel):
-    """Metadata about low-value crawl content returned by Firecrawl."""
-
-    model_config = ConfigDict(frozen=True)
-
-    reason: LowValueReason
-    metrics: LowValueContentMetrics
-    preview: str
 
 
 class ContentExtractor:
@@ -93,30 +62,21 @@ class ContentExtractor:
     def _schedule_crawl_persistence(
         self, req_id: int, crawl: FirecrawlResult, correlation_id: str | None
     ) -> asyncio.Task[None] | None:
-        """Run crawl persistence off the network path and log any errors."""
+        """Run crawl persistence off the network path."""
         try:
-            task: asyncio.Task[None] = asyncio.create_task(
-                self._persist_crawl_result(req_id, crawl, correlation_id)
-            )
-        except RuntimeError as exc:
-            logger.error(
-                "persist_crawl_schedule_failed",
-                extra={"cid": correlation_id, "error": str(exc)},
-            )
+            task = asyncio.create_task(self._persist_crawl_result(req_id, crawl, correlation_id))
+
+            def _log_err(t: asyncio.Task) -> None:
+                if not t.cancelled() and t.exception():
+                    logger.error(
+                        "persist_crawl_error",
+                        extra={"cid": correlation_id, "error": str(t.exception())},
+                    )
+
+            task.add_done_callback(_log_err)
+            return task
+        except Exception:
             return None
-
-        def _log_task_error(t: asyncio.Task[None]) -> None:
-            if t.cancelled():
-                return
-            exc = t.exception()
-            if exc:
-                logger.error(
-                    "persist_crawl_task_error",
-                    extra={"cid": correlation_id, "error": str(exc)},
-                )
-
-        task.add_done_callback(_log_task_error)
-        return task
 
     async def _persist_crawl_result(
         self, req_id: int, crawl: FirecrawlResult, correlation_id: str | None
@@ -140,16 +100,6 @@ class ContentExtractor:
         except Exception as e:  # noqa: BLE001
             raise_if_cancelled(e)
             logger.error("persist_crawl_error", extra={"error": str(e), "cid": correlation_id})
-
-    async def _await_persistence_task(self, task: asyncio.Task[None] | None) -> None:
-        """Await a scheduled persistence task, logging any errors."""
-        if task is None:
-            return
-        try:
-            await task
-        except Exception as exc:  # noqa: BLE001
-            raise_if_cancelled(exc)
-            logger.error("persist_crawl_task_error", extra={"error": str(exc)})
 
     async def extract_content_pure(
         self,
@@ -186,14 +136,13 @@ class ContentExtractor:
             crawl = await self.firecrawl.scrape_markdown(url, request_id=None)
 
         # Check content quality
-        quality_issue = self._detect_low_value_content(crawl)
+        quality_issue = detect_low_value_content(crawl)
         if quality_issue:
-            error_msg = f"Low-value content detected: {quality_issue.reason}"
+            reason = quality_issue["reason"]
             logger.warning(
-                "pure_extraction_low_value",
-                extra={"cid": correlation_id, "reason": quality_issue.reason},
+                "pure_extraction_low_value", extra={"cid": correlation_id, "reason": reason}
             )
-            raise ValueError(error_msg) from None
+            raise ValueError(f"Low-value content detected: {reason}")
 
         # Validate crawl success
         has_markdown = bool(crawl.content_markdown and crawl.content_markdown.strip())
@@ -269,8 +218,8 @@ class ContentExtractor:
         correlation_id: str | None = None,
         interaction_id: int | None = None,
         silent: bool = False,
-    ) -> tuple[int, str, str, str]:
-        """Extract content from URL and return (req_id, content_text, content_source, detected_lang)."""
+    ) -> tuple[int, str, str, str, str | None, list[str]]:
+        """Extract content from URL and return (req_id, content_text, content_source, detected_lang, title, images)."""
         from app.core.url_utils import is_youtube_url
 
         norm = normalize_url(url_text)
@@ -281,136 +230,81 @@ class ContentExtractor:
                 "youtube_url_detected",
                 extra={"url": url_text, "normalized": norm, "cid": correlation_id},
             )
-            return await self._extract_youtube_content(
+            # YouTube download returns metadata which may include title
+            (
+                req_id,
+                transcript_text,
+                content_source,
+                detected_lang,
+                video_metadata,
+            ) = await self._extract_youtube_content(
                 message, url_text, norm, correlation_id, interaction_id, silent
             )
+            title = video_metadata.get("title") if isinstance(video_metadata, dict) else None
+            return req_id, transcript_text, content_source, detected_lang, title, []
 
         # Regular web content flow
         dedupe = url_hash_sha256(norm)
-
         logger.info(
             "url_flow_detected",
             extra={"url": url_text, "normalized": norm, "hash": dedupe, "cid": correlation_id},
         )
-
-        # Notify: request accepted with URL preview
         await self.response_formatter.send_url_accepted_notification(
             message, norm, correlation_id, silent=silent
         )
-
-        # Handle request deduplication and creation
         req_id = await self._handle_request_dedupe_or_create(
             message, url_text, norm, dedupe, correlation_id
         )
-
-        # Extract content from Firecrawl or reuse existing
-        content_text, content_source = await self._extract_or_reuse_content(
-            message,
-            req_id,
-            url_text,
-            dedupe,
-            correlation_id,
-            interaction_id,
-            silent=silent,
+        (
+            content_text,
+            content_source,
+            title,
+            images,
+        ) = await self._extract_or_reuse_content_with_title(
+            message, req_id, url_text, dedupe, correlation_id, interaction_id, silent=silent
         )
-
-        # Language detection
         detected = detect_language(content_text or "")
         try:
             await self.message_persistence.request_repo.async_update_request_lang_detected(
                 req_id, detected
             )
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             raise_if_cancelled(e)
             logger.error(
                 "persist_lang_detected_error", extra={"error": str(e), "cid": correlation_id}
             )
-
-        return req_id, content_text, content_source, detected
+        return req_id, content_text, content_source, detected, title, images
 
     async def _handle_request_dedupe_or_create(
         self, message: Any, url_text: str, norm: str, dedupe: str, correlation_id: str | None
     ) -> int:
-        """Handle request deduplication or creation with race condition protection.
-
-        This method implements proper handling for concurrent requests with the same URL.
-        Uses optimistic concurrency: try to create, fall back to fetch on collision.
-
-        Returns:
-            Request ID (either existing or newly created)
-        """
+        """Handle request deduplication or creation."""
         await self._upsert_sender_metadata(message)
-
-        # Optimistic approach: Try to create first, handle collision if it occurs
-        # This is more efficient than always checking first (avoids extra DB query)
         try:
-            # Attempt to create new request
             req_id = await self._create_new_request(message, url_text, norm, dedupe, correlation_id)
-
-            # If we get here, creation succeeded (new URL)
             self._audit(
                 "INFO",
                 "url_request_created",
                 {"request_id": req_id, "hash": dedupe, "url": url_text, "cid": correlation_id},
             )
             return req_id
-
         except Exception as create_error:
-            # If creation failed due to race condition, fetch the existing request
-            # This handles the case where another thread created the request between
-            # our check and insert
-            logger.debug(
-                "url_request_creation_failed_fetching_existing",
-                extra={
-                    "error": str(create_error),
-                    "error_type": type(create_error).__name__,
-                    "cid": correlation_id,
-                },
-            )
-
-            # Fetch existing request by dedupe hash
             existing_req = (
                 await self.message_persistence.request_repo.async_get_request_by_dedupe_hash(dedupe)
             )
-
-            if isinstance(existing_req, Mapping):
-                existing_req = dict(existing_req)
-
             if existing_req:
                 req_id = int(existing_req["id"])
-                self._audit(
-                    "INFO",
-                    "url_dedupe_hit_after_race",
-                    {
-                        "request_id": req_id,
-                        "hash": dedupe,
-                        "url": url_text,
-                        "cid": correlation_id,
-                    },
-                )
-
-                # Update correlation ID for the existing request
                 if correlation_id:
                     try:
                         await self.message_persistence.request_repo.async_update_request_correlation_id(
                             req_id, correlation_id
                         )
-                    except Exception as e:  # noqa: BLE001
-                        logger.error(
-                            "persist_cid_error", extra={"error": str(e), "cid": correlation_id}
+                    except Exception as e:
+                        logger.debug(
+                            "correlation_id_update_failed",
+                            extra={"cid": correlation_id, "error": str(e)},
                         )
                 return req_id
-
-            # If we still can't find existing request, something is wrong
-            # Re-raise the original error
-            logger.error(
-                "url_request_race_condition_unresolved",
-                extra={
-                    "error": str(create_error),
-                    "dedupe_hash": dedupe,
-                    "cid": correlation_id,
-                },
-            )
             raise create_error
 
     async def _create_new_request(
@@ -497,7 +391,7 @@ class ContentExtractor:
                     extra={"user_id": user_id, "error": str(exc)},
                 )
 
-    async def _extract_or_reuse_content(
+    async def _extract_or_reuse_content_with_title(
         self,
         message: Any,
         req_id: int,
@@ -506,7 +400,7 @@ class ContentExtractor:
         correlation_id: str | None,
         interaction_id: int | None,
         silent: bool = False,
-    ) -> tuple[str, str]:
+    ) -> tuple[str, str, str | None, list[str]]:
         """Extract content from Firecrawl or reuse existing crawl result."""
         existing_crawl = (
             await self.message_persistence.crawl_repo.async_get_crawl_result_by_request(req_id)
@@ -518,11 +412,17 @@ class ContentExtractor:
         if existing_crawl and (
             existing_crawl.get("content_markdown") or existing_crawl.get("content_html")
         ):
-            return await self._process_existing_crawl(
+            (
+                content_text,
+                content_source,
+                title,
+                images,
+            ) = await self._process_existing_crawl_with_title(
                 message, existing_crawl, correlation_id, silent
             )
+            return content_text, content_source, title, images
         else:
-            return await self._perform_new_crawl(
+            return await self._perform_new_crawl_with_title(
                 message,
                 req_id,
                 url_text,
@@ -532,12 +432,37 @@ class ContentExtractor:
                 silent,
             )
 
-    async def _process_existing_crawl(
+    async def _process_existing_crawl_with_title(
         self, message: Any, existing_crawl: dict, correlation_id: str | None, silent: bool = False
-    ) -> tuple[str, str]:
+    ) -> tuple[str, str, str | None, list[str]]:
         """Process existing crawl result."""
         md = existing_crawl.get("content_markdown")
         html = existing_crawl.get("content_html")
+
+        # Extract title from metadata
+        title = None
+        metadata = existing_crawl.get("metadata_json")
+        if isinstance(metadata, str):
+            try:
+                metadata = json.loads(metadata)
+            except Exception:
+                metadata = None
+
+        if isinstance(metadata, dict):
+            title = metadata.get("title") or metadata.get("og:title")
+
+        # Extract images using metadata/markdown helper
+        # We need to wrap existing_crawl dict into something _extract_images can use
+        from app.adapters.external.firecrawl.models import FirecrawlResult
+
+        crawl_obj = FirecrawlResult(
+            status="ok",
+            content_markdown=md,
+            content_html=html,
+            metadata_json=metadata,
+            source_url=existing_crawl.get("source_url"),
+        )
+        images = self._extract_images(crawl_obj)
 
         # Process content with HTML fallback for empty markdown
         if md and md.strip():
@@ -563,8 +488,8 @@ class ContentExtractor:
         try:
             if getattr(self.cfg.runtime, "enable_textacy", False):
                 content_text = normalize_text(content_text)
-        except (AttributeError, RuntimeError):
-            pass
+        except (AttributeError, RuntimeError) as e:
+            logger.debug("normalization_skipped", extra={"reason": str(e)})
 
         self._audit("INFO", "reuse_crawl_result", {"request_id": None, "cid": correlation_id})
 
@@ -601,9 +526,9 @@ class ContentExtractor:
             silent=silent,
         )
 
-        return content_text, content_source
+        return content_text, content_source, title, images
 
-    async def _perform_new_crawl(
+    async def _perform_new_crawl_with_title(
         self,
         message: Any,
         req_id: int,
@@ -612,7 +537,7 @@ class ContentExtractor:
         correlation_id: str | None,
         interaction_id: int | None,
         silent: bool = False,
-    ) -> tuple[str, str]:
+    ) -> tuple[str, str, str | None, list[str]]:
         """Perform new Firecrawl extraction."""
         persist_task: asyncio.Task[None] | None = None
 
@@ -639,11 +564,22 @@ class ContentExtractor:
                 silent=silent,
             )
             persist_task = self._schedule_crawl_persistence(req_id, cached_crawl, correlation_id)
-            result = await self._process_successful_crawl(
+            (
+                content_text,
+                content_source,
+                title,
+                images,
+            ) = await self._process_successful_crawl_with_title(
                 message, cached_crawl, correlation_id, silent
             )
-            await self._await_persistence_task(persist_task)
-            return result
+            if persist_task:
+                try:
+                    await persist_task
+                except Exception as e:
+                    logger.warning(
+                        "persist_wait_failed", extra={"cid": correlation_id, "error": str(e)}
+                    )
+            return content_text, content_source, title, images
 
         # Notify: starting Firecrawl with progress indicator
         await self.response_formatter.send_firecrawl_start_notification(
@@ -653,20 +589,20 @@ class ContentExtractor:
         async with self._sem():
             crawl = await self.firecrawl.scrape_markdown(url_text, request_id=req_id)
 
-        quality_issue = self._detect_low_value_content(crawl)
+        quality_issue = detect_low_value_content(crawl)
         if quality_issue:
-            metrics = quality_issue.metrics
-            reason_label = quality_issue.reason
+            metrics = quality_issue["metrics"]
+            reason_label = quality_issue["reason"]
             metric_parts = [
-                f"chars={metrics.char_length}",
-                f"words={metrics.word_count}",
-                f"unique={metrics.unique_word_count}",
+                f"chars={metrics['char_length']}",
+                f"words={metrics['word_count']}",
+                f"unique={metrics['unique_word_count']}",
             ]
-            if metrics.top_word:
+            if metrics.get("top_word"):
                 metric_parts.append(
-                    f"top_word={metrics.top_word}, top_ratio={metrics.top_ratio:.2f}"
+                    f"top_word={metrics['top_word']}, top_ratio={metrics['top_ratio']:.2f}"
                 )
-            metric_parts.append(f"overlay_ratio={metrics.overlay_ratio:.2f}")
+            metric_parts.append(f"overlay_ratio={metrics['overlay_ratio']:.2f}")
             metric_str = ", ".join(metric_parts)
 
             crawl.status = "error"
@@ -678,25 +614,25 @@ class ContentExtractor:
                         "request_id": req_id,
                         "cid": correlation_id,
                         "reason": reason_label,
-                        "char_length": metrics.char_length,
-                        "word_count": metrics.word_count,
-                        "unique_word_count": metrics.unique_word_count,
-                        "overlay_ratio": round(metrics.overlay_ratio, 3),
+                        "char_length": metrics["char_length"],
+                        "word_count": metrics["word_count"],
+                        "unique_word_count": metrics["unique_word_count"],
+                        "overlay_ratio": round(metrics["overlay_ratio"], 3),
                     }
-                    if metrics.top_word:
-                        audit_payload["top_word"] = metrics.top_word
-                        audit_payload["top_ratio"] = round(metrics.top_ratio, 3)
+                    if metrics.get("top_word"):
+                        audit_payload["top_word"] = metrics["top_word"]
+                        audit_payload["top_ratio"] = round(metrics["top_ratio"], 3)
                     self._audit("WARNING", "firecrawl_low_value_content", audit_payload)
-                except (RuntimeError, ValueError, TypeError):
-                    pass
+                except Exception as e:
+                    logger.debug("audit_failed", extra={"cid": correlation_id, "error": str(e)})
 
             logger.warning(
                 "firecrawl_low_value_content",
                 extra={
                     "cid": correlation_id,
                     "reason": reason_label,
-                    **metrics.model_dump(),
-                    "preview": quality_issue.preview,
+                    **metrics,
+                    "preview": quality_issue["preview"],
                 },
             )
 
@@ -776,14 +712,32 @@ class ContentExtractor:
                 )
 
                 # Continue as if crawl succeeded with HTML
-                result = await self._process_successful_crawl(
+                (
+                    content_text,
+                    content_source,
+                    title,
+                    images,
+                ) = await self._process_successful_crawl_with_title(
                     message, salvage_crawl, correlation_id, silent
                 )
                 await self._write_firecrawl_cache(dedupe_hash, salvage_crawl)
-                await self._await_persistence_task(salvage_persist_task)
-                return result
+                if salvage_persist_task:
+                    try:
+                        await salvage_persist_task
+                    except Exception as e:
+                        logger.warning(
+                            "salvage_persist_wait_failed",
+                            extra={"cid": correlation_id, "error": str(e)},
+                        )
+                return content_text, content_source, title, images
 
-            await self._await_persistence_task(persist_task)
+            if persist_task:
+                try:
+                    await persist_task
+                except Exception as e:
+                    logger.warning(
+                        "persist_wait_failed", extra={"cid": correlation_id, "error": str(e)}
+                    )
             await self._handle_crawl_error(
                 message,
                 req_id,
@@ -798,76 +752,9 @@ class ContentExtractor:
             raise ValueError(f"Firecrawl extraction failed: {failure_reason}") from None
 
         # Process successful crawl
-        result = await self._process_successful_crawl(message, crawl, correlation_id, silent)
-        await self._write_firecrawl_cache(dedupe_hash, crawl)
-        return result
-
-    def _detect_low_value_content(self, crawl: FirecrawlResult) -> LowValueContentIssue | None:
-        """Detect low-value Firecrawl responses that should halt processing."""
-
-        text_candidates: list[str] = []
-        if crawl.content_markdown and crawl.content_markdown.strip():
-            text_candidates.append(clean_markdown_article_text(crawl.content_markdown))
-        if crawl.content_html and crawl.content_html.strip():
-            text_candidates.append(html_to_text(crawl.content_html))
-
-        primary_text = next((t for t in text_candidates if t and t.strip()), "")
-        normalized = re.sub(r"\s+", " ", primary_text).strip()
-
-        words_raw = re.findall(r"[0-9A-Za-zÀ-ÖØ-öø-ÿ']+", normalized)
-        words = [w.lower() for w in words_raw if w]
-        word_count = len(words)
-        unique_word_count = len(set(words))
-
-        top_word: str | None = None
-        top_ratio = 0.0
-        if words:
-            counter = Counter(words)
-            top_word, top_count = counter.most_common(1)[0]
-            top_ratio = top_count / word_count if word_count else 0.0
-
-        overlay_terms = {
-            "accept",
-            "close",
-            "cookie",
-            "cookies",
-            "consent",
-            "login",
-            "signin",
-            "signup",
-            "subscribe",
-        }
-        overlay_hits = sum(1 for w in words if w in overlay_terms)
-        overlay_ratio = overlay_hits / word_count if word_count else 0.0
-
-        metrics = LowValueContentMetrics(
-            char_length=len(normalized),
-            word_count=word_count,
-            unique_word_count=unique_word_count,
-            top_word=top_word,
-            top_ratio=top_ratio,
-            overlay_ratio=overlay_ratio,
+        return await self._process_successful_crawl_with_title(
+            message, crawl, correlation_id, silent
         )
-
-        reason: LowValueReason | None = None
-        if not normalized or word_count == 0:
-            reason = "empty_after_cleaning"
-        elif overlay_ratio >= 0.7 and len(normalized) < 600:
-            reason = "overlay_content_detected"
-        elif len(normalized) < 48 and word_count <= 2:
-            reason = "content_too_short"
-        elif len(normalized) < 120 and (
-            unique_word_count <= 3 or (word_count >= 4 and top_ratio >= 0.8)
-        ):
-            reason = "content_low_variation"
-        elif word_count >= 6 and top_ratio >= 0.92:
-            reason = "content_high_repetition"
-
-        if reason:
-            preview = normalized[:200]
-            return LowValueContentIssue(reason=reason, metrics=metrics, preview=preview)
-
-        return None
 
     async def _get_cached_crawl(
         self, dedupe_hash: str, correlation_id: str | None
@@ -893,7 +780,7 @@ class ContentExtractor:
             )
             return None
 
-        if self._detect_low_value_content(crawl):
+        if detect_low_value_content(crawl):
             logger.debug(
                 "firecrawl_cache_low_value_skipped",
                 extra={"cid": correlation_id, "hash": dedupe_hash},
@@ -934,23 +821,10 @@ class ContentExtractor:
     ) -> None:
         """Handle Firecrawl extraction errors."""
         await self.message_persistence.request_repo.async_update_request_status(req_id, "error")
-        # Provide a precise, user-visible stage and context
-        detail_lines = []
-        url_line = crawl.source_url or "unknown"
-        endpoint_line = crawl.endpoint or "/v2/scrape"
-        http_line = str(crawl.http_status) if crawl.http_status is not None else "n/a"
-        err_line = crawl.error_text or "unknown"
-        content_hint = f"md:{int(has_markdown)} html:{int(has_html)}"
-        detail_lines.append(f"🔗 URL: {url_line}")
-        detail_lines.append(f"🧭 Stage: Firecrawl scrape ({endpoint_line})")
-        detail_lines.append(f"📶 HTTP: {http_line}")
-        detail_lines.append(f"⚠️ Error: {err_line}")
-        detail_lines.append(f"🧩 Content received: {content_hint}")
-
+        details = f"🔗 URL: {crawl.source_url or 'unknown'}\n🧭 Stage: Firecrawl scrape ({crawl.endpoint or '/v2/scrape'})\n📶 HTTP: {crawl.http_status or 'n/a'}\n⚠️ Error: {crawl.error_text or 'unknown'}\n🧩 Content received: md:{int(has_markdown)} html:{int(has_html)}"
         await self.response_formatter.send_error_notification(
-            message, "firecrawl_error", correlation_id, details="\n".join(detail_lines)
+            message, "firecrawl_error", correlation_id, details=details
         )
-
         logger.error(
             "firecrawl_error",
             extra={
@@ -962,15 +836,14 @@ class ContentExtractor:
                 "has_html": has_html,
             },
         )
-
         try:
             self._audit(
                 "ERROR",
                 "firecrawl_error",
                 {"request_id": req_id, "cid": correlation_id, "error": crawl.error_text},
             )
-        except (RuntimeError, ValueError, TypeError):
-            pass
+        except Exception as e:
+            logger.debug("audit_failed", extra={"cid": correlation_id, "error": str(e)})
 
         # Update interaction with error
         if interaction_id:
@@ -1014,8 +887,11 @@ class ContentExtractor:
                                         extra={"url": url, "content_length": content_length},
                                     )
                                     return None
-                            except ValueError:
-                                pass
+                            except ValueError as e:
+                                logger.debug(
+                                    "content_length_parse_failed",
+                                    extra={"url": url, "error": str(e)},
+                                )
 
                         chunks: list[bytes] = []
                         total = 0
@@ -1052,14 +928,57 @@ class ContentExtractor:
             )
             return None
 
-    async def _process_successful_crawl(
+    def _extract_images(self, crawl: FirecrawlResult) -> list[str]:
+        """Extract image URLs from Firecrawl result metadata and markdown."""
+        images: list[str] = []
+        seen = set()
+
+        # 1. From metadata (screenshots/images field)
+        if crawl.metadata_json and "screenshots" in crawl.metadata_json:
+            shots = crawl.metadata_json["screenshots"]
+            if isinstance(shots, list):
+                for shot in shots:
+                    if isinstance(shot, str) and shot.startswith("http"):
+                        if shot not in seen:
+                            seen.add(shot)
+                            images.append(shot)
+            elif isinstance(shots, str) and shots.startswith("http"):
+                if shots not in seen:
+                    seen.add(shots)
+                    images.append(shots)
+
+        # 2. From markdown ![alt](url)
+        if crawl.content_markdown:
+            # Match standard markdown images
+            matches = re.findall(r"!\[[^\]]*\]\((https?://[^\s\)]+)\)", crawl.content_markdown)
+            for url in matches:
+                # Basic filter: skip common UI/tracking patterns
+                if any(
+                    x in url.lower() for x in ["icon", "logo", "tracker", "pixel", ".svg", ".ico"]
+                ):
+                    continue
+                if url not in seen:
+                    seen.add(url)
+                    images.append(url)
+
+        return images[:5]  # Limit to top 5 images
+
+    async def _process_successful_crawl_with_title(
         self,
         message: Any,
         crawl: FirecrawlResult,
         correlation_id: str | None,
         silent: bool = False,
-    ) -> tuple[str, str]:
+    ) -> tuple[str, str, str | None, list[str]]:
         """Process successful Firecrawl result."""
+        # Extract title from metadata
+        title = None
+        if crawl.metadata_json:
+            title = crawl.metadata_json.get("title") or crawl.metadata_json.get("og:title")
+
+        # Extract images before cleaning markdown
+        images = self._extract_images(crawl)
+
         # Notify: Firecrawl success
         excerpt_len = (len(crawl.content_markdown) if crawl.content_markdown else 0) or (
             len(crawl.content_html) if crawl.content_html else 0
@@ -1114,10 +1033,10 @@ class ContentExtractor:
         try:
             if getattr(self.cfg.runtime, "enable_textacy", False):
                 content_text = normalize_text(content_text)
-        except (AttributeError, RuntimeError):
-            pass
+        except (AttributeError, RuntimeError) as e:
+            logger.debug("normalization_skipped", extra={"reason": str(e)})
 
-        return content_text, content_source
+        return content_text, content_source, title, images
 
     async def _persist_message_snapshot(self, request_id: int, message: Any) -> None:
         """Persist message snapshot to database."""
@@ -1131,11 +1050,11 @@ class ContentExtractor:
         correlation_id: str | None,
         interaction_id: int | None,
         silent: bool = False,
-    ) -> tuple[int, str, str, str]:
+    ) -> tuple[int, str, str, str, dict[str, Any]]:
         """Extract YouTube video transcript and download video.
 
         Returns:
-            (req_id, transcript_text, content_source, detected_lang)
+            (req_id, transcript_text, content_source, detected_lang, video_metadata)
         """
         # Check if YouTube download is enabled
         if not self.cfg.youtube.enabled:
@@ -1178,7 +1097,7 @@ class ContentExtractor:
                 },
             )
 
-            return req_id, transcript_text, content_source, detected_lang
+            return req_id, transcript_text, content_source, detected_lang, video_metadata
 
         except Exception as e:
             raise_if_cancelled(e)

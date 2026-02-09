@@ -128,12 +128,12 @@ async def test_content_extractor_uses_cached_crawl(monkeypatch):
 
     extractor._schedule_crawl_persistence = lambda *args, **kwargs: None
 
-    async def _process_successful_crawl(*args, **kwargs):
-        return ("cached text", "markdown")
+    async def _process_successful_crawl_with_title(*args, **kwargs):
+        return ("cached text", "markdown", "Cached Title")
 
-    extractor._process_successful_crawl = _process_successful_crawl
+    extractor._process_successful_crawl_with_title = _process_successful_crawl_with_title
 
-    result = await extractor._perform_new_crawl(
+    result = await extractor._perform_new_crawl_with_title(
         message=None,
         req_id=1,
         url_text="http://example.com",
@@ -143,7 +143,7 @@ async def test_content_extractor_uses_cached_crawl(monkeypatch):
         silent=True,
     )
 
-    assert result == ("cached text", "markdown")
+    assert result == ("cached text", "markdown", "Cached Title")
     response_formatter.send_firecrawl_start_notification.assert_not_awaited()
     response_formatter.send_content_reuse_notification.assert_awaited_once()
 
