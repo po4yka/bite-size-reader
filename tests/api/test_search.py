@@ -1,9 +1,35 @@
 """Tests for search and discovery endpoints."""
 
 from datetime import datetime, timedelta
+from enum import Enum
+
+# Python 3.10 compatibility shims (must be before app imports)
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+
+
+class StrEnum(str, Enum):
+    """Compatibility shim for StrEnum (Python 3.11+)."""
+
+
+class _NotRequiredMeta(type):
+    def __getitem__(cls, item: Any) -> Any:
+        return item
+
+
+class NotRequired(metaclass=_NotRequiredMeta):
+    """Compatibility shim for NotRequired (Python 3.11+)."""
+
+
+import datetime as dt_module
+import enum
+import typing
+
+enum.StrEnum = StrEnum  # type: ignore[misc,assignment]
+typing.NotRequired = NotRequired  # type: ignore[assignment]
+dt_module.UTC = dt_module.UTC  # type: ignore[attr-defined]
 
 from app.api.routers.auth import create_access_token
 from app.core.time_utils import UTC
@@ -483,6 +509,8 @@ async def async_get_mock_chroma_service():
 
 def test_semantic_search_with_filters(client, search_data, search_token):
     """Test semantic search with language and tag filters."""
+    from app.api.dependencies.search_resources import get_chroma_search_service
+    from app.api.main import app
     from app.services.chroma_vector_search_service import ChromaVectorSearchResults
 
     mock_service = MagicMock()
@@ -496,7 +524,10 @@ def test_semantic_search_with_filters(client, search_data, search_token):
     async def mock_get_service():
         return mock_service
 
-    with patch("app.api.routers.search.get_chroma_search_service", new=mock_get_service):
+    # Override FastAPI dependency
+    app.dependency_overrides[get_chroma_search_service] = mock_get_service
+
+    try:
         response = client.get(
             "/v1/search/semantic",
             params={
@@ -510,12 +541,15 @@ def test_semantic_search_with_filters(client, search_data, search_token):
             headers={"Authorization": f"Bearer {search_token}"},
         )
 
-    assert response.status_code == 200
-    mock_service.search.assert_called_once()
-    call_kwargs = mock_service.search.call_args[1]
-    assert call_kwargs["language"] == "en"
-    assert call_kwargs["tags"] == ["ai", "technology"]
-    assert call_kwargs["user_scope"] == "test-scope"
+        assert response.status_code == 200
+        mock_service.search.assert_called_once()
+        call_kwargs = mock_service.search.call_args[1]
+        assert call_kwargs["language"] == "en"
+        assert call_kwargs["tags"] == ["ai", "technology"]
+        assert call_kwargs["user_scope"] == "test-scope"
+    finally:
+        # Clean up override
+        app.dependency_overrides.clear()
 
 
 def test_semantic_search_no_results(client, search_token):
@@ -568,20 +602,29 @@ def test_semantic_search_invalid_language(client, search_token):
 
 def test_semantic_search_error_handling(client, search_token):
     """Test semantic search error handling."""
+    from app.api.dependencies.search_resources import get_chroma_search_service
+    from app.api.main import app
+
     mock_service = MagicMock()
     mock_service.search = AsyncMock(side_effect=Exception("Chroma error"))
 
     async def mock_get_service():
         return mock_service
 
-    with patch("app.api.routers.search.get_chroma_search_service", new=mock_get_service):
+    # Override FastAPI dependency
+    app.dependency_overrides[get_chroma_search_service] = mock_get_service
+
+    try:
         response = client.get(
             "/v1/search/semantic",
             params={"q": "test", "limit": 10, "offset": 0},
             headers={"Authorization": f"Bearer {search_token}"},
         )
 
-    assert response.status_code == 500
+        assert response.status_code == 500
+    finally:
+        # Clean up override
+        app.dependency_overrides.clear()
 
 
 # ==================== Trending Topics Tests ====================
@@ -783,9 +826,9 @@ def test_check_duplicate_not_duplicate(mock_repo_class, client, search_user, sea
 
     assert response.status_code == 200
     data = response.json()["data"]
-    assert data["isDuplicate"] is False
-    assert "normalizedUrl" in data
-    assert "dedupeHash" in data
+    assert data["is_duplicate"] is False
+    assert "normalized_url" in data
+    assert "dedupe_hash" in data
 
 
 @patch("app.api.routers.search.SqliteRequestRepositoryAdapter")
@@ -826,10 +869,10 @@ def test_check_duplicate_is_duplicate(
 
     assert response.status_code == 200
     data = response.json()["data"]
-    assert data["isDuplicate"] is True
-    assert "requestId" in data
-    assert "summaryId" in data
-    assert "summarizedAt" in data
+    assert data["is_duplicate"] is True
+    assert "request_id" in data
+    assert "summary_id" in data
+    assert "summarized_at" in data
 
 
 @patch("app.api.routers.search.SqliteRequestRepositoryAdapter")
@@ -875,7 +918,7 @@ def test_check_duplicate_with_summary(
 
     assert response.status_code == 200
     data = response.json()["data"]
-    assert data["isDuplicate"] is True
+    assert data["is_duplicate"] is True
     assert "summary" in data
     assert "title" in data["summary"]
     assert "tldr" in data["summary"]
@@ -941,11 +984,17 @@ def test_check_duplicate_short_url(client, search_token):
 
 @patch("app.api.routers.search.SqliteRequestRepositoryAdapter")
 def test_check_duplicate_different_user(
-    mock_request_repo_class, client, search_data, search_user, db
+    mock_request_repo_class, client, search_data, search_user, db, monkeypatch
 ):
     """Test that duplicate check respects user isolation."""
     # Create different user
     other_user = User.create(telegram_user_id=111222333, username="other_user")
+
+    # Add both users to ALLOWED_USER_IDS
+    monkeypatch.setenv(
+        "ALLOWED_USER_IDS", f"{search_user.telegram_user_id},{other_user.telegram_user_id}"
+    )
+
     other_token = create_access_token(other_user.telegram_user_id, client_id="test")
 
     # Mock request with different user_id
@@ -970,7 +1019,7 @@ def test_check_duplicate_different_user(
     assert response.status_code == 200
     data = response.json()["data"]
     # Should not be duplicate for different user
-    assert data["isDuplicate"] is False
+    assert data["is_duplicate"] is False
 
 
 # ==================== Edge Cases and Error Handling ====================
@@ -1042,7 +1091,7 @@ def test_search_response_structure(client, search_data, search_token, mock_fts_r
     assert "meta" in json_data
 
     # Meta structure
-    assert "correlationId" in json_data["meta"]
+    assert "correlation_id" in json_data["meta"]
     assert "timestamp" in json_data["meta"]
     assert "version" in json_data["meta"]
 

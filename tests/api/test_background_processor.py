@@ -1,9 +1,20 @@
 import asyncio
+from enum import Enum
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import fakeredis.aioredis
 import pytest
+
+
+# Python 3.10 compatibility shim (must be before app imports)
+class StrEnum(str, Enum):
+    """Compatibility shim for StrEnum (Python 3.11+)."""
+
+
+import enum
+
+enum.StrEnum = StrEnum  # type: ignore[misc,assignment]
 
 from app.api.background_processor import BackgroundProcessor
 from app.di.background import build_background_processor
