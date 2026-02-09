@@ -189,7 +189,7 @@ class TestAdaptiveTimeoutConfig:
         config = AdaptiveTimeoutConfig()
         assert config.enabled is True
         assert config.min_timeout_sec == 60.0
-        assert config.max_timeout_sec == 900.0
+        assert config.max_timeout_sec == 1800.0
         assert config.default_timeout_sec == 300.0
         assert config.target_percentile == 0.95
         assert config.safety_margin == 1.3

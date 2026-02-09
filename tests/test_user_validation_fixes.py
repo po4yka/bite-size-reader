@@ -31,7 +31,7 @@ class FakeMessage:
         self.id = message_id
         self.message_id = message_id
 
-    async def reply_text(self, text):
+    async def reply_text(self, text, **kwargs):
         self._replies.append(text)
 
 
@@ -100,7 +100,7 @@ class TestUserValidationFixes(unittest.IsolatedAsyncioTestCase):
             # Test with denied user
             msg3 = FakeMessage("/help", uid=99999)
             await bot._on_message(msg3)
-            assert any("denied" in reply.lower() for reply in msg3._replies)
+            assert any("access denied" in reply.lower() for reply in msg3._replies)
 
     async def test_telegram_message_parsing_with_enum_objects(self):
         """Test TelegramMessage parsing with Pyrogram enum objects."""

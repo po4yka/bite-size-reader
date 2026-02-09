@@ -233,9 +233,11 @@ class AdaptiveTimeoutService:
                 source="default",
             )
 
-        # Base timeout + additional time per 1000 characters
-        # 60s base overhead + 1s per 1000 chars
-        estimated = 60.0 + (content_length / 1000) * 1.0
+        # Base timeout + additional time per 10k characters
+        estimated = (
+            self._config.content_base_timeout_sec
+            + (content_length / 10000) * self._config.content_per_10k_chars_sec
+        )
 
         # Clamp to bounds
         timeout = max(

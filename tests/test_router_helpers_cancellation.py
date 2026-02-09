@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 _DL_TARGET = "app.adapters.telegram.message_router_helpers.download_file"
 _PARSE_TARGET = "app.adapters.telegram.message_router_helpers.parse_txt_file"
 _SLEEP_TARGET = "app.adapters.telegram.message_router_helpers.asyncio.sleep"
-_PROC_TARGET = "app.adapters.telegram.message_router_helpers.process_urls_sequentially"
+_PROC_TARGET = "app.adapters.telegram.message_router_helpers.process_url_batch"
 
 
 def _make_router() -> MagicMock:
@@ -17,6 +17,7 @@ def _make_router() -> MagicMock:
     router = MagicMock()
     router.response_formatter.safe_reply = AsyncMock()
     router.response_formatter.safe_reply_with_id = AsyncMock(return_value=42)
+    router.response_formatter.send_error_notification = AsyncMock()
     router.response_formatter.MIN_MESSAGE_INTERVAL_MS = 100
     router.response_formatter.MAX_BATCH_URLS = 50
     router.response_formatter._validate_url = MagicMock(return_value=(True, None))
