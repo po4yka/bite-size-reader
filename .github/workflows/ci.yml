@@ -156,7 +156,7 @@ jobs:
           path: |
             ~/.cache/uv
             ~/.cache/pip
-          key: python-lint-${{ runner.os }}-${{ hashFiles('requirements.txt', 'requirements-dev.txt') }}
+          key: python-lint-${{ runner.os }}-${{ hashFiles('requirements-all.txt', 'requirements-dev.txt') }}
           restore-keys: |
             python-lint-${{ runner.os }}-
 
@@ -170,7 +170,7 @@ jobs:
             uv.lock
 
       - name: Install dependencies
-        run: uv pip sync --system requirements.txt requirements-dev.txt
+        run: uv pip sync --system requirements-all.txt requirements-dev.txt
 
       - name: Validate OpenAPI spec
         run: |
@@ -227,7 +227,7 @@ jobs:
           path: |
             ~/.cache/uv
             ~/.cache/pip
-          key: python-type-${{ runner.os }}-${{ hashFiles('requirements.txt', 'requirements-dev.txt') }}
+          key: python-type-${{ runner.os }}-${{ hashFiles('requirements-all.txt', 'requirements-dev.txt') }}
           restore-keys: |
             python-type-${{ runner.os }}-
 
@@ -249,7 +249,7 @@ jobs:
             uv.lock
 
       - name: Install dependencies
-        run: uv pip sync --system requirements.txt requirements-dev.txt
+        run: uv pip sync --system requirements-all.txt requirements-dev.txt
 
       - name: Type check (mypy)
         run: mypy app tests --show-error-codes --pretty --cache-dir .mypy_cache
