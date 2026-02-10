@@ -36,11 +36,8 @@ async def test_forward_message_with_url_prefers_forward_flow(
     url_handler: Any = SimpleNamespace(
         url_processor=Mock(),
         is_awaiting_url=Mock(return_value=False),
-        has_pending_multi_links=Mock(return_value=False),
         handle_awaited_url=AsyncMock(),
         handle_direct_url=AsyncMock(),
-        handle_multi_link_confirmation=AsyncMock(),
-        add_pending_multi_links=Mock(),
         add_awaiting_user=Mock(),
     )
 
@@ -90,11 +87,8 @@ def _make_router(tmp_path):
     url_handler: Any = SimpleNamespace(
         url_processor=Mock(),
         is_awaiting_url=Mock(return_value=False),
-        has_pending_multi_links=Mock(return_value=False),
         handle_awaited_url=AsyncMock(),
         handle_direct_url=AsyncMock(),
-        handle_multi_link_confirmation=AsyncMock(),
-        add_pending_multi_links=Mock(),
         add_awaiting_user=Mock(),
     )
     forward_processor: Any = SimpleNamespace(handle_forward_flow=AsyncMock())

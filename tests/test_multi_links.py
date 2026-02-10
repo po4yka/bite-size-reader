@@ -1,6 +1,5 @@
 import os
 import tempfile
-import time
 import unittest
 from typing import Any
 from unittest.mock import AsyncMock, patch
@@ -75,7 +74,7 @@ class TestMultiLinks(unittest.IsolatedAsyncioTestCase):
             # Send message with multiple links -- should process directly
             await bot._on_message(FakeMessage(text, uid=uid))
             # No pending state -- URLs processed immediately
-            assert uid not in bot._pending_multi_links
+            # Multi-link state no longer exists; URLs are processed directly
             assert "https://a.example/a" in bot.seen_urls
             assert "https://b.example/b" in bot.seen_urls
 
@@ -88,7 +87,7 @@ class TestMultiLinks(unittest.IsolatedAsyncioTestCase):
             uid = 66
             await bot._on_message(FakeMessage(text, uid=uid))
             # URLs processed directly, no pending state
-            assert uid not in bot._pending_multi_links
+            # Multi-link state no longer exists; URLs are processed directly
             assert len(bot.seen_urls) > 0
             # /cancel should report nothing pending
             cancel_msg = FakeMessage("/cancel", uid=uid)
@@ -156,28 +155,6 @@ class TestMultiLinks(unittest.IsolatedAsyncioTestCase):
 
             # Should not process URLs (bot.seen_urls should be empty)
             assert len(bot.seen_urls) == 0
-
-    async def test_confirm_without_pending_links(self):
-        """Confirm responses should be safe when no pending state exists."""
-        with tempfile.TemporaryDirectory() as tmp:
-            bot = make_bot(os.path.join(tmp, "app.db"))
-            message = FakeMessage("yes", uid=55)
-
-            await bot.message_handler.url_handler.handle_multi_link_confirmation(
-                message,
-                "yes",
-                55,
-                correlation_id="test-cid",
-                interaction_id=0,
-                start_time=time.time(),
-            )
-
-            assert message._replies, "Expected a notification reply to be sent"
-            assert (
-                message._replies[-1]
-                == "ℹ️ No pending multi-link request to confirm. Please send the links again."
-            )
-            assert bot.seen_urls == []
 
 
 if __name__ == "__main__":

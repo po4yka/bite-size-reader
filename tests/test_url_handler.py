@@ -77,9 +77,6 @@ async def test_handle_awaited_url_filters_invalid_before_processing() -> None:
         response_formatter=response_formatter,
         url_processor=url_processor,
     )
-    multi_link_mock = AsyncMock()
-    cast("Any", handler)._request_multi_link_confirmation = multi_link_mock
-
     message = SimpleNamespace(chat=None)
 
     await handler.handle_awaited_url(
@@ -92,7 +89,6 @@ async def test_handle_awaited_url_filters_invalid_before_processing() -> None:
     )
 
     assert handle_url_flow_mock.await_count == 1
-    assert multi_link_mock.await_count == 0
     assert safe_reply_mock.await_count == 0
 
 
@@ -125,46 +121,13 @@ async def test_awaiting_users_expire_after_ttl() -> None:
 
 
 @pytest.mark.asyncio
-async def test_pending_multi_links_expire_after_ttl() -> None:
-    """Entries in _pending_multi_links should expire after TTL."""
-    handler = _make_handler()
-
-    await handler.add_pending_multi_links(200, ["https://a.com", "https://b.com"])
-    assert await handler.has_pending_multi_links(200)
-
-    with patch("app.adapters.telegram.url_handler.time") as mock_time:
-        mock_time.time.return_value = time.time() + 130
-        assert not await handler.has_pending_multi_links(200), "Should have expired"
-
-
-@pytest.mark.asyncio
 async def test_cleanup_expired_state() -> None:
     """cleanup_expired_state removes stale entries."""
     handler = _make_handler()
 
     await handler.add_awaiting_user(100)
-    await handler.add_pending_multi_links(200, ["https://a.com"])
 
     with patch("app.adapters.telegram.url_handler.time") as mock_time:
         mock_time.time.return_value = time.time() + 130
         cleaned = await handler.cleanup_expired_state()
-        assert cleaned == 2
-
-
-@pytest.mark.asyncio
-async def test_clear_pending_multi_links() -> None:
-    """clear_pending_multi_links removes pending state for a user."""
-    handler = _make_handler()
-
-    # Add pending multi-links
-    await handler.add_pending_multi_links(300, ["https://a.com", "https://b.com"])
-    assert await handler.has_pending_multi_links(300)
-
-    # Clear should return True and remove the state
-    cleared = await handler.clear_pending_multi_links(300)
-    assert cleared is True
-    assert not await handler.has_pending_multi_links(300)
-
-    # Clearing again should return False (nothing to clear)
-    cleared_again = await handler.clear_pending_multi_links(300)
-    assert cleared_again is False
+        assert cleaned == 1

@@ -111,7 +111,6 @@ class TelegramBot:
 
         # Expose in-memory state containers for unit tests
         self._awaiting_url_users = self.message_handler.url_handler._awaiting_url_users
-        self._pending_multi_links = self.message_handler.url_handler._pending_multi_links
 
         # Sync dependencies (in case they were updated)
         self._sync_client_dependencies()

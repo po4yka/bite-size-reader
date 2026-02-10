@@ -120,8 +120,7 @@ class TestCommands(unittest.IsolatedAsyncioTestCase):
             multi_text = "https://example.com/a\nhttps://example.com/b"
 
             await bot._on_message(FakeMessage(multi_text, uid=uid))
-            # No pending state -- URLs processed directly
-            assert uid not in bot._pending_multi_links
+            # URLs processed directly, no pending multi-link state
 
             cancel_msg = FakeMessage("/cancel", uid=uid)
             await bot._on_message(cancel_msg)

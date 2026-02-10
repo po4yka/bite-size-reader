@@ -21,7 +21,6 @@ from app.adapters.llm import LLMClientFactory
 from app.adapters.telegram.command_processor import CommandProcessor
 from app.config import AppConfig, load_config
 from app.core.logging_utils import generate_correlation_id, setup_json_logging
-from app.core.url_utils import extract_all_urls
 from app.db.session import DatabaseSessionManager
 from app.infrastructure.persistence.sqlite.repositories.audit_log_repository import (
     SqliteAuditLogRepositoryAdapter,
@@ -377,7 +376,7 @@ async def run_summary_cli(args: argparse.Namespace) -> None:
     logger.info("cli_summary_start", extra={"cid": correlation_id})
 
     try:
-        next_action, _ = await command_processor.handle_summarize_command(
+        _next_action, _ = await command_processor.handle_summarize_command(
             message=message,
             text=text,
             uid=message.from_user.id,
@@ -385,21 +384,6 @@ async def run_summary_cli(args: argparse.Namespace) -> None:
             interaction_id=0,
             start_time=time.time(),
         )
-
-        if next_action == "multi_confirm" and args.accept_multiple:
-            urls = extract_all_urls(text)
-            await response_formatter.safe_reply(
-                message, f"Auto-confirmed processing of {len(urls)} link(s)."
-            )
-            for url in urls:
-                per_cid = generate_correlation_id()
-                logger.info(
-                    "cli_summary_link",
-                    extra={"cid": per_cid, "url": url},
-                )
-                await url_processor.handle_url_flow(message, url, correlation_id=per_cid)
-        elif next_action == "multi_confirm":
-            pass
 
     finally:
         await firecrawl.aclose()

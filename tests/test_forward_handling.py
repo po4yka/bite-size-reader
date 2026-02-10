@@ -708,11 +708,8 @@ async def test_forward_caption_only_routes_to_forward_flow(
     url_handler: Any = SimpleNamespace(
         url_processor=MagicMock(),
         is_awaiting_url=MagicMock(return_value=False),
-        has_pending_multi_links=MagicMock(return_value=False),
         handle_awaited_url=AsyncMock(),
         handle_direct_url=AsyncMock(),
-        handle_multi_link_confirmation=AsyncMock(),
-        add_pending_multi_links=MagicMock(),
         add_awaiting_user=MagicMock(),
     )
     forward_processor: Any = SimpleNamespace(handle_forward_flow=AsyncMock())
@@ -768,11 +765,8 @@ async def test_channel_forward_missing_msg_id_falls_to_user_path(
     url_handler: Any = SimpleNamespace(
         url_processor=MagicMock(),
         is_awaiting_url=AsyncMock(return_value=False),
-        has_pending_multi_links=AsyncMock(return_value=False),
         handle_awaited_url=AsyncMock(),
         handle_direct_url=AsyncMock(),
-        handle_multi_link_confirmation=AsyncMock(),
-        add_pending_multi_links=MagicMock(),
         add_awaiting_user=MagicMock(),
     )
     forward_processor: Any = SimpleNamespace(handle_forward_flow=AsyncMock())

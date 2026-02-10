@@ -465,40 +465,6 @@ class MessageRouter:
             if concurrent_acquired:
                 await self._release_concurrent_slot(limiter, uid)
 
-    async def handle_multi_confirm_response(self, message: Any, uid: int, response: str) -> None:
-        """Handle multi-link confirmation response from button or text.
-
-        Args:
-            message: The Telegram message object
-            uid: User ID
-            response: The response text ("yes" or "no")
-        """
-        # Generate correlation ID and start time for this interaction
-        correlation_id = generate_correlation_id()
-        start_time = time.time()
-
-        # Log interaction
-        interaction_id = await self._log_user_interaction(
-            user_id=uid,
-            chat_id=getattr(getattr(message, "chat", None), "id", None),
-            message_id=getattr(message, "message_id", 0) or getattr(message, "id", 0),
-            interaction_type="confirmation",
-            command=None,
-            input_text=response,
-            input_url=None,
-            has_forward=False,
-            forward_from_chat_id=None,
-            forward_from_chat_title=None,
-            forward_from_message_id=None,
-            media_type=None,
-            correlation_id=correlation_id,
-        )
-
-        # Call the existing URL handler method
-        await self.url_handler.handle_multi_link_confirmation(
-            message, response, uid, correlation_id, interaction_id, start_time
-        )
-
     async def _route_message_content(
         self,
         message: Any,
@@ -576,9 +542,7 @@ class MessageRouter:
             action, should_continue = await self.command_processor.handle_summarize_command(
                 message, text, uid, correlation_id, interaction_id, start_time
             )
-            if action == "multi_confirm":
-                await self.url_handler.add_pending_multi_links(uid, extract_all_urls(text))
-            elif action == "awaiting_url":
+            if action == "awaiting_url":
                 await self.url_handler.add_awaiting_user(uid)
             return
 
@@ -720,25 +684,7 @@ class MessageRouter:
 
         # Direct URL handling
         if text and looks_like_url(text):
-            # Check if user has pending batch confirmation - clear it and notify
-            if await self.url_handler.has_pending_multi_links(uid):
-                await self.url_handler.clear_pending_multi_links(uid)
-                logger.info(
-                    "pending_batch_cleared_for_new_url",
-                    extra={"uid": uid, "cid": correlation_id},
-                )
-                await self.response_formatter.safe_reply(
-                    message,
-                    "Previous batch request cancelled. Processing new URL(s)...",
-                )
             await self.url_handler.handle_direct_url(
-                message, text, uid, correlation_id, interaction_id, start_time
-            )
-            return
-
-        # Handle yes/no responses for pending multi-link confirmation
-        if await self.url_handler.has_pending_multi_links(uid):
-            await self.url_handler.handle_multi_link_confirmation(
                 message, text, uid, correlation_id, interaction_id, start_time
             )
             return

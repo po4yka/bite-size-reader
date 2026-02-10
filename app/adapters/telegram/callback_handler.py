@@ -28,8 +28,6 @@ logger = logging.getLogger(__name__)
 #   "rate:abc123:1"         - Rate summary (thumbs up)
 #   "rate:abc123:-1"        - Rate summary (thumbs down)
 #   "more:abc123"           - Show additional details
-#   "multi_confirm_yes"     - Confirm multi-link processing
-#   "multi_confirm_no"      - Cancel multi-link processing
 
 
 class CallbackHandler:
@@ -108,10 +106,6 @@ class CallbackHandler:
                 return await self._handle_rate(message, uid, parts, correlation_id)
             if action == "more":
                 return await self._handle_more(message, uid, parts, correlation_id)
-            if action == "multi_confirm_yes":
-                return await self._handle_multi_confirm(message, uid, "yes", correlation_id)
-            if action == "multi_confirm_no":
-                return await self._handle_multi_confirm(message, uid, "no", correlation_id)
 
             logger.warning(
                 "unknown_callback_action",
@@ -657,23 +651,3 @@ class CallbackHandler:
                 extra={"summary_id": summary_id, "error": str(e), "cid": correlation_id},
             )
             return None
-
-    async def _handle_multi_confirm(
-        self,
-        message: Any,
-        uid: int,
-        response: str,
-        correlation_id: str,
-    ) -> bool:
-        """Handle multi-link confirmation from button."""
-        if not self.url_handler:
-            logger.warning("multi_confirm_no_url_handler", extra={"cid": correlation_id})
-            return False
-
-        # This is handled by the existing flow in message_handler
-        # Just log that we received it via callback
-        logger.debug(
-            "multi_confirm_callback",
-            extra={"response": response, "uid": uid, "cid": correlation_id},
-        )
-        return False  # Let the existing handler process it

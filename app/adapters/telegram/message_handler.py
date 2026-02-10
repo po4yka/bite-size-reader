@@ -136,14 +136,6 @@ class MessageHandler:
             except Exception as e:
                 logger.warning("callback_answer_failed", extra={"error": str(e)})
 
-            # Handle multi-link confirmation callbacks (legacy path)
-            if callback_data == "multi_confirm_yes":
-                await self._handle_multi_confirm_yes(message, uid)
-                return
-            if callback_data == "multi_confirm_no":
-                await self._handle_multi_confirm_no(message, uid)
-                return
-
             # Route to the unified callback handler for all other actions
             handled = await self.callback_handler.handle_callback(
                 callback_query, uid, callback_data
@@ -153,17 +145,6 @@ class MessageHandler:
 
         except Exception as e:
             logger.exception("callback_query_handler_failed", extra={"error": str(e)})
-
-    async def _handle_multi_confirm_yes(self, message: Any, uid: int) -> None:
-        """Handle 'Yes' confirmation for multi-link processing."""
-        # Simulate typing "yes" text message to trigger existing flow
-        # This reuses the existing multi-link confirmation logic
-        await self.message_router.handle_multi_confirm_response(message, uid, "yes")
-
-    async def _handle_multi_confirm_no(self, message: Any, uid: int) -> None:
-        """Handle 'No' confirmation for multi-link processing."""
-        # Simulate typing "no" text message to trigger existing flow
-        await self.message_router.handle_multi_confirm_response(message, uid, "no")
 
     def _audit(self, level: str, event: str, details: dict) -> None:
         """Audit log helper (background async)."""
