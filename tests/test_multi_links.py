@@ -66,30 +66,34 @@ def make_bot(tmp_path: str) -> SpyBot:
 
 
 class TestMultiLinks(unittest.IsolatedAsyncioTestCase):
-    async def test_confirm_and_process_multi_links(self):
+    async def test_direct_process_multi_links(self):
+        """Multi-link messages are processed directly without confirmation."""
         with tempfile.TemporaryDirectory() as tmp:
             bot = make_bot(os.path.join(tmp, "app.db"))
             text = "Here are two links:\nhttps://a.example/a\nhttps://b.example/b"
             uid = 55
-            # Send message with multiple links
+            # Send message with multiple links -- should process directly
             await bot._on_message(FakeMessage(text, uid=uid))
-            # Bot should keep pending state
-            assert uid in bot._pending_multi_links
-            # Confirm
-            await bot._on_message(FakeMessage("yes", uid=uid))
+            # No pending state -- URLs processed immediately
+            assert uid not in bot._pending_multi_links
             assert "https://a.example/a" in bot.seen_urls
             assert "https://b.example/b" in bot.seen_urls
 
-    async def test_cancel_multi_links(self):
+    async def test_cancel_after_direct_multi_links(self):
+        """After direct multi-link processing, /cancel reports nothing to cancel."""
         with tempfile.TemporaryDirectory() as tmp:
             bot = make_bot(os.path.join(tmp, "app.db"))
+            bot.response_formatter.MIN_MESSAGE_INTERVAL_MS = 0
             text = "https://a.example/a\nhttps://b.example/b\nhttps://a.example/a"  # duplicate should dedupe
             uid = 66
             await bot._on_message(FakeMessage(text, uid=uid))
-            assert uid in bot._pending_multi_links
-            await bot._on_message(FakeMessage("no", uid=uid))
+            # URLs processed directly, no pending state
             assert uid not in bot._pending_multi_links
-            assert bot.seen_urls == []
+            assert len(bot.seen_urls) > 0
+            # /cancel should report nothing pending
+            cancel_msg = FakeMessage("/cancel", uid=uid)
+            await bot._on_message(cancel_msg)
+            assert any("No pending link requests" in r for r in cancel_msg._replies)
 
     async def test_document_file_processing(self):
         """Test processing of .txt file containing URLs."""

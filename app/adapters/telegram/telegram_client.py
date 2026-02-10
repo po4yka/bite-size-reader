@@ -86,34 +86,39 @@ class TelegramClient:
 
         client_any: Any = self.client
 
-        # Register handlers only if filters are available
-        if filters:
-            # Register a simple on_message handler in private chats
-            @client_any.on_message(filters.private)
-            async def _handler(client: Any, message: Any) -> None:
-                await message_handler(message)
-
         await client_any.start()
 
-        # Register callback query handler AFTER start() for reliable dispatch
-        if callback_query_handler:
-            try:
-                from pyrogram.handlers import CallbackQueryHandler
+        # Register all handlers AFTER start() for reliable dispatch.
+        # The decorator pattern (@client.on_message / @client.on_callback_query)
+        # before start() is empirically unreliable for callback queries in this
+        # Pyrogram fork (2.0.106). Using explicit add_handler() post-start for
+        # both handler types ensures consistent behavior.
+        handler_count = 0
 
-                async def _callback_handler(_client: Any, callback_query: Any) -> None:
+        if filters:
+            from pyrogram.handlers import CallbackQueryHandler, MessageHandler as PyroMessageHandler
+
+            async def _msg_handler(_client: Any, message: Any) -> None:
+                await message_handler(message)
+
+            client_any.add_handler(PyroMessageHandler(_msg_handler, filters.private), group=0)
+            handler_count += 1
+
+            if callback_query_handler:
+
+                async def _cb_handler(_client: Any, callback_query: Any) -> None:
                     await callback_query_handler(callback_query)
 
-                client_any.add_handler(CallbackQueryHandler(_callback_handler), group=0)
-                logger.info(
-                    "callback_handler_registered",
-                    extra={
-                        "handler_count": sum(len(g) for g in client_any.dispatcher.groups.values())
-                    },
-                )
-            except Exception as e:
-                logger.error("callback_handler_registration_failed", extra={"error": str(e)})
+                client_any.add_handler(CallbackQueryHandler(_cb_handler), group=0)
+                handler_count += 1
 
-        logger.info("bot_started")
+        logger.info(
+            "handlers_registered",
+            extra={
+                "handler_count": handler_count,
+                "has_callback": callback_query_handler is not None,
+            },
+        )
         await self._setup_bot_commands()
         await idle()
 

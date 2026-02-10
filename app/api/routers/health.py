@@ -72,30 +72,33 @@ async def _check_database() -> dict[str, Any]:
 
 
 async def _check_redis() -> dict[str, Any]:
-    """Check Redis connectivity."""
+    """Check Redis connectivity using shared client."""
     start = time.perf_counter()
     try:
         from app.config import load_config
+        from app.infrastructure.redis import get_redis
 
         config = load_config()
         if not config.redis.enabled:
             return {"status": "disabled", "latency_ms": 0}
 
-        import redis.asyncio as aioredis
-
-        redis_client = aioredis.from_url(
-            f"redis://{config.redis.host}:{config.redis.port}",
-            socket_connect_timeout=5.0,
-        )
-        try:
-            await asyncio.wait_for(redis_client.ping(), timeout=5.0)
+        redis_client = await get_redis(config)
+        if redis_client is None:
             latency_ms = (time.perf_counter() - start) * 1000
             return {
-                "status": "healthy",
+                "status": "unavailable",
+                "error": "Redis client not available",
                 "latency_ms": round(latency_ms, 2),
             }
-        finally:
-            await redis_client.close()
+
+        ping_result = redis_client.ping()
+        if asyncio.iscoroutine(ping_result):
+            await asyncio.wait_for(ping_result, timeout=5.0)
+        latency_ms = (time.perf_counter() - start) * 1000
+        return {
+            "status": "healthy",
+            "latency_ms": round(latency_ms, 2),
+        }
     except Exception as exc:
         latency_ms = (time.perf_counter() - start) * 1000
         logger.debug(

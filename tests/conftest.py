@@ -60,6 +60,7 @@ from app.config import (
     WebSearchConfig,
     YouTubeConfig,
 )
+from app.config.integrations import BatchAnalysisConfig
 
 # Provide sane defaults for integration/API tests that expect these env vars.
 os.environ.setdefault("JWT_SECRET_KEY", "test-secret-key-32-characters-long-123456")
@@ -240,6 +241,7 @@ def make_test_app_config(
         "circuit_breaker": CircuitBreakerConfig(),
         "web_search": WebSearchConfig(),
         "adaptive_timeout": AdaptiveTimeoutConfig(),
+        "batch_analysis": BatchAnalysisConfig(),
     }
     defaults.update(overrides)
     return AppConfig(**defaults)

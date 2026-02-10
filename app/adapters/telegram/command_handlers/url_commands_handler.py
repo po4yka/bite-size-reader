@@ -81,44 +81,47 @@ class URLCommandsHandlerImpl:
             Tuple of (next_action, should_continue) indicating the state machine
             transition. next_action can be:
             - None: Processing complete
-            - "multi_confirm": Waiting for multi-link confirmation
             - "awaiting_url": Waiting for user to send a URL
         """
         urls = extract_all_urls(ctx.text)
 
         if len(urls) > 1:
-            # Multiple URLs - ask for confirmation using handler's rich format if available
+            # Multiple URLs - process directly in parallel (no confirmation prompt)
             if self._url_handler is not None:
-                await self._url_handler._request_multi_link_confirmation(
-                    ctx.message,
-                    ctx.uid,
-                    urls,
-                    ctx.interaction_id,
-                    ctx.start_time,
-                    ctx.correlation_id,
+                valid_urls = await self._url_handler._apply_url_security_checks(
+                    ctx.message, urls, ctx.uid, ctx.correlation_id
                 )
+                if valid_urls:
+                    progress_id = await self._formatter.safe_reply_with_id(
+                        ctx.message, f"Processing {len(valid_urls)} links in parallel..."
+                    )
+                    await self._url_handler._process_multiple_urls_parallel(
+                        ctx.message,
+                        valid_urls,
+                        ctx.uid,
+                        ctx.correlation_id,
+                        initial_message_id=progress_id,
+                    )
             else:
-                # Fallback to simple buttons if no handler
-                buttons = [
-                    {"text": "✅ Yes", "callback_data": "multi_confirm_yes"},
-                    {"text": "❌ No", "callback_data": "multi_confirm_no"},
-                ]
-                keyboard = self._formatter.create_inline_keyboard(buttons)
-                await self._formatter.safe_reply(
-                    ctx.message, f"Process {len(urls)} links?", reply_markup=keyboard
-                )
-            logger.debug("awaiting_multi_confirm", extra={"uid": ctx.uid, "count": len(urls)})
+                # Fallback: process sequentially
+                for u in urls:
+                    per_link_cid = generate_correlation_id()
+                    await self._url_processor.handle_url_flow(
+                        ctx.message, u, correlation_id=per_link_cid
+                    )
+
+            logger.debug("multi_url_processed", extra={"uid": ctx.uid, "count": len(urls)})
 
             if ctx.interaction_id:
                 await async_safe_update_user_interaction(
                     ctx.user_repo,
                     interaction_id=ctx.interaction_id,
                     response_sent=True,
-                    response_type="confirmation",
+                    response_type="multi_url_direct",
                     start_time=ctx.start_time,
                     logger_=logger,
                 )
-            return "multi_confirm", False
+            return None, False
 
         if len(urls) == 1:
             # Single URL - process directly

@@ -17,6 +17,9 @@ services:
       - TEXTACY_ENABLED=1
       - DB_PATH=/data/app.db
       - CHROMA_HOST=http://chroma:8000
+      - REDIS_ENABLED=1
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
       - PYTHONUNBUFFERED=1
       - PYTHONDONTWRITEBYTECODE=1
       - MAX_CONCURRENT_CALLS=${MAX_CONCURRENT_CALLS:-4}
@@ -37,6 +40,8 @@ services:
       retries: 5
       start_period: 60s
     depends_on:
+      redis:
+        condition: service_healthy
       chroma:
         condition: service_healthy
         required: false # Allow bot to start without ChromaDB (graceful degradation)

@@ -108,21 +108,31 @@ class RedisCache:
             return False
 
     async def clear(self) -> int:
-        """Clear all cached keys matching the prefix."""
+        """Clear all cached keys matching the prefix.
+
+        Uses SCAN instead of KEYS to avoid blocking Redis on large datasets.
+        """
         client = await self._get_client()
         if not client:
             return 0
 
         pattern = f"{self.cfg.redis.prefix}:*"
+        deleted_count = 0
         try:
-            keys = await client.keys(pattern)
-            if keys:
-                await client.delete(*keys)
-            return len(keys)
+            # Use SCAN to iterate without blocking Redis
+            cursor = 0
+            while True:
+                cursor, keys = await client.scan(cursor, match=pattern, count=100)
+                if keys:
+                    await client.delete(*keys)
+                    deleted_count += len(keys)
+                if cursor == 0:
+                    break
+            return deleted_count
         except Exception as exc:
             logger.warning(
                 "redis_cache_clear_failed",
                 exc_info=True,
-                extra={"pattern": pattern, "error": str(exc)},
+                extra={"pattern": pattern, "error": str(exc), "deleted": deleted_count},
             )
-            return 0
+            return deleted_count

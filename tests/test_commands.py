@@ -111,7 +111,8 @@ class TestCommands(unittest.IsolatedAsyncioTestCase):
                 "Cancelled your pending URL request" in reply for reply in cancel_msg._replies
             )
 
-    async def test_cancel_pending_multi_links_command(self):
+    async def test_cancel_after_multi_links_direct_processing(self):
+        """After multi-link direct processing, /cancel reports nothing to cancel."""
         with tempfile.TemporaryDirectory() as tmp:
             bot = make_bot(os.path.join(tmp, "app.db"))
             bot.response_formatter.MIN_MESSAGE_INTERVAL_MS = 0
@@ -119,13 +120,13 @@ class TestCommands(unittest.IsolatedAsyncioTestCase):
             multi_text = "https://example.com/a\nhttps://example.com/b"
 
             await bot._on_message(FakeMessage(multi_text, uid=uid))
-            assert uid in bot._pending_multi_links
+            # No pending state -- URLs processed directly
+            assert uid not in bot._pending_multi_links
 
             cancel_msg = FakeMessage("/cancel", uid=uid)
             await bot._on_message(cancel_msg)
 
-            assert uid not in bot._pending_multi_links
-            assert any("pending multi-link confirmation" in reply for reply in cancel_msg._replies)
+            assert any("No pending link requests" in reply for reply in cancel_msg._replies)
 
     async def test_cancel_without_pending_requests(self):
         with tempfile.TemporaryDirectory() as tmp:
