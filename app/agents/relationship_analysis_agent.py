@@ -117,13 +117,17 @@ class RelationshipAnalysisAgent(BaseAgent[RelationshipAnalysisInput, Relationshi
             if series_result and series_result.confidence >= input_data.series_threshold:
                 self.log_info(
                     f"Detected series with confidence {series_result.confidence:.2f}",
-                    pattern=series_result.series_info.numbering_pattern if series_result.series_info else None,
+                    pattern=series_result.series_info.numbering_pattern
+                    if series_result.series_info
+                    else None,
                 )
                 return AgentResult.success_result(series_result)
             signals_used.append("series_patterns")
 
         # Phase 3: Check for strong topic cluster (metadata-based)
-        cluster_result = self._detect_cluster_from_metadata(articles, signals, input_data.cluster_threshold)
+        cluster_result = self._detect_cluster_from_metadata(
+            articles, signals, input_data.cluster_threshold
+        )
         if cluster_result and cluster_result.confidence >= input_data.cluster_threshold:
             self.log_info(f"Detected topic cluster with confidence {cluster_result.confidence:.2f}")
             return AgentResult.success_result(cluster_result)

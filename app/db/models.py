@@ -585,7 +585,9 @@ class BatchSession(BaseModel):
     failed_count = peewee.IntegerField(default=0)
 
     # Relationship detection results
-    relationship_type = peewee.TextField(null=True)  # series, topic_cluster, author_collection, domain_related, unrelated
+    relationship_type = peewee.TextField(
+        null=True
+    )  # series, topic_cluster, author_collection, domain_related, unrelated
     relationship_confidence = peewee.FloatField(null=True)  # 0.0-1.0
     relationship_metadata_json = JSONField(null=True)  # Additional relationship details
     combined_summary_json = JSONField(null=True)  # Synthesized summary across articles

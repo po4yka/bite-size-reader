@@ -228,9 +228,7 @@ class SqliteBatchSessionRepositoryAdapter(SqliteBaseRepository):
 
         return await self._execute(_create, operation_name="add_batch_session_item")
 
-    async def async_get_batch_session_items(
-        self, session_id: int
-    ) -> list[dict[str, Any]]:
+    async def async_get_batch_session_items(self, session_id: int) -> list[dict[str, Any]]:
         """Get all items for a batch session.
 
         Args:
@@ -275,7 +273,11 @@ class SqliteBatchSessionRepositoryAdapter(SqliteBaseRepository):
                 BatchSessionItem.select(BatchSessionItem, Request, Summary)
                 .join(Request)
                 .switch(BatchSessionItem)
-                .join(Summary, peewee.JOIN.LEFT_OUTER, on=(Summary.request == BatchSessionItem.request))
+                .join(
+                    Summary,
+                    peewee.JOIN.LEFT_OUTER,
+                    on=(Summary.request == BatchSessionItem.request),
+                )
                 .where(BatchSessionItem.batch_session == session_id)
                 .order_by(BatchSessionItem.position)
             )

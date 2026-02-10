@@ -48,9 +48,7 @@ class CombinedSummaryAgent(BaseAgent[CombinedSummaryInput, CombinedSummaryOutput
         super().__init__(name="CombinedSummaryAgent", correlation_id=correlation_id)
         self._llm = llm_client
 
-    async def execute(
-        self, input_data: CombinedSummaryInput
-    ) -> AgentResult[CombinedSummaryOutput]:
+    async def execute(self, input_data: CombinedSummaryInput) -> AgentResult[CombinedSummaryOutput]:
         """Generate combined summary for related articles.
 
         Args:
@@ -157,7 +155,9 @@ class CombinedSummaryAgent(BaseAgent[CombinedSummaryInput, CombinedSummaryOutput
             if rel.cluster_info.cluster_topic:
                 parts.append(f"  Topic: {rel.cluster_info.cluster_topic}")
             if rel.cluster_info.shared_entities:
-                parts.append(f"  Shared Entities: {', '.join(rel.cluster_info.shared_entities[:10])}")
+                parts.append(
+                    f"  Shared Entities: {', '.join(rel.cluster_info.shared_entities[:10])}"
+                )
             if rel.cluster_info.shared_tags:
                 parts.append(f"  Shared Tags: {', '.join(rel.cluster_info.shared_tags[:10])}")
             parts.append("")

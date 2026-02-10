@@ -19,7 +19,13 @@ from .circuit_breaker import CircuitBreakerConfig
 from .content import ContentLimitsConfig
 from .database import DatabaseConfig
 from .firecrawl import FirecrawlConfig  # noqa: TC001
-from .integrations import BatchAnalysisConfig, ChromaConfig, KarakeepConfig, McpConfig, WebSearchConfig
+from .integrations import (
+    BatchAnalysisConfig,
+    ChromaConfig,
+    KarakeepConfig,
+    McpConfig,
+    WebSearchConfig,
+)
 from .llm import AnthropicConfig, OpenAIConfig, OpenRouterConfig
 from .media import AttachmentConfig, YouTubeConfig
 from .redis import RedisConfig

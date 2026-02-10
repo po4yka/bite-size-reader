@@ -102,7 +102,7 @@ class TestCombinedSummaryAgent(unittest.IsolatedAsyncioTestCase):
         )
 
         # Mock LLM response
-        self.valid_llm_response = '''{
+        self.valid_llm_response = """{
             "thematic_arc": "A comprehensive journey through Python programming, from basics to functions.",
             "synthesized_insights": [
                 "Python's simplicity makes it ideal for beginners",
@@ -123,7 +123,7 @@ class TestCombinedSummaryAgent(unittest.IsolatedAsyncioTestCase):
             "combined_entities": ["Python", "functions"],
             "combined_topic_tags": ["#python", "#tutorial", "#programming"],
             "total_reading_time_min": 12
-        }'''
+        }"""
 
     async def test_successful_combined_summary_for_series(self):
         """Test successful combined summary generation for series."""
@@ -246,7 +246,7 @@ class TestCombinedSummaryAgent(unittest.IsolatedAsyncioTestCase):
 
     async def test_reading_order_defaults_to_input_order(self):
         """Test that reading order defaults to input order if not provided."""
-        response_no_order = '''{
+        response_no_order = """{
             "thematic_arc": "A Python journey.",
             "synthesized_insights": ["Python is great"],
             "contradictions": [],
@@ -256,7 +256,7 @@ class TestCombinedSummaryAgent(unittest.IsolatedAsyncioTestCase):
             "combined_entities": ["Python"],
             "combined_topic_tags": ["#python"],
             "total_reading_time_min": 10
-        }'''
+        }"""
 
         llm_response = MagicMock()
         llm_response.status = "ok"
@@ -306,7 +306,7 @@ class TestCombinedSummaryAgent(unittest.IsolatedAsyncioTestCase):
 
     async def test_total_reading_time_calculated_from_summaries(self):
         """Test that total reading time is calculated from summaries if not in LLM response."""
-        response_no_time = '''{
+        response_no_time = """{
             "thematic_arc": "A Python journey.",
             "synthesized_insights": ["Python is great"],
             "contradictions": [],
@@ -316,7 +316,7 @@ class TestCombinedSummaryAgent(unittest.IsolatedAsyncioTestCase):
             "combined_key_ideas": ["Python"],
             "combined_entities": ["Python"],
             "combined_topic_tags": ["#python"]
-        }'''
+        }"""
 
         llm_response = MagicMock()
         llm_response.status = "ok"
