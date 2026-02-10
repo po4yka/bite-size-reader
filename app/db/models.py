@@ -572,6 +572,68 @@ class KarakeepSync(BaseModel):
         )
 
 
+class BatchSession(BaseModel):
+    """Tracks batch URL processing sessions with relationship analysis."""
+
+    id = peewee.AutoField()
+    user = peewee.ForeignKeyField(User, backref="batch_sessions", on_delete="CASCADE")
+    correlation_id = peewee.TextField(unique=True)
+
+    # Batch counts
+    total_urls = peewee.IntegerField()
+    successful_count = peewee.IntegerField(default=0)
+    failed_count = peewee.IntegerField(default=0)
+
+    # Relationship detection results
+    relationship_type = peewee.TextField(null=True)  # series, topic_cluster, author_collection, domain_related, unrelated
+    relationship_confidence = peewee.FloatField(null=True)  # 0.0-1.0
+    relationship_metadata_json = JSONField(null=True)  # Additional relationship details
+    combined_summary_json = JSONField(null=True)  # Synthesized summary across articles
+
+    # Status tracking
+    status = peewee.TextField(default="processing")  # processing, completed, error
+    analysis_status = peewee.TextField(null=True)  # pending, analyzing, complete, skipped, error
+    processing_time_ms = peewee.IntegerField(null=True)  # Total processing time
+
+    # Sync/versioning
+    server_version = peewee.BigIntegerField(default=_next_server_version)
+    updated_at = peewee.DateTimeField(default=_utcnow)
+    created_at = peewee.DateTimeField(default=_utcnow)
+
+    class Meta:
+        table_name = "batch_sessions"
+        indexes = (
+            (("user",), False),
+            (("status",), False),
+            (("created_at",), False),
+            (("relationship_type",), False),
+        )
+
+
+class BatchSessionItem(BaseModel):
+    """Links batch sessions to individual requests with ordering metadata."""
+
+    id = peewee.AutoField()
+    batch_session = peewee.ForeignKeyField(BatchSession, backref="items", on_delete="CASCADE")
+    request = peewee.ForeignKeyField(Request, backref="batch_item", on_delete="CASCADE")
+    position = peewee.IntegerField()  # Order in the batch (0-indexed)
+
+    # Series detection metadata
+    is_series_part = peewee.BooleanField(default=False)
+    series_order = peewee.IntegerField(null=True)  # Order in series (1, 2, 3...)
+    series_title = peewee.TextField(null=True)  # Detected series name
+
+    created_at = peewee.DateTimeField(default=_utcnow)
+
+    class Meta:
+        table_name = "batch_session_items"
+        indexes = (
+            (("batch_session", "position"), False),
+            (("batch_session", "request"), True),  # Unique constraint
+            (("is_series_part",), False),
+        )
+
+
 ALL_MODELS: tuple[type[BaseModel], ...] = (
     User,
     Chat,
@@ -594,6 +656,8 @@ ALL_MODELS: tuple[type[BaseModel], ...] = (
     UserDevice,
     RefreshToken,
     KarakeepSync,
+    BatchSession,
+    BatchSessionItem,
 )
 
 

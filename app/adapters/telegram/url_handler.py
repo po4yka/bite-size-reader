@@ -477,6 +477,17 @@ class URLHandler:
                 return False
             return True
 
+    async def clear_pending_multi_links(self, uid: int) -> bool:
+        """Clear pending multi-link confirmation for a user.
+
+        Returns True if there was a pending state to clear, False otherwise.
+        """
+        async with self._state_lock:
+            if uid in self._pending_multi_links:
+                self._pending_multi_links.pop(uid)
+                return True
+            return False
+
     async def cleanup_expired_state(self) -> int:
         """Remove expired awaiting/pending entries. Returns count removed."""
         async with self._state_lock:

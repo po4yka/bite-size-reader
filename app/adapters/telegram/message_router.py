@@ -720,6 +720,17 @@ class MessageRouter:
 
         # Direct URL handling
         if text and looks_like_url(text):
+            # Check if user has pending batch confirmation - clear it and notify
+            if await self.url_handler.has_pending_multi_links(uid):
+                await self.url_handler.clear_pending_multi_links(uid)
+                logger.info(
+                    "pending_batch_cleared_for_new_url",
+                    extra={"uid": uid, "cid": correlation_id},
+                )
+                await self.response_formatter.safe_reply(
+                    message,
+                    "Previous batch request cancelled. Processing new URL(s)...",
+                )
             await self.url_handler.handle_direct_url(
                 message, text, uid, correlation_id, interaction_id, start_time
             )

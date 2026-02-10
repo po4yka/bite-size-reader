@@ -8,9 +8,12 @@ import json
 import logging
 import time
 from typing import TYPE_CHECKING, Any
+from urllib.parse import urlparse
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
+
+    from app.config.integrations import BatchAnalysisConfig
 
 from app.adapters.external.formatting import BatchProgressFormatter
 from app.core.async_utils import raise_if_cancelled
@@ -309,13 +312,16 @@ async def process_url_batch(
     max_concurrent: int = 4,
     max_retries: int = 2,
     compute_timeout_func: Callable[[str, int], Awaitable[float]] | None = None,
-) -> None:
+) -> BatchContext | None:
     """Process multiple URLs in parallel with controlled concurrency and detailed status tracking.
 
     This unified implementation handles both .txt file processing and multi-link text messages.
+
+    Returns:
+        BatchContext with batch processing results, or None if no URLs provided.
     """
     if not urls:
-        return
+        return None
 
     # Pre-register all URLs before processing starts
     # This ensures ALL URLs get database records even if processing fails early
@@ -730,6 +736,14 @@ async def process_url_batch(
             logger_=logger,
         )
 
+    # Return batch context for relationship analysis
+    return BatchContext(
+        batch_status=batch_status,
+        url_to_request_id=url_to_request_id,
+        correlation_id=correlation_id,
+        uid=uid,
+    )
+
 
 def should_notify_rate_limit(router: Any, uid: int) -> bool:
     """Determine if we should notify a user about rate limiting."""
@@ -771,3 +785,384 @@ def is_duplicate_message(
             if ts >= cutoff
         }
     return False
+
+
+class BatchContext:
+    """Context object returned from batch processing for relationship analysis."""
+
+    def __init__(
+        self,
+        batch_status: URLBatchStatus,
+        url_to_request_id: dict[str, int],
+        correlation_id: str,
+        uid: int,
+    ):
+        self.batch_status = batch_status
+        self.url_to_request_id = url_to_request_id
+        self.correlation_id = correlation_id
+        self.uid = uid
+
+
+async def run_batch_relationship_analysis(
+    batch_context: BatchContext,
+    message: Any,
+    response_formatter: Any,
+    summary_repo: Any,
+    batch_session_repo: Any,
+    llm_client: Any,
+    batch_config: BatchAnalysisConfig,
+) -> None:
+    """Run relationship analysis on a completed batch of articles.
+
+    This function:
+    1. Creates a BatchSession record
+    2. Fetches all successful summaries
+    3. Runs RelationshipAnalysisAgent
+    4. If relationship found, runs CombinedSummaryAgent
+    5. Persists results and sends combined analysis to user
+
+    Args:
+        batch_context: Context from batch processing
+        message: Telegram message for replies
+        response_formatter: ResponseFormatter instance
+        summary_repo: Summary repository
+        batch_session_repo: BatchSession repository
+        llm_client: LLM client for agents
+        batch_config: Batch analysis configuration
+    """
+    from app.agents.combined_summary_agent import CombinedSummaryAgent
+    from app.agents.relationship_analysis_agent import RelationshipAnalysisAgent
+    from app.models.batch_analysis import (
+        ArticleMetadata,
+        CombinedSummaryInput,
+        RelationshipAnalysisInput,
+        RelationshipType,
+    )
+
+    batch_status = batch_context.batch_status
+    url_to_request_id = batch_context.url_to_request_id
+    correlation_id = batch_context.correlation_id
+    uid = batch_context.uid
+
+    # Check if we have enough successful articles
+    if batch_status.success_count < batch_config.min_articles:
+        logger.debug(
+            "batch_analysis_skipped_insufficient_articles",
+            extra={
+                "success_count": batch_status.success_count,
+                "min_required": batch_config.min_articles,
+                "cid": correlation_id,
+            },
+        )
+        return
+
+    start_time_ms = time.time() * 1000
+
+    try:
+        # Create batch session record
+        session_id = await batch_session_repo.async_create_batch_session(
+            user_id=uid,
+            correlation_id=correlation_id,
+            total_urls=batch_status.total_count,
+        )
+
+        # Get successful request IDs
+        successful_request_ids = []
+        for url, request_id in url_to_request_id.items():
+            entry = batch_status._find_entry(url)
+            if entry and entry.status in (URLStatus.COMPLETE, URLStatus.CACHED):
+                successful_request_ids.append(request_id)
+
+        if len(successful_request_ids) < batch_config.min_articles:
+            await batch_session_repo.async_update_batch_session_status(
+                session_id, "completed", analysis_status="skipped"
+            )
+            return
+
+        # Fetch summaries for successful requests
+        summaries = await summary_repo.async_get_summaries_by_request_ids(successful_request_ids)
+
+        # Build article metadata for analysis
+        articles: list[ArticleMetadata] = []
+        full_summaries: list[dict[str, Any]] = []
+
+        for i, request_id in enumerate(successful_request_ids):
+            summary_data = summaries.get(request_id)
+            if not summary_data:
+                continue
+
+            # Add batch session item
+            await batch_session_repo.async_add_batch_session_item(
+                session_id=session_id,
+                request_id=request_id,
+                position=i,
+            )
+
+            payload = summary_data.get("json_payload", {})
+            if isinstance(payload, str):
+                try:
+                    payload = json.loads(payload)
+                except Exception:
+                    payload = {}
+
+            # Find the URL for this request_id
+            url = next((u for u, rid in url_to_request_id.items() if rid == request_id), "")
+
+            # Extract domain from URL
+            domain = None
+            if url:
+                try:
+                    domain = urlparse(url).netloc
+                except Exception:
+                    pass
+
+            # Extract entities as strings
+            entities = []
+            raw_entities = payload.get("entities", [])
+            if isinstance(raw_entities, list):
+                for e in raw_entities:
+                    if isinstance(e, dict) and "name" in e:
+                        entities.append(e["name"])
+                    elif isinstance(e, str):
+                        entities.append(e)
+
+            articles.append(
+                ArticleMetadata(
+                    request_id=request_id,
+                    url=url,
+                    title=payload.get("title"),
+                    author=payload.get("author"),
+                    domain=domain,
+                    published_at=payload.get("published_at"),
+                    topic_tags=payload.get("topic_tags", []),
+                    entities=entities,
+                    summary_250=payload.get("summary_250"),
+                    summary_1000=payload.get("summary_1000"),
+                    language=summary_data.get("lang"),
+                )
+            )
+            full_summaries.append(payload)
+
+        if len(articles) < batch_config.min_articles:
+            await batch_session_repo.async_update_batch_session_status(
+                session_id, "completed", analysis_status="skipped"
+            )
+            return
+
+        # Update session counts
+        await batch_session_repo.async_update_batch_session_counts(
+            session_id,
+            successful_count=batch_status.success_count,
+            failed_count=batch_status.failed_count,
+        )
+
+        # Determine language from articles
+        languages = [a.language for a in articles if a.language]
+        language = languages[0] if languages else "en"
+
+        # Run relationship analysis
+        await batch_session_repo.async_update_batch_session_status(
+            session_id, "processing", analysis_status="analyzing"
+        )
+
+        relationship_agent = RelationshipAnalysisAgent(
+            llm_client=llm_client if batch_config.use_llm_for_analysis else None,
+            correlation_id=correlation_id,
+        )
+
+        analysis_input = RelationshipAnalysisInput(
+            articles=articles,
+            correlation_id=correlation_id,
+            language=language,
+            series_threshold=batch_config.series_threshold,
+            cluster_threshold=batch_config.cluster_threshold,
+        )
+
+        analysis_result = await relationship_agent.execute(analysis_input)
+
+        if not analysis_result.success or not analysis_result.output:
+            logger.warning(
+                "batch_relationship_analysis_failed",
+                extra={"error": analysis_result.error, "cid": correlation_id},
+            )
+            await batch_session_repo.async_update_batch_session_status(
+                session_id, "completed", analysis_status="error"
+            )
+            return
+
+        relationship = analysis_result.output
+
+        # Persist relationship results
+        relationship_metadata = {
+            "series_info": relationship.series_info.model_dump() if relationship.series_info else None,
+            "cluster_info": relationship.cluster_info.model_dump() if relationship.cluster_info else None,
+            "reasoning": relationship.reasoning,
+            "signals_used": relationship.signals_used,
+        }
+
+        await batch_session_repo.async_update_batch_session_relationship(
+            session_id,
+            relationship_type=relationship.relationship_type.value,
+            relationship_confidence=relationship.confidence,
+            relationship_metadata=relationship_metadata,
+        )
+
+        # If unrelated, we're done
+        if relationship.relationship_type == RelationshipType.UNRELATED:
+            processing_time_ms = int(time.time() * 1000 - start_time_ms)
+            await batch_session_repo.async_update_batch_session_status(
+                session_id, "completed", processing_time_ms=processing_time_ms
+            )
+            logger.info(
+                "batch_analysis_complete_unrelated",
+                extra={"session_id": session_id, "cid": correlation_id},
+            )
+            return
+
+        # Update series info for items if detected
+        if relationship.series_info and relationship.series_info.article_order:
+            for i, req_id in enumerate(relationship.series_info.article_order, 1):
+                # Find the item and update it
+                items = await batch_session_repo.async_get_batch_session_items(session_id)
+                for item in items:
+                    if item.get("request") == req_id:
+                        await batch_session_repo.async_update_batch_session_item_series_info(
+                            item["id"],
+                            is_series_part=True,
+                            series_order=i,
+                            series_title=relationship.series_info.series_title,
+                        )
+                        break
+
+        # Generate combined summary if enabled
+        combined_summary = None
+        if batch_config.combined_summary_enabled and llm_client:
+            combined_agent = CombinedSummaryAgent(
+                llm_client=llm_client,
+                correlation_id=correlation_id,
+            )
+
+            combined_input = CombinedSummaryInput(
+                articles=articles,
+                relationship=relationship,
+                full_summaries=full_summaries,
+                correlation_id=correlation_id,
+                language=language,
+            )
+
+            combined_result = await combined_agent.execute(combined_input)
+
+            if combined_result.success and combined_result.output:
+                combined_summary = combined_result.output
+                await batch_session_repo.async_update_batch_session_combined_summary(
+                    session_id, combined_summary.model_dump()
+                )
+
+        processing_time_ms = int(time.time() * 1000 - start_time_ms)
+        await batch_session_repo.async_update_batch_session_status(
+            session_id, "completed", processing_time_ms=processing_time_ms
+        )
+
+        # Send relationship analysis result to user
+        await _send_batch_analysis_result(
+            message,
+            response_formatter,
+            relationship,
+            combined_summary,
+            articles,
+            language,
+        )
+
+        logger.info(
+            "batch_analysis_complete",
+            extra={
+                "session_id": session_id,
+                "relationship_type": relationship.relationship_type.value,
+                "confidence": relationship.confidence,
+                "combined_summary": combined_summary is not None,
+                "processing_time_ms": processing_time_ms,
+                "cid": correlation_id,
+            },
+        )
+
+    except Exception as e:
+        logger.exception(
+            "batch_relationship_analysis_error",
+            extra={"error": str(e), "cid": correlation_id},
+        )
+
+
+async def _send_batch_analysis_result(
+    message: Any,
+    response_formatter: Any,
+    relationship: Any,  # RelationshipAnalysisOutput
+    combined_summary: Any,  # CombinedSummaryOutput | None
+    articles: list[Any],
+    language: str,
+) -> None:
+    """Send batch analysis results to the user."""
+    from app.models.batch_analysis import RelationshipType
+
+    # Build relationship type display
+    type_labels = {
+        RelationshipType.SERIES: ("Series Detected", "Обнаружена серия"),
+        RelationshipType.TOPIC_CLUSTER: ("Topic Cluster", "Тематический кластер"),
+        RelationshipType.AUTHOR_COLLECTION: ("Author Collection", "Коллекция автора"),
+        RelationshipType.DOMAIN_RELATED: ("Related Content", "Связанный контент"),
+    }
+
+    type_label = type_labels.get(relationship.relationship_type, ("Related", "Связано"))
+    label = type_label[1] if language == "ru" else type_label[0]
+
+    # Build message
+    parts = []
+    parts.append(f"<b>{label}</b> ({relationship.confidence:.0%} confidence)")
+
+    if relationship.reasoning:
+        parts.append(f"\n{relationship.reasoning}")
+
+    # Series info
+    if relationship.series_info:
+        si = relationship.series_info
+        if si.series_title:
+            parts.append(f"\n<b>Series:</b> {si.series_title}")
+        if si.numbering_pattern:
+            parts.append(f"<b>Pattern:</b> {si.numbering_pattern}")
+
+    # Cluster info
+    if relationship.cluster_info:
+        ci = relationship.cluster_info
+        if ci.cluster_topic:
+            parts.append(f"\n<b>Topic:</b> {ci.cluster_topic}")
+        if ci.shared_entities:
+            parts.append(f"<b>Shared entities:</b> {', '.join(ci.shared_entities[:5])}")
+        if ci.shared_tags:
+            parts.append(f"<b>Shared tags:</b> {', '.join(ci.shared_tags[:5])}")
+
+    # Combined summary
+    if combined_summary:
+        parts.append("\n---")
+        parts.append(f"\n<b>Thematic Arc:</b>\n{combined_summary.thematic_arc}")
+
+        if combined_summary.synthesized_insights:
+            insights_header = "Synthesized Insights" if language != "ru" else "Синтезированные инсайты"
+            parts.append(f"\n<b>{insights_header}:</b>")
+            for insight in combined_summary.synthesized_insights[:5]:
+                parts.append(f"- {insight}")
+
+        if combined_summary.contradictions:
+            contradictions_header = "Contradictions" if language != "ru" else "Противоречия"
+            parts.append(f"\n<b>{contradictions_header}:</b>")
+            for contradiction in combined_summary.contradictions[:3]:
+                parts.append(f"- {contradiction}")
+
+        if combined_summary.reading_order_rationale:
+            order_header = "Reading Order" if language != "ru" else "Порядок чтения"
+            parts.append(f"\n<b>{order_header}:</b> {combined_summary.reading_order_rationale}")
+
+        if combined_summary.total_reading_time_min:
+            time_header = "Total Reading Time" if language != "ru" else "Общее время чтения"
+            parts.append(f"\n<b>{time_header}:</b> {combined_summary.total_reading_time_min} min")
+
+    text = "\n".join(parts)
+    await response_formatter.safe_reply(message, text, parse_mode="HTML")

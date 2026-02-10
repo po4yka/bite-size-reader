@@ -19,7 +19,7 @@ from .circuit_breaker import CircuitBreakerConfig
 from .content import ContentLimitsConfig
 from .database import DatabaseConfig
 from .firecrawl import FirecrawlConfig  # noqa: TC001
-from .integrations import ChromaConfig, KarakeepConfig, McpConfig, WebSearchConfig
+from .integrations import BatchAnalysisConfig, ChromaConfig, KarakeepConfig, McpConfig, WebSearchConfig
 from .llm import AnthropicConfig, OpenAIConfig, OpenRouterConfig
 from .media import AttachmentConfig, YouTubeConfig
 from .redis import RedisConfig
@@ -52,6 +52,7 @@ class AppConfig:
     circuit_breaker: CircuitBreakerConfig
     web_search: WebSearchConfig
     adaptive_timeout: AdaptiveTimeoutConfig
+    batch_analysis: BatchAnalysisConfig
 
 
 class Settings(BaseSettings):
@@ -92,6 +93,7 @@ class Settings(BaseSettings):
     web_search: WebSearchConfig = Field(default_factory=WebSearchConfig)
     mcp: McpConfig = Field(default_factory=McpConfig)
     adaptive_timeout: AdaptiveTimeoutConfig = Field(default_factory=AdaptiveTimeoutConfig)
+    batch_analysis: BatchAnalysisConfig = Field(default_factory=BatchAnalysisConfig)
 
     @model_validator(mode="before")
     @classmethod
@@ -187,6 +189,7 @@ class Settings(BaseSettings):
             circuit_breaker=self.circuit_breaker,
             web_search=self.web_search,
             adaptive_timeout=self.adaptive_timeout,
+            batch_analysis=self.batch_analysis,
         )
 
 

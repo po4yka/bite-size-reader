@@ -233,6 +233,74 @@ class McpConfig(BaseModel):
         return parsed
 
 
+class BatchAnalysisConfig(BaseModel):
+    """Batch article relationship detection and combined summary configuration."""
+
+    model_config = ConfigDict(frozen=True, populate_by_name=True)
+
+    enabled: bool = Field(
+        default=True,
+        validation_alias="BATCH_ANALYSIS_ENABLED",
+        description="Enable batch relationship analysis for multi-URL submissions",
+    )
+    min_articles: int = Field(
+        default=2,
+        validation_alias="BATCH_ANALYSIS_MIN_ARTICLES",
+        description="Minimum successful articles required to trigger analysis",
+    )
+    series_threshold: float = Field(
+        default=0.9,
+        validation_alias="BATCH_ANALYSIS_SERIES_THRESHOLD",
+        description="Confidence threshold for series detection (0.0-1.0)",
+    )
+    cluster_threshold: float = Field(
+        default=0.75,
+        validation_alias="BATCH_ANALYSIS_CLUSTER_THRESHOLD",
+        description="Confidence threshold for topic cluster detection (0.0-1.0)",
+    )
+    combined_summary_enabled: bool = Field(
+        default=True,
+        validation_alias="BATCH_COMBINED_SUMMARY_ENABLED",
+        description="Generate combined summary when relationship is detected",
+    )
+    use_llm_for_analysis: bool = Field(
+        default=True,
+        validation_alias="BATCH_ANALYSIS_USE_LLM",
+        description="Use LLM for ambiguous relationship analysis",
+    )
+
+    @field_validator("min_articles", mode="before")
+    @classmethod
+    def _validate_min_articles(cls, value: Any) -> int:
+        if value in (None, ""):
+            return 2
+        try:
+            parsed = int(str(value))
+        except ValueError as exc:
+            msg = "Min articles must be a valid integer"
+            raise ValueError(msg) from exc
+        if parsed < 2 or parsed > 100:
+            msg = "Min articles must be between 2 and 100"
+            raise ValueError(msg)
+        return parsed
+
+    @field_validator("series_threshold", "cluster_threshold", mode="before")
+    @classmethod
+    def _validate_threshold(cls, value: Any, info: ValidationInfo) -> float:
+        default = 0.9 if "series" in info.field_name else 0.75
+        if value in (None, ""):
+            return default
+        try:
+            parsed = float(str(value))
+        except ValueError as exc:
+            msg = f"{info.field_name} must be a valid number"
+            raise ValueError(msg) from exc
+        if parsed < 0.0 or parsed > 1.0:
+            msg = f"{info.field_name} must be between 0.0 and 1.0"
+            raise ValueError(msg)
+        return parsed
+
+
 class ChromaConfig(BaseModel):
     """Vector store configuration for Chroma."""
 

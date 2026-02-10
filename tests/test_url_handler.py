@@ -149,3 +149,22 @@ async def test_cleanup_expired_state() -> None:
         mock_time.time.return_value = time.time() + 130
         cleaned = await handler.cleanup_expired_state()
         assert cleaned == 2
+
+
+@pytest.mark.asyncio
+async def test_clear_pending_multi_links() -> None:
+    """clear_pending_multi_links removes pending state for a user."""
+    handler = _make_handler()
+
+    # Add pending multi-links
+    await handler.add_pending_multi_links(300, ["https://a.com", "https://b.com"])
+    assert await handler.has_pending_multi_links(300)
+
+    # Clear should return True and remove the state
+    cleared = await handler.clear_pending_multi_links(300)
+    assert cleared is True
+    assert not await handler.has_pending_multi_links(300)
+
+    # Clearing again should return False (nothing to clear)
+    cleared_again = await handler.clear_pending_multi_links(300)
+    assert cleared_again is False
