@@ -202,17 +202,13 @@ class MessageRouter:
             ):
                 return
 
-            logger.info("DEBUG_CHECKPOINT_1", extra={"cid": correlation_id, "uid": uid})
-
             chat_id = telegram_message.chat.id if telegram_message.chat else None
             message_id = telegram_message.message_id
             message_key = None
             if message_id is not None:
                 message_key = (uid, chat_id or 0, message_id)
 
-            logger.info("DEBUG_CHECKPOINT_2", extra={"cid": correlation_id})
             text = telegram_message.get_effective_text() or ""
-            logger.info("DEBUG_CHECKPOINT_3", extra={"cid": correlation_id, "text_len": len(text)})
 
             # CRITICAL: Validate text length to prevent memory exhaustion and regex DoS
             # Limit to 50KB for text processing (prevents regex DoS and memory issues)
@@ -236,10 +232,6 @@ class MessageRouter:
                 return
 
             text_signature = text.strip() if isinstance(text, str) else ""
-            logger.info(
-                "DEBUG_CHECKPOINT_4_pre_dup",
-                extra={"cid": correlation_id, "message_key": str(message_key)},
-            )
             if message_key and is_duplicate_message(self, message_key, text_signature):
                 logger.info(
                     "duplicate_message_skipped",

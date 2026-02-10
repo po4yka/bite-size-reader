@@ -344,10 +344,22 @@ class URLHandler:
             return
 
         if len(urls) > 1:
-            # Request confirmation for multiple URLs
-            await self._request_multi_link_confirmation(
-                message, uid, urls, interaction_id, start_time, correlation_id
+            # Process multiple URLs directly in parallel (no confirmation needed)
+            progress_message_id = await self.response_formatter.safe_reply_with_id(
+                message, f"Processing {len(urls)} links in parallel..."
             )
+            await self._process_multiple_urls_parallel(
+                message, urls, uid, correlation_id, initial_message_id=progress_message_id
+            )
+            if interaction_id:
+                await async_safe_update_user_interaction(
+                    self.user_repo,
+                    interaction_id=interaction_id,
+                    response_sent=True,
+                    response_type="processing",
+                    start_time=start_time,
+                    logger_=logger,
+                )
             return
 
         if len(urls) == 1:

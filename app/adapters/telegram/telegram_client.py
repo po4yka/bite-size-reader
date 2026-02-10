@@ -93,14 +93,26 @@ class TelegramClient:
             async def _handler(client: Any, message: Any) -> None:
                 await message_handler(message)
 
-            # Register callback query handler for inline button clicks
-            if callback_query_handler:
+        await client_any.start()
 
-                @client_any.on_callback_query()
-                async def _callback_handler(client: Any, callback_query: Any) -> None:
+        # Register callback query handler AFTER start() for reliable dispatch
+        if callback_query_handler:
+            try:
+                from pyrogram.handlers import CallbackQueryHandler
+
+                async def _callback_handler(_client: Any, callback_query: Any) -> None:
                     await callback_query_handler(callback_query)
 
-        await client_any.start()
+                client_any.add_handler(CallbackQueryHandler(_callback_handler), group=0)
+                logger.info(
+                    "callback_handler_registered",
+                    extra={
+                        "handler_count": sum(len(g) for g in client_any.dispatcher.groups.values())
+                    },
+                )
+            except Exception as e:
+                logger.error("callback_handler_registration_failed", extra={"error": str(e)})
+
         logger.info("bot_started")
         await self._setup_bot_commands()
         await idle()
