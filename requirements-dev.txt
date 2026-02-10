@@ -296,7 +296,7 @@ ru-core-news-sm @ https://github.com/explosion/spacy-models/releases/download/ru
     #   bite-size-reader (pyproject.toml)
 ruff==0.14.14
     # via bite-size-reader (pyproject.toml)
-setuptools==80.10.2
+setuptools==82.0.0
     # via
     #   -c requirements.txt
     #   pymorphy3
