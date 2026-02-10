@@ -8,7 +8,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -26,7 +26,7 @@ class TestBatchRelationshipFlow(unittest.IsolatedAsyncioTestCase):
         from app.db.session import DatabaseSessionManager
 
         # Create temporary database
-        self.tmp_db = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
+        self.tmp_db = tempfile.NamedTemporaryFile(suffix=".db", delete=False)  # noqa: SIM115
         self.db_path = self.tmp_db.name
         self.tmp_db.close()  # Close so DatabaseSessionManager can open it
 
@@ -132,13 +132,15 @@ class TestBatchRelationshipFlow(unittest.IsolatedAsyncioTestCase):
     async def test_relationship_agent_detects_series(self):
         """Test that RelationshipAnalysisAgent correctly detects a series."""
         from app.agents.relationship_analysis_agent import RelationshipAnalysisAgent
-        from app.models.batch_analysis import ArticleMetadata, RelationshipAnalysisInput, RelationshipType
+        from app.models.batch_analysis import (
+            ArticleMetadata,
+            RelationshipAnalysisInput,
+            RelationshipType,
+        )
 
         # Build article metadata from test data
         articles = []
-        for i, (request, summary) in enumerate(
-            zip(self.series_requests, self.series_summaries)
-        ):
+        for request, summary in zip(self.series_requests, self.series_summaries, strict=True):
             payload = json.loads(summary.json_payload)
             articles.append(
                 ArticleMetadata(
@@ -175,11 +177,15 @@ class TestBatchRelationshipFlow(unittest.IsolatedAsyncioTestCase):
     async def test_relationship_agent_detects_unrelated(self):
         """Test that RelationshipAnalysisAgent correctly identifies unrelated articles."""
         from app.agents.relationship_analysis_agent import RelationshipAnalysisAgent
-        from app.models.batch_analysis import ArticleMetadata, RelationshipAnalysisInput, RelationshipType
+        from app.models.batch_analysis import (
+            ArticleMetadata,
+            RelationshipAnalysisInput,
+            RelationshipType,
+        )
 
         # Build article metadata from test data
         articles = []
-        for request, summary in zip(self.unrelated_requests, self.unrelated_summaries):
+        for request, summary in zip(self.unrelated_requests, self.unrelated_summaries, strict=True):
             payload = json.loads(summary.json_payload)
             articles.append(
                 ArticleMetadata(
@@ -224,7 +230,7 @@ class TestBatchRelationshipFlow(unittest.IsolatedAsyncioTestCase):
         articles = []
         full_summaries = []
 
-        for request, summary in zip(self.series_requests, self.series_summaries):
+        for request, summary in zip(self.series_requests, self.series_summaries, strict=True):
             payload = json.loads(summary.json_payload)
             articles.append(
                 ArticleMetadata(
@@ -260,21 +266,23 @@ class TestBatchRelationshipFlow(unittest.IsolatedAsyncioTestCase):
         mock_llm = MagicMock()
         mock_response = MagicMock()
         mock_response.status = "ok"
-        mock_response.response_text = json.dumps({
-            "thematic_arc": "A comprehensive Python tutorial series covering basics to advanced topics.",
-            "synthesized_insights": [
-                "Python fundamentals build progressively",
-                "Each part builds on previous concepts",
-            ],
-            "contradictions": [],
-            "complementary_points": ["Parts complement each other well"],
-            "recommended_reading_order": [r.id for r in self.series_requests],
-            "reading_order_rationale": "Follow the natural Part 1, 2, 3 progression.",
-            "combined_key_ideas": ["Python basics", "Progressive learning"],
-            "combined_entities": ["Python"],
-            "combined_topic_tags": ["#python", "#tutorial"],
-            "total_reading_time_min": sum(5 + i for i in range(1, 4)),
-        })
+        mock_response.response_text = json.dumps(
+            {
+                "thematic_arc": "A comprehensive Python tutorial series covering basics to advanced topics.",
+                "synthesized_insights": [
+                    "Python fundamentals build progressively",
+                    "Each part builds on previous concepts",
+                ],
+                "contradictions": [],
+                "complementary_points": ["Parts complement each other well"],
+                "recommended_reading_order": [r.id for r in self.series_requests],
+                "reading_order_rationale": "Follow the natural Part 1, 2, 3 progression.",
+                "combined_key_ideas": ["Python basics", "Progressive learning"],
+                "combined_entities": ["Python"],
+                "combined_topic_tags": ["#python", "#tutorial"],
+                "total_reading_time_min": sum(5 + i for i in range(1, 4)),
+            }
+        )
         mock_llm.chat = AsyncMock(return_value=mock_response)
 
         agent = CombinedSummaryAgent(
@@ -338,9 +346,7 @@ class TestBatchRelationshipFlow(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(items), 3)
 
         # Test update counts
-        await repo.async_update_batch_session_counts(
-            session_id, successful_count=3, failed_count=0
-        )
+        await repo.async_update_batch_session_counts(session_id, successful_count=3, failed_count=0)
 
         # Test update relationship
         await repo.async_update_batch_session_relationship(
@@ -401,7 +407,7 @@ class TestBatchRelationshipFlow(unittest.IsolatedAsyncioTestCase):
         articles = []
         full_summaries = []
 
-        for request, summary in zip(self.series_requests, self.series_summaries):
+        for request, summary in zip(self.series_requests, self.series_summaries, strict=True):
             payload = json.loads(summary.json_payload)
             articles.append(
                 ArticleMetadata(
@@ -442,18 +448,20 @@ class TestBatchRelationshipFlow(unittest.IsolatedAsyncioTestCase):
             mock_llm = MagicMock()
             mock_response = MagicMock()
             mock_response.status = "ok"
-            mock_response.response_text = json.dumps({
-                "thematic_arc": "Complete Python tutorial journey.",
-                "synthesized_insights": ["Progressive learning works"],
-                "contradictions": [],
-                "complementary_points": ["Each part complements others"],
-                "recommended_reading_order": [r.id for r in self.series_requests],
-                "reading_order_rationale": "Sequential order.",
-                "combined_key_ideas": ["Python mastery"],
-                "combined_entities": ["Python"],
-                "combined_topic_tags": ["#python"],
-                "total_reading_time_min": 18,
-            })
+            mock_response.response_text = json.dumps(
+                {
+                    "thematic_arc": "Complete Python tutorial journey.",
+                    "synthesized_insights": ["Progressive learning works"],
+                    "contradictions": [],
+                    "complementary_points": ["Each part complements others"],
+                    "recommended_reading_order": [r.id for r in self.series_requests],
+                    "reading_order_rationale": "Sequential order.",
+                    "combined_key_ideas": ["Python mastery"],
+                    "combined_entities": ["Python"],
+                    "combined_topic_tags": ["#python"],
+                    "total_reading_time_min": 18,
+                }
+            )
             mock_llm.chat = AsyncMock(return_value=mock_response)
 
             combined_agent = CombinedSummaryAgent(

@@ -3,7 +3,6 @@
 import unittest
 from unittest.mock import AsyncMock, MagicMock
 
-from app.agents.base_agent import AgentResult
 from app.agents.relationship_analysis_agent import (
     MetadataSignals,
     RelationshipAnalysisAgent,
@@ -290,7 +289,7 @@ class TestRelationshipAnalysisAgent(unittest.IsolatedAsyncioTestCase):
         # Mock LLM response
         llm_response = MagicMock()
         llm_response.status = "ok"
-        llm_response.response_text = '''{
+        llm_response.response_text = """{
             "relationship_type": "topic_cluster",
             "confidence": 0.8,
             "cluster_info": {
@@ -302,7 +301,7 @@ class TestRelationshipAnalysisAgent(unittest.IsolatedAsyncioTestCase):
             },
             "reasoning": "Both articles discuss AWS cloud services",
             "signals_used": ["entity_overlap", "semantic_similarity"]
-        }'''
+        }"""
         self.mock_llm.chat = AsyncMock(return_value=llm_response)
 
         agent_with_llm = RelationshipAnalysisAgent(
