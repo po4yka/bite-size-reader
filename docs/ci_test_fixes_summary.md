@@ -301,7 +301,7 @@ All test-related objectives completed successfully.
 - **CI Run:** https://github.com/po4yka/bite-size-reader/actions/runs/21851690469
 - **Commit 1:** `0cd7e69` - Lazy scheduler import
 - **Commit 2:** `864d58b` - Skip metaclass conflict tests
-- **APScheduler 4.0 Docs:** https://apscheduler.readthedocs.io/en/4.x/
+- **APScheduler 4.0 Docs:** https://apscheduler.readthedocs.io/en/stable/
 
 ---
 
