@@ -60,7 +60,7 @@ cymem==2.0.13
     #   preshed
     #   spacy
     #   thinc
-dateparser==1.2.2
+dateparser==1.3.0
     # via
     #   -c requirements.txt
     #   htmldate
@@ -126,7 +126,7 @@ jinja2==3.1.6
     # via
     #   -c requirements.txt
     #   spacy
-json-repair==0.55.2
+json-repair==0.57.1
     # via
     #   -c requirements.txt
     #   bite-size-reader (pyproject.toml)
@@ -173,7 +173,7 @@ numpy==2.4.2
     #   blis
     #   spacy
     #   thinc
-orjson==3.11.6
+orjson==3.11.7
     # via
     #   -c requirements.txt
     #   bite-size-reader (pyproject.toml)
@@ -276,7 +276,7 @@ pyyaml==6.0.3
     # via
     #   bite-size-reader (pyproject.toml)
     #   pre-commit
-redis==7.1.0
+redis==7.1.1
     # via
     #   -c requirements.txt
     #   bite-size-reader (pyproject.toml)
@@ -294,7 +294,7 @@ ru-core-news-sm @ https://github.com/explosion/spacy-models/releases/download/ru
     # via
     #   -c requirements.txt
     #   bite-size-reader (pyproject.toml)
-ruff==0.14.14
+ruff==0.15.0
     # via bite-size-reader (pyproject.toml)
 setuptools==80.10.2
     # via
@@ -346,7 +346,7 @@ tld==0.13.1
     # via
     #   -c requirements.txt
     #   courlan
-tqdm==4.67.2
+tqdm==4.67.3
     # via
     #   -c requirements.txt
     #   spacy
@@ -399,7 +399,7 @@ weasel==0.4.3
     # via
     #   -c requirements.txt
     #   spacy
-wrapt==2.1.0
+wrapt==2.1.1
     # via
     #   -c requirements.txt
     #   smart-open
