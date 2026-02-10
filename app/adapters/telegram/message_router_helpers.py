@@ -863,7 +863,7 @@ async def run_batch_relationship_analysis(
         session_id = await batch_session_repo.async_create_batch_session(
             user_id=uid,
             correlation_id=correlation_id,
-            total_urls=batch_status.total_count,
+            total_urls=batch_status.total,
         )
 
         # Get successful request IDs
@@ -953,7 +953,7 @@ async def run_batch_relationship_analysis(
         await batch_session_repo.async_update_batch_session_counts(
             session_id,
             successful_count=batch_status.success_count,
-            failed_count=batch_status.failed_count,
+            failed_count=batch_status.fail_count,
         )
 
         # Determine language from articles
@@ -994,8 +994,12 @@ async def run_batch_relationship_analysis(
 
         # Persist relationship results
         relationship_metadata = {
-            "series_info": relationship.series_info.model_dump() if relationship.series_info else None,
-            "cluster_info": relationship.cluster_info.model_dump() if relationship.cluster_info else None,
+            "series_info": relationship.series_info.model_dump()
+            if relationship.series_info
+            else None,
+            "cluster_info": relationship.cluster_info.model_dump()
+            if relationship.cluster_info
+            else None,
             "reasoning": relationship.reasoning,
             "signals_used": relationship.signals_used,
         }
@@ -1145,7 +1149,9 @@ async def _send_batch_analysis_result(
         parts.append(f"\n<b>Thematic Arc:</b>\n{combined_summary.thematic_arc}")
 
         if combined_summary.synthesized_insights:
-            insights_header = "Synthesized Insights" if language != "ru" else "Синтезированные инсайты"
+            insights_header = (
+                "Synthesized Insights" if language != "ru" else "Синтезированные инсайты"
+            )
             parts.append(f"\n<b>{insights_header}:</b>")
             for insight in combined_summary.synthesized_insights[:5]:
                 parts.append(f"- {insight}")

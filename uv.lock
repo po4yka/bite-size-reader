@@ -164,6 +164,7 @@ dependencies = [
 
 [package.optional-dependencies]
 api = [
+    { name = "chromadb" },
     { name = "fastapi" },
     { name = "pyjwt" },
     { name = "python-multipart" },
@@ -219,6 +220,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "apscheduler", marker = "extra == 'scheduler'", specifier = ">=3.11.2,<4.0.0" },
+    { name = "chromadb", marker = "extra == 'api'", specifier = ">=1.4.1" },
     { name = "chromadb", marker = "extra == 'ml'", specifier = ">=1.4.1" },
     { name = "en-core-web-sm", url = "https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl" },
     { name = "fakeredis", specifier = ">=2.33.0" },
