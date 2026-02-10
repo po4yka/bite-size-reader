@@ -28,6 +28,7 @@ if TYPE_CHECKING:
     from app.config import AppConfig
     from app.db.session import DatabaseSessionManager
     from app.db.write_queue import DbWriteQueue
+    from app.services.scheduler import SchedulerService
 
 logger = logging.getLogger(__name__)
 
@@ -115,10 +116,8 @@ class TelegramBot:
         # Sync dependencies (in case they were updated)
         self._sync_client_dependencies()
 
-        # Initialize scheduler for background tasks (e.g., Karakeep sync)
-        from app.services.scheduler import SchedulerService
-
-        self._scheduler = SchedulerService(cfg=self.cfg, db=self.db)
+        # Scheduler will be lazily initialized when start() is called
+        self._scheduler: SchedulerService | None = None
 
     def _sem(self) -> asyncio.Semaphore:
         """Lazy-create a semaphore when an event loop is running.
@@ -175,6 +174,10 @@ class TelegramBot:
             logger.warning("startup_cache_clear_failed", extra={"error": str(e)})
 
         # Start background scheduler for periodic tasks (e.g., Karakeep sync)
+        # Lazy import to avoid apscheduler dependency in tests
+        from app.services.scheduler import SchedulerService
+
+        self._scheduler = SchedulerService(cfg=self.cfg, db=self.db)
         await self._scheduler.start()
 
         try:
@@ -183,8 +186,9 @@ class TelegramBot:
                 self.message_handler.handle_callback_query,
             )
         finally:
-            # Stop scheduler gracefully
-            await self._scheduler.stop()
+            # Stop scheduler gracefully (if it was started)
+            if self._scheduler is not None:
+                await self._scheduler.stop()
 
             if hasattr(self, "_backup_task") and self._backup_task is not None:
                 self._backup_task.cancel()

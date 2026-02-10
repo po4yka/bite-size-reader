@@ -52,15 +52,16 @@ jobs:
       - name: Compile locked requirements (runtime - core only)
         run: uv pip compile pyproject.toml -o requirements.txt
 
-      - name: Compile locked requirements (all extras for tests, except scheduler)
+      - name: Compile locked requirements (all extras for tests)
         run: |
-          # Exclude scheduler to avoid APScheduler metaclass conflicts in tests
-          # No tests use APScheduler, so it's safe to exclude
+          # Include all extras for comprehensive test coverage
+          # Scheduler import is now lazy in TelegramBot, avoiding metaclass conflicts
           uv pip compile \
             --extra api \
             --extra ml \
             --extra youtube \
             --extra export \
+            --extra scheduler \
             --extra mcp \
             pyproject.toml \
             -o requirements-all.txt
