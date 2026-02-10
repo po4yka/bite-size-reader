@@ -49,11 +49,23 @@ jobs:
             pyproject.toml
             uv.lock
 
-      - name: Compile locked requirements (runtime)
+      - name: Compile locked requirements (runtime - core only)
         run: uv pip compile pyproject.toml -o requirements.txt
 
+      - name: Compile locked requirements (all extras for tests)
+        run: |
+          uv pip compile \
+            --extra api \
+            --extra ml \
+            --extra youtube \
+            --extra export \
+            --extra scheduler \
+            --extra mcp \
+            pyproject.toml \
+            -o requirements-all.txt
+
       - name: Compile locked requirements (dev)
-        run: uv pip compile --extra dev -c requirements.txt pyproject.toml -o requirements-dev.txt
+        run: uv pip compile --extra dev -c requirements-all.txt pyproject.toml -o requirements-dev.txt
 
       - name: Check lockfile drift
         id: lockcheck
@@ -72,6 +84,7 @@ jobs:
           name: compiled-requirements
           path: |
             requirements.txt
+            requirements-all.txt
             requirements-dev.txt
           retention-days: 1
 
@@ -271,7 +284,7 @@ jobs:
           path: |
             ~/.cache/uv
             ~/.cache/pip
-          key: python-test-${{ runner.os }}-${{ hashFiles('requirements.txt', 'requirements-dev.txt') }}
+          key: python-test-${{ runner.os }}-${{ hashFiles('requirements-all.txt', 'requirements-dev.txt') }}
           restore-keys: |
             python-test-${{ runner.os }}-
 
@@ -284,8 +297,8 @@ jobs:
             pyproject.toml
             uv.lock
 
-      - name: Install dependencies
-        run: uv pip sync --system requirements.txt requirements-dev.txt
+      - name: Install dependencies (all extras for comprehensive testing)
+        run: uv pip sync --system requirements-all.txt requirements-dev.txt
 
       - name: Install additional test/coverage tools
         run: uv pip install --system pytest-cov pytest-xdist pytest-rerunfailures pytest-asyncio coverage[toml]
@@ -538,7 +551,7 @@ jobs:
       - name: Prepare audit requirements
         run: |
           # Filter out spaCy language models that aren't available on PyPI
-          cat requirements.txt requirements-dev.txt | \
+          cat requirements-all.txt requirements-dev.txt | \
             grep -v "en-core-web-sm" | \
             grep -v "ru-core-news-sm" | \
             # Torch does not yet publish Python 3.13 wheels to PyPI; skip it for auditing
@@ -590,13 +603,13 @@ jobs:
           path: |
             ~/.cache/uv
             ~/.cache/pip
-          key: python-safety-${{ runner.os }}-${{ hashFiles('requirements.txt', 'requirements-dev.txt') }}
+          key: python-safety-${{ runner.os }}-${{ hashFiles('requirements-all.txt', 'requirements-dev.txt') }}
           restore-keys: |
             python-safety-${{ runner.os }}-
 
-      - name: Install dependencies and safety
+      - name: Install dependencies and safety (all extras for comprehensive scanning)
         run: |
-          uv pip sync --system requirements.txt requirements-dev.txt
+          uv pip sync --system requirements-all.txt requirements-dev.txt
           uv pip install --system safety
 
       - name: Run Safety
@@ -689,8 +702,8 @@ jobs:
           version: "0.8.17"
           enable-cache: true
 
-      - name: Install dependencies
-        run: uv pip sync --system requirements.txt requirements-dev.txt
+      - name: Install dependencies (all extras for integration tests)
+        run: uv pip sync --system requirements-all.txt requirements-dev.txt
 
       - name: Install test tools
         run: uv pip install --system pytest pytest-timeout pytest-xdist pytest-rerunfailures pytest-asyncio
