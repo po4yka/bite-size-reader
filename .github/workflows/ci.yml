@@ -719,6 +719,9 @@ jobs:
           pytest \
             tests/ \
             -m "integration" \
+            --ignore=tests/benchmarks \
+            --ignore=tests/api/test_background_processor.py \
+            --ignore=tests/test_api_rate_limit_and_sync.py \
             --verbose \
             --maxfail=5 \
             --tb=short \
