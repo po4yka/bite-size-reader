@@ -425,11 +425,10 @@ jobs:
           push: ${{ github.event_name != 'pull_request' && vars.PUBLISH_DOCKER == 'true' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          # Temporarily disable cache to debug build failure
-          # cache-from: |
-          #   type=gha,scope=bot-builder
-          #   type=gha,scope=bot-runtime
-          # cache-to: type=gha,mode=max,scope=bot-builder
+          cache-from: |
+            type=gha,scope=bot-builder
+            type=gha,scope=bot-runtime
+          cache-to: type=gha,mode=max,scope=bot-builder
 
   docker-image-api:
     name: Docker Image (API)

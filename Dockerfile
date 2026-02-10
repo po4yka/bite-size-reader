@@ -33,7 +33,9 @@ COPY pyproject.toml uv.lock ./
 
 # Install dependencies with cache mounts for faster rebuilds
 # Bot needs: ml, youtube, export, scheduler, mcp (but NOT api)
-RUN echo "Starting uv sync with extras: ml youtube export scheduler mcp" && \
+RUN --mount=type=cache,target=/root/.cache/uv \
+    --mount=type=cache,target=/root/.cache/pip \
+    echo "Starting uv sync with extras: ml youtube export scheduler mcp" && \
     uv sync --frozen --no-dev --extra ml --extra youtube --extra export --extra scheduler --extra mcp --verbose && \
     echo "uv sync completed successfully"
 
