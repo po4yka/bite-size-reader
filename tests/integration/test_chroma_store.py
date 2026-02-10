@@ -54,6 +54,7 @@ def vector_store(chroma_config):
         yield store
 
 
+@pytest.mark.integration
 def test_health_check(vector_store):
     vector_store._client.heartbeat.return_value = 12345
     # Reset mock count since __init__ also calls heartbeat()
@@ -62,6 +63,7 @@ def test_health_check(vector_store):
     vector_store._client.heartbeat.assert_called_once()
 
 
+@pytest.mark.integration
 def test_upsert_and_query(vector_store):
     # Data
     vectors = [[0.1, 0.2, 0.3], [0.4, 0.5, 0.6]]
@@ -99,6 +101,7 @@ def test_upsert_and_query(vector_store):
     vector_store._collection.query.assert_called_once()
 
 
+@pytest.mark.integration
 def test_delete_by_request_id(vector_store):
     # Delete
     vector_store.delete_by_request_id(123)
@@ -109,6 +112,7 @@ def test_delete_by_request_id(vector_store):
     assert call_args["where"] == {"request_id": 123}
 
 
+@pytest.mark.integration
 def test_reset(vector_store):
     # Mock count behavior: first call returns 1, second call returns 0
     vector_store._collection.count.side_effect = [1, 0]
@@ -123,6 +127,7 @@ def test_reset(vector_store):
     assert vector_store.count() == 0
 
 
+@pytest.mark.integration
 def test_collection_name_includes_version(vector_store, chroma_config):
     assert (
         vector_store.collection_name
@@ -130,6 +135,7 @@ def test_collection_name_includes_version(vector_store, chroma_config):
     )
 
 
+@pytest.mark.integration
 def test_upsert_requires_summary_id(vector_store):
     vectors = [[0.1, 0.2]]
     metadatas = [{"request_id": 1, "text": "note without summary"}]

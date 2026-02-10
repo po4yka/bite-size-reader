@@ -2,6 +2,8 @@ import json
 import unittest
 from typing import Any, cast
 
+import pytest
+
 from app.adapters.external.firecrawl_parser import FirecrawlClient, httpx as firecrawl_httpx
 from app.adapters.openrouter.openrouter_client import OpenRouterClient, httpx as or_httpx
 
@@ -59,6 +61,7 @@ class _FakeAsyncClient:
         raise AssertionError(msg)
 
 
+@pytest.mark.integration
 class TestAdaptersIntegration(unittest.IsolatedAsyncioTestCase):
     async def test_firecrawl_scrape_markdown_mocked(self):
         # Patch httpx.AsyncClient in firecrawl module
