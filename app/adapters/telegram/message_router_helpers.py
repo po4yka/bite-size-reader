@@ -155,6 +155,10 @@ async def handle_document_file(
             interaction_id=interaction_id,
             start_time=start_time,
             initial_message_id=progress_message_id,
+            # Combined summary dependencies (from url_handler)
+            llm_client=getattr(router.url_handler, "_llm_client", None),
+            batch_session_repo=getattr(router.url_handler, "_batch_session_repo", None),
+            batch_config=getattr(router.url_handler, "_batch_config", None),
         )
 
         # Ensure we do not hit rate limiter after the last progress edit
@@ -312,6 +316,10 @@ async def process_url_batch(
     max_concurrent: int = 4,
     max_retries: int = 2,
     compute_timeout_func: Callable[[str, int], Awaitable[float]] | None = None,
+    # Optional: combined summary feature dependencies
+    llm_client: Any | None = None,
+    batch_session_repo: Any | None = None,
+    batch_config: BatchAnalysisConfig | None = None,
 ) -> BatchContext | None:
     """Process multiple URLs in parallel with controlled concurrency and detailed status tracking.
 
@@ -787,13 +795,38 @@ async def process_url_batch(
             logger_=logger,
         )
 
-    # Return batch context for relationship analysis
-    return BatchContext(
+    # Build batch context
+    batch_context = BatchContext(
         batch_status=batch_status,
         url_to_request_id=url_to_request_id,
         correlation_id=correlation_id,
         uid=uid,
     )
+
+    # Run combined summary analysis if dependencies provided and enough successful articles
+    if (
+        llm_client is not None
+        and batch_session_repo is not None
+        and batch_config is not None
+        and batch_status.success_count >= batch_config.min_articles
+    ):
+        try:
+            await run_batch_relationship_analysis(
+                batch_context=batch_context,
+                message=message,
+                response_formatter=response_formatter,
+                summary_repo=url_processor.summary_repo,
+                batch_session_repo=batch_session_repo,
+                llm_client=llm_client,
+                batch_config=batch_config,
+            )
+        except Exception as e:
+            logger.warning(
+                "batch_relationship_analysis_failed",
+                extra={"error": str(e), "cid": correlation_id},
+            )
+
+    return batch_context
 
 
 def should_notify_rate_limit(router: Any, uid: int) -> bool:

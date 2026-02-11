@@ -109,6 +109,16 @@ class TelegramBot:
         self.message_handler.url_handler.url_processor = self.url_processor
         self.message_handler.url_processor = self.url_processor
 
+        # Wire up combined summary dependencies for batch processing
+        from app.infrastructure.persistence.sqlite.repositories.batch_session_repository import (
+            SqliteBatchSessionRepositoryAdapter,
+        )
+
+        self._batch_session_repo = SqliteBatchSessionRepositoryAdapter(self.db)
+        self.message_handler.url_handler._llm_client = self._llm_client
+        self.message_handler.url_handler._batch_session_repo = self._batch_session_repo
+        self.message_handler.url_handler._batch_config = self.cfg.batch_analysis
+
         # Expose in-memory state containers for unit tests
         self._awaiting_url_users = self.message_handler.url_handler._awaiting_url_users
 
