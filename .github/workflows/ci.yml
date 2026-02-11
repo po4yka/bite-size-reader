@@ -398,7 +398,22 @@ jobs:
           echo "=== Disk space before cleanup ==="
           df -h
           echo "=== Removing unnecessary files ==="
-          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          # Remove large tool chains and runtimes
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /opt/hostedtoolcache/CodeQL
+          sudo rm -rf /usr/local/share/boost
+          sudo rm -rf "$AGENT_TOOLSDIRECTORY"
+          # Remove Azure CLI, Google Cloud SDK, etc.
+          sudo rm -rf /usr/share/az_* /opt/az
+          sudo rm -rf /usr/local/share/chromium /usr/local/share/chromedriver-linux64
+          # Remove large language runtimes
+          sudo rm -rf /usr/local/lib/node_modules
+          sudo rm -rf /opt/pipx
+          # Clean APT cache
+          sudo apt-get clean
+          # Docker cleanup
           sudo docker system prune -af --volumes
           echo "=== Disk space after cleanup ==="
           df -h
@@ -408,6 +423,21 @@ jobs:
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
+
+      - name: Additional Docker cleanup before build
+        run: |
+          echo "=== Docker disk usage before additional cleanup ==="
+          docker system df
+          # Remove all stopped containers
+          docker container prune -f
+          # Remove all dangling images
+          docker image prune -af
+          # Remove build cache older than 24h
+          docker buildx prune -f --filter until=24h
+          echo "=== Docker disk usage after additional cleanup ==="
+          docker system df
+          echo "=== Current disk space ==="
+          df -h
 
       - name: Log in to GHCR
         if: ${{ github.event_name != 'pull_request' && vars.PUBLISH_DOCKER == 'true' }}
@@ -461,6 +491,21 @@ jobs:
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
+
+      - name: Additional Docker cleanup before build
+        run: |
+          echo "=== Docker disk usage before additional cleanup ==="
+          docker system df
+          # Remove all stopped containers
+          docker container prune -f
+          # Remove all dangling images
+          docker image prune -af
+          # Remove build cache older than 24h
+          docker buildx prune -f --filter until=24h
+          echo "=== Docker disk usage after additional cleanup ==="
+          docker system df
+          echo "=== Current disk space ==="
+          df -h
 
       - name: Log in to GHCR
         if: ${{ github.event_name != 'pull_request' && vars.PUBLISH_DOCKER == 'true' }}
