@@ -50,13 +50,14 @@ jobs:
             uv.lock
 
       - name: Compile locked requirements (runtime - core only)
-        run: uv pip compile pyproject.toml -o requirements.txt
+        run: uv pip compile --python-version 3.13 pyproject.toml -o requirements.txt
 
       - name: Compile locked requirements (all extras for tests)
         run: |
           # Include all extras for comprehensive test coverage
           # Scheduler import is now lazy in TelegramBot, avoiding metaclass conflicts
           uv pip compile \
+            --python-version 3.13 \
             --extra api \
             --extra ml \
             --extra youtube \
@@ -67,7 +68,7 @@ jobs:
             -o requirements-all.txt
 
       - name: Compile locked requirements (dev)
-        run: uv pip compile --extra dev -c requirements-all.txt pyproject.toml -o requirements-dev.txt
+        run: uv pip compile --python-version 3.13 --extra dev -c requirements-all.txt pyproject.toml -o requirements-dev.txt
 
       - name: Check lockfile drift
         id: lockcheck

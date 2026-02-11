@@ -169,6 +169,7 @@ api = [
     { name = "onnxruntime" },
     { name = "pyjwt" },
     { name = "python-multipart" },
+    { name = "sentence-transformers" },
     { name = "starlette" },
     { name = "uvicorn", extra = ["standard"] },
 ]
@@ -254,6 +255,7 @@ requires-dist = [
     { name = "ru-core-news-sm", url = "https://github.com/explosion/spacy-models/releases/download/ru_core_news_sm-3.8.0/ru_core_news_sm-3.8.0-py3-none-any.whl" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.14.14" },
     { name = "scikit-learn", marker = "extra == 'ml'", specifier = ">=1.8.0" },
+    { name = "sentence-transformers", marker = "extra == 'api'", specifier = ">=5.2.2" },
     { name = "sentence-transformers", marker = "extra == 'ml'", specifier = ">=5.2.2" },
     { name = "spacy", specifier = ">=3.8.11,<4" },
     { name = "starlette", marker = "extra == 'api'", specifier = ">=0.50.0" },

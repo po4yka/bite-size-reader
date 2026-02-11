@@ -47,8 +47,21 @@ jobs:
 
       - name: Regenerate lockfiles (uv compile)
         run: |
-          uv pip compile pyproject.toml -o requirements.txt
-          uv pip compile --extra dev pyproject.toml -o requirements-dev.txt
+          set -euo pipefail
+          uv pip compile --python-version 3.13 pyproject.toml -o requirements.txt
+          TMP_REQ=.requirements-all.tmp.txt
+          uv pip compile \
+            --python-version 3.13 \
+            --extra api \
+            --extra ml \
+            --extra youtube \
+            --extra export \
+            --extra scheduler \
+            --extra mcp \
+            pyproject.toml \
+            -o "$TMP_REQ"
+          uv pip compile --python-version 3.13 --extra dev -c "$TMP_REQ" pyproject.toml -o requirements-dev.txt
+          rm -f "$TMP_REQ"
 
       - name: Create Pull Request (using PAT if provided)
         if: ${{ env.ACTIONS_PR_TOKEN != '' }}
