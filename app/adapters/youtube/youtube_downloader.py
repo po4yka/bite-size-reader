@@ -160,7 +160,7 @@ class YouTubeDownloader:
                             "♻️ Reusing previously downloaded video and transcript. Skipping re-download.",
                         )
                     except Exception:
-                        logger.debug("youtube_cached_reply_failed", exc_info=True)
+                        logger.warning("youtube_cached_reply_failed", exc_info=True)
 
                 self._url_locks.pop(dedupe, None)
                 return (
@@ -461,7 +461,7 @@ class YouTubeDownloader:
                                 },
                             )
                 except Exception:
-                    logger.debug("youtube_partial_cleanup_failed", exc_info=True)
+                    logger.warning("youtube_partial_cleanup_failed", exc_info=True)
 
     async def _extract_transcript_api(
         self, video_id: str, correlation_id: str | None

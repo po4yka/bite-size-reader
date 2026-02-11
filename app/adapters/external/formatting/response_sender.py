@@ -660,7 +660,7 @@ class ResponseSenderImpl:
             if client is not None and hasattr(client, "send_message"):
                 await client.send_message(chat_id=self._admin_log_chat_id, text=text[:4096])
         except Exception:
-            logger.debug("admin_log_send_failed", extra={"chat_id": self._admin_log_chat_id})
+            logger.warning("admin_log_send_failed", extra={"chat_id": self._admin_log_chat_id})
 
     def _slugify(self, text: str, *, max_len: int = 60) -> str:
         """Create a filesystem-friendly slug from text."""

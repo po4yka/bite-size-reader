@@ -227,7 +227,7 @@ class CallbackHandler:
             try:
                 path.unlink()
             except Exception:
-                pass
+                logger.debug("temp_file_cleanup_failed", exc_info=True)
 
     async def _handle_translate(
         self,

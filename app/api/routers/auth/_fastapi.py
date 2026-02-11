@@ -14,7 +14,7 @@ else:
     try:
         from fastapi import APIRouter, Depends
     except Exception:  # pragma: no cover - fallback for environments without compatible FastAPI
-        logger.debug("fastapi_import_failed", exc_info=True)
+        logger.warning("fastapi_import_failed", exc_info=True)
 
         class APIRouter:
             def __init__(self, *_: Any, **__: Any) -> None:

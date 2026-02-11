@@ -176,7 +176,7 @@ class SearchHandlerImpl:
             )
         except Exception as exc:
             raise_if_cancelled(exc)
-            logger.debug("audit_log_failed", extra={"error": str(exc)})
+            logger.warning("audit_log_failed", extra={"error": str(exc)})
 
         # Check if searcher is available
         if not searcher:

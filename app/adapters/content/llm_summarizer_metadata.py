@@ -231,7 +231,7 @@ class LLMSummaryMetadataHelper:
                     parsed = json.loads(metadata_raw)
                 except Exception as exc:
                     raise_if_cancelled(exc)
-                    logger.debug("firecrawl_metadata_parse_error", extra={"error": str(exc)})
+                    logger.warning("firecrawl_metadata_parse_error", extra={"error": str(exc)})
 
         if parsed is None:
             raw_payload = crawl_row.get("raw_response_json")
@@ -246,7 +246,7 @@ class LLMSummaryMetadataHelper:
                             parsed = data_block.get("metadata") or data_block.get("meta")
                 except Exception as exc:
                     raise_if_cancelled(exc)
-                    logger.debug("firecrawl_raw_metadata_parse_error", extra={"error": str(exc)})
+                    logger.warning("firecrawl_raw_metadata_parse_error", extra={"error": str(exc)})
 
         if parsed is None:
             return {}
@@ -454,5 +454,5 @@ class LLMSummaryMetadataHelper:
             netloc = netloc.removeprefix("www.")
             return netloc or None
         except Exception:
-            logger.debug("domain_extraction_failed", exc_info=True)
+            logger.warning("domain_extraction_failed", exc_info=True)
             return None

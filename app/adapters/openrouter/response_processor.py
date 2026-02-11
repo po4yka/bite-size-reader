@@ -151,7 +151,7 @@ class ResponseProcessor:
                         text = "\n".join(text_segments)
                 except Exception as exc:
                     raise_if_cancelled(exc)
-                    logger.debug("content_walk_failed", extra={"error": str(exc)})
+                    logger.warning("content_walk_failed", extra={"error": str(exc)})
 
         # Try reasoning field for o1-style models
         if not text or (isinstance(text, str) and not text.strip()):
@@ -182,7 +182,7 @@ class ResponseProcessor:
                         text = json.dumps(args, ensure_ascii=False)
                 except Exception as exc:
                     raise_if_cancelled(exc)
-                    logger.debug("tool_call_extraction_failed", extra={"error": str(exc)})
+                    logger.warning("tool_call_extraction_failed", extra={"error": str(exc)})
 
         return text
 

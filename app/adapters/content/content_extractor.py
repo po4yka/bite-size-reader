@@ -629,7 +629,7 @@ class ContentExtractor:
                         audit_payload["top_ratio"] = round(metrics["top_ratio"], 3)
                     self._audit("WARNING", "firecrawl_low_value_content", audit_payload)
                 except Exception as e:
-                    logger.debug("audit_failed", extra={"cid": correlation_id, "error": str(e)})
+                    logger.warning("audit_failed", extra={"cid": correlation_id, "error": str(e)})
 
             logger.warning(
                 "firecrawl_low_value_content",

@@ -424,7 +424,7 @@ class AgentOrchestrator:
             """Process a single URL with semaphore limiting."""
             async with semaphore:
                 correlation_id = f"{input_data.base_correlation_id}-{index}"
-                logger.info(f"[Batch] Processing URL {index + 1}: {url}")
+                logger.debug(f"[Batch] Processing URL {index + 1}: {url}")
 
                 pipeline_input = PipelineInput(
                     url=url,

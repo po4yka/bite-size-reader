@@ -954,7 +954,7 @@ def validate_and_shape_summary(payload: SummaryJSON) -> SummaryJSON:
             if not p.get("topic_tags") and terms:
                 p["topic_tags"] = _hash_tagify(terms)
         except Exception as e:
-            logger.debug("keyword_extraction_failed", extra={"error": str(e)})
+            logger.warning("keyword_extraction_failed", extra={"error": str(e)})
 
     p["insights"] = _shape_insights(p.get("insights"))
     p["quality"] = _shape_quality(p.get("quality"))
@@ -1051,7 +1051,7 @@ def validate_and_shape_summary(payload: SummaryJSON) -> SummaryJSON:
         model = SummaryModel(**p)
         return model.model_dump()
     except Exception as e:
-        logger.debug("pydantic_validation_fallback", extra={"error": str(e)})
+        logger.warning("pydantic_validation_fallback", extra={"error": str(e)})
         return p
 
 

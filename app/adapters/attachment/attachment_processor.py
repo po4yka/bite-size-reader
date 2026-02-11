@@ -280,7 +280,9 @@ class AttachmentProcessor:
                     correlation_id or "unknown",
                 )
             except Exception:
-                logger.debug("attachment_error_notification_failed", extra={"cid": correlation_id})
+                logger.warning(
+                    "attachment_error_notification_failed", extra={"cid": correlation_id}
+                )
         finally:
             # Clean up temp file
             if file_path and os.path.exists(file_path):

@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import contextlib
+import logging
 import re
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 
 def _dedupe_list(items: list[str], limit: int | None = None) -> list[str]:
@@ -88,6 +91,7 @@ def _merge_key_stats(
             if len(out) >= limit:
                 break
         except Exception:
+            logger.debug("aggregate_item_skipped", exc_info=True)
             continue
     return out
 
@@ -197,6 +201,7 @@ def aggregate_chunk_summaries(summaries: list[dict[str, Any]]) -> dict[str, Any]
                     [str(x).strip() for x in (insights_payload.get("next_exploration") or [])]
                 )
         except Exception:
+            logger.debug("aggregate_chunk_item_skipped", exc_info=True)
             continue
 
     # For summary_250: select the single best chunk summary (most informative)

@@ -294,5 +294,5 @@ class OpenRouterRerankingService:
                         r for r in results if isinstance(r, dict) and "id" in r and "score" in r
                     ]
         except Exception:
-            logger.debug("llm_rerank_parse_failed")
+            logger.warning("llm_rerank_parse_failed")
         return []
