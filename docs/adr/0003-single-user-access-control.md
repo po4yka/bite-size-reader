@@ -189,7 +189,7 @@ Single-user access control scored highest on cost control, development effort, a
 ### Update Log
 
 | Date | Author | Change |
-|------|--------|--------|
+| ------ | -------- | -------- |
 | 2024-12-20 | po4yka | Initial decision (Accepted) |
 | 2025-01-28 | po4yka | Added multi-user whitelist support |
 | 2025-02-08 | po4yka | Mobile API integration note |

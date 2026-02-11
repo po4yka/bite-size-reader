@@ -94,10 +94,10 @@ prepare-environment (15min)
 
 ```yaml
 if: |
-  github.ref == 'refs/heads/main' ||
-  contains(github.event.head_commit.message, '[docker]') ||
-  contains(join(github.event.commits.*.modified, ','), 'Dockerfile') ||
-  contains(join(github.event.commits.*.modified, ','), 'pyproject.toml') ||
+  github.ref == 'refs/heads/main' | |
+  contains(github.event.head_commit.message, '[docker]') | |
+  contains(join(github.event.commits.*.modified, ','), 'Dockerfile') | |
+  contains(join(github.event.commits.*.modified, ','), 'pyproject.toml') | |
   contains(join(github.event.commits.*.modified, ','), 'uv.lock')
 ```
 
@@ -377,7 +377,7 @@ docker images | grep bite-size-reader
 ## 10. Success Metrics
 
 | Metric | Before | Target | Phase 1 Expected |
-|--------|--------|--------|------------------|
+| -------- | -------- | -------- | ------------------ |
 | Critical path (main) | 90 min | 20-25 min | 45-50 min |
 | Critical path (PR, no Docker) | 90 min | 15-20 min | 20-25 min |
 | Docker build time | 45 min | 15-20 min | 30-35 min (warm cache) |

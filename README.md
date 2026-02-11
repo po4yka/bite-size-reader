@@ -64,15 +64,15 @@ flowchart LR
   end
 
   ForwardProcessor --> LLMSummarizer
-  LLMSummarizer -.->|optional| WebSearch[WebSearchAgent]
+  LLMSummarizer -.->| optional | WebSearch[WebSearchAgent]
   WebSearch -.-> Firecrawl
   ContentExtractor --> SQLite[(SQLite)]
   MessagePersistence --> SQLite
   LLMSummarizer --> SQLite
   MessageRouter --> ResponseFormatter
   ResponseFormatter --> TGClient
-  TGClient -->|Replies| Telegram
-  Telegram -->|Updates| TGClient
+  TGClient -->| Replies | Telegram
+  Telegram -->| Updates | TGClient
   ResponseFormatter --> Logs[(Structured + audit logs)]
 
   subgraph MobileAPI[Mobile API]
@@ -100,7 +100,7 @@ The bot ingests updates via a lightweight `TelegramClient`, normalizes them thro
 **I want to...**
 
 | Goal | How | Documentation |
-|------|-----|---------------|
+| ------ | ----- | --------------- |
 | **Summarize web articles** | Send URL to Telegram bot | [Quickstart Tutorial](docs/tutorials/quickstart.md) |
 | **Summarize YouTube videos** | Send YouTube URL (transcript extracted) | [Configure YouTube](docs/how-to/configure-youtube-download.md) |
 | **Search past summaries** | `/search <query>` command | [FAQ § Search](docs/FAQ.md#can-i-search-my-summaries) |
@@ -126,7 +126,7 @@ You can simply send a URL (or several URLs) or forward a channel post -- command
 ### Summarization
 
 | Command | Description |
-|---------|-------------|
+| --------- | ------------- |
 | `/help`, `/start` | Show help and usage |
 | `/summarize <URL>` | Summarize a URL immediately |
 | `/summarize` | Bot asks for a URL in the next message |
@@ -138,14 +138,14 @@ Multiple URLs in one message: bot asks "Process N links?"; reply "yes/no". Each 
 ### Content Management
 
 | Command | Description |
-|---------|-------------|
+| --------- | ------------- |
 | `/unread [limit] [topic]` | Show unread articles, optionally filtered by topic |
 | `/read <request_id>` | Mark an article as read |
 
 ### Search
 
 | Command | Description |
-|---------|-------------|
+| --------- | ------------- |
 | `/search <query>` | Search summaries by keyword |
 | `/find`, `/findweb`, `/findonline` | Search using Firecrawl web search |
 | `/finddb`, `/findlocal` | Search local database only |
@@ -153,14 +153,14 @@ Multiple URLs in one message: bot asks "Process N links?"; reply "yes/no". Each 
 ### Admin
 
 | Command | Description |
-|---------|-------------|
+| --------- | ------------- |
 | `/dbinfo` | Show database statistics |
 | `/dbverify` | Verify database integrity |
 
 ### Integrations
 
 | Command | Description |
-|---------|-------------|
+| --------- | ------------- |
 | `/sync_karakeep` | Trigger Karakeep bookmark sync |
 
 ## Environment
@@ -180,7 +180,7 @@ OPENROUTER_MODEL=deepseek/deepseek-v3.2  # Primary LLM model
 ### 🔧 Optional (Enable Features as Needed)
 
 | Subsystem | Key Variables | When to Enable |
-|-----------|--------------|---------------|
+| ----------- | -------------- | --------------- |
 | **YouTube** | `YOUTUBE_DOWNLOAD_ENABLED=true`<br>`YOUTUBE_PREFERRED_QUALITY=1080p`<br>`YOUTUBE_STORAGE_PATH=/data/videos` | Summarize YouTube videos |
 | **Web Search** | `WEB_SEARCH_ENABLED=false`<br>`WEB_SEARCH_MAX_QUERIES=3` | Add real-time context to summaries |
 | **Redis** | `REDIS_ENABLED=true`<br>`REDIS_URL` or `REDIS_HOST`/`REDIS_PORT` | Cache responses, speed up bot |
@@ -192,7 +192,7 @@ OPENROUTER_MODEL=deepseek/deepseek-v3.2  # Primary LLM model
 ### ⚙️ Advanced (Fine-Tuning)
 
 | Category | Key Variables | Purpose |
-|----------|--------------|---------|
+| ---------- | -------------- | --------- |
 | **Runtime** | `DB_PATH=/data/app.db`<br>`LOG_LEVEL=INFO`<br>`DEBUG_PAYLOADS=0`<br>`MAX_CONCURRENT_CALLS=4` | Performance tuning |
 | **LLM Providers** | `LLM_PROVIDER=openrouter`<br>`OPENAI_API_KEY`<br>`ANTHROPIC_API_KEY` | Switch LLM providers |
 | **Fallbacks** | `OPENROUTER_FALLBACK_MODELS=...`<br>`OPENAI_FALLBACK_MODELS=...` | Model fallback chains |

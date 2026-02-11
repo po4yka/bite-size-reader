@@ -40,7 +40,7 @@ Copy `.env.example` to `.env` and fill:
 - Telegram: `API_ID`, `API_HASH`, `BOT_TOKEN`, `ALLOWED_USER_IDS`
 - OpenRouter: `OPENROUTER_API_KEY`, `OPENROUTER_MODEL` (e.g., `deepseek/deepseek-v3.2`), optional `OPENROUTER_HTTP_REFERER`, `OPENROUTER_X_TITLE`
 - Firecrawl: `FIRECRAWL_API_KEY`
-- Runtime: `DB_PATH=/data/app.db`, `LOG_LEVEL=INFO|DEBUG`, `REQUEST_TIMEOUT_SEC=60`, `PREFERRED_LANG=auto|en|ru`, `DEBUG_PAYLOADS=0|1` (keep 0 in prod)
+- Runtime: `DB_PATH=/data/app.db`, `LOG_LEVEL=INFO| DEBUG`, `REQUEST_TIMEOUT_SEC=60`, `PREFERRED_LANG=auto | en | ru`, `DEBUG_PAYLOADS=0 |1` (keep 0 in prod)
 - YouTube: `YOUTUBE_DOWNLOAD_ENABLED=true`, `YOUTUBE_PREFERRED_QUALITY=1080p`, `YOUTUBE_STORAGE_PATH=/data/videos`, size/retention knobs as needed
 - API (mobile): `JWT_SECRET_KEY` (>=32 chars), `API_HOST`, `API_PORT` (default 8000), optional `ALLOWED_CLIENT_IDS`
 - Redis (rate limit/sync, optional): `REDIS_ENABLED`, `REDIS_URL` or host/port/db, `REDIS_PREFIX=bsr`, `REDIS_REQUIRED=false`, `API_RATE_LIMIT_*` caps, `SYNC_DEFAULT_CHUNK_SIZE`, `SYNC_EXPIRY_HOURS`
@@ -142,7 +142,7 @@ Full variable reference: `docs/environment_variables.md`
 ### Health Checks
 
 | Service | Method | Interval | Details |
-|---------|--------|----------|---------|
+| --------- | -------- | ---------- | --------- |
 | bsr | SQLite `SELECT 1` | 30s | Verifies DB connectivity; 5 retries, 60s start period |
 | mobile-api | HTTP `GET /health` | 30s | Returns 200 when API is ready; 5 retries, 60s start period |
 | redis | `redis-cli ping` | 10s | Standard Redis liveness check; 5 retries |

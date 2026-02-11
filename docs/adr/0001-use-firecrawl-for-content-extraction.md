@@ -189,7 +189,7 @@ Firecrawl scored highest across all high-priority criteria.
 ### Update Log
 
 | Date | Author | Change |
-|------|--------|--------|
+| ------ | -------- | -------- |
 | 2024-12-15 | po4yka | Initial decision (Accepted) |
 | 2025-01-15 | po4yka | Added fallback note |
 | 2025-02-05 | po4yka | Added success rate observation |

@@ -105,6 +105,6 @@
 ### Update Log
 
 | Date | Author | Change |
-|------|--------|--------|
+| ------ | -------- | -------- |
 | YYYY-MM-DD | Name | Initial decision |
 | YYYY-MM-DD | Name | Updated context based on... |

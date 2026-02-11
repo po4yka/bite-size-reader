@@ -42,7 +42,7 @@ python -m app.cli.summary --accept-multiple
 ### Options
 
 | Option | Type | Default | Description |
-|--------|------|---------|-------------|
+| -------- | ------ | --------- | ------------- |
 | `--url` | string | - | URL to summarize (required if not using `--accept-multiple`) |
 | `--accept-multiple` | flag | false | Interactive mode: accept multiple URLs |
 | `--json-path` | string | - | Save summary JSON to file |
@@ -151,7 +151,7 @@ python -m app.cli.migrate_db --check
 ### Options
 
 | Option | Type | Default | Description |
-|--------|------|---------|-------------|
+| -------- | ------ | --------- | ------------- |
 | `--check` | flag | false | Check migration status without applying |
 | `--target-version` | int | latest | Migrate to specific version |
 | `--rollback` | flag | false | Rollback last migration (use with caution) |
@@ -237,7 +237,7 @@ python -m app.cli.search "AI ethics" --mode hybrid
 ### Options
 
 | Option | Type | Default | Description |
-|--------|------|---------|-------------|
+| -------- | ------ | --------- | ------------- |
 | `query` | string | - | Search query (positional argument) |
 | `--mode` | string | fts | Search mode (fts, vector, hybrid) |
 | `--limit` | int | 10 | Max results to return |
@@ -254,10 +254,10 @@ python -m app.cli.search "AI ethics" --mode hybrid
 python -m app.cli.search "python tutorial" --limit 5
 
 # Output (table format):
-# Rank | Score | Title                | URL
-# -----|-------|----------------------|-----
-#  1   | 0.95  | Python Tutorial 2026 | https://...
-#  2   | 0.87  | Learn Python Fast    | https://...
+# Rank | Score | Title | URL
+# -----| ------- | ---------------------- |-----
+#  1   | 0.95 | Python Tutorial 2026 | https://...
+#  2   | 0.87 | Learn Python Fast | https://...
 #  ...
 ```
 
@@ -325,7 +325,7 @@ python -m app.cli.search_compare --queries-file test_queries.txt
 ### Options
 
 | Option | Type | Default | Description |
-|--------|------|---------|-------------|
+| -------- | ------ | --------- | ------------- |
 | `queries` | list | - | Queries to test (positional arguments) |
 | `--queries-file` | string | - | File with queries (one per line) |
 | `--output-csv` | string | - | Save comparison to CSV file |
@@ -394,7 +394,7 @@ python -m app.cli.backfill_embeddings --rebuild
 ### Options
 
 | Option | Type | Default | Description |
-|--------|------|---------|-------------|
+| -------- | ------ | --------- | ------------- |
 | `--rebuild` | flag | false | Regenerate all embeddings (skip existing check) |
 | `--batch-size` | int | 50 | Embeddings per batch |
 | `--model` | string | (from env) | Override embedding model |
@@ -472,7 +472,7 @@ python -m app.cli.backfill_chroma_store --rebuild
 ### Options
 
 | Option | Type | Default | Description |
-|--------|------|---------|-------------|
+| -------- | ------ | --------- | ------------- |
 | `--rebuild` | flag | false | Delete and rebuild ChromaDB collection |
 | `--batch-size` | int | 100 | Documents per batch |
 | `--collection` | string | summaries | ChromaDB collection name |
@@ -563,7 +563,7 @@ python -m app.cli.add_performance_indexes --check
 ### Options
 
 | Option | Type | Default | Description |
-|--------|------|---------|-------------|
+| -------- | ------ | --------- | ------------- |
 | `--check` | flag | false | Check which indexes are missing without adding them |
 | `--drop-first` | flag | false | Drop existing indexes before recreating (dangerous) |
 
@@ -641,7 +641,7 @@ python -m app.cli.mcp_server --transport sse --port 8080
 ### Options
 
 | Option | Type | Default | Description |
-|--------|------|---------|-------------|
+| -------- | ------ | --------- | ------------- |
 | `--transport` | string | stdio | Transport mode (stdio, sse) |
 | `--port` | int | 8080 | Port for SSE transport |
 | `--host` | string | 0.0.0.0 | Host for SSE transport |

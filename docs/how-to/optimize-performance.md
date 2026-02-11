@@ -361,7 +361,7 @@ LOG_LEVEL=DEBUG
 docker restart bite-size-reader
 
 # Look for timing logs
-docker logs bite-size-reader | grep -i "took\|elapsed\|duration"
+docker logs bite-size-reader | grep -i "took\ | elapsed\ |duration"
 ```
 
 **Common causes:**

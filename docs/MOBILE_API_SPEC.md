@@ -42,7 +42,7 @@ sequenceDiagram
   - `GET /summaries/{id}`: full JSON payload (matches `app/core/summary_contract.py`).
   - `PATCH /summaries/{id}`: `is_read` updates.
 - Requests
-  - `POST /requests`: `{type: url|forward, input_url|content_text, lang_preference}` with dedupe hint and `estimated_wait_seconds`.
+  - `POST /requests`: `{type: url| forward, input_url |content_text, lang_preference}` with dedupe hint and `estimated_wait_seconds`.
   - `GET /requests/{id}`: request + crawl + llm_calls + summary ids.
   - `GET /requests/{id}/status`: polling with `stage`, `progress`, `estimated_seconds_remaining`.
   - `POST /requests/{id}/retry`: create a retry request.
@@ -78,10 +78,10 @@ sequenceDiagram
 
 ```mermaid
 flowchart LR
-  A[Mobile app] -->|/sync/full| B[Session + chunk URLs]
-  A -->|chunk downloads| C[Local store]
-  A -->|/sync/delta since=ts| D[Changes]
-  A -->|/sync/upload-changes| E[Server apply + conflicts]
+  A[Mobile app] -->| /sync/full | B[Session + chunk URLs]
+  A -->| chunk downloads | C[Local store]
+  A -->| /sync/delta since=ts | D[Changes]
+  A -->| /sync/upload-changes | E[Server apply + conflicts]
 ```
 
 ## Data Shapes (summary)

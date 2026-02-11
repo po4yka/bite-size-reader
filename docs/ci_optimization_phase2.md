@@ -251,14 +251,14 @@ prepare-environment (15min)
 ### Docker Build Times
 
 | Image | Before | After | Savings |
-|-------|--------|-------|---------|
+| ------- | -------- | ------- | --------- |
 | **Bot** | 45 min | 40 min | 5 min (11% faster) |
 | **API** | 30 min | 15-20 min | 10-15 min (33-50% faster) |
 
 ### Image Sizes
 
 | Image | Before | After | Savings |
-|-------|--------|-------|---------|
+| ------- | -------- | ------- | --------- |
 | **Bot** | ~1.33 GB | ~1.28 GB | 50 MB (4% smaller) |
 | **API** | ~950 MB | ~550 MB | **400 MB (42% smaller!)** |
 
@@ -298,7 +298,7 @@ prepare-environment (15min)
 ## 6. Dependency Extras Matrix
 
 | Component | Core | api | ml | youtube | export | scheduler | mcp | dev |
-|-----------|------|-----|----|---------| -------|-----------|-----|-----|
+| ----------- | ------ | ----- | ---- | --------- | ------- | ----------- | ----- | ----- |
 | **Bot** | ✅ | ❌ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ |
 | **API Server** | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
 | **CI Tests** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
@@ -400,7 +400,7 @@ docker run --rm bite-size-reader-api python -c "import fastapi, uvicorn; print('
 
 ```bash
 # Check that security jobs run in parallel
-gh run view <run-id> --log | grep -E "bandit-scan|pip-audit-scan|safety-scan" | grep "started"
+gh run view <run-id> --log | grep -E "bandit-scan | pip-audit-scan | safety-scan" | grep "started"
 ```
 
 1. **Check CI performance:**
@@ -446,7 +446,7 @@ git checkout HEAD~1 -- .github/workflows/ci.yml
 ## 12. Success Metrics
 
 | Metric | Before Phase 2 | After Phase 2 | Phase 2 Savings |
-|--------|----------------|---------------|-----------------|
+| -------- | ---------------- | --------------- | ----------------- |
 | API image size | ~950 MB | ~550 MB | 400 MB (42%) |
 | Bot image size | ~1.33 GB | ~1.28 GB | 50 MB (4%) |
 | Security scan time | 20 min | 10 min | 10 min (50%) |

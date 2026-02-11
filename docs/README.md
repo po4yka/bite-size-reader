@@ -158,7 +158,7 @@ The documentation is organized using the [Diátaxis framework](https://diataxis.
 Step-by-step lessons that teach you how to use Bite-Size Reader.
 
 | Tutorial | Description | Audience | Time |
-|----------|-------------|----------|------|
+| ---------- | ------------- | ---------- | ------ |
 | [Quickstart](tutorials/quickstart.md) | Get first summary in 5 minutes | Users | 5 min |
 | [Local Development](tutorials/local-development.md) | Set up dev environment | Developers | 20 min |
 | [First Mobile API Client](tutorials/first-mobile-api-client.md) | Build a simple mobile client | Integrators | 30 min |
@@ -168,7 +168,7 @@ Step-by-step lessons that teach you how to use Bite-Size Reader.
 Practical guides for accomplishing specific tasks.
 
 | Guide | Description | Audience |
-|-------|-------------|----------|
+| ------- | ------------- | ---------- |
 | [Configure YouTube Download](how-to/configure-youtube-download.md) | Enable YouTube support | Users, Operators |
 | [Enable Web Search](how-to/enable-web-search.md) | Add real-time web context | Users, Operators |
 | [Setup Redis Caching](how-to/setup-redis-caching.md) | Configure Redis | Operators |
@@ -186,7 +186,7 @@ Practical guides for accomplishing specific tasks.
 Technical facts, API specs, and complete references.
 
 | Reference | Description | Audience |
-|-----------|-------------|----------|
+| ----------- | ------------- | ---------- |
 | [SPEC.md](SPEC.md) | Complete technical specification | Developers, Integrators |
 | [Environment Variables](environment_variables.md) | Full configuration reference (250+ vars) | All |
 | [MOBILE_API_SPEC.md](MOBILE_API_SPEC.md) | REST API specification | Integrators |
@@ -200,7 +200,7 @@ Technical facts, API specs, and complete references.
 Background, context, and "why" discussions.
 
 | Explanation | Description | Audience |
-|-------------|-------------|----------|
+| ------------- | ------------- | ---------- |
 | [ADRs](adr/README.md) | Architecture decision records | Developers, Contributors |
 | [Hexagonal Architecture](HEXAGONAL_ARCHITECTURE_QUICKSTART.md) | Why ports and adapters | Developers |
 | [Multi-Agent Architecture](multi_agent_architecture.md) | Why specialized agents | Developers |
@@ -214,7 +214,7 @@ Background, context, and "why" discussions.
 ### Core Documentation Files
 
 | File | Description | When to Read |
-|------|-------------|--------------|
+| ------ | ------------- | -------------- |
 | [README.md](../README.md) | Project overview, quick start | First time using the project |
 | [SPEC.md](SPEC.md) | Technical specification | Deep dive into system design |
 | [CLAUDE.md](../CLAUDE.md) | AI assistant guide | Comprehensive codebase overview |
@@ -227,7 +227,7 @@ Background, context, and "why" discussions.
 ### Specialized Documentation
 
 | File | Description | When to Read |
-|------|-------------|--------------|
+| ------ | ------------- | -------------- |
 | [MOBILE_API_SPEC.md](MOBILE_API_SPEC.md) | REST API spec | Building mobile client |
 | [HEXAGONAL_ARCHITECTURE_QUICKSTART.md](HEXAGONAL_ARCHITECTURE_QUICKSTART.md) | Architecture guide | Understanding code structure |
 | [multi_agent_architecture.md](multi_agent_architecture.md) | Multi-agent LLM | Understanding summarization pipeline |
@@ -237,7 +237,7 @@ Background, context, and "why" discussions.
 ### Architecture Decision Records
 
 | ADR | Title | When to Read |
-|-----|-------|--------------|
+| ----- | ------- | -------------- |
 | [ADR-0001](adr/0001-use-firecrawl-for-content-extraction.md) | Use Firecrawl | Why Firecrawl vs alternatives |
 | [ADR-0002](adr/0002-strict-json-summary-contract.md) | Strict JSON contract | Why structured output |
 | [ADR-0003](adr/0003-single-user-access-control.md) | Single-user access | Why not multi-tenant |
@@ -269,7 +269,7 @@ See [SPEC.md § Glossary](SPEC.md#glossary) for full glossary.
 **Search this index to find relevant documentation:**
 
 | Keyword | See Documentation |
-|---------|-------------------|
+| --------- | ------------------- |
 | **API integration** | [MOBILE_API_SPEC.md](MOBILE_API_SPEC.md), [First Mobile API Client Tutorial](tutorials/first-mobile-api-client.md) |
 | **Architecture** | [HEXAGONAL_ARCHITECTURE_QUICKSTART.md](HEXAGONAL_ARCHITECTURE_QUICKSTART.md), [ADRs](adr/README.md) |
 | **Backup** | [How to backup and restore](how-to/backup-and-restore.md), [TROUBLESHOOTING.md § Database](TROUBLESHOOTING.md#database-issues) |

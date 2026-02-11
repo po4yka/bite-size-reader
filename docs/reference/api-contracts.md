@@ -543,7 +543,7 @@ except TranscriptsDisabled:
 ## Service Comparison
 
 | Service | Purpose | Free Tier | Rate Limits | Fallback |
-|---------|---------|-----------|-------------|----------|
+| --------- | --------- | ----------- | ------------- | ---------- |
 | Firecrawl | Content extraction | 500 req/month | 10 req/min | Trafilatura |
 | OpenRouter | LLM completions | Yes (free models) | Varies by model | Model fallback chain |
 | Pyrogram | Telegram client | Unlimited | 30 msg/sec | Built-in FloodWait handling |

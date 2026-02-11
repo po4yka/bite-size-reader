@@ -218,6 +218,6 @@ See [HEXAGONAL_ARCHITECTURE_QUICKSTART.md](../HEXAGONAL_ARCHITECTURE_QUICKSTART.
 ### Update Log
 
 | Date | Author | Change |
-|------|--------|--------|
+| ------ | -------- | -------- |
 | 2025-01-10 | po4yka | Initial decision (Accepted) |
 | 2025-02-01 | po4yka | Added mobile API and MCP server note |

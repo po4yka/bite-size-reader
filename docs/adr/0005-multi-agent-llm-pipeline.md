@@ -230,6 +230,6 @@ See [multi_agent_architecture.md](../multi_agent_architecture.md) for detailed d
 ### Update Log
 
 | Date | Author | Change |
-|------|--------|--------|
+| ------ | -------- | -------- |
 | 2025-01-25 | po4yka | Initial decision (Accepted) |
 | 2025-02-05 | po4yka | Added WebSearchAgent |

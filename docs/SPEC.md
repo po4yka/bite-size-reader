@@ -120,8 +120,8 @@ Everything runs in one Docker container; code lives on GitHub. Access is restric
 
 ```mermaid
 flowchart TD
-  U[User] -->|URL / forwarded post| TG[Telegram]
-  TG -->|updates| TGClient[TelegramClient]
+  U[User] -->| URL / forwarded post | TG[Telegram]
+  TG -->| updates | TGClient[TelegramClient]
   TGClient --> MsgHandler[MessageHandler]
   MsgHandler --> AccessController
   AccessController --> MessageRouter
@@ -141,14 +141,14 @@ flowchart TD
   end
 
   ForwardProcessor --> LLMSummarizer
-  LLMSummarizer -.->|optional| WebSearch[WebSearchAgent]
+  LLMSummarizer -.->| optional | WebSearch[WebSearchAgent]
   WebSearch -.-> Firecrawl
   ContentExtractor --> DB
   LLMSummarizer --> DB
   MessageRouter --> ResponseFormatter
   ResponseFormatter --> TGClient
   ResponseFormatter --> Logs[(Structured + audit logs)]
-  TGClient -->|replies| TG
+  TGClient -->| replies | TG
 ```
 
 Incoming updates are normalized via `MessageHandler`, which delegates access checks to `AccessController` and durable logging to `MessagePersistence`. Authorized interactions are routed to either command handling, URL processing (Firecrawl → OpenRouter), or forwarded message summarization. `ResponseFormatter` provides a single path for replies, edits, and error handling while emitting structured logs and audit events.
@@ -289,7 +289,7 @@ sequenceDiagram
   id (PK)
   created_at
   type                 -- 'url' | 'forward'
-  status               -- 'pending'|'ok'|'error'
+  status               -- 'pending'| 'ok' |'error'
   chat_id (FK)
   user_id (FK)
   input_url            -- as sent
@@ -354,7 +354,7 @@ sequenceDiagram
   request_id (FK, unique)
   created_at
   video_id                     -- YouTube video ID (11 chars)
-  status                       -- 'pending'|'downloading'|'completed'|'error'
+  status                       -- 'pending'| 'downloading' | 'completed' |'error'
   video_file_path              -- path to downloaded MP4 file
   subtitle_file_path           -- path to subtitle/caption VTT file
   metadata_file_path           -- path to yt-dlp metadata JSON file
@@ -628,8 +628,8 @@ When `WEB_SEARCH_ENABLED=true`, the summarization pipeline can enrich content wi
 ```mermaid
 flowchart LR
   Content[Article Content] --> Analysis["WebSearchAgent\n(Pass 1: Gap Analysis)"]
-  Analysis -->|needs_search=false| Summarize["LLMSummarizer\n(Generate Summary)"]
-  Analysis -->|needs_search=true| Queries["Extract Queries\n(max 3)"]
+  Analysis -->| needs_search=false | Summarize["LLMSummarizer\n(Generate Summary)"]
+  Analysis -->| needs_search=true | Queries["Extract Queries\n(max 3)"]
   Queries --> Search["TopicSearchService\n(Firecrawl Search API)"]
   Search --> Context["SearchContextBuilder\n(Format Results)"]
   Context --> Inject["Inject Context\ninto User Prompt"]

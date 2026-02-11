@@ -168,6 +168,7 @@ api = [
   "pyjwt>=2.11.0",
   "python-multipart>=0.0.22",
   "chromadb>=1.4.1",
+  "onnxruntime>=1.24.1",  # Python 3.14 support (chromadb dependency)
 ]
 
 # Machine learning dependencies (embeddings, vector search, transformers)
@@ -177,6 +178,7 @@ ml = [
   "scikit-learn>=1.8.0",
   "sentence-transformers>=5.2.2",
   "chromadb>=1.4.1",
+  "onnxruntime>=1.24.1",  # Python 3.14 support (chromadb dependency)
 ]
 
 # YouTube video download and transcript extraction

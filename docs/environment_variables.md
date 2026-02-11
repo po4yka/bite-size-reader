@@ -100,7 +100,7 @@ API_RATE_LIMIT_PER_MINUTE=100
 ## [REQUIRED] Core Variables
 
 | Variable | Description |
-|----------|-------------|
+| ---------- | ------------- |
 | `API_ID` | Telegram API ID (from https://my.telegram.org/apps) |
 | `API_HASH` | Telegram API hash |
 | `BOT_TOKEN` | Telegram bot token (from BotFather) |
@@ -111,7 +111,7 @@ API_RATE_LIMIT_PER_MINUTE=100
 ## [OPTIONAL] LLM Provider Selection
 
 | Variable | Default | Description |
-|----------|---------|-------------|
+| ---------- | --------- | ------------- |
 | `LLM_PROVIDER` | `openrouter` | Active LLM backend: `openrouter`, `openai`, or `anthropic` |
 | `OPENAI_API_KEY` | _(empty)_ | OpenAI API key (when using `openai` provider) |
 | `OPENAI_MODEL` | `gpt-4o` | OpenAI model name |
@@ -126,7 +126,7 @@ API_RATE_LIMIT_PER_MINUTE=100
 ## [REQUIRED] OpenRouter (Default LLM Provider)
 
 | Variable | Default | Description |
-|----------|---------|-------------|
+| ---------- | --------- | ------------- |
 | `OPENROUTER_MODEL` | `deepseek/deepseek-v3.2` | Primary model |
 | `OPENROUTER_FALLBACK_MODELS` | `moonshotai/kimi-k2.5,qwen/qwen3-max,deepseek/deepseek-r1` | Comma-separated fallback chain |
 | `OPENROUTER_LONG_CONTEXT_MODEL` | `moonshotai/kimi-k2.5` | Model for long-context content (256k+) |
@@ -154,7 +154,7 @@ API_RATE_LIMIT_PER_MINUTE=100
 ## [ADVANCED] Firecrawl (Content Extraction)
 
 | Variable | Default | Description |
-|----------|---------|-------------|
+| ---------- | --------- | ------------- |
 | `FIRECRAWL_TIMEOUT_SEC` | `90` | Request timeout (10-300s) |
 | `FIRECRAWL_WAIT_FOR_MS` | `3000` | JS content load wait (0-30000ms) |
 | `FIRECRAWL_MAX_CONNECTIONS` | `10` | Max HTTP connections |
@@ -184,7 +184,7 @@ API_RATE_LIMIT_PER_MINUTE=100
 ## YouTube Video Download
 
 | Variable | Default | Description |
-|----------|---------|-------------|
+| ---------- | --------- | ------------- |
 | `YOUTUBE_DOWNLOAD_ENABLED` | `true` | Enable YouTube video downloading |
 | `YOUTUBE_STORAGE_PATH` | `/data/videos` | Video storage directory |
 | `YOUTUBE_MAX_VIDEO_SIZE_MB` | `500` | Max per-video size (MB) |
@@ -197,7 +197,7 @@ API_RATE_LIMIT_PER_MINUTE=100
 ## Web Search Enrichment
 
 | Variable | Default | Description |
-|----------|---------|-------------|
+| ---------- | --------- | ------------- |
 | `WEB_SEARCH_ENABLED` | `false` | Enable LLM-driven web search (opt-in) |
 | `WEB_SEARCH_MAX_QUERIES` | `3` | Max search queries per article (1-10) |
 | `WEB_SEARCH_MIN_CONTENT_LENGTH` | `500` | Min content chars to trigger search |
@@ -208,7 +208,7 @@ API_RATE_LIMIT_PER_MINUTE=100
 ## Redis Caching
 
 | Variable | Default | Description |
-|----------|---------|-------------|
+| ---------- | --------- | ------------- |
 | `REDIS_ENABLED` | `true` | Enable Redis integration |
 | `REDIS_CACHE_ENABLED` | `true` | Enable caching via Redis |
 | `REDIS_REQUIRED` | `false` | Fail requests when Redis unavailable |
@@ -226,7 +226,7 @@ API_RATE_LIMIT_PER_MINUTE=100
 ## Vector Search / ChromaDB
 
 | Variable | Default | Description |
-|----------|---------|-------------|
+| ---------- | --------- | ------------- |
 | `CHROMA_HOST` | `http://localhost:8000` | Chroma HTTP endpoint |
 | `CHROMA_AUTH_TOKEN` | _(none)_ | Bearer token for secured Chroma |
 | `CHROMA_ENV` | `dev` | Environment label for collection namespacing |
@@ -238,7 +238,7 @@ API_RATE_LIMIT_PER_MINUTE=100
 ## MCP Server
 
 | Variable | Default | Description |
-|----------|---------|-------------|
+| ---------- | --------- | ------------- |
 | `MCP_ENABLED` | `false` | Enable MCP server for AI agent access |
 | `MCP_TRANSPORT` | `stdio` | Transport: `stdio` or `sse` |
 | `MCP_HOST` | `0.0.0.0` | SSE bind address |
@@ -247,7 +247,7 @@ API_RATE_LIMIT_PER_MINUTE=100
 ## Mobile API and Auth
 
 | Variable | Default | Description |
-|----------|---------|-------------|
+| ---------- | --------- | ------------- |
 | `JWT_SECRET_KEY` | _(required if API used)_ | JWT signing secret (min 32 chars) |
 | `ALLOWED_CLIENT_IDS` | _(empty = allow all)_ | Comma-separated allowed client app IDs |
 | `API_RATE_LIMIT_WINDOW_SECONDS` | `60` | Rate limit window |
@@ -272,7 +272,7 @@ API_RATE_LIMIT_PER_MINUTE=100
 ## Karakeep Integration
 
 | Variable | Default | Description |
-|----------|---------|-------------|
+| ---------- | --------- | ------------- |
 | `KARAKEEP_ENABLED` | `false` | Enable Karakeep bookmark sync |
 | `KARAKEEP_API_URL` | `http://localhost:3000/api/v1` | Karakeep API endpoint |
 | `KARAKEEP_API_KEY` | _(empty)_ | Karakeep API key |
@@ -283,7 +283,7 @@ API_RATE_LIMIT_PER_MINUTE=100
 ## Database and Backups
 
 | Variable | Default | Description |
-|----------|---------|-------------|
+| ---------- | --------- | ------------- |
 | `DB_PATH` | `/data/app.db` | SQLite database path |
 | `DB_BACKUP_ENABLED` | `1` | Enable automatic backups (0/1) |
 | `DB_BACKUP_INTERVAL_MINUTES` | `360` | Backup interval |
@@ -299,7 +299,7 @@ API_RATE_LIMIT_PER_MINUTE=100
 ## Telegram Limits
 
 | Variable | Default | Description |
-|----------|---------|-------------|
+| ---------- | --------- | ------------- |
 | `TELEGRAM_MAX_MESSAGE_CHARS` | `3500` | Max chars per reply (safety margin below 4096) |
 | `TELEGRAM_MAX_URL_LENGTH` | `2048` | Max URL length (RFC 2616) |
 | `TELEGRAM_MAX_BATCH_URLS` | `200` | Max URLs in a batch operation |
@@ -308,13 +308,13 @@ API_RATE_LIMIT_PER_MINUTE=100
 ## Content Processing
 
 | Variable | Default | Description |
-|----------|---------|-------------|
+| ---------- | --------- | ------------- |
 | `MAX_TEXT_LENGTH_KB` | `50` | Max text length for URL extraction (KB, regex DoS prevention) |
 
 ## Circuit Breaker
 
 | Variable | Default | Description |
-|----------|---------|-------------|
+| ---------- | --------- | ------------- |
 | `CIRCUIT_BREAKER_ENABLED` | `true` | Enable circuit breaker for external services |
 | `CIRCUIT_BREAKER_FAILURE_THRESHOLD` | `5` | Failures before opening circuit |
 | `CIRCUIT_BREAKER_TIMEOUT_SECONDS` | `60.0` | Wait before half-open state |
@@ -323,7 +323,7 @@ API_RATE_LIMIT_PER_MINUTE=100
 ## Background Processor
 
 | Variable | Default | Description |
-|----------|---------|-------------|
+| ---------- | --------- | ------------- |
 | `BACKGROUND_REDIS_LOCK_ENABLED` | `true` | Use Redis distributed locks |
 | `BACKGROUND_REDIS_LOCK_REQUIRED` | `false` | Fail if Redis unavailable for locking |
 | `BACKGROUND_LOCK_TTL_MS` | `300000` | Lock TTL (ms, default 5min) |
@@ -336,14 +336,14 @@ API_RATE_LIMIT_PER_MINUTE=100
 ## Mobile API Server
 
 | Variable | Default | Description |
-|----------|---------|-------------|
+| ---------- | --------- | ------------- |
 | `API_HOST` | `0.0.0.0` | API bind address |
 | `API_PORT` | `8000` | API listen port |
 
 ## Runtime and Debug
 
 | Variable | Default | Description |
-|----------|---------|-------------|
+| ---------- | --------- | ------------- |
 | `LOG_LEVEL` | `INFO` | Logging level: DEBUG, INFO, WARNING, ERROR |
 | `LOG_TRUNCATE_LENGTH` | `1000` | Max chars for truncated log fields |
 | `REQUEST_TIMEOUT_SEC` | `60` | General request timeout |

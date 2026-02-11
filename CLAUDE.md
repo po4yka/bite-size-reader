@@ -44,17 +44,17 @@ This document helps AI assistants (like Claude) understand and work effectively 
 Telegram Message -> MessageHandler -> AccessController -> MessageRouter
                                                             |
                     +---------------------------------------+-----------+
-                    |                                                   |
+                    | |
               URL Handler                                  Forward Processor
-                    |                                                   |
+                    | |
               URLProcessor                                  LLMSummarizer
-                    |                                                   |
+                    | |
      ContentExtractor -> Firecrawl                              OpenRouter
-                    |                                                   |
+                    | |
               LLMSummarizer -> OpenRouter                     Summary JSON
-                    |                                                   |
+                    | |
               Summary JSON                                 ResponseFormatter
-                    |                                                   |
+                    | |
            ResponseFormatter -------------------------------------------+
                     |
          Telegram Reply + SQLite Storage
@@ -249,7 +249,7 @@ GitHub Actions (`.github/workflows/ci.yml`) enforces:
 
 - Language detection via `app/core/lang.py`
 - Prompts in `app/prompts/en/` and `app/prompts/ru/`
-- Configurable preference: `PREFERRED_LANG=auto|en|ru`
+- Configurable preference: `PREFERRED_LANG=auto| en |ru`
 - Detection result stored in `requests.lang_detected`
 
 ### YouTube Video Support

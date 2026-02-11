@@ -300,7 +300,7 @@ python -m bot
 ## Migration History
 
 | Migration | Description | Date |
-|-----------|-------------|------|
+| ----------- | ------------- | ------ |
 | `001_add_performance_indexes` | Add indexes for common queries | 2025-11-14 |
 
 ## Resources

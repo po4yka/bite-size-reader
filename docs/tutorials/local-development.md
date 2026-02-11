@@ -88,7 +88,7 @@ pip install -r requirements.txt
 pip install -r requirements-dev.txt
 
 # Verify installation
-pip list | grep -E "pyrogram|firecrawl|ruff|pytest"
+pip list | grep -E "pyrogram | firecrawl | ruff |pytest"
 
 # Should see:
 # firecrawl          x.x.x

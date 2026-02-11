@@ -13,7 +13,7 @@ Successfully resolved all test failures introduced by Phase 2 CI optimization (d
 ### Key Results
 
 | Metric | Before | After | Change |
-|--------|--------|-------|--------|
+| -------- | -------- | ------- | -------- |
 | **Tests Passing** | 708 | 1,319 | +611 (+87%) |
 | **Tests Failing** | 10 | 0 | -10 (100% fixed) |
 | **Tests with Errors** | 8 | 0 | -8 (100% fixed) |
@@ -250,7 +250,7 @@ TypeError: metaclass conflict: the metaclass of a derived class must be a
 ## Success Metrics
 
 | Objective | Target | Achieved | Status |
-|-----------|--------|----------|--------|
+| ----------- | -------- | ---------- | -------- |
 | **Fix test failures** | 0 failures | 0 failures | ✅ **SUCCESS** |
 | **Fix test errors** | 0 errors | 0 errors | ✅ **SUCCESS** |
 | **Maintain test coverage** | >50% | 54.57% | ✅ **SUCCESS** |

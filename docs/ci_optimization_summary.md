@@ -83,7 +83,7 @@ Reduced CI/CD pipeline from **90 minutes to 30-45 minutes** through:
 ### CI Build Times
 
 | Scenario | Before | After Phase 1 | After Phase 1+2 | Savings |
-|----------|--------|---------------|-----------------|---------|
+| ---------- | -------- | --------------- | ----------------- | --------- |
 | **Main branch (cold cache)** | 90 min | 60 min | 50-55 min | **35-40 min (39-44%)** |
 | **Main branch (warm cache)** | 90 min | 45-50 min | 40-45 min | **45-50 min (50-56%)** |
 | **PR without Docker (cold)** | 90 min | 30 min | 25-30 min | **60-65 min (67-72%)** |
@@ -94,14 +94,14 @@ Reduced CI/CD pipeline from **90 minutes to 30-45 minutes** through:
 ### Docker Image Sizes
 
 | Image | Before | After | Savings |
-|-------|--------|-------|---------|
+| ------- | -------- | ------- | --------- |
 | **Bot** | 1.33 GB | 1.28 GB | **50 MB (4%)** |
 | **API** | 950 MB | 550 MB | **400 MB (42%)** |
 
 ### Individual Job Times
 
 | Job | Before | After | Savings |
-|-----|--------|-------|---------|
+| ----- | -------- | ------- | --------- |
 | **build-and-check** | 30 min | 10 min (parallel) | 20 min (67%) |
 | **docker-image-bot** | 45 min | 40 min | 5 min (11%) |
 | **docker-image-api** | 30 min | 15-20 min | 10-15 min (33-50%) |
@@ -161,7 +161,7 @@ Reduced CI/CD pipeline from **90 minutes to 30-45 minutes** through:
 ## Dependency Extras Matrix
 
 | Component | Core | api | ml | youtube | export | scheduler | mcp | dev |
-|-----------|------|-----|----|---------| -------|-----------|-----|-----|
+| ----------- | ------ | ----- | ---- | --------- | ------- | ----------- | ----- | ----- |
 | **Bot** | ✅ | ❌ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ |
 | **API Server** | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
 | **CI Tests** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
@@ -203,7 +203,7 @@ prepare-environment (15min)
 ### Expected Invalidation Frequency
 
 | Cache | Invalidation Trigger | Frequency | Size |
-|-------|---------------------|-----------|------|
+| ------- | --------------------- | ----------- | ------ |
 | **Python environment** | requirements.txt/requirements-dev.txt change | 1-2x/week | ~1.3GB |
 | **mypy cache** | Python files or pyproject.toml change | 5-10x/day | ~50-100MB |
 | **Docker layers (bot)** | Dockerfile or dependencies change | 1-2x/week | ~1.5GB |
@@ -305,7 +305,7 @@ docker run --rm bite-size-reader-api python -c "import fastapi, uvicorn; print('
 
 ```bash
 # Check that security jobs run in parallel
-gh run view <run-id> --log | grep -E "bandit-scan|pip-audit-scan|safety-scan" | grep "started"
+gh run view <run-id> --log | grep -E "bandit-scan | pip-audit-scan | safety-scan" | grep "started"
 ```
 
 ### Check Cache Hit Rates
@@ -320,7 +320,7 @@ gh run view <run-id> --log | grep "Cache restored" | wc -l
 ## Success Metrics
 
 | Metric | Target | Achieved | Status |
-|--------|--------|----------|--------|
+| -------- | -------- | ---------- | -------- |
 | **Main branch CI time** | 20-25 min | 40-45 min (warm cache) | ✅ Exceeded target |
 | **PR without Docker time** | 15-20 min | 20-25 min (warm cache) | ✅ Met target |
 | **API image size** | 800-900 MB | 550 MB | ✅ Exceeded target |

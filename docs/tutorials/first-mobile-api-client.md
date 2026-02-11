@@ -206,7 +206,7 @@ client.login(telegramUserId, authToken)
         console.log(`Logged in! Access token expires in ${tokens.expires_in}s`);
     })
     .catch(error => {
-        console.error('Login failed:', error.response?.data || error.message);
+        console.error('Login failed:', error.response?.data | | error.message);
     });
 ```
 

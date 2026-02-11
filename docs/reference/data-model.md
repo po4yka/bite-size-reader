@@ -109,7 +109,7 @@ CREATE TABLE requests (
     id                         TEXT PRIMARY KEY,
     created_at                 TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     type                       TEXT NOT NULL,  -- 'url' | 'forward'
-    status                     TEXT DEFAULT 'pending',  -- 'pending'|'ok'|'error'
+    status                     TEXT DEFAULT 'pending',  -- 'pending'| 'ok' |'error'
     chat_id                    INTEGER REFERENCES chats(chat_id),
     user_id                    INTEGER REFERENCES users(telegram_user_id),
     input_url                  TEXT,
@@ -308,7 +308,7 @@ CREATE TABLE video_downloads (
     request_id                 TEXT UNIQUE REFERENCES requests(id),
     created_at                 TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     video_id                   TEXT NOT NULL,  -- YouTube video ID (11 chars)
-    status                     TEXT DEFAULT 'pending',  -- 'pending'|'downloading'|'completed'|'error'
+    status                     TEXT DEFAULT 'pending',  -- 'pending'| 'downloading' | 'completed' |'error'
     video_file_path            TEXT,
     subtitle_file_path         TEXT,
     metadata_file_path         TEXT,
@@ -731,7 +731,7 @@ CREATE TABLE collection_collaborators (
     id              TEXT PRIMARY KEY,
     collection_id   TEXT REFERENCES collections(id) ON DELETE CASCADE,
     user_id         INTEGER REFERENCES users(telegram_user_id) ON DELETE CASCADE,
-    role            TEXT DEFAULT 'viewer',  -- 'owner'|'editor'|'viewer'
+    role            TEXT DEFAULT 'viewer',  -- 'owner'| 'editor' |'viewer'
     added_at        TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 ```
@@ -821,7 +821,7 @@ CREATE INDEX idx_collection_invites_collection_id ON collection_invites(collecti
 CREATE TABLE user_interactions (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id         INTEGER REFERENCES users(telegram_user_id),
-    interaction_type TEXT NOT NULL,  -- 'request'|'search'|'collection_create'|etc.
+    interaction_type TEXT NOT NULL,  -- 'request'| 'search' | 'collection_create' |etc.
     metadata_json   TEXT,
     created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -858,7 +858,7 @@ CREATE INDEX idx_user_interactions_created_at ON user_interactions(created_at);
 CREATE TABLE audit_logs (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
     timestamp       TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    level           TEXT NOT NULL,  -- 'info'|'warning'|'error'
+    level           TEXT NOT NULL,  -- 'info'| 'warning' |'error'
     event           TEXT NOT NULL,
     correlation_id  TEXT,
     user_id         INTEGER,
@@ -968,29 +968,29 @@ CREATE UNIQUE INDEX idx_client_secrets_client_id ON client_secrets(client_id);
 
 ```mermaid
 erDiagram
-    users ||--o{ requests : "submits"
-    users ||--o{ user_interactions : "performs"
-    users ||--o{ user_devices : "owns"
-    users ||--o{ refresh_tokens : "has"
-    users ||--o{ collections : "creates"
-    users ||--o{ collection_collaborators : "collaborates"
+    users | |--o{ requests : "submits"
+    users | |--o{ user_interactions : "performs"
+    users | |--o{ user_devices : "owns"
+    users | |--o{ refresh_tokens : "has"
+    users | |--o{ collections : "creates"
+    users | |--o{ collection_collaborators : "collaborates"
 
-    chats ||--o{ requests : "contains"
-    chats ||--o{ telegram_messages : "has"
+    chats | |--o{ requests : "contains"
+    chats | |--o{ telegram_messages : "has"
 
-    requests ||--|| telegram_messages : "has"
-    requests ||--|| crawl_results : "has"
-    requests ||--|| video_downloads : "has"
-    requests ||--o{ llm_calls : "triggers"
-    requests ||--|| summaries : "produces"
+    requests | | -- | | telegram_messages : "has"
+    requests | | -- | | crawl_results : "has"
+    requests | | -- | | video_downloads : "has"
+    requests | |--o{ llm_calls : "triggers"
+    requests | | -- | | summaries : "produces"
 
-    summaries ||--|| summary_embeddings : "has"
-    summaries ||--|| topic_search_index : "indexed_in"
-    summaries ||--o{ collection_items : "included_in"
+    summaries | | -- | | summary_embeddings : "has"
+    summaries | | -- | | topic_search_index : "indexed_in"
+    summaries | |--o{ collection_items : "included_in"
 
-    collections ||--o{ collection_items : "contains"
-    collections ||--o{ collection_collaborators : "shared_with"
-    collections ||--o{ collection_invites : "has"
+    collections | |--o{ collection_items : "contains"
+    collections | |--o{ collection_collaborators : "shared_with"
+    collections | |--o{ collection_invites : "has"
 ```
 
 ---

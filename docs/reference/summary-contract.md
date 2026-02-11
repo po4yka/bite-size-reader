@@ -366,7 +366,7 @@ Complete specification for the strict JSON schema enforced by Bite-Size Reader f
 ### Character Limits
 
 | Field | Min | Max | Notes |
-|-------|-----|-----|-------|
+| ------- | ----- | ----- | ------- |
 | `summary_250` | 150 | 250 | Sentence boundary |
 | `summary_1000` | 800 | 1200 | Multi-sentence |
 | `tldr` | 50 | 100 | One sentence |
@@ -376,7 +376,7 @@ Complete specification for the strict JSON schema enforced by Bite-Size Reader f
 ### Array Lengths
 
 | Field | Min Items | Max Items |
-|-------|-----------|-----------|
+| ------- | ----------- | ----------- |
 | `key_ideas` | 3 | 8 |
 | `topic_tags` | 3 | 10 |
 | `entities.people` | 0 | unlimited |

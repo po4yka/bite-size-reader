@@ -5,7 +5,7 @@ Bite-Size Reader exposes an [MCP (Model Context Protocol)](https://modelcontextp
 ## Configuration
 
 | Variable | Default | Description |
-|----------|---------|-------------|
+| ---------- | --------- | ------------- |
 | `MCP_ENABLED` | `false` | Enable the MCP server |
 | `MCP_TRANSPORT` | `stdio` | Transport: `stdio` or `sse` |
 | `MCP_HOST` | `0.0.0.0` | SSE bind address |
@@ -30,7 +30,7 @@ python -m app.cli.mcp_server --transport sse --port 8200
 ## Tools (12)
 
 | Tool | Description |
-|------|-------------|
+| ------ | ------------- |
 | `search_articles(query, limit)` | Full-text search across titles, summaries, tags, entities |
 | `get_article(summary_id)` | Full summary details by ID |
 | `list_articles(limit, offset, is_favorited, lang, tag)` | Paginated article list with filters |
@@ -47,7 +47,7 @@ python -m app.cli.mcp_server --transport sse --port 8200
 ## Resources (10)
 
 | URI | Description |
-|-----|-------------|
+| ----- | ------------- |
 | `bsr://articles/recent` | 10 most recent article summaries |
 | `bsr://articles/favorites` | All favorited summaries |
 | `bsr://articles/unread` | Up to 20 unread summaries |

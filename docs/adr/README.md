@@ -25,7 +25,7 @@ We follow the [Michael Nygard ADR format](https://cognitect.com/blog/2011/11/15/
 ## Index of ADRs
 
 | ADR | Title | Status | Date |
-|-----|-------|--------|------|
+| ----- | ------- | -------- | ------ |
 | [ADR-0001](0001-use-firecrawl-for-content-extraction.md) | Use Firecrawl for Content Extraction | Accepted | 2024-12-15 |
 | [ADR-0002](0002-strict-json-summary-contract.md) | Strict JSON Summary Contract | Accepted | 2024-12-18 |
 | [ADR-0003](0003-single-user-access-control.md) | Single-User Access Control Model | Accepted | 2024-12-20 |

@@ -129,7 +129,7 @@ Check whether a URL has already been processed and summarised. Uses the same nor
 ## Available Resources
 
 | URI | Description |
-|---|---|
+| --- | --- |
 | `bsr://articles/recent` | 10 most recent article summaries |
 | `bsr://articles/favorites` | All favorited articles (up to 50) |
 | `bsr://articles/unread` | Unread articles (up to 20) |

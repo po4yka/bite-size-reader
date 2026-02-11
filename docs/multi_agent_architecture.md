@@ -75,11 +75,11 @@ When `WEB_SEARCH_ENABLED=true`, WebSearchAgent enriches content with current web
 ```mermaid
 flowchart LR
   Content[Article Content] --> Analysis["Gap Analysis\n(LLM call)"]
-  Analysis -->|needs_search=true| Queries["Extract Queries"]
+  Analysis -->| needs_search=true | Queries["Extract Queries"]
   Queries --> Search["TopicSearchService"]
   Search --> Context["SearchContextBuilder"]
   Context --> Output[Enriched Context]
-  Analysis -->|needs_search=false| Skip[Skip Search]
+  Analysis -->| needs_search=false | Skip[Skip Search]
 ```
 
 ### Input/Output

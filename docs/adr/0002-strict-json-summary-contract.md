@@ -197,7 +197,7 @@ See `SPEC.md` Summary JSON Contract section for full specification.
 ### Update Log
 
 | Date | Author | Change |
-|------|--------|--------|
+| ------ | -------- | -------- |
 | 2024-12-18 | po4yka | Initial decision (Accepted) |
 | 2025-01-20 | po4yka | Added JSON repair note |
 | 2025-02-04 | po4yka | Schema version 3.0 |
