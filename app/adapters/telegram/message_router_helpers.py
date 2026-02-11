@@ -328,6 +328,10 @@ async def process_url_batch(
     url_to_request_id: dict[str, int] = {}
     urls_to_process: list[str] = []
 
+    # Store cached summaries for delivery after progress message is shown
+    # Format: (url, payload_dict, request_id)
+    cached_summaries: list[tuple[str, dict[str, Any], int]] = []
+
     # Get chat_id from message
     chat_id = getattr(message.chat, "id", None)
 
@@ -346,7 +350,7 @@ async def process_url_batch(
                 # Double check summary table
                 summary = await url_processor.summary_repo.async_get_summary_by_request(req_id)
                 if summary:
-                    # Extract title from cached summary
+                    # Extract title and payload from cached summary
                     payload = summary.get("json_payload")
                     if isinstance(payload, str):
                         try:
@@ -359,6 +363,10 @@ async def process_url_batch(
                     title = URLProcessingFlowResult.from_summary(payload).title
 
                     batch_status.mark_cached(url, title=title)
+                    # Store for delivery after progress message is shown
+                    if isinstance(payload, dict) and payload:
+                        cached_summaries.append((url, payload, req_id))
+                        url_to_request_id[url] = req_id
                     logger.debug(
                         "batch_url_cache_hit",
                         extra={"url": url, "request_id": req_id, "uid": uid},
@@ -653,7 +661,13 @@ async def process_url_batch(
             return url, False, last_error, None
 
     # Create progress tracker with batch-aware formatter
+    edit_consecutive_failures = 0
+    edit_circuit_breaker_threshold = 3
+
     async def progress_formatter(current: int, total_count: int, msg_id: int | None) -> int | None:
+        nonlocal edit_consecutive_failures
+        if edit_consecutive_failures >= edit_circuit_breaker_threshold:
+            return msg_id
         try:
             progress_text = BatchProgressFormatter.format_progress_message(batch_status)
             chat_id = getattr(message.chat, "id", None)
@@ -662,9 +676,22 @@ async def process_url_batch(
                     chat_id, msg_id, progress_text, parse_mode="HTML"
                 )
                 if edit_success:
+                    edit_consecutive_failures = 0
                     return msg_id
+                edit_consecutive_failures += 1
+                if edit_consecutive_failures >= edit_circuit_breaker_threshold:
+                    logger.warning(
+                        "progress_edit_circuit_breaker_open",
+                        extra={"consecutive_failures": edit_consecutive_failures},
+                    )
             return msg_id
         except Exception:
+            edit_consecutive_failures += 1
+            if edit_consecutive_failures >= edit_circuit_breaker_threshold:
+                logger.warning(
+                    "progress_edit_circuit_breaker_open",
+                    extra={"consecutive_failures": edit_consecutive_failures},
+                )
             return msg_id
 
     # If initial_message_id is not provided, send the initial message
@@ -676,6 +703,30 @@ async def process_url_batch(
             )
         except Exception:
             initial_message_id = None
+
+    # Deliver cached summaries now that progress message is visible
+    # This ensures users see summaries for cached URLs without waiting
+    if cached_summaries:
+        logger.info(
+            "delivering_cached_summaries",
+            extra={"count": len(cached_summaries), "uid": uid},
+        )
+        for cached_url, cached_payload, cached_req_id in cached_summaries:
+            try:
+                await response_formatter.send_cached_summary_notification(message, silent=False)
+                await response_formatter.send_structured_summary_response(
+                    message,
+                    cached_payload,
+                    chunk_llm_stub=None,
+                    summary_id=f"req:{cached_req_id}",
+                )
+                # Small delay to avoid Telegram rate limits (30 msg/sec per chat)
+                await asyncio.sleep(0.3)
+            except Exception as e:
+                logger.warning(
+                    "cached_summary_delivery_failed",
+                    extra={"url": cached_url, "request_id": cached_req_id, "error": str(e)},
+                )
 
     progress_tracker = ProgressTracker(
         total=len(urls),
