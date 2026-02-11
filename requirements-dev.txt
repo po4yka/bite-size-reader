@@ -179,7 +179,7 @@ mypy-extensions==1.1.0
     # via mypy
 nodeenv==1.10.0
     # via pre-commit
-numpy==2.2.6
+numpy==2.4.2
     # via
     #   -c requirements.txt
     #   blis
@@ -369,7 +369,7 @@ trafilatura==2.0.0
     # via
     #   -c requirements.txt
     #   bite-size-reader (pyproject.toml)
-typer-slim==0.21.1
+typer-slim==0.21.2
     # via
     #   -c requirements.txt
     #   spacy
