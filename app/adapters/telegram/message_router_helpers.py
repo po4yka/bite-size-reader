@@ -155,6 +155,10 @@ async def handle_document_file(
             interaction_id=interaction_id,
             start_time=start_time,
             initial_message_id=progress_message_id,
+            # Combined summary dependencies (from url_handler)
+            llm_client=getattr(router.url_handler, "_llm_client", None),
+            batch_session_repo=getattr(router.url_handler, "_batch_session_repo", None),
+            batch_config=getattr(router.url_handler, "_batch_config", None),
         )
 
         # Ensure we do not hit rate limiter after the last progress edit
@@ -312,6 +316,10 @@ async def process_url_batch(
     max_concurrent: int = 4,
     max_retries: int = 2,
     compute_timeout_func: Callable[[str, int], Awaitable[float]] | None = None,
+    # Optional: combined summary feature dependencies
+    llm_client: Any | None = None,
+    batch_session_repo: Any | None = None,
+    batch_config: BatchAnalysisConfig | None = None,
 ) -> BatchContext | None:
     """Process multiple URLs in parallel with controlled concurrency and detailed status tracking.
 
@@ -327,6 +335,10 @@ async def process_url_batch(
     # This ensures ALL URLs get database records even if processing fails early
     url_to_request_id: dict[str, int] = {}
     urls_to_process: list[str] = []
+
+    # Store cached summaries for delivery after progress message is shown
+    # Format: (url, payload_dict, request_id)
+    cached_summaries: list[tuple[str, dict[str, Any], int]] = []
 
     # Get chat_id from message
     chat_id = getattr(message.chat, "id", None)
@@ -346,7 +358,7 @@ async def process_url_batch(
                 # Double check summary table
                 summary = await url_processor.summary_repo.async_get_summary_by_request(req_id)
                 if summary:
-                    # Extract title from cached summary
+                    # Extract title and payload from cached summary
                     payload = summary.get("json_payload")
                     if isinstance(payload, str):
                         try:
@@ -359,6 +371,10 @@ async def process_url_batch(
                     title = URLProcessingFlowResult.from_summary(payload).title
 
                     batch_status.mark_cached(url, title=title)
+                    # Store for delivery after progress message is shown
+                    if isinstance(payload, dict) and payload:
+                        cached_summaries.append((url, payload, req_id))
+                        url_to_request_id[url] = req_id
                     logger.debug(
                         "batch_url_cache_hit",
                         extra={"url": url, "request_id": req_id, "uid": uid},
@@ -653,7 +669,13 @@ async def process_url_batch(
             return url, False, last_error, None
 
     # Create progress tracker with batch-aware formatter
+    edit_consecutive_failures = 0
+    edit_circuit_breaker_threshold = 3
+
     async def progress_formatter(current: int, total_count: int, msg_id: int | None) -> int | None:
+        nonlocal edit_consecutive_failures
+        if edit_consecutive_failures >= edit_circuit_breaker_threshold:
+            return msg_id
         try:
             progress_text = BatchProgressFormatter.format_progress_message(batch_status)
             chat_id = getattr(message.chat, "id", None)
@@ -662,9 +684,22 @@ async def process_url_batch(
                     chat_id, msg_id, progress_text, parse_mode="HTML"
                 )
                 if edit_success:
+                    edit_consecutive_failures = 0
                     return msg_id
+                edit_consecutive_failures += 1
+                if edit_consecutive_failures >= edit_circuit_breaker_threshold:
+                    logger.warning(
+                        "progress_edit_circuit_breaker_open",
+                        extra={"consecutive_failures": edit_consecutive_failures},
+                    )
             return msg_id
         except Exception:
+            edit_consecutive_failures += 1
+            if edit_consecutive_failures >= edit_circuit_breaker_threshold:
+                logger.warning(
+                    "progress_edit_circuit_breaker_open",
+                    extra={"consecutive_failures": edit_consecutive_failures},
+                )
             return msg_id
 
     # If initial_message_id is not provided, send the initial message
@@ -676,6 +711,30 @@ async def process_url_batch(
             )
         except Exception:
             initial_message_id = None
+
+    # Deliver cached summaries now that progress message is visible
+    # This ensures users see summaries for cached URLs without waiting
+    if cached_summaries:
+        logger.info(
+            "delivering_cached_summaries",
+            extra={"count": len(cached_summaries), "uid": uid},
+        )
+        for cached_url, cached_payload, cached_req_id in cached_summaries:
+            try:
+                await response_formatter.send_cached_summary_notification(message, silent=False)
+                await response_formatter.send_structured_summary_response(
+                    message,
+                    cached_payload,
+                    chunk_llm_stub=None,
+                    summary_id=f"req:{cached_req_id}",
+                )
+                # Small delay to avoid Telegram rate limits (30 msg/sec per chat)
+                await asyncio.sleep(0.3)
+            except Exception as e:
+                logger.warning(
+                    "cached_summary_delivery_failed",
+                    extra={"url": cached_url, "request_id": cached_req_id, "error": str(e)},
+                )
 
     progress_tracker = ProgressTracker(
         total=len(urls),
@@ -736,13 +795,38 @@ async def process_url_batch(
             logger_=logger,
         )
 
-    # Return batch context for relationship analysis
-    return BatchContext(
+    # Build batch context
+    batch_context = BatchContext(
         batch_status=batch_status,
         url_to_request_id=url_to_request_id,
         correlation_id=correlation_id,
         uid=uid,
     )
+
+    # Run combined summary analysis if dependencies provided and enough successful articles
+    if (
+        llm_client is not None
+        and batch_session_repo is not None
+        and batch_config is not None
+        and batch_status.success_count >= batch_config.min_articles
+    ):
+        try:
+            await run_batch_relationship_analysis(
+                batch_context=batch_context,
+                message=message,
+                response_formatter=response_formatter,
+                summary_repo=url_processor.summary_repo,
+                batch_session_repo=batch_session_repo,
+                llm_client=llm_client,
+                batch_config=batch_config,
+            )
+        except Exception as e:
+            logger.warning(
+                "batch_relationship_analysis_failed",
+                extra={"error": str(e), "cid": correlation_id},
+            )
+
+    return batch_context
 
 
 def should_notify_rate_limit(router: Any, uid: int) -> bool:

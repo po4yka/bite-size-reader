@@ -150,7 +150,7 @@ def audit_command(
                 ctx.audit_func("INFO", event_name, extra)
             except Exception as exc:
                 raise_if_cancelled(exc)
-                logger.debug("audit_log_failed", extra={"error": str(exc)})
+                logger.warning("audit_log_failed", extra={"error": str(exc)})
 
             return await func(self, ctx)
 

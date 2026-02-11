@@ -66,6 +66,10 @@ class URLHandler:
         url_processor: URLProcessor,
         adaptive_timeout_service: AdaptiveTimeoutService | None = None,
         verbosity_resolver: VerbosityResolver | None = None,
+        # Optional: combined summary feature dependencies
+        llm_client: Any | None = None,
+        batch_session_repo: Any | None = None,
+        batch_config: Any | None = None,
     ) -> None:
         self.db = db
         self.user_repo = SqliteUserRepositoryAdapter(db)
@@ -74,6 +78,10 @@ class URLHandler:
         self.url_processor = url_processor
         self._adaptive_timeout = adaptive_timeout_service
         self.verbosity_resolver = verbosity_resolver
+        # Combined summary dependencies
+        self._llm_client = llm_client
+        self._batch_session_repo = batch_session_repo
+        self._batch_config = batch_config
 
         # Lock to protect shared state from concurrent access
         self._state_lock = asyncio.Lock()
@@ -199,6 +207,10 @@ class URLHandler:
             max_retries=URL_MAX_RETRIES,
             compute_timeout_func=compute_timeout,
             initial_message_id=initial_message_id,
+            # Combined summary dependencies (optional)
+            llm_client=self._llm_client,
+            batch_session_repo=self._batch_session_repo,
+            batch_config=self._batch_config,
         )
 
     async def add_awaiting_user(self, uid: int) -> None:

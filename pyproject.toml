@@ -167,7 +167,7 @@ api = [
   "starlette>=0.50.0",
   "pyjwt>=2.11.0",
   "python-multipart>=0.0.22",
-  "chromadb>=1.4.1",
+  "chromadb>=1.5.0",
   "sentence-transformers>=5.2.2",  # required by /search/semantic embedding generation
   "onnxruntime>=1.24.1",  # Python 3.14 support (chromadb dependency)
 ]
@@ -178,8 +178,8 @@ ml = [
   "transformers>=5.0.0",
   "scikit-learn>=1.8.0",
   "sentence-transformers>=5.2.2",
-  "chromadb>=1.4.1",
-  "onnxruntime>=1.24.1",  # Python 3.14 support (chromadb dependency)
+  "chromadb>=1.5.0",
+  "onnxruntime>=1.24.1",
 ]
 
 # YouTube video download and transcript extraction

@@ -87,7 +87,7 @@ class ForwardContentProcessor:
             if getattr(self.cfg.runtime, "enable_textacy", False):
                 prompt = normalize_text(prompt)
         except Exception:
-            pass
+            logger.debug("forward_text_normalize_failed", exc_info=True)
 
         # Create request with content text
         req_id = await self._create_forward_request(message, correlation_id, prompt)

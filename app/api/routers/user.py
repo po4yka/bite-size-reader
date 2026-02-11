@@ -179,7 +179,7 @@ async def get_user_stats(user=Depends(get_current_user)):
                     parsed = urlparse(normalized_url)
                     domain = parsed.netloc
                 except Exception:
-                    logger.debug("url_domain_parse_failed", exc_info=True)
+                    logger.warning("url_domain_parse_failed", exc_info=True)
 
         if domain:
             domain_counter[domain] += 1

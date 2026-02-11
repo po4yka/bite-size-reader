@@ -6,11 +6,17 @@ This adapter handles RefreshToken and ClientSecret operations.
 from __future__ import annotations
 
 import datetime as dt
-from typing import Any
+import logging
+from typing import TYPE_CHECKING, Any
 
 from app.core.time_utils import UTC
 from app.db.models import ClientSecret, RefreshToken, User, model_to_dict
 from app.infrastructure.persistence.sqlite.base import SqliteBaseRepository
+
+if TYPE_CHECKING:
+    from app.infrastructure.cache.auth_token_cache import AuthTokenCache
+
+logger = logging.getLogger(__name__)
 
 
 def _utcnow_naive() -> dt.datetime:
@@ -19,7 +25,25 @@ def _utcnow_naive() -> dt.datetime:
 
 
 class SqliteAuthRepositoryAdapter(SqliteBaseRepository):
-    """Adapter for authentication-related operations (RefreshToken, ClientSecret)."""
+    """Adapter for authentication-related operations (RefreshToken, ClientSecret).
+
+    Supports optional Redis caching for refresh token lookups. When a token cache
+    is provided, token data is cached for O(1) validation instead of DB queries.
+    """
+
+    def __init__(
+        self,
+        session_manager: Any,
+        token_cache: AuthTokenCache | None = None,
+    ) -> None:
+        """Initialize auth repository.
+
+        Args:
+            session_manager: Database session manager.
+            token_cache: Optional Redis cache for token lookups.
+        """
+        super().__init__(session_manager)
+        self._token_cache = token_cache
 
     # -------------------------------------------------------------------------
     # RefreshToken Operations
@@ -53,23 +77,81 @@ class SqliteAuthRepositoryAdapter(SqliteBaseRepository):
             )
             return record.id
 
-        return await self._execute(_create, operation_name="create_refresh_token")
+        token_id = await self._execute(_create, operation_name="create_refresh_token")
+
+        # Cache the new token for fast lookups
+        if self._token_cache:
+            try:
+                await self._token_cache.set_token(
+                    token_hash,
+                    user_id=user_id,
+                    client_id=client_id,
+                    expires_at=expires_at,
+                    is_revoked=False,
+                    token_id=token_id,
+                )
+            except Exception as exc:
+                # Log but don't fail the create operation
+                logger.warning(
+                    "auth_token_cache_write_failed",
+                    extra={"error": str(exc), "token_hash_prefix": token_hash[:8]},
+                )
+
+        return token_id
 
     async def async_get_refresh_token_by_hash(self, token_hash: str) -> dict[str, Any] | None:
         """Get a refresh token by its hash.
 
+        Checks Redis cache first for O(1) lookup, falls back to SQLite on miss.
+
         Returns:
             Dict with token data or None if not found.
         """
+        # Check cache first
+        if self._token_cache:
+            try:
+                cached = await self._token_cache.get_token(token_hash)
+                if cached is not None:
+                    return cached
+            except Exception as exc:
+                # Log but fall through to DB query
+                logger.warning(
+                    "auth_token_cache_read_failed",
+                    extra={"error": str(exc), "token_hash_prefix": token_hash[:8]},
+                )
 
+        # Cache miss - query database
         def _get() -> dict[str, Any] | None:
             record = RefreshToken.get_or_none(RefreshToken.token_hash == token_hash)
             return model_to_dict(record)
 
-        return await self._execute(_get, operation_name="get_refresh_token_by_hash", read_only=True)
+        result = await self._execute(
+            _get, operation_name="get_refresh_token_by_hash", read_only=True
+        )
+
+        # Populate cache on DB hit
+        if result and self._token_cache:
+            try:
+                await self._token_cache.set_token(
+                    token_hash,
+                    user_id=result.get("user"),
+                    client_id=result.get("client_id"),
+                    expires_at=result.get("expires_at"),
+                    is_revoked=result.get("is_revoked", False),
+                    token_id=result.get("id"),
+                )
+            except Exception as exc:
+                logger.warning(
+                    "auth_token_cache_populate_failed",
+                    extra={"error": str(exc), "token_hash_prefix": token_hash[:8]},
+                )
+
+        return result
 
     async def async_revoke_refresh_token(self, token_hash: str) -> bool:
         """Revoke a refresh token by hash.
+
+        Also invalidates the cached token entry if present.
 
         Returns:
             True if token was found and revoked, False otherwise.
@@ -83,7 +165,19 @@ class SqliteAuthRepositoryAdapter(SqliteBaseRepository):
             record.save()
             return True
 
-        return await self._execute(_revoke, operation_name="revoke_refresh_token")
+        revoked = await self._execute(_revoke, operation_name="revoke_refresh_token")
+
+        # Invalidate cache entry
+        if revoked and self._token_cache:
+            try:
+                await self._token_cache.mark_revoked(token_hash)
+            except Exception as exc:
+                logger.warning(
+                    "auth_token_cache_revoke_failed",
+                    extra={"error": str(exc), "token_hash_prefix": token_hash[:8]},
+                )
+
+        return revoked
 
     async def async_update_refresh_token_last_used(self, token_id: int) -> None:
         """Update the last_used_at timestamp for a refresh token."""

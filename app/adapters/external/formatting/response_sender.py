@@ -21,6 +21,35 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+def _normalize_parse_mode(mode: str | None) -> Any:
+    """Convert string parse mode to Pyrogram enum.
+
+    Pyrogram 2.x requires enums.ParseMode, not string literals.
+    This helper allows callers to use "HTML" or "MARKDOWN" strings
+    while ensuring Pyrogram receives the correct enum value.
+    """
+    if mode is None:
+        return None
+    # Already an enum or non-string type -- return as-is
+    if not isinstance(mode, str):
+        return mode
+    try:
+        from pyrogram import enums
+
+        mode_upper = mode.upper()
+        if mode_upper == "HTML":
+            return enums.ParseMode.HTML
+        if mode_upper in ("MARKDOWN", "MD"):
+            return enums.ParseMode.MARKDOWN
+        if mode_upper == "DISABLED":
+            return enums.ParseMode.DISABLED
+        # Unknown string value -- return as-is
+        return mode
+    except ImportError:
+        # Pyrogram not available, return as-is
+        return mode
+
+
 class ResponseSenderImpl:
     """Implementation of core Telegram message sending."""
 
@@ -464,8 +493,9 @@ class ResponseSenderImpl:
                             "message_id": message_id,
                             "text": local_text,
                         }
-                        if parse_mode is not None:
-                            kwargs["parse_mode"] = parse_mode
+                        normalized_mode = _normalize_parse_mode(parse_mode)
+                        if normalized_mode is not None:
+                            kwargs["parse_mode"] = normalized_mode
                         if reply_markup is not None:
                             kwargs["reply_markup"] = reply_markup
                         if disable_web_page_preview is not None:
@@ -660,7 +690,7 @@ class ResponseSenderImpl:
             if client is not None and hasattr(client, "send_message"):
                 await client.send_message(chat_id=self._admin_log_chat_id, text=text[:4096])
         except Exception:
-            logger.debug("admin_log_send_failed", extra={"chat_id": self._admin_log_chat_id})
+            logger.warning("admin_log_send_failed", extra={"chat_id": self._admin_log_chat_id})
 
     def _slugify(self, text: str, *, max_len: int = 60) -> str:
         """Create a filesystem-friendly slug from text."""

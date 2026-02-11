@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import hashlib
 from datetime import datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from app.api.exceptions import ResourceNotFoundError
 from app.api.models.auth import RefreshTokenRequest, SessionInfo
@@ -17,7 +17,7 @@ from app.api.models.responses import (
     success_response,
 )
 from app.api.routers.auth._fastapi import APIRouter, Depends
-from app.api.routers.auth.dependencies import get_current_user
+from app.api.routers.auth.dependencies import get_auth_repository, get_current_user
 from app.api.routers.auth.tokens import (
     ACCESS_TOKEN_EXPIRE_MINUTES,
     create_access_token,
@@ -27,12 +27,14 @@ from app.api.routers.auth.tokens import (
 from app.core.logging_utils import get_logger, log_exception
 from app.core.time_utils import UTC
 from app.db.models import database_proxy
-from app.infrastructure.persistence.sqlite.repositories.auth_repository import (
-    SqliteAuthRepositoryAdapter,
-)
 from app.infrastructure.persistence.sqlite.repositories.user_repository import (
     SqliteUserRepositoryAdapter,
 )
+
+if TYPE_CHECKING:
+    from app.infrastructure.persistence.sqlite.repositories.auth_repository import (
+        SqliteAuthRepositoryAdapter,
+    )
 
 logger = get_logger(__name__)
 router = APIRouter()
@@ -48,7 +50,10 @@ def _format_dt_z(dt_value: Any) -> str:
 
 
 @router.post("/refresh")
-async def refresh_access_token(refresh_data: RefreshTokenRequest):
+async def refresh_access_token(
+    refresh_data: RefreshTokenRequest,
+    auth_repo: SqliteAuthRepositoryAdapter = Depends(get_auth_repository),
+):
     """Refresh an expired access token using a refresh token."""
     from app.api.exceptions import TokenInvalidError, TokenRevokedError
 
@@ -61,7 +66,6 @@ async def refresh_access_token(refresh_data: RefreshTokenRequest):
     validate_client_id(client_id)
 
     token_hash = hashlib.sha256(refresh_data.refresh_token.encode()).hexdigest()
-    auth_repo = SqliteAuthRepositoryAdapter(database_proxy)
     refresh_token_record = await auth_repo.async_get_refresh_token_by_hash(token_hash)
     if not refresh_token_record:
         raise TokenInvalidError("Refresh token is not recognized")
@@ -92,12 +96,15 @@ async def refresh_access_token(refresh_data: RefreshTokenRequest):
 
 
 @router.post("/logout")
-async def logout(request: RefreshTokenRequest, _: dict = Depends(get_current_user)):
+async def logout(
+    request: RefreshTokenRequest,
+    _: dict = Depends(get_current_user),
+    auth_repo: SqliteAuthRepositoryAdapter = Depends(get_auth_repository),
+):
     """Logout by revoking the specific refresh token."""
     token = request.refresh_token
     try:
         token_hash = hashlib.sha256(token.encode()).hexdigest()
-        auth_repo = SqliteAuthRepositoryAdapter(database_proxy)
         revoked = await auth_repo.async_revoke_refresh_token(token_hash)
         if revoked:
             logger.info("refresh_token_revoked", extra={"token_hash": token_hash[:8] + "..."})
@@ -108,12 +115,14 @@ async def logout(request: RefreshTokenRequest, _: dict = Depends(get_current_use
 
 
 @router.get("/sessions")
-async def list_sessions(current_user: dict = Depends(get_current_user)) -> dict:
+async def list_sessions(
+    current_user: dict = Depends(get_current_user),
+    auth_repo: SqliteAuthRepositoryAdapter = Depends(get_auth_repository),
+) -> dict:
     """List active sessions for the current user."""
     user_id = current_user["user_id"]
     now = datetime.now(UTC)
 
-    auth_repo = SqliteAuthRepositoryAdapter(database_proxy)
     sessions = await auth_repo.async_list_active_sessions(user_id, now)
 
     formatted_sessions = []

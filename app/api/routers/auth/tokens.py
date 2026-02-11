@@ -2,8 +2,11 @@
 JWT token creation and validation.
 """
 
+from __future__ import annotations
+
 import hashlib
 from datetime import datetime, timedelta
+from typing import TYPE_CHECKING
 
 import jwt
 
@@ -14,10 +17,11 @@ from app.api.exceptions import (
 from app.config import Config
 from app.core.logging_utils import get_logger
 from app.core.time_utils import UTC
-from app.db.models import database_proxy
-from app.infrastructure.persistence.sqlite.repositories.auth_repository import (
-    SqliteAuthRepositoryAdapter,
-)
+
+if TYPE_CHECKING:
+    from app.infrastructure.persistence.sqlite.repositories.auth_repository import (
+        SqliteAuthRepositoryAdapter,
+    )
 
 logger = get_logger(__name__)
 
@@ -108,8 +112,16 @@ async def create_refresh_token(
     client_id: str | None = None,
     device_info: str | None = None,
     ip_address: str | None = None,
+    auth_repo: SqliteAuthRepositoryAdapter | None = None,
 ) -> tuple[str, int]:
     """Create and persist JWT refresh token.
+
+    Args:
+        user_id: Telegram user ID.
+        client_id: Client application identifier.
+        device_info: Device information string.
+        ip_address: Client IP address.
+        auth_repo: Optional auth repository with cache. If None, creates one.
 
     Returns:
         Tuple of (token_string, session_id) where session_id is the refresh token record ID.
@@ -120,7 +132,11 @@ async def create_refresh_token(
     token_hash = hashlib.sha256(token.encode()).hexdigest()
     expires_at = datetime.now(UTC) + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
 
-    auth_repo = SqliteAuthRepositoryAdapter(database_proxy)
+    if auth_repo is None:
+        from app.api.routers.auth.dependencies import get_auth_repository
+
+        auth_repo = get_auth_repository()
+
     session_id = await auth_repo.async_create_refresh_token(
         user_id=user_id,
         token_hash=token_hash,

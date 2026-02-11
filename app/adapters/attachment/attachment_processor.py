@@ -280,7 +280,9 @@ class AttachmentProcessor:
                     correlation_id or "unknown",
                 )
             except Exception:
-                logger.debug("attachment_error_notification_failed", extra={"cid": correlation_id})
+                logger.warning(
+                    "attachment_error_notification_failed", extra={"cid": correlation_id}
+                )
         finally:
             # Clean up temp file
             if file_path and os.path.exists(file_path):
@@ -690,6 +692,10 @@ class AttachmentProcessor:
         }
         if model_override:
             request_kwargs["model_override"] = model_override
+            # Use vision-specific fallback models when processing attachments
+            attachment_cfg = self.cfg.attachment
+            if attachment_cfg.vision_fallback_models:
+                request_kwargs["fallback_models_override"] = attachment_cfg.vision_fallback_models
 
         requests = [LLMRequestConfig(**request_kwargs)]
 

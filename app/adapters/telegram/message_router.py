@@ -96,21 +96,34 @@ class MessageRouter:
         self._recent_message_ttl = 120
 
     async def _get_active_rate_limiter(self) -> RedisUserRateLimiter | UserRateLimiter:
-        if self._redis_limiter_available is None:
-            redis_client = await get_redis(self.cfg)
-            if redis_client:
+        """Get the active rate limiter, preferring Redis when available.
+
+        The get_redis() function handles reconnection internally with rate-limiting,
+        so we can safely call it on each request. When Redis was unavailable and
+        becomes available again, the limiter will automatically switch to Redis.
+        """
+        # Always try to get Redis client - it handles reconnection internally
+        redis_client = await get_redis(self.cfg)
+
+        if redis_client is not None:
+            # Redis is available
+            if not self._redis_limiter_available:
+                # First time or reconnected after being unavailable
                 self._redis_limiter = RedisUserRateLimiter(
                     redis_client, self._rate_limiter_config, self.cfg.redis.prefix
                 )
                 self._redis_limiter_available = True
                 logger.info("telegram_rate_limiter_redis_enabled")
-            else:
-                self._redis_limiter_available = False
-        return (
-            self._redis_limiter
-            if self._redis_limiter_available and self._redis_limiter
-            else self._rate_limiter
-        )
+            # _redis_limiter is guaranteed to be set at this point
+            assert self._redis_limiter is not None
+            return self._redis_limiter
+
+        # Redis unavailable - use in-memory limiter
+        if self._redis_limiter_available is True:
+            # Was available before, now unavailable - log fallback
+            logger.info("telegram_rate_limiter_fallback_to_memory")
+        self._redis_limiter_available = False
+        return self._rate_limiter
 
     async def _check_rate_limit(
         self, limiter: RedisUserRateLimiter | UserRateLimiter, uid: int, interaction_type: str

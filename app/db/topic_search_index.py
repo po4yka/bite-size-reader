@@ -259,7 +259,7 @@ class TopicSearchIndexManager:
             self._delete_warned = True
             self._logger.warning("topic_search_index_delete_failed_primary", extra=log_extra)
         else:  # pragma: no cover - logging noise suppression
-            self._logger.debug("topic_search_index_delete_failed_primary", extra=log_extra)
+            self._logger.warning("topic_search_index_delete_failed_primary", extra=log_extra)
 
     def _handle_index_error(self, exc: peewee.DatabaseError, rowid: int) -> None:
         """Handle unrecoverable FTS errors by rebuilding the index."""

@@ -53,6 +53,7 @@ class LLMRequestConfig(BaseModel):
     temperature: float | None = None
     top_p: float | None = None
     model_override: str | None = None
+    fallback_models_override: tuple[str, ...] | None = None
     silent: bool = False
 
 
@@ -415,6 +416,7 @@ class LLMResponseWorkflow:
                         request_id=req_id,
                         response_format=request.response_format,
                         model_override=request.model_override,
+                        fallback_models_override=request.fallback_models_override,
                     )
             except TimeoutError:
                 if attempt < max_retries:

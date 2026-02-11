@@ -271,7 +271,7 @@ class SyncService:
             try:
                 return datetime.fromisoformat(dt_value.replace("Z", "+00:00")).isoformat() + "Z"
             except Exception:
-                logger.debug("datetime_parse_failed", exc_info=True)
+                logger.warning("datetime_parse_failed", exc_info=True)
         return datetime.now(UTC).isoformat() + "Z"
 
     def _serialize_user(self, user: dict[str, Any]) -> SyncEntityEnvelope:

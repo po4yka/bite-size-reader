@@ -450,6 +450,7 @@ class OpenRouterClient:
         request_id: int | None = None,
         response_format: dict[str, Any] | None = None,
         model_override: str | None = None,
+        fallback_models_override: tuple[str, ...] | list[str] | None = None,
     ) -> LLMCallResult:
         return await chat_completions.chat(
             self,
@@ -461,6 +462,7 @@ class OpenRouterClient:
             request_id=request_id,
             response_format=response_format,
             model_override=model_override,
+            fallback_models_override=fallback_models_override,
         )
 
     async def _attempt_request(
