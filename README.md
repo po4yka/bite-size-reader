@@ -398,7 +398,7 @@ GitHub Actions workflow `.github/workflows/ci.yml` enforces:
 ### Essential Guides
 
 | Document | Description | Audience |
-|----------|-------------|----------|
+| -------- | ----------- | -------- |
 | [Quickstart Tutorial](docs/tutorials/quickstart.md) | Get first summary in 5 minutes | **Users** |
 | [FAQ](docs/FAQ.md) | Frequently asked questions | **All** |
 | [TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) | Debugging guide with correlation IDs | **All** |
@@ -408,7 +408,7 @@ GitHub Actions workflow `.github/workflows/ci.yml` enforces:
 ### Technical Documentation
 
 | Document | Description | Audience |
-|----------|-------------|----------|
+| -------- | ----------- | -------- |
 | [SPEC.md](docs/SPEC.md) | Full technical specification (canonical) | **Developers** |
 | [CLAUDE.md](CLAUDE.md) | AI assistant codebase guide | **AI Assistants, Developers** |
 | [HEXAGONAL_ARCHITECTURE_QUICKSTART.md](docs/HEXAGONAL_ARCHITECTURE_QUICKSTART.md) | Architecture patterns | **Developers** |
@@ -418,7 +418,7 @@ GitHub Actions workflow `.github/workflows/ci.yml` enforces:
 ### Integration Guides
 
 | Document | Description | Audience |
-|----------|-------------|----------|
+| -------- | ----------- | -------- |
 | [MOBILE_API_SPEC.md](docs/MOBILE_API_SPEC.md) | REST API specification | **Integrators** |
 | [mcp_server.md](docs/mcp_server.md) | MCP server (AI agents) | **Integrators** |
 | [claude_code_hooks.md](docs/claude_code_hooks.md) | Development safety hooks | **Developers** |
@@ -426,7 +426,7 @@ GitHub Actions workflow `.github/workflows/ci.yml` enforces:
 ### Version History
 
 | Document | Description |
-|----------|-------------|
+| -------- | ----------- |
 | [CHANGELOG.md](CHANGELOG.md) | Version history and release notes |
 
 ## Notes
