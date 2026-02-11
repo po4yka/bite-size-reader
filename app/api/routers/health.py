@@ -76,20 +76,33 @@ async def _check_redis() -> dict[str, Any]:
     start = time.perf_counter()
     try:
         from app.config import load_config
-        from app.infrastructure.redis import get_redis
+        from app.infrastructure.redis import get_connection_state, get_redis
 
         config = load_config()
         if not config.redis.enabled:
             return {"status": "disabled", "latency_ms": 0}
 
+        # Get connection state for detailed reporting
+        conn_state = get_connection_state()
+
         redis_client = await get_redis(config)
+        latency_ms = (time.perf_counter() - start) * 1000
+
         if redis_client is None:
-            latency_ms = (time.perf_counter() - start) * 1000
-            return {
+            result: dict[str, Any] = {
                 "status": "unavailable",
-                "error": "Redis client not available",
                 "latency_ms": round(latency_ms, 2),
             }
+            # Add connection state details
+            last_attempt = conn_state["last_attempt"]
+            last_error = conn_state["last_error"]
+            if isinstance(last_attempt, float) and last_attempt > 0:
+                result["last_attempt"] = datetime.fromtimestamp(
+                    last_attempt, tz=UTC
+                ).isoformat()
+            if isinstance(last_error, str) and last_error:
+                result["error"] = last_error
+            return result
 
         ping_result = redis_client.ping()
         if asyncio.iscoroutine(ping_result):
