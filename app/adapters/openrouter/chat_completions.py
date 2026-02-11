@@ -25,6 +25,7 @@ async def chat(
     request_id: int | None = None,
     response_format: dict[str, Any] | None = None,
     model_override: str | None = None,
+    fallback_models_override: tuple[str, ...] | list[str] | None = None,
 ) -> LLMCallResult:
     """Enhanced chat method with structured output support."""
     if self._closed:
@@ -95,8 +96,11 @@ async def chat(
 
     # Determine models to try
     primary_model = model_override if model_override else self._model
+    fallback_models = (
+        list(fallback_models_override) if fallback_models_override else self._fallback_models
+    )
     models_to_try = self.model_capabilities.build_model_fallback_list(
-        primary_model, self._fallback_models, response_format, self._enable_structured_outputs
+        primary_model, fallback_models, response_format, self._enable_structured_outputs
     )
 
     if not models_to_try:

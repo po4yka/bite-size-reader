@@ -692,6 +692,10 @@ class AttachmentProcessor:
         }
         if model_override:
             request_kwargs["model_override"] = model_override
+            # Use vision-specific fallback models when processing attachments
+            attachment_cfg = self.cfg.attachment
+            if attachment_cfg.vision_fallback_models:
+                request_kwargs["fallback_models_override"] = attachment_cfg.vision_fallback_models
 
         requests = [LLMRequestConfig(**request_kwargs)]
 

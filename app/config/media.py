@@ -4,6 +4,8 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validator
 
+from ._validators import validate_model_name
+
 
 class YouTubeConfig(BaseModel):
     """YouTube video download and storage configuration."""
@@ -104,9 +106,15 @@ class AttachmentConfig(BaseModel):
     )
 
     vision_model: str = Field(
-        default="google/gemini-3-flash-preview",
+        default="qwen/qwen3-vl-32b-instruct",
         validation_alias="ATTACHMENT_VISION_MODEL",
         description="Vision-capable model for image and scanned PDF analysis",
+    )
+
+    vision_fallback_models: tuple[str, ...] = Field(
+        default_factory=lambda: ("moonshotai/kimi-k2.5",),
+        validation_alias="ATTACHMENT_VISION_FALLBACK_MODELS",
+        description="Fallback vision models if primary fails",
     )
 
     max_image_size_mb: int = Field(
@@ -170,3 +178,28 @@ class AttachmentConfig(BaseModel):
         except ValueError as exc:
             msg = f"{info.field_name.replace('_', ' ')} must be a valid integer"
             raise ValueError(msg) from exc
+
+    @field_validator("vision_model", mode="before")
+    @classmethod
+    def _validate_vision_model(cls, value: Any) -> str:
+        if value in (None, ""):
+            return "qwen/qwen3-vl-32b-instruct"
+        return validate_model_name(str(value))
+
+    @field_validator("vision_fallback_models", mode="before")
+    @classmethod
+    def _parse_vision_fallback_models(cls, value: Any) -> tuple[str, ...]:
+        if value in (None, ""):
+            return ()
+        iterable = value if isinstance(value, list | tuple) else str(value).split(",")
+
+        validated: list[str] = []
+        for raw in iterable:
+            candidate = str(raw).strip()
+            if not candidate:
+                continue
+            try:
+                validated.append(validate_model_name(candidate))
+            except ValueError:
+                continue
+        return tuple(validated)
