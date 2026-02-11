@@ -160,7 +160,7 @@ async def retry_with_backoff(
                 return None, False
 
             if not is_transient_error(e):
-                logger.debug(
+                logger.warning(
                     "non_transient_error_no_retry",
                     extra={
                         "function": func.__name__,
