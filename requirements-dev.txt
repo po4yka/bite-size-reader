@@ -3,7 +3,7 @@
 annotated-doc==0.0.4
     # via
     #   -c .requirements-all.tmp.txt
-    #   typer-slim
+    #   typer
 annotated-types==0.7.0
     # via
     #   -c .requirements-all.tmp.txt
@@ -44,7 +44,7 @@ charset-normalizer==3.4.4
 click==8.3.1
     # via
     #   -c .requirements-all.tmp.txt
-    #   typer-slim
+    #   typer
 cloudpathlib==0.23.0
     # via
     #   -c .requirements-all.tmp.txt
@@ -157,10 +157,18 @@ lxml-html-clean==0.4.3
     # via
     #   -c .requirements-all.tmp.txt
     #   lxml
+markdown-it-py==4.0.0
+    # via
+    #   -c .requirements-all.tmp.txt
+    #   rich
 markupsafe==3.0.3
     # via
     #   -c .requirements-all.tmp.txt
     #   jinja2
+mdurl==0.1.2
+    # via
+    #   -c .requirements-all.tmp.txt
+    #   markdown-it-py
 murmurhash==1.0.15
     # via
     #   -c .requirements-all.tmp.txt
@@ -238,6 +246,7 @@ pygments==2.19.2
     # via
     #   -c .requirements-all.tmp.txt
     #   pytest
+    #   rich
 pymorphy3==2.0.6
     # via
     #   -c .requirements-all.tmp.txt
@@ -299,6 +308,10 @@ requests==2.32.5
     #   -c .requirements-all.tmp.txt
     #   spacy
     #   weasel
+rich==14.3.2
+    # via
+    #   -c .requirements-all.tmp.txt
+    #   typer
 ru-core-news-sm @ https://github.com/explosion/spacy-models/releases/download/ru_core_news_sm-3.8.0/ru_core_news_sm-3.8.0-py3-none-any.whl
     # via
     #   -c .requirements-all.tmp.txt
@@ -311,6 +324,10 @@ setuptools==82.0.0
     #   pymorphy3
     #   spacy
     #   thinc
+shellingham==1.5.4
+    # via
+    #   -c .requirements-all.tmp.txt
+    #   typer
 six==1.17.0
     # via
     #   -c .requirements-all.tmp.txt
@@ -363,7 +380,11 @@ trafilatura==2.0.0
     # via
     #   -c .requirements-all.tmp.txt
     #   bite-size-reader (pyproject.toml)
-typer-slim==0.21.2
+typer==0.22.0
+    # via
+    #   -c .requirements-all.tmp.txt
+    #   typer-slim
+typer-slim==0.22.0
     # via
     #   -c .requirements-all.tmp.txt
     #   spacy
