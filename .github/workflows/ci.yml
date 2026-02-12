@@ -487,6 +487,35 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
+      - name: Free up disk space
+        run: |
+          echo "=== Disk space before cleanup ==="
+          df -h
+          echo "=== Removing unnecessary files ==="
+          # Remove large tool chains and runtimes
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /opt/hostedtoolcache/CodeQL
+          sudo rm -rf /usr/local/share/boost
+          sudo rm -rf "$AGENT_TOOLSDIRECTORY"
+          # Remove Azure CLI, Google Cloud SDK, etc.
+          sudo rm -rf /usr/share/az_* /opt/az
+          sudo rm -rf /usr/local/share/chromium /usr/local/share/chromedriver-linux64
+          # Remove large language runtimes
+          sudo rm -rf /usr/local/lib/node_modules
+          sudo rm -rf /opt/pipx
+          # Remove swap file to reclaim additional space
+          sudo swapoff -a || true
+          sudo rm -f /swapfile || true
+          # Clean APT cache
+          sudo apt-get clean
+          sudo apt-get autoremove -y
+          # Docker cleanup
+          sudo docker system prune -af --volumes
+          echo "=== Disk space after cleanup ==="
+          df -h
+
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
 
@@ -501,8 +530,8 @@ jobs:
           docker container prune -f
           # Remove all dangling images
           docker image prune -af
-          # Remove build cache older than 24h
-          docker buildx prune -f --filter until=24h
+          # Remove all Buildx cache to maximize free disk before build
+          docker buildx prune -af
           echo "=== Docker disk usage after additional cleanup ==="
           docker system df
           echo "=== Current disk space ==="
@@ -537,7 +566,7 @@ jobs:
           cache-from: |
             type=gha,scope=api-builder
             type=gha,scope=api-runtime
-          cache-to: type=gha,mode=max,scope=api-builder
+          cache-to: type=gha,mode=min,scope=api-builder
 
   bandit-scan:
     name: Security - Bandit (SAST)
