@@ -97,9 +97,7 @@ async def _check_redis() -> dict[str, Any]:
             last_attempt = conn_state["last_attempt"]
             last_error = conn_state["last_error"]
             if isinstance(last_attempt, float) and last_attempt > 0:
-                result["last_attempt"] = datetime.fromtimestamp(
-                    last_attempt, tz=UTC
-                ).isoformat()
+                result["last_attempt"] = datetime.fromtimestamp(last_attempt, tz=UTC).isoformat()
             if isinstance(last_error, str) and last_error:
                 result["error"] = last_error
             return result

@@ -66,7 +66,9 @@ class RedisQueryCache:
         # Add sorted kwargs
         for key in sorted(kwargs.keys()):
             try:
-                fingerprint_parts.append(f"{key}={json.dumps(kwargs[key], sort_keys=True, default=str)}")
+                fingerprint_parts.append(
+                    f"{key}={json.dumps(kwargs[key], sort_keys=True, default=str)}"
+                )
             except (TypeError, ValueError):
                 fingerprint_parts.append(f"{key}={kwargs[key]}")
 
