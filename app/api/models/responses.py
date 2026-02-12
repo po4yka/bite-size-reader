@@ -602,6 +602,11 @@ class SearchResult(BaseModel):
     relevance_score: float | None = Field(default=None, serialization_alias="relevanceScore")
     topic_tags: list[str] | None = Field(default=None, serialization_alias="topicTags")
     is_read: bool | None = Field(default=None, serialization_alias="isRead")
+    match_signals: list[str] | None = Field(default=None, serialization_alias="matchSignals")
+    match_explanation: str | None = Field(default=None, serialization_alias="matchExplanation")
+    score_breakdown: dict[str, float] | None = Field(
+        default=None, serialization_alias="scoreBreakdown"
+    )
 
 
 class SearchResultsData(BaseModel):
@@ -610,6 +615,9 @@ class SearchResultsData(BaseModel):
     results: list[SearchResult]
     pagination: PaginationInfo
     query: str
+    intent: str | None = None
+    mode: str | None = None
+    facets: dict[str, Any] | None = None
 
 
 class SyncSessionData(BaseModel):

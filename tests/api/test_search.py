@@ -1140,3 +1140,118 @@ def test_semantic_search_response_structure(client, search_token):
     assert "results" in data
     assert "pagination" in data
     assert "query" in data
+
+
+def test_search_response_includes_mode_intent_and_facets(
+    client, search_data, search_token, mock_fts_repos
+):
+    """Search response should include intent/mode/facets metadata."""
+    response = client.get(
+        "/v1/search",
+        params={"q": "ai trends", "limit": 10, "offset": 0},
+        headers={"Authorization": f"Bearer {search_token}"},
+    )
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data.get("intent") in {"topic", "keyword", "entity", "question", "similarity"}
+    assert data.get("mode") in {"keyword", "semantic", "hybrid"}
+    assert isinstance(data.get("facets"), dict)
+    assert "domains" in data["facets"]
+
+
+def test_semantic_search_response_includes_explanations(client, search_token):
+    """Semantic results should include explainability fields."""
+    from app.services.chroma_vector_search_service import (
+        ChromaVectorSearchResult,
+        ChromaVectorSearchResults,
+    )
+
+    mock_service = MagicMock()
+    mock_service.search = AsyncMock(
+        return_value=ChromaVectorSearchResults(
+            results=[
+                ChromaVectorSearchResult(
+                    request_id=1,
+                    summary_id=1,
+                    similarity_score=0.9,
+                    url="https://example.com/a",
+                    title="A",
+                    snippet="about ai",
+                )
+            ],
+            has_more=False,
+        )
+    )
+
+    async def mock_get_service():
+        return mock_service
+
+    with patch("app.api.routers.search.get_chroma_search_service", new=mock_get_service):
+        with (
+            patch(
+                "app.api.routers.search.SqliteRequestRepositoryAdapter"
+            ) as mock_request_repo_class,
+            patch(
+                "app.api.routers.search.SqliteSummaryRepositoryAdapter"
+            ) as mock_summary_repo_class,
+        ):
+            mock_request_repo = MagicMock()
+            mock_request_repo.async_get_requests_by_ids = AsyncMock(
+                return_value={
+                    1: {
+                        "id": 1,
+                        "input_url": "https://example.com/a",
+                        "normalized_url": "https://example.com/a",
+                        "created_at": datetime.now(UTC),
+                    }
+                }
+            )
+            mock_request_repo_class.return_value = mock_request_repo
+
+            mock_summary_repo = MagicMock()
+            mock_summary_repo.async_get_summaries_by_request_ids = AsyncMock(
+                return_value={
+                    1: {
+                        "id": 1,
+                        "lang": "en",
+                        "json_payload": {
+                            "summary_250": "about ai",
+                            "tldr": "ai",
+                            "topic_tags": ["#ai"],
+                            "metadata": {"title": "A", "domain": "example.com"},
+                        },
+                        "is_read": False,
+                        "is_favorited": False,
+                    }
+                }
+            )
+            mock_summary_repo_class.return_value = mock_summary_repo
+
+            response = client.get(
+                "/v1/search/semantic",
+                params={"q": "ai", "limit": 10, "offset": 0},
+                headers={"Authorization": f"Bearer {search_token}"},
+            )
+
+    assert response.status_code == 200
+    results = response.json()["data"]["results"]
+    if results:
+        assert "matchSignals" in results[0]
+        assert "matchExplanation" in results[0]
+        assert "scoreBreakdown" in results[0]
+
+
+def test_search_insights_success(client, search_data, search_token):
+    """Insights endpoint returns analytics blocks."""
+    response = client.get(
+        "/v1/search/insights",
+        params={"days": 30, "limit": 10},
+        headers={"Authorization": f"Bearer {search_token}"},
+    )
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert "topic_trends" in data
+    assert "rising_entities" in data
+    assert "source_diversity" in data
+    assert "language_mix" in data
+    assert "coverage_gaps" in data
