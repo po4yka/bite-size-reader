@@ -561,12 +561,11 @@ jobs:
           context: .
           file: ./Dockerfile.api
           push: ${{ github.event_name != 'pull_request' && vars.PUBLISH_DOCKER == 'true' }}
+          load: ${{ github.event_name == 'pull_request' || vars.PUBLISH_DOCKER != 'true' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: |
-            type=gha,scope=api-builder
-            type=gha,scope=api-runtime
-          cache-to: type=gha,mode=min,scope=api-builder
+          cache-from: type=gha,scope=api-builder
+          cache-to: type=gha,mode=min,scope=api-builder,ignore-error=true
 
   bandit-scan:
     name: Security - Bandit (SAST)
