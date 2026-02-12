@@ -27,6 +27,7 @@ class ChromaVectorSearchResult(BaseModel):
 
     request_id: int
     summary_id: int
+    user_id: int | None = None
     similarity_score: float = Field(ge=0.0, le=1.0)
     url: str | None = None
     title: str | None = None
@@ -82,6 +83,7 @@ class ChromaVectorSearchService:
         language: str | None = None,
         tags: Iterable[str] | None = None,
         user_scope: str | None = None,
+        user_id: int | None = None,
         limit: int | None = None,
         offset: int = 0,
         correlation_id: str | None = None,
@@ -119,6 +121,7 @@ class ChromaVectorSearchService:
         filters = {
             "language": detected_language,
             "tags": list(tags) if tags else [],
+            "user_id": user_id,
         }
 
         try:
@@ -166,6 +169,7 @@ class ChromaVectorSearchService:
                 ChromaVectorSearchResult(
                     request_id=request_id,
                     summary_id=summary_id,
+                    user_id=self._safe_int(metadata.get("user_id")),
                     similarity_score=similarity_score,
                     url=metadata.get("url"),
                     title=metadata.get("title"),
@@ -203,12 +207,14 @@ class ChromaVectorSearchService:
         threshold: float = 0.95,
         language: str | None = None,
         user_scope: str | None = None,
+        user_id: int | None = None,
     ) -> list[ChromaVectorSearchResult]:
         """Find content that is highly similar to the input text."""
         results = await self.search(
             text,
             language=language,
             user_scope=user_scope,
+            user_id=user_id,
             limit=5,
         )
         return [r for r in results.results if r.similarity_score >= threshold]

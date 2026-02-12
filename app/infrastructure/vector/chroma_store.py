@@ -316,6 +316,64 @@ class ChromaVectorStore:
             self._available = False
             return False
 
+    def get_indexed_summary_ids(
+        self, *, user_id: int | None = None, limit: int | None = 5000
+    ) -> set[int]:
+        """Return summary IDs currently present in the Chroma collection.
+
+        Args:
+            user_id: Optional per-user filter when metadata includes user_id.
+            limit: Maximum records to scan (None = backend default/all).
+        """
+        if not self._available:
+            self.ensure_available()
+        if not self._available:
+            return set()
+
+        where: dict[str, Any] = {
+            "environment": self._environment,
+            "user_scope": self._user_scope,
+        }
+        if user_id is not None:
+            where["user_id"] = int(user_id)
+
+        try:
+            collection = cast("Any", self._collection)
+            get_kwargs: dict[str, Any] = {"where": where, "include": ["metadatas"]}
+            if limit is not None and limit > 0:
+                get_kwargs["limit"] = int(limit)
+
+            payload = cast("dict[str, Any]", collection.get(**get_kwargs))
+            metadatas = payload.get("metadatas") or []
+            if not isinstance(metadatas, list):
+                return set()
+
+            # Chroma can return either flat metadata list or nested list.
+            if metadatas and isinstance(metadatas[0], list):
+                flat = []
+                for batch in metadatas:
+                    if isinstance(batch, list):
+                        flat.extend(batch)
+                metadatas = flat
+
+            summary_ids: set[int] = set()
+            for metadata in metadatas:
+                if not isinstance(metadata, dict):
+                    continue
+                raw_summary_id = metadata.get("summary_id")
+                try:
+                    if raw_summary_id is not None:
+                        summary_ids.add(int(raw_summary_id))
+                except (TypeError, ValueError):
+                    continue
+            return summary_ids
+        except ChromaError as e:
+            logger.error("chroma_get_indexed_summary_ids_failed", extra={"error": str(e)})
+            if self._required:
+                raise
+            self._available = False
+            return set()
+
     def reset(self) -> None:
         """Reset the collection (for testing purposes)."""
         try:

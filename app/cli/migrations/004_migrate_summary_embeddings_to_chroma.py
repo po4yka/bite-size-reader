@@ -167,6 +167,7 @@ def _fetch_summary_embeddings(
                 "request": {
                     "normalized_url": row.summary.request.normalized_url,
                     "input_url": row.summary.request.input_url,
+                    "user_id": row.summary.request.user_id,
                 },
             }
 
@@ -184,6 +185,7 @@ def _fetch_summary_embeddings(
                 language=summary_row["lang"],
                 user_scope=user_scope,
                 environment=environment,
+                user_id=row.summary.request.user_id,
                 summary_row=summary_row,
             )
 

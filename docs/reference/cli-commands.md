@@ -634,8 +634,8 @@ python -m app.cli.add_performance_indexes
 # Start MCP server (stdio mode)
 python -m app.cli.mcp_server
 
-# Start with SSE transport
-python -m app.cli.mcp_server --transport sse --port 8080
+# Start with SSE transport (loopback + user scoped)
+python -m app.cli.mcp_server --transport sse --user-id 123456789
 ```
 
 ### Options
@@ -643,8 +643,11 @@ python -m app.cli.mcp_server --transport sse --port 8080
 | Option | Type | Default | Description |
 | -------- | ------ | --------- | ------------- |
 | `--transport` | string | stdio | Transport mode (stdio, sse) |
-| `--port` | int | 8080 | Port for SSE transport |
-| `--host` | string | 0.0.0.0 | Host for SSE transport |
+| `--port` | int | 8200 | Port for SSE transport |
+| `--host` | string | 127.0.0.1 | Host for SSE transport |
+| `--user-id` | int | _(none)_ | Scope all MCP reads to one user |
+| `--allow-remote-sse` | flag | false | Allow non-loopback SSE bind host |
+| `--allow-unscoped-sse` | flag | false | Allow SSE without explicit user scope |
 
 ### Examples
 
@@ -672,9 +675,9 @@ python -m app.cli.mcp_server
 **SSE Mode (Web Access):**
 
 ```bash
-python -m app.cli.mcp_server --transport sse --port 8080
+python -m app.cli.mcp_server --transport sse --user-id 123456789
 
-# Server starts at http://localhost:8080
+# Server starts at http://127.0.0.1:8200
 # MCP tools available via HTTP SSE
 ```
 
@@ -682,14 +685,27 @@ python -m app.cli.mcp_server --transport sse --port 8080
 
 **Search Tools:**
 
-- `search_summaries` - Search by query
-- `get_summary_by_id` - Get summary by ID
-- `get_summaries_by_topic` - Filter by topic tag
+- `search_articles` - Full-text search by query
+- `semantic_search` - Meaning-based vector search
+- `find_by_entity` - Search by person/org/location
+
+**Article/Content Tools:**
+
+- `get_article` - Get summary details by ID
+- `list_articles` - Paginated list with filters
+- `get_article_content` - Full crawled content for summary
+- `check_url` - Deduplication lookup by URL
+
+**Organization/Media Tools:**
+
+- `list_collections` - Top-level collections
+- `get_collection` - Collection details with items
+- `list_videos` - Downloaded video metadata
+- `get_video_transcript` - Video transcript text
 
 **Stats Tools:**
 
 - `get_stats` - Database statistics
-- `get_user_stats` - User-specific stats
 
 See: [MCP Server Documentation](../mcp_server.md)
 

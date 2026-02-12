@@ -196,7 +196,7 @@ class McpConfig(BaseModel):
         description="Transport protocol: 'stdio' or 'sse'",
     )
     host: str = Field(
-        default="0.0.0.0",  # nosec B104 - intentional for Docker
+        default="127.0.0.1",
         validation_alias="MCP_HOST",
         description="Bind address for SSE transport",
     )
@@ -204,6 +204,21 @@ class McpConfig(BaseModel):
         default=8200,
         validation_alias="MCP_PORT",
         description="Port for SSE transport",
+    )
+    user_id: int | None = Field(
+        default=None,
+        validation_alias="MCP_USER_ID",
+        description="Optional user ID scope for MCP queries",
+    )
+    allow_remote_sse: bool = Field(
+        default=False,
+        validation_alias="MCP_ALLOW_REMOTE_SSE",
+        description="Allow SSE transport to bind non-loopback hosts",
+    )
+    allow_unscoped_sse: bool = Field(
+        default=False,
+        validation_alias="MCP_ALLOW_UNSCOPED_SSE",
+        description="Allow SSE transport without MCP_USER_ID scoping",
     )
 
     @field_validator("transport", mode="before")
@@ -229,6 +244,21 @@ class McpConfig(BaseModel):
             raise ValueError(msg) from exc
         if parsed < 1 or parsed > 65535:
             msg = "MCP port must be between 1 and 65535"
+            raise ValueError(msg)
+        return parsed
+
+    @field_validator("user_id", mode="before")
+    @classmethod
+    def _validate_user_id(cls, value: Any) -> int | None:
+        if value in (None, ""):
+            return None
+        try:
+            parsed = int(str(value))
+        except ValueError as exc:
+            msg = "MCP user ID must be a valid integer"
+            raise ValueError(msg) from exc
+        if parsed <= 0:
+            msg = "MCP user ID must be a positive integer"
             raise ValueError(msg)
         return parsed
 

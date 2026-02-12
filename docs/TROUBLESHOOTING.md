@@ -806,7 +806,7 @@ docker restart bite-size-reader
 1. **Start MCP server**:
 
    ```bash
-   python -m app.mcp.server
+   python -m app.cli.mcp_server
    ```
 
 2. **Verify Claude config** (`~/Library/Application Support/Claude/claude_desktop_config.json`):
@@ -816,7 +816,7 @@ docker restart bite-size-reader
      "mcpServers": {
        "bite-size-reader": {
          "command": "python",
-         "args": ["-m", "app.mcp.server"],
+         "args": ["-m", "app.cli.mcp_server"],
          "cwd": "/path/to/bite-size-reader",
          "env": {
            "PYTHONPATH": "/path/to/bite-size-reader"
@@ -843,13 +843,9 @@ echo "MCP_LOG_LEVEL=DEBUG" >> .env
 # Check MCP server logs
 tail -f /var/log/bite-size-reader/mcp.log
 
-# Test MCP tool directly
-python -c "
-from app.mcp.server import MCPServer
-server = MCPServer()
-result = server.search_summaries('python')
-print(result)
-"
+# If using SSE, ensure user scoping is configured
+echo "MCP_TRANSPORT=sse" >> .env
+echo "MCP_USER_ID=123456789" >> .env
 ```
 
 ---

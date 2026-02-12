@@ -76,6 +76,7 @@ class MetadataBuilder:
         language: str | None,
         user_scope: str,
         environment: str,
+        user_id: int | None = None,
         summary_row: dict[str, Any] | None = None,
     ) -> tuple[str, dict[str, Any]]:
         """Prepare text and metadata for upsert."""
@@ -104,6 +105,7 @@ class MetadataBuilder:
         final_metadata = {
             **note_text.metadata,
             **base_metadata,
+            "user_id": user_id,
             "text": note_text.text,
             "environment": environment,
             "user_scope": user_scope,
@@ -122,6 +124,7 @@ class MetadataBuilder:
         language: str | None,
         user_scope: str,
         environment: str,
+        user_id: int | None = None,
         *,
         window_size: int = 3,
         booster_limit: int = 8,
@@ -208,6 +211,7 @@ class MetadataBuilder:
                 **base_metadata,
                 "request_id": request_id,
                 "summary_id": summary_id,
+                "user_id": user_id,
                 "language": chunk_language,
                 "section": chunk_section,
                 "topics": chunk_topics,

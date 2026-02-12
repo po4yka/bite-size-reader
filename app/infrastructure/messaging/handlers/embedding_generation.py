@@ -107,6 +107,7 @@ class EmbeddingGenerationEventHandler:
             language=self._determine_language(summary),
             user_scope=user_scope,
             environment=environment,
+            user_id=self._extract_user_id(summary),
         )
 
         vectors: list[list[float]] = []
@@ -128,6 +129,7 @@ class EmbeddingGenerationEventHandler:
                 language=self._determine_language(summary),
                 user_scope=user_scope,
                 environment=environment,
+                user_id=self._extract_user_id(summary),
                 summary_row=summary,
             )
 
@@ -178,4 +180,17 @@ class EmbeddingGenerationEventHandler:
         request_data = summary.get("request") or {}
         if isinstance(request_data, dict):
             return request_data.get("lang_detected")
+        return None
+
+    @staticmethod
+    def _extract_user_id(summary: dict[str, Any]) -> int | None:
+        if not summary:
+            return None
+        request_data = summary.get("request") or {}
+        if isinstance(request_data, dict):
+            try:
+                user_id = request_data.get("user_id")
+                return int(user_id) if user_id is not None else None
+            except (TypeError, ValueError):
+                return None
         return None

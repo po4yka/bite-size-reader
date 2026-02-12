@@ -12,6 +12,7 @@ class ChromaMetadata(BaseModel):
 
     request_id: int = Field(..., ge=0)
     summary_id: int = Field(..., ge=0)
+    user_id: int | None = Field(default=None, ge=1)
     user_scope: str = Field(...)
     environment: str = Field(...)
     text: str = Field(..., min_length=1)
@@ -93,6 +94,7 @@ class ChromaQueryFilters(BaseModel):
     tags: list[str] = Field(default_factory=list)
     request_id: int | None = Field(default=None, ge=0)
     summary_id: int | None = Field(default=None, ge=0)
+    user_id: int | None = Field(default=None, ge=1)
 
     @field_validator("environment", "user_scope", mode="before")
     @classmethod
@@ -135,6 +137,8 @@ class ChromaQueryFilters(BaseModel):
                 where["request_id"] = self.request_id
             if self.summary_id is not None:
                 where["summary_id"] = self.summary_id
+            if self.user_id is not None:
+                where["user_id"] = self.user_id
             return where
 
         conditions: list[dict[str, Any]] = [
@@ -147,5 +151,7 @@ class ChromaQueryFilters(BaseModel):
             conditions.append({"request_id": self.request_id})
         if self.summary_id is not None:
             conditions.append({"summary_id": self.summary_id})
+        if self.user_id is not None:
+            conditions.append({"user_id": self.user_id})
         conditions.extend({"tags": {"$contains": tag}} for tag in self.tags)
         return {"$and": conditions}

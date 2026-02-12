@@ -12,15 +12,20 @@ Usage (stdio transport - default for OpenClaw/Claude Desktop):
     python -m app.cli.mcp_server
 
 Usage (SSE transport - for HTTP-based integrations):
-    python -m app.cli.mcp_server --transport sse --port 8200
+    python -m app.cli.mcp_server --transport sse --user-id 12345
 """
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
+import math
 import os
+import re
 import sys
+import threading
+import time
 from typing import Any
 
 from mcp.server.fastmcp import FastMCP
@@ -68,7 +73,13 @@ def _init_database(db_path: str | None = None) -> None:
 # ChromaDB / semantic search — lazy singleton, optional (graceful degradation)
 # ---------------------------------------------------------------------------
 _chroma_service: Any = None
-_chroma_init_attempted: bool = False
+_chroma_last_failed_at: float | None = None
+_CHROMA_RETRY_INTERVAL_SEC = 60.0
+_chroma_init_lock = threading.Lock()
+_local_vector_service: Any = None
+_local_vector_last_failed_at: float | None = None
+_LOCAL_VECTOR_RETRY_INTERVAL_SEC = 60.0
+_local_vector_init_lock = threading.Lock()
 
 
 async def _get_chroma_service() -> Any:
@@ -77,42 +88,99 @@ async def _get_chroma_service() -> Any:
     Returns None if ChromaDB is unavailable (the semantic_search tool
     will degrade to a helpful error message).
     """
-    global _chroma_service, _chroma_init_attempted
+    global _chroma_service, _chroma_last_failed_at
 
     if _chroma_service is not None:
         return _chroma_service
-    if _chroma_init_attempted:
+    now = time.monotonic()
+    if (
+        _chroma_last_failed_at is not None
+        and (now - _chroma_last_failed_at) < _CHROMA_RETRY_INTERVAL_SEC
+    ):
         return None
 
-    _chroma_init_attempted = True
-    try:
-        from app.config import load_config
-        from app.infrastructure.vector.chroma_store import ChromaVectorStore
-        from app.services.chroma_vector_search_service import ChromaVectorSearchService
-        from app.services.embedding_service import EmbeddingService
+    with _chroma_init_lock:
+        if _chroma_service is not None:
+            return _chroma_service
 
-        cfg = load_config(allow_stub_telegram=True).vector_store
-        embedding = EmbeddingService()
-        store = ChromaVectorStore(
-            host=cfg.host,
-            auth_token=cfg.auth_token,
-            environment=cfg.environment,
-            user_scope=cfg.user_scope,
-            collection_version=cfg.collection_version,
-        )
-        _chroma_service = ChromaVectorSearchService(
-            vector_store=store,
-            embedding_service=embedding,
-            default_top_k=100,
-        )
-        logger.info("ChromaDB search service initialised")
-        return _chroma_service
-    except Exception:
-        logger.warning(
-            "ChromaDB unavailable — semantic_search tool will be disabled",
-            exc_info=True,
-        )
+        now = time.monotonic()
+        if (
+            _chroma_last_failed_at is not None
+            and (now - _chroma_last_failed_at) < _CHROMA_RETRY_INTERVAL_SEC
+        ):
+            return None
+
+        try:
+            from app.config import load_config
+            from app.infrastructure.vector.chroma_store import ChromaVectorStore
+            from app.services.chroma_vector_search_service import ChromaVectorSearchService
+            from app.services.embedding_service import EmbeddingService
+
+            cfg = load_config(allow_stub_telegram=True).vector_store
+            embedding = EmbeddingService()
+            store = ChromaVectorStore(
+                host=cfg.host,
+                auth_token=cfg.auth_token,
+                environment=cfg.environment,
+                user_scope=cfg.user_scope,
+                collection_version=cfg.collection_version,
+            )
+            _chroma_service = ChromaVectorSearchService(
+                vector_store=store,
+                embedding_service=embedding,
+                default_top_k=100,
+            )
+            _chroma_last_failed_at = None
+            logger.info("ChromaDB search service initialised")
+            return _chroma_service
+        except Exception:
+            _chroma_last_failed_at = time.monotonic()
+            logger.warning(
+                "ChromaDB unavailable — semantic_search tool will be disabled",
+                exc_info=True,
+            )
+            return None
+
+
+async def _get_local_vector_service() -> Any:
+    """Lazily initialize local embedding service for semantic fallback search."""
+    global _local_vector_service, _local_vector_last_failed_at
+
+    if _local_vector_service is not None:
+        return _local_vector_service
+
+    now = time.monotonic()
+    if (
+        _local_vector_last_failed_at is not None
+        and (now - _local_vector_last_failed_at) < _LOCAL_VECTOR_RETRY_INTERVAL_SEC
+    ):
         return None
+
+    with _local_vector_init_lock:
+        if _local_vector_service is not None:
+            return _local_vector_service
+
+        now = time.monotonic()
+        if (
+            _local_vector_last_failed_at is not None
+            and (now - _local_vector_last_failed_at) < _LOCAL_VECTOR_RETRY_INTERVAL_SEC
+        ):
+            return None
+
+        try:
+            from app.services.embedding_service import EmbeddingService
+
+            _local_vector_service = EmbeddingService()
+            _local_vector_last_failed_at = None
+            logger.info("Local vector fallback service initialised")
+            return _local_vector_service
+        except Exception:
+            _local_vector_last_failed_at = time.monotonic()
+            logger.warning(
+                "Local vector fallback unavailable",
+                exc_info=True,
+            )
+            return None
 
 
 # ---------------------------------------------------------------------------
@@ -132,6 +200,36 @@ mcp = FastMCP(
 # ---------------------------------------------------------------------------
 # Helper utilities
 # ---------------------------------------------------------------------------
+_MCP_USER_ID: int | None = None
+
+
+def _set_user_scope(user_id: int | None) -> None:
+    """Configure optional MCP user scope for all DB queries."""
+    global _MCP_USER_ID
+    _MCP_USER_ID = user_id
+
+
+def _request_scope_filters(request_model: Any) -> list[Any]:
+    """Build request-level visibility filters for MCP queries."""
+    filters: list[Any] = [request_model.is_deleted == False]  # noqa: E712
+    if _MCP_USER_ID is not None:
+        filters.append(request_model.user_id == _MCP_USER_ID)
+    return filters
+
+
+def _collection_scope_filters(collection_model: Any) -> list[Any]:
+    """Build collection-level visibility filters for MCP queries."""
+    filters: list[Any] = [collection_model.is_deleted == False]  # noqa: E712
+    if _MCP_USER_ID is not None:
+        filters.append(collection_model.user == _MCP_USER_ID)
+    return filters
+
+
+def _is_loopback_host(host: str) -> bool:
+    """Return True when host points to loopback/local interface."""
+    return host.strip().lower() in {"127.0.0.1", "::1", "localhost"}
+
+
 def _ensure_mapping(value: Any) -> dict:
     """Safely coerce a value to a dict (handles None, str JSON, etc.)."""
     if isinstance(value, dict):
@@ -148,8 +246,17 @@ def _ensure_mapping(value: Any) -> dict:
 
 def _isotime(dt: Any) -> str:
     """Convert a datetime to ISO 8601 string."""
+    if dt is None:
+        return ""
     if hasattr(dt, "isoformat"):
-        return dt.isoformat() + "Z"
+        text = dt.isoformat()
+        if text.endswith("Z"):
+            return text
+        if text.endswith("+00:00"):
+            return f"{text[:-6]}Z"
+        if getattr(dt, "tzinfo", None) is None:
+            return f"{text}Z"
+        return text
     return str(dt) if dt else ""
 
 
@@ -221,6 +328,447 @@ def _format_summary_detail(summary_row: Any, request_row: Any) -> dict:
     }
 
 
+def _run_async_for_resource(coro: Any) -> str:
+    """Run async MCP tool logic from sync resource handlers."""
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return asyncio.run(coro)
+    return json.dumps({"error": "Resource cannot run async call inside active event loop"})
+
+
+def _clamp_limit(limit: int, *, minimum: int = 1, maximum: int = 25) -> int:
+    """Clamp integer limit values to a safe range."""
+    return max(minimum, min(maximum, int(limit)))
+
+
+def _clamp_similarity(value: float) -> float:
+    """Clamp similarity thresholds to [0.0, 1.0]."""
+    return max(0.0, min(1.0, float(value)))
+
+
+def _safe_int(value: Any) -> int | None:
+    """Safely cast values to int."""
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _tokenize(text: str) -> set[str]:
+    """Tokenize text for lightweight lexical scoring."""
+    if not text:
+        return set()
+    return {t.lower() for t in re.findall(r"[\w-]{2,}", text, flags=re.UNICODE)}
+
+
+def _lexical_overlap_score(query: str, text: str) -> float:
+    """Compute lightweight lexical overlap score between query and candidate text."""
+    query_tokens = _tokenize(query)
+    if not query_tokens:
+        return 0.0
+    text_tokens = _tokenize(text)
+    if not text_tokens:
+        return 0.0
+    overlap = query_tokens.intersection(text_tokens)
+    return len(overlap) / len(query_tokens)
+
+
+def _cosine_similarity(query_vector: list[float], candidate_vector: list[float]) -> float:
+    """Compute cosine similarity between two vectors."""
+    if not query_vector or not candidate_vector:
+        return 0.0
+
+    dot = 0.0
+    query_norm = 0.0
+    candidate_norm = 0.0
+    for q, c in zip(query_vector, candidate_vector, strict=False):
+        qf = float(q)
+        cf = float(c)
+        dot += qf * cf
+        query_norm += qf * qf
+        candidate_norm += cf * cf
+
+    if query_norm <= 0.0 or candidate_norm <= 0.0:
+        return 0.0
+    return max(0.0, min(1.0, dot / (math.sqrt(query_norm) * math.sqrt(candidate_norm))))
+
+
+def _extract_query_tags(text: str) -> list[str]:
+    """Extract hashtag tags from query text."""
+    if not text:
+        return []
+    tags = [f"#{match.lower()}" for match in re.findall(r"#([\w-]{1,50})", text, flags=re.UNICODE)]
+    seen: set[str] = set()
+    ordered: list[str] = []
+    for tag in tags:
+        if tag in seen:
+            continue
+        seen.add(tag)
+        ordered.append(tag)
+    return ordered
+
+
+def _extract_semantic_seed_text(payload: dict[str, Any]) -> str:
+    """Build semantic seed text from summary payload."""
+    metadata = _ensure_mapping(payload.get("metadata"))
+    pieces: list[str] = []
+    for value in (
+        metadata.get("title"),
+        payload.get("summary_250"),
+        payload.get("tldr"),
+        payload.get("summary_1000"),
+    ):
+        if value:
+            pieces.append(str(value))
+    for idea in payload.get("key_ideas", [])[:5]:
+        if idea:
+            pieces.append(str(idea))
+    for tag in payload.get("topic_tags", [])[:8]:
+        if tag:
+            pieces.append(str(tag))
+    return " ".join(pieces).strip()
+
+
+def _fetch_summaries_by_ids(summary_ids: list[int]) -> dict[int, tuple[Any, Any]]:
+    """Fetch summaries and requests in one query, keyed by summary id."""
+    from app.db.models import Request, Summary
+
+    if not summary_ids:
+        return {}
+
+    rows = (
+        Summary.select(Summary, Request)
+        .join(Request)
+        .where(
+            Summary.id.in_(summary_ids),
+            Summary.is_deleted == False,  # noqa: E712
+            *_request_scope_filters(Request),
+        )
+    )
+
+    result: dict[int, tuple[Any, Any]] = {}
+    for summary in rows:
+        result[int(summary.id)] = (summary, summary.request)
+    return result
+
+
+def _semantic_match_from_row(row: dict[str, Any]) -> dict[str, Any]:
+    """Normalize chunk/window match metadata for semantic result output."""
+    preview = row.get("local_summary") or row.get("snippet") or row.get("text")
+    preview_text = str(preview) if preview else ""
+    if len(preview_text) > 320:
+        preview_text = preview_text[:317] + "..."
+
+    return {
+        "similarity_score": round(float(row.get("similarity_score", 0.0)), 4),
+        "window_id": row.get("window_id"),
+        "window_index": row.get("window_index"),
+        "chunk_id": row.get("chunk_id"),
+        "section": row.get("section"),
+        "topics": row.get("topics") or [],
+        "keywords": row.get("local_keywords") or [],
+        "semantic_boosters": row.get("semantic_boosters") or [],
+        "preview": preview_text,
+    }
+
+
+def _build_semantic_results(
+    *,
+    query: str,
+    rows: list[dict[str, Any]],
+    backend: str,
+    limit: int,
+    include_chunks: bool,
+    rerank: bool,
+) -> list[dict[str, Any]]:
+    """Group semantic rows by summary and return enriched compact payloads."""
+    grouped: dict[int, dict[str, Any]] = {}
+
+    for row in rows:
+        raw_summary_id = row.get("summary_id")
+        try:
+            summary_id = int(raw_summary_id)
+        except (TypeError, ValueError):
+            continue
+
+        score = float(row.get("similarity_score", 0.0))
+        group = grouped.get(summary_id)
+        if group is None:
+            group = {
+                "summary_id": summary_id,
+                "similarity_score": score,
+                "best_row": row,
+                "matches": [],
+            }
+            grouped[summary_id] = group
+        elif score > float(group.get("similarity_score", 0.0)):
+            group["similarity_score"] = score
+            group["best_row"] = row
+
+        if include_chunks:
+            match = _semantic_match_from_row(row)
+            signature = (
+                match.get("window_id"),
+                match.get("chunk_id"),
+                match.get("section"),
+                match.get("preview"),
+            )
+            seen_signatures = group.setdefault("seen_signatures", set())
+            if signature not in seen_signatures:
+                seen_signatures.add(signature)
+                group["matches"].append(match)
+
+    if not grouped:
+        return []
+
+    summary_map = _fetch_summaries_by_ids(list(grouped.keys()))
+    results: list[dict[str, Any]] = []
+
+    for summary_id, group in grouped.items():
+        summary_bundle = summary_map.get(summary_id)
+        if summary_bundle is None:
+            continue
+        summary_row, request_row = summary_bundle
+        compact = _format_summary_compact(summary_row, request_row)
+        compact["similarity_score"] = round(float(group["similarity_score"]), 4)
+        compact["search_backend"] = backend
+
+        best_row = group.get("best_row") or {}
+        compact["semantic_context"] = {
+            "section": best_row.get("section"),
+            "topics": best_row.get("topics") or [],
+            "keywords": best_row.get("local_keywords") or [],
+        }
+
+        if include_chunks:
+            matches = sorted(
+                group.get("matches", []),
+                key=lambda item: item.get("similarity_score", 0.0),
+                reverse=True,
+            )
+            compact["semantic_matches"] = matches[:5]
+            compact["semantic_match_count"] = len(matches)
+            compact["best_match"] = matches[0] if matches else None
+
+        results.append(compact)
+
+    if rerank and results:
+        for result in results:
+            text = " ".join(
+                [
+                    str(result.get("title") or ""),
+                    str(result.get("summary_250") or ""),
+                    str(result.get("tldr") or ""),
+                    str(_ensure_mapping(result.get("best_match")).get("preview") or ""),
+                ]
+            )
+            lexical = _lexical_overlap_score(query, text)
+            result["rerank_score"] = round(
+                0.82 * float(result.get("similarity_score", 0.0)) + 0.18 * lexical, 4
+            )
+
+        results.sort(key=lambda item: float(item.get("rerank_score", 0.0)), reverse=True)
+    else:
+        results.sort(key=lambda item: float(item.get("similarity_score", 0.0)), reverse=True)
+
+    return results[:limit]
+
+
+async def _search_local_vectors(
+    query: str,
+    *,
+    language: str | None,
+    limit: int,
+    min_similarity: float,
+) -> list[dict[str, Any]]:
+    """Semantic search fallback over locally stored summary embeddings."""
+    from app.db.models import Request, Summary, SummaryEmbedding
+
+    embedding_service = await _get_local_vector_service()
+    if embedding_service is None:
+        return []
+
+    try:
+        query_vector_any = await embedding_service.generate_embedding(
+            query.strip(), language=language
+        )
+    except Exception:
+        logger.exception("local_vector_query_embedding_failed")
+        return []
+
+    query_vector = (
+        query_vector_any.tolist() if hasattr(query_vector_any, "tolist") else list(query_vector_any)
+    )
+    if not query_vector:
+        return []
+
+    scan_limit = max(limit * 80, 600)
+    query_rows = (
+        SummaryEmbedding.select(SummaryEmbedding, Summary, Request)
+        .join(Summary)
+        .join(Request)
+        .where(
+            Summary.is_deleted == False,  # noqa: E712
+            *_request_scope_filters(Request),
+        )
+        .order_by(SummaryEmbedding.created_at.desc())
+        .limit(scan_limit)
+    )
+
+    if language:
+        query_rows = query_rows.where((Summary.lang == language) | (Summary.lang.is_null(True)))
+
+    results: list[dict[str, Any]] = []
+    for row in query_rows:
+        try:
+            candidate = embedding_service.deserialize_embedding(row.embedding_blob)
+        except Exception:
+            continue
+
+        similarity = _cosine_similarity(query_vector, candidate)
+        if similarity < min_similarity:
+            continue
+
+        payload = _ensure_mapping(getattr(row.summary, "json_payload", None))
+        metadata = _ensure_mapping(payload.get("metadata"))
+        snippet = payload.get("summary_250") or payload.get("tldr")
+
+        results.append(
+            {
+                "request_id": getattr(row.summary.request, "id", None),
+                "summary_id": getattr(row.summary, "id", None),
+                "similarity_score": similarity,
+                "url": getattr(row.summary.request, "input_url", None)
+                or getattr(row.summary.request, "normalized_url", None),
+                "title": metadata.get("title"),
+                "snippet": snippet,
+                "text": payload.get("summary_1000") or snippet,
+                "source": metadata.get("domain"),
+                "published_at": metadata.get("published_at"),
+                "local_summary": snippet,
+                "topics": payload.get("topic_tags", []),
+                "local_keywords": payload.get("seo_keywords", []),
+            }
+        )
+
+    results.sort(key=lambda item: float(item.get("similarity_score", 0.0)), reverse=True)
+    return results[: max(limit * 4, limit)]
+
+
+async def _run_semantic_candidates(
+    query: str,
+    *,
+    language: str | None,
+    limit: int,
+    min_similarity: float,
+    include_chunks: bool,
+    rerank: bool,
+    allow_keyword_fallback: bool,
+) -> dict[str, Any]:
+    """Run semantic search with Chroma -> local vectors -> keyword fallback chain."""
+    limit = _clamp_limit(limit)
+    min_similarity = _clamp_similarity(min_similarity)
+    fetch_limit = max(limit * 6, limit + 8)
+
+    chroma = await _get_chroma_service()
+    if chroma is not None:
+        try:
+            chroma_results = await chroma.search(
+                query.strip(),
+                language=language,
+                tags=_extract_query_tags(query),
+                user_id=_MCP_USER_ID,
+                limit=fetch_limit,
+                offset=0,
+            )
+
+            chroma_rows: list[dict[str, Any]] = []
+            for hit in chroma_results.results:
+                if float(hit.similarity_score) < min_similarity:
+                    continue
+                chroma_rows.append(
+                    {
+                        "request_id": hit.request_id,
+                        "summary_id": hit.summary_id,
+                        "similarity_score": hit.similarity_score,
+                        "url": hit.url,
+                        "title": hit.title,
+                        "snippet": hit.snippet,
+                        "text": hit.text,
+                        "source": hit.source,
+                        "published_at": hit.published_at,
+                        "window_id": hit.window_id,
+                        "window_index": hit.window_index,
+                        "chunk_id": hit.chunk_id,
+                        "section": hit.section,
+                        "topics": hit.topics,
+                        "local_keywords": hit.local_keywords,
+                        "semantic_boosters": hit.semantic_boosters,
+                        "local_summary": hit.local_summary,
+                    }
+                )
+
+            enriched = _build_semantic_results(
+                query=query,
+                rows=chroma_rows,
+                backend="chroma",
+                limit=limit,
+                include_chunks=include_chunks,
+                rerank=rerank,
+            )
+            if enriched:
+                return {
+                    "results": enriched,
+                    "has_more": bool(chroma_results.has_more),
+                    "search_type": "semantic",
+                    "search_backend": "chroma",
+                }
+        except Exception:
+            logger.exception("semantic_chroma_search_failed")
+
+    local_rows = await _search_local_vectors(
+        query,
+        language=language,
+        limit=fetch_limit,
+        min_similarity=min_similarity,
+    )
+    enriched_local = _build_semantic_results(
+        query=query,
+        rows=local_rows,
+        backend="local_vector",
+        limit=limit,
+        include_chunks=include_chunks,
+        rerank=rerank,
+    )
+    if enriched_local:
+        return {
+            "results": enriched_local,
+            "has_more": len(enriched_local) >= limit and len(local_rows) > len(enriched_local),
+            "search_type": "semantic",
+            "search_backend": "local_vector",
+        }
+
+    if allow_keyword_fallback:
+        keyword_payload = _ensure_mapping(search_articles(query=query, limit=limit))
+        keyword_results = keyword_payload.get("results")
+        if not isinstance(keyword_results, list):
+            keyword_results = []
+        return {
+            "results": keyword_results[:limit],
+            "has_more": bool(keyword_payload.get("total", 0) > limit),
+            "search_type": "keyword_fallback",
+            "search_backend": "fts",
+        }
+
+    return {
+        "results": [],
+        "has_more": False,
+        "search_type": "semantic",
+        "search_backend": "none",
+    }
+
+
 # ---------------------------------------------------------------------------
 # MCP Tools
 # ---------------------------------------------------------------------------
@@ -253,25 +801,49 @@ def search_articles(query: str, limit: int = 10) -> str:
             # Phase 2: Fallback — scan summaries with basic matching
             return _fallback_search(query, limit)
 
-        request_ids = [r["request_id"] for r in fts_list if r.get("request_id")]
-        if not request_ids:
+        ranked_request_ids: list[int] = []
+        seen_request_ids: set[int] = set()
+        for row in fts_list:
+            raw_request_id = row.get("request_id")
+            if raw_request_id in (None, ""):
+                continue
+            try:
+                request_id = int(raw_request_id)
+            except (TypeError, ValueError):
+                continue
+            if request_id in seen_request_ids:
+                continue
+            seen_request_ids.add(request_id)
+            ranked_request_ids.append(request_id)
+
+        if not ranked_request_ids:
             return json.dumps({"results": [], "total": 0, "query": query})
 
-        # Load summaries for matched requests
+        rank_position = {request_id: idx for idx, request_id in enumerate(ranked_request_ids)}
+
+        # Load summaries for matched requests and keep FTS relevance ordering.
         summaries = (
             Summary.select(Summary, Request)
             .join(Request)
             .where(
-                Request.id.in_(request_ids),
+                Request.id.in_(ranked_request_ids),
                 Summary.is_deleted == False,  # noqa: E712
+                *_request_scope_filters(Request),
             )
-            .order_by(Summary.created_at.desc())
         )
 
-        results = []
+        by_request_id: dict[int, dict[str, Any]] = {}
         for s in summaries:
             req = s.request
-            results.append(_format_summary_compact(s, req))
+            rid = int(req.id)
+            if rid not in by_request_id:
+                by_request_id[rid] = _format_summary_compact(s, req)
+
+        ordered_request_ids = sorted(
+            by_request_id.keys(),
+            key=lambda rid: rank_position.get(rid, len(rank_position)),
+        )
+        results = [by_request_id[rid] for rid in ordered_request_ids][:limit]
 
         return json.dumps({"results": results, "total": len(results), "query": query}, default=str)
 
@@ -290,7 +862,10 @@ def _fallback_search(query: str, limit: int) -> str:
     all_summaries = (
         Summary.select(Summary, Request)
         .join(Request)
-        .where(Summary.is_deleted == False)  # noqa: E712
+        .where(
+            Summary.is_deleted == False,  # noqa: E712
+            *_request_scope_filters(Request),
+        )
         .order_by(Summary.created_at.desc())
         .limit(200)  # scan cap
     )
@@ -335,6 +910,7 @@ def get_article(summary_id: int) -> str:
             .where(
                 Summary.id == summary_id,
                 Summary.is_deleted == False,  # noqa: E712
+                *_request_scope_filters(Request),
             )
             .get()
         )
@@ -374,7 +950,12 @@ def list_articles(
 
     try:
         query = (
-            Summary.select(Summary, Request).join(Request).where(Summary.is_deleted == False)  # noqa: E712
+            Summary.select(Summary, Request)
+            .join(Request)
+            .where(
+                Summary.is_deleted == False,  # noqa: E712
+                *_request_scope_filters(Request),
+            )
         )
 
         if is_favorited is not None:
@@ -383,24 +964,24 @@ def list_articles(
         if lang:
             query = query.where(Summary.lang == lang)
 
-        # Count total before pagination
-        total = query.count()
+        ordered_query = query.order_by(Summary.created_at.desc())
 
-        articles = query.order_by(Summary.created_at.desc()).offset(offset).limit(limit)
-
-        results = []
-        for s in articles:
-            compact = _format_summary_compact(s, s.request)
-
-            # Apply tag filter client-side (tags are in JSON payload)
-            if tag:
-                tag_normalized = tag if tag.startswith("#") else f"#{tag}"
+        if tag:
+            tag_normalized = tag if tag.startswith("#") else f"#{tag}"
+            tag_lower = tag_normalized.lower()
+            matched_articles: list[dict[str, Any]] = []
+            for s in ordered_query:
+                compact = _format_summary_compact(s, s.request)
                 tags = compact.get("topic_tags", [])
-                if tag_normalized.lower() not in [t.lower() for t in tags]:
-                    total -= 1
-                    continue
+                if tag_lower in [str(t).lower() for t in tags]:
+                    matched_articles.append(compact)
 
-            results.append(compact)
+            total = len(matched_articles)
+            results = matched_articles[offset : offset + limit]
+        else:
+            total = query.count()
+            articles = ordered_query.offset(offset).limit(limit)
+            results = [_format_summary_compact(s, s.request) for s in articles]
 
         return json.dumps(
             {
@@ -408,7 +989,7 @@ def list_articles(
                 "total": total,
                 "limit": limit,
                 "offset": offset,
-                "has_more": (offset + limit) < total,
+                "has_more": (offset + len(results)) < total,
             },
             default=str,
         )
@@ -437,12 +1018,20 @@ def get_article_content(summary_id: int) -> str:
             .where(
                 Summary.id == summary_id,
                 Summary.is_deleted == False,  # noqa: E712
+                *_request_scope_filters(Request),
             )
             .get()
         )
 
         request = summary.request
-        crawl = CrawlResult.select().where(CrawlResult.request == request.id).first()
+        crawl = (
+            CrawlResult.select()
+            .where(
+                CrawlResult.request == request.id,
+                CrawlResult.is_deleted == False,  # noqa: E712
+            )
+            .first()
+        )
 
         if not crawl:
             return json.dumps({"error": f"No crawl content found for summary {summary_id}"})
@@ -480,37 +1069,33 @@ def get_stats() -> str:
     from app.db.models import Request, Summary
 
     try:
-        total = Summary.select().where(Summary.is_deleted == False).count()  # noqa: E712
-        unread = (
-            Summary.select()
+        scoped_summaries = (
+            Summary.select(Summary, Request)
+            .join(Request)
             .where(
                 Summary.is_deleted == False,  # noqa: E712
-                Summary.is_read == False,  # noqa: E712
+                *_request_scope_filters(Request),
             )
-            .count()
         )
-        favorited = (
-            Summary.select()
-            .where(
-                Summary.is_deleted == False,  # noqa: E712
-                Summary.is_favorited == True,  # noqa: E712
-            )
-            .count()
-        )
+
+        total = scoped_summaries.count()
+        unread = scoped_summaries.where(
+            Summary.is_read == False,  # noqa: E712
+        ).count()
+        favorited = scoped_summaries.where(
+            Summary.is_favorited == True,  # noqa: E712
+        ).count()
 
         # Language breakdown
         lang_counts: dict[str, int] = {}
-        for row in (
-            Summary.select(Summary.lang).where(Summary.is_deleted == False).dicts()  # noqa: E712
-        ):
+        for row in scoped_summaries.select(Summary.lang).dicts():
             lang = row.get("lang") or "unknown"
             lang_counts[lang] = lang_counts.get(lang, 0) + 1
 
         # Top tags (sample recent 200 summaries)
         tag_counts: dict[str, int] = {}
         recent = (
-            Summary.select(Summary.json_payload)
-            .where(Summary.is_deleted == False)  # noqa: E712
+            scoped_summaries.select(Summary.json_payload)
             .order_by(Summary.created_at.desc())
             .limit(200)
         )
@@ -522,8 +1107,14 @@ def get_stats() -> str:
         top_tags = sorted(tag_counts.items(), key=lambda x: x[1], reverse=True)[:20]
 
         # Request type breakdown
-        url_count = Request.select().where(Request.type == "url").count()
-        forward_count = Request.select().where(Request.type == "forward").count()
+        url_count = (
+            Request.select().where(*_request_scope_filters(Request), Request.type == "url").count()
+        )
+        forward_count = (
+            Request.select()
+            .where(*_request_scope_filters(Request), Request.type == "forward")
+            .count()
+        )
 
         return json.dumps(
             {
@@ -562,7 +1153,10 @@ def find_by_entity(entity_name: str, entity_type: str | None = None, limit: int 
         all_summaries = (
             Summary.select(Summary, Request)
             .join(Request)
-            .where(Summary.is_deleted == False)  # noqa: E712
+            .where(
+                Summary.is_deleted == False,  # noqa: E712
+                *_request_scope_filters(Request),
+            )
             .order_by(Summary.created_at.desc())
             .limit(500)  # scan cap
         )
@@ -626,8 +1220,7 @@ def list_collections(limit: int = 20, offset: int = 0) -> str:
 
     try:
         query = Collection.select().where(
-            Collection.is_deleted == False,  # noqa: E712
-            Collection.parent.is_null(True),
+            Collection.parent.is_null(True), *_collection_scope_filters(Collection)
         )
         total = query.count()
 
@@ -644,7 +1237,7 @@ def list_collections(limit: int = 20, offset: int = 0) -> str:
                 Collection.select()
                 .where(
                     Collection.parent == c.id,
-                    Collection.is_deleted == False,  # noqa: E712
+                    *_collection_scope_filters(Collection),
                 )
                 .count()
             )
@@ -691,8 +1284,7 @@ def get_collection(collection_id: int, include_items: bool = True, limit: int = 
 
     try:
         collection = Collection.get_or_none(
-            Collection.id == collection_id,
-            Collection.is_deleted == False,  # noqa: E712
+            Collection.id == collection_id, *_collection_scope_filters(Collection)
         )
         if not collection:
             return json.dumps({"error": f"Collection {collection_id} not found"})
@@ -702,7 +1294,7 @@ def get_collection(collection_id: int, include_items: bool = True, limit: int = 
             Collection.select()
             .where(
                 Collection.parent == collection.id,
-                Collection.is_deleted == False,  # noqa: E712
+                *_collection_scope_filters(Collection),
             )
             .order_by(Collection.position, Collection.created_at)
         )
@@ -727,6 +1319,10 @@ def get_collection(collection_id: int, include_items: bool = True, limit: int = 
                 .join(Summary)
                 .join(Request)
                 .where(CollectionItem.collection == collection.id)
+                .where(
+                    Summary.is_deleted == False,  # noqa: E712
+                    *_request_scope_filters(Request),
+                )
                 .order_by(CollectionItem.position, CollectionItem.created_at)
                 .limit(limit)
             )
@@ -762,7 +1358,11 @@ def list_videos(limit: int = 20, offset: int = 0, status: str | None = None) -> 
     offset = max(0, offset)
 
     try:
-        query = VideoDownload.select(VideoDownload, Request).join(Request)
+        query = (
+            VideoDownload.select(VideoDownload, Request)
+            .join(Request)
+            .where(*_request_scope_filters(Request))
+        )
 
         if status and status in ("pending", "downloading", "completed", "error"):
             query = query.where(VideoDownload.status == status)
@@ -828,7 +1428,7 @@ def get_video_transcript(video_id: str) -> str:
         video = (
             VideoDownload.select(VideoDownload, Request)
             .join(Request)
-            .where(VideoDownload.video_id == video_id)
+            .where(VideoDownload.video_id == video_id, *_request_scope_filters(Request))
             .first()
         )
         if not video:
@@ -881,7 +1481,9 @@ def check_url(url: str) -> str:
         normalized = normalize_url(url)
         dedupe_hash = compute_dedupe_hash(url)
 
-        request = Request.get_or_none(Request.dedupe_hash == dedupe_hash)
+        request = Request.get_or_none(
+            Request.dedupe_hash == dedupe_hash, *_request_scope_filters(Request)
+        )
 
         if not request:
             return json.dumps(
@@ -931,76 +1533,349 @@ async def semantic_search(
     description: str,
     limit: int = 10,
     language: str | None = None,
+    min_similarity: float = 0.25,
+    rerank: bool = False,
+    include_chunks: bool = True,
 ) -> str:
-    """Search articles by meaning using vector similarity (ChromaDB).
-
-    Unlike keyword search, this finds articles whose *content* is
-    semantically similar to your description — even when exact keywords
-    don't match. Use this when you want to find articles "about" a topic
-    described in natural language.
-
-    Requires ChromaDB to be configured and running. Falls back to
-    keyword search if ChromaDB is unavailable.
-
-    Args:
-        description: Natural-language description of what you're looking for
-                     (e.g. "articles about climate change policy in Europe").
-        limit: Maximum number of results to return (1-25, default 10).
-        language: Optional language filter (e.g. "en", "ru"). Auto-detected if omitted.
-    """
-    limit = max(1, min(25, limit))
-
-    chroma = await _get_chroma_service()
-
-    if chroma is None:
-        # Graceful degradation: fall back to keyword search
-        logger.info("semantic_search: ChromaDB unavailable, falling back to keyword search")
-        return search_articles(query=description, limit=limit)
-
+    """Search articles by semantic meaning with resilient fallback strategy."""
     try:
-        results = await chroma.search(
-            description.strip(),
+        payload = await _run_semantic_candidates(
+            description,
             language=language,
             limit=limit,
-            offset=0,
+            min_similarity=min_similarity,
+            include_chunks=include_chunks,
+            rerank=rerank,
+            allow_keyword_fallback=True,
         )
-
-        # Enrich Chroma results with full summary data from SQLite
-        from app.db.models import Request, Summary
-
-        output = []
-        for r in results.results:
-            try:
-                summary = (
-                    Summary.select(Summary, Request)
-                    .join(Request)
-                    .where(
-                        Summary.id == r.summary_id,
-                        Summary.is_deleted == False,  # noqa: E712
-                    )
-                    .get()
-                )
-                compact = _format_summary_compact(summary, summary.request)
-                compact["similarity_score"] = round(r.similarity_score, 4)
-                output.append(compact)
-            except Summary.DoesNotExist:
-                # Chroma entry with no matching summary — skip
-                continue
-
         return json.dumps(
             {
-                "results": output,
-                "total": len(output),
+                "results": payload.get("results", []),
+                "total": len(payload.get("results", [])),
                 "query": description,
-                "search_type": "semantic",
-                "has_more": results.has_more,
+                "search_type": payload.get("search_type", "semantic"),
+                "search_backend": payload.get("search_backend", "none"),
+                "has_more": bool(payload.get("has_more", False)),
+                "min_similarity": round(_clamp_similarity(min_similarity), 4),
+                "rerank_applied": bool(rerank),
             },
             default=str,
         )
-
     except Exception as exc:
         logger.exception("semantic_search failed")
         return json.dumps({"error": str(exc), "query": description})
+
+
+@mcp.tool()
+async def hybrid_search(
+    query: str,
+    limit: int = 10,
+    language: str | None = None,
+    min_similarity: float = 0.25,
+    rerank: bool = False,
+) -> str:
+    """Combine keyword and semantic retrieval into a single ranked result list."""
+    limit = _clamp_limit(limit)
+
+    try:
+        semantic = await _run_semantic_candidates(
+            query,
+            language=language,
+            limit=max(limit * 2, 12),
+            min_similarity=min_similarity,
+            include_chunks=True,
+            rerank=rerank,
+            allow_keyword_fallback=False,
+        )
+        semantic_results = semantic.get("results", [])
+        if not isinstance(semantic_results, list):
+            semantic_results = []
+
+        keyword_payload = _ensure_mapping(search_articles(query=query, limit=max(limit * 2, 12)))
+        keyword_results = keyword_payload.get("results", [])
+        if not isinstance(keyword_results, list):
+            keyword_results = []
+
+        fused: dict[int, dict[str, Any]] = {}
+        fusion_k = 50.0
+
+        for idx, item in enumerate(semantic_results):
+            summary_id = _safe_int(_ensure_mapping(item).get("summary_id"))
+            if summary_id is None:
+                continue
+            bucket = fused.setdefault(summary_id, dict(item))
+            bucket.setdefault("match_sources", [])
+            if "semantic" not in bucket["match_sources"]:
+                bucket["match_sources"].append("semantic")
+            bucket["hybrid_score"] = float(bucket.get("hybrid_score", 0.0)) + (
+                1.0 / (fusion_k + idx)
+            )
+            bucket["semantic_score"] = float(item.get("similarity_score", 0.0))
+
+        for idx, item in enumerate(keyword_results):
+            summary_id = _safe_int(_ensure_mapping(item).get("summary_id"))
+            if summary_id is None:
+                continue
+            if summary_id not in fused:
+                fused[summary_id] = dict(item)
+                fused[summary_id]["semantic_score"] = None
+            bucket = fused[summary_id]
+            bucket.setdefault("match_sources", [])
+            if "keyword" not in bucket["match_sources"]:
+                bucket["match_sources"].append("keyword")
+            bucket["hybrid_score"] = float(bucket.get("hybrid_score", 0.0)) + (
+                1.0 / (fusion_k + idx)
+            )
+
+        results = sorted(
+            fused.values(), key=lambda item: float(item.get("hybrid_score", 0.0)), reverse=True
+        )
+        for row in results:
+            row["hybrid_score"] = round(float(row.get("hybrid_score", 0.0)), 4)
+
+        return json.dumps(
+            {
+                "results": results[:limit],
+                "total": min(len(results), limit),
+                "query": query,
+                "search_type": "hybrid",
+                "semantic_backend": semantic.get("search_backend", "none"),
+                "min_similarity": round(_clamp_similarity(min_similarity), 4),
+                "rerank_applied": bool(rerank),
+                "has_more": len(results) > limit,
+            },
+            default=str,
+        )
+    except Exception as exc:
+        logger.exception("hybrid_search failed")
+        return json.dumps({"error": str(exc), "query": query})
+
+
+@mcp.tool()
+async def find_similar_articles(
+    summary_id: int,
+    limit: int = 10,
+    min_similarity: float = 0.3,
+    rerank: bool = False,
+    include_chunks: bool = True,
+) -> str:
+    """Find articles semantically similar to an existing summary."""
+    from app.db.models import Request, Summary
+
+    limit = _clamp_limit(limit)
+
+    try:
+        source_summary = (
+            Summary.select(Summary, Request)
+            .join(Request)
+            .where(
+                Summary.id == summary_id,
+                Summary.is_deleted == False,  # noqa: E712
+                *_request_scope_filters(Request),
+            )
+            .get()
+        )
+    except Summary.DoesNotExist:
+        return json.dumps({"error": f"Summary {summary_id} not found"})
+    except Exception as exc:
+        logger.exception("find_similar_articles source lookup failed")
+        return json.dumps({"error": str(exc), "summary_id": summary_id})
+
+    payload = _ensure_mapping(getattr(source_summary, "json_payload", None))
+    seed_query = _extract_semantic_seed_text(payload)
+    if not seed_query:
+        return json.dumps(
+            {
+                "summary_id": summary_id,
+                "results": [],
+                "total": 0,
+                "message": "Source summary has no text suitable for semantic search",
+            }
+        )
+
+    try:
+        semantic = await _run_semantic_candidates(
+            seed_query,
+            language=getattr(source_summary, "lang", None),
+            limit=max(limit + 4, 12),
+            min_similarity=min_similarity,
+            include_chunks=include_chunks,
+            rerank=rerank,
+            allow_keyword_fallback=False,
+        )
+        raw_results = semantic.get("results", [])
+        if not isinstance(raw_results, list):
+            raw_results = []
+        results = [
+            row
+            for row in raw_results
+            if _safe_int(_ensure_mapping(row).get("summary_id")) != int(summary_id)
+        ][:limit]
+
+        return json.dumps(
+            {
+                "summary_id": summary_id,
+                "query_seed": seed_query[:500],
+                "results": results,
+                "total": len(results),
+                "search_type": "similarity",
+                "search_backend": semantic.get("search_backend", "none"),
+                "min_similarity": round(_clamp_similarity(min_similarity), 4),
+                "rerank_applied": bool(rerank),
+                "has_more": len(raw_results) > len(results),
+            },
+            default=str,
+        )
+    except Exception as exc:
+        logger.exception("find_similar_articles failed")
+        return json.dumps({"error": str(exc), "summary_id": summary_id})
+
+
+@mcp.tool()
+async def chroma_health() -> str:
+    """Check Chroma availability and fallback readiness."""
+    try:
+        chroma = await _get_chroma_service()
+        local = await _get_local_vector_service()
+        chroma_store = getattr(chroma, "_vector_store", None) if chroma else None
+
+        now = time.monotonic()
+        chroma_failed_for = (
+            round(now - _chroma_last_failed_at, 2) if _chroma_last_failed_at is not None else None
+        )
+        local_failed_for = (
+            round(now - _local_vector_last_failed_at, 2)
+            if _local_vector_last_failed_at is not None
+            else None
+        )
+
+        return json.dumps(
+            {
+                "chroma_available": bool(chroma is not None),
+                "local_vector_available": bool(local is not None),
+                "collection_name": getattr(chroma_store, "collection_name", None),
+                "environment": getattr(chroma_store, "environment", None),
+                "user_scope": getattr(chroma_store, "user_scope", None),
+                "chroma_last_failed_seconds_ago": chroma_failed_for,
+                "local_last_failed_seconds_ago": local_failed_for,
+            },
+            default=str,
+        )
+    except Exception as exc:
+        logger.exception("chroma_health failed")
+        return json.dumps({"error": str(exc)})
+
+
+@mcp.tool()
+async def chroma_index_stats(scan_limit: int = 5000) -> str:
+    """Return index coverage stats between SQLite summaries and Chroma."""
+    from app.db.models import Request, Summary
+
+    scan_limit = max(100, min(50000, int(scan_limit)))
+
+    try:
+        chroma = await _get_chroma_service()
+        if chroma is None:
+            return json.dumps(
+                {
+                    "error": "ChromaDB unavailable",
+                    "chroma_available": False,
+                }
+            )
+
+        chroma_store = getattr(chroma, "_vector_store", None)
+        if chroma_store is None:
+            return json.dumps({"error": "Chroma store unavailable", "chroma_available": False})
+
+        sqlite_query = (
+            Summary.select(Summary.id, Request)
+            .join(Request)
+            .where(
+                Summary.is_deleted == False,  # noqa: E712
+                *_request_scope_filters(Request),
+            )
+            .order_by(Summary.created_at.desc())
+            .limit(scan_limit)
+        )
+        sqlite_ids = {int(row.id) for row in sqlite_query}
+
+        chroma_ids = chroma_store.get_indexed_summary_ids(user_id=_MCP_USER_ID, limit=scan_limit)
+
+        overlap = sqlite_ids.intersection(chroma_ids)
+        coverage_pct = round((len(overlap) / len(sqlite_ids) * 100), 2) if sqlite_ids else 0.0
+
+        return json.dumps(
+            {
+                "chroma_available": True,
+                "user_scope_id": _MCP_USER_ID,
+                "scan_limit": scan_limit,
+                "sqlite_summary_count": len(sqlite_ids),
+                "chroma_indexed_count": len(chroma_ids),
+                "overlap_count": len(overlap),
+                "coverage_percent": coverage_pct,
+            },
+            default=str,
+        )
+    except Exception as exc:
+        logger.exception("chroma_index_stats failed")
+        return json.dumps({"error": str(exc)})
+
+
+@mcp.tool()
+async def chroma_sync_gap(max_scan: int = 5000, sample_size: int = 20) -> str:
+    """Report sync gaps between SQLite summaries and Chroma index."""
+    from app.db.models import Request, Summary
+
+    max_scan = max(100, min(50000, int(max_scan)))
+    sample_size = max(1, min(100, int(sample_size)))
+
+    try:
+        chroma = await _get_chroma_service()
+        if chroma is None:
+            return json.dumps(
+                {
+                    "error": "ChromaDB unavailable",
+                    "chroma_available": False,
+                }
+            )
+
+        chroma_store = getattr(chroma, "_vector_store", None)
+        if chroma_store is None:
+            return json.dumps({"error": "Chroma store unavailable", "chroma_available": False})
+
+        sqlite_query = (
+            Summary.select(Summary.id, Request)
+            .join(Request)
+            .where(
+                Summary.is_deleted == False,  # noqa: E712
+                *_request_scope_filters(Request),
+            )
+            .order_by(Summary.created_at.desc())
+            .limit(max_scan)
+        )
+        sqlite_ids = {int(row.id) for row in sqlite_query}
+        chroma_ids = chroma_store.get_indexed_summary_ids(user_id=_MCP_USER_ID, limit=max_scan)
+
+        missing_in_chroma = sorted(sqlite_ids - chroma_ids)
+        missing_in_sqlite = sorted(chroma_ids - sqlite_ids)
+
+        return json.dumps(
+            {
+                "chroma_available": True,
+                "user_scope_id": _MCP_USER_ID,
+                "max_scan": max_scan,
+                "sqlite_summary_count": len(sqlite_ids),
+                "chroma_indexed_count": len(chroma_ids),
+                "missing_in_chroma_count": len(missing_in_chroma),
+                "missing_in_sqlite_count": len(missing_in_sqlite),
+                "missing_in_chroma_sample": missing_in_chroma[:sample_size],
+                "missing_in_sqlite_sample": missing_in_sqlite[:sample_size],
+            },
+            default=str,
+        )
+    except Exception as exc:
+        logger.exception("chroma_sync_gap failed")
+        return json.dumps({"error": str(exc)})
 
 
 # ---------------------------------------------------------------------------
@@ -1030,6 +1905,7 @@ def unread_resource() -> str:
             .where(
                 Summary.is_deleted == False,  # noqa: E712
                 Summary.is_read == False,  # noqa: E712
+                *_request_scope_filters(Request),
             )
             .order_by(Summary.created_at.desc())
             .limit(20)
@@ -1050,13 +1926,17 @@ def stats_resource() -> str:
 @mcp.resource("bsr://tags")
 def tags_resource() -> str:
     """All topic tags with article counts, sorted by frequency."""
-    from app.db.models import Summary
+    from app.db.models import Request, Summary
 
     try:
         tag_counts: dict[str, int] = {}
         all_summaries = (
-            Summary.select(Summary.json_payload)
-            .where(Summary.is_deleted == False)  # noqa: E712
+            Summary.select(Summary.json_payload, Request)
+            .join(Request)
+            .where(
+                Summary.is_deleted == False,  # noqa: E712
+                *_request_scope_filters(Request),
+            )
             .order_by(Summary.created_at.desc())
         )
         for row in all_summaries:
@@ -1080,7 +1960,7 @@ def tags_resource() -> str:
 @mcp.resource("bsr://entities")
 def entities_resource() -> str:
     """Aggregated entities (people, organizations, locations) across all articles."""
-    from app.db.models import Summary
+    from app.db.models import Request, Summary
 
     try:
         people: dict[str, int] = {}
@@ -1088,8 +1968,12 @@ def entities_resource() -> str:
         locations: dict[str, int] = {}
 
         all_summaries = (
-            Summary.select(Summary.json_payload)
-            .where(Summary.is_deleted == False)  # noqa: E712
+            Summary.select(Summary.json_payload, Request)
+            .join(Request)
+            .where(
+                Summary.is_deleted == False,  # noqa: E712
+                *_request_scope_filters(Request),
+            )
             .order_by(Summary.created_at.desc())
         )
         for row in all_summaries:
@@ -1131,7 +2015,10 @@ def domains_resource() -> str:
         all_summaries = (
             Summary.select(Summary.json_payload, Request)
             .join(Request)
-            .where(Summary.is_deleted == False)  # noqa: E712
+            .where(
+                Summary.is_deleted == False,  # noqa: E712
+                *_request_scope_filters(Request),
+            )
         )
         for row in all_summaries:
             payload = _ensure_mapping(getattr(row, "json_payload", None))
@@ -1168,12 +2055,24 @@ def recent_videos_resource() -> str:
 @mcp.resource("bsr://processing/stats")
 def processing_stats_resource() -> str:
     """Processing statistics: LLM call counts, token usage, model breakdown."""
-    from app.db.models import LLMCall, VideoDownload
+    from app.db.models import LLMCall, Request, VideoDownload
 
     try:
-        total_calls = LLMCall.select().count()
-        success_calls = LLMCall.select().where(LLMCall.status == "success").count()
-        error_calls = LLMCall.select().where(LLMCall.status == "error").count()
+        llm_scope_filters = [LLMCall.is_deleted == False, *_request_scope_filters(Request)]  # noqa: E712
+
+        total_calls = LLMCall.select(LLMCall.id).join(Request).where(*llm_scope_filters).count()
+        success_calls = (
+            LLMCall.select(LLMCall.id)
+            .join(Request)
+            .where(*llm_scope_filters, LLMCall.status == "success")
+            .count()
+        )
+        error_calls = (
+            LLMCall.select(LLMCall.id)
+            .join(Request)
+            .where(*llm_scope_filters, LLMCall.status == "error")
+            .count()
+        )
 
         # Token usage
         from peewee import fn
@@ -1185,7 +2084,8 @@ def processing_stats_resource() -> str:
                 fn.SUM(LLMCall.cost_usd).alias("total_cost"),
                 fn.AVG(LLMCall.latency_ms).alias("avg_latency_ms"),
             )
-            .where(LLMCall.status == "success")
+            .join(Request)
+            .where(*llm_scope_filters, LLMCall.status == "success")
             .dicts()
             .first()
         ) or {}
@@ -1194,7 +2094,8 @@ def processing_stats_resource() -> str:
         model_counts: dict[str, int] = {}
         for row in (
             LLMCall.select(LLMCall.model)
-            .where(LLMCall.status == "success", LLMCall.model.is_null(False))
+            .join(Request)
+            .where(*llm_scope_filters, LLMCall.status == "success", LLMCall.model.is_null(False))
             .dicts()
         ):
             model = row.get("model") or "unknown"
@@ -1203,16 +2104,18 @@ def processing_stats_resource() -> str:
         top_models = sorted(model_counts.items(), key=lambda x: x[1], reverse=True)[:10]
 
         # Video stats
-        total_videos = VideoDownload.select().count()
-        completed_videos = VideoDownload.select().where(VideoDownload.status == "completed").count()
-        videos_with_transcript = (
-            VideoDownload.select()
-            .where(
-                VideoDownload.status == "completed",
-                VideoDownload.transcript_text.is_null(False),
-            )
-            .count()
+        video_base = (
+            VideoDownload.select(VideoDownload.id)
+            .join(Request)
+            .where(*_request_scope_filters(Request))
         )
+
+        total_videos = video_base.count()
+        completed_videos = video_base.where(VideoDownload.status == "completed").count()
+        videos_with_transcript = video_base.where(
+            VideoDownload.status == "completed",
+            VideoDownload.transcript_text.is_null(False),
+        ).count()
 
         return json.dumps(
             {
@@ -1252,25 +2155,71 @@ def processing_stats_resource() -> str:
         return json.dumps({"error": str(exc)})
 
 
+@mcp.resource("bsr://chroma/health")
+def chroma_health_resource() -> str:
+    """Chroma availability status for semantic MCP tools."""
+    return _run_async_for_resource(chroma_health())
+
+
+@mcp.resource("bsr://chroma/index-stats")
+def chroma_index_stats_resource() -> str:
+    """Chroma index coverage compared to SQLite summaries."""
+    return _run_async_for_resource(chroma_index_stats())
+
+
+@mcp.resource("bsr://chroma/sync-gap")
+def chroma_sync_gap_resource() -> str:
+    """Chroma/SQLite sync gap sample using default scan limits."""
+    return _run_async_for_resource(chroma_sync_gap())
+
+
 # ---------------------------------------------------------------------------
 # Server entry point
 # ---------------------------------------------------------------------------
 def run_server(
     transport: str = "stdio",
-    host: str = "0.0.0.0",  # nosec B104 - intentional for Docker
+    host: str = "127.0.0.1",
     port: int = 8200,
     db_path: str | None = None,
+    user_id: int | None = None,
+    allow_remote_sse: bool = False,
+    allow_unscoped_sse: bool = False,
 ) -> None:
     """Start the MCP server.
 
     Args:
         transport: "stdio" (default) or "sse".
-        host: Bind address for SSE transport (default 0.0.0.0).
+        host: Bind address for SSE transport (default 127.0.0.1).
         port: Port for SSE transport (default 8200).
         db_path: Override for database file path.
+        user_id: Optional user scope. When set, all MCP reads are scoped to this user.
+        allow_remote_sse: Allow non-loopback SSE bind host.
+        allow_unscoped_sse: Allow SSE without explicit user scoping.
     """
     _init_database(db_path)
-    logger.info("Starting Bite-Size Reader MCP server (transport=%s)", transport)
+    _set_user_scope(user_id)
+    logger.info(
+        "Starting Bite-Size Reader MCP server (transport=%s, user_scope=%s)",
+        transport,
+        user_id if user_id is not None else "all",
+    )
+
+    if transport == "sse" and not allow_remote_sse and not _is_loopback_host(host):
+        msg = (
+            "Refusing to bind MCP SSE to non-loopback host without explicit opt-in "
+            "(set allow_remote_sse=True / --allow-remote-sse)."
+        )
+        raise ValueError(msg)
+
+    if transport == "sse" and user_id is None and not allow_unscoped_sse:
+        msg = (
+            "Refusing to start unscoped MCP SSE server. Set MCP_USER_ID/--user-id or "
+            "explicitly acknowledge risk via allow_unscoped_sse=True / --allow-unscoped-sse."
+        )
+        raise ValueError(msg)
+
+    if user_id is None:
+        logger.warning("MCP user scope is disabled; queries can access all users")
 
     if transport == "sse":
         mcp.settings.host = host

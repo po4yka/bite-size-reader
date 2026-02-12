@@ -77,6 +77,8 @@ async def backfill_chroma_store(
     for summary in summaries:
         summary_id = summary.get("id")
         request_id = summary.get("request_id")
+        request_row = summary.get("request") if isinstance(summary.get("request"), dict) else {}
+        user_id = request_row.get("user_id") if isinstance(request_row, dict) else None
         payload = summary.get("json_payload")
         language = summary.get("lang")
 
@@ -114,6 +116,7 @@ async def backfill_chroma_store(
             language=language,
             user_scope=chroma_cfg.user_scope,
             environment=chroma_cfg.environment,
+            user_id=user_id,
         )
 
         if chunk_windows:
@@ -133,6 +136,7 @@ async def backfill_chroma_store(
                 language=language,
                 user_scope=chroma_cfg.user_scope,
                 environment=chroma_cfg.environment,
+                user_id=user_id,
                 summary_row=summary,
             )
 

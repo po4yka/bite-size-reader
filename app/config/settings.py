@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -59,6 +59,7 @@ class AppConfig:
     web_search: WebSearchConfig
     adaptive_timeout: AdaptiveTimeoutConfig
     batch_analysis: BatchAnalysisConfig
+    mcp: McpConfig = field(default_factory=McpConfig)
 
 
 class Settings(BaseSettings):
@@ -196,6 +197,7 @@ class Settings(BaseSettings):
             web_search=self.web_search,
             adaptive_timeout=self.adaptive_timeout,
             batch_analysis=self.batch_analysis,
+            mcp=self.mcp,
         )
 
 

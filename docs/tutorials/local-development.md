@@ -467,15 +467,10 @@ open http://localhost:8000/docs
 
 ```bash
 # Start MCP server
-python -m app.mcp.server
+python -m app.cli.mcp_server
 
-# Test MCP tools directly
-python -c "
-from app.mcp.server import MCPServer
-server = MCPServer()
-result = server.search_summaries('python')
-print(result)
-"
+# Start MCP SSE transport safely (loopback + scoped user)
+python -m app.cli.mcp_server --transport sse --user-id 123456789
 ```
 
 ---

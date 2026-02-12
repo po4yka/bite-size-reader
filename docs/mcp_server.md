@@ -8,8 +8,11 @@ Bite-Size Reader exposes an [MCP (Model Context Protocol)](https://modelcontextp
 | ---------- | --------- | ------------- |
 | `MCP_ENABLED` | `false` | Enable the MCP server |
 | `MCP_TRANSPORT` | `stdio` | Transport: `stdio` or `sse` |
-| `MCP_HOST` | `0.0.0.0` | SSE bind address |
+| `MCP_HOST` | `127.0.0.1` | SSE bind address |
 | `MCP_PORT` | `8200` | SSE port |
+| `MCP_USER_ID` | _(none)_ | Scope MCP reads to one user ID (recommended for SSE) |
+| `MCP_ALLOW_REMOTE_SSE` | `false` | Allow binding SSE to non-loopback hosts |
+| `MCP_ALLOW_UNSCOPED_SSE` | `false` | Allow SSE without `MCP_USER_ID` |
 
 See `docs/environment_variables.md` for full config reference.
 
@@ -24,8 +27,13 @@ python -m app.cli.mcp_server
 **SSE mode** (HTTP-based integrations):
 
 ```bash
-python -m app.cli.mcp_server --transport sse --port 8200
+python -m app.cli.mcp_server --transport sse --user-id 12345
 ```
+
+SSE safety defaults:
+
+- Binds to loopback (`127.0.0.1`) unless you explicitly enable remote bind.
+- Requires user scoping (`MCP_USER_ID` / `--user-id`) unless you explicitly allow unscoped SSE.
 
 ## Tools (12)
 

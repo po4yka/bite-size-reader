@@ -160,6 +160,7 @@ async def semantic_search_summaries(
             language=language,
             tags=tags,
             user_scope=user_scope,
+            user_id=user["user_id"],
             limit=limit,
             offset=offset,
         )
