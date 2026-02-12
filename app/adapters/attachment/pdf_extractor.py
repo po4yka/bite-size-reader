@@ -10,8 +10,6 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-import fitz  # PyMuPDF
-
 from app.adapters.attachment.image_extractor import ImageContent, ImageExtractor
 
 logger = logging.getLogger(__name__)
@@ -61,6 +59,15 @@ class PDFExtractor:
         Raises:
             ValueError: If the PDF is encrypted, invalid, or cannot be opened.
         """
+        try:
+            import fitz  # PyMuPDF
+        except ModuleNotFoundError as exc:
+            msg = (
+                "PDF processing requires PyMuPDF (`fitz`). "
+                "Install dependencies with the `pymupdf` package."
+            )
+            raise ValueError(msg) from exc
+
         file_path = Path(file_path)
         if not file_path.exists():
             msg = f"PDF file not found: {file_path}"

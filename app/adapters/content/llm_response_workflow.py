@@ -1146,8 +1146,7 @@ class LLMResponseWorkflow:
             # Capture all values needed for the deferred write so the closure
             # is safe to execute later outside the request scope.
             _llm = llm
-            _req_id = req_id
-            _cid = correlation_id
+            _req_id, _cid = req_id, correlation_id
             _model_fallback = self.cfg.openrouter.model
 
             async def _deferred_persist() -> None:
