@@ -244,7 +244,7 @@ API_RATE_LIMIT_PER_MINUTE=100
 | `MCP_HOST` | `127.0.0.1` | SSE bind address |
 | `MCP_PORT` | `8200` | SSE port |
 | `MCP_USER_ID` | _(none)_ | Scope MCP reads to a single user ID |
-| `MCP_ALLOW_REMOTE_SSE` | `false` | Allow non-loopback SSE bind host |
+| `MCP_ALLOW_REMOTE_SSE` | `false` | Allow non-loopback SSE bind host; also disables DNS rebinding protection |
 | `MCP_ALLOW_UNSCOPED_SSE` | `false` | Allow SSE without explicit user scope |
 
 ## Mobile API and Auth

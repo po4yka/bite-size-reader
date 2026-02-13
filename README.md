@@ -308,7 +308,7 @@ FastAPI-based REST API for mobile clients with Telegram-based JWT authentication
 
 ## MCP Server
 
-Model Context Protocol server that exposes articles and search to external AI agents (OpenClaw, Claude Desktop). Provides 12 tools and 10 resources for searching, retrieving, and exploring stored summaries. See `docs/mcp_server.md`.
+Model Context Protocol server that exposes articles and search to external AI agents (OpenClaw, Claude Desktop). Provides 17 tools and 13 resources for searching, retrieving, and exploring stored summaries. Runs as a dedicated Docker container with SSE transport or standalone via stdio. See `docs/mcp_server.md`.
 
 ## Redis caching
 

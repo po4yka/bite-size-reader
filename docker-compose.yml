@@ -110,6 +110,63 @@ services:
         limits:
           memory: 1024M
           cpus: "0.30"
+  mcp:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: bsr-mcp
+    init: true
+    env_file:
+      - .env
+    environment:
+      - MCP_TRANSPORT=sse
+      - MCP_HOST=0.0.0.0
+      - MCP_PORT=8200
+      - MCP_USER_ID=${MCP_USER_ID:-94225168}
+      - MCP_ALLOW_REMOTE_SSE=true
+      - DB_PATH=/data/app.db
+      - CHROMA_HOST=http://chroma:8000
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - PYTHONUNBUFFERED=1
+      - PYTHONDONTWRITEBYTECODE=1
+    volumes:
+      - ./data:/data:ro
+      - /etc/localtime:/etc/localtime:ro
+    tmpfs:
+      - /tmp
+    command: ["python", "-m", "app.cli.mcp_server"]
+    ports:
+      - "127.0.0.1:8200:8200"
+    depends_on:
+      chroma:
+        condition: service_healthy
+        required: false
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import socket; s=socket.create_connection(('localhost',8200),5); s.close()"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - default
+      - karakeep
+    security_opt:
+      - no-new-privileges:true
+    stop_grace_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: "0.20"
+        reservations:
+          memory: 128M
+          cpus: "0.10"
   redis:
     image: redis:7-alpine
     container_name: bsr-redis

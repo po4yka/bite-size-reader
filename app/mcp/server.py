@@ -29,6 +29,7 @@ import time
 from typing import Any
 
 from mcp.server.fastmcp import FastMCP
+from mcp.server.transport_security import TransportSecuritySettings
 
 # ---------------------------------------------------------------------------
 # Logging — MCP stdio transport requires NO stdout writes, so we direct
@@ -2224,6 +2225,10 @@ def run_server(
     if transport == "sse":
         mcp.settings.host = host
         mcp.settings.port = port
+        if allow_remote_sse:
+            mcp.settings.transport_security = TransportSecuritySettings(
+                enable_dns_rebinding_protection=False,
+            )
         mcp.run(transport="sse")
     else:
         mcp.run(transport="stdio")

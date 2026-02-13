@@ -82,7 +82,7 @@ Notes
 
 ## Docker Compose (recommended)
 
-The production `docker-compose.yml` defines a 4-service stack:
+The production `docker-compose.yml` defines a 5-service stack:
 
 ```yaml
 services:
@@ -90,7 +90,7 @@ services:
     build: .
     env_file: .env
     volumes: [./data:/data]
-    depends_on: [chroma (optional)]
+    depends_on: [redis, chroma (optional)]
     healthcheck: SQLite SELECT 1 every 30s
 
   mobile-api:       # FastAPI REST API
@@ -100,13 +100,21 @@ services:
     depends_on: [redis, chroma (optional)]
     healthcheck: HTTP /health every 30s
 
+  mcp:              # MCP server (SSE transport)
+    build: .
+    command: ["python", "-m", "app.cli.mcp_server"]
+    volumes: [./data:/data:ro]  # read-only
+    ports: ["127.0.0.1:8200:8200"]
+    depends_on: [chroma (optional)]
+    healthcheck: TCP socket check on port 8200 every 30s
+
   redis:            # Caching, rate limits, sync locks
     image: redis:7-alpine
     ports: ["127.0.0.1:6379:6379"]
     healthcheck: redis-cli ping every 10s
 
   chroma:           # Vector search (ChromaDB)
-    image: bsr-chroma:1.4.1-curl
+    image: bsr-chroma:1.5.0-curl
     build: {dockerfile: Dockerfile.chroma}
     ports: ["127.0.0.1:8001:8000"]
     healthcheck: HTTP /api/v2/heartbeat every 30s
@@ -120,7 +128,7 @@ These services are not required but enhance functionality when available:
 
 - **Redis** -- Caching layer for Firecrawl/LLM responses, API rate limiting, sync locks, and background task distributed locking. Set `REDIS_ENABLED=true` and configure `REDIS_URL` or host/port.
 - **ChromaDB** -- Vector search for semantic article queries. Set `CHROMA_HOST` to a running Chroma instance. Degrades gracefully when unavailable.
-- **MCP Server** -- Exposes articles and search to external AI agents (OpenClaw, Claude Desktop). Run via `python -m app.cli.mcp_server`. See `docs/mcp_server.md`.
+- **MCP Server** -- Exposes 17 tools and 13 resources for article search, retrieval, and ChromaDB diagnostics to external AI agents (OpenClaw, Claude Desktop). Runs as a dedicated Docker container with SSE transport (`bsr-mcp`) or standalone via `python -m app.cli.mcp_server`. See `docs/mcp_server.md`.
 - **Karakeep** -- Bookmark sync integration. Set `KARAKEEP_ENABLED=true` with API URL and key. Use `/sync_karakeep` to trigger manually.
 
 Full variable reference: `docs/environment_variables.md`
@@ -145,6 +153,7 @@ Full variable reference: `docs/environment_variables.md`
 | --------- | -------- | ---------- | --------- |
 | bsr | SQLite `SELECT 1` | 30s | Verifies DB connectivity; 5 retries, 60s start period |
 | mobile-api | HTTP `GET /health` | 30s | Returns 200 when API is ready; 5 retries, 60s start period |
+| mcp | TCP socket on port 8200 | 30s | SSE server liveness check; 3 retries, 30s start period |
 | redis | `redis-cli ping` | 10s | Standard Redis liveness check; 5 retries |
 | chroma | HTTP `GET /api/v2/heartbeat` | 30s | ChromaDB heartbeat endpoint; 3 retries, 60s start period |
 
