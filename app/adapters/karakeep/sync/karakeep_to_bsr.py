@@ -47,7 +47,7 @@ class KarakeepToBsrSyncer:
             existing_hashes = await repository.async_get_existing_request_hashes()
 
             async def process_bookmark(normalized_url: str, bookmark: KarakeepBookmark) -> bool:
-                url_hash = _url_hash(bookmark.url or "")
+                url_hash = _url_hash(bookmark.url or "", normalized_url=normalized_url)
 
                 if _check_hash_in_set(url_hash, synced_hashes):
                     result.skipped_already_synced += 1
@@ -72,6 +72,8 @@ class KarakeepToBsrSyncer:
                         bookmark,
                         user_id,
                         correlation_id=correlation_id,
+                        normalized_url=normalized_url,
+                        url_hash=url_hash,
                     )
                     result.items_synced += 1
                     synced_hashes.add(url_hash)
@@ -141,12 +143,14 @@ class KarakeepToBsrSyncer:
         user_id: int,
         *,
         correlation_id: str | None,
+        normalized_url: str | None = None,
+        url_hash: str | None = None,
     ) -> None:
         url = bookmark.url
         if not url:
             return
 
-        normalized = normalize_url(url)
+        normalized = normalized_url or normalize_url(url)
         dedupe_hash = url_hash_sha256(normalized) if normalized else None
 
         await repository.async_create_request_from_karakeep(
@@ -156,10 +160,11 @@ class KarakeepToBsrSyncer:
             dedupe_hash=dedupe_hash,
         )
 
+        computed_hash = url_hash or _url_hash(url, normalized_url=normalized)
         sync_id = await repository.async_create_sync_record(
             bsr_summary_id=None,
             karakeep_bookmark_id=bookmark.id,
-            url_hash=_url_hash(url),
+            url_hash=computed_hash,
             sync_direction="karakeep_to_bsr",
             synced_at=datetime.now(UTC),
             karakeep_modified_at=bookmark.modified_at,

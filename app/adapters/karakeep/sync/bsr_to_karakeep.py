@@ -73,8 +73,15 @@ class BsrToKarakeepSyncer:
                 if not url:
                     result.skipped_no_url += 1
                     continue
+
+                # Normalize once -- reuse for both hashing and index lookup
                 try:
-                    url_hash = _url_hash(url)
+                    comparison_url = normalize_url(url) or url
+                except (ValueError, OSError):
+                    comparison_url = url
+
+                try:
+                    url_hash = _url_hash(url, normalized_url=comparison_url)
                 except (ValueError, OSError) as exc:
                     logger.warning(
                         "karakeep_sync_url_hash_failed",
@@ -91,11 +98,6 @@ class BsrToKarakeepSyncer:
                 if not force and _check_hash_in_set(url_hash, synced_hashes):
                     result.skipped_already_synced += 1
                     continue
-
-                try:
-                    comparison_url = normalize_url(url) or url
-                except (ValueError, OSError):
-                    comparison_url = url
 
                 if comparison_url in karakeep_url_index:
                     existing_bookmark = karakeep_url_index[comparison_url]

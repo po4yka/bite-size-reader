@@ -1,11 +1,39 @@
 from __future__ import annotations
 
+import contextvars
 import hashlib
 import logging
 import re
+from contextlib import contextmanager
+from typing import TYPE_CHECKING
 from urllib.parse import parse_qsl, quote, unquote, urlencode, urlparse, urlunparse
 
+if TYPE_CHECKING:
+    from collections.abc import Generator
+
 logger = logging.getLogger(__name__)
+
+# Per-task DNS resolution cache (opt-in via dns_cache_scope()).
+# When active, caches socket.getaddrinfo() results so repeated
+# normalize_url() calls for the same hostname skip DNS entirely.
+_dns_cache: contextvars.ContextVar[dict[str, list] | None] = contextvars.ContextVar(
+    "_dns_cache", default=None
+)
+
+
+@contextmanager
+def dns_cache_scope() -> Generator[None]:
+    """Enable DNS resolution caching for the duration of this scope.
+
+    Within the scope, socket.getaddrinfo() results are cached per hostname
+    so that repeated normalize_url() calls avoid redundant DNS lookups.
+    The cache is automatically discarded on scope exit.
+    """
+    token = _dns_cache.set({})
+    try:
+        yield
+    finally:
+        _dns_cache.reset(token)
 
 
 TRACKING_PARAMS = {
@@ -189,10 +217,16 @@ def _validate_url_input(url: str) -> None:
                         raise ValueError(msg)
 
                 # Resolve hostname to IPs and block if any resolve to private ranges
-                try:
-                    resolved = socket.getaddrinfo(hostname, None, proto=socket.IPPROTO_TCP)
-                except OSError:
-                    resolved = []
+                cache = _dns_cache.get()
+                if cache is not None and hostname_lower in cache:
+                    resolved = cache[hostname_lower]
+                else:
+                    try:
+                        resolved = socket.getaddrinfo(hostname, None, proto=socket.IPPROTO_TCP)
+                    except OSError:
+                        resolved = []
+                    if cache is not None:
+                        cache[hostname_lower] = resolved
                 for info in resolved:
                     try:
                         ip_candidate = ipaddress.ip_address(info[4][0])

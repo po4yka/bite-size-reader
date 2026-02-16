@@ -19,6 +19,7 @@ from app.adapters.karakeep.sync.preview import SyncPreviewer
 from app.adapters.karakeep.sync.retry import RetryExecutor
 from app.adapters.karakeep.sync.status_updates import StatusUpdateSynchronizer
 from app.core.logging_utils import generate_correlation_id
+from app.core.url_utils import dns_cache_scope
 from app.utils.retry_utils import is_transient_error
 
 if TYPE_CHECKING:
@@ -72,8 +73,9 @@ class KarakeepSyncService:
 
     @asynccontextmanager
     async def _cache_scope(self) -> Any:
-        async with self._cache.scope():
-            yield
+        with dns_cache_scope():
+            async with self._cache.scope():
+                yield
 
     async def _ensure_healthy(
         self, client: KarakeepClientProtocol, errors: list[str], correlation_id: str | None = None
@@ -95,25 +97,26 @@ class KarakeepSyncService:
 
         result = SyncResult(direction="bsr_to_karakeep")
         try:
-            async with self._client_factory(self.api_url, self.api_key) as client_raw:
-                client = cast("KarakeepClientProtocol", client_raw)
-                if not await self._ensure_healthy(
-                    client, result.errors, correlation_id=correlation_id
-                ):
-                    record_error(result, "Karakeep API health check failed", retryable=True)
-                    logger.error(
-                        "karakeep_sync_health_check_failed",
-                        extra={"correlation_id": correlation_id},
+            with dns_cache_scope():
+                async with self._client_factory(self.api_url, self.api_key) as client_raw:
+                    client = cast("KarakeepClientProtocol", client_raw)
+                    if not await self._ensure_healthy(
+                        client, result.errors, correlation_id=correlation_id
+                    ):
+                        record_error(result, "Karakeep API health check failed", retryable=True)
+                        logger.error(
+                            "karakeep_sync_health_check_failed",
+                            extra={"correlation_id": correlation_id},
+                        )
+                        return result
+                    return await self._bsr_to_kk.sync(
+                        client,
+                        repository,
+                        user_id=user_id,
+                        limit=limit,
+                        force=force,
+                        correlation_id=correlation_id,
                     )
-                    return result
-                return await self._bsr_to_kk.sync(
-                    client,
-                    repository,
-                    user_id=user_id,
-                    limit=limit,
-                    force=force,
-                    correlation_id=correlation_id,
-                )
         except KarakeepClientError as exc:
             record_error(result, f"Karakeep client error: {exc}", is_transient_error(exc))
             return result
@@ -129,24 +132,25 @@ class KarakeepSyncService:
 
         result = SyncResult(direction="karakeep_to_bsr")
         try:
-            async with self._client_factory(self.api_url, self.api_key) as client_raw:
-                client = cast("KarakeepClientProtocol", client_raw)
-                if not await self._ensure_healthy(
-                    client, result.errors, correlation_id=correlation_id
-                ):
-                    record_error(result, "Karakeep API health check failed", retryable=True)
-                    logger.error(
-                        "karakeep_sync_health_check_failed",
-                        extra={"correlation_id": correlation_id},
+            with dns_cache_scope():
+                async with self._client_factory(self.api_url, self.api_key) as client_raw:
+                    client = cast("KarakeepClientProtocol", client_raw)
+                    if not await self._ensure_healthy(
+                        client, result.errors, correlation_id=correlation_id
+                    ):
+                        record_error(result, "Karakeep API health check failed", retryable=True)
+                        logger.error(
+                            "karakeep_sync_health_check_failed",
+                            extra={"correlation_id": correlation_id},
+                        )
+                        return result
+                    return await self._kk_to_bsr.sync(
+                        client,
+                        repository,
+                        user_id=user_id,
+                        limit=limit,
+                        correlation_id=correlation_id,
                     )
-                    return result
-                return await self._kk_to_bsr.sync(
-                    client,
-                    repository,
-                    user_id=user_id,
-                    limit=limit,
-                    correlation_id=correlation_id,
-                )
         except KarakeepClientError as exc:
             record_error(result, f"Karakeep client error: {exc}", is_transient_error(exc))
             return result

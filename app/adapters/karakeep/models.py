@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime  # noqa: TC003 - Pydantic needs this at runtime
 
-from pydantic import BaseModel, Field, computed_field
+from pydantic import BaseModel, Field, computed_field, model_validator
 
 
 class KarakeepTag(BaseModel):
@@ -32,6 +32,21 @@ class KarakeepBookmark(BaseModel):
     modified_at: datetime | None = Field(default=None, alias="modifiedAt")
 
     model_config = {"populate_by_name": True, "extra": "ignore"}
+
+    @model_validator(mode="after")
+    def _extract_url_from_content(self) -> KarakeepBookmark:
+        """Extract url and title from nested content object if not set at top level.
+
+        The Karakeep API returns bookmark data with url/title nested inside the
+        ``content`` dict (e.g. ``content.url``, ``content.title``) rather than
+        as top-level fields.
+        """
+        if isinstance(self.content, dict):
+            if not self.url:
+                self.url = self.content.get("url")
+            if not self.title:
+                self.title = self.content.get("title")
+        return self
 
 
 class KarakeepBookmarkList(BaseModel):

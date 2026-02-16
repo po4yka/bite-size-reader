@@ -6,12 +6,13 @@ from app.adapters.karakeep.sync.constants import LEGACY_HASH_LENGTH
 from app.core.url_utils import normalize_url, url_hash_sha256
 
 
-def _url_hash(url: str) -> str:
+def _url_hash(url: str, *, normalized_url: str | None = None) -> str:
     """Generate consistent hash for URL deduplication.
 
     Uses full 64-char SHA256 for consistency with the rest of the codebase.
+    Pass *normalized_url* to skip a redundant normalize_url() call.
     """
-    normalized = normalize_url(url) or url
+    normalized = normalized_url or normalize_url(url) or url
     return url_hash_sha256(normalized)
 
 

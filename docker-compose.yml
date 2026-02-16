@@ -24,6 +24,9 @@ services:
       - PYTHONDONTWRITEBYTECODE=1
       - MAX_CONCURRENT_CALLS=${MAX_CONCURRENT_CALLS:-4}
       - REQUEST_TIMEOUT_SEC=${REQUEST_TIMEOUT_SEC:-60}
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
     restart: unless-stopped
     deploy:
       resources:
