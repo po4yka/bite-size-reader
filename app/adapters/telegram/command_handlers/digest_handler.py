@@ -94,6 +94,11 @@ class DigestHandlerImpl:
             finally:
                 await userbot.stop()
 
+        except FileNotFoundError:
+            await self._formatter.safe_reply(
+                ctx.message,
+                "Userbot session not found.\n\nRun /init_session first to authenticate.",
+            )
         except Exception as exc:
             logger.exception("digest_command_failed", extra={"cid": ctx.correlation_id})
             await self._formatter.safe_reply(ctx.message, f"Digest failed: {exc}")

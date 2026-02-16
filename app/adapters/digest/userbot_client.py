@@ -29,10 +29,23 @@ class UserbotClient:
         self._client: Any = None  # pyrogram.Client
 
     async def start(self) -> None:
-        """Start the userbot Pyrogram session."""
+        """Start the userbot Pyrogram session.
+
+        Raises:
+            FileNotFoundError: If the session file does not exist.
+                The user must run ``/init_session`` first.
+        """
         from pyrogram import Client
 
         session_path = self._session_dir / self._cfg.digest.session_name
+        session_file = session_path.with_suffix(".session")
+        if not session_file.exists():
+            msg = (
+                f"Userbot session file not found: {session_file}\n"
+                "Run /init_session first to authenticate the userbot."
+            )
+            raise FileNotFoundError(msg)
+
         self._client = Client(
             name=str(session_path),
             api_id=self._cfg.telegram.api_id,
