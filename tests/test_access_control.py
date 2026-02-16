@@ -71,6 +71,17 @@ def make_bot(tmp_path: str, allowed_ids):
 
 
 class TestAccessControl(unittest.IsolatedAsyncioTestCase):
+    def setUp(self):
+        from app.db.models import database_proxy
+
+        self._old_proxy_obj = database_proxy.obj
+
+    def tearDown(self):
+        from app.db.models import database_proxy
+
+        if database_proxy.obj is not self._old_proxy_obj:
+            database_proxy.initialize(self._old_proxy_obj)
+
     async def test_denied_user_gets_stub(self):
         with tempfile.TemporaryDirectory() as tmp:
             bot = make_bot(os.path.join(tmp, "app.db"), allowed_ids=[1])
@@ -87,6 +98,17 @@ class TestAccessControl(unittest.IsolatedAsyncioTestCase):
 
 
 class TestAccessControllerBlockReset(unittest.IsolatedAsyncioTestCase):
+    def setUp(self):
+        from app.db.models import database_proxy
+
+        self._old_proxy_obj = database_proxy.obj
+
+    def tearDown(self):
+        from app.db.models import database_proxy
+
+        if database_proxy.obj is not self._old_proxy_obj:
+            database_proxy.initialize(self._old_proxy_obj)
+
     async def test_failed_attempts_reset_after_block_window(self):
         with tempfile.TemporaryDirectory() as tmp:
             db_path = os.path.join(tmp, "app.db")
