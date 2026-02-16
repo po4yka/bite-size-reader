@@ -94,6 +94,8 @@ class CallbackHandler:
         )
 
         try:
+            if action == "dg":
+                return await self._handle_digest_full_summary(message, uid, parts, correlation_id)
             if action == "export":
                 return await self._handle_export(message, uid, parts, correlation_id)
             if action == "translate":
@@ -125,6 +127,87 @@ class CallbackHandler:
                 details="The button action could not be completed.",
             )
             return True
+
+    async def _handle_digest_full_summary(
+        self,
+        message: Any,
+        uid: int,
+        parts: list[str],
+        correlation_id: str,
+    ) -> bool:
+        """Handle digest full-summary callback (dg:channel_id:message_id).
+
+        Fetches the full post text from ChannelPost and pipes it through
+        the forward summarizer for a full 35-field BSR summary.
+        """
+        if len(parts) < 3:
+            logger.warning("digest_callback_missing_params", extra={"parts": parts})
+            return False
+
+        try:
+            channel_id = int(parts[1])
+            msg_id = int(parts[2])
+        except (ValueError, IndexError):
+            logger.warning("digest_callback_invalid_params", extra={"parts": parts})
+            await self.response_formatter.safe_reply(message, "Invalid digest callback data.")
+            return True
+
+        from app.db.models import Channel, ChannelPost
+
+        post = (
+            ChannelPost.select()
+            .join(Channel)
+            .where(
+                Channel.id == channel_id,
+                ChannelPost.message_id == msg_id,
+            )
+            .first()
+        )
+
+        if not post:
+            await self.response_formatter.safe_reply(message, "Post not found in database.")
+            return True
+
+        await self.response_formatter.safe_reply(message, "Generating full summary...")
+
+        # If the post has a t.me URL and we have a URL handler, pipe through full BSR pipeline
+        post_url = post.url or ""
+        if post_url and self.url_handler and hasattr(self.url_handler, "url_processor"):
+            try:
+                await self.url_handler.url_processor.handle_url_flow(
+                    message,
+                    post_url,
+                    correlation_id=correlation_id,
+                )
+            except Exception as e:
+                logger.exception(
+                    "digest_full_summary_failed",
+                    extra={"cid": correlation_id, "error": str(e)},
+                )
+                # Fallback: show the full post text
+                await self._send_digest_post_fallback(message, post, post_url)
+        else:
+            # No URL or no handler -- show the full post text
+            await self._send_digest_post_fallback(message, post, post_url)
+
+        logger.info(
+            "digest_full_summary_sent",
+            extra={
+                "channel_id": channel_id,
+                "message_id": msg_id,
+                "uid": uid,
+                "cid": correlation_id,
+            },
+        )
+        return True
+
+    async def _send_digest_post_fallback(self, message: Any, post: Any, post_url: str) -> None:
+        """Send full post text as a fallback when BSR pipeline is unavailable."""
+        text_preview = post.text[:4000]
+        reply_text = f"**Full Post**\n\n{text_preview}"
+        if post_url:
+            reply_text += f"\n\n[Original]({post_url})"
+        await self.response_formatter.safe_reply(message, reply_text)
 
     async def _handle_export(
         self,

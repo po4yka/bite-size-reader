@@ -122,6 +122,10 @@ class TelegramClient:
                 BotCommand("dbverify", "Verify database integrity"),
                 BotCommand("clearcache", "Clear internal cache"),
                 BotCommand("sync_karakeep", "Sync bookmarks from Karakeep"),
+                BotCommand("digest", "Generate channel digest"),
+                BotCommand("channels", "List subscribed channels"),
+                BotCommand("subscribe", "Subscribe to a channel"),
+                BotCommand("unsubscribe", "Unsubscribe from a channel"),
             ]
             commands_ru = [
                 BotCommand("summarize", "Суммировать ссылку"),
@@ -136,6 +140,10 @@ class TelegramClient:
                 BotCommand("dbverify", "Проверка БД"),
                 BotCommand("clearcache", "Очистить кэш"),
                 BotCommand("sync_karakeep", "Синхронизация Karakeep"),
+                BotCommand("digest", "Дайджест каналов"),
+                BotCommand("channels", "Список подписок"),
+                BotCommand("subscribe", "Подписаться на канал"),
+                BotCommand("unsubscribe", "Отписаться от канала"),
             ]
             try:
                 client_any: Any = self.client

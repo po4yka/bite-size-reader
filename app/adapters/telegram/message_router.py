@@ -589,6 +589,30 @@ class MessageRouter:
             )
             return
 
+        if text.startswith("/digest"):
+            await self.command_processor.handle_digest_command(
+                message, text, uid, correlation_id, interaction_id, start_time
+            )
+            return
+
+        if text.startswith("/channels"):
+            await self.command_processor.handle_channels_command(
+                message, text, uid, correlation_id, interaction_id, start_time
+            )
+            return
+
+        if text.startswith("/subscribe"):
+            await self.command_processor.handle_subscribe_command(
+                message, text, uid, correlation_id, interaction_id, start_time
+            )
+            return
+
+        if text.startswith("/unsubscribe"):
+            await self.command_processor.handle_unsubscribe_command(
+                message, text, uid, correlation_id, interaction_id, start_time
+            )
+            return
+
         if text.startswith("/debug"):
             await self.command_processor.handle_debug_command(
                 message, uid, correlation_id, interaction_id, start_time

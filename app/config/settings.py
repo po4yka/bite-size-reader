@@ -18,6 +18,7 @@ from .background import BackgroundProcessorConfig
 from .circuit_breaker import CircuitBreakerConfig
 from .content import ContentLimitsConfig
 from .database import DatabaseConfig
+from .digest import ChannelDigestConfig
 from .firecrawl import FirecrawlConfig  # noqa: TC001
 from .integrations import (
     BatchAnalysisConfig,
@@ -59,6 +60,7 @@ class AppConfig:
     web_search: WebSearchConfig
     adaptive_timeout: AdaptiveTimeoutConfig
     batch_analysis: BatchAnalysisConfig
+    digest: ChannelDigestConfig = field(default_factory=ChannelDigestConfig)
     mcp: McpConfig = field(default_factory=McpConfig)
 
 
@@ -101,6 +103,7 @@ class Settings(BaseSettings):
     mcp: McpConfig = Field(default_factory=McpConfig)
     adaptive_timeout: AdaptiveTimeoutConfig = Field(default_factory=AdaptiveTimeoutConfig)
     batch_analysis: BatchAnalysisConfig = Field(default_factory=BatchAnalysisConfig)
+    digest: ChannelDigestConfig = Field(default_factory=ChannelDigestConfig)
 
     @model_validator(mode="before")
     @classmethod
@@ -197,6 +200,7 @@ class Settings(BaseSettings):
             web_search=self.web_search,
             adaptive_timeout=self.adaptive_timeout,
             batch_analysis=self.batch_analysis,
+            digest=self.digest,
             mcp=self.mcp,
         )
 

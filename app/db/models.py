@@ -636,6 +636,106 @@ class BatchSessionItem(BaseModel):
         )
 
 
+# ---------------------------------------------------------------------------
+# Channel Digest models
+# ---------------------------------------------------------------------------
+
+
+class Channel(BaseModel):
+    """A Telegram channel tracked for digest analysis."""
+
+    id = peewee.AutoField()
+    username = peewee.TextField(unique=True)  # @channel without '@'
+    title = peewee.TextField(null=True)
+    channel_id = peewee.BigIntegerField(null=True)  # Telegram numeric chat ID
+    last_fetched_at = peewee.DateTimeField(null=True)
+    is_active = peewee.BooleanField(default=True)
+    fetch_error_count = peewee.IntegerField(default=0)
+    last_error = peewee.TextField(null=True)
+    updated_at = peewee.DateTimeField(default=_utcnow)
+    created_at = peewee.DateTimeField(default=_utcnow)
+
+    class Meta:
+        table_name = "channels"
+
+
+class ChannelSubscription(BaseModel):
+    """Links a user to a tracked channel."""
+
+    id = peewee.AutoField()
+    user = peewee.ForeignKeyField(User, backref="channel_subscriptions", on_delete="CASCADE")
+    channel = peewee.ForeignKeyField(Channel, backref="subscriptions", on_delete="CASCADE")
+    is_active = peewee.BooleanField(default=True)
+    updated_at = peewee.DateTimeField(default=_utcnow)
+    created_at = peewee.DateTimeField(default=_utcnow)
+
+    class Meta:
+        table_name = "channel_subscriptions"
+        indexes = ((("user", "channel"), True),)
+
+
+class ChannelPost(BaseModel):
+    """A single post fetched from a tracked channel."""
+
+    id = peewee.AutoField()
+    channel = peewee.ForeignKeyField(Channel, backref="posts", on_delete="CASCADE")
+    message_id = peewee.IntegerField()  # Telegram message ID
+    text = peewee.TextField()
+    media_type = peewee.TextField(null=True)  # photo, video, document, etc.
+    date = peewee.DateTimeField()
+    views = peewee.IntegerField(null=True)
+    forwards = peewee.IntegerField(null=True)
+    url = peewee.TextField(null=True)  # t.me/channel/msg_id
+    analyzed_at = peewee.DateTimeField(null=True)
+    created_at = peewee.DateTimeField(default=_utcnow)
+
+    class Meta:
+        table_name = "channel_posts"
+        indexes = (
+            (("channel", "message_id"), True),
+            (("date",), False),
+        )
+
+
+class ChannelPostAnalysis(BaseModel):
+    """Lightweight LLM analysis result for a channel post."""
+
+    id = peewee.AutoField()
+    post = peewee.ForeignKeyField(ChannelPost, backref="analysis", unique=True, on_delete="CASCADE")
+    real_topic = peewee.TextField()  # 2-4 word topic label
+    tldr = peewee.TextField()  # 1-2 sentence summary
+    key_insights = JSONField(null=True)  # list[str]
+    relevance_score = peewee.FloatField(default=0.5)  # 0.0-1.0
+    content_type = peewee.TextField(default="other")  # news/tutorial/opinion/announcement/other
+    llm_call = peewee.ForeignKeyField(
+        LLMCall, backref="digest_analyses", null=True, on_delete="SET NULL"
+    )
+    created_at = peewee.DateTimeField(default=_utcnow)
+
+    class Meta:
+        table_name = "channel_post_analyses"
+
+
+class DigestDelivery(BaseModel):
+    """Record of a digest delivered to a user."""
+
+    id = peewee.AutoField()
+    user = peewee.ForeignKeyField(User, backref="digest_deliveries", on_delete="CASCADE")
+    delivered_at = peewee.DateTimeField(default=_utcnow)
+    post_count = peewee.IntegerField(default=0)
+    channel_count = peewee.IntegerField(default=0)
+    digest_type = peewee.TextField()  # scheduled / on_demand
+    correlation_id = peewee.TextField(null=True)
+    posts_json = JSONField(null=True)  # list of post IDs included in digest
+
+    class Meta:
+        table_name = "digest_deliveries"
+        indexes = (
+            (("user",), False),
+            (("delivered_at",), False),
+        )
+
+
 ALL_MODELS: tuple[type[BaseModel], ...] = (
     User,
     Chat,
@@ -660,6 +760,11 @@ ALL_MODELS: tuple[type[BaseModel], ...] = (
     KarakeepSync,
     BatchSession,
     BatchSessionItem,
+    Channel,
+    ChannelSubscription,
+    ChannelPost,
+    ChannelPostAnalysis,
+    DigestDelivery,
 )
 
 

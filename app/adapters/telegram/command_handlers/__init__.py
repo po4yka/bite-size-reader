@@ -17,11 +17,13 @@ Handler Modules:
 - content_handler: /unread, /read commands
 - search_handler: /find*, /search commands
 - karakeep_handler: /sync_karakeep command
+- digest_handler: /digest, /channels, /subscribe, /unsubscribe commands
 """
 
 from app.adapters.telegram.command_handlers.admin_handler import AdminHandlerImpl
 from app.adapters.telegram.command_handlers.content_handler import ContentHandlerImpl
 from app.adapters.telegram.command_handlers.decorators import audit_command, track_interaction
+from app.adapters.telegram.command_handlers.digest_handler import DigestHandlerImpl
 from app.adapters.telegram.command_handlers.error_handler import command_error_handler
 from app.adapters.telegram.command_handlers.execution_context import CommandExecutionContext
 from app.adapters.telegram.command_handlers.karakeep_handler import KarakeepHandlerImpl
@@ -34,6 +36,7 @@ __all__ = [
     "AdminHandlerImpl",
     "CommandExecutionContext",
     "ContentHandlerImpl",
+    "DigestHandlerImpl",
     "KarakeepHandlerImpl",
     "OnboardingHandlerImpl",
     "SearchHandlerImpl",

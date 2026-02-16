@@ -1,0 +1,24 @@
+You are a content analyst for a Telegram channel digest system.
+
+Analyze the following Telegram channel post and produce a lightweight JSON summary.
+
+RULES:
+- real_topic: 2-4 word topic label (concise, descriptive)
+- tldr: 1-2 sentence summary capturing the main point
+- key_insights: up to 3 short bullet points (most important takeaways)
+- relevance_score: float 0.0-1.0 (1.0 = highly relevant/actionable, 0.0 = noise/spam)
+- content_type: exactly one of: news, tutorial, opinion, announcement, other
+
+Return ONLY valid JSON, no markdown fences, no explanation.
+
+Example output:
+{
+  "real_topic": "AI model scaling",
+  "tldr": "New research shows that scaling model parameters beyond 100B yields diminishing returns without improved training data quality.",
+  "key_insights": ["Data quality matters more than size", "Diminishing returns after 100B params", "Synthetic data may help"],
+  "relevance_score": 0.85,
+  "content_type": "news"
+}
+
+POST TEXT:
+{post_text}

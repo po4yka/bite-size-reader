@@ -7,6 +7,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 
 from app.core.time_utils import UTC
@@ -71,6 +72,28 @@ class SchedulerService:
                     "auto_sync_enabled": self.cfg.karakeep.auto_sync_enabled,
                 },
             )
+
+        # Add channel digest job if enabled
+        if self.cfg.digest.enabled:
+            hour, minute = map(int, self.cfg.digest.digest_time.split(":"))
+            self._scheduler.add_job(
+                self._run_channel_digest,
+                trigger=CronTrigger(hour=hour, minute=minute, timezone=self.cfg.digest.timezone),
+                id="channel_digest",
+                name="Channel Digest Delivery",
+                replace_existing=True,
+                max_instances=1,
+            )
+            logger.info(
+                "scheduler_digest_job_added",
+                extra={
+                    "job_id": "channel_digest",
+                    "time": self.cfg.digest.digest_time,
+                    "timezone": self.cfg.digest.timezone,
+                },
+            )
+        else:
+            logger.info("scheduler_digest_job_skipped", extra={"enabled": False})
 
         self._scheduler.start()
         self._started = True
@@ -140,6 +163,106 @@ class SchedulerService:
                 "scheduled_karakeep_sync_failed",
                 extra={"cid": correlation_id, "error": str(e)},
             )
+
+    async def _run_channel_digest(self) -> None:
+        """Execute scheduled channel digest delivery for all subscribed users."""
+        from pathlib import Path
+
+        from app.adapters.digest.analyzer import DigestAnalyzer
+        from app.adapters.digest.channel_reader import ChannelReader
+        from app.adapters.digest.digest_service import DigestService
+        from app.adapters.digest.formatter import DigestFormatter
+        from app.adapters.digest.userbot_client import UserbotClient
+
+        correlation_id = f"digest_{datetime.now(UTC).strftime('%Y%m%d_%H%M%S')}"
+        logger.info("scheduled_digest_starting", extra={"cid": correlation_id})
+
+        userbot: UserbotClient | None = None
+        try:
+            # Initialize userbot
+            session_dir = Path("/data")
+            userbot = UserbotClient(self.cfg, session_dir)
+            await userbot.start()
+
+            # Build LLM client (reuse OpenRouter)
+            from app.adapters.openrouter.openrouter_client import OpenRouterClient
+
+            llm_client = OpenRouterClient(
+                api_key=self.cfg.openrouter.api_key,
+                model=self.cfg.openrouter.model,
+                fallback_models=self.cfg.openrouter.fallback_models,
+            )
+
+            reader = ChannelReader(self.cfg, userbot)
+            analyzer = DigestAnalyzer(self.cfg, llm_client)
+            formatter = DigestFormatter()
+
+            # Create a send function using the bot (not the userbot)
+            # The bot client is not available here; use pyrogram bot directly
+            from pyrogram import Client as PyroClient
+
+            bot = PyroClient(
+                name="digest_bot_sender",
+                api_id=self.cfg.telegram.api_id,
+                api_hash=self.cfg.telegram.api_hash,
+                bot_token=self.cfg.telegram.bot_token,
+                in_memory=True,
+            )
+
+            async with bot:
+
+                async def send_message(
+                    user_id: int, text: str, reply_markup: object = None
+                ) -> None:
+                    await bot.send_message(chat_id=user_id, text=text, reply_markup=reply_markup)
+
+                service = DigestService(
+                    cfg=self.cfg,
+                    reader=reader,
+                    analyzer=analyzer,
+                    formatter=formatter,
+                    send_message_func=send_message,
+                )
+
+                # Deliver to all users with subscriptions
+                user_ids = service.get_users_with_subscriptions()
+                logger.info(
+                    "scheduled_digest_users",
+                    extra={"cid": correlation_id, "count": len(user_ids)},
+                )
+
+                for uid in user_ids:
+                    try:
+                        result = await service.generate_digest(
+                            user_id=uid,
+                            correlation_id=f"{correlation_id}_u{uid}",
+                            digest_type="scheduled",
+                        )
+                        logger.info(
+                            "scheduled_digest_user_complete",
+                            extra={
+                                "cid": correlation_id,
+                                "uid": uid,
+                                "posts": result.post_count,
+                                "errors": len(result.errors),
+                            },
+                        )
+                    except Exception as e:
+                        logger.exception(
+                            "scheduled_digest_user_failed",
+                            extra={"cid": correlation_id, "uid": uid, "error": str(e)},
+                        )
+
+            await llm_client.aclose()
+
+        except Exception as e:
+            logger.exception(
+                "scheduled_digest_failed",
+                extra={"cid": correlation_id, "error": str(e)},
+            )
+        finally:
+            if userbot:
+                await userbot.stop()
 
     def get_next_run_time(self, job_id: str) -> datetime | None:
         """Get next scheduled run time for a job.
