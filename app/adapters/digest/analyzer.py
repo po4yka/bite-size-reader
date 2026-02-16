@@ -136,6 +136,8 @@ class DigestAnalyzer:
             if content_type not in VALID_CONTENT_TYPES:
                 content_type = "other"
 
+            is_ad = bool(parsed.get("is_ad", False))
+
             # Persist to DB
             channel_post = (
                 ChannelPost.select()
@@ -168,6 +170,7 @@ class DigestAnalyzer:
                 "key_insights": key_insights,
                 "relevance_score": relevance_score,
                 "content_type": content_type,
+                "is_ad": is_ad,
             }
 
     @staticmethod

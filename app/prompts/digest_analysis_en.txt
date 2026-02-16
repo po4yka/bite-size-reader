@@ -8,6 +8,7 @@ RULES:
 - key_insights: up to 3 short bullet points (most important takeaways)
 - relevance_score: float 0.0-1.0 (1.0 = highly relevant/actionable, 0.0 = noise/spam)
 - content_type: exactly one of: news, tutorial, opinion, announcement, other
+- is_ad: true if the post is advertising, sponsored content, paid promotion, product pitch, event marketing, or commercial self-promotion; false otherwise
 
 Return ONLY valid JSON, no markdown fences, no explanation.
 
@@ -17,7 +18,8 @@ Example output:
   "tldr": "New research shows that scaling model parameters beyond 100B yields diminishing returns without improved training data quality.",
   "key_insights": ["Data quality matters more than size", "Diminishing returns after 100B params", "Synthetic data may help"],
   "relevance_score": 0.85,
-  "content_type": "news"
+  "content_type": "news",
+  "is_ad": false
 }
 
 POST TEXT:

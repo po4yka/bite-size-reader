@@ -104,6 +104,35 @@ class DigestService:
                 result.errors.append(f"Send failed: {e}")
             return result
 
+        # 2b. Filter out ads and announcements
+        pre_filter_count = len(analyzed)
+        analyzed = [
+            p
+            for p in analyzed
+            if not p.get("is_ad", False) and p.get("content_type") != "announcement"
+        ]
+        filtered_count = pre_filter_count - len(analyzed)
+        if filtered_count:
+            logger.info(
+                "digest_filtered_posts",
+                extra={
+                    "cid": correlation_id,
+                    "filtered": filtered_count,
+                    "remaining": len(analyzed),
+                },
+            )
+
+        if not analyzed:
+            try:
+                await self._send(
+                    user_id,
+                    "All fetched posts were filtered (ads/announcements). No content to digest.",
+                )
+                result.messages_sent = 1
+            except Exception as e:
+                result.errors.append(f"Send failed: {e}")
+            return result
+
         # 3. Format digest
         message_chunks = self._formatter.format_digest(analyzed)
 

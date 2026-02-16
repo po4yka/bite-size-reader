@@ -10,12 +10,11 @@ logger = logging.getLogger(__name__)
 # Telegram message length limit
 MAX_MESSAGE_LENGTH = 4096
 
-CONTENT_TYPE_LABELS = {
-    "news": "NEWS",
-    "tutorial": "HOWTO",
-    "opinion": "OPINION",
-    "announcement": "ANN",
-    "other": "POST",
+CONTENT_TYPE_EMOJI: dict[str, str] = {
+    "news": "\U0001f4f0",  # newspaper
+    "tutorial": "\U0001f4d6",  # open book
+    "opinion": "\U0001f4ac",  # speech balloon
+    "other": "\U0001f4cc",  # pushpin
 }
 
 
@@ -48,28 +47,33 @@ class DigestFormatter:
             by_channel.setdefault(channel, []).append(post)
 
         # Sort each group by relevance desc
-        for _channel_key, posts_list in by_channel.items():
+        for posts_list in by_channel.values():
             posts_list.sort(key=lambda p: p.get("relevance_score", 0), reverse=True)
 
         # Build message parts
         parts: list[str] = []
         buttons: list[list[dict[str, str]]] = []
 
-        parts.append("**Channel Digest**\n")
+        total_posts = sum(len(v) for v in by_channel.values())
+        total_channels = len(by_channel)
+        parts.append(
+            f"\U0001f4cb **Channel Digest** \u2014 "
+            f"{total_posts} posts from {total_channels} channel{'s' if total_channels != 1 else ''}\n"
+        )
 
+        post_num = 0
         for channel, posts in by_channel.items():
-            parts.append(f"\n**@{channel}** ({len(posts)} posts)\n")
+            parts.append(f"\n\U0001f4e2 **@{channel}**\n")
 
             for post in posts:
+                post_num += 1
                 content_type = post.get("content_type", "other")
-                label = CONTENT_TYPE_LABELS.get(content_type, "POST")
-                score = post.get("relevance_score", 0)
-                score_bar = _score_indicator(score)
+                emoji = CONTENT_TYPE_EMOJI.get(content_type, "\U0001f4cc")
 
                 real_topic = post.get("real_topic", "Untitled")
                 tldr = post.get("tldr", "")
 
-                line = f"  {score_bar} [{label}] **{real_topic}**\n  {tldr}\n"
+                line = f"{post_num}. {emoji} **{real_topic}**\n    {tldr}\n"
                 parts.append(line)
 
                 # Inline button for full summary
@@ -78,7 +82,7 @@ class DigestFormatter:
                 buttons.append(
                     [
                         {
-                            "text": f"Full: {real_topic[:30]}",
+                            "text": f"{post_num}. {real_topic[:30]}",
                             "callback_data": f"dg:{channel_id}:{message_id}",
                         }
                     ]
@@ -87,17 +91,6 @@ class DigestFormatter:
         # Combine and split if needed
         full_text = "".join(parts)
         return _split_message(full_text, buttons)
-
-
-def _score_indicator(score: float) -> str:
-    """Convert 0.0-1.0 score to a text indicator."""
-    if score >= 0.8:
-        return "[!!!]"
-    if score >= 0.6:
-        return "[!! ]"
-    if score >= 0.4:
-        return "[!  ]"
-    return "[   ]"
 
 
 def _split_message(
