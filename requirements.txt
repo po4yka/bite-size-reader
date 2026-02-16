@@ -91,7 +91,7 @@ murmurhash==1.0.15
     #   preshed
     #   spacy
     #   thinc
-numpy==2.2.6
+numpy==2.4.2
     # via
     #   blis
     #   spacy
@@ -105,7 +105,7 @@ packaging==26.0
     #   weasel
 peewee==3.19.0
     # via bite-size-reader (pyproject.toml)
-pillow==12.1.0
+pillow==12.1.1
     # via bite-size-reader (pyproject.toml)
 preshed==3.0.12
     # via
@@ -123,13 +123,13 @@ pydantic==2.12.5
     #   weasel
 pydantic-core==2.41.5
     # via pydantic
-pydantic-settings==2.12.0
+pydantic-settings==2.13.0
     # via bite-size-reader (pyproject.toml)
 pymorphy3==2.0.6
     # via ru-core-news-sm
 pymorphy3-dicts-ru==2.4.417150.4580142
     # via pymorphy3
-pymupdf==1.26.7
+pymupdf==1.27.1
     # via bite-size-reader (pyproject.toml)
 pyrogram==2.0.106
     # via bite-size-reader (pyproject.toml)
@@ -188,7 +188,7 @@ tqdm==4.67.3
     # via spacy
 trafilatura==2.0.0
     # via bite-size-reader (pyproject.toml)
-typer-slim==0.21.2
+typer-slim==0.23.1
     # via
     #   spacy
     #   weasel
