@@ -477,9 +477,7 @@ class TestTelegramMessage(unittest.TestCase):
 
     def test_from_pyrogram_message_forwarded_with_linked_chat_cycle(self):
         """Ensure channel forwards don't crash when Chat.linked_chat forms a cycle."""
-
-        from pyrogram.enums import ChatType
-        from pyrogram.types import Chat
+        import types
 
         class MockMessage:
             def __init__(self):
@@ -490,36 +488,11 @@ class TestTelegramMessage(unittest.TestCase):
                 self.forward_from_message_id = None
 
         def _make_chat(*, chat_id: int, chat_type: ChatType, title: str):
-            return Chat(
-                client=None,
+            return types.SimpleNamespace(
                 id=chat_id,
                 type=chat_type,
-                is_verified=False,
-                is_restricted=False,
-                is_creator=False,
-                is_scam=False,
-                is_fake=False,
-                is_support=False,
                 title=title,
-                username=None,
-                first_name=None,
-                last_name=None,
-                photo=None,
-                bio=None,
-                description=None,
-                dc_id=None,
-                has_protected_content=None,
-                invite_link=None,
-                pinned_message=None,
-                sticker_set_name=None,
-                can_set_sticker_set=None,
-                members_count=None,
-                restrictions=None,
-                permissions=None,
-                distance=None,
                 linked_chat=None,
-                send_as_chat=None,
-                available_reactions=None,
             )
 
         channel = _make_chat(chat_id=-1001, chat_type=ChatType.CHANNEL, title="Test Channel")

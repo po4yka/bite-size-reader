@@ -1573,6 +1573,50 @@ paths:
           $ref: '#/components/responses/TooManyRequestsError'
         '500':
           $ref: '#/components/responses/InternalServerError'
+  /v1/search/insights:
+    get:
+      tags:
+      - Search
+      summary: Search Insights
+      description: Search analytics snapshot including trends, entities, diversity,
+        topic mix and coverage gaps.
+      operationId: get_search_insights_v1_search_insights_get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: days
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 365
+          minimum: 7
+          default: 30
+          title: Days
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 100
+          minimum: 5
+          default: 20
+          title: Limit
+      responses:
+        '200':
+          description: Search insights data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SearchResponseEnvelope'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '429':
+          $ref: '#/components/responses/TooManyRequestsError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
   /v1/topics/trending:
     get:
       tags:

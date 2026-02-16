@@ -343,15 +343,15 @@ async def search_summaries(
                     limit=fetch_limit,
                     offset=0,
                 )
-                for idx, row in enumerate(semantic_results.results):
-                    if row.similarity_score < min_similarity:
+                for idx, result in enumerate(semantic_results.results):
+                    if result.similarity_score < min_similarity:
                         continue
-                    if row.request_id in semantic_by_request_id:
+                    if result.request_id in semantic_by_request_id:
                         continue
-                    semantic_by_request_id[row.request_id] = {
+                    semantic_by_request_id[result.request_id] = {
                         "position": idx,
-                        "score": float(row.similarity_score),
-                        "row": row,
+                        "score": float(result.similarity_score),
+                        "row": result,
                     }
 
         if resolved_mode == "keyword":

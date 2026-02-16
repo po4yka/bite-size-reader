@@ -180,8 +180,6 @@ srsly==2.5.2
     #   spacy
     #   thinc
     #   weasel
-tgcrypto==1.2.5
-    # via pyrotgfork (legacy; pytgcrypto preferred)
 thinc==8.3.10
     # via spacy
 tld==0.13.1

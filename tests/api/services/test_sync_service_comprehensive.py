@@ -1,15 +1,10 @@
 """Comprehensive tests for sync service to boost coverage above 80%."""
 
 import json
-import sys
 from datetime import datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
-# Mock redis before importing sync_service
-sys.modules["redis"] = MagicMock()
-sys.modules["redis.asyncio"] = MagicMock()
 
 from app.api.exceptions import (
     SyncSessionExpiredError,
@@ -109,7 +104,10 @@ class TestStoreSession:
         mock_redis = AsyncMock()
         mock_redis.set = AsyncMock()
 
-        with patch("app.api.services.sync_service.get_redis", return_value=mock_redis):
+        with patch(
+            "app.api.services.sync_service.get_redis",
+            new=AsyncMock(return_value=mock_redis),
+        ):
             payload = {
                 "session_id": "test-session",
                 "user_id": 123,

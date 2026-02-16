@@ -21,7 +21,7 @@ from app.infrastructure.persistence.sqlite.repositories.audit_log_repository imp
 try:
     from pyrogram import Client, filters
 except ImportError:
-    Client = object  # type: ignore[assignment,misc]
+    Client = object
     filters = None
 
 if TYPE_CHECKING:

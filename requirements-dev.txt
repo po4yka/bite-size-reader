@@ -3,7 +3,7 @@
 annotated-doc==0.0.4
     # via
     #   -c .requirements-all.tmp.txt
-    #   typer-slim
+    #   typer
 annotated-types==0.7.0
     # via
     #   -c .requirements-all.tmp.txt
@@ -44,7 +44,7 @@ charset-normalizer==3.4.4
 click==8.3.1
     # via
     #   -c .requirements-all.tmp.txt
-    #   typer-slim
+    #   typer
 cloudpathlib==0.23.0
     # via
     #   -c .requirements-all.tmp.txt
@@ -82,7 +82,7 @@ fakeredis==2.33.0
     # via
     #   -c .requirements-all.tmp.txt
     #   bite-size-reader (pyproject.toml)
-filelock==3.20.3
+filelock==3.24.2
     # via
     #   -c .requirements-all.tmp.txt
     #   virtualenv
@@ -157,10 +157,18 @@ lxml-html-clean==0.4.3
     # via
     #   -c .requirements-all.tmp.txt
     #   lxml
+markdown-it-py==4.0.0
+    # via
+    #   -c .requirements-all.tmp.txt
+    #   rich
 markupsafe==3.0.3
     # via
     #   -c .requirements-all.tmp.txt
     #   jinja2
+mdurl==0.1.2
+    # via
+    #   -c .requirements-all.tmp.txt
+    #   markdown-it-py
 murmurhash==1.0.15
     # via
     #   -c .requirements-all.tmp.txt
@@ -230,7 +238,7 @@ pydantic-core==2.41.5
     # via
     #   -c .requirements-all.tmp.txt
     #   pydantic
-pydantic-settings==2.12.0
+pydantic-settings==2.13.0
     # via
     #   -c .requirements-all.tmp.txt
     #   bite-size-reader (pyproject.toml)
@@ -238,6 +246,7 @@ pygments==2.19.2
     # via
     #   -c .requirements-all.tmp.txt
     #   pytest
+    #   rich
 pymorphy3==2.0.6
     # via
     #   -c .requirements-all.tmp.txt
@@ -246,7 +255,7 @@ pymorphy3-dicts-ru==2.4.417150.4580142
     # via
     #   -c .requirements-all.tmp.txt
     #   pymorphy3
-pymupdf==1.26.7
+pymupdf==1.27.1
     # via
     #   -c .requirements-all.tmp.txt
     #   bite-size-reader (pyproject.toml)
@@ -258,10 +267,6 @@ pysocks==1.7.1
     # via
     #   -c .requirements-all.tmp.txt
     #   pyrotgfork
-pytgcrypto==1.2.12
-    # via
-    #   -c .requirements-all.tmp.txt
-    #   bite-size-reader (pyproject.toml)
 pytest==9.0.2
     # via
     #   bite-size-reader (pyproject.toml)
@@ -271,6 +276,10 @@ pytest-asyncio==1.3.0
     # via bite-size-reader (pyproject.toml)
 pytest-benchmark==5.2.3
     # via bite-size-reader (pyproject.toml)
+pytgcrypto==1.2.12
+    # via
+    #   -c .requirements-all.tmp.txt
+    #   bite-size-reader (pyproject.toml)
 python-dateutil==2.9.0.post0
     # via
     #   -c .requirements-all.tmp.txt
@@ -303,6 +312,10 @@ requests==2.32.5
     #   -c .requirements-all.tmp.txt
     #   spacy
     #   weasel
+rich==14.3.2
+    # via
+    #   -c .requirements-all.tmp.txt
+    #   typer
 ru-core-news-sm @ https://github.com/explosion/spacy-models/releases/download/ru_core_news_sm-3.8.0/ru_core_news_sm-3.8.0-py3-none-any.whl
     # via
     #   -c .requirements-all.tmp.txt
@@ -315,6 +328,10 @@ setuptools==82.0.0
     #   pymorphy3
     #   spacy
     #   thinc
+shellingham==1.5.4
+    # via
+    #   -c .requirements-all.tmp.txt
+    #   typer
 six==1.17.0
     # via
     #   -c .requirements-all.tmp.txt
@@ -347,10 +364,6 @@ srsly==2.5.2
     #   spacy
     #   thinc
     #   weasel
-tgcrypto==1.2.5
-    # via
-    #   -c .requirements-all.tmp.txt
-    #   pyrotgfork (legacy; pytgcrypto preferred)
 thinc==8.3.10
     # via
     #   -c .requirements-all.tmp.txt
@@ -367,7 +380,11 @@ trafilatura==2.0.0
     # via
     #   -c .requirements-all.tmp.txt
     #   bite-size-reader (pyproject.toml)
-typer-slim==0.21.2
+typer==0.23.1
+    # via
+    #   -c .requirements-all.tmp.txt
+    #   typer-slim
+typer-slim==0.23.1
     # via
     #   -c .requirements-all.tmp.txt
     #   spacy
