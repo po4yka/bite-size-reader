@@ -558,17 +558,19 @@ def _shape_semantic_boosters(payload: SummaryJSON, base_text: str) -> list[str]:
     sentences = re.split(r"(?<=[.!?])\s+", base_text)
     sentences = [s.strip() for s in sentences if s and len(s.strip()) > 20]
 
+    # Cap existing boosters first so membership checks are consistent
+    boosters = [_cap_text(b, 320) for b in boosters if b.strip()]
+
     for sentence in sentences:
         if len(boosters) >= 15:
             break
-        if sentence not in boosters:
-            boosters.append(sentence)
+        capped = _cap_text(sentence, 320)
+        if capped not in boosters:
+            boosters.append(capped)
 
     if not boosters:
-        boosters = sentences[:10]
+        boosters = [_cap_text(s, 320) for s in sentences[:10] if s.strip()]
 
-    # Cap length and count
-    boosters = [_cap_text(sentence, 320) for sentence in boosters if sentence.strip()]
     return boosters[:15]
 
 
