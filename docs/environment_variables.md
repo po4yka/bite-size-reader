@@ -283,6 +283,21 @@ API_RATE_LIMIT_PER_MINUTE=100
 | `KARAKEEP_SYNC_INTERVAL_HOURS` | `6` | Auto-sync interval (1-168h) |
 | `KARAKEEP_AUTO_SYNC_ENABLED` | `true` | Enable automatic periodic sync |
 
+## Channel Digest
+
+| Variable | Default | Description |
+| ---------- | --------- | ------------- |
+| `DIGEST_ENABLED` | `false` | Enable channel digest subsystem |
+| `DIGEST_SESSION_NAME` | `digest_userbot` | Pyrogram session name for the userbot |
+| `DIGEST_TIME` | `09:00` | Daily digest delivery time (HH:MM) |
+| `DIGEST_TIMEZONE` | `UTC` | Timezone for digest scheduling |
+| `DIGEST_MAX_POSTS` | `50` | Max posts per channel to include in digest |
+| `DIGEST_MAX_CHANNELS` | `20` | Max channels per user |
+| `DIGEST_CONCURRENCY` | `3` | Concurrent channel fetch tasks |
+| `DIGEST_MIN_POST_LENGTH` | `100` | Min post character length to include |
+| `DIGEST_HOURS_LOOKBACK` | `24` | Hours to look back for new posts |
+| `API_BASE_URL` | `http://localhost:8000` | Base URL for the Mobile API (used by digest for session init) |
+
 ## Database and Backups
 
 | Variable | Default | Description |
@@ -382,6 +397,7 @@ Use this checklist to verify your configuration before deploying:
 - [ ] **ChromaDB**: `ENABLE_CHROMA=true` → ChromaDB server running at `CHROMA_HOST:CHROMA_PORT`
 - [ ] **Mobile API**: `JWT_SECRET_KEY` set → Strong secret (32+ characters)
 - [ ] **MCP Server**: `MCP_ENABLED=true` → Claude Desktop config updated
+- [ ] **Channel Digest**: `DIGEST_ENABLED=true` → `API_BASE_URL` set, `/init_session` completed
 
 ### ✅ Performance & Storage
 

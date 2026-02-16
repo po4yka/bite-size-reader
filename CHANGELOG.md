@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Channel digest subsystem with userbot, scheduler, and commands (`/digest`, `/channels`, `/subscribe`, `/unsubscribe`)
+- Bot-mediated userbot session initialization via `/init_session` with Telegram Mini App OTP/2FA flow
 - gRPC service implementation with comprehensive Python client library and integration tests
 - Quality assessment and web verification in summary output
 - Critical analysis and caveats sections in summaries

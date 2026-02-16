@@ -622,6 +622,28 @@ python -m app.cli.add_performance_indexes
 
 ---
 
+## Initialize Userbot Session
+
+**Command:** `python -m app.cli.init_userbot_session`
+
+**Purpose:** Initialize a Pyrogram userbot session for the channel digest subsystem.
+
+### Basic Usage
+
+```bash
+# Interactive session initialization (prompts for phone, OTP, 2FA)
+python -m app.cli.init_userbot_session
+```
+
+### Notes
+
+- This CLI tool requires interactive terminal input (phone number, OTP code, optional 2FA password)
+- The preferred alternative is the `/init_session` bot command, which uses a Telegram Mini App to securely relay OTP/2FA codes without exposing them in chat
+- The session file is stored at the path configured by `DIGEST_SESSION_NAME` (default: `digest_userbot`)
+- Only needs to be run once; the session persists across restarts
+
+---
+
 ## MCP Server
 
 **Command:** `python -m app.cli.mcp_server`

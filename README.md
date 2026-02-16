@@ -54,6 +54,19 @@ flowchart LR
     LLMSummarizer --> OpenRouter[(OpenRouter Chat Completions)]
   end
 
+  subgraph DigestPipeline[Channel Digest]
+    Scheduler[APScheduler] --> DigestService
+    CommandProcessor -.->|/digest| DigestService
+    DigestService --> ChannelReader
+    ChannelReader --> UserbotClient[Userbot Client]
+    DigestService --> DigestAnalyzer
+    DigestAnalyzer --> OpenRouter
+    DigestService --> DigestFormatter
+    DigestFormatter --> TGClient
+    CommandProcessor -.->|/init_session| SessionInit[Session Init + Mini App]
+    SessionInit --> UserbotClient
+  end
+
   subgraph OptionalServices[Optional services]
     Redis[(Redis)] -.-> ContentExtractor
     Redis -.-> LLMSummarizer
@@ -69,10 +82,12 @@ flowchart LR
   ContentExtractor --> SQLite[(SQLite)]
   MessagePersistence --> SQLite
   LLMSummarizer --> SQLite
+  DigestService --> SQLite
   MessageRouter --> ResponseFormatter
   ResponseFormatter --> TGClient
   TGClient -->| Replies | Telegram
   Telegram -->| Updates | TGClient
+  UserbotClient -->| Read channels | Telegram
   ResponseFormatter --> Logs[(Structured + audit logs)]
 
   subgraph MobileAPI[Mobile API]
@@ -81,7 +96,7 @@ flowchart LR
   end
 ```
 
-The bot ingests updates via a lightweight `TelegramClient`, normalizes them through `MessageHandler`, and hands them to `MessageRouter`. The router enforces access control, persists interaction metadata, and dispatches requests either to the command processor, the URL handler (which orchestrates Firecrawl + OpenRouter summarization through `URLProcessor`), or the forward processor for channel reposts. `ResponseFormatter` centralizes Telegram replies and audit logging while all artifacts land in SQLite.
+The bot ingests updates via a lightweight `TelegramClient`, normalizes them through `MessageHandler`, and hands them to `MessageRouter`. The router enforces access control, persists interaction metadata, and dispatches requests either to the command processor, the URL handler (which orchestrates Firecrawl + OpenRouter summarization through `URLProcessor`), or the forward processor for channel reposts. The channel digest subsystem uses a separate `UserbotClient` (authenticated as a real Telegram user) to read channel histories, analyzes posts via LLM, and delivers formatted digests on a schedule or via `/digest`. `ResponseFormatter` centralizes Telegram replies and audit logging while all artifacts land in SQLite.
 
 ## Quick start
 
@@ -157,6 +172,16 @@ Multiple URLs in one message: bot asks "Process N links?"; reply "yes/no". Each 
 | `/dbinfo` | Show database statistics |
 | `/dbverify` | Verify database integrity |
 
+### Channel Digest
+
+| Command | Description |
+| --------- | ------------- |
+| `/init_session` | Initialize userbot session via Mini App OTP/2FA flow |
+| `/digest` | Generate a digest of subscribed channels now |
+| `/channels` | List currently subscribed channels |
+| `/subscribe @channel` | Subscribe to a Telegram channel for digests |
+| `/unsubscribe @channel` | Unsubscribe from a channel |
+
 ### Integrations
 
 | Command | Description |
@@ -188,6 +213,7 @@ OPENROUTER_MODEL=deepseek/deepseek-v3.2  # Primary LLM model
 | **MCP Server** | `MCP_ENABLED=false`<br>`MCP_TRANSPORT=stdio`<br>`MCP_PORT=8200` | AI agent integration (Claude Desktop) |
 | **Mobile API** | `JWT_SECRET_KEY`<br>`ALLOWED_CLIENT_IDS`<br>`API_RATE_LIMIT_*` | Build mobile clients |
 | **Karakeep** | `KARAKEEP_ENABLED=false`<br>`KARAKEEP_API_URL`<br>`KARAKEEP_API_KEY` | Bookmark sync |
+| **Channel Digest** | `DIGEST_ENABLED=true`<br>`API_BASE_URL=http://localhost:8000` | Scheduled channel digests |
 
 ### ⚙️ Advanced (Fine-Tuning)
 

@@ -214,6 +214,7 @@ All users share the same database (no per-user isolation). This is designed for 
 - ✅ YouTube videos (any format: watch, shorts, live, music)
 - ✅ Forwarded Telegram channel posts
 - ✅ PDFs (with embedded image analysis)
+- ✅ Channel digest summaries (scheduled digests of subscribed Telegram channels)
 - ✅ Long-form content (up to 256k tokens with long-context models)
 
 **Not Supported**:

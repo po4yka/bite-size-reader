@@ -130,6 +130,7 @@ These services are not required but enhance functionality when available:
 - **ChromaDB** -- Vector search for semantic article queries. Set `CHROMA_HOST` to a running Chroma instance. Degrades gracefully when unavailable.
 - **MCP Server** -- Exposes 17 tools and 13 resources for article search, retrieval, and ChromaDB diagnostics to external AI agents (OpenClaw, Claude Desktop). Runs as a dedicated Docker container with SSE transport (`bsr-mcp`) or standalone via `python -m app.cli.mcp_server`. See `docs/mcp_server.md`.
 - **Karakeep** -- Bookmark sync integration. Set `KARAKEEP_ENABLED=true` with API URL and key. Use `/sync_karakeep` to trigger manually.
+- **Channel Digest** -- Scheduled digests of subscribed Telegram channels. Set `DIGEST_ENABLED=true` and `API_BASE_URL` to the Mobile API endpoint. Run `/init_session` in the bot to authenticate the userbot via Mini App OTP/2FA flow, then use `/subscribe @channel` to add channels.
 
 Full variable reference: `docs/environment_variables.md`
 

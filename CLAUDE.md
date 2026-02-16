@@ -68,6 +68,7 @@ Telegram Message -> MessageHandler -> AccessController -> MessageRouter
 - **LLM Abstraction** (`app/adapters/llm/`) -- Provider-agnostic LLM interface (OpenRouter, OpenAI, Anthropic)
 - **External Services** (`app/adapters/openrouter/`, `app/adapters/external/`) -- OpenRouter client, Firecrawl parser, response formatting
 - **Karakeep Integration** (`app/adapters/karakeep/`) -- Bookmark sync from self-hosted Karakeep
+- **Digest Subsystem** (`app/adapters/telegram/command_handlers/digest*.py`, `app/adapters/telegram/digest/`) -- Channel digest with userbot, scheduler, and bot-mediated session init via Mini App
 - **Application Layer** (`app/application/`) -- DTOs (`dto/`) and use cases (`use_cases/`) for orchestrating domain logic
 - **Core Utilities** (`app/core/`) -- URL normalization, JSON parsing/repair, summary contract validation, language detection, structured logging
 - **Database** (`app/db/`) -- SQLite schema, Peewee ORM models (21 model classes), migrations
@@ -126,9 +127,9 @@ app/
 
 ## Database Models
 
-21 Peewee model classes in `app/db/models.py`:
+24 Peewee model classes in `app/db/models.py`:
 
-`BaseModel`, `User`, `ClientSecret`, `Chat`, `Request`, `TelegramMessage`, `CrawlResult`, `LLMCall`, `Summary`, `TopicSearchIndex` (FTS5), `UserInteraction`, `AuditLog`, `SummaryEmbedding`, `VideoDownload`, `Collection`, `UserDevice`, `CollectionItem`, `CollectionCollaborator`, `CollectionInvite`, `RefreshToken`, `KarakeepSync`
+`BaseModel`, `User`, `ClientSecret`, `Chat`, `Request`, `TelegramMessage`, `CrawlResult`, `LLMCall`, `Summary`, `TopicSearchIndex` (FTS5), `UserInteraction`, `AuditLog`, `SummaryEmbedding`, `VideoDownload`, `Collection`, `UserDevice`, `CollectionItem`, `CollectionCollaborator`, `CollectionInvite`, `RefreshToken`, `KarakeepSync`, `Channel`, `ChannelSubscription`, `DigestDelivery`
 
 ## Summary JSON Contract
 
@@ -280,6 +281,7 @@ Four specialized agents (ContentExtraction, Summarization, Validation, WebSearch
 - **Chroma Vector Store** -- Semantic search via ChromaDB embeddings (`app/infrastructure/`, `app/cli/backfill_chroma_store.py`)
 - **PDF Export** -- Summary export to PDF via weasyprint
 - **Background Scheduling** -- APScheduler-based background task processing with Redis distributed locks
+- **Channel Digest** -- Scheduled digests of subscribed Telegram channels via userbot. Commands: `/init_session`, `/digest`, `/channels`, `/subscribe`, `/unsubscribe`. Uses a separate Pyrogram userbot session to read channel posts. Bot-mediated session init via Telegram Mini App OTP/2FA flow.
 
 ### Safety Hooks
 
@@ -366,13 +368,17 @@ FIRECRAWL_API_KEY=...               # Firecrawl API key
 OPENROUTER_API_KEY=...              # OpenRouter API key
 OPENROUTER_MODEL=deepseek/deepseek-v3.2  # Default model
 OPENROUTER_FALLBACK_MODELS=moonshotai/kimi-k2.5,qwen/qwen3-max,deepseek/deepseek-r1
+
+# Channel Digest (optional)
+DIGEST_ENABLED=false                # Enable channel digest subsystem
+API_BASE_URL=http://localhost:8000  # Mobile API base URL (for session init)
 ```
 
 Full reference: `docs/environment_variables.md`
 
 ---
 
-**Last Updated:** 2026-02-04
+**Last Updated:** 2026-02-16
 
 For questions about the codebase, always refer to:
 

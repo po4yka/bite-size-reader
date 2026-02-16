@@ -189,6 +189,11 @@ EOF
 - `/summarize` — Bot asks for URL in next message
 - `/summarize_all <URLs>` — Process multiple URLs without confirmation
 - `/cancel` — Cancel pending operation
+- `/init_session` — Initialize userbot session via Mini App OTP/2FA flow
+- `/digest` — Generate a digest of subscribed channels now
+- `/channels` — List currently subscribed channels
+- `/subscribe @channel` — Subscribe to a Telegram channel for digests
+- `/unsubscribe @channel` — Unsubscribe from a channel
 
 ### Command Processing
 
