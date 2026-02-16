@@ -6,8 +6,12 @@ requiring a running gRPC server.
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import grpc
 import pytest
+
+# gRPC is an optional dependency.
+pytest.importorskip("grpc", reason="grpcio not installed")
+
+import grpc
 
 from app.grpc import (
     ConnectionError,

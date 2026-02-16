@@ -88,6 +88,7 @@ class ResponseSenderImpl:
         parse_mode: str | None = None,
         reply_markup: Any = None,
         disable_web_page_preview: bool | None = None,
+        message_thread_id: int | None = None,
     ) -> None:
         """Safely reply to a message with comprehensive security checks."""
         # Input validation
@@ -140,6 +141,16 @@ class ResponseSenderImpl:
                     kwargs["reply_markup"] = reply_markup
                 if disable_web_page_preview is not None:
                     kwargs["disable_web_page_preview"] = disable_web_page_preview
+
+                # When message_thread_id is set, send to a specific forum topic
+                # thread using client.send_message() instead of reply_text().
+                if message_thread_id is not None and self._telegram_client is not None:
+                    client = getattr(self._telegram_client, "client", None)
+                    chat_id = getattr(getattr(msg_any, "chat", None), "id", None)
+                    if client is not None and chat_id is not None:
+                        kwargs["message_thread_id"] = message_thread_id
+                        return await client.send_message(chat_id, text, **kwargs)
+
                 return await msg_any.reply_text(text, **kwargs)
 
             # Retry the send operation with exponential backoff

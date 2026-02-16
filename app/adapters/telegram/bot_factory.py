@@ -286,6 +286,15 @@ class BotFactory:
         # Wire response formatter to telegram client
         response_formatter._telegram_client = telegram_client
 
+        # Initialize forum topic manager if enabled
+        if cfg.telegram.forum_topics_enabled:
+            from app.adapters.telegram.topic_manager import TopicManager
+
+            topic_manager = TopicManager()
+            response_formatter._summary_presenter._topic_manager = topic_manager
+            telegram_client.topic_manager = topic_manager
+            logger.info("forum_topic_manager_initialized")
+
         # Create adaptive timeout service for intelligent timeout estimation
         adaptive_timeout_service: AdaptiveTimeoutService | None = None
         if cfg.adaptive_timeout is not None:

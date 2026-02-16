@@ -7,6 +7,11 @@ from unittest.mock import MagicMock
 
 import pytest
 
+# All API tests require optional 'api' extras (fastapi, pyjwt, starlette).
+# Skip the entire directory when these are not installed.
+pytest.importorskip("jwt", reason="PyJWT not installed (install with: pip install .[api])")
+pytest.importorskip("fastapi", reason="FastAPI not installed (install with: pip install .[api])")
+
 
 # Python 3.10 compatibility shims (must be before app imports)
 class StrEnum(str, Enum):

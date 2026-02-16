@@ -112,7 +112,7 @@ preshed==3.0.12
     #   spacy
     #   thinc
 pyaes==1.6.1
-    # via pyrogram
+    # via pyrotgfork
 pydantic==2.12.5
     # via
     #   bite-size-reader (pyproject.toml)
@@ -131,10 +131,12 @@ pymorphy3-dicts-ru==2.4.417150.4580142
     # via pymorphy3
 pymupdf==1.26.7
     # via bite-size-reader (pyproject.toml)
-pyrogram==2.0.106
+pyrotgfork==2.2.18
     # via bite-size-reader (pyproject.toml)
 pysocks==1.7.1
-    # via pyrogram
+    # via pyrotgfork
+pytgcrypto==1.2.12
+    # via bite-size-reader (pyproject.toml)
 python-dateutil==2.9.0.post0
     # via
     #   dateparser
@@ -179,7 +181,7 @@ srsly==2.5.2
     #   thinc
     #   weasel
 tgcrypto==1.2.5
-    # via bite-size-reader (pyproject.toml)
+    # via pyrotgfork (legacy; pytgcrypto preferred)
 thinc==8.3.10
     # via spacy
 tld==0.13.1

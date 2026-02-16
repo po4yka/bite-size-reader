@@ -9,6 +9,11 @@ from pathlib import Path
 from typing import TYPE_CHECKING, cast
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
+
+# yt-dlp is an optional dependency.
+pytest.importorskip("yt_dlp", reason="yt-dlp not installed (install with: pip install .[youtube])")
+
 try:
     from youtube_transcript_api import YouTubeTranscriptApi
     from youtube_transcript_api._errors import (

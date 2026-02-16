@@ -32,6 +32,7 @@ from app.adapters.external.formatting.text_processor import TextProcessorImpl
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable, Sequence
 
+    from app.adapters.telegram.topic_manager import TopicManager
     from app.core.progress_tracker import ProgressTracker
     from app.core.verbosity import VerbosityResolver
     from app.services.topic_search import TopicArticle
@@ -54,6 +55,7 @@ class ResponseFormatter:
         telegram_limits: Any = None,
         verbosity_resolver: VerbosityResolver | None = None,
         admin_log_chat_id: int | None = None,
+        topic_manager: TopicManager | None = None,
     ) -> None:
         """Initialize the ResponseFormatter facade.
 
@@ -125,6 +127,7 @@ class ResponseFormatter:
             self._data_formatter,
             verbosity_resolver=verbosity_resolver,
             progress_tracker=self._progress_tracker,
+            topic_manager=topic_manager,
         )
 
         self._database_presenter = DatabasePresenterImpl(

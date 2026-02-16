@@ -1,7 +1,13 @@
 import json
 
-import fakeredis.aioredis
 import pytest
+
+# These tests require optional 'api' extras.
+pytest.importorskip(
+    "starlette", reason="Starlette not installed (install with: pip install .[api])"
+)
+
+import fakeredis.aioredis
 from starlette.requests import Request
 from starlette.responses import Response
 

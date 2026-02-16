@@ -13,6 +13,7 @@ if TYPE_CHECKING:
     from app.adapters.external.formatting.data_formatter import DataFormatterImpl
     from app.adapters.external.formatting.response_sender import ResponseSenderImpl
     from app.adapters.external.formatting.text_processor import TextProcessorImpl
+    from app.adapters.telegram.topic_manager import TopicManager
     from app.core.progress_tracker import ProgressTracker
     from app.core.verbosity import VerbosityResolver
 
@@ -74,6 +75,7 @@ class SummaryPresenterImpl:
         *,
         verbosity_resolver: VerbosityResolver | None = None,
         progress_tracker: ProgressTracker | None = None,
+        topic_manager: TopicManager | None = None,
     ) -> None:
         """Initialize the summary presenter.
 
@@ -83,12 +85,14 @@ class SummaryPresenterImpl:
             data_formatter: Data formatter for formatting values.
             verbosity_resolver: Optional resolver for per-user verbosity.
             progress_tracker: Optional tracker to clear when summary is ready.
+            topic_manager: Optional topic manager for forum topic routing.
         """
         self._response_sender = response_sender
         self._text_processor = text_processor
         self._data_formatter = data_formatter
         self._verbosity_resolver = verbosity_resolver
         self._progress_tracker = progress_tracker
+        self._topic_manager = topic_manager
 
     def _create_action_buttons(self, summary_id: int | str) -> list[list[dict[str, str]]]:
         """Create inline keyboard buttons for post-summary actions.
@@ -381,6 +385,11 @@ class SummaryPresenterImpl:
             if summary_id and not job_card_finalized:
                 await self._send_action_buttons(message, summary_id, correlation_id)
 
+            # Crosspost compact card to categorized forum topic thread
+            await self._crosspost_to_topic(
+                message, summary_shaped, llm, chunks, summary_id, correlation_id, card_text
+            )
+
         except Exception as exc:
             raise_if_cancelled(exc)
             # Fallback to simpler format
@@ -396,6 +405,36 @@ class SummaryPresenterImpl:
             # Still try to add action buttons in fallback
             if summary_id:
                 await self._send_action_buttons(message, summary_id, correlation_id)
+
+    async def _crosspost_to_topic(
+        self,
+        message: Any,
+        summary_shaped: dict[str, Any],
+        llm: Any,
+        chunks: int | None,
+        summary_id: int | str | None,
+        correlation_id: str | None,
+        card_text: str | None = None,
+    ) -> None:
+        """Delegate to crosspost module for forum topic routing."""
+        if self._topic_manager is None:
+            return
+        from app.adapters.external.formatting.summary_presenter_parts.crosspost import (
+            crosspost_to_topic,
+        )
+
+        if card_text is None:
+            card_text = self._build_compact_card_html(summary_shaped, llm, chunks, reader=True)
+        await crosspost_to_topic(
+            topic_manager=self._topic_manager,
+            response_sender=self._response_sender,
+            message=message,
+            summary_shaped=summary_shaped,
+            summary_id=summary_id,
+            correlation_id=correlation_id,
+            card_text=card_text,
+            create_keyboard_fn=self._create_inline_keyboard,
+        )
 
     async def send_russian_translation(
         self, message: Any, translated_text: str, correlation_id: str | None = None

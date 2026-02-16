@@ -138,8 +138,8 @@ requires-python = ">=3.13"
 # Core dependencies: Telegram bot, HTTP, database, NLP, logging
 dependencies = [
   "httpx[http2]>=0.28.1",
-  "pyrogram>=2.0.106",
-  "tgcrypto>=1.2.5",
+  "pyrotgfork>=2.2.18",
+  "pytgcrypto>=1.2.12",
   "pydantic>=2.12.5",
   "pydantic-settings>=2.12.0",
   "peewee>=3.19.0",

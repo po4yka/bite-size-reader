@@ -216,7 +216,7 @@ py-cpuinfo==9.0.0
 pyaes==1.6.1
     # via
     #   -c .requirements-all.tmp.txt
-    #   pyrogram
+    #   pyrotgfork
 pydantic==2.12.5
     # via
     #   -c .requirements-all.tmp.txt
@@ -250,14 +250,18 @@ pymupdf==1.26.7
     # via
     #   -c .requirements-all.tmp.txt
     #   bite-size-reader (pyproject.toml)
-pyrogram==2.0.106
+pyrotgfork==2.2.18
     # via
     #   -c .requirements-all.tmp.txt
     #   bite-size-reader (pyproject.toml)
 pysocks==1.7.1
     # via
     #   -c .requirements-all.tmp.txt
-    #   pyrogram
+    #   pyrotgfork
+pytgcrypto==1.2.12
+    # via
+    #   -c .requirements-all.tmp.txt
+    #   bite-size-reader (pyproject.toml)
 pytest==9.0.2
     # via
     #   bite-size-reader (pyproject.toml)
@@ -346,7 +350,7 @@ srsly==2.5.2
 tgcrypto==1.2.5
     # via
     #   -c .requirements-all.tmp.txt
-    #   bite-size-reader (pyproject.toml)
+    #   pyrotgfork (legacy; pytgcrypto preferred)
 thinc==8.3.10
     # via
     #   -c .requirements-all.tmp.txt

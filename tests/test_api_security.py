@@ -15,8 +15,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-# Note: These tests require the API to be importable
-# Run with: pytest tests/test_api_security.py -v
+# These tests require optional 'api' extras (pyjwt, fastapi).
+pytest.importorskip("jwt", reason="PyJWT not installed (install with: pip install .[api])")
 
 
 class TestTelegramAuth:

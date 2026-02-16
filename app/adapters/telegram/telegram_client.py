@@ -17,22 +17,9 @@ if TYPE_CHECKING:
 
     from app.config import AppConfig
 else:
-    _pyrogram_bootstrap_loop: asyncio.AbstractEventLoop | None = None
-    _previous_loop: asyncio.AbstractEventLoop | None = None
     try:
-        # Pyrogram's sync adapter tries to grab a running loop at import time.
-        # Python 3.13+ raises when no loop exists, so we provision a temporary
-        # one to keep the import compatible inside containers.
-        try:
-            _previous_loop = asyncio.get_running_loop()
-        except RuntimeError:
-            _previous_loop = None
-
-        if _previous_loop is None or _previous_loop.is_closed():
-            _pyrogram_bootstrap_loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(_pyrogram_bootstrap_loop)
-
-        # Runtime aliases that tests can monkeypatch
+        # PyroTGFork (pyrogram import name) handles Python 3.13+ event loop
+        # natively -- no bootstrap workaround needed (unlike pyrogram 2.0.106).
         from pyrogram import Client, filters
         from pyrogram.types import Message
 
@@ -42,15 +29,6 @@ else:
         filters = None
         Message = object
         PYROGRAM_AVAILABLE = False
-    finally:
-        if _pyrogram_bootstrap_loop is not None:
-            try:
-                if _previous_loop is not None and not _previous_loop.is_closed():
-                    asyncio.set_event_loop(_previous_loop)
-                else:
-                    asyncio.set_event_loop(None)
-            except Exception:
-                pass
 
 logger = logging.getLogger(__name__)
 
@@ -61,6 +39,8 @@ class TelegramClient:
     def __init__(self, cfg: AppConfig) -> None:
         self.cfg = cfg
         self.client: Client | None = None
+        # Optional TopicManager, set externally by bot_factory when forum topics enabled
+        self.topic_manager: Any = None
 
         # Initialize Telegram client (PyroTGFork/Pyrogram)
         if not PYROGRAM_AVAILABLE or Client is object:
@@ -89,10 +69,8 @@ class TelegramClient:
         await client_any.start()
 
         # Register all handlers AFTER start() for reliable dispatch.
-        # The decorator pattern (@client.on_message / @client.on_callback_query)
-        # before start() is empirically unreliable for callback queries in this
-        # Pyrogram fork (2.0.106). Using explicit add_handler() post-start for
-        # both handler types ensures consistent behavior.
+        # Using explicit add_handler() post-start ensures consistent behavior
+        # across PyroTGFork versions.
         handler_count = 0
 
         if filters:
@@ -120,6 +98,7 @@ class TelegramClient:
             },
         )
         await self._setup_bot_commands()
+        await self._setup_forum_topics()
         await idle()
 
     async def _setup_bot_commands(self) -> None:
@@ -224,6 +203,26 @@ class TelegramClient:
                 logger.warning("bot_commands_set_failed", extra={"error": str(e)})
         except Exception:
             return
+
+    async def _setup_forum_topics(self) -> None:
+        """Initialize forum topics for allowed users' private chats.
+
+        Creates default topic categories so summaries can be routed by topic.
+        Only runs when topic_manager is set (forum topics enabled in config).
+        """
+        if self.topic_manager is None or not self.client:
+            return
+        if not self.cfg.telegram.allowed_user_ids:
+            return
+
+        for uid in self.cfg.telegram.allowed_user_ids:
+            try:
+                await self.topic_manager.ensure_default_topics(self.client, uid)
+            except Exception as exc:
+                logger.warning(
+                    "forum_topics_setup_failed",
+                    extra={"user_id": uid, "error": str(exc)},
+                )
 
 
 async def idle() -> None:

@@ -7,6 +7,9 @@ from typing import Any
 
 import pytest
 
+# MCP is an optional dependency.
+pytest.importorskip("mcp", reason="mcp not installed (install with: pip install .[mcp])")
+
 import app.mcp.server as mcp_server
 from app.db.database import Database
 from app.db.models import Summary, TopicSearchIndex, database_proxy

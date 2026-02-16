@@ -32,23 +32,40 @@ def create_action_buttons(summary_id: int | str) -> list[list[dict[str, str]]]:
 
 def create_inline_keyboard(summary_id: int | str, correlation_id: str | None = None) -> Any:
     try:
+        from pyrogram import enums
         from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
         summary_id_str = str(summary_id)
         keyboard = [
             [
-                InlineKeyboardButton("More", callback_data=f"more:{summary_id_str}"),
+                InlineKeyboardButton(
+                    "More",
+                    callback_data=f"more:{summary_id_str}",
+                    style=enums.ButtonStyle.PRIMARY,
+                ),
                 InlineKeyboardButton("PDF", callback_data=f"export:{summary_id_str}:pdf"),
                 InlineKeyboardButton("MD", callback_data=f"export:{summary_id_str}:md"),
                 InlineKeyboardButton("HTML", callback_data=f"export:{summary_id_str}:html"),
             ],
             [
-                InlineKeyboardButton("Save", callback_data=f"save:{summary_id_str}"),
+                InlineKeyboardButton(
+                    "Save",
+                    callback_data=f"save:{summary_id_str}",
+                    style=enums.ButtonStyle.SUCCESS,
+                ),
                 InlineKeyboardButton("Similar", callback_data=f"similar:{summary_id_str}"),
             ],
             [
-                InlineKeyboardButton("👍", callback_data=f"rate:{summary_id_str}:1"),
-                InlineKeyboardButton("👎", callback_data=f"rate:{summary_id_str}:-1"),
+                InlineKeyboardButton(
+                    "+1",
+                    callback_data=f"rate:{summary_id_str}:1",
+                    style=enums.ButtonStyle.SUCCESS,
+                ),
+                InlineKeyboardButton(
+                    "-1",
+                    callback_data=f"rate:{summary_id_str}:-1",
+                    style=enums.ButtonStyle.DANGER,
+                ),
             ],
         ]
         return InlineKeyboardMarkup(keyboard)
