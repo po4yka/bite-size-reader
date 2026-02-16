@@ -114,7 +114,7 @@ hyperframe==6.1.0
     # via
     #   -c .requirements-all.tmp.txt
     #   h2
-hypothesis==6.151.5
+hypothesis==6.151.8
     # via bite-size-reader (pyproject.toml)
 identify==2.6.16
     # via pre-commit
@@ -140,7 +140,7 @@ justext==3.0.2
     # via
     #   -c .requirements-all.tmp.txt
     #   trafilatura
-librt==0.7.8
+librt==0.8.0
     # via mypy
 loguru==0.7.3
     # via
@@ -208,7 +208,7 @@ pillow==12.1.1
     # via
     #   -c .requirements-all.tmp.txt
     #   bite-size-reader (pyproject.toml)
-platformdirs==4.5.1
+platformdirs==4.9.2
     # via virtualenv
 pluggy==1.6.0
     # via pytest
@@ -320,7 +320,7 @@ ru-core-news-sm @ https://github.com/explosion/spacy-models/releases/download/ru
     # via
     #   -c .requirements-all.tmp.txt
     #   bite-size-reader (pyproject.toml)
-ruff==0.15.0
+ruff==0.15.1
     # via bite-size-reader (pyproject.toml)
 setuptools==82.0.0
     # via
