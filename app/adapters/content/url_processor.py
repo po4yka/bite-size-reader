@@ -44,15 +44,22 @@ class URLProcessingFlowResult:
         success: Whether processing completed successfully
         title: Extracted article title (from summary_250 or tldr)
         cached: Whether result was served from cache
+        summary_json: Full summary payload (for batch card delivery)
+        request_id: Associated request ID (for batch card delivery)
     """
 
     success: bool = True
     title: str | None = None
     cached: bool = False
+    summary_json: dict[str, Any] | None = None
+    request_id: int | None = None
 
     @classmethod
     def from_summary(
-        cls, summary_json: dict[str, Any] | None, cached: bool = False
+        cls,
+        summary_json: dict[str, Any] | None,
+        cached: bool = False,
+        request_id: int | None = None,
     ) -> URLProcessingFlowResult:
         """Create result from summary JSON, extracting title."""
         if not summary_json:
@@ -86,7 +93,13 @@ class URLProcessingFlowResult:
             if len(title) > 60:
                 title = title[:57] + "..."
 
-        return cls(success=True, title=title, cached=cached)
+        return cls(
+            success=True,
+            title=title,
+            cached=cached,
+            summary_json=summary_json,
+            request_id=request_id,
+        )
 
 
 def _get_system_prompt(lang: str) -> str:
@@ -501,8 +514,8 @@ class URLProcessor:
             if (silent or batch_mode) and persist_task:
                 await self._await_persistence_task(persist_task)
 
-            # Return result with extracted title
-            return URLProcessingFlowResult.from_summary(summary_json)
+            # Return result with extracted title and payload for batch card delivery
+            return URLProcessingFlowResult.from_summary(summary_json, request_id=req_id)
 
         except Exception as exc:
             raise_if_cancelled(exc)
@@ -595,7 +608,9 @@ class URLProcessor:
                         response_type="summary",
                         request_id=request_id if isinstance(request_id, int) else None,
                     )
-                return URLProcessingFlowResult.from_summary(payload, cached=True)
+                return URLProcessingFlowResult.from_summary(
+                    payload, cached=True, request_id=request_id
+                )
         except Exception as exc:
             logger.warning(
                 "cache_check_failed",

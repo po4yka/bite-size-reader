@@ -460,6 +460,9 @@ async def process_url_batch(
                     extra={"url": url, "request_id": request_id, "error": str(e)},
                 )
 
+    # Serialize summary card delivery to avoid Telegram flood errors
+    delivery_lock = asyncio.Lock()
+
     async def process_single_url(
         url: str, progress_tracker: ProgressTracker
     ) -> tuple[str, bool, str, str | None]:
@@ -608,6 +611,36 @@ async def process_url_batch(
                     batch_status.mark_complete(
                         url, title=title, processing_time_ms=processing_time_ms
                     )
+
+                    # Deliver individual summary card for this URL
+                    if (
+                        result
+                        and getattr(result, "success", False)
+                        and getattr(result, "summary_json", None)
+                    ):
+                        async with delivery_lock:
+                            try:
+                                req_id = getattr(
+                                    result, "request_id", None
+                                ) or url_to_request_id.get(url)
+                                await response_formatter.send_structured_summary_response(
+                                    message,
+                                    result.summary_json,
+                                    llm=None,
+                                    summary_id=f"req:{req_id}" if req_id else None,
+                                    correlation_id=per_link_cid,
+                                )
+                                await asyncio.sleep(0.5)
+                            except Exception as exc:
+                                logger.warning(
+                                    "batch_summary_card_delivery_failed",
+                                    extra={
+                                        "url": url,
+                                        "error": str(exc),
+                                        "cid": per_link_cid,
+                                    },
+                                )
+
                     await progress_tracker.increment_and_update()
                     return url, True, "", title
 
