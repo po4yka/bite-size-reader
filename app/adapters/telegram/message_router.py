@@ -489,6 +489,20 @@ class MessageRouter:
         start_time: float,
     ) -> None:
         """Route message to appropriate handler based on content."""
+        # Handle contact sharing (session init flow)
+        if getattr(message, "contact", None) and self.command_processor.has_active_init_session(
+            uid
+        ):
+            await self.command_processor.handle_init_session_contact(message)
+            return
+
+        # Handle Mini App web_app_data (session init flow)
+        if getattr(
+            message, "web_app_data", None
+        ) and self.command_processor.has_active_init_session(uid):
+            await self.command_processor.handle_init_session_webapp(message)
+            return
+
         if text.startswith("/start"):
             await self.command_processor.handle_start_command(
                 message, uid, correlation_id, interaction_id, start_time
@@ -609,6 +623,12 @@ class MessageRouter:
 
         if text.startswith("/unsubscribe"):
             await self.command_processor.handle_unsubscribe_command(
+                message, text, uid, correlation_id, interaction_id, start_time
+            )
+            return
+
+        if text.startswith("/init_session"):
+            await self.command_processor.handle_init_session_command(
                 message, text, uid, correlation_id, interaction_id, start_time
             )
             return

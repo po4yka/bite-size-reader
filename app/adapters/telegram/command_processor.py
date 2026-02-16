@@ -26,6 +26,7 @@ from app.adapters.telegram.command_handlers.admin_handler import AdminHandlerImp
 from app.adapters.telegram.command_handlers.content_handler import ContentHandlerImpl
 from app.adapters.telegram.command_handlers.digest_handler import DigestHandlerImpl
 from app.adapters.telegram.command_handlers.execution_context import CommandExecutionContext
+from app.adapters.telegram.command_handlers.init_session_handler import InitSessionHandlerImpl
 from app.adapters.telegram.command_handlers.karakeep_handler import KarakeepHandlerImpl
 from app.adapters.telegram.command_handlers.onboarding_handler import OnboardingHandlerImpl
 from app.adapters.telegram.command_handlers.search_handler import SearchHandlerImpl
@@ -156,6 +157,11 @@ class CommandProcessor:
         self._digest = DigestHandlerImpl(
             cfg=cfg,
             db=db,
+            response_formatter=response_formatter,
+        )
+
+        self._init_session = InitSessionHandlerImpl(
+            cfg=cfg,
             response_formatter=response_formatter,
         )
 
@@ -609,6 +615,35 @@ class CommandProcessor:
         """Handle /unsubscribe command."""
         ctx = self._build_context(message, uid, correlation_id, interaction_id, start_time, text)
         await self._digest.handle_unsubscribe(ctx)
+
+    # =========================================================================
+    # Init session delegation
+    # =========================================================================
+
+    async def handle_init_session_command(
+        self,
+        message: Any,
+        text: str,
+        uid: int,
+        correlation_id: str,
+        interaction_id: int,
+        start_time: float,
+    ) -> None:
+        """Handle /init_session command."""
+        ctx = self._build_context(message, uid, correlation_id, interaction_id, start_time, text)
+        await self._init_session.handle_init_session(ctx)
+
+    async def handle_init_session_contact(self, message: Any) -> None:
+        """Handle contact message during session init flow."""
+        await self._init_session.handle_contact(message)
+
+    async def handle_init_session_webapp(self, message: Any) -> None:
+        """Handle web_app_data message during session init flow."""
+        await self._init_session.handle_web_app_data(message)
+
+    def has_active_init_session(self, uid: int) -> bool:
+        """Check if user has an active session init flow."""
+        return self._init_session.has_active_session(uid)
 
     # =========================================================================
     # Settings delegation

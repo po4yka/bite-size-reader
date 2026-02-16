@@ -40,6 +40,11 @@ class TelegramConfig(BaseModel):
         validation_alias=AliasChoices("FORUM_TOPICS_ENABLED", "TELEGRAM_FORUM_TOPICS_ENABLED"),
         description="Enable forum topics in private chats to organize summaries by category",
     )
+    api_base_url: str = Field(
+        default="",
+        validation_alias=AliasChoices("API_BASE_URL", "TELEGRAM_API_BASE_URL"),
+        description="Public HTTPS base URL for the FastAPI instance (used for Mini App URLs)",
+    )
 
     @field_validator("api_id", mode="before")
     @classmethod

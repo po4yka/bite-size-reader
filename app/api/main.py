@@ -8,10 +8,12 @@ Usage:
 import os
 from contextlib import asynccontextmanager
 from datetime import datetime
+from pathlib import Path as _Path
 
 import peewee
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from pydantic import ValidationError as PydanticValidationError
 
 from app.api.dependencies import search_resources
@@ -127,6 +129,11 @@ app.include_router(system.router, prefix="/v1/system", tags=["System"])
 app.include_router(proxy.router, prefix="/v1/proxy", tags=["Proxy"])
 app.include_router(notifications.router, prefix="/v1/notifications", tags=["Notifications"])
 app.include_router(health.router, tags=["Health"])
+
+# Serve static files (Mini App HTML for session init, etc.)
+_static_dir = _Path(__file__).resolve().parent.parent / "static"
+if _static_dir.is_dir():
+    app.mount("/static", StaticFiles(directory=str(_static_dir)), name="static")
 
 
 @app.get("/")
