@@ -73,6 +73,33 @@ class DigestAnalyzer:
         )
         return analyzed
 
+    @staticmethod
+    def _cached_analysis(post: dict[str, Any]) -> dict[str, Any] | None:
+        """Return existing analysis from DB if the post was already analyzed."""
+        channel_post = (
+            ChannelPost.select()
+            .where(
+                ChannelPost.channel == post.get("_channel_id"),
+                ChannelPost.message_id == post["message_id"],
+            )
+            .first()
+        )
+        if channel_post and channel_post.analyzed_at:
+            existing = (
+                ChannelPostAnalysis.select().where(ChannelPostAnalysis.post == channel_post).first()
+            )
+            if existing:
+                return {
+                    **post,
+                    "real_topic": existing.real_topic,
+                    "tldr": existing.tldr,
+                    "key_insights": existing.key_insights or [],
+                    "relevance_score": existing.relevance_score,
+                    "content_type": existing.content_type,
+                    "is_ad": False,
+                }
+        return None
+
     async def _analyze_single(
         self,
         post: dict[str, Any],
@@ -80,6 +107,15 @@ class DigestAnalyzer:
         lang: str,
     ) -> dict[str, Any] | None:
         """Analyze a single post under the concurrency semaphore."""
+        # Check cache before acquiring semaphore / calling LLM
+        cached = self._cached_analysis(post)
+        if cached is not None:
+            logger.debug(
+                "digest_analysis_cache_hit",
+                extra={"cid": correlation_id, "msg_id": post.get("message_id")},
+            )
+            return cached
+
         async with self._semaphore:
             prompt_template = self._load_prompt(lang)
             user_prompt = prompt_template.replace("{post_text}", post["text"][:4000])

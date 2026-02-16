@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
+from difflib import SequenceMatcher
 from typing import TYPE_CHECKING, Any
 
 from app.db.models import ChannelSubscription, DigestDelivery, _utcnow
@@ -133,6 +134,42 @@ class DigestService:
                 result.errors.append(f"Send failed: {e}")
             return result
 
+        # 2c. Cross-channel deduplication by fuzzy topic matching
+        pre_dedup_count = len(analyzed)
+        analyzed = _deduplicate_posts(analyzed)
+        dedup_dropped = pre_dedup_count - len(analyzed)
+        if dedup_dropped:
+            logger.info(
+                "digest_dedup_dropped",
+                extra={"cid": correlation_id, "dropped": dedup_dropped},
+            )
+
+        # 2d. Filter by minimum relevance score
+        min_rel = self._cfg.digest.min_relevance_score
+        pre_rel_count = len(analyzed)
+        analyzed = [p for p in analyzed if p.get("relevance_score", 0) >= min_rel]
+        rel_dropped = pre_rel_count - len(analyzed)
+        if rel_dropped:
+            logger.info(
+                "digest_low_relevance_dropped",
+                extra={
+                    "cid": correlation_id,
+                    "dropped": rel_dropped,
+                    "threshold": min_rel,
+                },
+            )
+
+        if not analyzed:
+            try:
+                await self._send(
+                    user_id,
+                    "All posts were filtered out (ads, duplicates, or low relevance).",
+                )
+                result.messages_sent = 1
+            except Exception as e:
+                result.errors.append(f"Send failed: {e}")
+            return result
+
         # 3. Format digest
         message_chunks = self._formatter.format_digest(analyzed)
 
@@ -191,6 +228,24 @@ class DigestService:
             .distinct()
         )
         return [row.user_id for row in rows]
+
+
+def _deduplicate_posts(posts: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Remove cross-channel duplicates by fuzzy topic matching.
+
+    Posts are sorted by relevance desc; the first occurrence of a topic is
+    kept, later posts with SequenceMatcher ratio > 0.75 are dropped.
+    """
+    kept: list[dict[str, Any]] = []
+    for post in sorted(posts, key=lambda p: p.get("relevance_score", 0), reverse=True):
+        topic = post.get("real_topic", "").lower()
+        is_dup = any(
+            SequenceMatcher(None, topic, k.get("real_topic", "").lower()).ratio() > 0.75
+            for k in kept
+        )
+        if not is_dup:
+            kept.append(post)
+    return kept
 
 
 def _build_inline_keyboard(

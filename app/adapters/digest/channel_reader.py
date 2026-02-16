@@ -63,6 +63,9 @@ class ChannelReader:
                     hours_lookback=self._cfg.digest.hours_lookback,
                     min_length=self._cfg.digest.min_post_length,
                 )
+                for p in posts:
+                    p["_channel_id"] = channel.channel_id or channel.id
+                    p["_channel_username"] = channel.username
                 self._persist_posts(channel, posts)
                 self._update_channel_fetch_time(channel)
                 channel_posts[channel.id] = posts
@@ -83,28 +86,39 @@ class ChannelReader:
             return []
 
         # Round-robin fair distribution
-        return self._fair_distribute(channel_posts, max_total)
+        return self._fair_distribute(
+            channel_posts, max_total, self._cfg.digest.max_posts_per_channel
+        )
 
     @staticmethod
     def _fair_distribute(
-        channel_posts: dict[int, list[dict[str, Any]]], max_total: int
+        channel_posts: dict[int, list[dict[str, Any]]],
+        max_total: int,
+        max_per_channel: int | None = None,
     ) -> list[dict[str, Any]]:
         """Distribute posts fairly across channels.
 
-        Each channel gets floor(max_total / num_channels) posts,
-        remaining slots are filled round-robin from channels with extras.
+        Each channel gets floor(max_total / num_channels) posts, capped by
+        ``max_per_channel``. Remaining slots are filled round-robin from
+        channels with extras.
         """
         num_channels = len(channel_posts)
         if num_channels == 0:
             return []
 
         fair_share = max_total // num_channels
+        if max_per_channel is not None:
+            fair_share = min(fair_share, max_per_channel)
+
         result: list[dict[str, Any]] = []
         overflow: list[dict[str, Any]] = []
 
         for _channel_id, posts in channel_posts.items():
             # Sort by date desc (most recent first)
             sorted_posts = sorted(posts, key=lambda p: p.get("date") or "", reverse=True)
+            # Cap per channel
+            if max_per_channel is not None:
+                sorted_posts = sorted_posts[:max_per_channel]
             result.extend(sorted_posts[:fair_share])
             overflow.extend(sorted_posts[fair_share:])
 

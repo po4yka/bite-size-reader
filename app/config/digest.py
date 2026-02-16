@@ -54,6 +54,16 @@ class ChannelDigestConfig(BaseModel):
         validation_alias="DIGEST_HOURS_LOOKBACK",
         description="Fetch window in hours",
     )
+    max_posts_per_channel: int = Field(
+        default=5,
+        validation_alias="DIGEST_MAX_POSTS_PER_CHANNEL",
+        description="Max posts taken from a single channel",
+    )
+    min_relevance_score: float = Field(
+        default=0.3,
+        validation_alias="DIGEST_MIN_RELEVANCE",
+        description="Drop posts below this relevance score",
+    )
 
     @field_validator("session_name", mode="before")
     @classmethod
@@ -169,5 +179,35 @@ class ChannelDigestConfig(BaseModel):
             raise ValueError(msg) from exc
         if parsed < 1 or parsed > 168:
             msg = "DIGEST_HOURS_LOOKBACK must be between 1 and 168 hours"
+            raise ValueError(msg)
+        return parsed
+
+    @field_validator("max_posts_per_channel", mode="before")
+    @classmethod
+    def _validate_max_posts_per_channel(cls, value: Any) -> int:
+        if value in (None, ""):
+            return 5
+        try:
+            parsed = int(str(value))
+        except ValueError as exc:
+            msg = "DIGEST_MAX_POSTS_PER_CHANNEL must be a valid integer"
+            raise ValueError(msg) from exc
+        if parsed < 1 or parsed > 20:
+            msg = "DIGEST_MAX_POSTS_PER_CHANNEL must be between 1 and 20"
+            raise ValueError(msg)
+        return parsed
+
+    @field_validator("min_relevance_score", mode="before")
+    @classmethod
+    def _validate_min_relevance_score(cls, value: Any) -> float:
+        if value in (None, ""):
+            return 0.3
+        try:
+            parsed = float(str(value))
+        except ValueError as exc:
+            msg = "DIGEST_MIN_RELEVANCE must be a valid number"
+            raise ValueError(msg) from exc
+        if parsed < 0.0 or parsed > 1.0:
+            msg = "DIGEST_MIN_RELEVANCE must be between 0.0 and 1.0"
             raise ValueError(msg)
         return parsed

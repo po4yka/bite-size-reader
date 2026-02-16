@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from statistics import mean
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -27,15 +28,15 @@ class DigestFormatter:
     ) -> list[tuple[str, list[list[dict[str, str]]]]]:
         """Format analyzed posts into Telegram-ready messages.
 
-        Groups posts by channel, sorts by relevance_score desc within groups.
-        Splits into multiple messages if content exceeds Telegram limits.
+        Groups posts by channel (sorted by avg relevance desc), adds a table
+        of contents, shows key_insights, and distributes inline buttons per
+        message chunk.
 
         Args:
             analyzed_posts: List of post dicts with analysis fields.
 
         Returns:
             List of (message_text, inline_keyboard_rows) tuples.
-            Each keyboard row is a list of button dicts with 'text' and 'callback_data'.
         """
         if not analyzed_posts:
             return [("No new posts to digest.", [])]
@@ -50,22 +51,37 @@ class DigestFormatter:
         for posts_list in by_channel.values():
             posts_list.sort(key=lambda p: p.get("relevance_score", 0), reverse=True)
 
-        # Build message parts
-        parts: list[str] = []
-        buttons: list[list[dict[str, str]]] = []
-
-        total_posts = sum(len(v) for v in by_channel.values())
-        total_channels = len(by_channel)
-        parts.append(
-            f"\U0001f4cb **Channel Digest** \u2014 "
-            f"{total_posts} posts from {total_channels} channel{'s' if total_channels != 1 else ''}\n"
+        # Sort channels by average relevance desc, then alphabetically
+        sorted_channels = sorted(
+            by_channel.keys(),
+            key=lambda ch: (
+                -mean(p.get("relevance_score", 0) for p in by_channel[ch]),
+                ch.lower(),
+            ),
         )
 
-        post_num = 0
-        for channel, posts in by_channel.items():
-            parts.append(f"\n\U0001f4e2 **@{channel}**\n")
+        # --- Build header + table of contents ---
+        total_posts = sum(len(v) for v in by_channel.values())
+        total_channels = len(by_channel)
+        parts: list[str] = [
+            f"\U0001f4cb **Channel Digest** \u2014 "
+            f"{total_posts} posts from {total_channels} channel{'s' if total_channels != 1 else ''}\n\n",
+        ]
+        for ch in sorted_channels:
+            count = len(by_channel[ch])
+            parts.append(f"  @{ch} \u2014 {count} post{'s' if count != 1 else ''}\n")
+        parts.append("\n---\n")
 
-            for post in posts:
+        # --- Build post entries with per-post buttons ---
+        # Track which post_num belongs to which line range so we can pair
+        # buttons with the chunk that contains the post.
+        post_entries: list[tuple[str, dict[str, str]]] = []
+        post_num = 0
+        for channel in sorted_channels:
+            channel_header = f"\n\U0001f4e2 **@{channel}**\n"
+            post_entries.append((channel_header, {}))
+
+            for post in by_channel[channel]:
                 post_num += 1
                 content_type = post.get("content_type", "other")
                 emoji = CONTENT_TYPE_EMOJI.get(content_type, "\U0001f4cc")
@@ -73,60 +89,49 @@ class DigestFormatter:
                 real_topic = post.get("real_topic", "Untitled")
                 tldr = post.get("tldr", "")
 
-                line = f"{post_num}. {emoji} **{real_topic}**\n    {tldr}\n"
-                parts.append(line)
+                lines = f"{post_num}. {emoji} **{real_topic}**\n    {tldr}\n"
 
-                # Inline button for full summary
+                # Append key_insights as indented bullets
+                key_insights: list[str] = post.get("key_insights") or []
+                for insight in key_insights[:3]:
+                    lines += f"    - {insight}\n"
+
                 channel_id = post.get("_channel_id", 0)
                 message_id = post.get("message_id", 0)
-                buttons.append(
-                    [
-                        {
-                            "text": f"{post_num}. {real_topic[:30]}",
-                            "callback_data": f"dg:{channel_id}:{message_id}",
-                        }
-                    ]
-                )
+                button = {
+                    "text": f"{post_num}. {real_topic[:30]}",
+                    "callback_data": f"dg:{channel_id}:{message_id}",
+                }
+                post_entries.append((lines, button))
 
-        # Combine and split if needed
-        full_text = "".join(parts)
-        return _split_message(full_text, buttons)
+        # Combine header
+        header_text = "".join(parts)
+
+        # Split into chunks, distributing buttons
+        return _split_with_buttons(header_text, post_entries)
 
 
-def _split_message(
-    text: str,
-    buttons: list[list[dict[str, str]]],
+def _split_with_buttons(
+    header: str,
+    entries: list[tuple[str, dict[str, str]]],
 ) -> list[tuple[str, list[list[dict[str, str]]]]]:
-    """Split message into chunks respecting Telegram's 4096 char limit.
-
-    Buttons are attached only to the last chunk.
-    """
-    if len(text) <= MAX_MESSAGE_LENGTH:
-        return [(text, buttons)]
-
-    chunks: list[str] = []
-    current = ""
-    for line in text.split("\n"):
-        candidate = current + line + "\n"
-        if len(candidate) > MAX_MESSAGE_LENGTH:
-            if current:
-                chunks.append(current)
-            current = line + "\n"
-        else:
-            current = candidate
-
-    if current:
-        chunks.append(current)
-
-    if not chunks:
-        return [(text[:MAX_MESSAGE_LENGTH], buttons)]
-
-    # Attach buttons to last chunk only
+    """Build message chunks, attaching buttons for posts within each chunk."""
     result: list[tuple[str, list[list[dict[str, str]]]]] = []
-    for i, chunk in enumerate(chunks):
-        if i == len(chunks) - 1:
-            result.append((chunk, buttons))
-        else:
-            result.append((chunk, []))
+    current_text = header
+    current_buttons: list[list[dict[str, str]]] = []
 
-    return result
+    for entry_text, button in entries:
+        candidate = current_text + entry_text
+        if len(candidate) > MAX_MESSAGE_LENGTH and current_text.strip():
+            result.append((current_text, current_buttons))
+            current_text = entry_text
+            current_buttons = []
+        else:
+            current_text = candidate
+        if button:
+            current_buttons.append([button])
+
+    if current_text.strip():
+        result.append((current_text, current_buttons))
+
+    return result if result else [("No new posts to digest.", [])]
