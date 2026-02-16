@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any
 
-from app.db.models import Channel, ChannelPost, ChannelSubscription, _utcnow
+from app.db.models import Channel, ChannelPost, ChannelSubscription, DigestDelivery, _utcnow
 
 if TYPE_CHECKING:
     from app.config import AppConfig
@@ -90,6 +90,46 @@ class ChannelReader:
             channel_posts, max_total, self._cfg.digest.max_posts_per_channel
         )
 
+    async def fetch_posts_for_channel(
+        self,
+        channel: Channel,
+        user_id: int,
+        max_posts: int | None = None,
+    ) -> list[dict[str, Any]]:
+        """Fetch unread posts from a single channel for a user.
+
+        'Unread' means the message_id is not present in any prior
+        DigestDelivery.posts_json for this user.
+
+        Args:
+            channel: Channel record to fetch from.
+            user_id: Telegram user ID (for delivery history lookup).
+            max_posts: Override for max posts cap.
+
+        Returns:
+            List of unread post dicts, sorted by date desc, capped.
+        """
+        max_total = max_posts or self._cfg.digest.max_posts_per_digest
+
+        posts = await self._userbot.fetch_channel_posts(
+            channel.username,
+            hours_lookback=self._cfg.digest.hours_lookback,
+            min_length=self._cfg.digest.min_post_length,
+        )
+        for p in posts:
+            p["_channel_id"] = channel.channel_id or channel.id
+            p["_channel_username"] = channel.username
+        self._persist_posts(channel, posts)
+        self._update_channel_fetch_time(channel)
+
+        # Filter out already-delivered posts
+        delivered_ids = _get_delivered_message_ids(user_id)
+        unread = [p for p in posts if p["message_id"] not in delivered_ids]
+
+        # Sort by date desc, cap
+        unread.sort(key=lambda p: p.get("date") or "", reverse=True)
+        return unread[:max_total]
+
     @staticmethod
     def _fair_distribute(
         channel_posts: dict[int, list[dict[str, Any]]],
@@ -155,3 +195,14 @@ class ChannelReader:
             last_error=None,
             updated_at=_utcnow(),
         ).where(Channel.id == channel.id).execute()
+
+
+def _get_delivered_message_ids(user_id: int) -> set[int]:
+    """Collect all message_ids from past digest deliveries for a user."""
+    delivered: set[int] = set()
+    for dd in DigestDelivery.select(DigestDelivery.posts_json).where(
+        DigestDelivery.user == user_id,
+    ):
+        if dd.posts_json and isinstance(dd.posts_json, list):
+            delivered.update(dd.posts_json)
+    return delivered

@@ -564,6 +564,19 @@ class CommandProcessor:
     # Digest delegation
     # =========================================================================
 
+    async def handle_cdigest_command(
+        self,
+        message: Any,
+        text: str,
+        uid: int,
+        correlation_id: str,
+        interaction_id: int,
+        start_time: float,
+    ) -> None:
+        """Handle /cdigest command -- single-channel unread digest."""
+        ctx = self._build_context(message, uid, correlation_id, interaction_id, start_time, text)
+        await self._digest.handle_cdigest(ctx)
+
     async def handle_digest_command(
         self,
         message: Any,

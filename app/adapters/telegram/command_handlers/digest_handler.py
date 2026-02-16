@@ -103,6 +103,98 @@ class DigestHandlerImpl:
             logger.exception("digest_command_failed", extra={"cid": ctx.correlation_id})
             await self._formatter.safe_reply(ctx.message, f"Digest failed: {exc}")
 
+    async def handle_cdigest(self, ctx: CommandExecutionContext) -> None:
+        """Handle /cdigest @channel_name -- single-channel unread digest."""
+        if not self._cfg.digest.enabled:
+            await self._formatter.safe_reply(
+                ctx.message,
+                "Channel digest is not enabled.\n\nSet `DIGEST_ENABLED=true` in your environment.",
+            )
+            return
+
+        # Parse channel name
+        parts = ctx.text.strip().split(maxsplit=1)
+        if len(parts) < 2:
+            await self._formatter.safe_reply(
+                ctx.message,
+                "Usage: `/cdigest @channel_name`",
+            )
+            return
+
+        raw_name = parts[1].strip().lstrip("@")
+        if not raw_name:
+            await self._formatter.safe_reply(ctx.message, "Please provide a channel name.")
+            return
+
+        # Get or create channel record (no subscription required)
+        channel, _ = Channel.get_or_create(
+            username=raw_name,
+            defaults={"title": raw_name, "is_active": True},
+        )
+
+        await self._formatter.safe_reply(ctx.message, f"Generating digest for @{raw_name}...")
+
+        try:
+            from pathlib import Path
+
+            from app.adapters.digest.analyzer import DigestAnalyzer
+            from app.adapters.digest.channel_reader import ChannelReader
+            from app.adapters.digest.digest_service import DigestService
+            from app.adapters.digest.formatter import DigestFormatter
+            from app.adapters.digest.userbot_client import UserbotClient
+            from app.adapters.openrouter.openrouter_client import OpenRouterClient
+
+            session_dir = Path("/data")
+            userbot = UserbotClient(self._cfg, session_dir)
+            await userbot.start()
+
+            try:
+                llm_client = OpenRouterClient(
+                    api_key=self._cfg.openrouter.api_key,
+                    model=self._cfg.openrouter.model,
+                    fallback_models=self._cfg.openrouter.fallback_models,
+                )
+                reader = ChannelReader(self._cfg, userbot)
+                analyzer = DigestAnalyzer(self._cfg, llm_client)
+                formatter = DigestFormatter()
+
+                async def send_msg(user_id: int, text: str, reply_markup: object = None) -> None:
+                    await self._formatter.safe_reply(ctx.message, text, reply_markup=reply_markup)
+
+                service = DigestService(
+                    cfg=self._cfg,
+                    reader=reader,
+                    analyzer=analyzer,
+                    formatter=formatter,
+                    send_message_func=send_msg,
+                )
+
+                result = await service.generate_channel_digest(
+                    user_id=ctx.uid,
+                    channel=channel,
+                    correlation_id=ctx.correlation_id,
+                )
+
+                if result.errors:
+                    errors_text = "\n".join(result.errors[:3])
+                    await self._formatter.safe_reply(
+                        ctx.message,
+                        f"Digest completed with errors:\n{errors_text}",
+                    )
+
+                await llm_client.aclose()
+            finally:
+                await userbot.stop()
+
+        except FileNotFoundError:
+            await self._formatter.safe_reply(
+                ctx.message,
+                "Userbot session not found.\n\nRun /init_session first to authenticate.",
+            )
+        except Exception as exc:
+            logger.exception("cdigest_command_failed", extra={"cid": ctx.correlation_id})
+            await self._formatter.safe_reply(ctx.message, f"Channel digest failed: {exc}")
+
     async def handle_channels(self, ctx: CommandExecutionContext) -> None:
         """Handle /channels command -- list subscribed channels."""
         if not self._cfg.digest.enabled:

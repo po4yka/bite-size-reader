@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from difflib import SequenceMatcher
 from typing import TYPE_CHECKING, Any
 
-from app.db.models import ChannelSubscription, DigestDelivery, _utcnow
+from app.db.models import Channel, ChannelSubscription, DigestDelivery, _utcnow
 
 if TYPE_CHECKING:
     from app.adapters.digest.analyzer import DigestAnalyzer
@@ -88,6 +88,79 @@ class DigestService:
             except Exception as e:
                 result.errors.append(f"Send failed: {e}")
             return result
+
+        # 2-5. Analyze, filter, format, deliver, persist
+        return await self._process_and_deliver(posts, result, correlation_id, lang)
+
+    async def generate_channel_digest(
+        self,
+        user_id: int,
+        channel: Channel,
+        correlation_id: str,
+        lang: str = "en",
+    ) -> DigestResult:
+        """Generate a digest for a single channel's unread posts.
+
+        Args:
+            user_id: Telegram user ID.
+            channel: Channel record to digest.
+            correlation_id: Correlation ID for tracing.
+            lang: Language for LLM analysis prompts.
+
+        Returns:
+            DigestResult with delivery statistics.
+        """
+        result = DigestResult(
+            user_id=user_id,
+            digest_type="channel_on_demand",
+            correlation_id=correlation_id,
+        )
+
+        # 1. Fetch unread posts from the single channel
+        try:
+            posts = await self._reader.fetch_posts_for_channel(channel, user_id)
+        except Exception as e:
+            logger.exception(
+                "cdigest_fetch_failed",
+                extra={"cid": correlation_id, "uid": user_id, "channel": channel.username},
+            )
+            result.errors.append(f"Fetch failed: {e}")
+            return result
+
+        if not posts:
+            logger.info(
+                "cdigest_no_unread",
+                extra={"cid": correlation_id, "uid": user_id, "channel": channel.username},
+            )
+            try:
+                await self._send(user_id, f"No unread posts in @{channel.username}.")
+                result.messages_sent = 1
+            except Exception as e:
+                result.errors.append(f"Send failed: {e}")
+            return result
+
+        # 2-5. Analyze, filter, format, deliver, persist
+        return await self._process_and_deliver(posts, result, correlation_id, lang)
+
+    async def _process_and_deliver(
+        self,
+        posts: list[dict[str, Any]],
+        result: DigestResult,
+        correlation_id: str,
+        lang: str,
+    ) -> DigestResult:
+        """Shared pipeline: analyze, filter, format, deliver, persist.
+
+        Args:
+            posts: Raw posts to process.
+            result: DigestResult to populate.
+            correlation_id: Correlation ID for tracing.
+            lang: Language for LLM analysis prompts.
+
+        Returns:
+            Populated DigestResult.
+        """
+        user_id = result.user_id
 
         # 2. Analyze posts
         try:
@@ -199,7 +272,7 @@ class DigestService:
                 delivered_at=_utcnow(),
                 post_count=result.post_count,
                 channel_count=result.channel_count,
-                digest_type=digest_type,
+                digest_type=result.digest_type,
                 correlation_id=correlation_id,
                 posts_json=post_ids,
             )
@@ -214,7 +287,7 @@ class DigestService:
                 "posts": result.post_count,
                 "channels": result.channel_count,
                 "messages": result.messages_sent,
-                "type": digest_type,
+                "type": result.digest_type,
             },
         )
         return result

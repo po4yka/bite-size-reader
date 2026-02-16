@@ -603,6 +603,17 @@ class MessageRouter:
             )
             return
 
+        if text.startswith("/cdigest"):
+            await self.command_processor.handle_cdigest_command(
+                message,
+                text,
+                uid,
+                correlation_id,
+                interaction_id,
+                start_time,
+            )
+            return
+
         if text.startswith("/digest"):
             await self.command_processor.handle_digest_command(
                 message, text, uid, correlation_id, interaction_id, start_time
