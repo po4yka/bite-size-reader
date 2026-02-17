@@ -67,6 +67,10 @@ coverage.xml
 logs/
 *.log
 
+# --- Runtime Data ---
+# Application data directory (SQLite DB, session files, backups)
+data/
+
 # --- Temporary/Data Files ---
 # Export files, data dumps, and temporary text files
 *_export.txt
