@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { pollStatus } from "../../api/requests";
 import { usePolling } from "../../hooks/usePolling";
 import type { RequestStatus } from "../../types/api";
@@ -31,21 +31,30 @@ export default function ProcessingStatus({
 }: ProcessingStatusProps) {
   const fetcher = useCallback(() => pollStatus(requestId), [requestId]);
 
-  const { data, error, loading } = usePolling<RequestStatus>(
+  const shouldStop = useCallback(
+    (d: RequestStatus) => d.status === "completed" || d.status === "failed",
+    [],
+  );
+
+  const { data, error, loading, retry } = usePolling<RequestStatus>(
     fetcher,
     3000,
     true,
+    shouldStop,
   );
+
+  const calledRef = useRef(false);
+
+  useEffect(() => {
+    if (data?.status === "completed" && data.summary_id != null && !calledRef.current) {
+      calledRef.current = true;
+      onComplete(data.summary_id);
+    }
+  }, [data, onComplete]);
 
   const status = data?.status ?? "pending";
   const progress = STATUS_PROGRESS[status] ?? 0;
   const label = STATUS_LABELS[status] ?? status;
-
-  // Trigger callbacks based on terminal states
-  if (data?.status === "completed" && data.summary_id != null) {
-    // Defer to avoid setState during render
-    queueMicrotask(() => onComplete(data.summary_id!));
-  }
 
   if (data?.status === "failed") {
     return (
@@ -64,7 +73,16 @@ export default function ProcessingStatus({
     <div className="processing-status">
       {loading && !data && <div className="loading">Connecting...</div>}
 
-      {error && <div className="error"><p>{error}</p></div>}
+      {error && (
+        <div className="error">
+          <p>{error}</p>
+          {retry && (
+            <button className="btn-retry" onClick={retry}>
+              Retry
+            </button>
+          )}
+        </div>
+      )}
 
       <div className="progress-bar">
         <div className="progress-bar-fill" style={{ width: `${progress}%` }} />

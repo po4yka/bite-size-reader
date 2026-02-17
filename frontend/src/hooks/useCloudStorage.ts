@@ -6,9 +6,11 @@ export function useCloudStorage(key: string, defaultValue: string): [string, (v:
   useEffect(() => {
     const cs = window.Telegram?.WebApp?.CloudStorage;
     if (!cs) return;
+    let cancelled = false;
     cs.getItem(key, (err, val) => {
-      if (!err && val) setValue(val);
+      if (!cancelled && !err && val) setValue(val);
     });
+    return () => { cancelled = true; };
   }, [key]);
 
   const set = useCallback(

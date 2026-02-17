@@ -1,3 +1,5 @@
+import { sanitizeUrl } from "../../utils/url";
+
 interface ArticleContentProps {
   markdown: string;
 }
@@ -16,7 +18,7 @@ function renderInline(text: string): (string | JSX.Element)[] {
     else if (match[2]) parts.push(<em key={key}>{match[2]}</em>);
     else if (match[3]) parts.push(<code key={key}>{match[3]}</code>);
     else if (match[4] && match[5]) {
-      parts.push(<a key={key} href={match[5]} target="_blank" rel="noopener noreferrer">{match[4]}</a>);
+      parts.push(<a key={key} href={sanitizeUrl(match[5])} target="_blank" rel="noopener noreferrer">{match[4]}</a>);
     }
     last = match.index + match[0].length;
   }

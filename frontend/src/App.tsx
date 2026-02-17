@@ -1,8 +1,10 @@
 import { lazy, Suspense, useEffect } from "react";
 import { useTelegram } from "./hooks/useTelegram";
 import { useRouter } from "./hooks/useRouter";
+import { ToastContext, useToastState } from "./hooks/useToast";
 import ErrorBoundary from "./components/common/ErrorBoundary";
 import BottomNav from "./components/common/BottomNav";
+import ToastContainer from "./components/common/Toast";
 import LoadingSpinner from "./components/common/LoadingSpinner";
 import LoadingSkeleton from "./components/common/LoadingSkeleton";
 
@@ -98,9 +100,14 @@ function AppContent() {
 }
 
 export default function App() {
+  const toast = useToastState();
+
   return (
     <ErrorBoundary>
-      <AppContent />
+      <ToastContext.Provider value={toast}>
+        <AppContent />
+        <ToastContainer toasts={toast.toasts} onDismiss={toast.dismiss} />
+      </ToastContext.Provider>
     </ErrorBoundary>
   );
 }

@@ -1,6 +1,8 @@
 import { useState, useEffect } from "react";
 import { fetchSummary, fetchSummaryContent, markAsRead, toggleFavorite } from "../../api/summaries";
 import type { SummaryDetail, SummaryContent } from "../../types/api";
+import { useToast } from "../../hooks/useToast";
+import { sanitizeUrl } from "../../utils/url";
 import LoadingSpinner from "../common/LoadingSpinner";
 import ErrorBanner from "../common/ErrorBanner";
 import ArticleContent from "./ArticleContent";
@@ -11,6 +13,7 @@ interface ArticleDetailProps {
 }
 
 export default function ArticleDetail({ articleId, onBack }: ArticleDetailProps) {
+  const { addToast } = useToast();
   const [detail, setDetail] = useState<SummaryDetail | null>(null);
   const [content, setContent] = useState<SummaryContent | null>(null);
   const [showContent, setShowContent] = useState(false);
@@ -46,7 +49,7 @@ export default function ArticleDetail({ articleId, onBack }: ArticleDetailProps)
       await markAsRead(articleId);
       setDetail({ ...detail, is_read: true });
     } catch {
-      // Silently fail
+      addToast("Failed to mark as read", "error");
     }
   };
 
@@ -56,8 +59,9 @@ export default function ArticleDetail({ articleId, onBack }: ArticleDetailProps)
     try {
       const res = await toggleFavorite(articleId);
       setDetail({ ...detail, is_favorite: res.is_favorite });
+      addToast(res.is_favorite ? "Added to favorites" : "Removed from favorites", "success");
     } catch {
-      // Silently fail
+      addToast("Failed to update favorite", "error");
     }
   };
 
@@ -116,7 +120,7 @@ export default function ArticleDetail({ articleId, onBack }: ArticleDetailProps)
         </button>
         <button
           className="btn-action"
-          onClick={() => window.open(detail.url, "_blank", "noopener,noreferrer")}
+          onClick={() => window.open(sanitizeUrl(detail.url), "_blank", "noopener,noreferrer")}
           aria-label="Open original article"
         >
           Open original

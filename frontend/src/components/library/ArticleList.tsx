@@ -3,6 +3,7 @@ import { fetchSummaries, toggleFavorite } from "../../api/summaries";
 import type { SummaryCompact } from "../../types/api";
 import { useCloudStorage } from "../../hooks/useCloudStorage";
 import { usePullToRefresh } from "../../hooks/usePullToRefresh";
+import { useToast } from "../../hooks/useToast";
 import ArticleCard from "../common/ArticleCard";
 import LoadingSpinner from "../common/LoadingSpinner";
 import LoadingSkeleton from "../common/LoadingSkeleton";
@@ -18,6 +19,7 @@ interface ArticleListProps {
 }
 
 export default function ArticleList({ onArticleClick }: ArticleListProps) {
+  const { addToast } = useToast();
   const [filterStr, setFilterStr] = useCloudStorage("bsr_library_filter", "all");
   const filter = (["all", "unread", "favorites"].includes(filterStr) ? filterStr : "all") as FilterKey;
 
@@ -95,7 +97,7 @@ export default function ArticleList({ onArticleClick }: ArticleListProps) {
         prev.map((s) => (s.id === id ? { ...s, is_favorite: res.is_favorite } : s)),
       );
     } catch {
-      // Silently fail
+      addToast("Failed to update favorite", "error");
     }
   };
 

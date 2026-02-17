@@ -65,6 +65,11 @@ export default function SubmitForm({ onViewArticle }: SubmitFormProps) {
     return () => wa.disableClosingConfirmation?.();
   }, [url, requestId]);
 
+  // Hide MainButton on unmount (prevents bleed into other tabs)
+  useEffect(() => {
+    return () => { window.Telegram?.WebApp?.MainButton?.hide(); };
+  }, []);
+
   // MainButton integration
   useEffect(() => {
     const btn = window.Telegram?.WebApp?.MainButton;
