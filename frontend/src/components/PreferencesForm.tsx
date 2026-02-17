@@ -4,13 +4,14 @@ import {
   updatePreferences,
   type DigestPreferences,
 } from "../api/digest";
+import { useToast } from "../hooks/useToast";
 
 export default function PreferencesForm() {
+  const { addToast } = useToast();
   const [prefs, setPrefs] = useState<DigestPreferences | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState("");
   const isDirty = useRef(false);
 
   // Form state
@@ -45,7 +46,6 @@ export default function PreferencesForm() {
     e.preventDefault();
     if (saving) return;
     setSaving(true);
-    setMessage("");
     try {
       const updated = await updatePreferences({
         delivery_time: deliveryTime,
@@ -55,13 +55,13 @@ export default function PreferencesForm() {
         min_relevance_score: minRelevance,
       });
       setPrefs(updated);
-      setMessage("Preferences saved");
+      addToast("Preferences saved", "success");
       isDirty.current = false;
       window.Telegram?.WebApp?.disableClosingConfirmation?.();
       window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred("success");
     } catch (err) {
       window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred("error");
-      setMessage(err instanceof Error ? err.message : "Save failed");
+      addToast(err instanceof Error ? err.message : "Save failed", "error");
     } finally {
       setSaving(false);
     }
@@ -85,8 +85,6 @@ export default function PreferencesForm() {
 
   return (
     <form className="preferences-form" onSubmit={handleSave}>
-      {message && <div className="message">{message}</div>}
-
       <label className="field">
         <span className="field-label">
           Delivery Time

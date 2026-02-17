@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { lazy, useState, useEffect, Suspense } from "react";
 import { fetchSummary, fetchSummaryContent, markAsRead, toggleFavorite } from "../../api/summaries";
 import type { SummaryDetail, SummaryContent } from "../../types/api";
 import { useToast } from "../../hooks/useToast";
@@ -6,6 +6,8 @@ import { sanitizeUrl } from "../../utils/url";
 import LoadingSpinner from "../common/LoadingSpinner";
 import ErrorBanner from "../common/ErrorBanner";
 import ArticleContent from "./ArticleContent";
+
+const AddToCollectionSheet = lazy(() => import("../collections/AddToCollectionSheet"));
 
 interface ArticleDetailProps {
   articleId: number;
@@ -20,6 +22,7 @@ export default function ArticleDetail({ articleId, onBack }: ArticleDetailProps)
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showCollectionSheet, setShowCollectionSheet] = useState(false);
 
   useEffect(() => {
     setLoading(true);
@@ -118,6 +121,9 @@ export default function ArticleDetail({ articleId, onBack }: ArticleDetailProps)
         <button className="btn-action" onClick={handleToggleFavorite} aria-label={detail.is_favorite ? "Remove from favorites" : "Add to favorites"}>
           {detail.is_favorite ? "Unfavorite" : "Favorite"}
         </button>
+        <button className="btn-action" onClick={() => setShowCollectionSheet(true)} aria-label="Save to collection">
+          Save
+        </button>
         <button
           className="btn-action"
           onClick={() => window.open(sanitizeUrl(detail.url), "_blank", "noopener,noreferrer")}
@@ -188,6 +194,12 @@ export default function ArticleDetail({ articleId, onBack }: ArticleDetailProps)
           <p className="text-muted">Full content not available.</p>
         )}
       </section>
+
+      {showCollectionSheet && (
+        <Suspense fallback={null}>
+          <AddToCollectionSheet summaryId={articleId} onClose={() => setShowCollectionSheet(false)} />
+        </Suspense>
+      )}
     </div>
   );
 }

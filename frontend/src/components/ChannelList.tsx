@@ -6,15 +6,16 @@ import {
   triggerDigest,
   type ChannelsData,
 } from "../api/digest";
+import { useToast } from "../hooks/useToast";
 
 export default function ChannelList() {
+  const { addToast } = useToast();
   const [data, setData] = useState<ChannelsData | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [input, setInput] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [triggering, setTriggering] = useState(false);
-  const [message, setMessage] = useState("");
 
   const load = useCallback(async () => {
     try {
@@ -36,14 +37,13 @@ export default function ChannelList() {
     e.preventDefault();
     if (!input.trim() || submitting) return;
     setSubmitting(true);
-    setMessage("");
     try {
       const result = await subscribeChannel(input.trim());
-      setMessage(`Subscribed to @${result.username}`);
+      addToast(`Subscribed to @${result.username}`, "success");
       setInput("");
       await load();
     } catch (err) {
-      setMessage(err instanceof Error ? err.message : "Subscribe failed");
+      addToast(err instanceof Error ? err.message : "Subscribe failed", "error");
     } finally {
       setSubmitting(false);
     }
@@ -64,13 +64,12 @@ export default function ChannelList() {
 
     window.Telegram?.WebApp?.HapticFeedback?.impactOccurred("heavy");
     setSubmitting(true);
-    setMessage("");
     try {
       await unsubscribeChannel(username);
-      setMessage(`Unsubscribed from @${username}`);
+      addToast(`Unsubscribed from @${username}`, "success");
       await load();
     } catch (err) {
-      setMessage(err instanceof Error ? err.message : "Unsubscribe failed");
+      addToast(err instanceof Error ? err.message : "Unsubscribe failed", "error");
     } finally {
       setSubmitting(false);
     }
@@ -79,12 +78,11 @@ export default function ChannelList() {
   const handleTrigger = async () => {
     if (triggering) return;
     setTriggering(true);
-    setMessage("");
     try {
       await triggerDigest();
-      setMessage("Digest queued! Check your Telegram chat.");
+      addToast("Digest queued! Check your Telegram chat.", "success");
     } catch (err) {
-      setMessage(err instanceof Error ? err.message : "Trigger failed");
+      addToast(err instanceof Error ? err.message : "Trigger failed", "error");
     } finally {
       setTriggering(false);
     }
@@ -112,8 +110,6 @@ export default function ChannelList() {
       <div className="slot-info">
         {data.active_count}/{data.max_channels} slots used
       </div>
-
-      {message && <div className="message">{message}</div>}
 
       {data.channels.length === 0 ? (
         <p className="empty">No subscriptions yet. Add a channel above.</p>

@@ -1,26 +1,22 @@
 import { useState } from "react";
 import { triggerChannelDigest } from "../../../api/admin";
+import { useToast } from "../../../hooks/useToast";
 
 export default function ChannelDigest() {
+  const { addToast } = useToast();
   const [input, setInput] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const [message, setMessage] = useState("");
-  const [error, setError] = useState("");
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!input.trim() || submitting) return;
     setSubmitting(true);
-    setMessage("");
-    setError("");
     try {
       const result = await triggerChannelDigest(input.trim());
-      setMessage(
-        `Digest ${result.status} for @${result.channel}. Check Telegram.`,
-      );
+      addToast(`Digest ${result.status} for @${result.channel}. Check Telegram.`, "success");
       setInput("");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Trigger failed");
+      addToast(err instanceof Error ? err.message : "Trigger failed", "error");
     } finally {
       setSubmitting(false);
     }
@@ -34,9 +30,6 @@ export default function ChannelDigest() {
         Trigger a digest for a single channel. The result will be delivered to
         your Telegram chat.
       </p>
-
-      {message && <div className="message">{message}</div>}
-      {error && <div className="error">{error}</div>}
 
       <form className="admin-form" onSubmit={handleSubmit}>
         <input

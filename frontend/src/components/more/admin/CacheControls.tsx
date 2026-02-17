@@ -1,10 +1,10 @@
 import { useState } from "react";
 import { clearCache } from "../../../api/admin";
+import { useToast } from "../../../hooks/useToast";
 
 export default function CacheControls() {
+  const { addToast } = useToast();
   const [clearing, setClearing] = useState(false);
-  const [message, setMessage] = useState("");
-  const [error, setError] = useState("");
 
   const handleClear = async () => {
     if (clearing) return;
@@ -21,13 +21,11 @@ export default function CacheControls() {
 
     window.Telegram?.WebApp?.HapticFeedback?.impactOccurred("medium");
     setClearing(true);
-    setMessage("");
-    setError("");
     try {
       const result = await clearCache();
-      setMessage(`Cleared ${result.cleared_keys} cached key(s).`);
+      addToast(`Cleared ${result.cleared_keys} cached key(s).`, "success");
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to clear cache");
+      addToast(e instanceof Error ? e.message : "Failed to clear cache", "error");
     } finally {
       setClearing(false);
     }
@@ -41,9 +39,6 @@ export default function CacheControls() {
         Clear the Redis URL cache. This forces fresh content extraction on next
         request.
       </p>
-
-      {message && <div className="message">{message}</div>}
-      {error && <div className="error">{error}</div>}
 
       <button
         className="btn-admin"

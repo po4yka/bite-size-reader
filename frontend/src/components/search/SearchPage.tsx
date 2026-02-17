@@ -20,6 +20,8 @@ export default function SearchPage({ onArticleClick }: SearchPageProps) {
   const [results, setResults] = useState<SearchResult[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [page, setPage] = useState(0);
+  const [hasMore, setHasMore] = useState(false);
 
   const [trending, setTrending] = useState<TrendingTopic[]>([]);
   const [trendingLoading, setTrendingLoading] = useState(true);
@@ -33,11 +35,17 @@ export default function SearchPage({ onArticleClick }: SearchPageProps) {
       .finally(() => setTrendingLoading(false));
   }, []);
 
+  // Reset page when query changes
+  useEffect(() => {
+    setPage(0);
+  }, [debouncedQuery]);
+
   useEffect(() => {
     const trimmed = debouncedQuery.trim();
     if (!trimmed) {
       setResults([]);
       setError("");
+      setHasMore(false);
       return;
     }
 
@@ -45,9 +53,15 @@ export default function SearchPage({ onArticleClick }: SearchPageProps) {
     setLoading(true);
     setError("");
 
-    searchArticles(trimmed)
+    searchArticles(trimmed, { offset: page * 20, limit: 20 })
       .then((data) => {
-        if (!cancelled) setResults(data.results);
+        if (cancelled) return;
+        if (page === 0) {
+          setResults(data.results);
+        } else {
+          setResults((prev) => [...prev, ...data.results]);
+        }
+        setHasMore(data.pagination.has_more);
       })
       .catch((err) => {
         if (!cancelled) setError(err instanceof Error ? err.message : "Search failed");
@@ -59,7 +73,7 @@ export default function SearchPage({ onArticleClick }: SearchPageProps) {
     return () => {
       cancelled = true;
     };
-  }, [debouncedQuery]);
+  }, [debouncedQuery, page]);
 
   const handleTopicClick = useCallback((tag: string) => {
     setQuery(tag);
@@ -109,6 +123,11 @@ export default function SearchPage({ onArticleClick }: SearchPageProps) {
               onClick={() => onArticleClick(r.id)}
             />
           ))}
+          {hasMore && !loading && (
+            <button className="btn-primary" onClick={() => setPage((p) => p + 1)}>
+              Load more
+            </button>
+          )}
         </div>
       )}
     </div>

@@ -426,13 +426,24 @@ body {
   color: var(--hint);
 }
 
-.trending-grid {
+.trending-topics {
+  margin-bottom: 16px;
+}
+
+.trending-topics-title {
+  font-size: 15px;
+  font-weight: 600;
+  margin-bottom: 10px;
+  color: var(--section-header);
+}
+
+.trending-topics-grid {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
 }
 
-.trending-chip {
+.topic-chip {
   padding: 8px 14px;
   background: var(--secondary-bg);
   border-radius: 16px;
@@ -440,16 +451,18 @@ body {
   font-size: 13px;
   color: var(--text);
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
 }
 
-.trending-chip:active {
+.topic-chip:active {
   opacity: 0.7;
 }
 
-.trending-count {
+.topic-chip-count {
   font-size: 11px;
   color: var(--hint);
-  margin-left: 4px;
 }
 
 /* Submit form */
@@ -506,14 +519,14 @@ body {
   margin: 12px 0;
 }
 
-.progress-fill {
+.progress-bar-fill {
   height: 100%;
   background: var(--btn);
   border-radius: 2px;
   transition: width 0.5s ease;
 }
 
-.status-label {
+.progress-label {
   font-size: 13px;
   color: var(--hint);
   text-transform: capitalize;
@@ -605,7 +618,50 @@ body {
 .sheet-title {
   font-size: 16px;
   font-weight: 600;
-  margin-bottom: 12px;
+}
+
+.sheet-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: 12px;
+}
+
+.sheet-close {
+  border: none;
+  background: none;
+  color: var(--hint);
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.sheet-collection-list {
+  list-style: none;
+}
+
+.sheet-collection-item {
+  padding: 10px 0;
+  border-bottom: 1px solid var(--secondary-bg);
+}
+
+.sheet-collection-item:last-child {
+  border-bottom: none;
+}
+
+.sheet-collection-label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+}
+
+.sheet-collection-name {
+  flex: 1;
+}
+
+.sheet-collection-count {
+  color: var(--hint);
+  font-size: 12px;
 }
 
 .sheet-item {
