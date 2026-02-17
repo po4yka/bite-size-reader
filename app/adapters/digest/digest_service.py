@@ -276,8 +276,17 @@ class DigestService:
                 correlation_id=correlation_id,
                 posts_json=post_ids,
             )
-        except Exception:
-            logger.exception("digest_delivery_persist_failed", extra={"cid": correlation_id})
+        except Exception as exc:
+            logger.error(
+                "digest_delivery_persist_failed",
+                extra={
+                    "cid": correlation_id,
+                    "uid": user_id,
+                    "post_ids_sample": post_ids[:5],
+                    "error": str(exc),
+                },
+            )
+            result.errors.append(f"Delivery record not saved: {exc}")
 
         logger.info(
             "digest_delivered",

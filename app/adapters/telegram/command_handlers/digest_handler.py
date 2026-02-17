@@ -6,6 +6,8 @@ import logging
 from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING
 
+import peewee
+
 from app.core.channel_utils import parse_channel_input
 from app.db.models import Channel, ChannelSubscription, _utcnow
 
@@ -197,7 +199,66 @@ class DigestHandlerImpl:
             lines.append(f"  @{ch.username} [{status}]{error_info}")
 
         lines.append(f"\n{len(subs)}/{self._cfg.digest.max_channels} slots used")
+
+        # Warn about disabled channels the user is subscribed to
+        disabled = [s for s in subs if not s.channel.is_active]
+        if disabled:
+            lines.append("\n**Disabled channels** (too many fetch errors):")
+            for dsub in disabled:
+                dch: Channel = dsub.channel
+                lines.append(
+                    f"  @{dch.username} -- {dch.fetch_error_count} errors. "
+                    "Use `/unsubscribe` then `/subscribe` to re-enable."
+                )
+
         await self._formatter.safe_reply(ctx.message, "\n".join(lines))
+
+    @staticmethod
+    def _subscribe_atomic(user_id: int, username: str, max_channels: int) -> str:
+        """Run subscribe logic inside a single transaction.
+
+        Returns a status string: "limit_reached", "already_subscribed",
+        "reactivated", or "created".
+        """
+        active_count = (
+            ChannelSubscription.select()
+            .where(
+                ChannelSubscription.user == user_id,
+                ChannelSubscription.is_active == True,  # noqa: E712
+            )
+            .count()
+        )
+        if active_count >= max_channels:
+            return "limit_reached"
+
+        channel, _ = Channel.get_or_create(
+            username=username,
+            defaults={"title": username, "is_active": True},
+        )
+
+        existing = (
+            ChannelSubscription.select()
+            .where(
+                ChannelSubscription.user == user_id,
+                ChannelSubscription.channel == channel,
+            )
+            .first()
+        )
+
+        if existing:
+            if existing.is_active:
+                return "already_subscribed"
+            existing.is_active = True
+            existing.updated_at = _utcnow()
+            existing.save()
+            return "reactivated"
+
+        ChannelSubscription.create(
+            user=user_id,
+            channel=channel,
+            is_active=True,
+        )
+        return "created"
 
     async def handle_subscribe(self, ctx: CommandExecutionContext) -> None:
         """Handle /subscribe @channel_name command."""
@@ -205,7 +266,6 @@ class DigestHandlerImpl:
             await self._formatter.safe_reply(ctx.message, "Channel digest is not enabled.")
             return
 
-        # Parse channel name from text
         parts = ctx.text.strip().split(maxsplit=1)
         if len(parts) < 2:
             await self._formatter.safe_reply(
@@ -219,67 +279,68 @@ class DigestHandlerImpl:
             await self._formatter.safe_reply(ctx.message, error)
             return
 
-        # Check max channels limit
-        active_count = (
-            ChannelSubscription.select()
-            .where(
-                ChannelSubscription.user == ctx.uid,
-                ChannelSubscription.is_active == True,  # noqa: E712
+        max_ch = self._cfg.digest.max_channels
+        try:
+            status = await self._db._safe_db_transaction(
+                self._subscribe_atomic,
+                ctx.uid,
+                username,
+                max_ch,
+                operation_name="subscribe_channel",
             )
-            .count()
-        )
-        if active_count >= self._cfg.digest.max_channels:
+        except peewee.IntegrityError:
+            status = "already_subscribed"
+
+        if status == "limit_reached":
             await self._formatter.safe_reply(
                 ctx.message,
-                f"Maximum channel limit reached ({self._cfg.digest.max_channels}).\n"
+                f"Maximum channel limit reached ({max_ch}).\n"
                 "Use `/unsubscribe @channel` to remove one first.",
             )
-            return
+        elif status == "already_subscribed":
+            await self._formatter.safe_reply(ctx.message, f"Already subscribed to @{username}.")
+        elif status == "reactivated":
+            await self._formatter.safe_reply(
+                ctx.message, f"Reactivated subscription to @{username}."
+            )
+        else:
+            await self._formatter.safe_reply(
+                ctx.message,
+                f"Subscribed to @{username}.\n\n"
+                "Use `/digest` to generate a digest now, or wait for the daily delivery.",
+            )
+            logger.info(
+                "digest_subscribed",
+                extra={"uid": ctx.uid, "channel": username, "cid": ctx.correlation_id},
+            )
 
-        # Get or create channel
-        channel, _created = Channel.get_or_create(
-            username=username,
-            defaults={"title": username, "is_active": True},
-        )
+    @staticmethod
+    def _unsubscribe_atomic(user_id: int, username: str) -> str:
+        """Run unsubscribe logic inside a single transaction.
 
-        # Check if already subscribed
-        existing = (
+        Returns a status string: "not_found", "not_subscribed", or "unsubscribed".
+        """
+        channel = Channel.get_or_none(Channel.username == username)
+        if not channel:
+            return "not_found"
+
+        sub = (
             ChannelSubscription.select()
             .where(
-                ChannelSubscription.user == ctx.uid,
+                ChannelSubscription.user == user_id,
                 ChannelSubscription.channel == channel,
+                ChannelSubscription.is_active == True,  # noqa: E712
             )
             .first()
         )
 
-        if existing:
-            if existing.is_active:
-                await self._formatter.safe_reply(ctx.message, f"Already subscribed to @{username}.")
-                return
-            # Reactivate
-            existing.is_active = True
-            existing.updated_at = _utcnow()
-            existing.save()
-            await self._formatter.safe_reply(
-                ctx.message, f"Reactivated subscription to @{username}."
-            )
-            return
+        if not sub:
+            return "not_subscribed"
 
-        ChannelSubscription.create(
-            user=ctx.uid,
-            channel=channel,
-            is_active=True,
-        )
-
-        await self._formatter.safe_reply(
-            ctx.message,
-            f"Subscribed to @{username}.\n\n"
-            "Use `/digest` to generate a digest now, or wait for the daily delivery.",
-        )
-        logger.info(
-            "digest_subscribed",
-            extra={"uid": ctx.uid, "channel": username, "cid": ctx.correlation_id},
-        )
+        sub.is_active = False
+        sub.updated_at = _utcnow()
+        sub.save()
+        return "unsubscribed"
 
     async def handle_unsubscribe(self, ctx: CommandExecutionContext) -> None:
         """Handle /unsubscribe @channel_name command."""
@@ -300,30 +361,20 @@ class DigestHandlerImpl:
             await self._formatter.safe_reply(ctx.message, error)
             return
 
-        channel = Channel.get_or_none(Channel.username == username)
-        if not channel:
+        status = await self._db._safe_db_transaction(
+            self._unsubscribe_atomic,
+            ctx.uid,
+            username,
+            operation_name="unsubscribe_channel",
+        )
+
+        if status == "not_found":
             await self._formatter.safe_reply(ctx.message, f"Channel @{username} not found.")
-            return
-
-        sub = (
-            ChannelSubscription.select()
-            .where(
-                ChannelSubscription.user == ctx.uid,
-                ChannelSubscription.channel == channel,
-                ChannelSubscription.is_active == True,  # noqa: E712
-            )
-            .first()
-        )
-
-        if not sub:
+        elif status == "not_subscribed":
             await self._formatter.safe_reply(ctx.message, f"Not subscribed to @{username}.")
-            return
-
-        sub.is_active = False
-        sub.save()
-
-        await self._formatter.safe_reply(ctx.message, f"Unsubscribed from @{username}.")
-        logger.info(
-            "digest_unsubscribed",
-            extra={"uid": ctx.uid, "channel": username, "cid": ctx.correlation_id},
-        )
+        else:
+            await self._formatter.safe_reply(ctx.message, f"Unsubscribed from @{username}.")
+            logger.info(
+                "digest_unsubscribed",
+                extra={"uid": ctx.uid, "channel": username, "cid": ctx.correlation_id},
+            )

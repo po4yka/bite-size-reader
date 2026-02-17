@@ -47,6 +47,14 @@ def _make_ctx(text: str = "/subscribe", uid: int = _TEST_UID) -> CommandExecutio
     )
 
 
+async def _run_operation_directly(operation: Any, *args: Any, **kwargs: Any) -> Any:
+    """Execute a DB operation directly (for in-memory SQLite tests)."""
+    # Strip keyword-only args that _safe_db_transaction accepts
+    kwargs.pop("operation_name", None)
+    kwargs.pop("timeout", None)
+    return operation(*args, **kwargs)
+
+
 def _make_handler(
     *, enabled: bool = True, max_channels: int = 10
 ) -> tuple[DigestHandlerImpl, AsyncMock]:
@@ -55,6 +63,7 @@ def _make_handler(
     formatter = MagicMock()
     formatter.safe_reply = AsyncMock()
     db_session = MagicMock()
+    db_session._safe_db_transaction = AsyncMock(side_effect=_run_operation_directly)
     handler = DigestHandlerImpl(cfg=cast("Any", cfg), db=db_session, response_formatter=formatter)
     return handler, formatter.safe_reply
 

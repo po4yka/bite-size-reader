@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from datetime import timedelta
 from typing import TYPE_CHECKING, Any
 
 from app.db.models import Channel, ChannelPost, ChannelSubscription, DigestDelivery, _utcnow
@@ -74,12 +75,26 @@ class ChannelReader:
                     "digest_channel_fetch_error",
                     extra={"channel": channel.username, "uid": user_id},
                 )
-                # Increment error count
-                Channel.update(
-                    fetch_error_count=Channel.fetch_error_count + 1,
-                    last_error="fetch_failed",
-                    updated_at=_utcnow(),
-                ).where(Channel.id == channel.id).execute()
+                new_count = channel.fetch_error_count + 1
+                max_errors = self._cfg.digest.max_fetch_errors
+                disable = new_count >= max_errors
+                update_fields: dict[str, object] = {
+                    "fetch_error_count": Channel.fetch_error_count + 1,
+                    "last_error": "fetch_failed",
+                    "updated_at": _utcnow(),
+                }
+                if disable:
+                    update_fields["is_active"] = False
+                Channel.update(**update_fields).where(Channel.id == channel.id).execute()
+                if disable:
+                    logger.warning(
+                        "digest_channel_auto_disabled",
+                        extra={
+                            "channel": channel.username,
+                            "error_count": new_count,
+                            "threshold": max_errors,
+                        },
+                    )
                 continue
 
         if not channel_posts:
@@ -110,6 +125,13 @@ class ChannelReader:
             List of unread post dicts, sorted by date desc, capped.
         """
         max_total = max_posts or self._cfg.digest.max_posts_per_digest
+
+        if not channel.is_active:
+            logger.warning(
+                "cdigest_channel_disabled",
+                extra={"channel": channel.username, "uid": user_id},
+            )
+            return []
 
         posts = await self._userbot.fetch_channel_posts(
             channel.username,
@@ -198,10 +220,16 @@ class ChannelReader:
 
 
 def _get_delivered_message_ids(user_id: int) -> set[int]:
-    """Collect all message_ids from past digest deliveries for a user."""
+    """Collect all message_ids from past digest deliveries for a user.
+
+    Only looks back 30 days to prevent unbounded growth (4x the max
+    hours_lookback of 168h = 7d).
+    """
+    cutoff = _utcnow() - timedelta(days=30)
     delivered: set[int] = set()
     for dd in DigestDelivery.select(DigestDelivery.posts_json).where(
         DigestDelivery.user == user_id,
+        DigestDelivery.delivered_at >= cutoff,
     ):
         if dd.posts_json and isinstance(dd.posts_json, list):
             delivered.update(dd.posts_json)

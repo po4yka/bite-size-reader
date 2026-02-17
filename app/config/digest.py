@@ -64,6 +64,11 @@ class ChannelDigestConfig(BaseModel):
         validation_alias="DIGEST_MIN_RELEVANCE",
         description="Drop posts below this relevance score",
     )
+    max_fetch_errors: int = Field(
+        default=5,
+        validation_alias="DIGEST_MAX_FETCH_ERRORS",
+        description="Auto-disable channel after this many consecutive fetch errors",
+    )
 
     @field_validator("session_name", mode="before")
     @classmethod
@@ -209,5 +214,20 @@ class ChannelDigestConfig(BaseModel):
             raise ValueError(msg) from exc
         if parsed < 0.0 or parsed > 1.0:
             msg = "DIGEST_MIN_RELEVANCE must be between 0.0 and 1.0"
+            raise ValueError(msg)
+        return parsed
+
+    @field_validator("max_fetch_errors", mode="before")
+    @classmethod
+    def _validate_max_fetch_errors(cls, value: Any) -> int:
+        if value in (None, ""):
+            return 5
+        try:
+            parsed = int(str(value))
+        except ValueError as exc:
+            msg = "DIGEST_MAX_FETCH_ERRORS must be a valid integer"
+            raise ValueError(msg) from exc
+        if parsed < 1 or parsed > 100:
+            msg = "DIGEST_MAX_FETCH_ERRORS must be between 1 and 100"
             raise ValueError(msg)
         return parsed
