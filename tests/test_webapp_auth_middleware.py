@@ -4,9 +4,11 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
-from fastapi import Depends, FastAPI
+from fastapi import Depends, FastAPI, Request
+from fastapi.responses import JSONResponse
 from fastapi.testclient import TestClient
 
+from app.api.exceptions import APIException
 from app.api.middleware import webapp_auth_middleware
 from app.api.routers.auth.dependencies import get_current_user
 
@@ -15,6 +17,11 @@ def _make_app() -> FastAPI:
     """Create a minimal FastAPI app with webapp auth middleware and a protected route."""
     app = FastAPI()
     app.middleware("http")(webapp_auth_middleware)
+
+    # Register exception handler so APIException subclasses return proper status codes
+    @app.exception_handler(APIException)
+    async def _api_exc_handler(request: Request, exc: APIException):
+        return JSONResponse(status_code=exc.status_code, content={"error": exc.message})
 
     @app.get("/protected")
     async def protected(user=Depends(get_current_user)):
@@ -37,6 +44,10 @@ _FAKE_JWT_PAYLOAD = {
     "type": "access",
 }
 
+# Mock target: the function is lazily imported inside the middleware,
+# so we patch it at the source module.
+_VERIFY_TARGET = "app.api.routers.auth.webapp_auth.verify_telegram_webapp_init_data"
+
 
 class TestWebAppAuthMiddleware:
     """Tests for webapp_auth_middleware + get_current_user dual-auth."""
@@ -46,10 +57,7 @@ class TestWebAppAuthMiddleware:
         app = _make_app()
         client = TestClient(app)
 
-        with patch(
-            "app.api.middleware.verify_telegram_webapp_init_data",
-            return_value=_FAKE_WEBAPP_USER,
-        ):
+        with patch(_VERIFY_TARGET, return_value=_FAKE_WEBAPP_USER):
             resp = client.get(
                 "/protected",
                 headers={"X-Telegram-Init-Data": "fake_init_data"},
@@ -94,10 +102,7 @@ class TestWebAppAuthMiddleware:
         client = TestClient(app)
 
         with (
-            patch(
-                "app.api.middleware.verify_telegram_webapp_init_data",
-                return_value=_FAKE_WEBAPP_USER,
-            ),
+            patch(_VERIFY_TARGET, return_value=_FAKE_WEBAPP_USER),
             patch(
                 "app.api.routers.auth.dependencies.decode_token",
                 return_value=_FAKE_JWT_PAYLOAD,
@@ -137,10 +142,7 @@ class TestWebAppAuthMiddleware:
         app = _make_app()
         client = TestClient(app)
 
-        with patch(
-            "app.api.middleware.verify_telegram_webapp_init_data",
-            side_effect=Exception("bad signature"),
-        ):
+        with patch(_VERIFY_TARGET, side_effect=Exception("bad signature")):
             resp = client.get(
                 "/protected",
                 headers={"X-Telegram-Init-Data": "invalid_data"},
