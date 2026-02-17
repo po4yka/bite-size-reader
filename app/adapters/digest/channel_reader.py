@@ -100,6 +100,18 @@ class ChannelReader:
         if not channel_posts:
             return []
 
+        # Filter out already-delivered posts
+        delivered_ids = _get_delivered_message_ids(user_id)
+        if delivered_ids:
+            channel_posts = {
+                ch_id: [p for p in posts if p["message_id"] not in delivered_ids]
+                for ch_id, posts in channel_posts.items()
+            }
+            channel_posts = {k: v for k, v in channel_posts.items() if v}
+
+        if not channel_posts:
+            return []
+
         # Round-robin fair distribution
         return self._fair_distribute(
             channel_posts, max_total, self._cfg.digest.max_posts_per_channel
