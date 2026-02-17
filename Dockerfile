@@ -40,7 +40,19 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     echo "uv sync completed successfully"
 
 # =============================================================================
-# Stage 2: Runtime - Minimal production image
+# Stage 2: Frontend - Build React Mini App
+# =============================================================================
+FROM node:20-alpine AS frontend-builder
+
+WORKDIR /app/frontend
+COPY frontend/package*.json ./
+RUN npm ci
+COPY frontend/ ./
+RUN npm run build
+# Output: /app/app/static/digest/
+
+# =============================================================================
+# Stage 3: Runtime - Minimal production image
 # =============================================================================
 FROM python:3.13-slim AS runtime
 
@@ -68,6 +80,9 @@ COPY --from=builder /app/.venv /app/.venv
 # Copy application code
 COPY app ./app
 COPY bot.py ./
+
+# Copy built frontend assets from frontend-builder stage
+COPY --from=frontend-builder /app/app/static/digest /app/app/static/digest
 
 # Create non-root user for security
 RUN useradd -r -u 1000 -m -d /home/appuser -s /sbin/nologin appuser \

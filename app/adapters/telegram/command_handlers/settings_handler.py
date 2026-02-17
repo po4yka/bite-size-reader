@@ -1,4 +1,4 @@
-"""Settings command handlers (/debug)."""
+"""Settings command handlers (/debug, /settings)."""
 
 from __future__ import annotations
 
@@ -11,16 +11,24 @@ if TYPE_CHECKING:
     from app.adapters.telegram.command_handlers.execution_context import (
         CommandExecutionContext,
     )
+    from app.config import AppConfig
     from app.core.verbosity import VerbosityResolver
 
 logger = logging.getLogger(__name__)
+
+_DIGEST_MINI_APP_PATH = "/static/digest/index.html"
 
 
 class SettingsHandlerImpl:
     """Handles user-facing settings commands."""
 
-    def __init__(self, verbosity_resolver: VerbosityResolver | None) -> None:
+    def __init__(
+        self,
+        verbosity_resolver: VerbosityResolver | None,
+        cfg: AppConfig | None = None,
+    ) -> None:
         self._verbosity_resolver = verbosity_resolver
+        self._cfg = cfg
 
     @combined_handler("command_debug", "debug_toggle")
     async def handle_debug(self, ctx: CommandExecutionContext) -> None:
@@ -51,3 +59,30 @@ class SettingsHandlerImpl:
                 "Use /debug for technical details."
             )
         await ctx.response_formatter.safe_reply(ctx.message, text)
+
+    @combined_handler("command_settings", "settings_open")
+    async def handle_settings(self, ctx: CommandExecutionContext) -> None:
+        """Open Digest Mini App via inline keyboard button."""
+        from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
+
+        api_base = ""
+        if self._cfg is not None:
+            api_base = getattr(self._cfg.telegram, "api_base_url", "") or ""
+
+        if not api_base:
+            await ctx.response_formatter.safe_reply(
+                ctx.message,
+                "API base URL not configured. Set `API_BASE_URL` in your environment.",
+            )
+            return
+
+        url = f"{api_base.rstrip('/')}{_DIGEST_MINI_APP_PATH}"
+        keyboard = InlineKeyboardMarkup(
+            [[InlineKeyboardButton("Digest Settings", web_app=WebAppInfo(url=url))]]
+        )
+
+        await ctx.response_formatter.safe_reply(
+            ctx.message,
+            "Tap the button below to manage your digest settings.",
+            reply_markup=keyboard,
+        )

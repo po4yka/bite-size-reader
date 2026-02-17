@@ -167,6 +167,7 @@ class CommandProcessor:
 
         self._settings = SettingsHandlerImpl(
             verbosity_resolver=verbosity_resolver,
+            cfg=cfg,
         )
 
     def _build_context(
@@ -673,6 +674,19 @@ class CommandProcessor:
         """Handle /debug command -- toggle verbosity mode."""
         ctx = self._build_context(message, uid, correlation_id, interaction_id, start_time)
         await self._settings.handle_debug(ctx)
+
+    async def handle_settings_command(
+        self,
+        message: Any,
+        text: str,
+        uid: int,
+        correlation_id: str,
+        interaction_id: int,
+        start_time: float,
+    ) -> None:
+        """Handle /settings command -- open digest Mini App."""
+        ctx = self._build_context(message, uid, correlation_id, interaction_id, start_time, text)
+        await self._settings.handle_settings(ctx)
 
     # =========================================================================
     # Static utilities (backward compatibility)

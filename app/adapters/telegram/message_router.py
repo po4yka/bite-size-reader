@@ -644,6 +644,12 @@ class MessageRouter:
             )
             return
 
+        if text.startswith("/settings"):
+            await self.command_processor.handle_settings_command(
+                message, text, uid, correlation_id, interaction_id, start_time
+            )
+            return
+
         if text.startswith("/debug"):
             await self.command_processor.handle_debug_command(
                 message, uid, correlation_id, interaction_id, start_time

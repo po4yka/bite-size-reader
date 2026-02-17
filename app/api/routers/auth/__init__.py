@@ -6,7 +6,7 @@ All public exports are re-exported here for backward compatibility.
 """
 
 # Security dependencies (critical - imported by 7+ routers)
-from app.api.routers.auth.dependencies import get_current_user, security
+from app.api.routers.auth.dependencies import get_current_user, get_webapp_user, security
 
 # Router for endpoint registration
 from app.api.routers.auth.endpoints import router
@@ -61,6 +61,7 @@ __all__ = [
     "ensure_user_allowed",
     "generate_secret_value",
     "get_current_user",
+    "get_webapp_user",
     "hash_secret",
     "router",
     "security",

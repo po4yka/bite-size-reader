@@ -121,6 +121,11 @@ Desktop.ini
 # --- act (local GitHub Actions runner) ---
 .actrc
 
+# --- Frontend ---
+frontend/node_modules/
+frontend/tsconfig.tsbuildinfo
+app/static/digest/
+
 # --- Claude Code ---
 # Local Claude Code settings (user-specific)
 .claude/settings.local.json

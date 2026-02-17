@@ -8,7 +8,7 @@ import logging
 from typing import TYPE_CHECKING, Any
 
 try:
-    from fastapi import Depends
+    from fastapi import Depends, Request  # noqa: TC002 - used at runtime by FastAPI DI
     from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 except Exception:  # pragma: no cover - fallback for environments without compatible FastAPI
     logging.getLogger(__name__).debug("fastapi_security_import_failed", exc_info=True)
@@ -24,7 +24,7 @@ except Exception:  # pragma: no cover - fallback for environments without compat
         return None
 
 
-from app.api.exceptions import AuthorizationError
+from app.api.exceptions import AuthenticationError, AuthorizationError
 from app.api.routers.auth.tokens import decode_token, validate_client_id
 from app.config import Config
 
@@ -121,3 +121,16 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
         "username": payload.get("username"),
         "client_id": client_id,
     }
+
+
+async def get_webapp_user(request: Request) -> dict:
+    """Dependency to get user from Telegram WebApp initData.
+
+    Validates the X-Telegram-Init-Data header using HMAC-SHA256.
+    """
+    from app.api.routers.auth.webapp_auth import verify_telegram_webapp_init_data
+
+    init_data = request.headers.get("X-Telegram-Init-Data")
+    if not init_data:
+        raise AuthenticationError("Missing X-Telegram-Init-Data header")
+    return verify_telegram_webapp_init_data(init_data)

@@ -736,6 +736,28 @@ class DigestDelivery(BaseModel):
         )
 
 
+class UserDigestPreference(BaseModel):
+    """Per-user digest preference overrides.
+
+    Null fields fall back to global ChannelDigestConfig defaults.
+    """
+
+    id = peewee.AutoField()
+    user = peewee.ForeignKeyField(
+        User, backref="digest_preferences", unique=True, on_delete="CASCADE"
+    )
+    delivery_time = peewee.TextField(null=True)  # HH:MM (null = global default)
+    timezone = peewee.TextField(null=True)  # IANA tz (null = global default)
+    hours_lookback = peewee.IntegerField(null=True)  # null = global default
+    max_posts_per_digest = peewee.IntegerField(null=True)
+    min_relevance_score = peewee.FloatField(null=True)
+    updated_at = peewee.DateTimeField(default=_utcnow)
+    created_at = peewee.DateTimeField(default=_utcnow)
+
+    class Meta:
+        table_name = "user_digest_preferences"
+
+
 ALL_MODELS: tuple[type[BaseModel], ...] = (
     User,
     Chat,
@@ -765,6 +787,7 @@ ALL_MODELS: tuple[type[BaseModel], ...] = (
     ChannelPost,
     ChannelPostAnalysis,
     DigestDelivery,
+    UserDigestPreference,
 )
 
 

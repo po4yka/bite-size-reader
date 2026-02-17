@@ -29,6 +29,7 @@ from app.api.models.responses import success_response
 from app.api.routers import (
     auth,
     collections,
+    digest,
     health,
     notifications,
     proxy,
@@ -108,6 +109,7 @@ app.add_middleware(
         "Authorization",
         "Content-Type",
         "X-Correlation-ID",
+        "X-Telegram-Init-Data",
     ],  # Specific headers
     max_age=3600,  # Cache preflight for 1 hour
 )
@@ -128,6 +130,7 @@ app.include_router(user.router, prefix="/v1/user", tags=["User"])
 app.include_router(system.router, prefix="/v1/system", tags=["System"])
 app.include_router(proxy.router, prefix="/v1/proxy", tags=["Proxy"])
 app.include_router(notifications.router, prefix="/v1/notifications", tags=["Notifications"])
+app.include_router(digest.router, prefix="/v1/digest", tags=["Digest"])
 app.include_router(health.router, tags=["Health"])
 
 # Serve static files (Mini App HTML for session init, etc.)
