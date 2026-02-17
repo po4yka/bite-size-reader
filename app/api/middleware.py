@@ -60,6 +60,26 @@ def _check_local_rate_limit(user_id: str, limit: int, window: int) -> tuple[bool
         return True, limit - len(requests)
 
 
+async def webapp_auth_middleware(request: Request, call_next: Callable):
+    """Validate Telegram WebApp initData and attach user to request.state.
+
+    When X-Telegram-Init-Data header is present and no Authorization header,
+    validates the initData and stores the parsed user in request.state.webapp_user.
+    This lets downstream ``get_current_user`` dependency accept WebApp auth
+    without modifying every router.
+    """
+    init_data = request.headers.get("X-Telegram-Init-Data")
+    if init_data and "Authorization" not in request.headers:
+        try:
+            from app.api.routers.auth.webapp_auth import verify_telegram_webapp_init_data
+
+            user = verify_telegram_webapp_init_data(init_data)
+            request.state.webapp_user = user
+        except Exception:
+            pass  # Fall through to JWT auth
+    return await call_next(request)
+
+
 async def correlation_id_middleware(request: Request, call_next: Callable):
     """
     Add correlation ID to all requests for tracing.

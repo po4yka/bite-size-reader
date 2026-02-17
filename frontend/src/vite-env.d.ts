@@ -20,7 +20,19 @@ interface TelegramWebApp {
     onClick: (cb: () => void) => void;
     offClick: (cb: () => void) => void;
   };
+  BackButton: {
+    show: () => void;
+    hide: () => void;
+    onClick: (cb: () => void) => void;
+    offClick: (cb: () => void) => void;
+    isVisible: boolean;
+  };
   themeParams: Record<string, string>;
+  HapticFeedback: {
+    impactOccurred: (style: "light" | "medium" | "heavy" | "rigid" | "soft") => void;
+    notificationOccurred: (type: "error" | "success" | "warning") => void;
+    selectionChanged: () => void;
+  };
 }
 
 interface Window {

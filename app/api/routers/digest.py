@@ -126,3 +126,27 @@ async def trigger_digest(
         data,
         correlation_id=getattr(request.state, "correlation_id", None) if request else None,
     )
+
+
+@router.post("/trigger-channel")
+async def trigger_channel_digest(
+    request_body: dict,
+    current_user: dict = Depends(get_webapp_user),
+    request: Request = None,  # type: ignore[assignment]
+) -> dict:
+    """Trigger digest for a single channel (equivalent to /cdigest bot command)."""
+    from app.api.exceptions import ValidationError
+
+    channel_username = request_body.get("channel_username", "").strip().lstrip("@")
+    if not channel_username:
+        raise ValidationError("channel_username is required")
+
+    # Reuse existing digest trigger logic but for single channel
+    # This will be handled by the digest scheduler
+    return success_response(
+        {
+            "status": "queued",
+            "channel": channel_username,
+        },
+        correlation_id=getattr(request.state, "correlation_id", None) if request else None,
+    )

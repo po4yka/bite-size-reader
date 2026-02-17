@@ -1,27 +1,4 @@
-const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "";
-
-function getInitData(): string {
-  return window.Telegram?.WebApp?.initData ?? "";
-}
-
-async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const res = await fetch(`${BASE_URL}/v1/digest${path}`, {
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      "X-Telegram-Init-Data": getInitData(),
-      ...options.headers,
-    },
-  });
-
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error(body?.error?.message ?? `Request failed: ${res.status}`);
-  }
-
-  const json = await res.json();
-  return json.data;
-}
+import { apiRequest } from "./client";
 
 // Types
 
@@ -77,25 +54,25 @@ export interface TriggerResult {
 // API methods
 
 export function fetchChannels(): Promise<ChannelsData> {
-  return request("/channels");
+  return apiRequest("/v1/digest/channels");
 }
 
 export function subscribeChannel(username: string): Promise<{ status: string; username: string }> {
-  return request("/channels/subscribe", {
+  return apiRequest("/v1/digest/channels/subscribe", {
     method: "POST",
     body: JSON.stringify({ channel_username: username }),
   });
 }
 
 export function unsubscribeChannel(username: string): Promise<{ status: string; username: string }> {
-  return request("/channels/unsubscribe", {
+  return apiRequest("/v1/digest/channels/unsubscribe", {
     method: "POST",
     body: JSON.stringify({ channel_username: username }),
   });
 }
 
 export function fetchPreferences(): Promise<DigestPreferences> {
-  return request("/preferences");
+  return apiRequest("/v1/digest/preferences");
 }
 
 export function updatePreferences(prefs: Partial<{
@@ -105,16 +82,16 @@ export function updatePreferences(prefs: Partial<{
   max_posts_per_digest: number;
   min_relevance_score: number;
 }>): Promise<DigestPreferences> {
-  return request("/preferences", {
+  return apiRequest("/v1/digest/preferences", {
     method: "PATCH",
     body: JSON.stringify(prefs),
   });
 }
 
 export function fetchHistory(limit = 20, offset = 0): Promise<HistoryData> {
-  return request(`/history?limit=${limit}&offset=${offset}`);
+  return apiRequest(`/v1/digest/history?limit=${limit}&offset=${offset}`);
 }
 
 export function triggerDigest(): Promise<TriggerResult> {
-  return request("/trigger", { method: "POST" });
+  return apiRequest("/v1/digest/trigger", { method: "POST" });
 }

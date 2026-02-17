@@ -116,3 +116,66 @@ async def head_database(request: Request, user=Depends(get_current_user)):
     """
     await AuthService.require_owner(user)
     return _build_db_dump_response(request, user)
+
+
+@router.get("/db-info")
+async def get_db_info(user=Depends(get_current_user)):
+    """Get database information: table row counts and file size."""
+    from app.api.models.responses import success_response
+
+    db_path = Config.get("DB_PATH", "/data/app.db")
+
+    file_size_mb = 0.0
+    if os.path.exists(db_path):
+        file_size_mb = round(os.path.getsize(db_path) / (1024 * 1024), 1)
+
+    table_counts: dict[str, int] = {}
+    try:
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"
+        )
+        tables = [row[0] for row in cursor.fetchall()]
+        for table in sorted(tables):
+            try:
+                cursor.execute(f"SELECT COUNT(*) FROM [{table}]")
+                table_counts[table] = cursor.fetchone()[0]
+            except Exception:
+                table_counts[table] = -1
+        conn.close()
+    except Exception as e:
+        logger.error("db_info_failed", extra={"error": str(e)})
+
+    return success_response(
+        {
+            "file_size_mb": file_size_mb,
+            "table_counts": table_counts,
+            "db_path": db_path,
+        }
+    )
+
+
+@router.post("/clear-cache")
+async def clear_cache(user=Depends(get_current_user)):
+    """Clear Redis URL cache."""
+    from app.api.models.responses import success_response
+    from app.config.settings import load_config
+    from app.infrastructure.redis import get_redis
+
+    cfg = load_config(allow_stub_telegram=True)
+    redis_client = await get_redis(cfg)
+
+    cleared = 0
+    if redis_client:
+        try:
+            keys: list[bytes] = []
+            async for key in redis_client.scan_iter(match=f"{cfg.redis.prefix}:url:*"):
+                keys.append(key)
+            if keys:
+                cleared = await redis_client.delete(*keys)
+        except Exception as e:
+            logger.error("clear_cache_failed", extra={"error": str(e)})
+            raise ProcessingError(f"Cache clear failed: {e}") from e
+
+    return success_response({"cleared_keys": cleared})

@@ -24,7 +24,11 @@ from app.api.error_handlers import (
     validation_exception_handler,
 )
 from app.api.exceptions import APIException
-from app.api.middleware import correlation_id_middleware, rate_limit_middleware
+from app.api.middleware import (
+    correlation_id_middleware,
+    rate_limit_middleware,
+    webapp_auth_middleware,
+)
 from app.api.models.responses import success_response
 from app.api.routers import (
     auth,
@@ -114,9 +118,11 @@ app.add_middleware(
     max_age=3600,  # Cache preflight for 1 hour
 )
 
-# Custom middleware
-app.middleware("http")(correlation_id_middleware)
+# Custom middleware (order: last added = outermost = runs first)
+# webapp_auth_middleware runs first to parse initData before rate limiting
 app.middleware("http")(rate_limit_middleware)
+app.middleware("http")(correlation_id_middleware)
+app.middleware("http")(webapp_auth_middleware)
 
 # Include routers
 app.include_router(auth.router, prefix="/v1/auth", tags=["Authentication"])

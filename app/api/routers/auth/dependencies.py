@@ -36,7 +36,8 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 # HTTPBearer security scheme for JWT authentication
-security = HTTPBearer()
+# auto_error=False so missing Bearer token doesn't 403 before we check WebApp auth
+security = HTTPBearer(auto_error=False)
 
 # Cached instances for dependency injection
 _auth_token_cache: Any = None
@@ -86,41 +87,65 @@ def get_auth_repository() -> SqliteAuthRepositoryAdapter:
     return SqliteAuthRepositoryAdapter(database_proxy, token_cache=token_cache)
 
 
-async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)) -> dict:
+async def get_current_user(
+    request: Request,
+    credentials: HTTPAuthorizationCredentials | None = Depends(security),
+) -> dict:
     """
     Dependency to get current authenticated user.
 
-    Validates JWT token and returns user data.
+    Supports two auth methods:
+    1. JWT Bearer token (mobile app / API clients)
+    2. Telegram WebApp initData (Mini App -- set by webapp_auth_middleware)
+
+    When both are present, JWT takes precedence.
 
     Raises:
         TokenExpiredError: Access token has expired (401)
         TokenInvalidError: Token is malformed (401)
         TokenWrongTypeError: Not an access token (401)
         AuthorizationError: User not in whitelist (403)
+        AuthenticationError: No valid auth method found (401)
     """
-    from app.api.exceptions import TokenInvalidError
+    # Check WebApp auth first (set by webapp_auth_middleware)
+    webapp_user = getattr(request.state, "webapp_user", None)
 
-    token = credentials.credentials
-    payload = decode_token(token, expected_type="access")
+    # If we have JWT credentials, use JWT auth (takes precedence)
+    if credentials is not None:
+        from app.api.exceptions import TokenInvalidError
 
-    user_id = payload.get("user_id")
-    if not user_id:
-        raise TokenInvalidError("Missing user_id in token payload")
+        token = credentials.credentials
+        payload = decode_token(token, expected_type="access")
 
-    # Verify user is still in whitelist when configured
-    allowed_ids = Config.get_allowed_user_ids()
-    if allowed_ids and user_id not in allowed_ids:
-        raise AuthorizationError("User not authorized")
+        user_id = payload.get("user_id")
+        if not user_id:
+            raise TokenInvalidError("Missing user_id in token payload")
 
-    # Validate client_id from token
-    client_id = payload.get("client_id")
-    validate_client_id(client_id)
+        # Verify user is still in whitelist when configured
+        allowed_ids = Config.get_allowed_user_ids()
+        if allowed_ids and user_id not in allowed_ids:
+            raise AuthorizationError("User not authorized")
 
-    return {
-        "user_id": user_id,
-        "username": payload.get("username"),
-        "client_id": client_id,
-    }
+        # Validate client_id from token
+        client_id = payload.get("client_id")
+        validate_client_id(client_id)
+
+        return {
+            "user_id": user_id,
+            "username": payload.get("username"),
+            "client_id": client_id,
+        }
+
+    # Fall back to WebApp auth
+    if webapp_user is not None:
+        return {
+            "user_id": webapp_user["user_id"],
+            "username": webapp_user.get("username"),
+            "client_id": "webapp",
+        }
+
+    # No valid auth method found
+    raise AuthenticationError("Authentication required")
 
 
 async def get_webapp_user(request: Request) -> dict:
