@@ -4,6 +4,7 @@ import { useDebounce } from "../../hooks/useDebounce";
 import type { SearchResult, TrendingTopic } from "../../types/api";
 import ArticleCard from "../common/ArticleCard";
 import LoadingSpinner from "../common/LoadingSpinner";
+import LoadingSkeleton from "../common/LoadingSkeleton";
 import EmptyState from "../common/EmptyState";
 import ErrorBanner from "../common/ErrorBanner";
 import TrendingTopics from "./TrendingTopics";
@@ -86,7 +87,7 @@ export default function SearchPage({ onArticleClick }: SearchPageProps) {
             )
       )}
 
-      {!showTrending && loading && <LoadingSpinner text="Searching..." />}
+      {!showTrending && loading && <LoadingSkeleton count={3} />}
 
       {!showTrending && !loading && !error && results.length === 0 && (
         <EmptyState message="No results found. Try a different query." />

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   fetchPreferences,
   updatePreferences,
@@ -11,6 +11,7 @@ export default function PreferencesForm() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
+  const isDirty = useRef(false);
 
   // Form state
   const [deliveryTime, setDeliveryTime] = useState("");
@@ -55,10 +56,26 @@ export default function PreferencesForm() {
       });
       setPrefs(updated);
       setMessage("Preferences saved");
+      isDirty.current = false;
+      window.Telegram?.WebApp?.disableClosingConfirmation?.();
+      window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred("success");
     } catch (err) {
+      window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred("error");
       setMessage(err instanceof Error ? err.message : "Save failed");
     } finally {
       setSaving(false);
+    }
+  };
+
+  // Closing confirmation when form is dirty
+  useEffect(() => {
+    return () => window.Telegram?.WebApp?.disableClosingConfirmation?.();
+  }, []);
+
+  const markDirty = () => {
+    if (!isDirty.current) {
+      isDirty.current = true;
+      window.Telegram?.WebApp?.enableClosingConfirmation?.();
     }
   };
 
@@ -78,7 +95,7 @@ export default function PreferencesForm() {
         <input
           type="time"
           value={deliveryTime}
-          onChange={(e) => setDeliveryTime(e.target.value)}
+          onChange={(e) => { setDeliveryTime(e.target.value); markDirty(); }}
         />
       </label>
 
@@ -87,7 +104,7 @@ export default function PreferencesForm() {
           Timezone
           <span className="source-badge">{prefs.timezone_source}</span>
         </span>
-        <select value={timezone} onChange={(e) => setTimezone(e.target.value)}>
+        <select value={timezone} onChange={(e) => { setTimezone(e.target.value); markDirty(); }}>
           <option value="UTC">UTC</option>
           <option value="Europe/Moscow">Europe/Moscow</option>
           <option value="Europe/London">Europe/London</option>
@@ -109,7 +126,7 @@ export default function PreferencesForm() {
             min={1}
             max={168}
             value={hoursLookback}
-            onChange={(e) => setHoursLookback(Number(e.target.value))}
+            onChange={(e) => { setHoursLookback(Number(e.target.value)); markDirty(); }}
           />
           <span className="range-value">{hoursLookback}h</span>
         </div>
@@ -126,7 +143,7 @@ export default function PreferencesForm() {
             min={1}
             max={100}
             value={maxPosts}
-            onChange={(e) => setMaxPosts(Number(e.target.value))}
+            onChange={(e) => { setMaxPosts(Number(e.target.value)); markDirty(); }}
           />
           <span className="range-value">{maxPosts}</span>
         </div>
@@ -144,7 +161,7 @@ export default function PreferencesForm() {
             max={1}
             step={0.05}
             value={minRelevance}
-            onChange={(e) => setMinRelevance(Number(e.target.value))}
+            onChange={(e) => { setMinRelevance(Number(e.target.value)); markDirty(); }}
           />
           <span className="range-value">{minRelevance.toFixed(2)}</span>
         </div>

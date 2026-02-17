@@ -8,6 +8,18 @@ export default function CacheControls() {
 
   const handleClear = async () => {
     if (clearing) return;
+
+    const confirmed = await new Promise<boolean>((resolve) => {
+      const wa = window.Telegram?.WebApp;
+      if (wa?.showConfirm) {
+        wa.showConfirm("Clear the entire URL cache?", resolve);
+      } else {
+        resolve(window.confirm("Clear the entire URL cache?"));
+      }
+    });
+    if (!confirmed) return;
+
+    window.Telegram?.WebApp?.HapticFeedback?.impactOccurred("medium");
     setClearing(true);
     setMessage("");
     setError("");

@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { checkDuplicate, submitUrl } from "../../api/requests";
 import ProcessingStatus from "./ProcessingStatus";
 
@@ -32,11 +32,12 @@ export default function SubmitForm({ onViewArticle }: SubmitFormProps) {
     }
   }, [url]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = useCallback(async (e?: React.FormEvent) => {
+    e?.preventDefault();
     const trimmed = url.trim();
     if (!trimmed || submitting) return;
 
+    window.Telegram?.WebApp?.HapticFeedback?.impactOccurred("medium");
     setSubmitting(true);
     setError("");
     setDuplicate(null);
@@ -45,11 +46,48 @@ export default function SubmitForm({ onViewArticle }: SubmitFormProps) {
       const result = await submitUrl(trimmed);
       setRequestId(result.request_id);
     } catch (err) {
+      window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred("error");
       setError(err instanceof Error ? err.message : "Failed to submit URL");
     } finally {
       setSubmitting(false);
     }
-  };
+  }, [url, submitting]);
+
+  // Closing confirmation when URL input has content
+  useEffect(() => {
+    const wa = window.Telegram?.WebApp;
+    if (!wa) return;
+    if (url.trim() && !requestId) {
+      wa.enableClosingConfirmation?.();
+    } else {
+      wa.disableClosingConfirmation?.();
+    }
+    return () => wa.disableClosingConfirmation?.();
+  }, [url, requestId]);
+
+  // MainButton integration
+  useEffect(() => {
+    const btn = window.Telegram?.WebApp?.MainButton;
+    if (!btn) return;
+
+    if (submitting) {
+      btn.setText("Submitting...");
+      btn.showProgress(true);
+      btn.show();
+      return () => { btn.hideProgress(); btn.hide(); };
+    }
+
+    if (url.trim() && !requestId) {
+      btn.setText("Summarize");
+      btn.show();
+      const handler = () => handleSubmit();
+      btn.onClick(handler);
+      return () => { btn.offClick(handler); btn.hide(); };
+    }
+
+    btn.hide();
+    return () => btn.hide();
+  }, [url, submitting, requestId, handleSubmit]);
 
   const handleComplete = (summaryId: number) => {
     setRequestId(null);
@@ -80,6 +118,7 @@ export default function SubmitForm({ onViewArticle }: SubmitFormProps) {
         onBlur={handleBlur}
         placeholder="Paste an article or YouTube URL"
         disabled={submitting}
+        aria-label="Article URL"
       />
 
       {duplicate?.existing_summary_id && (

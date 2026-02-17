@@ -1,20 +1,26 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { fetchSummaries, toggleFavorite } from "../../api/summaries";
 import type { SummaryCompact } from "../../types/api";
+import { useCloudStorage } from "../../hooks/useCloudStorage";
+import { usePullToRefresh } from "../../hooks/usePullToRefresh";
 import ArticleCard from "../common/ArticleCard";
 import LoadingSpinner from "../common/LoadingSpinner";
+import LoadingSkeleton from "../common/LoadingSkeleton";
 import ErrorBanner from "../common/ErrorBanner";
 import EmptyState from "../common/EmptyState";
 import FilterBar from "./FilterBar";
 
 const PAGE_SIZE = 20;
+type FilterKey = "all" | "unread" | "favorites";
 
 interface ArticleListProps {
   onArticleClick: (id: number) => void;
 }
 
 export default function ArticleList({ onArticleClick }: ArticleListProps) {
-  const [filter, setFilter] = useState<"all" | "unread" | "favorites">("all");
+  const [filterStr, setFilterStr] = useCloudStorage("bsr_library_filter", "all");
+  const filter = (["all", "unread", "favorites"].includes(filterStr) ? filterStr : "all") as FilterKey;
+
   const [summaries, setSummaries] = useState<SummaryCompact[]>([]);
   const [hasMore, setHasMore] = useState(true);
   const [loading, setLoading] = useState(false);
@@ -70,6 +76,18 @@ export default function ArticleList({ onArticleClick }: ArticleListProps) {
     return () => observer.disconnect();
   }, [hasMore, loading, loadPage]);
 
+  // Pull-to-refresh
+  const handleRefresh = useCallback(async () => {
+    offsetRef.current = 0;
+    await loadPage(0, true);
+  }, [loadPage]);
+
+  const { containerRef, pullDistance, refreshing } = usePullToRefresh(handleRefresh);
+
+  const handleFilterChange = (f: FilterKey) => {
+    setFilterStr(f);
+  };
+
   const handleFavoriteToggle = async (id: number) => {
     try {
       const res = await toggleFavorite(id);
@@ -77,15 +95,26 @@ export default function ArticleList({ onArticleClick }: ArticleListProps) {
         prev.map((s) => (s.id === id ? { ...s, is_favorite: res.is_favorite } : s)),
       );
     } catch {
-      // Silently fail -- optimistic update not worth the complexity here
+      // Silently fail
     }
   };
 
   return (
-    <div className="article-list">
-      <FilterBar filter={filter} onFilterChange={setFilter} />
+    <div className="article-list" ref={containerRef}>
+      {pullDistance > 0 && (
+        <div
+          className="pull-indicator"
+          style={{ height: pullDistance, opacity: pullDistance / 60 }}
+        >
+          {refreshing ? "Refreshing..." : pullDistance >= 60 ? "Release to refresh" : "Pull to refresh"}
+        </div>
+      )}
+
+      <FilterBar filter={filter} onFilterChange={handleFilterChange} />
 
       {error && <ErrorBanner message={error} onRetry={() => loadPage(0, true)} />}
+
+      {loading && summaries.length === 0 && !error && <LoadingSkeleton count={5} />}
 
       {!loading && !error && summaries.length === 0 && (
         <EmptyState message="No articles found" />
@@ -100,7 +129,7 @@ export default function ArticleList({ onArticleClick }: ArticleListProps) {
         />
       ))}
 
-      {loading && <LoadingSpinner />}
+      {loading && summaries.length > 0 && <LoadingSpinner />}
 
       <div ref={sentinelRef} style={{ height: 1 }} />
     </div>

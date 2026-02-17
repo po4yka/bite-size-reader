@@ -39,10 +39,22 @@ export default function CollectionDetail({
   }, [load]);
 
   const handleRemove = async (itemId: number) => {
+    const confirmed = await new Promise<boolean>((resolve) => {
+      const wa = window.Telegram?.WebApp;
+      if (wa?.showConfirm) {
+        wa.showConfirm("Remove this item from the collection?", resolve);
+      } else {
+        resolve(window.confirm("Remove this item from the collection?"));
+      }
+    });
+    if (!confirmed) return;
+
+    window.Telegram?.WebApp?.HapticFeedback?.impactOccurred("heavy");
     try {
       await removeFromCollection(collectionId, itemId);
       setItems((prev) => prev.filter((item) => item.id !== itemId));
     } catch (e) {
+      window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred("error");
       setError(e instanceof Error ? e.message : "Failed to remove item");
     }
   };

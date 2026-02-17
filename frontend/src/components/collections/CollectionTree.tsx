@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { fetchCollections, createCollection } from "../../api/collections";
 import type { Collection } from "../../types/api";
-import LoadingSpinner from "../common/LoadingSpinner";
+import LoadingSkeleton from "../common/LoadingSkeleton";
 import ErrorBanner from "../common/ErrorBanner";
 import EmptyState from "../common/EmptyState";
 
@@ -38,6 +38,7 @@ export default function CollectionTree({ onCollectionClick }: CollectionTreeProp
     setCreating(true);
     try {
       await createCollection(name.trim());
+      window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred("success");
       setName("");
       await load();
     } catch (e) {
@@ -47,7 +48,7 @@ export default function CollectionTree({ onCollectionClick }: CollectionTreeProp
     }
   };
 
-  if (loading) return <LoadingSpinner text="Loading collections..." />;
+  if (loading) return <LoadingSkeleton count={3} type="collection" />;
   if (error) return <ErrorBanner message={error} onRetry={load} />;
 
   return (

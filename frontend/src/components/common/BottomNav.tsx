@@ -14,15 +14,24 @@ const NAV_ITEMS: Array<{ page: Route["page"]; label: string; icon: string }> = [
 ];
 
 export default function BottomNav({ activePage, onNavigate }: BottomNavProps) {
+  const handleClick = (page: Route["page"]) => {
+    if (page !== activePage) {
+      window.Telegram?.WebApp?.HapticFeedback?.selectionChanged();
+    }
+    onNavigate({ page });
+  };
+
   return (
-    <nav className="bottom-nav">
+    <nav className="bottom-nav" role="navigation" aria-label="Main navigation">
       {NAV_ITEMS.map((item) => (
         <button
           key={item.page}
           className={`bottom-nav-item${activePage === item.page ? " active" : ""}`}
-          onClick={() => onNavigate({ page: item.page })}
+          onClick={() => handleClick(item.page)}
+          aria-label={item.label}
+          aria-current={activePage === item.page ? "page" : undefined}
         >
-          <span className="bottom-nav-icon">{item.icon}</span>
+          <span className="bottom-nav-icon" aria-hidden="true">{item.icon}</span>
           <span className="bottom-nav-label">{item.label}</span>
         </button>
       ))}

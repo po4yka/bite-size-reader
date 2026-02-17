@@ -21,19 +21,19 @@ function DigestSection() {
       <div className="digest-tabs">
         <button
           className={`digest-tab ${tab === "channels" ? "active" : ""}`}
-          onClick={() => setTab("channels")}
+          onClick={() => { window.Telegram?.WebApp?.HapticFeedback?.selectionChanged(); setTab("channels"); }}
         >
           Channels
         </button>
         <button
           className={`digest-tab ${tab === "preferences" ? "active" : ""}`}
-          onClick={() => setTab("preferences")}
+          onClick={() => { window.Telegram?.WebApp?.HapticFeedback?.selectionChanged(); setTab("preferences"); }}
         >
           Settings
         </button>
         <button
           className={`digest-tab ${tab === "history" ? "active" : ""}`}
-          onClick={() => setTab("history")}
+          onClick={() => { window.Telegram?.WebApp?.HapticFeedback?.selectionChanged(); setTab("history"); }}
         >
           History
         </button>
@@ -73,7 +73,10 @@ export default function MorePage({ sub, onNavigate }: MorePageProps) {
           <li key={item.sub}>
             <button
               className="more-menu-item"
-              onClick={() => onNavigate({ page: "more", sub: item.sub })}
+              onClick={() => {
+                window.Telegram?.WebApp?.HapticFeedback?.impactOccurred("light");
+                onNavigate({ page: "more", sub: item.sub });
+              }}
             >
               <span>{item.label}</span>
               <span className="more-menu-arrow">&rsaquo;</span>

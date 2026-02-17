@@ -51,6 +51,18 @@ export default function ChannelList() {
 
   const handleUnsubscribe = async (username: string) => {
     if (submitting) return;
+
+    const confirmed = await new Promise<boolean>((resolve) => {
+      const wa = window.Telegram?.WebApp;
+      if (wa?.showConfirm) {
+        wa.showConfirm(`Unsubscribe from @${username}?`, resolve);
+      } else {
+        resolve(window.confirm(`Unsubscribe from @${username}?`));
+      }
+    });
+    if (!confirmed) return;
+
+    window.Telegram?.WebApp?.HapticFeedback?.impactOccurred("heavy");
     setSubmitting(true);
     setMessage("");
     try {

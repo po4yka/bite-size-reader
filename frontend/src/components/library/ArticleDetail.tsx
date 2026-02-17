@@ -14,6 +14,7 @@ export default function ArticleDetail({ articleId, onBack }: ArticleDetailProps)
   const [detail, setDetail] = useState<SummaryDetail | null>(null);
   const [content, setContent] = useState<SummaryContent | null>(null);
   const [showContent, setShowContent] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -40,6 +41,7 @@ export default function ArticleDetail({ articleId, onBack }: ArticleDetailProps)
 
   const handleMarkAsRead = async () => {
     if (!detail) return;
+    window.Telegram?.WebApp?.HapticFeedback?.impactOccurred("light");
     try {
       await markAsRead(articleId);
       setDetail({ ...detail, is_read: true });
@@ -50,6 +52,7 @@ export default function ArticleDetail({ articleId, onBack }: ArticleDetailProps)
 
   const handleToggleFavorite = async () => {
     if (!detail) return;
+    window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred("success");
     try {
       const res = await toggleFavorite(articleId);
       setDetail({ ...detail, is_favorite: res.is_favorite });
@@ -57,6 +60,21 @@ export default function ArticleDetail({ articleId, onBack }: ArticleDetailProps)
       // Silently fail
     }
   };
+
+  const handleToggleFullscreen = () => {
+    const wa = window.Telegram?.WebApp;
+    if (!wa?.isVersionAtLeast?.("8.0")) return;
+
+    if (isFullscreen) {
+      wa.exitFullscreen();
+      setIsFullscreen(false);
+    } else {
+      wa.requestFullscreen();
+      setIsFullscreen(true);
+    }
+  };
+
+  const canFullscreen = !!window.Telegram?.WebApp?.isVersionAtLeast?.("8.0");
 
   if (loading) return <LoadingSpinner text="Loading article..." />;
   if (error) return <ErrorBanner message={error} onRetry={onBack} />;
@@ -66,7 +84,18 @@ export default function ArticleDetail({ articleId, onBack }: ArticleDetailProps)
 
   return (
     <div className="article-detail">
-      <button className="btn-back" onClick={onBack}>Back</button>
+      <div className="article-detail-header-row">
+        <button className="btn-back" onClick={onBack} aria-label="Go back">Back</button>
+        {canFullscreen && (
+          <button
+            className="fullscreen-toggle"
+            onClick={handleToggleFullscreen}
+            aria-label={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
+          >
+            {isFullscreen ? "Exit fullscreen" : "Fullscreen"}
+          </button>
+        )}
+      </div>
 
       <h1 className="article-detail-title">{detail.title || "Untitled"}</h1>
 
@@ -78,16 +107,17 @@ export default function ArticleDetail({ articleId, onBack }: ArticleDetailProps)
 
       <div className="article-detail-actions">
         {!detail.is_read && (
-          <button className="btn-primary" onClick={handleMarkAsRead}>
+          <button className="btn-action" onClick={handleMarkAsRead} aria-label="Mark as read">
             Mark as read
           </button>
         )}
-        <button className="btn-primary" onClick={handleToggleFavorite}>
+        <button className="btn-action" onClick={handleToggleFavorite} aria-label={detail.is_favorite ? "Remove from favorites" : "Add to favorites"}>
           {detail.is_favorite ? "Unfavorite" : "Favorite"}
         </button>
         <button
-          className="btn-primary"
+          className="btn-action"
           onClick={() => window.open(detail.url, "_blank", "noopener,noreferrer")}
+          aria-label="Open original article"
         >
           Open original
         </button>

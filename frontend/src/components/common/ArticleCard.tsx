@@ -9,17 +9,26 @@ interface ArticleCardProps {
 export default function ArticleCard({ article, onClick, onFavoriteToggle }: ArticleCardProps) {
   const domain = article.domain || new URL(article.url).hostname;
 
+  const handleClick = () => {
+    window.Telegram?.WebApp?.HapticFeedback?.impactOccurred("light");
+    onClick();
+  };
+
+  const handleFavorite = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred("success");
+    onFavoriteToggle?.(article.id);
+  };
+
   return (
-    <div className="article-card" onClick={onClick}>
+    <div className="article-card" onClick={handleClick} role="article">
       <div className="article-card-header">
         <span className="article-card-title">{article.title || "Untitled"}</span>
         {onFavoriteToggle && (
           <button
             className="article-card-fav"
-            onClick={(e) => {
-              e.stopPropagation();
-              onFavoriteToggle(article.id);
-            }}
+            onClick={handleFavorite}
+            aria-label={article.is_favorite ? "Remove from favorites" : "Add to favorites"}
           >
             {article.is_favorite ? "\u2605" : "\u2606"}
           </button>
