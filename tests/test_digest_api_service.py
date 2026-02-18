@@ -146,7 +146,7 @@ class TestPreferences:
         db, user = db_setup
         with db.bind_ctx(ALL_MODELS):
             prefs = service.get_preferences(user.telegram_id)
-            assert prefs.delivery_time == "09:00"
+            assert prefs.delivery_time == "10:00,19:00"
             assert prefs.delivery_time_source == "global"
             assert prefs.timezone_source == "global"
 

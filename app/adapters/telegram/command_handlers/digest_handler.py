@@ -97,6 +97,7 @@ class DigestHandlerImpl:
                     user_id=ctx.uid,
                     correlation_id=ctx.correlation_id,
                     digest_type="on_demand",
+                    lang="ru",
                 )
                 if result.errors:
                     errors_text = "\n".join(result.errors[:3])
@@ -150,6 +151,7 @@ class DigestHandlerImpl:
                     user_id=ctx.uid,
                     channel=channel,
                     correlation_id=ctx.correlation_id,
+                    lang="ru",
                 )
                 if result.errors:
                     errors_text = "\n".join(result.errors[:3])

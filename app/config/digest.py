@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator
 
 
 class ChannelDigestConfig(BaseModel):
@@ -21,10 +21,10 @@ class ChannelDigestConfig(BaseModel):
         default="channel_digest_userbot",
         validation_alias="DIGEST_SESSION_NAME",
     )
-    digest_time: str = Field(
-        default="09:00",
-        validation_alias="DIGEST_TIME",
-        description="Daily delivery time (HH:MM)",
+    digest_times: list[str] = Field(
+        default=["10:00", "19:00"],
+        validation_alias=AliasChoices("DIGEST_TIMES", "DIGEST_TIME"),
+        description="Comma-separated delivery times (HH:MM)",
     )
     timezone: str = Field(
         default="UTC",
@@ -81,25 +81,34 @@ class ChannelDigestConfig(BaseModel):
             raise ValueError(msg)
         return name
 
-    @field_validator("digest_time", mode="before")
+    @field_validator("digest_times", mode="before")
     @classmethod
-    def _validate_digest_time(cls, value: Any) -> str:
-        raw = str(value or "09:00").strip()
-        if not raw:
-            return "09:00"
-        parts = raw.split(":")
-        if len(parts) != 2:
-            msg = "DIGEST_TIME must be in HH:MM format"
-            raise ValueError(msg)
-        try:
-            hour, minute = int(parts[0]), int(parts[1])
-        except ValueError as exc:
-            msg = "DIGEST_TIME must contain valid integers"
-            raise ValueError(msg) from exc
-        if not (0 <= hour <= 23 and 0 <= minute <= 59):
-            msg = "DIGEST_TIME hour must be 0-23 and minute must be 0-59"
-            raise ValueError(msg)
-        return raw
+    def _validate_digest_times(cls, value: Any) -> list[str]:
+        if isinstance(value, list):
+            raw_items = value
+        else:
+            raw = str(value or "10:00,19:00").strip()
+            if not raw:
+                return ["10:00", "19:00"]
+            raw_items = [t.strip() for t in raw.split(",") if t.strip()]
+        if not raw_items:
+            return ["10:00", "19:00"]
+        validated: list[str] = []
+        for item in raw_items:
+            parts = item.split(":")
+            if len(parts) != 2:
+                msg = f"DIGEST_TIMES entry '{item}' must be in HH:MM format"
+                raise ValueError(msg)
+            try:
+                hour, minute = int(parts[0]), int(parts[1])
+            except ValueError as exc:
+                msg = f"DIGEST_TIMES entry '{item}' must contain valid integers"
+                raise ValueError(msg) from exc
+            if not (0 <= hour <= 23 and 0 <= minute <= 59):
+                msg = f"DIGEST_TIMES entry '{item}': hour must be 0-23, minute 0-59"
+                raise ValueError(msg)
+            validated.append(item)
+        return validated
 
     @field_validator("timezone", mode="before")
     @classmethod

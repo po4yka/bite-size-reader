@@ -73,25 +73,29 @@ class SchedulerService:
                 },
             )
 
-        # Add channel digest job if enabled
+        # Add channel digest jobs if enabled (one per configured time)
         if self.cfg.digest.enabled:
-            hour, minute = map(int, self.cfg.digest.digest_time.split(":"))
-            self._scheduler.add_job(
-                self._run_channel_digest,
-                trigger=CronTrigger(hour=hour, minute=minute, timezone=self.cfg.digest.timezone),
-                id="channel_digest",
-                name="Channel Digest Delivery",
-                replace_existing=True,
-                max_instances=1,
-            )
-            logger.info(
-                "scheduler_digest_job_added",
-                extra={
-                    "job_id": "channel_digest",
-                    "time": self.cfg.digest.digest_time,
-                    "timezone": self.cfg.digest.timezone,
-                },
-            )
+            for idx, time_str in enumerate(self.cfg.digest.digest_times):
+                hour, minute = map(int, time_str.split(":"))
+                job_id = f"channel_digest_{idx}"
+                self._scheduler.add_job(
+                    self._run_channel_digest,
+                    trigger=CronTrigger(
+                        hour=hour, minute=minute, timezone=self.cfg.digest.timezone
+                    ),
+                    id=job_id,
+                    name=f"Channel Digest Delivery ({time_str})",
+                    replace_existing=True,
+                    max_instances=1,
+                )
+                logger.info(
+                    "scheduler_digest_job_added",
+                    extra={
+                        "job_id": job_id,
+                        "time": time_str,
+                        "timezone": self.cfg.digest.timezone,
+                    },
+                )
         else:
             logger.info("scheduler_digest_job_skipped", extra={"enabled": False})
 
@@ -237,6 +241,7 @@ class SchedulerService:
                             user_id=uid,
                             correlation_id=f"{correlation_id}_u{uid}",
                             digest_type="scheduled",
+                            lang="ru",
                         )
                         logger.info(
                             "scheduled_digest_user_complete",

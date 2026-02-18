@@ -201,7 +201,10 @@ class DigestAPIService:
                 return user_val, "user"
             return global_val, "global"
 
-        dt, dt_src = _val(pref.delivery_time if pref else None, self._cfg.digest_time)
+        dt, dt_src = _val(
+            pref.delivery_time if pref else None,
+            ",".join(self._cfg.digest_times),
+        )
         tz, tz_src = _val(pref.timezone if pref else None, self._cfg.timezone)
         hl, hl_src = _val(pref.hours_lookback if pref else None, self._cfg.hours_lookback)
         mp, mp_src = _val(

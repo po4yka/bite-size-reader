@@ -83,7 +83,10 @@ class DigestService:
         if not posts:
             logger.info("digest_no_posts", extra={"cid": correlation_id, "uid": user_id})
             try:
-                await self._send(user_id, "No new posts found for your subscribed channels.")
+                await self._send(
+                    user_id,
+                    "\u041d\u0435\u0442 \u043d\u043e\u0432\u044b\u0445 \u043f\u043e\u0441\u0442\u043e\u0432 \u0432 \u043f\u043e\u0434\u043f\u0438\u0441\u0430\u043d\u043d\u044b\u0445 \u043a\u0430\u043d\u0430\u043b\u0430\u0445.",
+                )
                 result.messages_sent = 1
             except Exception as e:
                 result.errors.append(f"Send failed: {e}")
@@ -133,7 +136,10 @@ class DigestService:
                 extra={"cid": correlation_id, "uid": user_id, "channel": channel.username},
             )
             try:
-                await self._send(user_id, f"No unread posts in @{channel.username}.")
+                await self._send(
+                    user_id,
+                    f"\u041d\u0435\u0442 \u043d\u0435\u043f\u0440\u043e\u0447\u0438\u0442\u0430\u043d\u043d\u044b\u0445 \u043f\u043e\u0441\u0442\u043e\u0432 \u0432 @{channel.username}.",
+                )
                 result.messages_sent = 1
             except Exception as e:
                 result.errors.append(f"Send failed: {e}")
@@ -172,7 +178,10 @@ class DigestService:
 
         if not analyzed:
             try:
-                await self._send(user_id, "Posts were fetched but analysis produced no results.")
+                await self._send(
+                    user_id,
+                    "\u041f\u043e\u0441\u0442\u044b \u043f\u043e\u043b\u0443\u0447\u0435\u043d\u044b, \u043d\u043e \u0430\u043d\u0430\u043b\u0438\u0437 \u043d\u0435 \u0434\u0430\u043b \u0440\u0435\u0437\u0443\u043b\u044c\u0442\u0430\u0442\u043e\u0432.",
+                )
                 result.messages_sent = 1
             except Exception as e:
                 result.errors.append(f"Send failed: {e}")
@@ -200,7 +209,7 @@ class DigestService:
             try:
                 await self._send(
                     user_id,
-                    "All fetched posts were filtered (ads/announcements). No content to digest.",
+                    "\u0412\u0441\u0435 \u043f\u043e\u0441\u0442\u044b \u043e\u0442\u0444\u0438\u043b\u044c\u0442\u0440\u043e\u0432\u0430\u043d\u044b (\u0440\u0435\u043a\u043b\u0430\u043c\u0430/\u0430\u043d\u043e\u043d\u0441\u044b). \u041d\u0435\u0447\u0435\u0433\u043e \u043f\u043e\u043a\u0430\u0437\u044b\u0432\u0430\u0442\u044c.",
                 )
                 result.messages_sent = 1
             except Exception as e:
@@ -236,7 +245,7 @@ class DigestService:
             try:
                 await self._send(
                     user_id,
-                    "All posts were filtered out (ads, duplicates, or low relevance).",
+                    "\u0412\u0441\u0435 \u043f\u043e\u0441\u0442\u044b \u043e\u0442\u0444\u0438\u043b\u044c\u0442\u0440\u043e\u0432\u0430\u043d\u044b (\u0440\u0435\u043a\u043b\u0430\u043c\u0430, \u0434\u0443\u0431\u043b\u0438 \u0438\u043b\u0438 \u043d\u0438\u0437\u043a\u0430\u044f \u0440\u0435\u043b\u0435\u0432\u0430\u043d\u0442\u043d\u043e\u0441\u0442\u044c).",
                 )
                 result.messages_sent = 1
             except Exception as e:

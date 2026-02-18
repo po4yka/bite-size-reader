@@ -26,11 +26,12 @@ class DigestFormatter:
     def format_digest(
         analyzed_posts: list[dict[str, Any]],
     ) -> list[tuple[str, list[list[dict[str, str]]]]]:
-        """Format analyzed posts into Telegram-ready messages.
+        """Format analyzed posts into per-channel Telegram messages.
 
-        Groups posts by channel (sorted by avg relevance desc), adds a table
-        of contents, shows key_insights, and distributes inline buttons per
-        message chunk.
+        Returns a header/TOC message followed by one message group per channel.
+        Each channel block is self-contained with its posts and inline buttons.
+        If a single channel's content exceeds 4096 chars, it is split into
+        multiple messages.
 
         Args:
             analyzed_posts: List of post dicts with analysis fields.
@@ -39,7 +40,12 @@ class DigestFormatter:
             List of (message_text, inline_keyboard_rows) tuples.
         """
         if not analyzed_posts:
-            return [("No new posts to digest.", [])]
+            return [
+                (
+                    "\u041d\u0435\u0442 \u043d\u043e\u0432\u044b\u0445 \u043f\u043e\u0441\u0442\u043e\u0432 \u0434\u043b\u044f \u0434\u0430\u0439\u0434\u0436\u0435\u0441\u0442\u0430.",
+                    [],
+                )
+            ]
 
         # Group by channel
         by_channel: dict[str, list[dict[str, Any]]] = {}
@@ -60,36 +66,41 @@ class DigestFormatter:
             ),
         )
 
-        # --- Build header + table of contents ---
+        # --- Build header / TOC message ---
         total_posts = sum(len(v) for v in by_channel.values())
         total_channels = len(by_channel)
+        ch_word = _pluralize_channels(total_channels)
+        post_word = _pluralize_posts(total_posts)
         parts: list[str] = [
-            f"\U0001f4cb **Channel Digest** \u2014 "
-            f"{total_posts} posts from {total_channels} channel{'s' if total_channels != 1 else ''}\n\n",
+            f"\U0001f4cb **\u0414\u0430\u0439\u0434\u0436\u0435\u0441\u0442 \u043a\u0430\u043d\u0430\u043b\u043e\u0432** \u2014 "
+            f"{total_posts} {post_word} \u0438\u0437 {total_channels} {ch_word}\n\n",
         ]
         for ch in sorted_channels:
             count = len(by_channel[ch])
-            parts.append(f"  @{ch} \u2014 {count} post{'s' if count != 1 else ''}\n")
-        parts.append("\n---\n")
+            parts.append(f"  @{ch} \u2014 {count} {_pluralize_posts(count)}\n")
 
-        # --- Build post entries with per-post buttons ---
-        # Track which post_num belongs to which line range so we can pair
-        # buttons with the chunk that contains the post.
-        post_entries: list[tuple[str, dict[str, str]]] = []
-        post_num = 0
+        header_text = "".join(parts)
+        result: list[tuple[str, list[list[dict[str, str]]]]] = [(header_text, [])]
+
+        # --- Build per-channel messages ---
+        global_post_num = 0
         for channel in sorted_channels:
-            channel_header = f"\n\U0001f4e2 **@{channel}**\n"
-            post_entries.append((channel_header, {}))
+            channel_entries: list[tuple[str, dict[str, str]]] = []
+            channel_header = f"\U0001f4e2 **@{channel}**\n\n"
+            channel_entries.append((channel_header, {}))
 
             for post in by_channel[channel]:
-                post_num += 1
+                global_post_num += 1
                 content_type = post.get("content_type", "other")
                 emoji = CONTENT_TYPE_EMOJI.get(content_type, "\U0001f4cc")
 
-                real_topic = post.get("real_topic", "Untitled")
+                real_topic = post.get("real_topic", "\u0411\u0435\u0437 \u0442\u0435\u043c\u044b")
                 tldr = post.get("tldr", "")
+                url = post.get("url", "")
 
-                lines = f"{post_num}. {emoji} **{real_topic}**\n    {tldr}\n"
+                lines = f"{global_post_num}. {emoji} **{real_topic}**\n    {tldr}\n"
+                if url:
+                    lines += f"    [\u0427\u0438\u0442\u0430\u0442\u044c]({url})\n"
 
                 # Append key_insights as indented bullets
                 key_insights: list[str] = post.get("key_insights") or []
@@ -99,25 +110,23 @@ class DigestFormatter:
                 channel_id = post.get("_channel_id", 0)
                 message_id = post.get("message_id", 0)
                 button = {
-                    "text": f"{post_num}. {real_topic[:30]}",
+                    "text": f"{global_post_num}. {real_topic[:30]}",
                     "callback_data": f"dg:{channel_id}:{message_id}",
                 }
-                post_entries.append((lines, button))
+                channel_entries.append((lines, button))
 
-        # Combine header
-        header_text = "".join(parts)
+            # Split this channel's entries into message chunks
+            result.extend(_split_channel_entries(channel_entries))
 
-        # Split into chunks, distributing buttons
-        return _split_with_buttons(header_text, post_entries)
+        return result
 
 
-def _split_with_buttons(
-    header: str,
+def _split_channel_entries(
     entries: list[tuple[str, dict[str, str]]],
 ) -> list[tuple[str, list[list[dict[str, str]]]]]:
-    """Build message chunks, attaching buttons for posts within each chunk."""
+    """Build message chunks for a single channel, attaching buttons per chunk."""
     result: list[tuple[str, list[list[dict[str, str]]]]] = []
-    current_text = header
+    current_text = ""
     current_buttons: list[list[dict[str, str]]] = []
 
     for entry_text, button in entries:
@@ -134,4 +143,26 @@ def _split_with_buttons(
     if current_text.strip():
         result.append((current_text, current_buttons))
 
-    return result if result else [("No new posts to digest.", [])]
+    return result
+
+
+def _pluralize_posts(n: int) -> str:
+    """Russian pluralization for 'post'."""
+    mod10 = n % 10
+    mod100 = n % 100
+    if mod10 == 1 and mod100 != 11:
+        return "\u043f\u043e\u0441\u0442"
+    if 2 <= mod10 <= 4 and not (12 <= mod100 <= 14):
+        return "\u043f\u043e\u0441\u0442\u0430"
+    return "\u043f\u043e\u0441\u0442\u043e\u0432"
+
+
+def _pluralize_channels(n: int) -> str:
+    """Russian pluralization for 'channel'."""
+    mod10 = n % 10
+    mod100 = n % 100
+    if mod10 == 1 and mod100 != 11:
+        return "\u043a\u0430\u043d\u0430\u043b"
+    if 2 <= mod10 <= 4 and not (12 <= mod100 <= 14):
+        return "\u043a\u0430\u043d\u0430\u043b\u0430"
+    return "\u043a\u0430\u043d\u0430\u043b\u043e\u0432"
