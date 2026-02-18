@@ -5,32 +5,38 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from app.core.ui_strings import t
+
 logger = logging.getLogger(__name__)
 
 
-def create_action_buttons(summary_id: int | str) -> list[list[dict[str, str]]]:
+def create_action_buttons(summary_id: int | str, lang: str = "en") -> list[list[dict[str, str]]]:
     summary_id_str = str(summary_id)
     export_row = [
-        {"text": "More", "callback_data": f"more:{summary_id_str}"},
-        {"text": "PDF", "callback_data": f"export:{summary_id_str}:pdf"},
-        {"text": "MD", "callback_data": f"export:{summary_id_str}:md"},
-        {"text": "HTML", "callback_data": f"export:{summary_id_str}:html"},
+        {"text": t("btn_more", lang), "callback_data": f"more:{summary_id_str}"},
+        {"text": t("btn_pdf", lang), "callback_data": f"export:{summary_id_str}:pdf"},
+        {"text": t("btn_md", lang), "callback_data": f"export:{summary_id_str}:md"},
+        {"text": t("btn_html", lang), "callback_data": f"export:{summary_id_str}:html"},
     ]
 
     action_row = [
-        {"text": "Save", "callback_data": f"save:{summary_id_str}"},
-        {"text": "Similar", "callback_data": f"similar:{summary_id_str}"},
+        {"text": t("btn_save", lang), "callback_data": f"save:{summary_id_str}"},
+        {"text": t("btn_similar", lang), "callback_data": f"similar:{summary_id_str}"},
     ]
 
     feedback_row = [
-        {"text": "👍", "callback_data": f"rate:{summary_id_str}:1"},
-        {"text": "👎", "callback_data": f"rate:{summary_id_str}:-1"},
+        {"text": "+1", "callback_data": f"rate:{summary_id_str}:1"},
+        {"text": "-1", "callback_data": f"rate:{summary_id_str}:-1"},
     ]
 
     return [export_row, action_row, feedback_row]
 
 
-def create_inline_keyboard(summary_id: int | str, correlation_id: str | None = None) -> Any:
+def create_inline_keyboard(
+    summary_id: int | str,
+    correlation_id: str | None = None,
+    lang: str = "en",
+) -> Any:
     try:
         from pyrogram import enums
         from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
@@ -39,21 +45,29 @@ def create_inline_keyboard(summary_id: int | str, correlation_id: str | None = N
         keyboard = [
             [
                 InlineKeyboardButton(
-                    "More",
+                    t("btn_more", lang),
                     callback_data=f"more:{summary_id_str}",
                     style=enums.ButtonStyle.PRIMARY,
                 ),
-                InlineKeyboardButton("PDF", callback_data=f"export:{summary_id_str}:pdf"),
-                InlineKeyboardButton("MD", callback_data=f"export:{summary_id_str}:md"),
-                InlineKeyboardButton("HTML", callback_data=f"export:{summary_id_str}:html"),
+                InlineKeyboardButton(
+                    t("btn_pdf", lang), callback_data=f"export:{summary_id_str}:pdf"
+                ),
+                InlineKeyboardButton(
+                    t("btn_md", lang), callback_data=f"export:{summary_id_str}:md"
+                ),
+                InlineKeyboardButton(
+                    t("btn_html", lang), callback_data=f"export:{summary_id_str}:html"
+                ),
             ],
             [
                 InlineKeyboardButton(
-                    "Save",
+                    t("btn_save", lang),
                     callback_data=f"save:{summary_id_str}",
                     style=enums.ButtonStyle.SUCCESS,
                 ),
-                InlineKeyboardButton("Similar", callback_data=f"similar:{summary_id_str}"),
+                InlineKeyboardButton(
+                    t("btn_similar", lang), callback_data=f"similar:{summary_id_str}"
+                ),
             ],
             [
                 InlineKeyboardButton(

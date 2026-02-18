@@ -10,9 +10,18 @@ import html
 import math
 from typing import Any
 
+from app.core.ui_strings import t
+
 
 class DataFormatterImpl:
-    """Stateless implementation of data formatting operations."""
+    """Stateless implementation of data formatting operations.
+
+    Args:
+        lang: UI language code ("en" or "ru").
+    """
+
+    def __init__(self, lang: str = "en") -> None:
+        self._lang = lang
 
     def format_bytes(self, size: int) -> str:
         """Convert byte count into a human-readable string."""
@@ -31,7 +40,7 @@ class DataFormatterImpl:
         if value is None:
             return None
         if isinstance(value, bool):
-            return "Yes" if value else "No"
+            return t("yes", self._lang) if value else t("no", self._lang)
         if isinstance(value, int):
             return str(value)
         if isinstance(value, float):
@@ -87,7 +96,7 @@ class DataFormatterImpl:
 
             if source_excerpt:
                 # Escape source excerpt as well
-                detail_parts.append(f"Source: {html.escape(source_excerpt)}")
+                detail_parts.append(f"{t('source', self._lang)}: {html.escape(source_excerpt)}")
 
             if detail_parts:
                 formatted.append(f"• {label_escaped}: " + " — ".join(detail_parts))
@@ -172,9 +181,9 @@ class DataFormatterImpl:
             detail_parts: list[str] = []
             if score is not None:
                 score_code = f"<code>{html.escape(score)}</code>"
-                detail_parts.append(f"Score: {score_code}")
+                detail_parts.append(f"{t('score', self._lang)}: {score_code}")
             if level_display:
-                detail_parts.append(f"Level: {level_display}")
+                detail_parts.append(f"{t('level', self._lang)}: {level_display}")
 
             details = " • ".join(detail_parts)
             if method_display and details:

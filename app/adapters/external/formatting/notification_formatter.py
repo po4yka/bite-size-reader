@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from app.core.async_utils import raise_if_cancelled
+from app.core.ui_strings import t
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
@@ -26,6 +27,7 @@ class NotificationFormatterImpl:
         safe_reply_func: Callable[[Any, str], Awaitable[None]] | None = None,
         verbosity_resolver: VerbosityResolver | None = None,
         progress_tracker: ProgressTracker | None = None,
+        lang: str = "en",
     ) -> None:
         """Initialize the notification formatter.
 
@@ -37,12 +39,14 @@ class NotificationFormatterImpl:
                 When *None*, all methods behave in DEBUG mode (legacy).
             progress_tracker: Optional tracker for editable progress messages
                 used in Reader mode.
+            lang: UI language code ("en" or "ru").
         """
         self._response_sender = response_sender
         self._data_formatter = data_formatter
         self._safe_reply_func = safe_reply_func
         self._verbosity_resolver = verbosity_resolver
         self._progress_tracker = progress_tracker
+        self._lang = lang
         # Error notification deduplication
         self._notified_error_ids: set[str] = set()
 
@@ -136,7 +140,7 @@ class NotificationFormatterImpl:
             )
 
             if reader and self._progress_tracker is not None:
-                user_text = f"Processing {url_domain}..."
+                user_text = t("processing_domain", self._lang).format(domain=url_domain)
             else:
                 user_text = debug_text
 
@@ -171,7 +175,7 @@ class NotificationFormatterImpl:
             )
 
             if reader and self._progress_tracker is not None:
-                user_text = "Extracting content..."
+                user_text = t("extracting_content", self._lang)
             else:
                 user_text = debug_text
 
@@ -232,8 +236,8 @@ class NotificationFormatterImpl:
             reader = await self._is_reader_mode(message)
 
             if reader and self._progress_tracker is not None:
-                user_text = (
-                    f"Content extracted ({excerpt_len:,} chars, {latency_sec:.0f}s). Analyzing..."
+                user_text = t("content_extracted_analyzing", self._lang).format(
+                    chars=f"{excerpt_len:,}", secs=f"{latency_sec:.0f}"
                 )
             else:
                 user_text = debug_text
@@ -291,7 +295,7 @@ class NotificationFormatterImpl:
             reader = await self._is_reader_mode(message)
 
             if reader and self._progress_tracker is not None:
-                user_text = "Using cached content. Analyzing..."
+                user_text = t("cached_content_analyzing", self._lang)
             else:
                 user_text = debug_text
 
@@ -336,7 +340,7 @@ class NotificationFormatterImpl:
             reader = await self._is_reader_mode(message)
 
             if reader and self._progress_tracker is not None:
-                user_text = f"Processing content ({content_len:,} chars)..."
+                user_text = t("processing_content", self._lang).format(chars=f"{content_len:,}")
             else:
                 user_text = debug_text
 
@@ -387,7 +391,9 @@ class NotificationFormatterImpl:
             reader = await self._is_reader_mode(message)
 
             if reader and self._progress_tracker is not None:
-                user_text = f"Detected language: {detected or 'unknown'}. Analyzing..."
+                user_text = t("detected_lang_analyzing", self._lang).format(
+                    lang=detected or "unknown"
+                )
             else:
                 user_text = debug_text
 
@@ -443,7 +449,7 @@ class NotificationFormatterImpl:
             reader = await self._is_reader_mode(message)
 
             if reader and self._progress_tracker is not None:
-                user_text = "Preparing AI analysis..."
+                user_text = t("preparing_analysis", self._lang)
             else:
                 user_text = debug_text
 
@@ -503,10 +509,8 @@ class NotificationFormatterImpl:
 
             if reader and self._progress_tracker is not None:
                 model_name = model.rsplit("/", maxsplit=1)[-1]
-                user_text = (
-                    f"🧠 <b>Analyzing with AI</b> ({model_name})\n"
-                    f"📝 Content: {content_len:,} chars\n"
-                    f"⌛ Est. time: 30-60s..."
+                user_text = t("analyzing_ai", self._lang).format(
+                    model=model_name, chars=f"{content_len:,}"
                 )
             else:
                 user_text = debug_text
@@ -566,7 +570,7 @@ class NotificationFormatterImpl:
                 reader = await self._is_reader_mode(message)
 
                 if reader and self._progress_tracker is not None:
-                    user_text = f"Analysis complete ({latency_sec:.0f}s). Generating summary..."
+                    user_text = t("analysis_complete", self._lang).format(secs=f"{latency_sec:.0f}")
                 else:
                     user_text = debug_text
 
@@ -607,7 +611,9 @@ class NotificationFormatterImpl:
                 "Status: Detecting language..."
             )
 
-            user_text = f"Processing forwarded post from {title}..." if reader else debug_text
+            user_text = (
+                t("processing_forward", self._lang).format(title=title) if reader else debug_text
+            )
 
             if self._progress_tracker is not None:
                 await self._progress_tracker.update(message, user_text)
@@ -629,7 +635,9 @@ class NotificationFormatterImpl:
             )
 
             if reader:
-                user_text = f"Detected language: {detected or 'unknown'}. Sending to model..."
+                user_text = t("detected_lang_sending", self._lang).format(
+                    lang=detected or "unknown"
+                )
             else:
                 user_text = debug_text
 
@@ -661,9 +669,9 @@ class NotificationFormatterImpl:
             )
 
             user_text = (
-                f"AI analysis done ({latency_sec:.0f}s). Generating summary..."
+                t("ai_analysis_done", self._lang).format(secs=f"{latency_sec:.0f}")
                 if reader and llm.status == "ok"
-                else ("AI analysis failed. See details above." if reader else debug_text)
+                else (t("analysis_failed", self._lang) if reader else debug_text)
             )
 
             if self._progress_tracker is not None:
@@ -740,17 +748,19 @@ class NotificationFormatterImpl:
                     self._progress_tracker.clear(message)
                 await self._response_sender.safe_reply(message, text)
 
+            _l = self._lang
+
             if error_type == "firecrawl_error":
-                details_block = f"\n\n<i>Details: {details}</i>" if details else ""
+                details_block = f"\n\n<i>{t('details', _l)}: {details}</i>" if details else ""
                 error_text = (
-                    "❌ <b>Content Extraction Failed</b>\n\n"
-                    "I was unable to extract readable content from the provided URL.\n\n"
-                    f"<b>Error ID:</b> <code>{correlation_id}</code>"
+                    f"\u274c <b>{t('err_firecrawl_title', _l)}</b>\n\n"
+                    f"{t('err_firecrawl_body', _l)}\n\n"
+                    f"<b>{t('error_id', _l)}:</b> <code>{correlation_id}</code>"
                     f"{details_block}\n\n"
-                    "<b>Possible Solutions:</b>\n"
-                    "• Try a different URL\n"
-                    "• Check if the content is publicly accessible (no paywall)\n"
-                    "• Ensure the URL points to a text-based article"
+                    f"<b>{t('err_firecrawl_solutions', _l)}:</b>\n"
+                    f"\u2022 {t('err_firecrawl_hint_url', _l)}\n"
+                    f"\u2022 {t('err_firecrawl_hint_paywall', _l)}\n"
+                    f"\u2022 {t('err_firecrawl_hint_text', _l)}"
                 )
                 if self._progress_tracker is not None:
                     self._progress_tracker.clear(message)
@@ -758,34 +768,34 @@ class NotificationFormatterImpl:
                 await self._admin_log(error_text, correlation_id=correlation_id)
             elif error_type == "empty_content":
                 error_text = (
-                    "❌ <b>No Content Found</b>\n\n"
-                    "The extraction process completed, but no meaningful text was found.\n\n"
-                    "<b>Common Causes:</b>\n"
-                    "• Website blocking automated access\n"
-                    "• Content behind paywall or login\n"
-                    "• Non-text content (images, videos only)\n"
-                    "• Temporary server issues at the source\n\n"
-                    "<b>Suggestions:</b>\n"
-                    "• Try a different URL\n"
-                    "• Check if the article is readable in a private browser tab\n\n"
-                    f"<b>Error ID:</b> <code>{correlation_id}</code>"
+                    f"\u274c <b>{t('err_empty_title', _l)}</b>\n\n"
+                    f"{t('err_empty_body', _l)}\n\n"
+                    f"<b>{t('err_empty_causes', _l)}:</b>\n"
+                    f"\u2022 {t('err_empty_cause_block', _l)}\n"
+                    f"\u2022 {t('err_empty_cause_paywall', _l)}\n"
+                    f"\u2022 {t('err_empty_cause_nontext', _l)}\n"
+                    f"\u2022 {t('err_empty_cause_server', _l)}\n\n"
+                    f"<b>{t('err_empty_suggestions', _l)}:</b>\n"
+                    f"\u2022 {t('err_empty_hint_url', _l)}\n"
+                    f"\u2022 {t('err_empty_hint_private', _l)}\n\n"
+                    f"<b>{t('error_id', _l)}:</b> <code>{correlation_id}</code>"
                 )
                 if self._progress_tracker is not None:
                     self._progress_tracker.clear(message)
                 await self._response_sender.safe_reply(message, error_text, parse_mode="HTML")
                 await self._admin_log(error_text, correlation_id=correlation_id)
             elif error_type == "processing_failed":
-                detail_block = f"\n\n<i>Reason: {details}</i>" if details else ""
+                detail_block = f"\n\n<i>{t('reason', _l)}: {details}</i>" if details else ""
                 error_text = (
-                    "⚙️ <b>Processing Failed</b>\n\n"
-                    "I couldn't generate a valid summary despite multiple attempts.\n\n"
-                    "<b>What happened:</b>\n"
-                    "• The AI models returned data that couldn't be parsed\n"
-                    "• Automatic repair attempts were unsuccessful\n\n"
-                    "<b>Try:</b>\n"
-                    "• Submit the URL again in a few minutes\n"
-                    "• Try a different article from the same source\n\n"
-                    f"<b>Error ID:</b> <code>{correlation_id}</code>"
+                    f"\u2699\ufe0f <b>{t('err_processing_title', _l)}</b>\n\n"
+                    f"{t('err_processing_body', _l)}\n\n"
+                    f"<b>{t('err_processing_what', _l)}:</b>\n"
+                    f"\u2022 {t('err_processing_parse', _l)}\n"
+                    f"\u2022 {t('err_processing_repair', _l)}\n\n"
+                    f"<b>{t('err_processing_try', _l)}:</b>\n"
+                    f"\u2022 {t('err_processing_hint_retry', _l)}\n"
+                    f"\u2022 {t('err_processing_hint_other', _l)}\n\n"
+                    f"<b>{t('error_id', _l)}:</b> <code>{correlation_id}</code>"
                     f"{detail_block}"
                 )
                 if self._progress_tracker is not None:
@@ -798,25 +808,24 @@ class NotificationFormatterImpl:
 
                 if "Tried" in error_info and "model(s):" in error_info:
                     lines = error_info.split("\n")
-                    models_info = f"\n• {lines[0]}" if lines else ""
+                    models_info = f"\n\u2022 {lines[0]}" if lines else ""
                     error_detail = "\n".join(lines[1:]) if len(lines) > 1 else ""
                 else:
                     error_detail = f"\n\n<i>Provider response: {details}</i>" if details else ""
 
                 error_text = (
-                    "🤖 <b>AI Analysis Failed</b>\n\n"
-                    "All AI models failed to process the content despite automatic fallbacks."
+                    f"\U0001f916 <b>{t('err_llm_title', _l)}</b>\n\n{t('err_llm_body', _l)}"
                 )
 
                 if models_info:
-                    error_text += f"\n\n<b>Models attempted:</b>{models_info}"
+                    error_text += f"\n\n<b>{t('err_llm_models', _l)}:</b>{models_info}"
 
                 error_text += (
-                    "\n\n<b>Possible Solutions:</b>\n"
-                    "• Try again in a few moments\n"
-                    "• The content might be too complex or unusual\n"
-                    "• Contact support if this happens repeatedly\n\n"
-                    f"<b>Error ID:</b> <code>{correlation_id}</code>"
+                    f"\n\n<b>{t('err_llm_solutions', _l)}:</b>\n"
+                    f"\u2022 {t('err_llm_hint_retry', _l)}\n"
+                    f"\u2022 {t('err_llm_hint_complex', _l)}\n"
+                    f"\u2022 {t('err_llm_hint_support', _l)}\n\n"
+                    f"<b>{t('error_id', _l)}:</b> <code>{correlation_id}</code>"
                 )
 
                 if error_detail:
@@ -827,13 +836,12 @@ class NotificationFormatterImpl:
                 await self._response_sender.safe_reply(message, error_text, parse_mode="HTML")
                 await self._admin_log(error_text, correlation_id=correlation_id)
             elif error_type == "unexpected_error":
-                details_block = f"\n\n<i>Details: {details}</i>" if details else ""
+                details_block = f"\n\n<i>{t('details', _l)}: {details}</i>" if details else ""
                 error_text = (
-                    "⚠️ <b>An unexpected error occurred</b>\n\n"
-                    "The system encountered an internal problem while processing your request.\n\n"
-                    f"<b>Error ID:</b> <code>{correlation_id}</code>\n"
-                    "<b>Status:</b> Please try again in a moment. If the issue persists, "
-                    "try a different URL or contact support."
+                    f"\u26a0\ufe0f <b>{t('err_unexpected_title', _l)}</b>\n\n"
+                    f"{t('err_unexpected_body', _l)}\n\n"
+                    f"<b>{t('error_id', _l)}:</b> <code>{correlation_id}</code>\n"
+                    f"<b>{t('status', _l)}:</b> {t('err_unexpected_status', _l)}"
                     f"{details_block}"
                 )
                 if self._progress_tracker is not None:
@@ -842,12 +850,12 @@ class NotificationFormatterImpl:
                 await self._admin_log(error_text, correlation_id=correlation_id)
             elif error_type == "timeout":
                 error_text = (
-                    "⏱ <b>Request Timed Out</b>\n\n"
-                    f"{details or 'The operation took too long to complete.'}\n\n"
-                    "<b>Try:</b>\n"
-                    "• Submitting a smaller article\n"
-                    "• Waiting a few moments before retrying\n\n"
-                    f"<b>Error ID:</b> <code>{correlation_id}</code>"
+                    f"\u23f1 <b>{t('err_timeout_title', _l)}</b>\n\n"
+                    f"{details or t('err_timeout_default', _l)}\n\n"
+                    f"<b>{t('err_timeout_try', _l)}:</b>\n"
+                    f"\u2022 {t('err_timeout_hint_smaller', _l)}\n"
+                    f"\u2022 {t('err_timeout_hint_wait', _l)}\n\n"
+                    f"<b>{t('error_id', _l)}:</b> <code>{correlation_id}</code>"
                 )
                 if self._progress_tracker is not None:
                     self._progress_tracker.clear(message)
@@ -855,10 +863,10 @@ class NotificationFormatterImpl:
                 await self._admin_log(error_text, correlation_id=correlation_id)
             elif error_type == "rate_limit":
                 error_text = (
-                    "⏳ <b>Service is Busy</b>\n\n"
-                    f"{details or 'You have reached the rate limit.'}\n\n"
-                    "<b>Status:</b> Please wait a minute before sending more requests.\n\n"
-                    f"<b>Error ID:</b> <code>{correlation_id}</code>"
+                    f"\u23f3 <b>{t('err_rate_limit_title', _l)}</b>\n\n"
+                    f"{details or t('err_rate_limit_default', _l)}\n\n"
+                    f"<b>{t('status', _l)}:</b> {t('err_rate_limit_status', _l)}\n\n"
+                    f"<b>{t('error_id', _l)}:</b> <code>{correlation_id}</code>"
                 )
                 if self._progress_tracker is not None:
                     self._progress_tracker.clear(message)
@@ -866,12 +874,12 @@ class NotificationFormatterImpl:
                 await self._admin_log(error_text, correlation_id=correlation_id)
             elif error_type == "network_error":
                 error_text = (
-                    "🌐 <b>Network Error</b>\n\n"
-                    f"{details or 'A connection problem occurred.'}\n\n"
-                    "<b>Try:</b>\n"
-                    "• Checking your internet connection\n"
-                    "• Retrying in a few moments\n\n"
-                    f"<b>Error ID:</b> <code>{correlation_id}</code>"
+                    f"\U0001f310 <b>{t('err_network_title', _l)}</b>\n\n"
+                    f"{details or t('err_network_default', _l)}\n\n"
+                    f"<b>{t('err_network_try', _l)}:</b>\n"
+                    f"\u2022 {t('err_network_hint_conn', _l)}\n"
+                    f"\u2022 {t('err_network_hint_retry', _l)}\n\n"
+                    f"<b>{t('error_id', _l)}:</b> <code>{correlation_id}</code>"
                 )
                 if self._progress_tracker is not None:
                     self._progress_tracker.clear(message)
@@ -879,10 +887,10 @@ class NotificationFormatterImpl:
                 await self._admin_log(error_text, correlation_id=correlation_id)
             elif error_type == "database_error":
                 error_text = (
-                    "💾 <b>Database Error</b>\n\n"
-                    f"{details or 'An internal storage error occurred.'}\n\n"
-                    "<b>Status:</b> This is an internal issue. Our team has been notified.\n\n"
-                    f"<b>Error ID:</b> <code>{correlation_id}</code>"
+                    f"\U0001f4be <b>{t('err_database_title', _l)}</b>\n\n"
+                    f"{details or t('err_database_default', _l)}\n\n"
+                    f"<b>{t('status', _l)}:</b> {t('err_database_status', _l)}\n\n"
+                    f"<b>{t('error_id', _l)}:</b> <code>{correlation_id}</code>"
                 )
                 if self._progress_tracker is not None:
                     self._progress_tracker.clear(message)
@@ -890,42 +898,42 @@ class NotificationFormatterImpl:
                 await self._admin_log(error_text, correlation_id=correlation_id)
             elif error_type == "access_denied":
                 error_text = (
-                    "🛑 <b>Access Denied</b>\n\n"
-                    f"User ID <code>{details or 'unknown'}</code> is not authorized to use this bot.\n\n"
-                    "If you believe this is an error, please contact the administrator."
+                    f"\U0001f6d1 <b>{t('err_access_denied_title', _l)}</b>\n\n"
+                    f"{t('err_access_denied_body', _l).format(uid=details or 'unknown')}\n\n"
+                    f"{t('err_access_denied_contact', _l)}"
                 )
                 await self._response_sender.safe_reply(message, error_text, parse_mode="HTML")
             elif error_type == "access_blocked":
                 error_text = (
-                    "🚫 <b>Access Blocked</b>\n\n"
-                    f"{details or 'Too many failed access attempts.'}\n\n"
-                    "<b>Status:</b> Please try again later."
+                    f"\U0001f6ab <b>{t('err_access_blocked_title', _l)}</b>\n\n"
+                    f"{details or t('err_access_blocked_default', _l)}\n\n"
+                    f"<b>{t('status', _l)}:</b> {t('err_access_blocked_status', _l)}"
                 )
                 await self._response_sender.safe_reply(message, error_text, parse_mode="HTML")
             elif error_type == "message_too_long":
                 error_text = (
-                    "📏 <b>Message Too Long</b>\n\n"
-                    f"{details or 'The message exceeds the maximum allowed length.'}\n\n"
-                    "<b>Suggestions:</b>\n"
-                    "• Split the content into smaller messages\n"
-                    "• Upload a .txt file with the content instead"
+                    f"\U0001f4cf <b>{t('err_message_too_long_title', _l)}</b>\n\n"
+                    f"{details or t('err_message_too_long_default', _l)}\n\n"
+                    f"<b>{t('suggestions', _l)}:</b>\n"
+                    f"\u2022 {t('err_message_too_long_hint_split', _l)}\n"
+                    f"\u2022 {t('err_message_too_long_hint_file', _l)}"
                 )
                 await self._response_sender.safe_reply(message, error_text, parse_mode="HTML")
             elif error_type == "no_urls_found":
                 error_text = (
-                    "🔗 <b>No URLs Found</b>\n\n"
-                    f"{details or 'I couldn’t find any valid URLs to process.'}\n\n"
-                    "<b>Try:</b>\n"
-                    "• Ensuring URLs start with http:// or https://\n"
-                    "• Checking for typos in the address"
+                    f"\U0001f517 <b>{t('err_no_urls_title', _l)}</b>\n\n"
+                    f"{details or t('err_no_urls_default', _l)}\n\n"
+                    f"<b>{t('try_label', _l)}:</b>\n"
+                    f"\u2022 {t('err_no_urls_hint_http', _l)}\n"
+                    f"\u2022 {t('err_no_urls_hint_typo', _l)}"
                 )
                 await self._response_sender.safe_reply(message, error_text, parse_mode="HTML")
             else:
                 # Generic error fallback
                 error_text = (
-                    f"<b>Error Occurred</b>\n"
-                    f"{details or 'Unknown error'}\n\n"
-                    f"<b>Error ID:</b> <code>{correlation_id}</code>"
+                    f"<b>{t('err_generic_title', _l)}</b>\n"
+                    f"{details or t('err_generic_default', _l)}\n\n"
+                    f"<b>{t('error_id', _l)}:</b> <code>{correlation_id}</code>"
                 )
                 if self._progress_tracker is not None:
                     self._progress_tracker.clear(message)

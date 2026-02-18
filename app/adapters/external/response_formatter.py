@@ -56,6 +56,7 @@ class ResponseFormatter:
         verbosity_resolver: VerbosityResolver | None = None,
         admin_log_chat_id: int | None = None,
         topic_manager: TopicManager | None = None,
+        lang: str = "en",
     ) -> None:
         """Initialize the ResponseFormatter facade.
 
@@ -73,6 +74,7 @@ class ResponseFormatter:
         self._reply_json_func = reply_json_func
         self._telegram_client = telegram_client
         self._verbosity_resolver = verbosity_resolver
+        self._lang = lang
 
         # Load limits from config (with backward-compatible defaults)
         if telegram_limits is not None:
@@ -88,7 +90,7 @@ class ResponseFormatter:
             self.MIN_MESSAGE_INTERVAL_MS = 100
 
         # Initialize components
-        self._data_formatter = DataFormatterImpl()
+        self._data_formatter = DataFormatterImpl(lang=lang)
 
         self._message_validator = MessageValidatorImpl(
             min_message_interval_ms=self.MIN_MESSAGE_INTERVAL_MS
@@ -119,6 +121,7 @@ class ResponseFormatter:
             safe_reply_func=safe_reply_func,
             verbosity_resolver=verbosity_resolver,
             progress_tracker=self._progress_tracker,
+            lang=lang,
         )
 
         self._summary_presenter = SummaryPresenterImpl(
@@ -128,6 +131,7 @@ class ResponseFormatter:
             verbosity_resolver=verbosity_resolver,
             progress_tracker=self._progress_tracker,
             topic_manager=topic_manager,
+            lang=lang,
         )
 
         self._database_presenter = DatabasePresenterImpl(

@@ -7,6 +7,8 @@ Similar to BatchProgressFormatter but tailored for single-URL workflows.
 
 import time
 
+from app.core.ui_strings import t
+
 
 class SingleURLProgressFormatter:
     """Formats progress messages for single-URL operations."""
@@ -57,6 +59,7 @@ class SingleURLProgressFormatter:
         model: str,
         elapsed_sec: float,
         phase: str = "analyzing",
+        lang: str = "en",
     ) -> str:
         """Format LLM analysis progress message (HTML).
 
@@ -65,36 +68,28 @@ class SingleURLProgressFormatter:
             model: LLM model name (e.g., "deepseek-v3.2")
             elapsed_sec: Elapsed time in seconds
             phase: Current phase ("analyzing", "retrying", "enriching")
+            lang: UI language code ("en" or "ru").
 
         Returns:
             HTML-formatted progress message
-
-        Example output:
-            🧠 AI Analysis
-
-            📝 Content: 12,450 chars
-            🤖 Model: deepseek-v3.2
-            ⏱️ Analyzing... (12s) ⠙
-
-            Status: Processing with smart fallbacks
         """
         phase_labels = {
-            "analyzing": "Analyzing...",
-            "retrying": "Retrying with fallback...",
-            "enriching": "Generating insights...",
+            "analyzing": t("progress_analyzing", lang),
+            "retrying": t("progress_retrying", lang),
+            "enriching": t("progress_enriching", lang),
         }
-        phase_label = phase_labels.get(phase, "Processing...")
+        phase_label = phase_labels.get(phase, t("progress_processing", lang))
 
         spinner = cls._get_spinner()
         duration = cls._format_duration(elapsed_sec)
         content_formatted = f"{content_length:,}"
 
         return (
-            f"🧠 <b>AI Analysis</b>\n\n"
-            f"📝 Content: {content_formatted} chars\n"
-            f"🤖 Model: {cls._html_escape(model)}\n"
-            f"⏱️ {phase_label} ({duration}) {spinner}\n\n"
-            f"<i>Status: Processing with smart fallbacks</i>"
+            f"\U0001f9e0 <b>{t('progress_ai_analysis', lang)}</b>\n\n"
+            f"\U0001f4dd {t('progress_content', lang)}: {content_formatted} chars\n"
+            f"\U0001f916 {t('progress_model', lang)}: {cls._html_escape(model)}\n"
+            f"\u23f1\ufe0f {phase_label} ({duration}) {spinner}\n\n"
+            f"<i>{t('progress_status_processing', lang)}</i>"
         )
 
     @classmethod
@@ -105,6 +100,7 @@ class SingleURLProgressFormatter:
         success: bool = True,
         error_msg: str | None = None,
         correlation_id: str | None = None,
+        lang: str = "en",
     ) -> str:
         """Format LLM completion message (HTML).
 
@@ -114,33 +110,26 @@ class SingleURLProgressFormatter:
             success: Whether analysis succeeded
             error_msg: Error message (if failed)
             correlation_id: Correlation ID for error tracking
+            lang: UI language code ("en" or "ru").
 
         Returns:
             HTML-formatted completion message
-
-        Success example:
-            ✅ Analysis Complete (45s)
-
-            📊 Summary generated
-            🤖 Model: deepseek-v3.2
-
-        Failure example:
-            ❌ Analysis Failed (23s)
-
-            Error: Timeout after 60s
-            Error ID: abc123de
         """
         duration = cls._format_duration(elapsed_sec)
 
         if success:
             return (
-                f"✅ <b>Analysis Complete</b> ({duration})\n\n"
-                f"📊 Summary generated\n"
-                f"🤖 Model: {cls._html_escape(model)}"
+                f"\u2705 <b>{t('progress_analysis_complete', lang)}</b> ({duration})\n\n"
+                f"\U0001f4ca {t('progress_summary_generated', lang)}\n"
+                f"\U0001f916 {t('progress_model', lang)}: {cls._html_escape(model)}"
             )
         error_text = cls._html_escape(error_msg or "Unknown error")
-        error_id_line = f"\nError ID: <code>{correlation_id}</code>" if correlation_id else ""
-        return f"❌ <b>Analysis Failed</b> ({duration})\n\nError: {error_text}{error_id_line}"
+        error_id_line = (
+            f"\n{t('progress_error_id', lang)}: <code>{correlation_id}</code>"
+            if correlation_id
+            else ""
+        )
+        return f"\u274c <b>{t('progress_analysis_failed', lang)}</b> ({duration})\n\n{t('progress_error', lang)}: {error_text}{error_id_line}"
 
     @classmethod
     def format_youtube_progress(
@@ -151,6 +140,7 @@ class SingleURLProgressFormatter:
         stage_elapsed_sec: float,
         completed_stages: list[tuple[str, float]],
         total_elapsed_sec: float,
+        lang: str = "en",
     ) -> str:
         """Format YouTube download progress message (HTML).
 
@@ -161,19 +151,10 @@ class SingleURLProgressFormatter:
             stage_elapsed_sec: Elapsed time for current stage
             completed_stages: List of (stage_name, duration) for completed stages
             total_elapsed_sec: Total elapsed time across all stages
+            lang: UI language code ("en" or "ru").
 
         Returns:
             HTML-formatted progress message
-
-        Example output:
-            🎥 YouTube Video Processing
-
-            Stage 1/3: ✅ Transcript extracted (8s)
-            Stage 2/3: 📥 Downloading video... (45s) ⠸
-            Video ID: abc123xyz
-            Quality: 1080p
-
-            Total: 53s
         """
         spinner = cls._get_spinner()
         stage_duration = cls._format_duration(stage_elapsed_sec)
@@ -191,11 +172,11 @@ class SingleURLProgressFormatter:
         stages_text = "\n".join(stage_lines)
 
         return (
-            f"🎥 <b>YouTube Video Processing</b>\n\n"
+            f"\U0001f3a5 <b>{t('progress_youtube_processing', lang)}</b>\n\n"
             f"{stages_text}\n"
             f"Video ID: <code>{cls._html_escape(video_id)}</code>\n"
             f"Quality: 1080p\n\n"
-            f"<b>Total:</b> {total_duration}"
+            f"<b>{t('progress_total', lang)}:</b> {total_duration}"
         )
 
     @classmethod
@@ -208,6 +189,7 @@ class SingleURLProgressFormatter:
         error_msg: str | None = None,
         correlation_id: str | None = None,
         failed_stage: str | None = None,
+        lang: str = "en",
     ) -> str:
         """Format YouTube completion message (HTML).
 
@@ -219,40 +201,30 @@ class SingleURLProgressFormatter:
             error_msg: Error message (if failed)
             correlation_id: Correlation ID for error tracking
             failed_stage: Stage description where failure occurred
+            lang: UI language code ("en" or "ru").
 
         Returns:
             HTML-formatted completion message
-
-        Success example:
-            ✅ Video Processing Complete (2m 48s)
-
-            📹 Title: "How to Build AI Agents"
-            💾 Size: 245.3 MB
-            📝 Transcript ready
-
-        Failure example:
-            ❌ Video Processing Failed (1m 12s)
-
-            Stage 2/3: Download failed
-            Error: Connection timeout
-            Error ID: xyz789ab
         """
         duration = cls._format_duration(total_elapsed_sec)
 
         if success:
-            # Truncate title if too long
             display_title = title[:100] + "..." if len(title) > 100 else title
             return (
-                f"✅ <b>Video Processing Complete</b> ({duration})\n\n"
-                f"📹 Title: {cls._html_escape(display_title)}\n"
-                f"💾 Size: {size_mb:.1f} MB\n"
-                f"📝 Transcript ready"
+                f"\u2705 <b>{t('progress_video_complete', lang)}</b> ({duration})\n\n"
+                f"\U0001f4f9 Title: {cls._html_escape(display_title)}\n"
+                f"\U0001f4be Size: {size_mb:.1f} MB\n"
+                f"\U0001f4dd {t('progress_transcript_ready', lang)}"
             )
         error_text = cls._html_escape(error_msg or "Unknown error")
-        error_id_line = f"\nError ID: <code>{correlation_id}</code>" if correlation_id else ""
+        error_id_line = (
+            f"\n{t('progress_error_id', lang)}: <code>{correlation_id}</code>"
+            if correlation_id
+            else ""
+        )
         stage_line = f"{failed_stage}\n" if failed_stage else ""
         return (
-            f"❌ <b>Video Processing Failed</b> ({duration})\n\n"
+            f"\u274c <b>{t('progress_video_failed', lang)}</b> ({duration})\n\n"
             f"{stage_line}"
-            f"Error: {error_text}{error_id_line}"
+            f"{t('progress_error', lang)}: {error_text}{error_id_line}"
         )

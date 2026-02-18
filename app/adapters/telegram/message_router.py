@@ -21,6 +21,7 @@ from app.adapters.telegram.message_router_helpers import (
 from app.adapters.telegram.task_manager import UserTaskManager
 from app.config import AppConfig
 from app.core.logging_utils import generate_correlation_id
+from app.core.ui_strings import t
 from app.core.url_utils import extract_all_urls, looks_like_url
 from app.db.session import DatabaseSessionManager
 from app.db.user_interactions import async_safe_update_user_interaction
@@ -61,9 +62,11 @@ class MessageRouter:
         audit_func: Callable[[str, str, dict], None],
         task_manager: UserTaskManager | None = None,
         attachment_processor: AttachmentProcessor | None = None,
+        lang: str = "en",
     ) -> None:
         self.cfg = cfg
         self.db = db
+        self._lang = lang
         self.user_repo = SqliteUserRepositoryAdapter(db)
         self.access_controller = access_controller
         self.command_processor = command_processor
@@ -342,7 +345,7 @@ class MessageRouter:
                 )
                 await self.response_formatter.safe_reply(
                     message,
-                    "⏸️ Too many concurrent operations. Please wait for your previous requests to complete.",
+                    t("concurrent_ops_limit", self._lang),
                 )
                 if interaction_id:
                     await async_safe_update_user_interaction(
@@ -776,7 +779,7 @@ class MessageRouter:
             return
 
         # Default response for unknown input
-        await self.response_formatter.safe_reply(message, "Send a URL or forward a channel post.")
+        await self.response_formatter.safe_reply(message, t("fallback_prompt", self._lang))
         logger.debug(
             "unknown_input",
             extra={

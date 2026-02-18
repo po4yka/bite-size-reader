@@ -306,7 +306,10 @@ async def run_summary_cli(args: argparse.Namespace) -> None:
     max_concurrency = cfg.runtime.max_concurrent_calls
     sem_factory = _SemaphoreFactory(max_concurrency)
 
-    response_formatter = ResponseFormatter(telegram_limits=cfg.telegram_limits)
+    _ui_lang = cfg.runtime.preferred_lang
+    if _ui_lang == "auto":
+        _ui_lang = "en"
+    response_formatter = ResponseFormatter(telegram_limits=cfg.telegram_limits, lang=_ui_lang)
 
     firecrawl = FirecrawlClient(
         api_key=cfg.firecrawl.api_key,

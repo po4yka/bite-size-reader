@@ -7,6 +7,7 @@ import logging
 from typing import TYPE_CHECKING, Any
 
 from app.core.logging_utils import generate_correlation_id
+from app.core.ui_strings import t
 
 if TYPE_CHECKING:
     from app.adapters.external.response_formatter import ResponseFormatter
@@ -39,11 +40,13 @@ class CallbackHandler:
         response_formatter: ResponseFormatter,
         url_handler: URLHandler | None = None,
         hybrid_search: HybridSearchService | None = None,
+        lang: str = "en",
     ) -> None:
         self.db = db
         self.response_formatter = response_formatter
         self.url_handler = url_handler
         self.hybrid_search = hybrid_search
+        self._lang = lang
         # Rate limit: track recent clicks per user (debounce)
         self._recent_clicks: dict[tuple[int, str], float] = {}
         self._click_cooldown_seconds = 1.0
@@ -168,7 +171,7 @@ class CallbackHandler:
             await self.response_formatter.safe_reply(message, "Post not found in database.")
             return True
 
-        await self.response_formatter.safe_reply(message, "Generating full summary...")
+        await self.response_formatter.safe_reply(message, t("cb_generating_summary", self._lang))
 
         # If the post has a t.me URL and we have a URL handler, pipe through full BSR pipeline
         post_url = post.url or ""
@@ -243,7 +246,7 @@ class CallbackHandler:
 
         try:
             await self.response_formatter.safe_reply(
-                message, f"Generating {export_format.upper()} export..."
+                message, t("cb_export_generating", self._lang).format(fmt=export_format.upper())
             )
 
             file_path, filename = await exporter.export_summary(
@@ -265,7 +268,7 @@ class CallbackHandler:
             else:
                 await self.response_formatter.safe_reply(
                     message,
-                    f"Export failed. Summary not found or export error. Error ID: {correlation_id}",
+                    t("cb_export_failed", self._lang).format(cid=correlation_id),
                 )
         except Exception as e:
             logger.exception(
@@ -326,11 +329,13 @@ class CallbackHandler:
         summary_id = ":".join(parts[1:]).strip()
         summary_data = await self._load_summary_payload(summary_id, correlation_id=correlation_id)
         if not summary_data:
-            await self.response_formatter.safe_reply(message, "Summary not found.")
+            await self.response_formatter.safe_reply(message, t("cb_summary_not_found", self._lang))
             return True
 
         if summary_data.get("lang") == "ru":
-            await self.response_formatter.safe_reply(message, "This summary is already in Russian.")
+            await self.response_formatter.safe_reply(
+                message, t("cb_translation_already_ru", self._lang)
+            )
             return True
 
         if not self.url_handler or not hasattr(self.url_handler, "url_processor"):
@@ -343,7 +348,7 @@ class CallbackHandler:
             return True
 
         await self.response_formatter.safe_reply(
-            message, "Translation feature request received. Processing..."
+            message, t("cb_translation_processing", self._lang)
         )
 
         try:
@@ -401,13 +406,13 @@ class CallbackHandler:
         summary_id = ":".join(parts[1:]).strip()
         summary_data = await self._load_summary_payload(summary_id, correlation_id=correlation_id)
         if not summary_data:
-            await self.response_formatter.safe_reply(message, "Summary not found.")
+            await self.response_formatter.safe_reply(message, t("cb_summary_not_found", self._lang))
             return True
 
         if not self.hybrid_search:
             await self.response_formatter.safe_reply(
                 message,
-                "Search service is currently unavailable.",
+                t("cb_search_unavailable", self._lang),
             )
             return True
 
@@ -435,14 +440,12 @@ class CallbackHandler:
 
         query = " ".join(query_parts).strip()
         if not query:
-            await self.response_formatter.safe_reply(
-                message, "Not enough information to perform similarity search."
-            )
+            await self.response_formatter.safe_reply(message, t("cb_not_enough_info", self._lang))
             return True
 
         await self.response_formatter.safe_reply(
             message,
-            f"🔍 Finding similar summaries for: <b>{html.escape(title or 'this item')}</b>...",
+            f"\U0001f50d {t('cb_finding_similar', self._lang).format(title=html.escape(title or 'this item'))}",
             parse_mode="HTML",
         )
 
@@ -461,7 +464,7 @@ class CallbackHandler:
                 filtered_results.append(r)
 
             if not filtered_results:
-                await self.response_formatter.safe_reply(message, "No similar summaries found.")
+                await self.response_formatter.safe_reply(message, t("cb_no_similar", self._lang))
             else:
                 await self.response_formatter.send_topic_search_results(
                     message,
@@ -515,8 +518,12 @@ class CallbackHandler:
                 summary.is_favorited = not summary.is_favorited
                 summary.save()
 
-                status = "saved to favorites" if summary.is_favorited else "removed from favorites"
-                await self.response_formatter.safe_reply(message, f"Summary {status}.")
+                status_msg = (
+                    t("cb_saved", self._lang)
+                    if summary.is_favorited
+                    else t("cb_removed", self._lang)
+                )
+                await self.response_formatter.safe_reply(message, status_msg)
                 logger.info(
                     "summary_favorite_toggled",
                     extra={
@@ -527,7 +534,9 @@ class CallbackHandler:
                     },
                 )
             else:
-                await self.response_formatter.safe_reply(message, "Summary not found.")
+                await self.response_formatter.safe_reply(
+                    message, t("cb_summary_not_found", self._lang)
+                )
         except Exception as e:
             logger.exception(
                 "toggle_save_failed",
@@ -561,10 +570,14 @@ class CallbackHandler:
 
         # For now, just acknowledge the rating
         # Future: Store in SummaryFeedback table
-        rating_text = "positive" if rating > 0 else "negative"
+        rating_text = (
+            t("cb_feedback_positive", self._lang)
+            if rating > 0
+            else t("cb_feedback_negative", self._lang)
+        )
         await self.response_formatter.safe_reply(
             message,
-            f"Thanks for your {rating_text} feedback! This helps improve summarization quality.",
+            t("cb_feedback_thanks", self._lang).format(rating=rating_text),
         )
         logger.info(
             "summary_rated",
@@ -591,7 +604,7 @@ class CallbackHandler:
         summary_id = ":".join(parts[1:]).strip()
         summary_data = await self._load_summary_payload(summary_id, correlation_id=correlation_id)
         if not summary_data:
-            await self.response_formatter.safe_reply(message, "Summary not found.")
+            await self.response_formatter.safe_reply(message, t("cb_summary_not_found", self._lang))
             return True
 
         meta = summary_data.get("metadata") or {}
@@ -633,12 +646,14 @@ class CallbackHandler:
             lines.append(f"<i>{html.escape(domain)}</i>")
 
         if summary_1000:
-            lines.extend(["", "<b>Long summary</b>", html.escape(summary_1000)])
+            lines.extend(
+                ["", f"<b>{t('more_long_summary', self._lang)}</b>", html.escape(summary_1000)]
+            )
 
         overview = str(insights.get("topic_overview") or "").strip()
         new_facts = insights.get("new_facts") or []
         if overview or (isinstance(new_facts, list) and new_facts):
-            lines.extend(["", "<b>Research highlights</b>"])
+            lines.extend(["", f"<b>{t('more_research_highlights', self._lang)}</b>"])
             if overview:
                 overview_short = overview if len(overview) <= 500 else overview[:497].rstrip() + "…"
                 lines.append(html.escape(overview_short))
@@ -654,7 +669,7 @@ class CallbackHandler:
                     lines.append("• " + html.escape(fact_short))
 
         if answered:
-            lines.extend(["", "<b>Answered questions</b>"])
+            lines.extend(["", f"<b>{t('more_answered_questions', self._lang)}</b>"])
             for q in answered[:5]:
                 q_s = str(q).strip()
                 if q_s:
@@ -666,28 +681,40 @@ class CallbackHandler:
                 shown = clean_tags[:5]
                 hidden = max(0, len(clean_tags) - len(shown))
                 tail = f" (+{hidden})" if hidden else ""
-                lines.extend(["", "<b>Tags</b>", html.escape(" ".join(shown) + tail)])
+                lines.extend(
+                    [
+                        "",
+                        f"<b>{t('more_tags', self._lang)}</b>",
+                        html.escape(" ".join(shown) + tail),
+                    ]
+                )
 
         if people or orgs or locs:
             lines.append("")
-            lines.append("<b>Entities</b>")
+            lines.append(f"<b>{t('more_entities', self._lang)}</b>")
             if people:
                 shown = people[:5]
                 hidden = max(0, len(people) - len(shown))
                 tail = f" (+{hidden})" if hidden else ""
-                lines.append("• People: " + html.escape(", ".join(shown) + tail))
+                lines.append(
+                    f"\u2022 {t('people', self._lang)}: " + html.escape(", ".join(shown) + tail)
+                )
             if orgs:
                 shown = orgs[:5]
                 hidden = max(0, len(orgs) - len(shown))
                 tail = f" (+{hidden})" if hidden else ""
-                lines.append("• Orgs: " + html.escape(", ".join(shown) + tail))
+                lines.append(
+                    f"\u2022 {t('orgs', self._lang)}: " + html.escape(", ".join(shown) + tail)
+                )
             if locs:
                 shown = locs[:5]
                 hidden = max(0, len(locs) - len(shown))
                 tail = f" (+{hidden})" if hidden else ""
-                lines.append("• Places: " + html.escape(", ".join(shown) + tail))
+                lines.append(
+                    f"\u2022 {t('places', self._lang)}: " + html.escape(", ".join(shown) + tail)
+                )
 
-        text = "\n".join(lines).strip() or "No additional details available."
+        text = "\n".join(lines).strip() or t("cb_no_details", self._lang)
         await self.response_formatter.safe_reply(message, text, parse_mode="HTML")
         logger.info(
             "more_details_sent",

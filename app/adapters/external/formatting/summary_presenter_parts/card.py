@@ -7,6 +7,8 @@ import logging
 import re
 from typing import Any
 
+from app.core.ui_strings import t
+
 logger = logging.getLogger(__name__)
 
 
@@ -19,7 +21,7 @@ def truncate_plain_text(text: str, max_len: int) -> str:
     cut = text.rfind(" ", soft_min, max_len)
     if cut == -1:
         cut = max_len
-    return text[:cut].rstrip() + "…"
+    return text[:cut].rstrip() + "\u2026"
 
 
 def extract_domain_from_url(url: str) -> str | None:
@@ -46,7 +48,7 @@ def compact_tldr(
     if not cleaned:
         return ""
 
-    sentences = [s.strip() for s in re.split(r"(?<=[.!?…])\s+", cleaned) if s.strip()]
+    sentences = [s.strip() for s in re.split(r"(?<=[.!?\u2026])\s+", cleaned) if s.strip()]
     compact = " ".join(sentences[:max_sentences]).strip() if sentences else cleaned
     return truncate_plain_text(compact, max_chars)
 
@@ -59,6 +61,7 @@ def build_compact_card_html(
     reader: bool,
     text_processor: Any,
     data_formatter: Any,
+    lang: str = "en",
 ) -> str:
     def capped(items: list[str], cap: int, *, sep: str) -> tuple[str, int]:
         clean = [str(x).strip() for x in items if str(x).strip()]
@@ -88,7 +91,7 @@ def build_compact_card_html(
         logger.debug("reading_time_conversion_failed", exc_info=True)
         reading_time_str = ""
 
-    display_title = truncate_plain_text(title or domain or "Article", 180)
+    display_title = truncate_plain_text(title or domain or t("article", lang), 180)
     if canonical_url:
         title_line = (
             f'<a href="{html.escape(canonical_url, quote=True)}">{html.escape(display_title)}</a>'
@@ -101,7 +104,7 @@ def build_compact_card_html(
         meta_parts.append(html.escape(domain))
     if reading_time_str:
         meta_parts.append(html.escape(reading_time_str))
-    meta_line = " · ".join(meta_parts)
+    meta_line = " \u00b7 ".join(meta_parts)
 
     tldr_raw = (
         str(summary_shaped.get("tldr") or "").strip()
@@ -150,37 +153,42 @@ def build_compact_card_html(
         lines.append(f"<i>{meta_line}</i>")
 
     if tldr_compact:
-        lines.extend(["", "<b>TL;DR</b>", html.escape(tldr_compact)])
+        lines.extend(["", f"<b>{t('tldr', lang)}</b>", html.escape(tldr_compact)])
 
     if takeaways_clean:
-        lines.extend(["", "<b>Key takeaways</b>"])
-        lines.extend([f"• {t}" for t in takeaways_clean])
+        lines.extend(["", f"<b>{t('key_takeaways', lang)}</b>"])
+        lines.extend([f"\u2022 {item}" for item in takeaways_clean])
 
     if stats_lines:
-        lines.extend(["", "<b>Key stats</b>"])
+        lines.extend(["", f"<b>{t('key_stats', lang)}</b>"])
         lines.extend(stats_lines[:5])
 
     meta_lines: list[str] = []
     if tags_shown:
         tag_tail = f" (+{tags_hidden})" if tags_hidden else ""
-        meta_lines.append("Tags: " + html.escape(tags_shown + tag_tail))
+        meta_lines.append(t("tags", lang) + ": " + html.escape(tags_shown + tag_tail))
     if people_shown:
         tail = f" (+{people_hidden})" if people_hidden else ""
-        meta_lines.append("People: " + html.escape(people_shown + tail))
+        meta_lines.append(t("people", lang) + ": " + html.escape(people_shown + tail))
     if orgs_shown:
         tail = f" (+{orgs_hidden})" if orgs_hidden else ""
-        meta_lines.append("Orgs: " + html.escape(orgs_shown + tail))
+        meta_lines.append(t("orgs", lang) + ": " + html.escape(orgs_shown + tail))
     if places_shown:
         tail = f" (+{places_hidden})" if places_hidden else ""
-        meta_lines.append("Places: " + html.escape(places_shown + tail))
+        meta_lines.append(t("places", lang) + ": " + html.escape(places_shown + tail))
 
     if meta_lines:
-        lines.extend(["", "<b>Metadata</b>"])
+        lines.extend(["", f"<b>{t('metadata', lang)}</b>"])
         lines.extend(meta_lines)
 
     if not reader:
-        method = f"Chunked ({chunks} parts)" if chunks else "Single-pass"
+        method = f"{t('chunked', lang)} ({chunks} parts)" if chunks else t("single_pass", lang)
         model_name = getattr(llm, "model", None) or "unknown"
-        lines.extend(["", f"<i>Model: {html.escape(str(model_name))} · {html.escape(method)}</i>"])
+        lines.extend(
+            [
+                "",
+                f"<i>{t('model', lang)}: {html.escape(str(model_name))} \u00b7 {html.escape(method)}</i>",
+            ]
+        )
 
-    return "\n".join(lines).strip() or "✅ Summary Ready"
+    return "\n".join(lines).strip() or f"\u2705 {t('summary_ready', lang)}"

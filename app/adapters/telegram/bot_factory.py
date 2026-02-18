@@ -136,6 +136,11 @@ class BotFactory:
         user_repo = SqliteUserRepositoryAdapter(db)
         verbosity_resolver = VerbosityResolver(user_repo)
 
+        # Resolve UI language from config
+        ui_lang = cfg.runtime.preferred_lang
+        if ui_lang == "auto":
+            ui_lang = "en"
+
         # Create response formatter (will be wired to telegram_client later)
         response_formatter = ResponseFormatter(
             safe_reply_func=safe_reply_func,
@@ -143,6 +148,7 @@ class BotFactory:
             telegram_limits=cfg.telegram_limits,
             verbosity_resolver=verbosity_resolver,
             admin_log_chat_id=cfg.telegram.admin_log_chat_id,
+            lang=ui_lang,
         )
 
         # Determine topic search limit (moved up for URLProcessor dependency)
