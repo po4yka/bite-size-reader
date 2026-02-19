@@ -6,6 +6,7 @@ and preference merging with ChannelDigestConfig global defaults.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import uuid
 from typing import Any
@@ -30,6 +31,17 @@ from app.db.models import (
 )
 
 logger = logging.getLogger(__name__)
+_background_digest_tasks: set[asyncio.Task[None]] = set()
+
+
+def _track_background_task(task: asyncio.Task[None]) -> None:
+    """Keep a strong reference for fire-and-forget tasks until completion."""
+    _background_digest_tasks.add(task)
+
+    def _on_done(done_task: asyncio.Task[None]) -> None:
+        _background_digest_tasks.discard(done_task)
+
+    task.add_done_callback(_on_done)
 
 
 class DigestAPIService:
@@ -336,3 +348,186 @@ class DigestAPIService:
             status="queued",
             correlation_id=correlation_id,
         )
+
+    def trigger_channel_digest(self, user_id: int, raw_channel_username: str) -> dict[str, str]:
+        """Queue an on-demand digest generation for a single channel."""
+        self._require_enabled()
+
+        channel_username, error = parse_channel_input(str(raw_channel_username or ""))
+        if error:
+            raise ValidationError(error)
+
+        correlation_id = str(uuid.uuid4())
+
+        logger.info(
+            "channel_digest_triggered_via_api",
+            extra={"uid": user_id, "channel": channel_username, "cid": correlation_id},
+        )
+
+        return {
+            "status": "queued",
+            "channel": channel_username,
+            "correlation_id": correlation_id,
+        }
+
+    async def enqueue_digest_trigger(self, *, user_id: int, correlation_id: str) -> None:
+        """Dispatch digest generation in a background task."""
+        task = asyncio.create_task(
+            self._execute_digest_trigger(user_id=user_id, correlation_id=correlation_id)
+        )
+        _track_background_task(task)
+
+    async def enqueue_channel_digest_trigger(
+        self,
+        *,
+        user_id: int,
+        correlation_id: str,
+        channel_username: str,
+    ) -> None:
+        """Dispatch single-channel digest generation in a background task."""
+        task = asyncio.create_task(
+            self._execute_channel_digest_trigger(
+                user_id=user_id,
+                correlation_id=correlation_id,
+                channel_username=channel_username,
+            )
+        )
+        _track_background_task(task)
+
+    async def _execute_digest_trigger(self, *, user_id: int, correlation_id: str) -> None:
+        try:
+            result = await self._run_digest_task(
+                user_id=user_id,
+                correlation_id=correlation_id,
+                channel_username=None,
+            )
+            logger.info(
+                "digest_api_job_complete",
+                extra={
+                    "uid": user_id,
+                    "cid": correlation_id,
+                    "posts": result.post_count,
+                    "channels": result.channel_count,
+                    "messages": result.messages_sent,
+                    "errors": len(result.errors),
+                },
+            )
+        except Exception:
+            logger.exception("digest_api_job_failed", extra={"uid": user_id, "cid": correlation_id})
+
+    async def _execute_channel_digest_trigger(
+        self,
+        *,
+        user_id: int,
+        correlation_id: str,
+        channel_username: str,
+    ) -> None:
+        try:
+            result = await self._run_digest_task(
+                user_id=user_id,
+                correlation_id=correlation_id,
+                channel_username=channel_username,
+            )
+            logger.info(
+                "channel_digest_api_job_complete",
+                extra={
+                    "uid": user_id,
+                    "channel": channel_username,
+                    "cid": correlation_id,
+                    "posts": result.post_count,
+                    "channels": result.channel_count,
+                    "messages": result.messages_sent,
+                    "errors": len(result.errors),
+                },
+            )
+        except Exception:
+            logger.exception(
+                "channel_digest_api_job_failed",
+                extra={"uid": user_id, "channel": channel_username, "cid": correlation_id},
+            )
+
+    async def _run_digest_task(
+        self,
+        *,
+        user_id: int,
+        correlation_id: str,
+        channel_username: str | None,
+    ) -> Any:
+        """Build runtime dependencies and execute one digest task."""
+        from pathlib import Path
+
+        from pyrogram import Client as PyroClient
+
+        from app.adapters.digest.analyzer import DigestAnalyzer
+        from app.adapters.digest.channel_reader import ChannelReader
+        from app.adapters.digest.digest_service import DigestService
+        from app.adapters.digest.formatter import DigestFormatter
+        from app.adapters.digest.userbot_client import UserbotClient
+        from app.adapters.openrouter.openrouter_client import OpenRouterClient
+
+        session_dir = Path("/data")
+        userbot = UserbotClient(self._cfg, session_dir)
+        llm_client: OpenRouterClient | None = None
+
+        await userbot.start()
+        try:
+            llm_client = OpenRouterClient(
+                api_key=self._cfg.openrouter.api_key,
+                model=self._cfg.openrouter.model,
+                fallback_models=self._cfg.openrouter.fallback_models,
+            )
+            reader = ChannelReader(self._cfg, userbot)
+            analyzer = DigestAnalyzer(self._cfg, llm_client)
+            formatter = DigestFormatter()
+
+            bot = PyroClient(
+                name=f"digest_api_sender_{correlation_id[:8]}",
+                api_id=self._cfg.telegram.api_id,
+                api_hash=self._cfg.telegram.api_hash,
+                bot_token=self._cfg.telegram.bot_token,
+                in_memory=True,
+            )
+
+            async with bot:
+
+                async def _send_message(
+                    target_user_id: int,
+                    text: str,
+                    reply_markup: object = None,
+                ) -> None:
+                    await bot.send_message(
+                        chat_id=target_user_id,
+                        text=text,
+                        reply_markup=reply_markup,
+                    )
+
+                service = DigestService(
+                    cfg=self._cfg,
+                    reader=reader,
+                    analyzer=analyzer,
+                    formatter=formatter,
+                    send_message_func=_send_message,
+                )
+
+                if channel_username is None:
+                    return await service.generate_digest(
+                        user_id=user_id,
+                        correlation_id=correlation_id,
+                        digest_type="on_demand",
+                        lang="ru",
+                    )
+
+                channel, _ = Channel.get_or_create(
+                    username=channel_username,
+                    defaults={"title": channel_username, "is_active": True},
+                )
+                return await service.generate_channel_digest(
+                    user_id=user_id,
+                    channel=channel,
+                    correlation_id=correlation_id,
+                    lang="ru",
+                )
+        finally:
+            if llm_client is not None:
+                await llm_client.aclose()
+            await userbot.stop()

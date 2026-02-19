@@ -76,7 +76,7 @@ class AuthService:
         user_data, _ = await user_repo.async_get_or_create_user(
             user_id,
             username=username,
-            is_owner=True,
+            is_owner=False,
         )
         return user_data
 

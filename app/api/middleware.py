@@ -75,6 +75,7 @@ async def webapp_auth_middleware(request: Request, call_next: Callable):
 
             user = verify_telegram_webapp_init_data(init_data)
             request.state.webapp_user = user
+            request.state.user_id = str(user["user_id"])
         except Exception:
             pass  # Fall through to JWT auth
     return await call_next(request)
@@ -150,6 +151,14 @@ async def rate_limit_middleware(request: Request, call_next: Callable):
 
     # Identify actor (prefer authenticated user ID, fallback to client host)
     user_id = getattr(request.state, "user_id", None) or _get_user_id_from_auth_header(request)
+    if not user_id:
+        webapp_user = getattr(request.state, "webapp_user", None)
+        if isinstance(webapp_user, dict):
+            webapp_user_id = webapp_user.get("user_id")
+            if isinstance(webapp_user_id, int):
+                user_id = str(webapp_user_id)
+            elif isinstance(webapp_user_id, str) and webapp_user_id.isdigit():
+                user_id = webapp_user_id
     if not user_id:
         user_id = request.client.host if request.client and request.client.host else "unknown"
     bucket_limit = _resolve_limit(request.url.path, cfg)

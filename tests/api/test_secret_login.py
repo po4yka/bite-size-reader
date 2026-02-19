@@ -145,3 +145,32 @@ async def test_secret_key_management(tmp_path, monkeypatch: pytest.MonkeyPatch):
 
     list_resp = await auth_endpoints.list_secret_keys(user=owner_context)
     assert len(list_resp["data"]["keys"]) == 1
+
+
+@pytest.mark.asyncio
+async def test_secret_key_creation_does_not_promote_target_to_owner(
+    tmp_path, monkeypatch: pytest.MonkeyPatch
+):
+    _configure_env(monkeypatch)
+    monkeypatch.setenv("ALLOWED_USER_IDS", "123456789,222222222")
+    secret_auth._cfg = None
+    _db = _init_db(tmp_path)
+
+    owner = User.create(telegram_user_id=123456789, username="owner", is_owner=True)
+    owner_context = {"user_id": owner.telegram_user_id, "client_id": "admin", "username": "owner"}
+
+    create_payload = SecretKeyCreateRequest(
+        user_id=222222222,
+        client_id="mobile-client",
+        label="target-user-key",
+        description=None,
+        expires_at=None,
+        secret="target-user-secret-strong",
+        username="target-user",
+    )
+
+    create_resp = await auth_endpoints.create_secret_key(create_payload, user=owner_context)
+    assert create_resp["data"]["key"]["client_id"] == "mobile-client"
+
+    target_user = User.get(User.telegram_user_id == 222222222)
+    assert target_user.is_owner is False

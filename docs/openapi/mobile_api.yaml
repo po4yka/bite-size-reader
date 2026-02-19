@@ -2124,6 +2124,315 @@ paths:
           $ref: '#/components/responses/ValidationError'
         '500':
           $ref: '#/components/responses/InternalServerError'
+  /v1/digest/channels:
+    get:
+      tags:
+      - Digest
+      summary: List Digest Channels
+      description: List user's channel subscriptions and slot usage.
+      operationId: list_channels_v1_digest_channels_get
+      security:
+      - HTTPBearer: []
+      responses:
+        '200':
+          description: Digest channel subscriptions
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /v1/digest/channels/subscribe:
+    post:
+      tags:
+      - Digest
+      summary: Subscribe Digest Channel
+      description: Subscribe to a Telegram channel for digest generation.
+      operationId: subscribe_channel_v1_digest_channels_subscribe_post
+      security:
+      - HTTPBearer: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                channel_username:
+                  type: string
+                  minLength: 5
+                  maxLength: 32
+              required:
+              - channel_username
+        required: true
+      responses:
+        '200':
+          description: Subscription result
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /v1/digest/channels/unsubscribe:
+    post:
+      tags:
+      - Digest
+      summary: Unsubscribe Digest Channel
+      description: Unsubscribe from a Telegram channel.
+      operationId: unsubscribe_channel_v1_digest_channels_unsubscribe_post
+      security:
+      - HTTPBearer: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                channel_username:
+                  type: string
+                  minLength: 5
+                  maxLength: 32
+              required:
+              - channel_username
+        required: true
+      responses:
+        '200':
+          description: Unsubscribe result
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /v1/digest/preferences:
+    get:
+      tags:
+      - Digest
+      summary: Get Digest Preferences
+      description: Get merged digest preferences (user overrides plus global defaults).
+      operationId: get_preferences_v1_digest_preferences_get
+      security:
+      - HTTPBearer: []
+      responses:
+        '200':
+          description: Digest preferences
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    patch:
+      tags:
+      - Digest
+      summary: Update Digest Preferences
+      description: Update user digest preferences.
+      operationId: update_preferences_v1_digest_preferences_patch
+      security:
+      - HTTPBearer: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                delivery_time:
+                  type: string
+                  pattern: ^\d{2}:\d{2}$
+                timezone:
+                  type: string
+                  maxLength: 50
+                hours_lookback:
+                  type: integer
+                  minimum: 1
+                  maximum: 168
+                max_posts_per_digest:
+                  type: integer
+                  minimum: 1
+                  maximum: 100
+                min_relevance_score:
+                  type: number
+                  minimum: 0
+                  maximum: 1
+        required: true
+      responses:
+        '200':
+          description: Preferences update result
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /v1/digest/history:
+    get:
+      tags:
+      - Digest
+      summary: List Digest History
+      description: Get paginated list of past digest deliveries.
+      operationId: list_history_v1_digest_history_get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 100
+          default: 20
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+          default: 0
+      responses:
+        '200':
+          description: Digest history
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /v1/digest/trigger:
+    post:
+      tags:
+      - Digest
+      summary: Trigger Digest
+      description: Trigger an on-demand digest generation for current user.
+      operationId: trigger_digest_v1_digest_trigger_post
+      security:
+      - HTTPBearer: []
+      responses:
+        '200':
+          description: Trigger accepted
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /v1/digest/trigger-channel:
+    post:
+      tags:
+      - Digest
+      summary: Trigger Channel Digest
+      description: Trigger digest for a single channel.
+      operationId: trigger_channel_digest_v1_digest_trigger_channel_post
+      security:
+      - HTTPBearer: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                channel_username:
+                  type: string
+              required:
+              - channel_username
+        required: true
+      responses:
+        '200':
+          description: Trigger accepted
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /v1/system/db-info:
+    get:
+      tags:
+      - System
+      summary: Get Database Info
+      description: Return database file size and table row counts. Owner-only.
+      operationId: get_db_info_v1_system_db_info_get
+      security:
+      - HTTPBearer: []
+      responses:
+        '200':
+          description: Database information
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /v1/system/clear-cache:
+    post:
+      tags:
+      - System
+      summary: Clear URL Cache
+      description: Clear Redis URL cache keys. Owner-only.
+      operationId: clear_cache_v1_system_clear_cache_post
+      security:
+      - HTTPBearer: []
+      responses:
+        '200':
+          description: Cache clear result
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
   /v1/system/db-dump:
     get:
       tags:

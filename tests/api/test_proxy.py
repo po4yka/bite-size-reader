@@ -7,13 +7,19 @@ from httpx import RequestError, Response
 from app.api.routers.proxy import proxy_image
 
 
+async def _aiter_bytes(chunks: list[bytes]):
+    for chunk in chunks:
+        yield chunk
+
+
 @pytest.mark.asyncio
 async def test_proxy_image_success():
     """Test successful image proxying."""
     mock_response = AsyncMock(spec=Response)
     mock_response.status_code = 200
     mock_response.headers = {"content-type": "image/jpeg"}
-    mock_response.aiter_bytes = AsyncMock(return_value=iter([b"fake", b"image"]))
+    mock_response.aiter_bytes = lambda: _aiter_bytes([b"fake", b"image"])
+    mock_response.aclose = AsyncMock()
 
     # Mock the context manager behavior of AsyncClient
     with patch("httpx.AsyncClient") as mock_client_cls:
@@ -25,8 +31,7 @@ async def test_proxy_image_success():
 
         assert response.status_code == 200
         assert response.media_type == "image/jpeg"
-        # Since it's a streaming response, we can't easily check body in unit test without consuming it,
-        # but the creation of StreamingResponse indicates success.
+        assert response.body == b"fakeimage"
 
 
 @pytest.mark.asyncio
@@ -42,6 +47,7 @@ async def test_proxy_image_not_found():
     """Test handling of 404 from upstream."""
     mock_response = AsyncMock(spec=Response)
     mock_response.status_code = 404
+    mock_response.aclose = AsyncMock()
 
     with patch("httpx.AsyncClient") as mock_client_cls:
         mock_client = AsyncMock()
@@ -59,6 +65,7 @@ async def test_proxy_image_not_an_image():
     mock_response = AsyncMock(spec=Response)
     mock_response.status_code = 200
     mock_response.headers = {"content-type": "text/html"}
+    mock_response.aclose = AsyncMock()
 
     with patch("httpx.AsyncClient") as mock_client_cls:
         mock_client = AsyncMock()
@@ -81,3 +88,44 @@ async def test_proxy_image_request_error():
         with pytest.raises(HTTPException) as exc:
             await proxy_image("https://example.com/image.jpg")
         assert exc.value.status_code == 502
+
+
+@pytest.mark.asyncio
+async def test_proxy_image_rejects_declared_too_large_content():
+    """Declared content-length above limit should be rejected with 413."""
+    mock_response = AsyncMock(spec=Response)
+    mock_response.status_code = 200
+    mock_response.headers = {
+        "content-type": "image/jpeg",
+        "content-length": str(11 * 1024 * 1024),
+    }
+    mock_response.aclose = AsyncMock()
+
+    with patch("httpx.AsyncClient") as mock_client_cls:
+        mock_client = AsyncMock()
+        mock_client_cls.return_value.__aenter__.return_value = mock_client
+        mock_client.send.return_value = mock_response
+
+        with pytest.raises(HTTPException) as exc:
+            await proxy_image("https://example.com/huge.jpg")
+        assert exc.value.status_code == 413
+
+
+@pytest.mark.asyncio
+async def test_proxy_image_rejects_stream_too_large_content():
+    """Streaming content above limit should be rejected with 413."""
+    ten_mb = 10 * 1024 * 1024
+    mock_response = AsyncMock(spec=Response)
+    mock_response.status_code = 200
+    mock_response.headers = {"content-type": "image/jpeg"}
+    mock_response.aiter_bytes = lambda: _aiter_bytes([b"x" * ten_mb, b"y"])
+    mock_response.aclose = AsyncMock()
+
+    with patch("httpx.AsyncClient") as mock_client_cls:
+        mock_client = AsyncMock()
+        mock_client_cls.return_value.__aenter__.return_value = mock_client
+        mock_client.send.return_value = mock_response
+
+        with pytest.raises(HTTPException) as exc:
+            await proxy_image("https://example.com/huge-stream.jpg")
+        assert exc.value.status_code == 413

@@ -150,3 +150,40 @@ async def test_sync_session_stored_in_redis(monkeypatch):
     assert stored is not None
 
     await redis_client.flushall()
+
+
+@pytest.mark.asyncio
+async def test_rate_limit_uses_webapp_user_id_over_client_host(monkeypatch):
+    redis_client = fakeredis.aioredis.FakeRedis(decode_responses=True)
+    cfg = DummyCfg(limit=5, window_seconds=60)
+
+    middleware._cfg = cfg
+    middleware._redis_warning_logged = False
+
+    async def fake_get_redis(_: DummyCfg):
+        return redis_client
+
+    monkeypatch.setattr(middleware, "get_redis", fake_get_redis)
+
+    async def call_next(_: Request):
+        return Response(status_code=200)
+
+    request = Request(
+        {
+            "type": "http",
+            "method": "GET",
+            "path": "/v1/requests",
+            "headers": [],
+            "client": ("127.0.0.1", 0),
+        }
+    )
+    request.state.webapp_user = {"user_id": 555}
+
+    resp = await middleware.rate_limit_middleware(request, call_next)
+    assert getattr(resp, "status_code", None) == 200
+
+    keys = await redis_client.keys("*")
+    assert any(":rate:555:" in key for key in keys)
+    assert not any(":rate:127.0.0.1:" in key for key in keys)
+
+    await redis_client.flushall()

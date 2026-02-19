@@ -66,7 +66,7 @@ async def telegram_login(login_data: TelegramLoginRequest):
         user, created = await user_repo.async_get_or_create_user(
             login_data.telegram_user_id,
             username=login_data.username,
-            is_owner=True,
+            is_owner=False,
         )
 
         user_id = user.get("telegram_user_id", login_data.telegram_user_id)

@@ -122,6 +122,10 @@ async def trigger_digest(
     """Trigger an on-demand digest generation. Result delivered to Telegram chat."""
     svc = _get_service()
     data = svc.trigger_digest(current_user["user_id"])
+    await svc.enqueue_digest_trigger(
+        user_id=current_user["user_id"],
+        correlation_id=data.correlation_id,
+    )
     return success_response(
         data,
         correlation_id=getattr(request.state, "correlation_id", None) if request else None,
@@ -135,18 +139,17 @@ async def trigger_channel_digest(
     request: Request = None,  # type: ignore[assignment]
 ) -> dict:
     """Trigger digest for a single channel (equivalent to /cdigest bot command)."""
-    from app.api.exceptions import ValidationError
-
-    channel_username = request_body.get("channel_username", "").strip().lstrip("@")
-    if not channel_username:
-        raise ValidationError("channel_username is required")
-
-    # Reuse existing digest trigger logic but for single channel
-    # This will be handled by the digest scheduler
+    svc = _get_service()
+    data = svc.trigger_channel_digest(
+        current_user["user_id"],
+        request_body.get("channel_username", ""),
+    )
+    await svc.enqueue_channel_digest_trigger(
+        user_id=current_user["user_id"],
+        channel_username=data["channel"],
+        correlation_id=data["correlation_id"],
+    )
     return success_response(
-        {
-            "status": "queued",
-            "channel": channel_username,
-        },
+        data,
         correlation_id=getattr(request.state, "correlation_id", None) if request else None,
     )

@@ -123,6 +123,8 @@ async def get_db_info(user=Depends(get_current_user)):
     """Get database information: table row counts and file size."""
     from app.api.models.responses import success_response
 
+    await AuthService.require_owner(user)
+
     db_path = Config.get("DB_PATH", "/data/app.db")
 
     file_size_mb = 0.0
@@ -162,6 +164,8 @@ async def clear_cache(user=Depends(get_current_user)):
     from app.api.models.responses import success_response
     from app.config.settings import load_config
     from app.infrastructure.redis import get_redis
+
+    await AuthService.require_owner(user)
 
     cfg = load_config(allow_stub_telegram=True)
     redis_client = await get_redis(cfg)

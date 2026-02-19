@@ -8,7 +8,7 @@ from urllib.parse import urlparse
 
 import httpx
 from fastapi import APIRouter, HTTPException, Query
-from starlette.responses import StreamingResponse
+from starlette.responses import Response
 
 from app.core.logging_utils import get_logger, log_exception
 
@@ -39,9 +39,10 @@ BLOCKED_NETWORKS = [
 ]
 
 
-async def _limited_stream(response: httpx.Response, max_bytes: int):
-    """Wrap an httpx streaming response with a cumulative size limit."""
+async def _read_limited_content(response: httpx.Response, max_bytes: int) -> bytes:
+    """Read full response content with a strict cumulative size limit."""
     total = 0
+    chunks: list[bytes] = []
     async for chunk in response.aiter_bytes():
         total += len(chunk)
         if total > max_bytes:
@@ -49,8 +50,12 @@ async def _limited_stream(response: httpx.Response, max_bytes: int):
                 "proxy_response_size_exceeded",
                 extra={"total_bytes": total, "max_bytes": max_bytes},
             )
-            break
-        yield chunk
+            raise HTTPException(
+                status_code=413,
+                detail=f"Image too large (max {max_bytes // (1024 * 1024)} MB)",
+            )
+        chunks.append(chunk)
+    return b"".join(chunks)
 
 
 def _resolve_host_ips(hostname: str) -> list[str]:
@@ -139,6 +144,7 @@ async def proxy_image(url: str = Query(..., description="URL of the image to pro
                 raise HTTPException(status_code=502, detail="Too many redirects")
 
             if resp.status_code >= 400:
+                await resp.aclose()
                 logger.warning(
                     "proxy_fetch_failed",
                     extra={"url": current_url, "status_code": resp.status_code},
@@ -147,14 +153,36 @@ async def proxy_image(url: str = Query(..., description="URL of the image to pro
 
             content_type = resp.headers.get("content-type", "")
             if not content_type.startswith("image/"):
+                await resp.aclose()
                 logger.warning(
                     "proxy_non_image_content",
                     extra={"url": current_url, "content_type": content_type},
                 )
                 raise HTTPException(status_code=400, detail="URL does not point to an image")
 
-            return StreamingResponse(
-                _limited_stream(resp, _MAX_PROXY_RESPONSE_BYTES),
+            content_length_header = resp.headers.get("content-length")
+            if content_length_header and content_length_header.isdigit():
+                if int(content_length_header) > _MAX_PROXY_RESPONSE_BYTES:
+                    await resp.aclose()
+                    logger.warning(
+                        "proxy_response_declared_size_exceeded",
+                        extra={
+                            "declared_size": int(content_length_header),
+                            "max_bytes": _MAX_PROXY_RESPONSE_BYTES,
+                        },
+                    )
+                    raise HTTPException(
+                        status_code=413,
+                        detail=f"Image too large (max {_MAX_PROXY_RESPONSE_BYTES // (1024 * 1024)} MB)",
+                    )
+
+            try:
+                image_bytes = await _read_limited_content(resp, _MAX_PROXY_RESPONSE_BYTES)
+            finally:
+                await resp.aclose()
+
+            return Response(
+                content=image_bytes,
                 media_type=content_type,
                 headers={
                     "Cache-Control": "public, max-age=86400",  # Cache for 1 day

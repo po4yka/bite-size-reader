@@ -1,11 +1,13 @@
+import time
 from unittest.mock import patch
 
 import pytest
 
-from app.api.models.auth import AppleLoginRequest, GoogleLoginRequest
+from app.api.models.auth import AppleLoginRequest, GoogleLoginRequest, TelegramLoginRequest
 from app.api.routers.auth import (
     endpoints_me as auth_endpoints_me,
     endpoints_oauth as auth_endpoints_oauth,
+    endpoints_telegram as auth_endpoints_telegram,
     oauth as auth_oauth,
     secret_auth,
 )
@@ -107,3 +109,27 @@ async def test_google_login(tmp_path, monkeypatch: pytest.MonkeyPatch):
         assert User.select().where(User.telegram_user_id == google_user_id).exists()
         user = User.get(User.telegram_user_id == google_user_id)
         assert user.username == "Test User"
+
+
+@pytest.mark.asyncio
+async def test_telegram_login_does_not_auto_grant_owner(tmp_path, monkeypatch: pytest.MonkeyPatch):
+    _configure_env(monkeypatch)
+    _init_db(tmp_path)
+
+    payload = TelegramLoginRequest(
+        id=123456789,
+        hash="test-hash",
+        auth_date=int(time.time()),
+        username="testuser",
+        client_id="com.example.app",
+    )
+
+    with patch.object(auth_endpoints_telegram, "verify_telegram_auth", return_value=True):
+        response = await auth_endpoints_telegram.telegram_login(payload)
+
+    tokens = response["data"]["tokens"]
+    assert tokens["accessToken"]
+    assert tokens["refreshToken"]
+
+    user = User.get(User.telegram_user_id == 123456789)
+    assert user.is_owner is False
