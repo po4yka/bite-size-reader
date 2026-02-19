@@ -79,7 +79,15 @@ class TelegramClient:
             async def _msg_handler(_client: Any, message: Any) -> None:
                 await message_handler(message)
 
-            client_any.add_handler(PyroMessageHandler(_msg_handler, filters.private), group=0)
+            message_filters = filters.private
+            incoming_filter = getattr(filters, "incoming", None)
+            if incoming_filter is not None:
+                message_filters &= incoming_filter
+            outgoing_filter = getattr(filters, "outgoing", None)
+            if outgoing_filter is not None:
+                message_filters &= ~outgoing_filter
+
+            client_any.add_handler(PyroMessageHandler(_msg_handler, message_filters), group=0)
             handler_count += 1
 
             if callback_query_handler:

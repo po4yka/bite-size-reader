@@ -179,6 +179,34 @@ class MessageRouter:
         try:
             correlation_id = generate_correlation_id()
 
+            # Ignore non-user updates early to avoid routing bot's own outgoing
+            # digest messages back into fallback handling loops.
+            if bool(getattr(message, "outgoing", False)):
+                logger.debug(
+                    "skip_outgoing_message",
+                    extra={"cid": correlation_id, "message_id": getattr(message, "id", None)},
+                )
+                return
+
+            from_user = getattr(message, "from_user", None)
+            if from_user is None:
+                logger.debug(
+                    "skip_message_without_from_user",
+                    extra={"cid": correlation_id, "message_id": getattr(message, "id", None)},
+                )
+                return
+
+            if bool(getattr(from_user, "is_bot", False)):
+                logger.debug(
+                    "skip_bot_origin_message",
+                    extra={
+                        "cid": correlation_id,
+                        "message_id": getattr(message, "id", None),
+                        "from_user_id": getattr(from_user, "id", None),
+                    },
+                )
+                return
+
             # Parse message using comprehensive model for better validation
             telegram_message = TelegramMessage.from_pyrogram_message(message)
 
