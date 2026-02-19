@@ -8,6 +8,7 @@ import AdminPage from "./admin/AdminPage";
 
 interface MorePageProps {
   sub?: "digest" | "profile" | "stats" | "preferences" | "admin";
+  canAccessAdmin?: boolean;
   onNavigate: (route: Route) => void;
 }
 
@@ -50,21 +51,23 @@ function DigestSection() {
 
 type MoreSub = "digest" | "stats" | "preferences" | "admin";
 
-const menuItems: Array<{
-  label: string;
-  sub: MoreSub;
-}> = [
-  { label: "Digest Management", sub: "digest" },
-  { label: "Reading Stats", sub: "stats" },
-  { label: "Preferences", sub: "preferences" },
-  { label: "Admin Tools", sub: "admin" },
-];
+export default function MorePage({ sub, canAccessAdmin = false, onNavigate }: MorePageProps) {
+  const menuItems: Array<{ label: string; sub: MoreSub }> = [
+    { label: "Digest Management", sub: "digest" },
+    { label: "Reading Stats", sub: "stats" },
+    { label: "Preferences", sub: "preferences" },
+    ...(canAccessAdmin ? ([{ label: "Admin Tools", sub: "admin" }] as const) : []),
+  ];
 
-export default function MorePage({ sub, onNavigate }: MorePageProps) {
   if (sub === "digest") return <DigestSection />;
   if (sub === "stats") return <UserStatsView />;
   if (sub === "preferences") return <PreferencesForm />;
-  if (sub === "admin") return <AdminPage />;
+  if (sub === "admin") {
+    if (!canAccessAdmin) {
+      return <div className="error">Access denied.</div>;
+    }
+    return <AdminPage />;
+  }
 
   return (
     <div className="more-page">

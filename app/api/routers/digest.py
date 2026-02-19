@@ -10,6 +10,7 @@ from fastapi import APIRouter, Depends, Query, Request
 from app.api.models.digest import SubscribeRequest, UpdatePreferenceRequest
 from app.api.models.responses import success_response
 from app.api.routers.auth.dependencies import get_webapp_user
+from app.api.services.auth_service import AuthService
 from app.api.services.digest_api_service import DigestAPIService
 from app.config.digest import ChannelDigestConfig
 
@@ -134,15 +135,17 @@ async def trigger_digest(
 
 @router.post("/trigger-channel")
 async def trigger_channel_digest(
-    request_body: dict,
+    body: SubscribeRequest,
     current_user: dict = Depends(get_webapp_user),
     request: Request = None,  # type: ignore[assignment]
 ) -> dict:
     """Trigger digest for a single channel (equivalent to /cdigest bot command)."""
+    await AuthService.require_owner(current_user)
+
     svc = _get_service()
     data = svc.trigger_channel_digest(
         current_user["user_id"],
-        request_body.get("channel_username", ""),
+        body.channel_username,
     )
     await svc.enqueue_channel_digest_trigger(
         user_id=current_user["user_id"],

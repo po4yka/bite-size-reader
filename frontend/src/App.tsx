@@ -1,4 +1,5 @@
-import { lazy, Suspense, useEffect } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
+import { fetchCurrentUser } from "./api/auth";
 import { useTelegram } from "./hooks/useTelegram";
 import { useRouter } from "./hooks/useRouter";
 import { ToastContext, useToastState } from "./hooks/useToast";
@@ -22,6 +23,26 @@ const MorePage = lazy(() => import("./components/more/MorePage"));
 function AppContent() {
   const { user, webApp } = useTelegram();
   const { route, navigate, goBack, isSubPage } = useRouter();
+  const [isOwner, setIsOwner] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadCurrentUser() {
+      if (!user) return;
+      try {
+        const currentUser = await fetchCurrentUser();
+        if (!cancelled) setIsOwner(Boolean(currentUser.is_owner));
+      } catch {
+        if (!cancelled) setIsOwner(false);
+      }
+    }
+
+    loadCurrentUser();
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
 
   // Disable vertical swipes to prevent accidental close during scroll
   useEffect(() => {
@@ -36,18 +57,24 @@ function AppContent() {
     webApp.setHeaderColor(isSubPage ? "secondary_bg_color" : "bg_color");
   }, [isSubPage, webApp]);
 
-  // SettingsButton -> Admin
+  // SettingsButton -> Admin (owner only)
   useEffect(() => {
     const btn = webApp?.SettingsButton;
     if (!btn) return;
+    if (!isOwner) {
+      btn.hide();
+      return;
+    }
+    const handler = () => {
+      navigate({ page: "more", sub: "admin" });
+    };
     btn.show();
-    const handler = () => navigate({ page: "more", sub: "admin" });
     btn.onClick(handler);
     return () => {
       btn.offClick(handler);
       btn.hide();
     };
-  }, [webApp, navigate]);
+  }, [webApp, navigate, isOwner]);
 
   // Telegram BackButton integration
   useEffect(() => {
@@ -81,7 +108,7 @@ function AppContent() {
             onBack={goBack} />;
         return <CollectionTree onCollectionClick={(id) => navigate({ page: "collections", collectionId: id })} />;
       case "more":
-        return <MorePage sub={route.sub} onNavigate={navigate} />;
+        return <MorePage sub={route.sub} canAccessAdmin={isOwner} onNavigate={navigate} />;
       default:
         return <ArticleList onArticleClick={(id) => navigate({ page: "library", articleId: id })} />;
     }

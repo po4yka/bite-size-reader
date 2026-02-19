@@ -31,6 +31,15 @@ COPY pyproject.toml uv.lock ./
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev --extra api
 
+# Stage 1.5: Frontend - Build React Mini App assets
+FROM node:20-alpine AS frontend-builder
+
+WORKDIR /app/frontend
+COPY frontend/package*.json ./
+RUN npm ci
+COPY frontend/ ./
+RUN npm run build
+
 # Stage 2: Runtime - Minimal runtime environment (no build tools)
 FROM python:3.13-slim AS runtime
 
@@ -52,6 +61,9 @@ COPY --from=builder /app/.venv /app/.venv
 
 # Copy application source
 COPY app ./app
+
+# Copy built digest mini-app static assets
+COPY --from=frontend-builder /app/app/static/digest /app/app/static/digest
 
 # Create non-root user and data directory
 RUN useradd -r -u 1000 -m -d /home/appuser -s /sbin/nologin appuser \

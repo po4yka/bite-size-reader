@@ -3,7 +3,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from app.api.models.digest import TriggerDigestResponse
+from app.api.models.digest import SubscribeRequest, TriggerDigestResponse
 from app.api.routers import digest as digest_router
 
 
@@ -18,7 +18,10 @@ async def test_trigger_digest_enqueues_background_job():
 
     request = SimpleNamespace(state=SimpleNamespace(correlation_id="api-cid-1"))
 
-    with patch.object(digest_router, "_get_service", return_value=service):
+    with (
+        patch.object(digest_router, "_get_service", return_value=service),
+        patch("app.api.routers.digest.AuthService.require_owner", new=AsyncMock()),
+    ):
         response = await digest_router.trigger_digest(
             current_user={"user_id": 123456789},
             request=request,
@@ -45,9 +48,12 @@ async def test_trigger_channel_digest_enqueues_background_job():
 
     request = SimpleNamespace(state=SimpleNamespace(correlation_id="api-cid-2"))
 
-    with patch.object(digest_router, "_get_service", return_value=service):
+    with (
+        patch.object(digest_router, "_get_service", return_value=service),
+        patch("app.api.routers.digest.AuthService.require_owner", new=AsyncMock()),
+    ):
         response = await digest_router.trigger_channel_digest(
-            request_body={"channel_username": "@channel_name"},
+            body=SubscribeRequest(channel_username="@channel_name"),
             current_user={"user_id": 123456789},
             request=request,
         )

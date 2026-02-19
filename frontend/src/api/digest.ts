@@ -15,7 +15,8 @@ export interface ChannelSubscription {
 export interface ChannelsData {
   channels: ChannelSubscription[];
   active_count: number;
-  max_channels: number;
+  max_channels: number | null;
+  unlimited_channels?: boolean;
 }
 
 export interface DigestPreferences {

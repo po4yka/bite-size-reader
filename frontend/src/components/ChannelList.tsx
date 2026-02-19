@@ -108,7 +108,9 @@ export default function ChannelList() {
       </form>
 
       <div className="slot-info">
-        {data.active_count}/{data.max_channels} slots used
+        {data.unlimited_channels || data.max_channels == null
+          ? `${data.active_count} channels subscribed`
+          : `${data.active_count}/${data.max_channels} slots used`}
       </div>
 
       {data.channels.length === 0 ? (
