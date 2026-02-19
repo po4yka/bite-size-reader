@@ -87,7 +87,8 @@ class DigestAPIService:
         return {
             "channels": items,
             "active_count": active_count,
-            "max_channels": self._cfg.max_channels,
+            "max_channels": None,
+            "unlimited_channels": True,
         }
 
     def subscribe_channel(self, user_id: int, raw_username: str) -> dict[str, str]:
@@ -98,36 +99,19 @@ class DigestAPIService:
         if error:
             raise ValidationError(error)
 
-        max_ch = self._cfg.max_channels
         try:
-            status = self._subscribe_atomic(user_id, username, max_ch)
+            status = self._subscribe_atomic(user_id, username)
         except peewee.IntegrityError:
             status = "already_subscribed"
-
-        if status == "limit_reached":
-            raise ValidationError(
-                f"Maximum channel limit reached ({max_ch}). Unsubscribe from a channel first."
-            )
 
         return {"status": status, "username": username}
 
     @staticmethod
-    def _subscribe_atomic(user_id: int, username: str, max_channels: int) -> str:
+    def _subscribe_atomic(user_id: int, username: str) -> str:
         """Run subscribe logic inside a single transaction.
 
         Mirrors digest_handler._subscribe_atomic for consistency.
         """
-        active_count = (
-            ChannelSubscription.select()
-            .where(
-                ChannelSubscription.user == user_id,
-                ChannelSubscription.is_active == True,  # noqa: E712
-            )
-            .count()
-        )
-        if active_count >= max_channels:
-            return "limit_reached"
-
         channel, _ = Channel.get_or_create(
             username=username,
             defaults={"title": username, "is_active": True},

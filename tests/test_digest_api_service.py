@@ -55,7 +55,8 @@ class TestListSubscriptions:
             result = service.list_subscriptions(user.telegram_id)
             assert result["channels"] == []
             assert result["active_count"] == 0
-            assert result["max_channels"] == 5
+            assert result["max_channels"] is None
+            assert result["unlimited_channels"] is True
 
     def test_with_subscriptions(self, db_setup, service):
         db, user = db_setup
@@ -101,7 +102,7 @@ class TestSubscribe:
             result = service.subscribe_channel(user.telegram_id, "testchan")
             assert result["status"] == "reactivated"
 
-    def test_subscribe_limit_reached(self, db_setup):
+    def test_subscribe_not_limited_by_max_channels_config(self, db_setup):
         from app.api.services.digest_api_service import DigestAPIService
 
         cfg = ChannelDigestConfig(DIGEST_ENABLED=True, DIGEST_MAX_CHANNELS=1)
@@ -109,8 +110,9 @@ class TestSubscribe:
         db, user = db_setup
         with db.bind_ctx(ALL_MODELS):
             svc.subscribe_channel(user.telegram_id, "chan01")
-            with pytest.raises(ValidationError, match="limit reached"):
-                svc.subscribe_channel(user.telegram_id, "chan02")
+            result = svc.subscribe_channel(user.telegram_id, "chan02")
+            assert result["status"] == "created"
+            assert result["username"] == "chan02"
 
     def test_subscribe_invalid_username(self, db_setup, service):
         db, user = db_setup

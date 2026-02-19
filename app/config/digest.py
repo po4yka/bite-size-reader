@@ -36,8 +36,9 @@ class ChannelDigestConfig(BaseModel):
         validation_alias="DIGEST_MAX_POSTS",
     )
     max_channels: int = Field(
-        default=10,
+        default=0,
         validation_alias="DIGEST_MAX_CHANNELS",
+        description="Deprecated. 0 means unlimited channel subscriptions.",
     )
     concurrency: int = Field(
         default=3,
@@ -140,14 +141,14 @@ class ChannelDigestConfig(BaseModel):
     @classmethod
     def _validate_max_channels(cls, value: Any) -> int:
         if value in (None, ""):
-            return 10
+            return 0
         try:
             parsed = int(str(value))
         except ValueError as exc:
             msg = "DIGEST_MAX_CHANNELS must be a valid integer"
             raise ValueError(msg) from exc
-        if parsed < 1 or parsed > 50:
-            msg = "DIGEST_MAX_CHANNELS must be between 1 and 50"
+        if parsed < 0:
+            msg = "DIGEST_MAX_CHANNELS must be >= 0"
             raise ValueError(msg)
         return parsed
 

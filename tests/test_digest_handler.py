@@ -132,11 +132,11 @@ class TestHandleSubscribe:
         assert "Invalid channel username" in reply.call_args[0][1]
 
     @pytest.mark.asyncio
-    async def test_max_channels_reached(self) -> None:
+    async def test_subscribe_not_limited_by_max_channels_config(self) -> None:
         _ensure_user()
         handler, reply = _make_handler(max_channels=1)
 
-        # Create one existing active subscription to fill the limit.
+        # Even with DIGEST_MAX_CHANNELS=1, subscriptions remain unlimited.
         ch = Channel.create(username="existingchan", title="existingchan", is_active=True)
         ChannelSubscription.create(user=_TEST_UID, channel=ch, is_active=True)
 
@@ -144,7 +144,7 @@ class TestHandleSubscribe:
         await handler.handle_subscribe(ctx)
 
         reply.assert_awaited_once()
-        assert "Maximum channel limit" in reply.call_args[0][1]
+        assert "Subscribed to @anotherchannel" in reply.call_args[0][1]
 
     @pytest.mark.asyncio
     async def test_already_subscribed_active(self) -> None:

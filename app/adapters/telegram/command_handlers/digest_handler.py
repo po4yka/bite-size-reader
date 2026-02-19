@@ -200,7 +200,7 @@ class DigestHandlerImpl:
             error_info = f" (errors: {ch.fetch_error_count})" if ch.fetch_error_count else ""
             lines.append(f"  @{ch.username} [{status}]{error_info}")
 
-        lines.append(f"\n{len(subs)}/{self._cfg.digest.max_channels} slots used")
+        lines.append(f"\nTotal subscribed channels: {len(subs)}")
 
         # Warn about disabled channels the user is subscribed to
         disabled = [s for s in subs if not s.channel.is_active]
@@ -216,23 +216,11 @@ class DigestHandlerImpl:
         await self._formatter.safe_reply(ctx.message, "\n".join(lines))
 
     @staticmethod
-    def _subscribe_atomic(user_id: int, username: str, max_channels: int) -> str:
+    def _subscribe_atomic(user_id: int, username: str) -> str:
         """Run subscribe logic inside a single transaction.
 
-        Returns a status string: "limit_reached", "already_subscribed",
-        "reactivated", or "created".
+        Returns a status string: "already_subscribed", "reactivated", or "created".
         """
-        active_count = (
-            ChannelSubscription.select()
-            .where(
-                ChannelSubscription.user == user_id,
-                ChannelSubscription.is_active == True,  # noqa: E712
-            )
-            .count()
-        )
-        if active_count >= max_channels:
-            return "limit_reached"
-
         channel, _ = Channel.get_or_create(
             username=username,
             defaults={"title": username, "is_active": True},
@@ -281,25 +269,17 @@ class DigestHandlerImpl:
             await self._formatter.safe_reply(ctx.message, error)
             return
 
-        max_ch = self._cfg.digest.max_channels
         try:
             status = await self._db._safe_db_transaction(
                 self._subscribe_atomic,
                 ctx.uid,
                 username,
-                max_ch,
                 operation_name="subscribe_channel",
             )
         except peewee.IntegrityError:
             status = "already_subscribed"
 
-        if status == "limit_reached":
-            await self._formatter.safe_reply(
-                ctx.message,
-                f"Maximum channel limit reached ({max_ch}).\n"
-                "Use `/unsubscribe @channel` to remove one first.",
-            )
-        elif status == "already_subscribed":
+        if status == "already_subscribed":
             await self._formatter.safe_reply(ctx.message, f"Already subscribed to @{username}.")
         elif status == "reactivated":
             await self._formatter.safe_reply(
