@@ -10,6 +10,7 @@ import asyncio
 import logging
 import time
 from typing import TYPE_CHECKING, Any
+from urllib.parse import unquote
 
 import httpx
 
@@ -60,6 +61,7 @@ def _extract_tweet_sync(
     cookies_path: Path | None = None,
     headless: bool = True,
     timeout_ms: int = 15000,
+    expected_tweet_id: str | None = None,
 ) -> ExtractionResult:
     """Extract tweet data by intercepting X's GraphQL API via Playwright.
 
@@ -78,7 +80,11 @@ def _extract_tweet_sync(
 
     def _on_response(response: Any) -> None:
         try:
-            if "TweetDetail" in response.url and response.status == 200:
+            if (
+                "TweetDetail" in response.url
+                and response.status == 200
+                and _response_matches_requested_tweet(response.url, expected_tweet_id)
+            ):
                 captured_responses.append(response.json())
         except Exception:
             pass
@@ -111,17 +117,7 @@ def _extract_tweet_sync(
         page.close()
         browser.close()
 
-    # Parse captured GraphQL responses
-    all_tweets: list[TweetData] = []
-    seen_ids: set[str] = set()
-    for resp_json in captured_responses:
-        for tweet in extract_tweets_from_graphql(resp_json):
-            if tweet.tweet_id not in seen_ids:
-                seen_ids.add(tweet.tweet_id)
-                all_tweets.append(tweet)
-
-    # Sort by order
-    all_tweets.sort(key=lambda t: t.order)
+    all_tweets = _merge_captured_tweets(captured_responses)
 
     return ExtractionResult(url=url, tweets=all_tweets)
 
@@ -180,6 +176,22 @@ def _scrape_article_sync(
         # Scroll back to top
         page.evaluate("window.scrollTo(0, 0)")
         time.sleep(0.5)
+
+        # Expand "Show more" / "Read more" buttons to reveal truncated content
+        page.evaluate(
+            """() => {
+            const container = document.querySelector('article') || document.querySelector('main');
+            if (!container) return;
+            const buttons = container.querySelectorAll('button, [role="button"]');
+            buttons.forEach(btn => {
+                const text = (btn.innerText || '').trim().toLowerCase();
+                if (text === 'show more' || text === 'read more') {
+                    btn.click();
+                }
+            });
+        }"""
+        )
+        time.sleep(1)
 
         # Extract article content from DOM
         article_data = page.evaluate(
@@ -242,6 +254,7 @@ async def extract_tweet(
     cookies_path: Path | None = None,
     headless: bool = True,
     timeout_ms: int = 15000,
+    expected_tweet_id: str | None = None,
 ) -> ExtractionResult:
     """Async wrapper around sync Playwright tweet extraction."""
     return await asyncio.to_thread(
@@ -250,6 +263,7 @@ async def extract_tweet(
         cookies_path=cookies_path,
         headless=headless,
         timeout_ms=timeout_ms,
+        expected_tweet_id=expected_tweet_id,
     )
 
 
@@ -267,3 +281,33 @@ async def scrape_article(
         headless=headless,
         timeout_ms=timeout_ms,
     )
+
+
+def _response_matches_requested_tweet(
+    response_url: str,
+    expected_tweet_id: str | None,
+) -> bool:
+    """Check whether a captured TweetDetail response likely belongs to the requested tweet."""
+    if not expected_tweet_id:
+        return True
+    # GraphQL URLs include encoded variables with focalTweetId.
+    return expected_tweet_id in unquote(response_url)
+
+
+def _merge_captured_tweets(captured_responses: list[dict[str, Any]]) -> list[TweetData]:
+    """Merge tweets extracted from multiple GraphQL responses in stable global order."""
+    staged: list[tuple[int, int, TweetData]] = []
+    seen_ids: set[str] = set()
+
+    for response_index, resp_json in enumerate(captured_responses):
+        for tweet in extract_tweets_from_graphql(resp_json):
+            if tweet.tweet_id in seen_ids:
+                continue
+            seen_ids.add(tweet.tweet_id)
+            staged.append((response_index, tweet.order, tweet))
+
+    staged.sort(key=lambda item: (item[0], item[1]))
+    merged = [tweet for _response_index, _local_order, tweet in staged]
+    for global_order, tweet in enumerate(merged):
+        tweet.order = global_order
+    return merged

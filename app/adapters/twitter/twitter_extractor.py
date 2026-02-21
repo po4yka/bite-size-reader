@@ -8,13 +8,17 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from app.adapters.content.quality_filters import detect_low_value_content
 from app.adapters.twitter.text_formatter import (
+    BAD_TITLES,
+    _has_article_header,
     format_article_for_summary,
     format_tweets_for_summary,
+    parse_article_header,
 )
 from app.core.async_utils import raise_if_cancelled
 from app.core.html_utils import clean_markdown_article_text, html_to_text
@@ -108,7 +112,7 @@ class TwitterExtractor:
         firecrawl_ok = False
         if self._cfg.twitter.prefer_firecrawl:
             firecrawl_ok, content_text, content_source = await self._try_firecrawl(
-                url_text, req_id, tweet_id, metadata, correlation_id
+                url_text, req_id, tweet_id, metadata, correlation_id, is_article
             )
 
         # Tier 2: Playwright fallback (if Firecrawl failed and Playwright is enabled)
@@ -163,6 +167,7 @@ class TwitterExtractor:
         tweet_id: str | None,
         metadata: dict[str, Any],
         correlation_id: str | None,
+        is_article: bool,
     ) -> tuple[bool, str, str]:
         """Attempt Twitter extraction via Firecrawl.
 
@@ -176,6 +181,18 @@ class TwitterExtractor:
             self._schedule_crawl_persistence(req_id, crawl, correlation_id)
 
             quality_issue = detect_low_value_content(crawl)
+            if quality_issue and self._can_accept_low_value_firecrawl_content(
+                quality_issue, is_article
+            ):
+                logger.info(
+                    "twitter_firecrawl_accept_short_content",
+                    extra={
+                        "cid": correlation_id,
+                        "tweet_id": tweet_id,
+                        "quality_reason": quality_issue.get("reason"),
+                    },
+                )
+                quality_issue = None
             has_content = bool(
                 crawl.status == "ok"
                 and not quality_issue
@@ -262,10 +279,15 @@ class TwitterExtractor:
             cookies_path=cookies,
             headless=headless,
             timeout_ms=timeout_ms,
+            expected_tweet_id=tweet_id,
         )
 
         if not result.tweets:
             msg = f"Playwright extraction returned no tweets for {url}"
+            raise ValueError(msg)
+
+        if tweet_id and all(tweet.tweet_id != tweet_id for tweet in result.tweets):
+            msg = f"Playwright extraction did not include requested tweet_id={tweet_id}"
             raise ValueError(msg)
 
         content_text = format_tweets_for_summary(result.tweets)
@@ -314,12 +336,32 @@ class TwitterExtractor:
         if not content:
             msg = f"Playwright article extraction returned no content for {url}"
             raise ValueError(msg)
+        if self._is_low_quality_article_content(content):
+            msg = f"Playwright article extraction appears to be UI/login content for {url}"
+            raise ValueError(msg)
+
+        # Parse title/author from content text when DOM selectors missed them
+        title = (article_data.get("title") or "").strip()
+        author = (article_data.get("author") or "").strip()
+        author_handle = (article_data.get("authorHandle") or "").strip()
+        if (title in BAD_TITLES or not author) and _has_article_header(content):
+            parsed_title, parsed_author, parsed_handle, _ = parse_article_header(content)
+            if title in BAD_TITLES and parsed_title:
+                article_data["title"] = parsed_title
+                title = parsed_title
+            if not author and parsed_author:
+                article_data["author"] = parsed_author
+                author = parsed_author
+            if not author_handle and parsed_handle:
+                article_data["authorHandle"] = parsed_handle
+                author_handle = parsed_handle
 
         content_text = format_article_for_summary(article_data)
 
         pw_metadata: dict[str, Any] = {
-            "title": article_data.get("title"),
-            "author": article_data.get("author"),
+            "title": title,
+            "author": author,
+            "author_handle": author_handle,
             "is_article": True,
         }
 
@@ -333,3 +375,41 @@ class TwitterExtractor:
         )
 
         return content_text, "twitter_article", pw_metadata
+
+    @staticmethod
+    def _can_accept_low_value_firecrawl_content(
+        quality_issue: dict[str, Any],
+        is_article: bool,
+    ) -> bool:
+        """Allow short-but-valid tweet content from Firecrawl."""
+        if is_article:
+            return False
+
+        reason = str(quality_issue.get("reason") or "")
+        return reason in {"content_too_short", "content_low_variation"}
+
+    @staticmethod
+    def _is_low_quality_article_content(content: str) -> bool:
+        """Detect login walls and UI chrome mistakenly scraped as article content."""
+        normalized = re.sub(r"\s+", " ", content).strip().lower()
+        if len(normalized) < 60:
+            return True
+
+        login_wall_phrases = (
+            "log in to x",
+            "sign in to x",
+            "sign up for x",
+            "join x today",
+            "by signing up, you agree",
+            "terms of service",
+            "privacy policy",
+        )
+        if any(phrase in normalized for phrase in login_wall_phrases) and len(normalized) < 240:
+            return True
+
+        tokens = re.findall(r"[a-z0-9']+", normalized)
+        if not tokens:
+            return True
+        ui_terms = {"log", "login", "sign", "signup", "signin", "cookie", "cookies", "privacy"}
+        ui_ratio = sum(1 for token in tokens if token in ui_terms) / len(tokens)
+        return len(tokens) < 80 and ui_ratio >= 0.18

@@ -123,7 +123,7 @@ def _parse_single_tweet(result: dict[str, Any], order: int) -> TweetData | None:
     author = user_legacy.get("name", "")
     author_handle = user_legacy.get("screen_name", "")
     tweet_id = legacy.get("id_str", result.get("rest_id", ""))
-    text = legacy.get("full_text", "")
+    text = _extract_tweet_text(result, legacy)
 
     # Extract image URLs
     images: list[str] = []
@@ -149,3 +149,39 @@ def _parse_single_tweet(result: dict[str, Any], order: int) -> TweetData | None:
         quote_tweet=quote_tweet,
         order=order,
     )
+
+
+def _extract_tweet_text(result: dict[str, Any], legacy: dict[str, Any]) -> str:
+    """Extract tweet text with support for long-form note tweets."""
+    full_text = str(legacy.get("full_text") or "").strip()
+    if full_text:
+        return full_text
+
+    legacy_text = str(legacy.get("text") or "").strip()
+    if legacy_text:
+        return legacy_text
+
+    note_result = (result.get("note_tweet") or {}).get("note_tweet_results", {}).get("result")
+    if isinstance(note_result, dict):
+        note_text = _extract_note_tweet_text(note_result)
+        if note_text:
+            return note_text
+
+    return ""
+
+
+def _extract_note_tweet_text(note_result: dict[str, Any]) -> str:
+    """Extract text from a note_tweet result payload."""
+    for key in ("text", "note_tweet_text", "full_text"):
+        value = note_result.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+
+    nested_note = note_result.get("note_tweet")
+    if isinstance(nested_note, dict):
+        for key in ("text", "note_tweet_text", "full_text"):
+            value = nested_note.get(key)
+            if isinstance(value, str) and value.strip():
+                return value.strip()
+
+    return ""

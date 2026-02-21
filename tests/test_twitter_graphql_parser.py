@@ -171,6 +171,21 @@ class TestExtractTweetsFromGraphql:
         tweets = extract_tweets_from_graphql(response)
         assert len(tweets) == 0
 
+    def test_note_tweet_text_fallback(self) -> None:
+        """When full_text is missing, parser should use note_tweet text."""
+        tr = _make_tweet_result(tweet_id="777", text="")
+        tr["note_tweet"] = {
+            "note_tweet_results": {
+                "result": {
+                    "text": "This is a long-form note tweet body",
+                }
+            }
+        }
+        response = _make_thread_response(tr)
+        tweets = extract_tweets_from_graphql(response)
+        assert len(tweets) == 1
+        assert tweets[0].text == "This is a long-form note tweet body"
+
 
 class TestTweetDataSerialization:
     def test_to_dict_simple(self) -> None:
