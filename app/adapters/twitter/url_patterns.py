@@ -5,16 +5,7 @@ Handles tweet status URLs, article URLs, and t.co short URL resolution.
 
 from __future__ import annotations
 
-import re
-
-_TWEET_URL_RE = re.compile(
-    r"https?://(?:(?:www|mobile)\.)?(?:x|twitter)\.com/"
-    r"(?P<user>[^/]+)/status/(?P<id>\d+)"
-)
-
-_ARTICLE_URL_RE = re.compile(
-    r"https?://(?:(?:www|mobile)\.)?(?:x|twitter)\.com/i/article/(?P<id>\d+)"
-)
+from app.core.url_utils import extract_twitter_article_id, extract_twitter_status_parts
 
 
 def parse_tweet_url(url: str) -> tuple[str, str]:
@@ -29,11 +20,11 @@ def parse_tweet_url(url: str) -> tuple[str, str]:
     Raises:
         ValueError: If URL is not a valid tweet URL
     """
-    m = _TWEET_URL_RE.match(url.split("?", maxsplit=1)[0].rstrip("/"))
-    if not m:
+    parts = extract_twitter_status_parts(url)
+    if not parts:
         msg = f"Not a valid tweet URL: {url}"
         raise ValueError(msg)
-    return m.group("user"), m.group("id")
+    return parts
 
 
 def parse_article_url(url: str) -> str | None:
@@ -45,5 +36,4 @@ def parse_article_url(url: str) -> str | None:
     Returns:
         Article ID string, or None if not an article URL
     """
-    m = _ARTICLE_URL_RE.match(url.split("?", maxsplit=1)[0].rstrip("/"))
-    return m.group("id") if m else None
+    return extract_twitter_article_id(url)

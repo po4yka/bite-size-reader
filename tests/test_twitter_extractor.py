@@ -163,6 +163,75 @@ async def test_pw_extract_tweet_expands_tco_urls() -> None:
 
 
 @pytest.mark.asyncio
+async def test_expand_tco_urls_replaces_nested_quote_tweet_links() -> None:
+    crawl_result = SimpleNamespace(status="error", content_markdown=None, content_html=None)
+    extractor = _make_extractor(cfg=_make_cfg(playwright_enabled=True), crawl_result=crawl_result)
+
+    quoted = TweetData(
+        tweet_id="2",
+        author="B",
+        author_handle="b",
+        text="Quote https://t.co/quoted1",
+        order=0,
+    )
+    tweets = [
+        TweetData(
+            tweet_id="1",
+            author="A",
+            author_handle="a",
+            text="Main https://t.co/main1",
+            quote_tweet=quoted,
+            order=0,
+        )
+    ]
+
+    async def _resolve(url: str) -> str | None:
+        return {
+            "https://t.co/main1": "https://example.com/main",
+            "https://t.co/quoted1": "https://example.com/quote",
+        }.get(url)
+
+    with patch(
+        "app.adapters.twitter.playwright_client.resolve_tco_url",
+        new=AsyncMock(side_effect=_resolve),
+    ):
+        await extractor._expand_tco_urls_in_tweets(tweets, "cid")
+
+    assert "https://example.com/main" in tweets[0].text
+    assert "https://example.com/quote" in (
+        tweets[0].quote_tweet.text if tweets[0].quote_tweet else ""
+    )
+
+
+@pytest.mark.asyncio
+async def test_expand_tco_urls_caps_resolution_work() -> None:
+    crawl_result = SimpleNamespace(status="error", content_markdown=None, content_html=None)
+    extractor = _make_extractor(cfg=_make_cfg(playwright_enabled=True), crawl_result=crawl_result)
+
+    tweets = [
+        TweetData(
+            tweet_id=str(i),
+            author="A",
+            author_handle="a",
+            text=f"Link https://t.co/id{i:02d}",
+            order=i,
+        )
+        for i in range(25)
+    ]
+
+    resolver = AsyncMock(
+        side_effect=lambda url: url.replace("https://t.co/", "https://resolved.example/")
+    )
+    with patch("app.adapters.twitter.playwright_client.resolve_tco_url", new=resolver):
+        await extractor._expand_tco_urls_in_tweets(tweets, "cid")
+
+    # Expansion is capped to protect latency and network usage.
+    assert resolver.await_count == 20
+    assert "https://resolved.example/id00" in tweets[0].text
+    assert "https://t.co/id24" in tweets[24].text
+
+
+@pytest.mark.asyncio
 async def test_pw_extract_article_rejects_login_wall_content() -> None:
     crawl_result = SimpleNamespace(status="error", content_markdown=None, content_html=None)
     extractor = _make_extractor(cfg=_make_cfg(playwright_enabled=True), crawl_result=crawl_result)

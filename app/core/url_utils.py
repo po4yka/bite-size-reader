@@ -621,15 +621,51 @@ def extract_tweet_id(url: str) -> str | None:
     Returns:
         Tweet ID string or None if not found
     """
+    parts = extract_twitter_status_parts(url)
+    return parts[1] if parts else None
+
+
+def extract_twitter_status_parts(url: str) -> tuple[str, str] | None:
+    """Extract ``(username, tweet_id)`` from a Twitter/X status URL.
+
+    Args:
+        url: Twitter/X URL
+
+    Returns:
+        Tuple ``(username, tweet_id)`` when matched, else ``None``
+    """
     if not url or not isinstance(url, str):
         return None
     try:
-        m = _TWEET_STATUS_RE.search(url)
+        cleaned = url.split("?", maxsplit=1)[0].rstrip("/")
+        m = _TWEET_STATUS_RE.match(cleaned)
         if m:
-            return m.group("id")
+            return m.group("user"), m.group("id")
         return None
     except Exception as e:
-        logger.exception("extract_tweet_id_failed", extra={"error": str(e), "url": url[:100]})
+        logger.exception(
+            "extract_twitter_status_parts_failed",
+            extra={"error": str(e), "url": url[:100]},
+        )
+        return None
+
+
+def extract_twitter_article_id(url: str) -> str | None:
+    """Extract article ID from an X/Twitter article URL.
+
+    Args:
+        url: X/Twitter URL
+
+    Returns:
+        Article ID string if URL points to an article, else ``None``
+    """
+    if not url or not isinstance(url, str):
+        return None
+    try:
+        cleaned = url.split("?", maxsplit=1)[0].rstrip("/")
+        m = _ARTICLE_RE.match(cleaned)
+        return m.group("id") if m else None
+    except Exception:
         return None
 
 
@@ -642,12 +678,7 @@ def is_twitter_article_url(url: str) -> bool:
     Returns:
         True if URL is an X Article URL
     """
-    if not url or not isinstance(url, str):
-        return False
-    try:
-        return bool(_ARTICLE_RE.search(url))
-    except Exception:
-        return False
+    return extract_twitter_article_id(url) is not None
 
 
 def is_youtube_url(url: str) -> bool:

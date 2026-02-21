@@ -96,3 +96,9 @@ def test_response_matches_requested_tweet_without_expectation() -> None:
     assert (
         _response_matches_requested_tweet("https://x.com/i/api/graphql/x/TweetDetail", None) is True
     )
+
+
+def test_response_matches_requested_tweet_with_raw_query_value() -> None:
+    response_url = "https://x.com/i/api/graphql/abc/TweetDetail?focalTweetId=67890"
+    assert _response_matches_requested_tweet(response_url, "67890") is True
+    assert _response_matches_requested_tweet(response_url, "11111") is False
