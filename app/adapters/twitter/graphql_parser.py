@@ -153,6 +153,12 @@ def _parse_single_tweet(result: dict[str, Any], order: int) -> TweetData | None:
 
 def _extract_tweet_text(result: dict[str, Any], legacy: dict[str, Any]) -> str:
     """Extract tweet text with support for long-form note tweets."""
+    note_result = (result.get("note_tweet") or {}).get("note_tweet_results", {}).get("result")
+    if isinstance(note_result, dict):
+        note_text = _extract_note_tweet_text(note_result)
+        if note_text:
+            return note_text
+
     full_text = str(legacy.get("full_text") or "").strip()
     if full_text:
         return full_text
@@ -160,12 +166,6 @@ def _extract_tweet_text(result: dict[str, Any], legacy: dict[str, Any]) -> str:
     legacy_text = str(legacy.get("text") or "").strip()
     if legacy_text:
         return legacy_text
-
-    note_result = (result.get("note_tweet") or {}).get("note_tweet_results", {}).get("result")
-    if isinstance(note_result, dict):
-        note_text = _extract_note_tweet_text(note_result)
-        if note_text:
-            return note_text
 
     return ""
 

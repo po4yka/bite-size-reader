@@ -35,6 +35,7 @@ if TYPE_CHECKING:
 
     from app.adapters.external.firecrawl_parser import FirecrawlClient
     from app.adapters.external.response_formatter import ResponseFormatter
+    from app.adapters.twitter.graphql_parser import TweetData
     from app.config import AppConfig
     from app.db.session import DatabaseSessionManager
     from app.infrastructure.persistence.message_persistence import MessagePersistence
@@ -43,6 +44,8 @@ logger = logging.getLogger(__name__)
 
 # Limit concurrent Playwright browser sessions
 _MAX_CONCURRENT_BROWSERS = 2
+_TCO_URL_RE = re.compile(r"https?://t\.co/[A-Za-z0-9]+", re.IGNORECASE)
+_MAX_TCO_EXPANSIONS = 20
 
 
 class TwitterExtractor:
@@ -290,6 +293,7 @@ class TwitterExtractor:
             msg = f"Playwright extraction did not include requested tweet_id={tweet_id}"
             raise ValueError(msg)
 
+        await self._expand_tco_urls_in_tweets(result.tweets, correlation_id)
         content_text = format_tweets_for_summary(result.tweets)
 
         pw_metadata: dict[str, Any] = {
@@ -375,6 +379,91 @@ class TwitterExtractor:
         )
 
         return content_text, "twitter_article", pw_metadata
+
+    async def _expand_tco_urls_in_tweets(
+        self,
+        tweets: list[TweetData],
+        correlation_id: str | None,
+    ) -> None:
+        """Resolve t.co short links in tweet text for better summarization context."""
+        urls = self._collect_tco_urls(tweets)
+        if not urls:
+            return
+
+        if len(urls) > _MAX_TCO_EXPANSIONS:
+            logger.info(
+                "twitter_tco_expansion_capped",
+                extra={
+                    "cid": correlation_id,
+                    "detected": len(urls),
+                    "cap": _MAX_TCO_EXPANSIONS,
+                },
+            )
+            urls = urls[:_MAX_TCO_EXPANSIONS]
+
+        from app.adapters.twitter.playwright_client import resolve_tco_url
+
+        resolved_urls = await asyncio.gather(
+            *(resolve_tco_url(url) for url in urls),
+            return_exceptions=True,
+        )
+
+        replacements: dict[str, str] = {}
+        for short_url, resolved in zip(urls, resolved_urls, strict=False):
+            if isinstance(resolved, Exception):
+                raise_if_cancelled(resolved)
+                logger.debug(
+                    "twitter_tco_resolution_failed",
+                    extra={"cid": correlation_id, "url": short_url, "error": str(resolved)},
+                )
+                continue
+            if isinstance(resolved, str) and resolved and resolved != short_url:
+                replacements[short_url] = resolved
+
+        if not replacements:
+            return
+
+        for tweet in tweets:
+            self._apply_tco_replacements(tweet, replacements)
+
+        logger.info(
+            "twitter_tco_expanded",
+            extra={
+                "cid": correlation_id,
+                "resolved": len(replacements),
+            },
+        )
+
+    @staticmethod
+    def _collect_tco_urls(tweets: list[TweetData]) -> list[str]:
+        """Collect unique t.co URLs from tweets and nested quote tweets."""
+        urls: list[str] = []
+        seen: set[str] = set()
+
+        def _collect(tweet: TweetData) -> None:
+            for match in _TCO_URL_RE.finditer(tweet.text or ""):
+                url = match.group(0)
+                if url in seen:
+                    continue
+                seen.add(url)
+                urls.append(url)
+            if tweet.quote_tweet:
+                _collect(tweet.quote_tweet)
+
+        for tweet in tweets:
+            _collect(tweet)
+
+        return urls
+
+    @staticmethod
+    def _apply_tco_replacements(tweet: TweetData, replacements: dict[str, str]) -> None:
+        """Replace t.co URLs in tweet and nested quote text."""
+        tweet.text = _TCO_URL_RE.sub(
+            lambda match: replacements.get(match.group(0), match.group(0)),
+            tweet.text or "",
+        )
+        if tweet.quote_tweet:
+            TwitterExtractor._apply_tco_replacements(tweet.quote_tweet, replacements)
 
     @staticmethod
     def _can_accept_low_value_firecrawl_content(

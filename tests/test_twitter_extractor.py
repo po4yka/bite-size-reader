@@ -125,6 +125,44 @@ async def test_pw_extract_tweet_requires_requested_tweet_id() -> None:
 
 
 @pytest.mark.asyncio
+async def test_pw_extract_tweet_expands_tco_urls() -> None:
+    crawl_result = SimpleNamespace(status="error", content_markdown=None, content_html=None)
+    extractor = _make_extractor(cfg=_make_cfg(playwright_enabled=True), crawl_result=crawl_result)
+
+    result = ExtractionResult(
+        url="https://x.com/user/status/123",
+        tweets=[
+            TweetData(
+                tweet_id="123",
+                author="A",
+                author_handle="a",
+                text="Read this https://t.co/abc123",
+                order=0,
+            )
+        ],
+    )
+    with patch(
+        "app.adapters.twitter.playwright_client.extract_tweet",
+        new=AsyncMock(return_value=result),
+    ):
+        with patch(
+            "app.adapters.twitter.playwright_client.resolve_tco_url",
+            new=AsyncMock(return_value="https://example.com/article"),
+        ):
+            content_text, _source, _meta = await extractor._pw_extract_tweet(
+                url="https://x.com/user/status/123",
+                tweet_id="123",
+                cookies=None,
+                headless=True,
+                timeout_ms=1000,
+                correlation_id="cid",
+            )
+
+    assert "https://example.com/article" in content_text
+    assert "https://t.co/abc123" not in content_text
+
+
+@pytest.mark.asyncio
 async def test_pw_extract_article_rejects_login_wall_content() -> None:
     crawl_result = SimpleNamespace(status="error", content_markdown=None, content_html=None)
     extractor = _make_extractor(cfg=_make_cfg(playwright_enabled=True), crawl_result=crawl_result)

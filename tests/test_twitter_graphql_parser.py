@@ -186,6 +186,21 @@ class TestExtractTweetsFromGraphql:
         assert len(tweets) == 1
         assert tweets[0].text == "This is a long-form note tweet body"
 
+    def test_note_tweet_takes_precedence_over_legacy_full_text(self) -> None:
+        """note_tweet text should be preferred over legacy full_text when both exist."""
+        tr = _make_tweet_result(tweet_id="778", text="Legacy full text")
+        tr["note_tweet"] = {
+            "note_tweet_results": {
+                "result": {
+                    "text": "Preferred note_tweet text",
+                }
+            }
+        }
+        response = _make_thread_response(tr)
+        tweets = extract_tweets_from_graphql(response)
+        assert len(tweets) == 1
+        assert tweets[0].text == "Preferred note_tweet text"
+
 
 class TestTweetDataSerialization:
     def test_to_dict_simple(self) -> None:
