@@ -194,6 +194,19 @@ API_RATE_LIMIT_PER_MINUTE=100
 | `YOUTUBE_AUTO_CLEANUP_ENABLED` | `true` | Auto-delete old videos |
 | `YOUTUBE_CLEANUP_AFTER_DAYS` | `30` | Retention period (days) |
 
+## Twitter/X Content Extraction
+
+| Variable | Default | Description |
+| ---------- | --------- | ------------- |
+| `TWITTER_ENABLED` | `true` | Enable Twitter/X URL detection and extraction |
+| `TWITTER_PLAYWRIGHT_ENABLED` | `false` | Enable Playwright-based extraction (requires chromium) |
+| `TWITTER_COOKIES_PATH` | `/data/twitter_cookies.txt` | Path to Netscape-format cookies.txt for authenticated extraction |
+| `TWITTER_HEADLESS` | `true` | Run Playwright browser in headless mode |
+| `TWITTER_PAGE_TIMEOUT_MS` | `15000` | Page load timeout for Playwright (ms) |
+| `TWITTER_PREFER_FIRECRAWL` | `true` | Try Firecrawl first before Playwright fallback |
+
+**Two-tier extraction**: By default, Twitter URLs are extracted via Firecrawl (free, no auth needed). If Firecrawl fails (login wall), enable `TWITTER_PLAYWRIGHT_ENABLED` and provide a `cookies.txt` for authenticated extraction. Docker: build with `--build-arg WITH_PLAYWRIGHT=1`.
+
 ## Web Search Enrichment
 
 | Variable | Default | Description |

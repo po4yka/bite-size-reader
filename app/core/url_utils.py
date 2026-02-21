@@ -570,6 +570,86 @@ _YOUTUBE_PATTERNS = [
 ]
 
 
+# Twitter/X URL patterns
+_TWITTER_PATTERNS = [
+    # Standard tweet status URLs: x.com/user/status/ID or twitter.com/user/status/ID
+    re.compile(
+        r"(?:https?://)?(?:(?:www|mobile)\.)?(?<![a-z])(?:x|twitter)\.com/(?P<user>[^/]+)/status/(?P<id>\d+)",
+        re.IGNORECASE,
+    ),
+    # X Article URLs: x.com/i/article/ID
+    re.compile(
+        r"(?:https?://)?(?:(?:www|mobile)\.)?(?<![a-z])(?:x|twitter)\.com/i/article/(?P<id>\d+)",
+        re.IGNORECASE,
+    ),
+]
+
+_TWEET_STATUS_RE = _TWITTER_PATTERNS[0]
+_ARTICLE_RE = _TWITTER_PATTERNS[1]
+
+
+def is_twitter_url(url: str) -> bool:
+    """Check if URL is a Twitter/X tweet or article.
+
+    Supports:
+    - x.com/user/status/ID
+    - twitter.com/user/status/ID
+    - x.com/i/article/ID
+    - mobile.x.com, www.x.com variants
+
+    Args:
+        url: URL string to check
+
+    Returns:
+        True if URL is a Twitter/X URL, False otherwise
+    """
+    if not url or not isinstance(url, str):
+        return False
+    try:
+        return any(pattern.search(url) for pattern in _TWITTER_PATTERNS)
+    except Exception as e:
+        logger.exception("is_twitter_url_failed", extra={"error": str(e), "url": url[:100]})
+        return False
+
+
+def extract_tweet_id(url: str) -> str | None:
+    """Extract tweet ID from a Twitter/X status URL.
+
+    Args:
+        url: Twitter/X URL
+
+    Returns:
+        Tweet ID string or None if not found
+    """
+    if not url or not isinstance(url, str):
+        return None
+    try:
+        m = _TWEET_STATUS_RE.search(url)
+        if m:
+            return m.group("id")
+        return None
+    except Exception as e:
+        logger.exception("extract_tweet_id_failed", extra={"error": str(e), "url": url[:100]})
+        return None
+
+
+def is_twitter_article_url(url: str) -> bool:
+    """Check if URL points to an X Article (long-form content).
+
+    Args:
+        url: URL string to check
+
+    Returns:
+        True if URL is an X Article URL
+    """
+    if not url or not isinstance(url, str):
+        return False
+    try:
+        return bool(_ARTICLE_RE.search(url))
+    except Exception:
+        return False
+
+
 def is_youtube_url(url: str) -> bool:
     """Check if URL is a YouTube video.
 

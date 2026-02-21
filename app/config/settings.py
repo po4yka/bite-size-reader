@@ -32,6 +32,7 @@ from .media import AttachmentConfig, YouTubeConfig
 from .redis import RedisConfig
 from .runtime import RuntimeConfig
 from .telegram import TelegramConfig, TelegramLimitsConfig
+from .twitter import TwitterConfig
 
 logger = logging.getLogger(__name__)
 
@@ -60,6 +61,7 @@ class AppConfig:
     web_search: WebSearchConfig
     adaptive_timeout: AdaptiveTimeoutConfig
     batch_analysis: BatchAnalysisConfig
+    twitter: TwitterConfig = field(default_factory=TwitterConfig)
     digest: ChannelDigestConfig = field(default_factory=ChannelDigestConfig)
     mcp: McpConfig = field(default_factory=McpConfig)
 
@@ -103,6 +105,7 @@ class Settings(BaseSettings):
     mcp: McpConfig = Field(default_factory=McpConfig)
     adaptive_timeout: AdaptiveTimeoutConfig = Field(default_factory=AdaptiveTimeoutConfig)
     batch_analysis: BatchAnalysisConfig = Field(default_factory=BatchAnalysisConfig)
+    twitter: TwitterConfig = Field(default_factory=TwitterConfig)
     digest: ChannelDigestConfig = Field(default_factory=ChannelDigestConfig)
 
     @model_validator(mode="before")
@@ -200,6 +203,7 @@ class Settings(BaseSettings):
             web_search=self.web_search,
             adaptive_timeout=self.adaptive_timeout,
             batch_analysis=self.batch_analysis,
+            twitter=self.twitter,
             digest=self.digest,
             mcp=self.mcp,
         )

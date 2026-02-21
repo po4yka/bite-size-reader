@@ -60,6 +60,7 @@ class ContentExtractor:
         self._cache = RedisCache(cfg)
         self.message_persistence = MessagePersistence(db)
         self._youtube_downloader: YouTubeDownloader | None = None
+        self._twitter_extractor: Any | None = None
 
     def _schedule_crawl_persistence(
         self, req_id: int, crawl: FirecrawlResult, correlation_id: str | None
@@ -223,9 +224,24 @@ class ContentExtractor:
         progress_tracker: ProgressTracker | None = None,
     ) -> tuple[int, str, str, str, str | None, list[str]]:
         """Extract content from URL and return (req_id, content_text, content_source, detected_lang, title, images)."""
-        from app.core.url_utils import is_youtube_url
+        from app.core.url_utils import is_twitter_url, is_youtube_url
 
         norm = normalize_url(url_text)
+
+        # Check if Twitter/X URL and route accordingly
+        if is_twitter_url(norm) and self.cfg.twitter.enabled:
+            logger.info("twitter_url_detected", extra={"url": url_text, "cid": correlation_id})
+            (
+                req_id,
+                content_text,
+                content_source,
+                detected_lang,
+                meta,
+            ) = await self._extract_twitter_content(
+                message, url_text, norm, correlation_id, interaction_id, silent
+            )
+            title = meta.get("title") if isinstance(meta, dict) else None
+            return req_id, content_text, content_source, detected_lang, title, []
 
         # Check if YouTube URL and route accordingly
         if is_youtube_url(norm):
@@ -1112,3 +1128,30 @@ class ContentExtractor:
                 extra={"url": url_text, "error": str(e), "cid": correlation_id},
             )
             raise
+
+    async def _extract_twitter_content(
+        self,
+        message: Any,
+        url_text: str,
+        norm: str,
+        correlation_id: str | None,
+        interaction_id: int | None,
+        silent: bool = False,
+    ) -> tuple[int, str, str, str, dict[str, Any]]:
+        """Extract Twitter/X content via TwitterExtractor (two-tier strategy)."""
+        if self._twitter_extractor is None:
+            from app.adapters.twitter.twitter_extractor import TwitterExtractor
+
+            self._twitter_extractor = TwitterExtractor(
+                cfg=self.cfg,
+                db=self.db,
+                firecrawl=self.firecrawl,
+                response_formatter=self.response_formatter,
+                message_persistence=self.message_persistence,
+                firecrawl_sem=self._sem,
+                handle_request_dedupe_or_create=self._handle_request_dedupe_or_create,
+                schedule_crawl_persistence=self._schedule_crawl_persistence,
+            )
+        return await self._twitter_extractor.extract_and_process(
+            message, url_text, correlation_id, interaction_id, silent
+        )

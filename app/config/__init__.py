@@ -15,6 +15,7 @@ from .redis import RedisConfig
 from .runtime import RuntimeConfig
 from .settings import AppConfig, Config, ConfigHelper, Settings, load_config
 from .telegram import TelegramConfig, TelegramLimitsConfig
+from .twitter import TwitterConfig
 
 __all__ = [
     "AdaptiveTimeoutConfig",
@@ -41,6 +42,7 @@ __all__ = [
     "SyncConfig",
     "TelegramConfig",
     "TelegramLimitsConfig",
+    "TwitterConfig",
     "WebSearchConfig",
     "YouTubeConfig",
     "load_config",

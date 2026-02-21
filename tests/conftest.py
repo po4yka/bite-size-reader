@@ -57,6 +57,7 @@ from app.config import (
     SyncConfig,
     TelegramConfig,
     TelegramLimitsConfig,
+    TwitterConfig,
     WebSearchConfig,
     YouTubeConfig,
 )
@@ -242,6 +243,7 @@ def make_test_app_config(
         "web_search": WebSearchConfig(),
         "adaptive_timeout": AdaptiveTimeoutConfig(),
         "batch_analysis": BatchAnalysisConfig(),
+        "twitter": TwitterConfig(),
     }
     defaults.update(overrides)
     return AppConfig(**defaults)

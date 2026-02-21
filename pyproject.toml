@@ -188,6 +188,11 @@ youtube = [
   "youtube-transcript-api>=1.2.4",
 ]
 
+# Twitter/X content extraction via Playwright browser automation
+twitter = [
+  "playwright>=1.40",
+]
+
 # PDF export functionality
 export = [
   "weasyprint>=68.0",

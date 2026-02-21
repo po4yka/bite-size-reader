@@ -65,6 +65,7 @@ Telegram Message -> MessageHandler -> AccessController -> MessageRouter
 - **Telegram Layer** (`app/adapters/telegram/`) -- Bot orchestration, message routing, access control, persistence, command processing, URL/forward handling
 - **Content Pipeline** (`app/adapters/content/`) -- Firecrawl integration, content chunking, LLM summarization, web search context
 - **YouTube Adapter** (`app/adapters/youtube/`) -- yt-dlp video download, transcript extraction, storage management
+- **Twitter/X Adapter** (`app/adapters/twitter/`) -- Two-tier extraction: Firecrawl (public) + Playwright (authenticated). GraphQL interception for tweets/threads, DOM scraping for X Articles
 - **LLM Abstraction** (`app/adapters/llm/`) -- Provider-agnostic LLM interface (OpenRouter, OpenAI, Anthropic)
 - **External Services** (`app/adapters/openrouter/`, `app/adapters/external/`) -- OpenRouter client, Firecrawl parser, response formatting
 - **Karakeep Integration** (`app/adapters/karakeep/`) -- Bookmark sync from self-hosted Karakeep
@@ -256,6 +257,15 @@ GitHub Actions (`.github/workflows/ci.yml`) enforces:
 ### YouTube Video Support
 
 YouTube URL detection, transcript extraction, and video download are handled by `app/adapters/youtube/`. Supports all major URL formats (watch, shorts, live, embed, mobile, music). See README.md for details.
+
+### Twitter/X Content Extraction
+
+Twitter/X URLs (tweets, threads, X Articles) are handled by `app/adapters/twitter/`. Uses a two-tier extraction strategy:
+
+1. **Firecrawl** (default, free) -- works for some public tweets
+2. **Playwright** (opt-in via `TWITTER_PLAYWRIGHT_ENABLED`) -- intercepts GraphQL API for tweets/threads, DOM-scrapes X Articles. Requires cookies.txt and Chromium.
+
+Key files: `url_patterns.py` (URL parsing), `graphql_parser.py` (TweetData extraction), `text_formatter.py` (LLM-ready text), `playwright_client.py` (browser automation), `twitter_extractor.py` (orchestrator). Config: `app/config/twitter.py`.
 
 ### Web Search Enrichment (Optional)
 
