@@ -30,7 +30,7 @@ from app.api.models.responses import (
     success_response,
 )
 from app.api.routers.auth import get_current_user
-from app.api.services import SummaryService
+from app.application.use_cases.summary_read_model import SummaryReadModelUseCase
 from app.core.html_utils import clean_markdown_article_text, html_to_text
 from app.core.logging_utils import get_logger
 from app.core.time_utils import UTC
@@ -60,18 +60,13 @@ def _isotime(dt: Any) -> str:
     return str(dt)
 
 
-def _get_repos() -> tuple[
-    SqliteSummaryRepositoryAdapter,
-    SqliteRequestRepositoryAdapter,
-    SqliteCrawlResultRepositoryAdapter,
-    SqliteLLMRepositoryAdapter,
-]:
-    """Get repository adapters."""
-    return (
-        SqliteSummaryRepositoryAdapter(database_proxy),
-        SqliteRequestRepositoryAdapter(database_proxy),
-        SqliteCrawlResultRepositoryAdapter(database_proxy),
-        SqliteLLMRepositoryAdapter(database_proxy),
+def _get_summary_use_case() -> SummaryReadModelUseCase:
+    """Build the summary read-model use case for API handlers."""
+    return SummaryReadModelUseCase(
+        summary_repository=SqliteSummaryRepositoryAdapter(database_proxy),
+        request_repository=SqliteRequestRepositoryAdapter(database_proxy),
+        crawl_result_repository=SqliteCrawlResultRepositoryAdapter(database_proxy),
+        llm_repository=SqliteLLMRepositoryAdapter(database_proxy),
     )
 
 
@@ -86,6 +81,7 @@ async def get_summaries(
     end_date: str | None = Query(None),
     sort: str = Query("created_at_desc", pattern="^(created_at_desc|created_at_asc)$"),
     user=Depends(get_current_user),
+    use_case: SummaryReadModelUseCase = Depends(_get_summary_use_case),
 ):
     """
     Get paginated list of summaries.
@@ -100,7 +96,7 @@ async def get_summaries(
     - sort: Sort order (created_at_desc/created_at_asc)
     """
     # Use service layer for business logic
-    summaries, total, unread_count = await SummaryService.get_user_summaries(
+    summaries, total, unread_count = await use_case.get_user_summaries(
         user_id=user["user_id"],
         limit=limit,
         offset=offset,
@@ -174,49 +170,34 @@ async def get_summaries(
 async def get_summary_by_url(
     url: str = Query(..., description="Original URL of the article"),
     user=Depends(get_current_user),
+    use_case: SummaryReadModelUseCase = Depends(_get_summary_use_case),
 ):
     """Get a single summary (article) by its original URL."""
-    summary_repo, request_repo, _, _ = _get_repos()
-
-    # Find request ID by URL (with summary join)
-    request_id = await request_repo.async_get_request_id_by_url_with_summary(
-        user_id=user["user_id"], url=url
-    )
-
-    if not request_id:
+    summary_id = await use_case.get_summary_id_by_url_for_user(user_id=user["user_id"], url=url)
+    if not summary_id:
         raise ResourceNotFoundError("Article", url)
 
-    # Get summary ID by request ID
-    summary_id = await summary_repo.async_get_summary_id_by_request(request_id)
-    if not summary_id:
-        raise ResourceNotFoundError("Summary", f"request:{request_id}")
-
-    return await get_summary(summary_id=summary_id, user=user)
+    return await get_summary(summary_id=summary_id, user=user, use_case=use_case)
 
 
 @router.get("/{summary_id}")
 async def get_summary(
     summary_id: int,
     user=Depends(get_current_user),
+    use_case: SummaryReadModelUseCase = Depends(_get_summary_use_case),
 ):
     """Get a single summary with full details."""
-    _, request_repo, crawl_repo, llm_repo = _get_repos()
+    context = await use_case.get_summary_context_for_user(
+        user_id=user["user_id"],
+        summary_id=summary_id,
+    )
+    if not context:
+        raise ResourceNotFoundError("Summary", summary_id)
 
-    # Use service layer - it handles authorization and returns summary dict
-    summary = await SummaryService.get_summary_by_id(user["user_id"], summary_id)
-
-    # Extract request data from the summary dict
-    request_data = summary.get("request") or {}
-    if isinstance(request_data, int):
-        # If request is just an ID, fetch the full request data
-        request_id = request_data
-        request_data = await request_repo.async_get_request_by_id(request_id) or {}
-    else:
-        request_id = request_data.get("id", summary.get("request_id"))
-
-    # Load crawl result and LLM calls via repositories
-    crawl_result = await crawl_repo.async_get_crawl_result_by_request(request_id)
-    llm_calls = await llm_repo.async_get_llm_calls_by_request(request_id)
+    summary = context["summary"]
+    request_data = context["request"]
+    crawl_result = context["crawl_result"]
+    llm_calls = context["llm_calls"]
 
     # Build source metadata
     source = {}
@@ -325,21 +306,20 @@ async def get_summary_content(
     summary_id: int,
     format: str = Query("markdown", pattern="^(markdown|text)$"),
     user=Depends(get_current_user),
+    use_case: SummaryReadModelUseCase = Depends(_get_summary_use_case),
 ):
     """Get full article content for offline reading."""
-    _, request_repo, crawl_repo, _ = _get_repos()
+    context = await use_case.get_summary_context_for_user(
+        user_id=user["user_id"],
+        summary_id=summary_id,
+    )
+    if not context:
+        raise ResourceNotFoundError("Summary", summary_id)
 
-    summary = await SummaryService.get_summary_by_id(user["user_id"], summary_id)
-
-    # Extract request data
-    request_data = summary.get("request") or {}
-    if isinstance(request_data, int):
-        request_id = request_data
-        request_data = await request_repo.async_get_request_by_id(request_id) or {}
-    else:
-        request_id = request_data.get("id", summary.get("request_id"))
-
-    crawl_result = await crawl_repo.async_get_crawl_result_by_request(request_id)
+    summary = context["summary"]
+    request_data = context["request"]
+    request_id = context["request_id"]
+    crawl_result = context["crawl_result"]
 
     if not crawl_result:
         raise ResourceNotFoundError("Content", summary_id)
@@ -431,19 +411,23 @@ async def update_summary(
     summary_id: int,
     update: UpdateSummaryRequest,
     user=Depends(get_current_user),
+    use_case: SummaryReadModelUseCase = Depends(_get_summary_use_case),
 ):
     """Update summary metadata (e.g., mark as read)."""
-    # Use service layer
-    await SummaryService.update_summary(
+    updated_summary = await use_case.update_summary(
         user_id=user["user_id"],
         summary_id=summary_id,
         is_read=update.is_read,
     )
+    if not updated_summary:
+        raise ResourceNotFoundError("Summary", summary_id)
+
+    resolved_is_read = bool(updated_summary.get("is_read"))
 
     return success_response(
         UpdateSummaryResponse(
             id=summary_id,
-            is_read=update.is_read,
+            is_read=resolved_is_read,
             updated_at=datetime.now(UTC).isoformat().replace("+00:00", "Z"),
         )
     )
@@ -453,10 +437,12 @@ async def update_summary(
 async def delete_summary(
     summary_id: int,
     user=Depends(get_current_user),
+    use_case: SummaryReadModelUseCase = Depends(_get_summary_use_case),
 ):
     """Delete a summary (soft delete)."""
-    # Use service layer
-    await SummaryService.delete_summary(user_id=user["user_id"], summary_id=summary_id)
+    deleted = await use_case.soft_delete_summary(user_id=user["user_id"], summary_id=summary_id)
+    if not deleted:
+        raise ResourceNotFoundError("Summary", summary_id)
 
     return success_response(
         DeleteSummaryResponse(
@@ -470,9 +456,10 @@ async def delete_summary(
 async def toggle_favorite(
     summary_id: int,
     user=Depends(get_current_user),
+    use_case: SummaryReadModelUseCase = Depends(_get_summary_use_case),
 ):
     """Toggle the favorite status of a summary."""
-    is_favorited = await SummaryService.toggle_favorite(
-        user_id=user["user_id"], summary_id=summary_id
-    )
+    is_favorited = await use_case.toggle_favorite(user_id=user["user_id"], summary_id=summary_id)
+    if is_favorited is None:
+        raise ResourceNotFoundError("Summary", summary_id)
     return success_response(ToggleFavoriteResponse(success=True, is_favorited=is_favorited))

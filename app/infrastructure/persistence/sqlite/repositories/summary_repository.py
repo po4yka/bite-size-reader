@@ -125,6 +125,37 @@ class SqliteSummaryRepositoryAdapter(SqliteBaseRepository):
 
         return await self._execute(_query, operation_name="get_user_summaries", read_only=True)
 
+    async def async_get_user_summaries_for_insights(
+        self,
+        user_id: int,
+        request_created_after: datetime,
+        limit: int,
+    ) -> list[dict[str, Any]]:
+        """Get summary+request rows for analytics/insight computations."""
+
+        def _query() -> list[dict[str, Any]]:
+            if limit <= 0:
+                return []
+
+            rows = (
+                Summary.select(Summary, Request)
+                .join(Request)
+                .where(
+                    (Request.user_id == user_id)
+                    & (Request.created_at >= request_created_after)
+                    & (~Summary.is_deleted)
+                )
+                .order_by(Request.created_at.desc())
+                .limit(limit)
+            )
+            return [model_to_dict(row) or {} for row in rows]
+
+        return await self._execute(
+            _query,
+            operation_name="get_user_summaries_for_insights",
+            read_only=True,
+        )
+
     async def async_get_summary_by_request(self, request_id: int) -> dict[str, Any] | None:
         """Get the latest summary for a request."""
 

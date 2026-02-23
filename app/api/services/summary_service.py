@@ -3,7 +3,18 @@
 from typing import Any
 
 from app.api.exceptions import ResourceNotFoundError
+from app.application.use_cases.summary_read_model import SummaryReadModelUseCase
 from app.core.logging_utils import get_logger
+from app.db.models import database_proxy
+from app.infrastructure.persistence.sqlite.repositories.crawl_result_repository import (
+    SqliteCrawlResultRepositoryAdapter,
+)
+from app.infrastructure.persistence.sqlite.repositories.llm_repository import (
+    SqliteLLMRepositoryAdapter,
+)
+from app.infrastructure.persistence.sqlite.repositories.request_repository import (
+    SqliteRequestRepositoryAdapter,
+)
 from app.infrastructure.persistence.sqlite.repositories.summary_repository import (
     SqliteSummaryRepositoryAdapter,
 )
@@ -13,6 +24,15 @@ logger = get_logger(__name__)
 
 class SummaryService:
     """Service for summary-related business logic."""
+
+    @staticmethod
+    def _build_use_case() -> SummaryReadModelUseCase:
+        return SummaryReadModelUseCase(
+            summary_repository=SqliteSummaryRepositoryAdapter(database_proxy),
+            request_repository=SqliteRequestRepositoryAdapter(database_proxy),
+            crawl_result_repository=SqliteCrawlResultRepositoryAdapter(database_proxy),
+            llm_repository=SqliteLLMRepositoryAdapter(database_proxy),
+        )
 
     @staticmethod
     async def get_user_summaries(
@@ -46,11 +66,8 @@ class SummaryService:
         Raises:
             ValueError: If invalid sort parameter
         """
-        from app.db.models import database_proxy
-
-        repo = SqliteSummaryRepositoryAdapter(database_proxy)
-
-        return await repo.async_get_user_summaries(
+        use_case = SummaryService._build_use_case()
+        return await use_case.get_user_summaries(
             user_id=user_id,
             limit=limit,
             offset=offset,
@@ -77,14 +94,9 @@ class SummaryService:
         Raises:
             ResourceNotFoundError: If summary not found or access denied
         """
-        from app.db.models import database_proxy
-
-        repo = SqliteSummaryRepositoryAdapter(database_proxy)
-
-        summary = await repo.async_get_summary_by_id(summary_id)
-
-        # Check authorization (repo returns request data joined)
-        if not summary or summary.get("user_id") != user_id or summary.get("is_deleted"):
+        use_case = SummaryService._build_use_case()
+        summary = await use_case.get_summary_by_id_for_user(user_id=user_id, summary_id=summary_id)
+        if not summary:
             raise ResourceNotFoundError("Summary", summary_id)
 
         return summary
@@ -107,28 +119,21 @@ class SummaryService:
         Raises:
             ResourceNotFoundError: If summary not found or access denied
         """
-        from app.db.models import database_proxy
-
-        repo = SqliteSummaryRepositoryAdapter(database_proxy)
-
-        # Get with authorization check
-        summary = await repo.async_get_summary_by_id(summary_id)
-        if not summary or summary.get("user_id") != user_id or summary.get("is_deleted"):
+        use_case = SummaryService._build_use_case()
+        updated_summary = await use_case.update_summary(
+            user_id=user_id,
+            summary_id=summary_id,
+            is_read=is_read,
+        )
+        if not updated_summary:
             raise ResourceNotFoundError("Summary", summary_id)
-
-        # Update fields
-        if is_read is not None:
-            if is_read:
-                await repo.async_mark_summary_as_read(summary_id)
-            else:
-                await repo.async_mark_summary_as_unread(summary_id)
 
         logger.info(
             f"Summary {summary_id} updated by user {user_id}",
             extra={"summary_id": summary_id, "user_id": user_id, "is_read": is_read},
         )
 
-        return await repo.async_get_summary_by_id(summary_id)
+        return updated_summary
 
     @staticmethod
     async def delete_summary(user_id: int, summary_id: int) -> None:
@@ -142,16 +147,10 @@ class SummaryService:
         Raises:
             ResourceNotFoundError: If summary not found or access denied
         """
-        from app.db.models import database_proxy
-
-        repo = SqliteSummaryRepositoryAdapter(database_proxy)
-
-        # Get with authorization check
-        summary = await repo.async_get_summary_by_id(summary_id)
-        if not summary or summary.get("user_id") != user_id or summary.get("is_deleted"):
+        use_case = SummaryService._build_use_case()
+        deleted = await use_case.soft_delete_summary(user_id=user_id, summary_id=summary_id)
+        if not deleted:
             raise ResourceNotFoundError("Summary", summary_id)
-
-        await repo.async_soft_delete_summary(summary_id)
 
         logger.info(
             f"Summary {summary_id} soft-deleted by user {user_id}",
@@ -173,16 +172,10 @@ class SummaryService:
         Raises:
             ResourceNotFoundError: If summary not found or access denied
         """
-        from app.db.models import database_proxy
-
-        repo = SqliteSummaryRepositoryAdapter(database_proxy)
-
-        # Get with authorization check
-        summary = await repo.async_get_summary_by_id(summary_id)
-        if not summary or summary.get("user_id") != user_id or summary.get("is_deleted"):
+        use_case = SummaryService._build_use_case()
+        new_status = await use_case.toggle_favorite(user_id=user_id, summary_id=summary_id)
+        if new_status is None:
             raise ResourceNotFoundError("Summary", summary_id)
-
-        new_status = await repo.async_toggle_favorite(summary_id)
 
         logger.info(
             f"Summary {summary_id} favorite status toggled to {new_status} by user {user_id}",

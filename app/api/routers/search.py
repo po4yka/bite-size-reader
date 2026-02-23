@@ -17,6 +17,7 @@ from app.api.models.responses import (
     success_response,
 )
 from app.api.routers.auth import get_current_user
+from app.application.use_cases.search_read_model import SearchReadModelUseCase
 from app.core.logging_utils import get_logger
 from app.core.time_utils import UTC
 from app.db.models import database_proxy
@@ -39,6 +40,15 @@ router = APIRouter()
 
 _HASHTAG_RE = re.compile(r"#([\w-]{1,50})", re.UNICODE)
 _ENTITY_RE = re.compile(r"\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,2})\b")
+
+
+def _get_search_read_model_use_case() -> SearchReadModelUseCase:
+    """Build search read-model use case for API handlers."""
+    return SearchReadModelUseCase(
+        topic_search_repository=SqliteTopicSearchRepositoryAdapter(database_proxy),
+        request_repository=SqliteRequestRepositoryAdapter(database_proxy),
+        summary_repository=SqliteSummaryRepositoryAdapter(database_proxy),
+    )
 
 
 def _query_tokens(text: str) -> set[str]:
@@ -287,6 +297,7 @@ async def search_summaries(
     is_favorited: bool | None = Query(None),
     min_similarity: float = Query(0.2, ge=0.0, le=1.0),
     user=Depends(get_current_user),
+    search_use_case: SearchReadModelUseCase = Depends(_get_search_read_model_use_case),
 ):
     """
     Full-text search across all summaries using FTS5.
@@ -298,17 +309,13 @@ async def search_summaries(
     - Exclusion: crypto NOT bitcoin
     """
     try:
-        topic_search_repo = SqliteTopicSearchRepositoryAdapter(database_proxy)
-        request_repo = SqliteRequestRepositoryAdapter(database_proxy)
-        summary_repo = SqliteSummaryRepositoryAdapter(database_proxy)
-
         intent = _infer_intent(q)
         resolved_mode = _resolve_mode(mode, intent)
 
         fetch_limit = min(300, max(limit * 4, limit + 25))
 
         fts_query = re.sub(r"#", " ", q).strip() or q
-        fts_results, _ = await topic_search_repo.async_fts_search_paginated(
+        fts_results, _ = await search_use_case.fts_search_paginated(
             fts_query, limit=fetch_limit, offset=0
         )
         fts_by_request_id: dict[int, dict[str, Any]] = {}
@@ -363,10 +370,10 @@ async def search_summaries(
                 dict.fromkeys([*fts_by_request_id.keys(), *semantic_by_request_id.keys()])
             )
 
-        requests_map = await request_repo.async_get_requests_by_ids(
+        requests_map = await search_use_case.get_requests_by_ids(
             candidate_request_ids, user_id=user["user_id"]
         )
-        summaries_map = await summary_repo.async_get_summaries_by_request_ids(
+        summaries_map = await search_use_case.get_summaries_by_request_ids(
             list(requests_map.keys())
         )
 
@@ -525,12 +532,10 @@ async def semantic_search_summaries(
     min_similarity: float = Query(0.2, ge=0.0, le=1.0),
     user=Depends(get_current_user),
     chroma_service: ChromaVectorSearchService = Depends(get_chroma_search_service),
+    search_use_case: SearchReadModelUseCase = Depends(_get_search_read_model_use_case),
 ):
     """Semantic search across summaries using Chroma embeddings."""
     try:
-        request_repo = SqliteRequestRepositoryAdapter(database_proxy)
-        summary_repo = SqliteSummaryRepositoryAdapter(database_proxy)
-
         search_results = await chroma_service.search(
             q,
             language=language,
@@ -544,15 +549,13 @@ async def semantic_search_summaries(
         request_ids = [result.request_id for result in search_results.results]
 
         # Batch load requests with user authorization
-        requests_map = await request_repo.async_get_requests_by_ids(
+        requests_map = await search_use_case.get_requests_by_ids(
             request_ids, user_id=user["user_id"]
         )
 
         # Batch load summaries
         authorized_request_ids = list(requests_map.keys())
-        summaries_map = await summary_repo.async_get_summaries_by_request_ids(
-            authorized_request_ids
-        )
+        summaries_map = await search_use_case.get_summaries_by_request_ids(authorized_request_ids)
 
         filtered_rows: list[dict[str, Any]] = []
         for result in search_results.results:
@@ -704,24 +707,17 @@ async def get_search_insights(
     days: int = Query(30, ge=7, le=365),
     limit: int = Query(20, ge=5, le=100),
     user=Depends(get_current_user),
+    search_use_case: SearchReadModelUseCase = Depends(_get_search_read_model_use_case),
 ):
     """Search analytics snapshot: trends, entities, diversity, mix and coverage gaps."""
-    from app.db.models import Request, Summary
-
     now = datetime.now(UTC)
     current_start = now - timedelta(days=days)
     previous_start = current_start - timedelta(days=days)
 
-    rows = (
-        Summary.select(Summary, Request)
-        .join(Request)
-        .where(
-            Request.user_id == user["user_id"],
-            Request.created_at >= previous_start,
-            Summary.is_deleted == False,  # noqa: E712
-        )
-        .order_by(Request.created_at.desc())
-        .limit(max(limit * 60, 1200))
+    rows = await search_use_case.get_search_insight_rows(
+        user_id=user["user_id"],
+        previous_start=previous_start,
+        limit=max(limit * 60, 1200),
     )
 
     tag_rows: list[tuple[datetime, list[str]]] = []
@@ -733,10 +729,13 @@ async def get_search_insights(
     total_articles = 0
 
     for row in rows:
-        payload = ensure_mapping(row.json_payload)
+        payload = ensure_mapping(row.get("json_payload"))
         metadata = ensure_mapping(payload.get("metadata"))
         entities = ensure_mapping(payload.get("entities"))
-        created_at = row.request.created_at
+        request_data = ensure_mapping(row.get("request"))
+        created_at = request_data.get("created_at")
+        if created_at is None:
+            continue
         total_articles += 1
 
         tags = [str(t).strip().lower() for t in (payload.get("topic_tags") or []) if str(t).strip()]
@@ -747,7 +746,7 @@ async def get_search_insights(
         if domain:
             domain_counts[domain] += 1
 
-        lang = str(row.lang or "unknown").strip().lower()
+        lang = str(row.get("lang") or "unknown").strip().lower()
         lang_counts[lang] += 1
 
         for bucket in ("people", "organizations", "locations"):
@@ -853,15 +852,14 @@ async def get_related_summaries(
     limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0),
     user=Depends(get_current_user),
+    search_use_case: SearchReadModelUseCase = Depends(_get_search_read_model_use_case),
 ):
     """Get summaries related to a specific topic tag."""
     if not tag.startswith("#"):
         tag = f"#{tag}"
 
-    summary_repo = SqliteSummaryRepositoryAdapter(database_proxy)
-
     # Get user summaries with pagination
-    summaries_list, _, _ = await summary_repo.async_get_user_summaries(
+    summaries_list, _, _ = await search_use_case.get_user_summaries(
         user_id=user["user_id"],
         limit=limit,
         offset=offset,
@@ -906,19 +904,20 @@ async def check_duplicate(
     url: str = Query(..., min_length=10),
     include_summary: bool = Query(False),
     user=Depends(get_current_user),
+    search_use_case: SearchReadModelUseCase = Depends(_get_search_read_model_use_case),
 ):
     """Check if a URL has already been summarized."""
     from app.core.url_utils import compute_dedupe_hash, normalize_url
 
-    request_repo = SqliteRequestRepositoryAdapter(database_proxy)
-    summary_repo = SqliteSummaryRepositoryAdapter(database_proxy)
-
     normalized = normalize_url(url)
     dedupe_hash = compute_dedupe_hash(normalized)
 
-    existing = await request_repo.async_get_request_by_dedupe_hash(dedupe_hash)
+    existing, summary = await search_use_case.get_duplicate_request_and_summary(
+        user_id=user["user_id"],
+        dedupe_hash=dedupe_hash,
+    )
 
-    if not existing or existing.get("user_id") != user["user_id"]:
+    if not existing:
         return success_response(
             {
                 "is_duplicate": False,
@@ -926,8 +925,6 @@ async def check_duplicate(
                 "dedupe_hash": dedupe_hash,
             }
         )
-
-    summary = await summary_repo.async_get_summary_by_request(existing["id"])
 
     response_data = {
         "is_duplicate": True,
