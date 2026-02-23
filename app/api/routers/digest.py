@@ -27,67 +27,67 @@ def _get_service() -> DigestAPIService:
 
 @router.get("/channels")
 async def list_channels(
+    request: Request,
     current_user: dict = Depends(get_webapp_user),
-    request: Request | None = None,
 ) -> dict:
     """List user's channel subscriptions and slot usage."""
     svc = _get_service()
     data = svc.list_subscriptions(current_user["user_id"])
     return success_response(
         data,
-        correlation_id=getattr(request.state, "correlation_id", None) if request else None,
+        correlation_id=getattr(request.state, "correlation_id", None),
     )
 
 
 @router.post("/channels/subscribe")
 async def subscribe_channel(
     body: SubscribeRequest,
+    request: Request,
     current_user: dict = Depends(get_webapp_user),
-    request: Request | None = None,
 ) -> dict:
     """Subscribe to a Telegram channel."""
     svc = _get_service()
     data = svc.subscribe_channel(current_user["user_id"], body.channel_username)
     return success_response(
         data,
-        correlation_id=getattr(request.state, "correlation_id", None) if request else None,
+        correlation_id=getattr(request.state, "correlation_id", None),
     )
 
 
 @router.post("/channels/unsubscribe")
 async def unsubscribe_channel(
     body: SubscribeRequest,
+    request: Request,
     current_user: dict = Depends(get_webapp_user),
-    request: Request | None = None,
 ) -> dict:
     """Unsubscribe from a Telegram channel."""
     svc = _get_service()
     data = svc.unsubscribe_channel(current_user["user_id"], body.channel_username)
     return success_response(
         data,
-        correlation_id=getattr(request.state, "correlation_id", None) if request else None,
+        correlation_id=getattr(request.state, "correlation_id", None),
     )
 
 
 @router.get("/preferences")
 async def get_preferences(
+    request: Request,
     current_user: dict = Depends(get_webapp_user),
-    request: Request | None = None,
 ) -> dict:
     """Get merged digest preferences (user overrides + global defaults)."""
     svc = _get_service()
     data = svc.get_preferences(current_user["user_id"])
     return success_response(
         data,
-        correlation_id=getattr(request.state, "correlation_id", None) if request else None,
+        correlation_id=getattr(request.state, "correlation_id", None),
     )
 
 
 @router.patch("/preferences")
 async def update_preferences(
     body: UpdatePreferenceRequest,
+    request: Request,
     current_user: dict = Depends(get_webapp_user),
-    request: Request | None = None,
 ) -> dict:
     """Update user digest preferences."""
     svc = _get_service()
@@ -95,30 +95,30 @@ async def update_preferences(
     data = svc.update_preferences(current_user["user_id"], **fields)
     return success_response(
         data,
-        correlation_id=getattr(request.state, "correlation_id", None) if request else None,
+        correlation_id=getattr(request.state, "correlation_id", None),
     )
 
 
 @router.get("/history")
 async def list_history(
+    request: Request,
     current_user: dict = Depends(get_webapp_user),
     limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0),
-    request: Request | None = None,
 ) -> dict:
     """Paginated list of past digest deliveries."""
     svc = _get_service()
     data = svc.list_deliveries(current_user["user_id"], limit=limit, offset=offset)
     return success_response(
         data,
-        correlation_id=getattr(request.state, "correlation_id", None) if request else None,
+        correlation_id=getattr(request.state, "correlation_id", None),
     )
 
 
 @router.post("/trigger")
 async def trigger_digest(
+    request: Request,
     current_user: dict = Depends(get_webapp_user),
-    request: Request | None = None,
 ) -> dict:
     """Trigger an on-demand digest generation. Result delivered to Telegram chat."""
     svc = _get_service()
@@ -129,15 +129,15 @@ async def trigger_digest(
     )
     return success_response(
         data,
-        correlation_id=getattr(request.state, "correlation_id", None) if request else None,
+        correlation_id=getattr(request.state, "correlation_id", None),
     )
 
 
 @router.post("/trigger-channel")
 async def trigger_channel_digest(
     body: SubscribeRequest,
+    request: Request,
     current_user: dict = Depends(get_webapp_user),
-    request: Request | None = None,
 ) -> dict:
     """Trigger digest for a single channel (equivalent to /cdigest bot command)."""
     await AuthService.require_owner(current_user)
@@ -154,5 +154,5 @@ async def trigger_channel_digest(
     )
     return success_response(
         data,
-        correlation_id=getattr(request.state, "correlation_id", None) if request else None,
+        correlation_id=getattr(request.state, "correlation_id", None),
     )
