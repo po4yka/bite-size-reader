@@ -46,7 +46,7 @@ class SearchHandlerImpl:
             searcher_provider: Object with topic_searcher, local_searcher, and
                 hybrid_search attributes that can be dynamically accessed.
                 This allows tests to modify the searchers after initialization.
-            container: Optional DI container for hexagonal architecture use cases.
+            container: DI container exposing application use cases.
         """
         self._formatter = response_formatter
         self._searcher_provider = searcher_provider
@@ -277,7 +277,7 @@ class SearchHandlerImpl:
         topic: str,
         formatter_source: str,
     ) -> list[Any]:
-        """Execute topic search using hexagonal architecture or direct service.
+        """Execute topic search via application use case (library) or service (online).
 
         Args:
             ctx: The command execution context.
@@ -288,12 +288,10 @@ class SearchHandlerImpl:
         Returns:
             List of search results.
         """
-        # Use hexagonal architecture for local search if available
-        if (
-            self._container is not None
-            and formatter_source == "library"
-            and hasattr(searcher, "max_results")  # LocalTopicSearchService
-        ):
+        if formatter_source == "library":
+            if self._container is None:
+                msg = "SearchHandler requires a DI container for library search"
+                raise RuntimeError(msg)
             from app.application.use_cases.search_topics import SearchTopicsQuery
 
             query = SearchTopicsQuery(
@@ -303,27 +301,12 @@ class SearchHandlerImpl:
                 correlation_id=ctx.correlation_id,
             )
             use_case = self._container.search_topics_use_case()
-            if use_case is not None:
-                topic_articles = await use_case.execute(query)
+            if use_case is None:
+                msg = "Search topics use case is not configured in container"
+                raise RuntimeError(msg)
+            return await use_case.execute(query)
 
-                # Convert TopicArticleDTO to format expected by formatter
-                results = []
-                for article in topic_articles:
-                    results.append(
-                        {
-                            "request_id": article.request_id,
-                            "url": article.url,
-                            "title": article.title,
-                            "created_at": article.created_at.isoformat()
-                            if article.created_at
-                            else None,
-                            "relevance_score": article.relevance_score,
-                            "matched_topics": article.matched_topics,
-                        }
-                    )
-                return results
-
-        # Use the service directly
+        # Online search remains a direct adapter/service call.
         return await searcher.find_articles(topic, correlation_id=ctx.correlation_id)
 
     @audit_command("command_search", include_text=True)

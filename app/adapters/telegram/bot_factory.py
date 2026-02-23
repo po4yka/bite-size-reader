@@ -262,29 +262,26 @@ class BotFactory:
             reranking=reranking_service,
         )
 
-        # Optional hexagonal architecture container
-        container = None
-        if cfg.runtime.enable_hex_container:
-            from app.di.container import Container
+        from app.di.container import Container
 
-            container = Container(
-                database=db,
-                topic_search_service=local_searcher,
-                analytics_service=None,  # No analytics service yet
-                vector_store=vector_store,
-                embedding_generator=embedding_generator,
-            )
-            # Wire event handlers automatically
-            container.wire_event_handlers_auto()
+        container = Container(
+            database=db,
+            topic_search_service=local_searcher,
+            analytics_service=None,  # No analytics service yet
+            vector_store=vector_store,
+            embedding_generator=embedding_generator,
+        )
+        # Wire event handlers automatically
+        container.wire_event_handlers_auto()
 
-            logger.info(
-                "hexagonal_architecture_initialized",
-                extra={
-                    "event_bus_handlers": container.event_bus().get_handler_count(
-                        type("DomainEvent", (), {})  # Base event type
-                    ),
-                },
-            )
+        logger.info(
+            "hexagonal_architecture_initialized",
+            extra={
+                "event_bus_handlers": container.event_bus().get_handler_count(
+                    type("DomainEvent", (), {})  # Base event type
+                ),
+            },
+        )
 
         # Create telegram client
         telegram_client = TelegramClient(cfg=cfg)

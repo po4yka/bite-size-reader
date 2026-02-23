@@ -50,7 +50,7 @@ class ContentHandlerImpl:
             response_formatter: Response formatter for sending messages.
             summary_repo: Repository for summary data.
             llm_repo: Repository for LLM call data.
-            container: Optional DI container for hexagonal architecture use cases.
+            container: DI container exposing application use cases.
         """
         self._formatter = response_formatter
         self._summary_repo = summary_repo
@@ -203,7 +203,7 @@ class ContentHandlerImpl:
         limit: int,
         topic: str | None,
     ) -> list[dict[str, Any]]:
-        """Get unread summaries using hexagonal architecture or direct repository.
+        """Get unread summaries via the application use case.
 
         Args:
             ctx: The command execution context.
@@ -213,42 +213,37 @@ class ContentHandlerImpl:
         Returns:
             List of unread summary dictionaries.
         """
-        if self._container is not None:
-            from app.application.use_cases.get_unread_summaries import GetUnreadSummariesQuery
+        if self._container is None:
+            msg = "ContentHandler requires a DI container with use cases"
+            raise RuntimeError(msg)
 
-            query = GetUnreadSummariesQuery(
-                user_id=ctx.uid,
-                chat_id=ctx.chat_id,
-                limit=limit,
-                topic=topic,
-            )
-            use_case = self._container.get_unread_summaries_use_case()
-            domain_summaries = await use_case.execute(query)
+        from app.application.use_cases.get_unread_summaries import GetUnreadSummariesQuery
 
-            # Convert domain models to database format for compatibility
-            unread_summaries = []
-            for summary in domain_summaries:
-                unread_summaries.append(
-                    {
-                        "request_id": summary.request_id,
-                        "input_url": "Unknown URL",
-                        "created_at": summary.created_at.isoformat()
-                        if hasattr(summary, "created_at") and summary.created_at
-                        else "Unknown date",
-                        "json_payload": summary.content,
-                        "is_read": summary.is_read,
-                        "id": summary.id,
-                    }
-                )
-            return unread_summaries
-
-        # Fallback to direct database access
-        return await self._summary_repo.async_get_unread_summaries(
-            uid=ctx.uid,
-            cid=ctx.chat_id,
+        query = GetUnreadSummariesQuery(
+            user_id=ctx.uid,
+            chat_id=ctx.chat_id,
             limit=limit,
             topic=topic,
         )
+        use_case = self._container.get_unread_summaries_use_case()
+        domain_summaries = await use_case.execute(query)
+
+        # Convert domain models to database format for compatibility
+        unread_summaries = []
+        for summary in domain_summaries:
+            unread_summaries.append(
+                {
+                    "request_id": summary.request_id,
+                    "input_url": "Unknown URL",
+                    "created_at": summary.created_at.isoformat()
+                    if hasattr(summary, "created_at") and summary.created_at
+                    else "Unknown date",
+                    "json_payload": summary.content,
+                    "is_read": summary.is_read,
+                    "id": summary.id,
+                }
+            )
+        return unread_summaries
 
     async def _send_unread_list(
         self,
@@ -411,31 +406,31 @@ class ContentHandlerImpl:
         summary: dict[str, Any],
         request_id: int,
     ) -> None:
-        """Mark an article as read using hexagonal architecture or direct repository.
+        """Mark an article as read via the application use case.
 
         Args:
             ctx: The command execution context.
             summary: The summary data dictionary.
             request_id: The request ID.
         """
-        if self._container is not None:
-            from app.application.use_cases.mark_summary_as_read import MarkSummaryAsReadCommand
+        if self._container is None:
+            msg = "ContentHandler requires a DI container with use cases"
+            raise RuntimeError(msg)
 
-            summary_id = summary.get("id")
-            if summary_id:
-                command = MarkSummaryAsReadCommand(
-                    summary_id=summary_id,
-                    user_id=ctx.uid,
-                )
-                use_case = self._container.mark_summary_as_read_use_case()
-                event = await use_case.execute(command)
+        from app.application.use_cases.mark_summary_as_read import MarkSummaryAsReadCommand
 
-                # Publish the event
-                event_bus = self._container.event_bus()
-                await event_bus.publish(event)
-            else:
-                # Fallback if summary_id not available
-                await self._summary_repo.async_mark_summary_as_read(request_id)
-        else:
-            # Fallback to direct database access
-            await self._summary_repo.async_mark_summary_as_read(request_id)
+        summary_id = summary.get("id")
+        if not summary_id:
+            msg = f"Cannot mark as read for request_id={request_id}: missing summary id"
+            raise RuntimeError(msg)
+
+        command = MarkSummaryAsReadCommand(
+            summary_id=summary_id,
+            user_id=ctx.uid,
+        )
+        use_case = self._container.mark_summary_as_read_use_case()
+        event = await use_case.execute(command)
+
+        # Publish the event
+        event_bus = self._container.event_bus()
+        await event_bus.publish(event)
