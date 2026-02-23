@@ -47,7 +47,7 @@ dawg2-python==0.9.0
     # via pymorphy3
 en-core-web-sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl
     # via bite-size-reader (pyproject.toml)
-fakeredis==2.33.0
+fakeredis==2.34.0
     # via bite-size-reader (pyproject.toml)
 h11==0.16.0
     # via httpcore
@@ -70,7 +70,7 @@ idna==3.11
     #   requests
 jinja2==3.1.6
     # via spacy
-json-repair==0.57.1
+json-repair==0.58.0
     # via bite-size-reader (pyproject.toml)
 justext==3.0.2
     # via trafilatura
@@ -91,7 +91,7 @@ murmurhash==1.0.15
     #   preshed
     #   spacy
     #   thinc
-numpy==2.2.6
+numpy==2.4.2
     # via
     #   blis
     #   spacy
@@ -105,7 +105,7 @@ packaging==26.0
     #   weasel
 peewee==3.19.0
     # via bite-size-reader (pyproject.toml)
-pillow==12.1.0
+pillow==12.1.1
     # via bite-size-reader (pyproject.toml)
 preshed==3.0.12
     # via
@@ -123,13 +123,13 @@ pydantic==2.12.5
     #   weasel
 pydantic-core==2.41.5
     # via pydantic
-pydantic-settings==2.12.0
+pydantic-settings==2.13.1
     # via bite-size-reader (pyproject.toml)
 pymorphy3==2.0.6
     # via ru-core-news-sm
 pymorphy3-dicts-ru==2.4.417150.4580142
     # via pymorphy3
-pymupdf==1.26.7
+pymupdf==1.27.1
     # via bite-size-reader (pyproject.toml)
 pyrotgfork==2.2.18
     # via bite-size-reader (pyproject.toml)
@@ -145,11 +145,11 @@ python-dotenv==1.2.1
     # via pydantic-settings
 pytz==2025.2
     # via dateparser
-redis==7.1.1
+redis==7.2.0
     # via
     #   bite-size-reader (pyproject.toml)
     #   fakeredis
-regex==2026.1.15
+regex==2026.2.19
     # via dateparser
 requests==2.32.5
     # via
@@ -188,7 +188,7 @@ tqdm==4.67.3
     # via spacy
 trafilatura==2.0.0
     # via bite-size-reader (pyproject.toml)
-typer-slim==0.21.2
+typer-slim==0.24.0
     # via
     #   spacy
     #   weasel
