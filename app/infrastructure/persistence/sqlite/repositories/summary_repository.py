@@ -570,6 +570,16 @@ class SqliteSummaryRepositoryAdapter(SqliteBaseRepository):
 
     def to_domain_model(self, db_summary: dict[str, Any]) -> DomainSummary:
         """Convert database record to domain model."""
+        created_at_raw = db_summary.get("created_at")
+        created_at_value = datetime.now(UTC)
+        if isinstance(created_at_raw, datetime):
+            created_at_value = created_at_raw
+        elif isinstance(created_at_raw, str):
+            try:
+                created_at_value = datetime.fromisoformat(created_at_raw)
+            except ValueError:
+                created_at_value = datetime.now(UTC)
+
         return DomainSummary(
             id=db_summary.get("id"),
             request_id=db_summary.get("request_id") or db_summary.get("request"),
@@ -578,7 +588,7 @@ class SqliteSummaryRepositoryAdapter(SqliteBaseRepository):
             version=db_summary.get("version", 1),
             is_read=db_summary.get("is_read", False),
             insights=db_summary.get("insights_json"),
-            created_at=db_summary.get("created_at", datetime.now(UTC)),
+            created_at=created_at_value,
         )
 
     def from_domain_model(self, summary: DomainSummary) -> dict[str, Any]:

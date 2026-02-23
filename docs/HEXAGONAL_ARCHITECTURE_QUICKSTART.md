@@ -16,6 +16,16 @@ This doc keeps our layering consistent across Telegram, CLI, and the mobile API.
 - Infrastructure: `app/infrastructure/*`, `app/db/*`, external clients in `app/adapters/*`
 - DI: `app/di/container.py`
 
+## Legacy DB Facade Layout
+
+- `app/db/database.py` is a backward-compatible facade around `DatabaseSessionManager`.
+- Facade operations are split into focused mixins:
+  - `app/db/database_user_ops.py`
+  - `app/db/database_request_ops.py`
+  - `app/db/database_summary_ops.py`
+  - `app/db/database_embedding_media_ops.py`
+- New business workflows should go through application use cases and repository ports in `app/infrastructure/persistence/sqlite/repositories/*`, not directly through the facade.
+
 ```mermaid
 flowchart LR
   Presentation["Presentation\n(Telegram, FastAPI, CLI)"]

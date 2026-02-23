@@ -211,6 +211,8 @@ See [HEXAGONAL_ARCHITECTURE_QUICKSTART.md](../HEXAGONAL_ARCHITECTURE_QUICKSTART.
 
 **2025-02-01**: Mobile API and MCP server built on hexagonal foundation without duplicating logic.
 
+**2026-02-23**: Legacy `app/db/database.py` facade decomposed into focused operation modules (`database_user_ops`, `database_request_ops`, `database_summary_ops`, `database_embedding_media_ops`) to reduce module size while preserving backward compatibility.
+
 **Future**: Consider `injector` or `dependency-injector` library for automated DI as codebase grows.
 
 ---
@@ -221,3 +223,4 @@ See [HEXAGONAL_ARCHITECTURE_QUICKSTART.md](../HEXAGONAL_ARCHITECTURE_QUICKSTART.
 | ------ | -------- | -------- |
 | 2025-01-10 | po4yka | Initial decision (Accepted) |
 | 2025-02-01 | po4yka | Added mobile API and MCP server note |
+| 2026-02-23 | codex | Documented legacy DB facade decomposition into focused operation modules |
