@@ -22,10 +22,11 @@ from app.adapters.telegram.command_processor import CommandProcessor
 from app.config import AppConfig, load_config
 from app.core.logging_utils import generate_correlation_id, setup_json_logging
 from app.db.session import DatabaseSessionManager
+from app.di.container import Container
 from app.infrastructure.persistence.sqlite.repositories.audit_log_repository import (
     SqliteAuditLogRepositoryAdapter,
 )
-from app.services.topic_search import TopicSearchService
+from app.services.topic_search import LocalTopicSearchService, TopicSearchService
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -365,12 +366,27 @@ async def run_summary_cli(args: argparse.Namespace) -> None:
         topic_search=topic_search,
     )
 
+    # Mirror production architecture wiring: always provide DI container.
+    local_searcher = LocalTopicSearchService(
+        db=db,
+        max_results=cfg.runtime.topic_search_max_results,
+        audit_func=audit,
+    )
+    container = Container(
+        database=db,
+        topic_search_service=local_searcher,
+    )
+    container.wire_event_handlers_auto()
+
     command_processor = CommandProcessor(
         cfg=cfg,
         response_formatter=response_formatter,
         db=db,
         url_processor=url_processor,
         audit_func=audit,
+        topic_searcher=topic_search,
+        local_searcher=local_searcher,
+        container=container,
     )
 
     message = CLIMessage(text=text, json_output_path=args.json_path)

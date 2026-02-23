@@ -2,6 +2,12 @@
 
 This doc keeps our layering consistent across Telegram, CLI, and the mobile API. Keep dependencies pointing inward: Domain has no outward dependencies.
 
+## Runtime policy
+
+- DI container is always enabled in runtime entrypoints (Telegram bot and CLI harness).
+- Presentation handlers call application use cases for business workflows.
+- No presentation-layer fallback path should call repositories directly for the same workflow.
+
 ## Layer Map (project-specific)
 
 - Presentation: `app/adapters/telegram/*`, `app/api/*`, CLI in `app/cli/*`

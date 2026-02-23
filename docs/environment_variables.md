@@ -385,7 +385,6 @@ API_RATE_LIMIT_PER_MINUTE=100
 | `CHUNKING_ENABLED` | `false` | Enable content chunking for long articles |
 | `CHUNK_MAX_CHARS` | `200000` | Max chars per content chunk |
 | `SUMMARY_PROMPT_VERSION` | `v1` | Summary prompt template version |
-| `ENABLE_HEX_CONTAINER` | `false` | Enable hexagonal architecture container |
 | `TELEGRAM_REPLY_TIMEOUT_SEC` | `30.0` | Timeout for Telegram reply operations |
 
 ---

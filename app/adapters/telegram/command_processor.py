@@ -67,7 +67,7 @@ class CommandProcessor:
 
     The facade pattern is used to:
     - Preserve the existing public API
-    - Allow incremental migration to the new handler architecture
+    - Keep handler internals decoupled from Telegram entrypoints
     - Enable unit testing of individual handlers in isolation
     """
 
@@ -98,7 +98,7 @@ class CommandProcessor:
             topic_searcher: Online topic search service.
             local_searcher: Local database topic search service.
             task_manager: Task manager for tracking active tasks.
-            container: Optional DI container for hexagonal architecture.
+            container: DI container for application use cases.
             hybrid_search: Hybrid semantic search service.
         """
         self.cfg = cfg

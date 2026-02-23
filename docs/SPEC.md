@@ -1,7 +1,7 @@
 # Bite‑Size Reader — Technical Specification
 
 **Version:** 3.0
-**Last Updated:** 2026-02-09
+**Last Updated:** 2026-02-23
 
 ---
 
@@ -152,6 +152,8 @@ flowchart TD
 ```
 
 Incoming updates are normalized via `MessageHandler`, which delegates access checks to `AccessController` and durable logging to `MessagePersistence`. Authorized interactions are routed to either command handling, URL processing (Firecrawl → OpenRouter), or forwarded message summarization. `ResponseFormatter` provides a single path for replies, edits, and error handling while emitting structured logs and audit events.
+
+Telegram and CLI entrypoints both wire the DI container by default; business flows in presentation adapters execute through application use cases rather than repository fallbacks.
 
 ### Telegram message routing
 
