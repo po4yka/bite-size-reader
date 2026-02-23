@@ -5,17 +5,11 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from app.infrastructure.persistence.sqlite.repositories.crawl_result_repository import (
-        SqliteCrawlResultRepositoryAdapter,
-    )
-    from app.infrastructure.persistence.sqlite.repositories.llm_repository import (
-        SqliteLLMRepositoryAdapter,
-    )
-    from app.infrastructure.persistence.sqlite.repositories.request_repository import (
-        SqliteRequestRepositoryAdapter,
-    )
-    from app.infrastructure.persistence.sqlite.repositories.summary_repository import (
-        SqliteSummaryRepositoryAdapter,
+    from app.application.ports import (
+        CrawlResultRepositoryPort,
+        LLMRepositoryPort,
+        RequestRepositoryPort,
+        SummaryRepositoryPort,
     )
 
 
@@ -27,10 +21,10 @@ class SummaryReadModelUseCase:
 
     def __init__(
         self,
-        summary_repository: SqliteSummaryRepositoryAdapter,
-        request_repository: SqliteRequestRepositoryAdapter,
-        crawl_result_repository: SqliteCrawlResultRepositoryAdapter,
-        llm_repository: SqliteLLMRepositoryAdapter,
+        summary_repository: SummaryRepositoryPort,
+        request_repository: RequestRepositoryPort,
+        crawl_result_repository: CrawlResultRepositoryPort,
+        llm_repository: LLMRepositoryPort,
     ) -> None:
         self._summary_repo = summary_repository
         self._request_repo = request_repository

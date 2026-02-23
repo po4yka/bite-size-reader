@@ -8,6 +8,7 @@ import logging
 from dataclasses import dataclass
 from datetime import datetime
 
+from app.application.ports import SummaryRepositoryPort
 from app.core.time_utils import UTC
 from app.domain.events.summary_events import SummaryMarkedAsUnread
 from app.domain.exceptions.domain_exceptions import (
@@ -15,9 +16,6 @@ from app.domain.exceptions.domain_exceptions import (
     ResourceNotFoundError,
 )
 from app.domain.services.summary_validator import SummaryValidator
-from app.infrastructure.persistence.sqlite.repositories.summary_repository import (
-    SqliteSummaryRepositoryAdapter,
-)
 
 logger = logging.getLogger(__name__)
 
@@ -50,7 +48,7 @@ class MarkSummaryAsUnreadUseCase:
 
     Example:
         ```python
-        repository = SqliteSummaryRepositoryAdapter(database)
+        repository = your_summary_repository_adapter
         use_case = MarkSummaryAsUnreadUseCase(repository)
 
         command = MarkSummaryAsUnreadCommand(summary_id=123, user_id=456)
@@ -59,7 +57,7 @@ class MarkSummaryAsUnreadUseCase:
 
     """
 
-    def __init__(self, summary_repository: SqliteSummaryRepositoryAdapter) -> None:
+    def __init__(self, summary_repository: SummaryRepositoryPort) -> None:
         """Initialize the use case.
 
         Args:

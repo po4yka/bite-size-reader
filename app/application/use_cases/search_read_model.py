@@ -7,14 +7,10 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from datetime import datetime
 
-    from app.infrastructure.persistence.sqlite.repositories.request_repository import (
-        SqliteRequestRepositoryAdapter,
-    )
-    from app.infrastructure.persistence.sqlite.repositories.summary_repository import (
-        SqliteSummaryRepositoryAdapter,
-    )
-    from app.infrastructure.persistence.sqlite.repositories.topic_search_repository import (
-        SqliteTopicSearchRepositoryAdapter,
+    from app.application.ports import (
+        RequestRepositoryPort,
+        SummaryRepositoryPort,
+        TopicSearchRepositoryPort,
     )
 
 
@@ -23,9 +19,9 @@ class SearchReadModelUseCase:
 
     def __init__(
         self,
-        topic_search_repository: SqliteTopicSearchRepositoryAdapter,
-        request_repository: SqliteRequestRepositoryAdapter,
-        summary_repository: SqliteSummaryRepositoryAdapter,
+        topic_search_repository: TopicSearchRepositoryPort,
+        request_repository: RequestRepositoryPort,
+        summary_repository: SummaryRepositoryPort,
     ) -> None:
         self._topic_search_repo = topic_search_repository
         self._request_repo = request_repository

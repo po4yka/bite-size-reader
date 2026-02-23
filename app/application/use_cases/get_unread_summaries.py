@@ -7,10 +7,8 @@ and does not modify state.
 import logging
 from dataclasses import dataclass
 
+from app.application.ports import SummaryRepositoryPort
 from app.domain.models.summary import Summary
-from app.infrastructure.persistence.sqlite.repositories.summary_repository import (
-    SqliteSummaryRepositoryAdapter,
-)
 
 logger = logging.getLogger(__name__)
 
@@ -54,7 +52,7 @@ class GetUnreadSummariesUseCase:
 
     Example:
         ```python
-        repository = SqliteSummaryRepositoryAdapter(database)
+        repository = your_summary_repository_adapter
         use_case = GetUnreadSummariesUseCase(repository)
 
         query = GetUnreadSummariesQuery(user_id=123, chat_id=456, limit=10)
@@ -63,7 +61,7 @@ class GetUnreadSummariesUseCase:
 
     """
 
-    def __init__(self, summary_repository: SqliteSummaryRepositoryAdapter) -> None:
+    def __init__(self, summary_repository: SummaryRepositoryPort) -> None:
         """Initialize the use case.
 
         Args:
