@@ -1802,31 +1802,46 @@ async def chroma_index_stats(scan_limit: int = 5000) -> str:
         if chroma_store is None:
             return json.dumps({"error": "Chroma store unavailable", "chroma_available": False})
 
-        sqlite_query = (
-            Summary.select(Summary.id, Request)
-            .join(Request)
-            .where(
-                Summary.is_deleted == False,  # noqa: E712
-                *_request_scope_filters(Request),
-            )
-            .order_by(Summary.created_at.desc())
-            .limit(scan_limit)
-        )
-        sqlite_ids = {int(row.id) for row in sqlite_query}
-
         chroma_ids = chroma_store.get_indexed_summary_ids(user_id=_MCP_USER_ID, limit=scan_limit)
 
-        overlap = sqlite_ids.intersection(chroma_ids)
-        coverage_pct = round((len(overlap) / len(sqlite_ids) * 100), 2) if sqlite_ids else 0.0
+        overlap_count = 0
+        sqlite_count = 0
+        offset = 0
+        batch_size = 500
+
+        while True:
+            sqlite_query = (
+                Summary.select(Summary.id, Request)
+                .join(Request)
+                .where(
+                    Summary.is_deleted == False,  # noqa: E712
+                    *_request_scope_filters(Request),
+                )
+                .order_by(Summary.created_at.desc())
+                .limit(batch_size)
+                .offset(offset)
+            )
+            batch_ids = {int(row.id) for row in sqlite_query}
+
+            if not batch_ids:
+                break
+
+            sqlite_count += len(batch_ids)
+            overlap_count += len(batch_ids.intersection(chroma_ids))
+            offset += batch_size
+            if sqlite_count >= scan_limit:
+                break
+
+        coverage_pct = round((overlap_count / sqlite_count * 100), 2) if sqlite_count else 0.0
 
         return json.dumps(
             {
                 "chroma_available": True,
                 "user_scope_id": _MCP_USER_ID,
                 "scan_limit": scan_limit,
-                "sqlite_summary_count": len(sqlite_ids),
+                "sqlite_summary_count": sqlite_count,
                 "chroma_indexed_count": len(chroma_ids),
-                "overlap_count": len(overlap),
+                "overlap_count": overlap_count,
                 "coverage_percent": coverage_pct,
             },
             default=str,
@@ -1858,33 +1873,53 @@ async def chroma_sync_gap(max_scan: int = 5000, sample_size: int = 20) -> str:
         if chroma_store is None:
             return json.dumps({"error": "Chroma store unavailable", "chroma_available": False})
 
-        sqlite_query = (
-            Summary.select(Summary.id, Request)
-            .join(Request)
-            .where(
-                Summary.is_deleted == False,  # noqa: E712
-                *_request_scope_filters(Request),
-            )
-            .order_by(Summary.created_at.desc())
-            .limit(max_scan)
-        )
-        sqlite_ids = {int(row.id) for row in sqlite_query}
         chroma_ids = chroma_store.get_indexed_summary_ids(user_id=_MCP_USER_ID, limit=max_scan)
 
-        missing_in_chroma = sorted(sqlite_ids - chroma_ids)
-        missing_in_sqlite = sorted(chroma_ids - sqlite_ids)
+        missing_in_chroma = set()
+        missing_in_sqlite = set(chroma_ids)
+        sqlite_count = 0
+        offset = 0
+        batch_size = 500
+
+        while True:
+            sqlite_query = (
+                Summary.select(Summary.id, Request)
+                .join(Request)
+                .where(
+                    Summary.is_deleted == False,  # noqa: E712
+                    *_request_scope_filters(Request),
+                )
+                .order_by(Summary.created_at.desc())
+                .limit(batch_size)
+                .offset(offset)
+            )
+            batch_ids = {int(row.id) for row in sqlite_query}
+
+            if not batch_ids:
+                break
+
+            sqlite_count += len(batch_ids)
+            missing_in_chroma.update(batch_ids - chroma_ids)
+            missing_in_sqlite.difference_update(batch_ids)
+
+            offset += batch_size
+            if sqlite_count >= max_scan:
+                break
+
+        sorted_missing_chroma = sorted(missing_in_chroma)
+        sorted_missing_sqlite = sorted(missing_in_sqlite)
 
         return json.dumps(
             {
                 "chroma_available": True,
                 "user_scope_id": _MCP_USER_ID,
                 "max_scan": max_scan,
-                "sqlite_summary_count": len(sqlite_ids),
+                "sqlite_summary_count": sqlite_count,
                 "chroma_indexed_count": len(chroma_ids),
-                "missing_in_chroma_count": len(missing_in_chroma),
-                "missing_in_sqlite_count": len(missing_in_sqlite),
-                "missing_in_chroma_sample": missing_in_chroma[:sample_size],
-                "missing_in_sqlite_sample": missing_in_sqlite[:sample_size],
+                "missing_in_chroma_count": len(sorted_missing_chroma),
+                "missing_in_sqlite_count": len(sorted_missing_sqlite),
+                "missing_in_chroma_sample": sorted_missing_chroma[:sample_size],
+                "missing_in_sqlite_sample": sorted_missing_sqlite[:sample_size],
             },
             default=str,
         )
@@ -2171,21 +2206,21 @@ def processing_stats_resource() -> str:
 
 
 @mcp.resource("bsr://chroma/health")
-def chroma_health_resource() -> str:
+async def chroma_health_resource() -> str:
     """Chroma availability status for semantic MCP tools."""
-    return _run_async_for_resource(chroma_health())
+    return await chroma_health()
 
 
 @mcp.resource("bsr://chroma/index-stats")
-def chroma_index_stats_resource() -> str:
+async def chroma_index_stats_resource() -> str:
     """Chroma index coverage compared to SQLite summaries."""
-    return _run_async_for_resource(chroma_index_stats())
+    return await chroma_index_stats()
 
 
 @mcp.resource("bsr://chroma/sync-gap")
-def chroma_sync_gap_resource() -> str:
+async def chroma_sync_gap_resource() -> str:
     """Chroma/SQLite sync gap sample using default scan limits."""
-    return _run_async_for_resource(chroma_sync_gap())
+    return await chroma_sync_gap()
 
 
 # ---------------------------------------------------------------------------
