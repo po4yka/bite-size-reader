@@ -5,7 +5,6 @@ Usage:
     uvicorn app.api.main:app --reload --host 0.0.0.0 --port 8000
 """
 
-import os
 from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path as _Path
@@ -17,6 +16,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import ValidationError as PydanticValidationError
 
 from app.api.dependencies import search_resources
+from app.api.dependencies.database import get_session_manager
 from app.api.error_handlers import (
     api_exception_handler,
     database_exception_handler,
@@ -44,24 +44,27 @@ from app.api.routers import (
     system,
     user,
 )
-from app.config import Config, DatabaseConfig
+from app.config import Config
 from app.core.logging_utils import get_logger
 from app.core.time_utils import UTC
-from app.db.session import DatabaseSessionManager
 from app.infrastructure.redis import close_redis
 
 logger = get_logger(__name__)
-_db: DatabaseSessionManager | None = None
+_db = None
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
+    global _db
     try:
+        _db = get_session_manager()
+        _db.database.connect(reuse_if_open=True)
+        logger.info("database_initialized", extra={"db_path": _db.path})
         yield
     finally:
         await search_resources.shutdown_chroma_search_resources()
         await close_redis()
-        if _db:
+        if _db is not None:
             _db.database.close()
             logger.info("database_closed")
 
@@ -119,10 +122,10 @@ app.add_middleware(
 )
 
 # Custom middleware (order: last added = outermost = runs first)
-# webapp_auth_middleware runs first to parse initData before rate limiting
+# correlation_id must run first, then auth, then rate limit
 app.middleware("http")(rate_limit_middleware)
-app.middleware("http")(correlation_id_middleware)
 app.middleware("http")(webapp_auth_middleware)
+app.middleware("http")(correlation_id_middleware)
 
 # Include routers
 app.include_router(auth.router, prefix="/v1/auth", tags=["Authentication"])
@@ -196,39 +199,6 @@ app.add_exception_handler(
 app.add_exception_handler(peewee.DatabaseError, database_exception_handler)
 app.add_exception_handler(peewee.OperationalError, database_exception_handler)
 app.add_exception_handler(Exception, global_error_handler)
-
-
-# Initialize database proxy eagerly so Peewee models can be used immediately
-DB_PATH = Config.get("DB_PATH", "/data/app.db")
-# Pydantic handles type coercion from string env vars
-# Pydantic handles string-to-number coercion at runtime via validation_alias
-_db_env_overrides: dict[str, str] = {
-    key: value
-    for key, value in {
-        "DB_OPERATION_TIMEOUT": os.getenv("DB_OPERATION_TIMEOUT"),
-        "DB_MAX_RETRIES": os.getenv("DB_MAX_RETRIES"),
-        "DB_JSON_MAX_SIZE": os.getenv("DB_JSON_MAX_SIZE"),
-        "DB_JSON_MAX_DEPTH": os.getenv("DB_JSON_MAX_DEPTH"),
-        "DB_JSON_MAX_ARRAY_LENGTH": os.getenv("DB_JSON_MAX_ARRAY_LENGTH"),
-        "DB_JSON_MAX_DICT_KEYS": os.getenv("DB_JSON_MAX_DICT_KEYS"),
-    }.items()
-    if value not in (None, "")
-}
-db_cfg = DatabaseConfig.model_validate(_db_env_overrides)
-_db = DatabaseSessionManager(
-    path=DB_PATH,
-    operation_timeout=db_cfg.operation_timeout,
-    max_retries=db_cfg.max_retries,
-    json_max_size=db_cfg.json_max_size,
-    json_max_depth=db_cfg.json_max_depth,
-    json_max_array_length=db_cfg.json_max_array_length,
-    json_max_dict_keys=db_cfg.json_max_dict_keys,
-)
-_db.database.connect(reuse_if_open=True)
-logger.info(
-    "database_initialized",
-    extra={"db_path": DB_PATH},
-)
 
 
 if __name__ == "__main__":

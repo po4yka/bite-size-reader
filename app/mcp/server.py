@@ -24,7 +24,6 @@ import math
 import os
 import re
 import sys
-import threading
 import time
 from typing import Any
 
@@ -76,11 +75,11 @@ def _init_database(db_path: str | None = None) -> None:
 _chroma_service: Any = None
 _chroma_last_failed_at: float | None = None
 _CHROMA_RETRY_INTERVAL_SEC = 60.0
-_chroma_init_lock = threading.Lock()
+_chroma_init_lock: asyncio.Lock | None = None
 _local_vector_service: Any = None
 _local_vector_last_failed_at: float | None = None
 _LOCAL_VECTOR_RETRY_INTERVAL_SEC = 60.0
-_local_vector_init_lock = threading.Lock()
+_local_vector_init_lock: asyncio.Lock | None = None
 
 
 async def _get_chroma_service() -> Any:
@@ -89,7 +88,7 @@ async def _get_chroma_service() -> Any:
     Returns None if ChromaDB is unavailable (the semantic_search tool
     will degrade to a helpful error message).
     """
-    global _chroma_service, _chroma_last_failed_at
+    global _chroma_service, _chroma_last_failed_at, _chroma_init_lock
 
     if _chroma_service is not None:
         return _chroma_service
@@ -100,7 +99,10 @@ async def _get_chroma_service() -> Any:
     ):
         return None
 
-    with _chroma_init_lock:
+    if _chroma_init_lock is None:
+        _chroma_init_lock = asyncio.Lock()
+
+    async with _chroma_init_lock:
         if _chroma_service is not None:
             return _chroma_service
 
@@ -145,7 +147,7 @@ async def _get_chroma_service() -> Any:
 
 async def _get_local_vector_service() -> Any:
     """Lazily initialize local embedding service for semantic fallback search."""
-    global _local_vector_service, _local_vector_last_failed_at
+    global _local_vector_service, _local_vector_last_failed_at, _local_vector_init_lock
 
     if _local_vector_service is not None:
         return _local_vector_service
@@ -157,7 +159,10 @@ async def _get_local_vector_service() -> Any:
     ):
         return None
 
-    with _local_vector_init_lock:
+    if _local_vector_init_lock is None:
+        _local_vector_init_lock = asyncio.Lock()
+
+    async with _local_vector_init_lock:
         if _local_vector_service is not None:
             return _local_vector_service
 
@@ -620,26 +625,18 @@ async def _search_local_vectors(
     if language:
         query_rows = query_rows.where((Summary.lang == language) | (Summary.lang.is_null(True)))
 
-    results: list[dict[str, Any]] = []
+    # Convert query results to a list of dicts to detach from DB session
+    # before passing to a background thread for CPU-bound similarity processing
+    rows_data = []
     for row in query_rows:
-        try:
-            candidate = embedding_service.deserialize_embedding(row.embedding_blob)
-        except Exception:
-            continue
-
-        similarity = _cosine_similarity(query_vector, candidate)
-        if similarity < min_similarity:
-            continue
-
         payload = _ensure_mapping(getattr(row.summary, "json_payload", None))
         metadata = _ensure_mapping(payload.get("metadata"))
         snippet = payload.get("summary_250") or payload.get("tldr")
-
-        results.append(
+        rows_data.append(
             {
+                "embedding_blob": row.embedding_blob,
                 "request_id": getattr(row.summary.request, "id", None),
                 "summary_id": getattr(row.summary, "id", None),
-                "similarity_score": similarity,
                 "url": getattr(row.summary.request, "input_url", None)
                 or getattr(row.summary.request, "normalized_url", None),
                 "title": metadata.get("title"),
@@ -653,8 +650,25 @@ async def _search_local_vectors(
             }
         )
 
-    results.sort(key=lambda item: float(item.get("similarity_score", 0.0)), reverse=True)
-    return results[: max(limit * 4, limit)]
+    def _compute() -> list[dict[str, Any]]:
+        results: list[dict[str, Any]] = []
+        for row_dict in rows_data:
+            try:
+                candidate = embedding_service.deserialize_embedding(row_dict.pop("embedding_blob"))
+            except Exception:
+                continue
+
+            similarity = _cosine_similarity(query_vector, candidate)
+            if similarity < min_similarity:
+                continue
+
+            row_dict["similarity_score"] = similarity
+            results.append(row_dict)
+
+        results.sort(key=lambda item: float(item.get("similarity_score", 0.0)), reverse=True)
+        return results[: max(limit * 4, limit)]
+
+    return await asyncio.to_thread(_compute)
 
 
 async def _run_semantic_candidates(
