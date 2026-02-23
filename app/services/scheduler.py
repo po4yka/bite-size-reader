@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -215,10 +215,12 @@ class SchedulerService:
 
             async with bot:
 
-                async def send_message(
-                    user_id: int, text: str, reply_markup: object = None
-                ) -> None:
-                    await bot.send_message(chat_id=user_id, text=text, reply_markup=reply_markup)
+                async def send_message(user_id: int, text: str, reply_markup: Any = None) -> None:
+                    await bot.send_message(
+                        chat_id=user_id,
+                        text=text,
+                        reply_markup=reply_markup,
+                    )
 
                 service = DigestService(
                     cfg=self.cfg,

@@ -19,10 +19,13 @@ from app.infrastructure.persistence.sqlite.repositories.audit_log_repository imp
 )
 
 try:
-    from pyrogram import Client, filters
+    from pyrogram import Client as _PyroClient, filters as _pyro_filters
+
+    _PYRO_CLIENT_CLS: Any = _PyroClient
+    _PYRO_FILTERS: Any = _pyro_filters
 except ImportError:
-    Client = object
-    filters = None
+    _PYRO_CLIENT_CLS = object
+    _PYRO_FILTERS = None
 
 if TYPE_CHECKING:
     from app.config import AppConfig
@@ -55,9 +58,9 @@ class TelegramBot:
 
         # Reflect monkeypatches from tests into the telegram_client module so
         # that no real Pyrogram client is constructed.
-        setattr(telegram_client_module, "Client", Client)  # noqa: B010
-        setattr(telegram_client_module, "filters", filters)  # noqa: B010
-        if Client is object:
+        setattr(telegram_client_module, "Client", _PYRO_CLIENT_CLS)  # noqa: B010
+        setattr(telegram_client_module, "filters", _PYRO_FILTERS)  # noqa: B010
+        if _PYRO_CLIENT_CLS is object:
             telegram_client_module.PYROGRAM_AVAILABLE = False
 
         # Initialize semaphore for concurrency control

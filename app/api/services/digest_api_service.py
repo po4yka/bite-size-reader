@@ -448,27 +448,29 @@ class DigestAPIService:
         from app.adapters.digest.formatter import DigestFormatter
         from app.adapters.digest.userbot_client import UserbotClient
         from app.adapters.openrouter.openrouter_client import OpenRouterClient
+        from app.config import load_config
 
         session_dir = Path("/data")
-        userbot = UserbotClient(self._cfg, session_dir)
+        app_cfg = load_config()
+        userbot = UserbotClient(app_cfg, session_dir)
         llm_client: OpenRouterClient | None = None
 
         await userbot.start()
         try:
             llm_client = OpenRouterClient(
-                api_key=self._cfg.openrouter.api_key,
-                model=self._cfg.openrouter.model,
-                fallback_models=self._cfg.openrouter.fallback_models,
+                api_key=app_cfg.openrouter.api_key,
+                model=app_cfg.openrouter.model,
+                fallback_models=app_cfg.openrouter.fallback_models,
             )
-            reader = ChannelReader(self._cfg, userbot)
-            analyzer = DigestAnalyzer(self._cfg, llm_client)
+            reader = ChannelReader(app_cfg, userbot)
+            analyzer = DigestAnalyzer(app_cfg, llm_client)
             formatter = DigestFormatter()
 
             bot = PyroClient(
                 name=f"digest_api_sender_{correlation_id[:8]}",
-                api_id=self._cfg.telegram.api_id,
-                api_hash=self._cfg.telegram.api_hash,
-                bot_token=self._cfg.telegram.bot_token,
+                api_id=app_cfg.telegram.api_id,
+                api_hash=app_cfg.telegram.api_hash,
+                bot_token=app_cfg.telegram.bot_token,
                 in_memory=True,
             )
 
@@ -477,7 +479,7 @@ class DigestAPIService:
                 async def _send_message(
                     target_user_id: int,
                     text: str,
-                    reply_markup: object = None,
+                    reply_markup: Any = None,
                 ) -> None:
                     await bot.send_message(
                         chat_id=target_user_id,
@@ -486,7 +488,7 @@ class DigestAPIService:
                     )
 
                 service = DigestService(
-                    cfg=self._cfg,
+                    cfg=app_cfg,
                     reader=reader,
                     analyzer=analyzer,
                     formatter=formatter,

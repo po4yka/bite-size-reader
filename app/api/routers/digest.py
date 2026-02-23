@@ -28,7 +28,7 @@ def _get_service() -> DigestAPIService:
 @router.get("/channels")
 async def list_channels(
     current_user: dict = Depends(get_webapp_user),
-    request: Request = None,  # type: ignore[assignment]
+    request: Request | None = None,
 ) -> dict:
     """List user's channel subscriptions and slot usage."""
     svc = _get_service()
@@ -43,7 +43,7 @@ async def list_channels(
 async def subscribe_channel(
     body: SubscribeRequest,
     current_user: dict = Depends(get_webapp_user),
-    request: Request = None,  # type: ignore[assignment]
+    request: Request | None = None,
 ) -> dict:
     """Subscribe to a Telegram channel."""
     svc = _get_service()
@@ -58,7 +58,7 @@ async def subscribe_channel(
 async def unsubscribe_channel(
     body: SubscribeRequest,
     current_user: dict = Depends(get_webapp_user),
-    request: Request = None,  # type: ignore[assignment]
+    request: Request | None = None,
 ) -> dict:
     """Unsubscribe from a Telegram channel."""
     svc = _get_service()
@@ -72,7 +72,7 @@ async def unsubscribe_channel(
 @router.get("/preferences")
 async def get_preferences(
     current_user: dict = Depends(get_webapp_user),
-    request: Request = None,  # type: ignore[assignment]
+    request: Request | None = None,
 ) -> dict:
     """Get merged digest preferences (user overrides + global defaults)."""
     svc = _get_service()
@@ -87,7 +87,7 @@ async def get_preferences(
 async def update_preferences(
     body: UpdatePreferenceRequest,
     current_user: dict = Depends(get_webapp_user),
-    request: Request = None,  # type: ignore[assignment]
+    request: Request | None = None,
 ) -> dict:
     """Update user digest preferences."""
     svc = _get_service()
@@ -104,7 +104,7 @@ async def list_history(
     current_user: dict = Depends(get_webapp_user),
     limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0),
-    request: Request = None,  # type: ignore[assignment]
+    request: Request | None = None,
 ) -> dict:
     """Paginated list of past digest deliveries."""
     svc = _get_service()
@@ -118,7 +118,7 @@ async def list_history(
 @router.post("/trigger")
 async def trigger_digest(
     current_user: dict = Depends(get_webapp_user),
-    request: Request = None,  # type: ignore[assignment]
+    request: Request | None = None,
 ) -> dict:
     """Trigger an on-demand digest generation. Result delivered to Telegram chat."""
     svc = _get_service()
@@ -137,7 +137,7 @@ async def trigger_digest(
 async def trigger_channel_digest(
     body: SubscribeRequest,
     current_user: dict = Depends(get_webapp_user),
-    request: Request = None,  # type: ignore[assignment]
+    request: Request | None = None,
 ) -> dict:
     """Trigger digest for a single channel (equivalent to /cdigest bot command)."""
     await AuthService.require_owner(current_user)
