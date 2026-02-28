@@ -48,47 +48,26 @@ Add to your `.env` file:
 # Enable web search enrichment
 WEB_SEARCH_ENABLED=true
 
-# Search provider (default: duckduckgo)
-WEB_SEARCH_PROVIDER=duckduckgo  # or: google, firecrawl
-
 # Max search queries per article (default: 3)
 WEB_SEARCH_MAX_QUERIES=3
 
-# Max results per query (default: 3)
-WEB_SEARCH_MAX_RESULTS=3
+# Search timeout (default: 10s)
+WEB_SEARCH_TIMEOUT_SEC=10
+
+# Injected context size cap (default: 2000 chars)
+WEB_SEARCH_MAX_CONTEXT_CHARS=2000
 ```
 
 ---
 
-### 2. Configure Search Provider (Optional)
-
-**Option A: DuckDuckGo (Default, Free)**
+### 2. Tune Search Behavior (Optional)
 
 ```bash
-WEB_SEARCH_PROVIDER=duckduckgo
-# No API key needed
-```
+# Only trigger search for sufficiently rich content
+WEB_SEARCH_MIN_CONTENT_LENGTH=500
 
-**Option B: Google Custom Search (Requires API Key)**
-
-```bash
-WEB_SEARCH_PROVIDER=google
-GOOGLE_SEARCH_API_KEY=your_key
-GOOGLE_SEARCH_ENGINE_ID=your_engine_id
-```
-
-Get Google API key:
-
-1. Go to https://console.cloud.google.com/apis/credentials
-2. Create credentials → API key
-3. Enable Custom Search API
-4. Create Custom Search Engine at https://cse.google.com/cse/
-
-**Option C: Firecrawl Search**
-
-```bash
-WEB_SEARCH_PROVIDER=firecrawl
-# Uses your existing FIRECRAWL_API_KEY
+# Cache search context to reduce repeated lookups
+WEB_SEARCH_CACHE_TTL_SEC=3600
 ```
 
 ---
@@ -171,21 +150,9 @@ docker logs bite-size-reader | grep "Web search"
 
 **Symptom:** Error message "Web search failed" or "Search API error"
 
-**For DuckDuckGo:**
-
-- Usually rate limiting (100 req/day free tier)
-- Wait or switch to Google/Firecrawl
-
-**For Google:**
-
-- Check API key and Custom Search Engine ID
-- Verify Custom Search API is enabled
-- Check quota at https://console.cloud.google.com/apis/dashboard
-
-**For Firecrawl:**
-
 - Verify `FIRECRAWL_API_KEY` is valid
 - Check Firecrawl credit balance
+- Reduce `WEB_SEARCH_MAX_QUERIES` and/or increase `WEB_SEARCH_TIMEOUT_SEC`
 
 ---
 
@@ -198,7 +165,7 @@ docker logs bite-size-reader | grep "Web search"
 ```bash
 # Reduce max queries
 WEB_SEARCH_MAX_QUERIES=1
-WEB_SEARCH_MAX_RESULTS=2
+WEB_SEARCH_MAX_CONTEXT_CHARS=1200
 
 # Or disable for certain content types
 # (Not yet implemented, manual disable/enable for now)
@@ -211,36 +178,17 @@ WEB_SEARCH_MAX_RESULTS=2
 ### Customize Search Behavior
 
 ```bash
-# Minimum confidence threshold to trigger search (0-1)
-WEB_SEARCH_CONFIDENCE_THRESHOLD=0.7
-
 # Search timeout (seconds)
 WEB_SEARCH_TIMEOUT_SEC=10
 
+# Minimum content length before search is considered
+WEB_SEARCH_MIN_CONTENT_LENGTH=500
+
 # Cache search results
-REDIS_ENABLED=true  # Caches search results for repeated queries
-```
+WEB_SEARCH_CACHE_TTL_SEC=3600
 
-### Provider-Specific Settings
-
-**DuckDuckGo:**
-
-```bash
-DUCKDUCKGO_REGION=us-en  # Region code
-DUCKDUCKGO_SAFESEARCH=moderate  # off, moderate, strict
-```
-
-**Google:**
-
-```bash
-GOOGLE_SEARCH_COUNTRY=us
-GOOGLE_SEARCH_LANGUAGE=en
-```
-
-**Firecrawl:**
-
-```bash
-FIRECRAWL_SEARCH_LIMIT=5  # Results per query
+# Enable Redis-backed caching for repeated queries
+REDIS_ENABLED=true
 ```
 
 ---

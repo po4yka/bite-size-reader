@@ -16,9 +16,6 @@ defaults:
 
 permissions:
   contents: read
-  packages: write
-  pull-requests: write
-  checks: write
 
 env:
   UV_EXTRA_INDEX_URL: "https://download.pytorch.org/whl/cpu"
@@ -49,6 +46,9 @@ jobs:
             pyproject.toml
             uv.lock
 
+      - name: Refresh uv.lock
+        run: uv lock
+
       - name: Compile locked requirements (runtime - core only)
         run: uv pip compile --python-version 3.13 pyproject.toml -o requirements.txt
 
@@ -73,7 +73,7 @@ jobs:
       - name: Check lockfile drift
         id: lockcheck
         run: |
-          if git diff --quiet requirements.txt requirements-dev.txt; then
+          if git diff --quiet uv.lock requirements.txt requirements-dev.txt; then
             echo "drift=false" >> "$GITHUB_OUTPUT"
             echo "No lockfile drift detected."
           else
@@ -86,6 +86,7 @@ jobs:
         with:
           name: compiled-requirements
           path: |
+            uv.lock
             requirements.txt
             requirements-all.txt
             requirements-dev.txt
@@ -131,6 +132,30 @@ jobs:
           fail: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  frontend-build:
+    name: Frontend Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build frontend
+        run: npm run build
 
   lint-and-format:
     name: Lint and Format Checks
@@ -643,7 +668,7 @@ jobs:
   pr-summary:
     name: PR Summary
     if: github.event_name == 'pull_request'
-    needs: [prepare-environment, lint-and-format, type-check, test, bandit-scan, pip-audit-scan, safety-scan, secrets]
+    needs: [prepare-environment, frontend-build, lint-and-format, type-check, test, bandit-scan, pip-audit-scan, safety-scan, secrets]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -661,6 +686,7 @@ jobs:
               summary += '✅ Lockfiles are up to date\n\n';
             }
             summary += '### Checks Completed\n';
+            summary += '- ✅ Frontend build\n';
             summary += '- ✅ Code linting and formatting\n';
             summary += '- ✅ Type checking (mypy)\n';
             summary += '- ✅ Unit tests with coverage\n';
@@ -697,7 +723,7 @@ jobs:
   status-check:
     name: CI Status Check
     if: always()
-    needs: [prepare-environment, lint-and-format, type-check, test, bandit-scan, pip-audit-scan, safety-scan, secrets, integration-tests]
+    needs: [prepare-environment, frontend-build, lint-and-format, type-check, test, bandit-scan, pip-audit-scan, safety-scan, secrets, integration-tests]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -723,6 +749,11 @@ jobs:
 
           if [[ "${{ needs.test.result }}" != "success" ]]; then
             echo "::error::test job failed"
+            exit 1
+          fi
+
+          if [[ "${{ needs.frontend-build.result }}" != "success" ]]; then
+            echo "::error::frontend-build job failed"
             exit 1
           fi
 

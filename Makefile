@@ -14,7 +14,7 @@ test:
 	pytest tests/ -v
 
 test-unit:
-	pytest tests/ -m "not slow and not integration" -v -n auto
+	pytest tests/ -m "not slow and not integration" -v
 
 test-integration:
 	pytest tests/ -m "integration" -v
@@ -23,7 +23,7 @@ test-all:
 	pytest tests/ -v --cov=app --cov-report=term-missing
 
 test-fast:
-	pytest tests/ -m "not slow and not integration" -v -n auto -x
+	pytest tests/ -m "not slow and not integration" -v -x
 
 all: format lint type test
 
@@ -45,6 +45,7 @@ pre-commit-run:
 
 .PHONY: lock-uv lock-piptools
 lock-uv:
+	uv lock
 	uv pip compile --python-version 3.13 pyproject.toml -o requirements.txt
 	@set -eu; \
 	TMP_REQ=.requirements-all.tmp.txt; \
@@ -58,13 +59,14 @@ lock-piptools:
 	pip-compile pyproject.toml --extra dev --output-file requirements-dev.txt
 
 check-lock:
+	uv lock
 	uv pip compile --python-version 3.13 pyproject.toml -o requirements.txt
 	@set -eu; \
 	TMP_REQ=.requirements-all.tmp.txt; \
 	uv pip compile --python-version 3.13 --extra api --extra ml --extra youtube --extra export --extra scheduler --extra mcp pyproject.toml -o $$TMP_REQ; \
 	uv pip compile --python-version 3.13 --extra dev -c $$TMP_REQ pyproject.toml -o requirements-dev.txt; \
 	rm -f $$TMP_REQ
-	@git diff --exit-code requirements.txt requirements-dev.txt || (echo "Lockfiles are out of date. Run 'make lock-uv' and commit changes." && exit 1)
+	@git diff --exit-code uv.lock requirements.txt requirements-dev.txt || (echo "Lockfiles are out of date. Run 'make lock-uv' and commit changes." && exit 1)
 
 check-openapi: ## Run OpenAPI spec sync checks
 	pytest tests/api/test_openapi_sync.py -v

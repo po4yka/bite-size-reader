@@ -59,9 +59,10 @@ YOUTUBE_PREFERRED_QUALITY=1080p
 YOUTUBE_STORAGE_PATH=/data/videos
 
 # Auto-cleanup old videos (optional)
-YOUTUBE_AUTO_CLEANUP_DAYS=7        # Delete videos older than 7 days
+YOUTUBE_AUTO_CLEANUP_ENABLED=true
+YOUTUBE_CLEANUP_AFTER_DAYS=7        # Delete videos older than 7 days
 YOUTUBE_MAX_STORAGE_GB=10          # Max 10 GB total storage
-YOUTUBE_MAX_FILE_SIZE_MB=500       # Max 500 MB per video
+YOUTUBE_MAX_VIDEO_SIZE_MB=500       # Max 500 MB per video
 ```
 
 ---
@@ -181,7 +182,8 @@ du -sh /data/videos/
 find /data/videos/ -type f -mtime +7 -delete
 
 # Or enable auto-cleanup (recommended)
-echo "YOUTUBE_AUTO_CLEANUP_DAYS=7" >> .env
+echo "YOUTUBE_AUTO_CLEANUP_ENABLED=true" >> .env
+echo "YOUTUBE_CLEANUP_AFTER_DAYS=7" >> .env
 echo "YOUTUBE_MAX_STORAGE_GB=10" >> .env
 docker restart bite-size-reader
 ```

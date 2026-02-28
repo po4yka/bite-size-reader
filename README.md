@@ -247,7 +247,7 @@ OPENROUTER_MODEL=deepseek/deepseek-v3.2  # Primary LLM model
 
 **Optimize storage**:
 
-- 🧹 **Auto-cleanup YouTube**: `YOUTUBE_AUTO_CLEANUP_DAYS=7` (delete old videos)
+- 🧹 **Auto-cleanup YouTube**: `YOUTUBE_CLEANUP_AFTER_DAYS=7` (delete old videos)
 - 📏 **Set storage limits**: `YOUTUBE_MAX_STORAGE_GB=10`
 - 💾 **Database maintenance**: Periodic `VACUUM` and index rebuilding
 

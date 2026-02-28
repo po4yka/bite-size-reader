@@ -70,11 +70,10 @@ Add to your `.env` file:
 
 ```bash
 # Enable ChromaDB
-ENABLE_CHROMA=true
+CHROMA_REQUIRED=true
 
 # ChromaDB server
-CHROMA_HOST=localhost
-CHROMA_PORT=8000
+CHROMA_HOST=http://localhost:8000
 
 # Embedding model (default: all-MiniLM-L6-v2)
 CHROMA_EMBEDDING_MODEL=all-MiniLM-L6-v2
@@ -205,7 +204,6 @@ chroma run --host localhost --port 8000
 
 # Verify connection settings
 grep CHROMA_HOST .env
-grep CHROMA_PORT .env
 ```
 
 ---
@@ -470,7 +468,7 @@ docker restart chromadb
 
 ```bash
 # Set to false in .env
-ENABLE_CHROMA=false
+CHROMA_REQUIRED=false
 
 # Restart bot
 docker restart bite-size-reader

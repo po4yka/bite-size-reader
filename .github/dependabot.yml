@@ -42,6 +42,35 @@ updates:
     allow:
       - dependency-type: "all"
 
+  # Frontend dependencies
+  - package-ecosystem: "npm"
+    directory: "/frontend"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "frontend"
+    commit-message:
+      prefix: "chore"
+      include: "scope"
+    groups:
+      frontend-dependencies:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+      frontend-security:
+        patterns:
+          - "*"
+        update-types:
+          - "security"
+    allow:
+      - dependency-type: "all"
+
   # GitHub Actions
   - package-ecosystem: "github-actions"
     directory: "/"

@@ -63,11 +63,11 @@ Key design decisions:
 - **Read-only data mount** (`./data:/data:ro`) -- the MCP server only reads the SQLite database.
 - **`MCP_ALLOW_REMOTE_SSE=true`** -- required because `0.0.0.0` is non-loopback inside Docker. This also disables the MCP SDK's DNS rebinding protection so that Docker-internal hostnames (`bsr-mcp`, `bsr-mcp:8200`) are accepted in the `Host` header.
 - **Loopback port binding** (`127.0.0.1:8200`) -- prevents direct external access from the host network.
-- **`karakeep` network** -- shared Docker network allowing other services (e.g. OpenClaw) to reach the MCP server via `http://bsr-mcp:8200/sse`.
+- **`karakeep` network** -- shared Docker network (named `karakeep_default`) that is created automatically by Compose and allows other services (e.g. OpenClaw) to reach the MCP server via `http://bsr-mcp:8200/sse`.
 
 ### Connecting from another Docker Compose project
 
-To connect from a service in a different compose project (e.g. OpenClaw), ensure both containers share a Docker network and point the MCP client at `http://bsr-mcp:8200/sse`.
+To connect from a service in a different compose project (e.g. OpenClaw), attach that service to the `karakeep_default` network and point the MCP client at `http://bsr-mcp:8200/sse`.
 
 Example mcporter config:
 

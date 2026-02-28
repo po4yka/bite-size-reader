@@ -729,7 +729,7 @@ ffmpeg is required for video processing but was not found.
 
 - Wait and retry (automatic retry with exponential backoff)
 - Check for long-running queries or transactions
-- Increase `DB_TIMEOUT_MS` env var
+- Increase `DB_OPERATION_TIMEOUT` env var
 
 ---
 

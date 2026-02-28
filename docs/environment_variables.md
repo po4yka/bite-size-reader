@@ -49,15 +49,15 @@ LOG_LEVEL=INFO
 
 # [OPTIONAL] - Performance
 MAX_CONCURRENT_CALLS=4
-RATE_LIMIT_DELAY_SECONDS=0.5
+RATE_LIMIT_WINDOW_SECONDS=60
 
 # [OPTIONAL] - Logging
 LOG_LEVEL=INFO
 DEBUG_PAYLOADS=0
-STRUCTURED_LOGGING=true
+REQUEST_TIMEOUT_SEC=60
 
 # [OPTIONAL] - Database
-DB_TIMEOUT=30
+DB_OPERATION_TIMEOUT=30
 ```
 
 **Use case**: Stable production deployment, no caching/search/YouTube.
@@ -71,26 +71,26 @@ DB_TIMEOUT=30
 YOUTUBE_DOWNLOAD_ENABLED=true
 YOUTUBE_PREFERRED_QUALITY=1080p
 YOUTUBE_STORAGE_PATH=/data/videos
-YOUTUBE_AUTO_CLEANUP_DAYS=7
+YOUTUBE_CLEANUP_AFTER_DAYS=7
 
 # [OPTIONAL] - Web Search Enrichment
 WEB_SEARCH_ENABLED=true
-WEB_SEARCH_PROVIDER=duckduckgo
 WEB_SEARCH_MAX_QUERIES=3
+WEB_SEARCH_TIMEOUT_SEC=10
 
 # [OPTIONAL] - Redis Caching
 REDIS_ENABLED=true
 REDIS_URL=redis://localhost:6379/0
-REDIS_CACHE_TTL_SECONDS=3600
+REDIS_LLM_TTL_SECONDS=3600
 
 # [OPTIONAL] - ChromaDB Search
-CHROMA_HOST=localhost
-CHROMA_PORT=8000
-ENABLE_CHROMA=true
+CHROMA_HOST=http://localhost:8000
+CHROMA_COLLECTION_VERSION=v1
+CHROMA_REQUIRED=false
 
 # [OPTIONAL] - Mobile API
 JWT_SECRET_KEY=your_secret_key
-API_RATE_LIMIT_PER_MINUTE=100
+API_RATE_LIMIT_DEFAULT=100
 ```
 
 **Use case**: Full features, high performance, multi-device access.
@@ -406,7 +406,7 @@ Use this checklist to verify your configuration before deploying:
 - [ ] **YouTube**: `YOUTUBE_DOWNLOAD_ENABLED=true` → ffmpeg installed
 - [ ] **Web Search**: `WEB_SEARCH_ENABLED=true` → Firecrawl search API accessible
 - [ ] **Redis**: `REDIS_ENABLED=true` → Redis server running at `REDIS_URL`
-- [ ] **ChromaDB**: `ENABLE_CHROMA=true` → ChromaDB server running at `CHROMA_HOST:CHROMA_PORT`
+- [ ] **ChromaDB**: `CHROMA_HOST` points to a running ChromaDB server
 - [ ] **Mobile API**: `JWT_SECRET_KEY` set → Strong secret (32+ characters)
 - [ ] **MCP Server**: `MCP_ENABLED=true` → Claude Desktop config updated
 - [ ] **Channel Digest**: `DIGEST_ENABLED=true` → `API_BASE_URL` set, `/init_session` completed
@@ -535,7 +535,7 @@ curl -H "Authorization: Bearer $OPENROUTER_API_KEY" \
 redis-cli -u $REDIS_URL ping
 
 # Test ChromaDB connection (if enabled)
-curl http://$CHROMA_HOST:$CHROMA_PORT/api/v1/heartbeat
+curl "$CHROMA_HOST/api/v2/heartbeat"
 ```
 
 ---

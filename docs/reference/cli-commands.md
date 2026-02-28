@@ -537,9 +537,9 @@ docker-compose up -d chroma
 **Environment Variables:**
 
 ```bash
-CHROMA_HOST=localhost:8000
-CHROMA_COLLECTION=summaries
-ENABLE_CHROMA=true
+CHROMA_HOST=http://localhost:8000
+CHROMA_COLLECTION_VERSION=v1
+CHROMA_REQUIRED=true
 ```
 
 ---
@@ -794,16 +794,11 @@ DB_PATH=/data/app.db
 
 # Logging
 LOG_LEVEL=INFO         # DEBUG for CLI debugging
-LOG_FORMAT=console     # console or json
 
 # ChromaDB
-CHROMA_HOST=localhost:8000
-CHROMA_COLLECTION=summaries
-ENABLE_CHROMA=true
-
-# Embedding Model
-CHROMA_EMBEDDING_MODEL=all-MiniLM-L6-v2
-CHROMA_DEVICE=cpu      # or cuda
+CHROMA_HOST=http://localhost:8000
+CHROMA_COLLECTION_VERSION=v1
+CHROMA_REQUIRED=true
 
 # LLM (for summary CLI)
 OPENROUTER_API_KEY=...
