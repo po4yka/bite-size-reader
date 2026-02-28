@@ -66,7 +66,16 @@ class ContentExtractor(
         correlation_id: str | None = None,
     ) -> tuple[str, str, dict[str, Any]]:
         """Pure extraction method without message dependencies."""
+        from app.core.url_utils import is_twitter_url
+
         normalized_url = normalize_url(url)
+
+        if is_twitter_url(normalized_url) and self.cfg.twitter.enabled:
+            logger.info(
+                "twitter_url_detected_pure",
+                extra={"url": url, "normalized": normalized_url, "cid": correlation_id},
+            )
+            return await self._extract_twitter_content_pure(url, correlation_id)
 
         logger.info(
             "pure_extraction_start",

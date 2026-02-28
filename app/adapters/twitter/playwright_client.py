@@ -10,7 +10,7 @@ import asyncio
 import logging
 import time
 from typing import TYPE_CHECKING, Any
-from urllib.parse import unquote
+from urllib.parse import unquote, urlparse
 
 import httpx
 
@@ -37,7 +37,13 @@ def _load_cookies_netscape(cookies_path: Path) -> list[dict[str, Any]]:
     cookies: list[dict[str, Any]] = []
     for line in cookies_path.read_text().splitlines():
         line = line.strip()
-        if not line or line.startswith("#"):
+        if not line:
+            continue
+        http_only = False
+        if line.startswith("#HttpOnly_"):
+            http_only = True
+            line = line.removeprefix("#HttpOnly_")
+        elif line.startswith("#"):
             continue
         parts = line.split("\t")
         if len(parts) < 7:
@@ -51,6 +57,7 @@ def _load_cookies_netscape(cookies_path: Path) -> list[dict[str, Any]]:
                 "path": path,
                 "secure": secure.upper() == "TRUE",
                 "expires": int(expires) if expires != "0" else -1,
+                "httpOnly": http_only,
             }
         )
     return cookies
@@ -239,7 +246,10 @@ async def resolve_tco_url(short_url: str, timeout: int = 10) -> str | None:
     Returns:
         Resolved URL string, or None if not a t.co URL or resolution fails
     """
-    if not short_url.startswith("https://t.co/"):
+    parsed = urlparse(short_url)
+    host = (parsed.hostname or "").lower()
+    scheme = (parsed.scheme or "").lower()
+    if host != "t.co" or scheme not in {"http", "https"}:
         return None
     try:
         async with httpx.AsyncClient(follow_redirects=True, timeout=timeout) as client:

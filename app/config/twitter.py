@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validator, model_validator
 
 
 class TwitterConfig(BaseModel):
@@ -58,3 +58,13 @@ class TwitterConfig(BaseModel):
         except ValueError as exc:
             msg = "page_timeout_ms must be a valid integer"
             raise ValueError(msg) from exc
+
+    @model_validator(mode="after")
+    def _validate_extraction_tiers(self) -> TwitterConfig:
+        if not self.prefer_firecrawl and not self.playwright_enabled:
+            msg = (
+                "At least one Twitter extraction tier must be enabled "
+                "(TWITTER_PREFER_FIRECRAWL or TWITTER_PLAYWRIGHT_ENABLED)."
+            )
+            raise ValueError(msg)
+        return self

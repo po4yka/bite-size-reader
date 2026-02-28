@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.agents.base_agent import AgentResult, BaseAgent
-from app.core.url_utils import normalize_url, url_hash_sha256
+from app.core.url_utils import compute_dedupe_hash, normalize_url
 from app.infrastructure.persistence.sqlite.repositories.crawl_result_repository import (
     SqliteCrawlResultRepositoryAdapter,
 )
@@ -152,7 +152,7 @@ class ContentExtractionAgent(BaseAgent[ExtractionInput, ExtractionOutput]):
             Extraction result dictionary or None if extraction fails
         """
         # Compute dedupe hash to check for existing crawl
-        dedupe_hash = url_hash_sha256(url)
+        dedupe_hash = compute_dedupe_hash(url)
 
         existing_req = await self.request_repo.async_get_request_by_dedupe_hash(dedupe_hash)
 

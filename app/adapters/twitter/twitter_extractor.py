@@ -24,10 +24,10 @@ from app.core.async_utils import raise_if_cancelled
 from app.core.html_utils import clean_markdown_article_text, html_to_text
 from app.core.lang import detect_language
 from app.core.url_utils import (
+    compute_dedupe_hash,
     extract_tweet_id,
     is_twitter_article_url,
     normalize_url,
-    url_hash_sha256,
 )
 
 if TYPE_CHECKING:
@@ -95,7 +95,14 @@ class TwitterExtractor:
         tweet_id = extract_tweet_id(url_text)
         is_article = is_twitter_article_url(url_text)
 
-        dedupe = url_hash_sha256(norm)
+        if not self._cfg.twitter.prefer_firecrawl and not self._cfg.twitter.playwright_enabled:
+            error_msg = (
+                "Twitter extraction misconfigured: both Firecrawl and Playwright are disabled. "
+                "Enable at least one extraction tier."
+            )
+            raise ValueError(error_msg)
+
+        dedupe = compute_dedupe_hash(url_text)
         await self._response_formatter.send_url_accepted_notification(
             message, norm, correlation_id, silent=silent
         )
@@ -132,12 +139,7 @@ class TwitterExtractor:
                 )
 
         if not content_text:
-            error_msg = "Twitter content extraction failed (both Firecrawl and Playwright)"
-            if not self._cfg.twitter.playwright_enabled:
-                error_msg = (
-                    "Twitter content extraction via Firecrawl returned insufficient content. "
-                    "Enable TWITTER_PLAYWRIGHT_ENABLED for authenticated extraction."
-                )
+            error_msg = self._build_extraction_error_message()
             await self._message_persistence.request_repo.async_update_request_status(
                 req_id, "error"
             )
@@ -159,6 +161,51 @@ class TwitterExtractor:
 
         return req_id, content_text, content_source, detected, metadata
 
+    async def extract_content_pure(
+        self,
+        url_text: str,
+        correlation_id: str | None = None,
+    ) -> tuple[str, str, dict[str, Any]]:
+        """Extract Twitter/X content without request creation or notifications."""
+        tweet_id = extract_tweet_id(url_text)
+        is_article = is_twitter_article_url(url_text)
+        metadata: dict[str, Any] = {
+            "source": "twitter",
+            "tweet_id": tweet_id,
+            "is_article": is_article,
+        }
+        content_text = ""
+        content_source = "none"
+
+        if not self._cfg.twitter.prefer_firecrawl and not self._cfg.twitter.playwright_enabled:
+            raise ValueError(self._build_extraction_error_message())
+
+        firecrawl_ok = False
+        if self._cfg.twitter.prefer_firecrawl:
+            firecrawl_ok, content_text, content_source = await self._try_firecrawl(
+                url_text=url_text,
+                req_id=None,
+                tweet_id=tweet_id,
+                metadata=metadata,
+                correlation_id=correlation_id,
+                is_article=is_article,
+                persist_result=False,
+            )
+
+        if not firecrawl_ok and self._cfg.twitter.playwright_enabled:
+            content_text, content_source, metadata = await self._extract_playwright(
+                url_text=url_text,
+                tweet_id=tweet_id,
+                is_article=is_article,
+                correlation_id=correlation_id,
+                metadata=metadata,
+            )
+
+        if not content_text:
+            raise ValueError(self._build_extraction_error_message())
+
+        return content_text, content_source, metadata
+
     # ------------------------------------------------------------------
     # Tier 1: Firecrawl
     # ------------------------------------------------------------------
@@ -166,11 +213,12 @@ class TwitterExtractor:
     async def _try_firecrawl(
         self,
         url_text: str,
-        req_id: int,
+        req_id: int | None,
         tweet_id: str | None,
         metadata: dict[str, Any],
         correlation_id: str | None,
         is_article: bool,
+        persist_result: bool = True,
     ) -> tuple[bool, str, str]:
         """Attempt Twitter extraction via Firecrawl.
 
@@ -181,7 +229,8 @@ class TwitterExtractor:
             async with self._firecrawl_sem():
                 crawl = await self._firecrawl.scrape_markdown(url_text, request_id=req_id)
 
-            self._schedule_crawl_persistence(req_id, crawl, correlation_id)
+            if persist_result and req_id is not None:
+                self._schedule_crawl_persistence(req_id, crawl, correlation_id)
 
             quality_issue = detect_low_value_content(crawl)
             if quality_issue and self._can_accept_low_value_firecrawl_content(
@@ -233,6 +282,20 @@ class TwitterExtractor:
             )
 
         return False, "", "none"
+
+    def _build_extraction_error_message(self) -> str:
+        """Build a consistent error message for failed/misconfigured extraction."""
+        if not self._cfg.twitter.prefer_firecrawl and not self._cfg.twitter.playwright_enabled:
+            return (
+                "Twitter extraction misconfigured: both Firecrawl and Playwright are disabled. "
+                "Enable TWITTER_PREFER_FIRECRAWL or TWITTER_PLAYWRIGHT_ENABLED."
+            )
+        if not self._cfg.twitter.playwright_enabled:
+            return (
+                "Twitter content extraction via Firecrawl returned insufficient content. "
+                "Enable TWITTER_PLAYWRIGHT_ENABLED for authenticated extraction."
+            )
+        return "Twitter content extraction failed (both Firecrawl and Playwright)"
 
     # ------------------------------------------------------------------
     # Tier 2: Playwright

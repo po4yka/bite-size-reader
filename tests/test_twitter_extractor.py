@@ -26,11 +26,15 @@ class _DummySemCtx:
         return False
 
 
-def _make_cfg(*, playwright_enabled: bool = False) -> SimpleNamespace:
+def _make_cfg(
+    *,
+    playwright_enabled: bool = False,
+    prefer_firecrawl: bool = True,
+) -> SimpleNamespace:
     return SimpleNamespace(
         twitter=SimpleNamespace(
             cookies_path="/tmp/nonexistent-twitter-cookies.txt",
-            prefer_firecrawl=True,
+            prefer_firecrawl=prefer_firecrawl,
             playwright_enabled=playwright_enabled,
             headless=True,
             page_timeout_ms=15000,
@@ -79,6 +83,18 @@ async def test_try_firecrawl_accepts_short_tweet_content() -> None:
     assert ok is True
     assert content_source == "markdown"
     assert "Yes" in content_text
+
+
+@pytest.mark.asyncio
+async def test_extract_content_pure_requires_at_least_one_tier() -> None:
+    crawl_result = SimpleNamespace(status="ok", content_markdown="unused", content_html=None)
+    extractor = _make_extractor(
+        cfg=_make_cfg(playwright_enabled=False, prefer_firecrawl=False),
+        crawl_result=crawl_result,
+    )
+
+    with pytest.raises(ValueError, match="both Firecrawl and Playwright are disabled"):
+        await extractor.extract_content_pure("https://x.com/user/status/1", correlation_id="cid")
 
 
 @pytest.mark.asyncio

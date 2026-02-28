@@ -13,7 +13,7 @@ from app.adapters.content.content_extractor import ContentExtractor
 from app.adapters.content.llm_summarizer import LLMSummarizer
 from app.core.async_utils import raise_if_cancelled
 from app.core.lang import LANG_RU, choose_language
-from app.core.url_utils import normalize_url, url_hash_sha256
+from app.core.url_utils import compute_dedupe_hash
 from app.db.user_interactions import async_safe_update_user_interaction
 from app.infrastructure.persistence.message_persistence import MessagePersistence
 from app.infrastructure.persistence.sqlite.repositories.summary_repository import (
@@ -337,8 +337,7 @@ class URLProcessor:
             return cached_result
 
         try:
-            norm = normalize_url(url_text)
-            dedupe_hash = url_hash_sha256(norm)
+            dedupe_hash = compute_dedupe_hash(url_text)
             # Signal phase: extracting content
             if on_phase_change:
                 await on_phase_change("extracting", None, None, None)
@@ -552,8 +551,7 @@ class URLProcessor:
         Returns URLProcessingFlowResult if a cached response was sent, None otherwise.
         """
         try:
-            norm = normalize_url(url_text)
-            dedupe_hash = url_hash_sha256(norm)
+            dedupe_hash = compute_dedupe_hash(url_text)
 
             request_row = (
                 await self.message_persistence.request_repo.async_get_request_by_dedupe_hash(

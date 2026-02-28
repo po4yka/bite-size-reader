@@ -105,3 +105,27 @@ class ContentExtractorPlatformsMixin:
         return await self._twitter_extractor.extract_and_process(
             message, url_text, correlation_id, interaction_id, silent
         )
+
+    async def _extract_twitter_content_pure(
+        self,
+        url_text: str,
+        correlation_id: str | None,
+    ) -> tuple[str, str, dict[str, Any]]:
+        """Extract Twitter/X content without message-bound persistence/notifications."""
+        if self._twitter_extractor is None:
+            from app.adapters.twitter.twitter_extractor import TwitterExtractor
+
+            self._twitter_extractor = TwitterExtractor(
+                cfg=self.cfg,
+                db=self.db,
+                firecrawl=self.firecrawl,
+                response_formatter=self.response_formatter,
+                message_persistence=self.message_persistence,
+                firecrawl_sem=self._sem,
+                handle_request_dedupe_or_create=self._handle_request_dedupe_or_create,
+                schedule_crawl_persistence=self._schedule_crawl_persistence,
+            )
+        return await self._twitter_extractor.extract_content_pure(
+            url_text=url_text,
+            correlation_id=correlation_id,
+        )
