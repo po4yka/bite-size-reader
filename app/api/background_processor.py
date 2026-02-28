@@ -23,6 +23,10 @@ from app.infrastructure.persistence.sqlite.repositories.summary_repository impor
     SqliteSummaryRepositoryAdapter,
 )
 from app.infrastructure.redis import get_redis, redis_key
+from app.observability.failure_observability import (
+    REASON_UNKNOWN_EXTRACTION_FAILURE,
+    persist_request_failure,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
@@ -96,6 +100,7 @@ class BackgroundProcessor:
         db_path: str | None = None,
     ) -> None:
         """Process a request by id."""
+        started_at = time.perf_counter()
         processor_db, processor = self._maybe_override_db(db_path)
         request: dict[str, Any] | None = None
 
@@ -168,12 +173,33 @@ class BackgroundProcessor:
             )
         except StageError as exc:
             error_payload = self._build_error_payload(exc.stage, exc.original)
+            cid = (request or {}).get("correlation_id") or correlation_id
+            elapsed_ms = int((time.perf_counter() - started_at) * 1000)
+            target_repo = (
+                self.request_repo
+                if processor_db == self.db
+                else SqliteRequestRepositoryAdapter(processor_db)
+            )
+            await persist_request_failure(
+                request_repo=target_repo,
+                logger=logger,
+                request_id=request_id,
+                correlation_id=cid,
+                stage=exc.stage,
+                component="background_processor",
+                reason_code=error_payload["error_code"],
+                error=exc.original,
+                retryable=True,
+                attempt=self._retry.attempts,
+                max_attempts=self._retry.attempts,
+                processing_time_ms=elapsed_ms,
+            )
             if request:
                 await self._mark_status(
                     processor_db,
                     request_id,
                     "error",
-                    correlation_id or request.get("correlation_id"),
+                    cid,
                 )
             await self._publish_update(
                 request_id,
@@ -187,7 +213,7 @@ class BackgroundProcessor:
                 "bg_processing_failed",
                 exc_info=True,
                 extra={
-                    "correlation_id": getattr(request, "correlation_id", correlation_id),
+                    "correlation_id": cid,
                     "request_id": request_id,
                     **error_payload,
                 },
@@ -212,12 +238,33 @@ class BackgroundProcessor:
             raise  # Re-raise CancelledError after cleanup
         except Exception as exc:  # pragma: no cover - defensive
             error_payload = self._build_error_payload("unknown", exc)
+            cid = (request or {}).get("correlation_id") or correlation_id
+            elapsed_ms = int((time.perf_counter() - started_at) * 1000)
+            target_repo = (
+                self.request_repo
+                if processor_db == self.db
+                else SqliteRequestRepositoryAdapter(processor_db)
+            )
+            await persist_request_failure(
+                request_repo=target_repo,
+                logger=logger,
+                request_id=request_id,
+                correlation_id=cid,
+                stage="unknown",
+                component="background_processor",
+                reason_code=REASON_UNKNOWN_EXTRACTION_FAILURE,
+                error=exc,
+                retryable=True,
+                attempt=self._retry.attempts,
+                max_attempts=self._retry.attempts,
+                processing_time_ms=elapsed_ms,
+            )
             if request:
                 await self._mark_status(
                     processor_db,
                     request_id,
                     "error",
-                    correlation_id or request.get("correlation_id"),
+                    cid,
                 )
             await self._publish_update(
                 request_id, "FAILED", "UNKNOWN", str(exc), 0.0, error=str(exc)
@@ -226,7 +273,7 @@ class BackgroundProcessor:
                 "bg_processing_failed",
                 exc_info=True,
                 extra={
-                    "correlation_id": getattr(request, "correlation_id", correlation_id),
+                    "correlation_id": cid,
                     "request_id": request_id,
                     **error_payload,
                 },
@@ -378,6 +425,7 @@ class BackgroundProcessor:
             lambda: url_processor.content_extractor.extract_content_pure(
                 url=normalized_url,
                 correlation_id=correlation_id,
+                request_id=request_id,
             ),
         )
 

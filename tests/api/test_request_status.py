@@ -95,3 +95,28 @@ async def test_status_prefers_llm_error_when_available(in_memory_db):
     assert status_info["error_message"] == "llm summary failed"
     assert status_info["correlation_id"] == "cid-llm"
     assert status_info["can_retry"] is True
+
+
+@pytest.mark.asyncio
+async def test_status_uses_request_error_context_snapshot_when_present(in_memory_db):
+    req = _create_request(user_id=3, dedupe_hash="hash-3", correlation_id="cid-snapshot")
+    req.error_context_json = {
+        "pipeline": "url_extraction",
+        "stage": "extraction",
+        "component": "firecrawl",
+        "reason_code": "FIRECRAWL_ERROR",
+        "error_type": "ValueError",
+        "error_message": "normalized error",
+        "retryable": True,
+        "attempt": 1,
+        "max_attempts": 3,
+        "timestamp": "2026-02-28T10:00:00Z",
+    }
+    req.save()
+
+    status_info = await RequestService.get_request_status(req.user_id, req.id)
+
+    assert status_info["error_stage"] == "extraction"
+    assert status_info["error_reason_code"] == "FIRECRAWL_ERROR"
+    assert status_info["retryable"] is True
+    assert status_info["debug"]["component"] == "firecrawl"

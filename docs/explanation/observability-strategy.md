@@ -720,6 +720,36 @@ fi
 
 ---
 
+## Normalized Extraction Failure Snapshots
+
+Failed URL/article processing now writes a normalized snapshot to `requests.error_context_json`.
+This is the fastest way to identify stage, component, reason code, and retryability without log
+scraping.
+
+```sql
+SELECT
+  id,
+  status,
+  error_type,
+  error_message,
+  json_extract(error_context_json, '$.stage')        AS stage,
+  json_extract(error_context_json, '$.component')    AS component,
+  json_extract(error_context_json, '$.reason_code')  AS reason_code,
+  json_extract(error_context_json, '$.retryable')    AS retryable
+FROM requests
+WHERE status = 'error'
+ORDER BY updated_at DESC
+LIMIT 20;
+```
+
+Prometheus metrics for extraction failure analysis:
+
+- `bsr_extraction_failures_total{stage,component,reason_code,retryable}`
+- `bsr_extraction_attempts_total{stage,component,outcome}`
+- `bsr_extraction_stage_latency_seconds{stage,component,outcome}`
+
+---
+
 ## Best Practices
 
 ### 1. Always Include Correlation IDs

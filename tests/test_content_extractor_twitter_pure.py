@@ -75,5 +75,6 @@ async def test_extract_content_pure_routes_twitter_urls_to_twitter_extractor() -
     extract_twitter_mock.assert_awaited_once_with(
         "https://x.com/user/status/123?s=20&t=abc",
         "cid",
+        None,
     )
     assert firecrawl_scrape_mock.await_count == 0

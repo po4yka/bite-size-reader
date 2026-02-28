@@ -70,7 +70,21 @@ SELECT * FROM summaries WHERE request_id = '<correlation_id>';
 
 -- See Telegram messages
 SELECT * FROM telegram_messages WHERE request_id = '<correlation_id>';
+
+-- See normalized latest failure snapshot (if request failed)
+SELECT id, status, error_type, error_message, error_context_json
+FROM requests
+WHERE id = '<correlation_id>';
 ```
+
+Common `error_context_json.reason_code` values:
+
+- `FIRECRAWL_ERROR`
+- `FIRECRAWL_LOW_VALUE`
+- `PLAYWRIGHT_EMPTY_CONTENT`
+- `PLAYWRIGHT_UI_OR_LOGIN`
+- `RESOLVE_FAILED`
+- `EXTRACTION_EMPTY_OUTPUT`
 
 **Pro Tip**: Use `DEBUG_PAYLOADS=1` to log full request/response bodies (Authorization headers redacted).
 

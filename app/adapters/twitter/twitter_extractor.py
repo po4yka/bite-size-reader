@@ -37,6 +37,15 @@ from app.core.url_utils import (
     is_twitter_article_url,
     normalize_url,
 )
+from app.observability.failure_observability import (
+    REASON_EXTRACTION_EMPTY_OUTPUT,
+    REASON_FIRECRAWL_ERROR,
+    REASON_FIRECRAWL_LOW_VALUE,
+    REASON_PLAYWRIGHT_EMPTY_CONTENT,
+    REASON_PLAYWRIGHT_UI_OR_LOGIN,
+    REASON_RESOLVE_FAILED,
+    persist_request_failure,
+)
 from app.observability.metrics import (
     record_twitter_article_extraction,
     record_twitter_article_resolution,
@@ -156,6 +165,7 @@ class TwitterExtractor:
             "article_resolved_url": article_resolution.resolved_url,
             "article_canonical_url": article_resolution.canonical_url,
             "article_extraction_stage": None,
+            "tier_outcomes": {"firecrawl": "skipped", "playwright": "skipped"},
         }
 
         # Tier 1: Try Firecrawl first (if preferred)
@@ -164,15 +174,23 @@ class TwitterExtractor:
             firecrawl_ok, content_text, content_source = await self._try_firecrawl(
                 extraction_url, req_id, tweet_id, metadata, correlation_id, is_article
             )
+            metadata["tier_outcomes"]["firecrawl"] = "success" if firecrawl_ok else "failed"
 
         # Tier 2: Playwright fallback (if Firecrawl failed and Playwright is enabled)
         if not firecrawl_ok and self._cfg.twitter.playwright_enabled:
             try:
                 content_text, content_source, metadata = await self._extract_playwright(
-                    extraction_url, tweet_id, is_article, correlation_id, metadata
+                    extraction_url,
+                    tweet_id,
+                    is_article,
+                    correlation_id,
+                    metadata,
+                    request_id=req_id,
                 )
+                metadata["tier_outcomes"]["playwright"] = "success"
             except Exception as e:
                 raise_if_cancelled(e)
+                metadata["tier_outcomes"]["playwright"] = "failed"
                 logger.warning(
                     "twitter_playwright_failed",
                     extra={
@@ -185,8 +203,29 @@ class TwitterExtractor:
 
         if not content_text:
             error_msg = self._build_extraction_error_message()
-            await self._message_persistence.request_repo.async_update_request_status(
-                req_id, "error"
+            reason_code = (
+                REASON_RESOLVE_FAILED
+                if metadata.get("article_resolution_reason") == "resolve_failed"
+                else REASON_EXTRACTION_EMPTY_OUTPUT
+            )
+            await persist_request_failure(
+                request_repo=self._message_persistence.request_repo,
+                logger=logger,
+                request_id=req_id,
+                correlation_id=correlation_id,
+                stage="extraction",
+                component="platform_router",
+                reason_code=reason_code,
+                error=ValueError(error_msg),
+                retryable=True,
+                source_url=url_text,
+                resolved_url=metadata.get("article_resolved_url"),
+                canonical_url=metadata.get("article_canonical_url"),
+                article_id=metadata.get("article_id"),
+                content_signals={
+                    "tier_outcomes": metadata.get("tier_outcomes"),
+                    "is_article": is_article,
+                },
             )
             await self._response_formatter.send_error_notification(
                 message, "twitter_extraction_error", correlation_id, details=error_msg
@@ -210,6 +249,7 @@ class TwitterExtractor:
         self,
         url_text: str,
         correlation_id: str | None = None,
+        request_id: int | None = None,
     ) -> tuple[str, str, dict[str, Any]]:
         """Extract Twitter/X content without request creation or notifications."""
         tweet_id = extract_tweet_id(url_text)
@@ -234,6 +274,7 @@ class TwitterExtractor:
             "article_resolved_url": article_resolution.resolved_url,
             "article_canonical_url": article_resolution.canonical_url,
             "article_extraction_stage": None,
+            "tier_outcomes": {"firecrawl": "skipped", "playwright": "skipped"},
         }
         content_text = ""
         content_source = "none"
@@ -245,24 +286,53 @@ class TwitterExtractor:
         if self._cfg.twitter.prefer_firecrawl:
             firecrawl_ok, content_text, content_source = await self._try_firecrawl(
                 url_text=extraction_url,
-                req_id=None,
+                req_id=request_id,
                 tweet_id=tweet_id,
                 metadata=metadata,
                 correlation_id=correlation_id,
                 is_article=is_article,
                 persist_result=False,
             )
+            metadata["tier_outcomes"]["firecrawl"] = "success" if firecrawl_ok else "failed"
 
         if not firecrawl_ok and self._cfg.twitter.playwright_enabled:
-            content_text, content_source, metadata = await self._extract_playwright(
-                url_text=extraction_url,
-                tweet_id=tweet_id,
-                is_article=is_article,
-                correlation_id=correlation_id,
-                metadata=metadata,
-            )
+            try:
+                content_text, content_source, metadata = await self._extract_playwright(
+                    url_text=extraction_url,
+                    tweet_id=tweet_id,
+                    is_article=is_article,
+                    correlation_id=correlation_id,
+                    metadata=metadata,
+                    request_id=request_id,
+                )
+                metadata["tier_outcomes"]["playwright"] = "success"
+            except Exception:
+                metadata["tier_outcomes"]["playwright"] = "failed"
+                raise
 
         if not content_text:
+            reason_code = (
+                REASON_RESOLVE_FAILED
+                if metadata.get("article_resolution_reason") == "resolve_failed"
+                else REASON_EXTRACTION_EMPTY_OUTPUT
+            )
+            if request_id is not None:
+                await persist_request_failure(
+                    request_repo=self._message_persistence.request_repo,
+                    logger=logger,
+                    request_id=request_id,
+                    correlation_id=correlation_id,
+                    stage="extraction",
+                    component="platform_router",
+                    reason_code=reason_code,
+                    error=ValueError(self._build_extraction_error_message()),
+                    retryable=True,
+                    source_url=url_text,
+                    resolved_url=metadata.get("article_resolved_url"),
+                    canonical_url=metadata.get("article_canonical_url"),
+                    article_id=metadata.get("article_id"),
+                    content_signals={"tier_outcomes": metadata.get("tier_outcomes")},
+                )
             raise ValueError(self._build_extraction_error_message())
 
         return content_text, content_source, metadata
@@ -425,6 +495,22 @@ class TwitterExtractor:
                         status="failed",
                         reason="ui_or_login",
                     )
+                    if req_id is not None:
+                        await persist_request_failure(
+                            request_repo=self._message_persistence.request_repo,
+                            logger=logger,
+                            request_id=req_id,
+                            correlation_id=correlation_id,
+                            stage="extraction",
+                            component="twitter_firecrawl",
+                            reason_code=REASON_FIRECRAWL_LOW_VALUE,
+                            error=ValueError(
+                                "Firecrawl article extraction produced UI/login content"
+                            ),
+                            retryable=True,
+                            source_url=url_text,
+                            quality_reason="ui_or_login",
+                        )
                     return False, "", "none"
 
                 metadata["extraction_method"] = "firecrawl"
@@ -466,6 +552,19 @@ class TwitterExtractor:
                     status="failed",
                     reason="exception",
                 )
+                if req_id is not None:
+                    await persist_request_failure(
+                        request_repo=self._message_persistence.request_repo,
+                        logger=logger,
+                        request_id=req_id,
+                        correlation_id=correlation_id,
+                        stage="extraction",
+                        component="twitter_firecrawl",
+                        reason_code=REASON_FIRECRAWL_ERROR,
+                        error=e,
+                        retryable=True,
+                        source_url=url_text,
+                    )
 
         return False, "", "none"
 
@@ -494,6 +593,7 @@ class TwitterExtractor:
         is_article: bool,
         correlation_id: str | None,
         metadata: dict[str, Any],
+        request_id: int | None = None,
     ) -> tuple[str, str, dict[str, Any]]:
         """Extract Twitter content via Playwright browser automation."""
         headless = self._cfg.twitter.headless
@@ -503,7 +603,7 @@ class TwitterExtractor:
         async with self._pw_sem:
             if is_article:
                 content_text, content_source, pw_metadata = await self._pw_extract_article(
-                    url_text, cookies, headless, timeout_ms, correlation_id
+                    url_text, cookies, headless, timeout_ms, correlation_id, request_id
                 )
             else:
                 content_text, content_source, pw_metadata = await self._pw_extract_tweet(
@@ -573,6 +673,7 @@ class TwitterExtractor:
         headless: bool,
         timeout_ms: int,
         correlation_id: str | None,
+        request_id: int | None = None,
     ) -> tuple[str, str, dict[str, Any]]:
         """Extract X Article via DOM scraping."""
         from app.adapters.twitter.playwright_client import scrape_article
@@ -592,12 +693,41 @@ class TwitterExtractor:
             record_twitter_article_extraction(
                 stage="playwright", status="failed", reason="empty_content"
             )
+            if request_id is not None:
+                await persist_request_failure(
+                    request_repo=self._message_persistence.request_repo,
+                    logger=logger,
+                    request_id=request_id,
+                    correlation_id=correlation_id,
+                    stage="extraction",
+                    component="twitter_playwright",
+                    reason_code=REASON_PLAYWRIGHT_EMPTY_CONTENT,
+                    error=ValueError("Playwright article extraction returned no content"),
+                    retryable=True,
+                    source_url=url,
+                )
             msg = f"Playwright article extraction returned no content (reason=empty_content) for {url}"
             raise ValueError(msg)
         if self._is_low_quality_article_content(content):
             record_twitter_article_extraction(
                 stage="playwright", status="failed", reason="ui_or_login"
             )
+            if request_id is not None:
+                await persist_request_failure(
+                    request_repo=self._message_persistence.request_repo,
+                    logger=logger,
+                    request_id=request_id,
+                    correlation_id=correlation_id,
+                    stage="extraction",
+                    component="twitter_playwright",
+                    reason_code=REASON_PLAYWRIGHT_UI_OR_LOGIN,
+                    error=ValueError(
+                        "Playwright article extraction appears to be UI/login content"
+                    ),
+                    retryable=True,
+                    source_url=url,
+                    quality_reason="ui_or_login",
+                )
             msg = (
                 "Playwright article extraction appears to be UI/login content "
                 f"(reason=ui_or_login) for {url}"

@@ -21,6 +21,11 @@ from app.core.url_utils import normalize_url, url_hash_sha256
 from app.db.session import DatabaseSessionManager
 from app.infrastructure.cache.redis_cache import RedisCache
 from app.infrastructure.persistence.message_persistence import MessagePersistence
+from app.observability.failure_observability import (
+    REASON_FIRECRAWL_ERROR,
+    REASON_FIRECRAWL_LOW_VALUE,
+    persist_request_failure,
+)
 
 if TYPE_CHECKING:
     from app.adapters.external.response_formatter import ResponseFormatter
@@ -64,6 +69,7 @@ class ContentExtractor(
         self,
         url: str,
         correlation_id: str | None = None,
+        request_id: int | None = None,
     ) -> tuple[str, str, dict[str, Any]]:
         """Pure extraction method without message dependencies."""
         from app.core.url_utils import is_twitter_url
@@ -75,7 +81,7 @@ class ContentExtractor(
                 "twitter_url_detected_pure",
                 extra={"url": url, "normalized": normalized_url, "cid": correlation_id},
             )
-            return await self._extract_twitter_content_pure(url, correlation_id)
+            return await self._extract_twitter_content_pure(url, correlation_id, request_id)
 
         logger.info(
             "pure_extraction_start",
@@ -91,6 +97,23 @@ class ContentExtractor(
             logger.warning(
                 "pure_extraction_low_value", extra={"cid": correlation_id, "reason": reason}
             )
+            if request_id is not None:
+                await persist_request_failure(
+                    request_repo=self.message_persistence.request_repo,
+                    logger=logger,
+                    request_id=request_id,
+                    correlation_id=correlation_id,
+                    stage="extraction",
+                    component="firecrawl",
+                    reason_code=REASON_FIRECRAWL_LOW_VALUE,
+                    error=ValueError(f"Low-value content detected: {reason}"),
+                    retryable=True,
+                    quality_reason=reason,
+                    source_url=url,
+                    content_signals=quality_issue.get("metrics")
+                    if isinstance(quality_issue, dict)
+                    else None,
+                )
             raise ValueError(f"Low-value content detected: {reason}")
 
         has_markdown = bool(crawl.content_markdown and crawl.content_markdown.strip())
@@ -118,6 +141,22 @@ class ContentExtractor(
                 pass
 
             error_msg = crawl.error_text or "Firecrawl extraction failed"
+            if request_id is not None:
+                await persist_request_failure(
+                    request_repo=self.message_persistence.request_repo,
+                    logger=logger,
+                    request_id=request_id,
+                    correlation_id=correlation_id,
+                    stage="extraction",
+                    component="firecrawl",
+                    reason_code=REASON_FIRECRAWL_ERROR,
+                    error=ValueError(f"Extraction failed: {error_msg}"),
+                    retryable=True,
+                    http_status=crawl.http_status,
+                    latency_ms=crawl.latency_ms,
+                    source_url=url,
+                    provider_error_code=crawl.response_error_code,
+                )
             raise ValueError(f"Extraction failed: {error_msg}") from None
 
         if crawl.content_markdown and crawl.content_markdown.strip():

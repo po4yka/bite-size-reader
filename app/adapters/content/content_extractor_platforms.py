@@ -110,6 +110,7 @@ class ContentExtractorPlatformsMixin:
         self,
         url_text: str,
         correlation_id: str | None,
+        request_id: int | None = None,
     ) -> tuple[str, str, dict[str, Any]]:
         """Extract Twitter/X content without message-bound persistence/notifications."""
         if self._twitter_extractor is None:
@@ -128,4 +129,5 @@ class ContentExtractorPlatformsMixin:
         return await self._twitter_extractor.extract_content_pure(
             url_text=url_text,
             correlation_id=correlation_id,
+            request_id=request_id,
         )

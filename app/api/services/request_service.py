@@ -254,6 +254,9 @@ class RequestService:
         error_stage = None
         error_type = None
         error_message = None
+        error_reason_code = None
+        retryable = False
+        debug = None
         can_retry = False  # Explicit boolean, never None
 
         if status == "processing":
@@ -289,16 +292,23 @@ class RequestService:
 
         elif status == "error":
             stage = "failed"
-            error_stage, error_type, error_message = await RequestService._derive_error_details(
-                request_id
-            )
+            (
+                error_stage,
+                error_type,
+                error_message,
+                error_reason_code,
+                retryable,
+                debug,
+            ) = await RequestService._derive_error_details(request_id)
             if not error_message:
                 error_message = "Request failed"
-            can_retry = True  # Failed requests can be retried
+            can_retry = bool(retryable) or True  # Failed requests can be retried
 
         elif status == "cancelled":
             stage = "failed"
             error_message = "Request was cancelled"
+            error_reason_code = "REQUEST_CANCELLED"
+            retryable = True
             can_retry = True  # Cancelled requests can be retried
 
         else:
@@ -315,6 +325,9 @@ class RequestService:
             "error_stage": error_stage,
             "error_type": error_type,
             "error_message": error_message,
+            "error_reason_code": error_reason_code,
+            "retryable": retryable,
+            "debug": debug,
             "can_retry": can_retry,
             "correlation_id": request.get("correlation_id"),
         }
@@ -382,7 +395,7 @@ class RequestService:
     @staticmethod
     async def _derive_error_details(
         request_id: int,
-    ) -> tuple[str | None, str | None, str | None]:
+    ) -> tuple[str | None, str | None, str | None, str | None, bool, dict[str, Any] | None]:
         """
         Infer error stage/type/message from persisted artifacts.
         Prefers LLM errors (later stage) over crawl errors.
@@ -390,6 +403,27 @@ class RequestService:
         from app.db.models import database_proxy
 
         crawl_repo = SqliteCrawlResultRepositoryAdapter(database_proxy)
+
+        request_row = RequestModel.get_or_none(RequestModel.id == request_id)
+        request_ctx = (
+            request_row.error_context_json
+            if request_row and isinstance(request_row.error_context_json, dict)
+            else None
+        )
+        if request_ctx:
+            reason_code = request_ctx.get("reason_code")
+            error_type = request_ctx.get("error_type") or reason_code
+            message = request_ctx.get("error_message") or "Request failed"
+            stage = request_ctx.get("stage") or "unknown"
+            retryable = bool(request_ctx.get("retryable", True))
+            debug = {
+                "pipeline": request_ctx.get("pipeline"),
+                "component": request_ctx.get("component"),
+                "attempt": request_ctx.get("attempt"),
+                "max_attempts": request_ctx.get("max_attempts"),
+                "timestamp": request_ctx.get("timestamp"),
+            }
+            return stage, error_type, message, reason_code, retryable, debug
 
         # For llm_calls we don't have a direct repo method for latest, we'll use Peewee for now
         latest_llm = (
@@ -410,6 +444,9 @@ class RequestService:
                 "llm_summarization",
                 error_type or "LLM_FAILED",
                 message or "LLM summarization failed",
+                "LLM_FAILED",
+                True,
+                None,
             )
 
         latest_crawl = await crawl_repo.async_get_crawl_result_by_request(request_id)
@@ -422,6 +459,9 @@ class RequestService:
                 latest_crawl.get("error_text")
                 or latest_crawl.get("firecrawl_error_message")
                 or "Content extraction failed",
+                "EXTRACTION_FAILED",
+                True,
+                None,
             )
 
-        return None, None, None
+        return None, None, None, None, False, None
