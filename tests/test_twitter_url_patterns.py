@@ -30,6 +30,7 @@ class TestIsTwitterUrl:
             "https://x.com/user/status/666/photo/1",
             "https://x.com/i/web/status/777",
             "https://x.com/i/article/1234567890",
+            "https://x.com/i/article/1234567890/preview",
             "https://twitter.com/i/article/9876543210",
         ],
     )
@@ -144,6 +145,9 @@ class TestParseArticleUrl:
 
     def test_with_trailing_slash(self) -> None:
         assert parse_article_url("https://x.com/i/article/789/") == "789"
+
+    def test_with_safe_suffix(self) -> None:
+        assert parse_article_url("https://x.com/i/article/789/preview") == "789"
 
 
 class TestTwitterDedupeCanonicalization:

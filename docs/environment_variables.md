@@ -3,7 +3,7 @@
 Complete reference for all Bite-Size Reader configuration. Source of truth: `app/config/` (entrypoint `app/config/settings.py`).
 
 **Total Variables**: 250+
-**Last Updated**: 2026-02-09
+**Last Updated**: 2026-02-28
 
 ---
 
@@ -204,8 +204,19 @@ API_RATE_LIMIT_DEFAULT=100
 | `TWITTER_HEADLESS` | `true` | Run Playwright browser in headless mode |
 | `TWITTER_PAGE_TIMEOUT_MS` | `15000` | Page load timeout for Playwright (ms) |
 | `TWITTER_PREFER_FIRECRAWL` | `true` | Try Firecrawl first before Playwright fallback |
+| `TWITTER_ARTICLE_REDIRECT_RESOLUTION_ENABLED` | `true` | Resolve redirects/canonical hints for X Article links before extraction |
+| `TWITTER_ARTICLE_RESOLUTION_TIMEOUT_SEC` | `5` | Timeout for article link resolution requests (seconds) |
+| `TWITTER_ARTICLE_LIVE_SMOKE_ENABLED` | `false` | Enable optional live smoke checks for article links (manual script only) |
 
 **Two-tier extraction**: By default, Twitter URLs are extracted via Firecrawl (free, no auth needed). If Firecrawl fails (login wall), enable `TWITTER_PLAYWRIGHT_ENABLED` and provide a `cookies.txt` for authenticated extraction. Docker: build with `--build-arg WITH_PLAYWRIGHT=1`.
+
+**Manual live smoke (non-CI)**: Validate real article links with redirect-aware routing and stage-level diagnostics:
+
+```bash
+uv run python scripts/twitter_article_live_smoke.py \
+  --url "https://t.co/..." \
+  --url "https://x.com/i/article/1234567890"
+```
 
 ## Web Search Enrichment
 

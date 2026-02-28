@@ -161,79 +161,133 @@ def _scrape_article_sync(
                 context.add_cookies(cookies)
 
         page = context.new_page()
-
         try:
-            page.goto(url, wait_until="networkidle", timeout=timeout_ms)
-        except Exception:
-            pass
+            try:
+                page.goto(url, wait_until="domcontentloaded", timeout=timeout_ms)
+            except Exception:
+                pass
 
-        # Wait for content to render
-        time.sleep(3)
+            # Prefer locator-based readiness before falling back to scripted scraping.
+            try:
+                page.locator("article").first.wait_for(
+                    state="visible", timeout=max(2_000, timeout_ms // 2)
+                )
+            except Exception:
+                try:
+                    page.locator("main").first.wait_for(
+                        state="visible",
+                        timeout=max(2_000, timeout_ms // 3),
+                    )
+                except Exception:
+                    pass
 
-        # Scroll to bottom to load all content
-        prev_height = 0
-        for _ in range(20):
-            page.evaluate("window.scrollBy(0, window.innerHeight * 2)")
-            time.sleep(1)
-            height = page.evaluate("document.body.scrollHeight")
-            if height == prev_height:
-                break
-            prev_height = height
+            for _ in range(8):
+                page.evaluate("window.scrollBy(0, window.innerHeight * 1.5)")
+                page.wait_for_timeout(250)
 
-        # Scroll back to top
-        page.evaluate("window.scrollTo(0, 0)")
-        time.sleep(0.5)
+            page.evaluate("window.scrollTo(0, 0)")
+            page.wait_for_timeout(200)
 
-        # Expand "Show more" / "Read more" buttons to reveal truncated content
-        page.evaluate(
-            """() => {
-            const container = document.querySelector('article') || document.querySelector('main');
-            if (!container) return;
-            const buttons = container.querySelectorAll('button, [role="button"]');
-            buttons.forEach(btn => {
-                const text = (btn.innerText || '').trim().toLowerCase();
-                if (text === 'show more' || text === 'read more') {
-                    btn.click();
+            expand_labels = [
+                "show more",
+                "read more",
+                "показать",
+                "читать дальше",
+                "читать далее",
+                "mostrar más",
+                "voir plus",
+                "mehr anzeigen",
+            ]
+            page.evaluate(
+                """(labels) => {
+                const normalizedLabels = new Set(labels.map(x => x.toLowerCase()));
+                const container = document.querySelector('article') || document.querySelector('main');
+                if (!container) return;
+                const buttons = container.querySelectorAll('button, [role="button"]');
+                buttons.forEach((btn) => {
+                    const text = (btn.innerText || btn.textContent || '').trim().toLowerCase();
+                    if (!text) return;
+                    for (const label of normalizedLabels) {
+                        if (text === label || text.includes(label)) {
+                            btn.click();
+                            break;
+                        }
+                    }
+                });
+            }""",
+                expand_labels,
+            )
+            page.wait_for_timeout(300)
+
+            return page.evaluate(
+                """() => {
+                const result = {
+                    title: '',
+                    author: '',
+                    authorHandle: '',
+                    content: '',
+                    images: [],
+                    finalUrl: window.location.href || '',
+                    canonicalUrl: '',
+                    selectorFallbackUsed: false,
+                    contentSelector: 'unknown',
+                };
+
+                const canonicalEl = document.querySelector('link[rel="canonical"]');
+                if (canonicalEl && canonicalEl.href) result.canonicalUrl = canonicalEl.href;
+                if (!result.canonicalUrl) {
+                    const ogUrl = document.querySelector('meta[property="og:url"]');
+                    if (ogUrl && ogUrl.content) result.canonicalUrl = ogUrl.content;
                 }
-            });
-        }"""
-        )
-        time.sleep(1)
 
-        # Extract article content from DOM
-        article_data = page.evaluate(
-            """() => {
-            const result = {title: '', author: '', authorHandle: '', content: '', images: []};
+                const titleSelectors = [
+                    'article h1',
+                    '[data-testid="article-cover-title"]',
+                    'main h1',
+                ];
+                for (const sel of titleSelectors) {
+                    const el = document.querySelector(sel);
+                    const value = (el?.innerText || '').trim();
+                    if (value) {
+                        result.title = value;
+                        break;
+                    }
+                }
+                if (!result.title) {
+                    const ogTitle = document.querySelector('meta[property="og:title"]');
+                    if (ogTitle && ogTitle.content) result.title = ogTitle.content;
+                }
 
-            const h1 = document.querySelector('article h1, [data-testid="article-cover-title"]');
-            if (h1) result.title = h1.innerText.trim();
+                const authorLink = document.querySelector(
+                    '[data-testid="User-Name"] a[href*="/"], article a[href*="/"], main a[href*="/"]'
+                );
+                const authorText = (authorLink?.innerText || '').trim();
+                if (authorText) result.author = authorText;
+                const href = (authorLink?.getAttribute('href') || '').trim();
+                const handleMatch = href.match(/^\\/@?([A-Za-z0-9_]{1,32})$/);
+                if (handleMatch) result.authorHandle = handleMatch[1];
 
-            if (!result.title) {
-                const ogTitle = document.querySelector('meta[property="og:title"]');
-                if (ogTitle) result.title = ogTitle.content;
-            }
+                const articleEl = document.querySelector('article');
+                const mainEl = document.querySelector('main [data-testid="primaryColumn"], main');
+                const bodyEl = document.body;
+                const contentEl = articleEl || mainEl || bodyEl;
+                result.contentSelector = articleEl ? 'article' : (mainEl ? 'main' : 'body');
+                result.selectorFallbackUsed = result.contentSelector !== 'article';
+                result.content = (contentEl?.innerText || '').trim();
 
-            const authorEl = document.querySelector(
-                '[data-testid="User-Name"] a, article [role="link"] span'
-            );
-            if (authorEl) result.author = authorEl.innerText.trim();
+                const imageEls = contentEl?.querySelectorAll('img[src]') || [];
+                imageEls.forEach((img) => {
+                    const src = (img.getAttribute('src') || '').trim();
+                    if (!src || src.startsWith('data:')) return;
+                    if (!result.images.includes(src)) result.images.push(src);
+                });
 
-            const articleEl = document.querySelector('article');
-            if (articleEl) {
-                result.content = articleEl.innerText;
-            } else {
-                const main = document.querySelector('main [data-testid="primaryColumn"]');
-                if (main) result.content = main.innerText;
-            }
-
-            return result;
-        }"""
-        )
-
-        page.close()
-        browser.close()
-
-    return article_data
+                return result;
+            }"""
+            )
+        finally:
+            page.close()
+            browser.close()
 
 
 async def resolve_tco_url(short_url: str, timeout: int = 10) -> str | None:

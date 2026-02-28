@@ -21,12 +21,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Editable progress messages for LLM and YouTube processing in Telegram
 - Typing indicators for long-running operations in Telegram bot
 - Full logging and dynamic status updates for batch processing
+- Redirect-aware X article link resolver with structured reason codes (`path_match`, `redirect_match`, `canonical_match`, `not_article`, `resolve_failed`)
+- Optional manual live smoke script for X article links (`scripts/twitter_article_live_smoke.py`) with per-link JSON diagnostics
 
 ### Changed
 - Renamed ContentExtractor methods (breaking change for tests)
 - Improved PDF extraction flow with async processing and enhanced Russian language detection
 - Enhanced "Analyzing with AI" messages with additional context
 - Made input validation less strict for better usability
+- Hardened X article extraction flow with strict article-path matching plus redirect/canonical resolution before routing
+- Added article-stage metadata fields for observability (`article_resolution_reason`, `article_resolved_url`, `article_canonical_url`, `article_id`, `article_extraction_stage`)
+- Added Twitter article config flags (`TWITTER_ARTICLE_REDIRECT_RESOLUTION_ENABLED`, `TWITTER_ARTICLE_RESOLUTION_TIMEOUT_SEC`, `TWITTER_ARTICLE_LIVE_SMOKE_ENABLED`)
 
 ### Fixed
 - Updated tests for renamed ContentExtractor methods
@@ -34,6 +39,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fixed batch processing stalls with improved UX and logging
 - Limited verification scope to prevent performance issues
 - Implemented integrity checks for data validation
+- Improved Playwright X article scraping reliability by moving to locator-first readiness and selector fallback diagnostics
 
 ## Release History
 

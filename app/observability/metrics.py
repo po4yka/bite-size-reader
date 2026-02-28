@@ -120,6 +120,28 @@ if PROMETHEUS_AVAILABLE:
         registry=REGISTRY,
     )
 
+    TWITTER_ARTICLE_RESOLUTION = Counter(
+        "bsr_twitter_article_resolution_total",
+        "Twitter/X article resolution attempts",
+        ["status", "reason"],
+        registry=REGISTRY,
+    )
+
+    TWITTER_ARTICLE_RESOLUTION_LATENCY = Histogram(
+        "bsr_twitter_article_resolution_latency_seconds",
+        "Twitter/X article resolution latency in seconds",
+        ["status"],
+        buckets=[0.01, 0.05, 0.1, 0.25, 0.5, 1.0, 2.0, 5.0, 10.0],
+        registry=REGISTRY,
+    )
+
+    TWITTER_ARTICLE_EXTRACTION = Counter(
+        "bsr_twitter_article_extraction_total",
+        "Twitter/X article extraction attempts by stage",
+        ["stage", "status", "reason"],
+        registry=REGISTRY,
+    )
+
 else:
     # Create dummy metrics when prometheus_client is not available
     REGISTRY = None
@@ -133,6 +155,9 @@ else:
     CIRCUIT_BREAKER_STATE = None
     DB_QUERY_LATENCY = None
     DB_CONNECTIONS = None
+    TWITTER_ARTICLE_RESOLUTION = None
+    TWITTER_ARTICLE_RESOLUTION_LATENCY = None
+    TWITTER_ARTICLE_EXTRACTION = None
 
 
 def get_metrics() -> bytes:
@@ -256,6 +281,28 @@ def record_db_query(operation: str, latency_seconds: float) -> None:
         return
 
     DB_QUERY_LATENCY.labels(operation=operation).observe(latency_seconds)
+
+
+def record_twitter_article_resolution(
+    status: str,
+    reason: str,
+    latency_seconds: float | None = None,
+) -> None:
+    """Record a Twitter/X article link resolution attempt."""
+    if not PROMETHEUS_AVAILABLE:
+        return
+
+    TWITTER_ARTICLE_RESOLUTION.labels(status=status, reason=reason).inc()
+    if latency_seconds is not None:
+        TWITTER_ARTICLE_RESOLUTION_LATENCY.labels(status=status).observe(latency_seconds)
+
+
+def record_twitter_article_extraction(stage: str, status: str, reason: str) -> None:
+    """Record a Twitter/X article extraction attempt."""
+    if not PROMETHEUS_AVAILABLE:
+        return
+
+    TWITTER_ARTICLE_EXTRACTION.labels(stage=stage, status=status, reason=reason).inc()
 
 
 def set_db_connections(count: int) -> None:

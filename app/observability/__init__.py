@@ -8,12 +8,16 @@ from app.observability.metrics import (
     OPENROUTER_TOKENS,
     REQUEST_LATENCY,
     REQUESTS_TOTAL,
+    TWITTER_ARTICLE_EXTRACTION,
+    TWITTER_ARTICLE_RESOLUTION,
     get_metrics,
     record_circuit_breaker_state,
     record_db_query,
     record_firecrawl_request,
     record_openrouter_call,
     record_request,
+    record_twitter_article_extraction,
+    record_twitter_article_resolution,
 )
 
 __all__ = [
@@ -24,10 +28,14 @@ __all__ = [
     "OPENROUTER_TOKENS",
     "REQUESTS_TOTAL",
     "REQUEST_LATENCY",
+    "TWITTER_ARTICLE_EXTRACTION",
+    "TWITTER_ARTICLE_RESOLUTION",
     "get_metrics",
     "record_circuit_breaker_state",
     "record_db_query",
     "record_firecrawl_request",
     "record_openrouter_call",
     "record_request",
+    "record_twitter_article_extraction",
+    "record_twitter_article_resolution",
 ]

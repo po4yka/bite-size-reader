@@ -587,7 +587,7 @@ _TWEET_STATUS_PATH_RE = re.compile(
     re.IGNORECASE,
 )
 _TWEET_I_WEB_STATUS_PATH_RE = re.compile(r"^/i/web/status/(?P<id>\d+)(?:/.*)?$", re.IGNORECASE)
-_ARTICLE_PATH_RE = re.compile(r"^/i/article/(?P<id>\d+)$", re.IGNORECASE)
+_ARTICLE_PATH_RE = re.compile(r"^/i/article/(?P<id>\d+)(?:/.*)?$", re.IGNORECASE)
 
 
 def _parse_twitter_url_host_path(url: str) -> tuple[str, str] | None:
