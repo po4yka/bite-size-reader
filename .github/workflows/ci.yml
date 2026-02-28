@@ -46,8 +46,8 @@ jobs:
             pyproject.toml
             uv.lock
 
-      - name: Refresh uv.lock
-        run: uv lock
+      - name: Validate uv.lock
+        run: uv lock --check
 
       - name: Compile locked requirements (runtime - core only)
         run: uv pip compile --python-version 3.13 pyproject.toml -o requirements.txt
