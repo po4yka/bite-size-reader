@@ -116,7 +116,7 @@ REDIS_SSL=true
 
 ```bash
 # Cache TTL (time-to-live)
-REDIS_CACHE_TTL_SECONDS=3600  # 1 hour default
+REDIS_LLM_TTL_SECONDS=3600  # 1 hour default
 
 # Connection pool
 REDIS_MAX_CONNECTIONS=10
@@ -229,7 +229,7 @@ redis-cli DEL "llm:cache:request_hash"
 
 ```bash
 # Via environment variable (applies to all)
-REDIS_CACHE_TTL_SECONDS=7200  # 2 hours
+REDIS_LLM_TTL_SECONDS=7200  # 2 hours
 
 # Or set per-key via redis-cli
 redis-cli EXPIRE "key_name" 3600  # 1 hour
@@ -327,7 +327,7 @@ maxmemory 100mb
 maxmemory-policy allkeys-lru
 
 # Reduce cache TTL
-REDIS_CACHE_TTL_SECONDS=1800  # 30 minutes
+REDIS_LLM_TTL_SECONDS=1800  # 30 minutes
 ```
 
 ---

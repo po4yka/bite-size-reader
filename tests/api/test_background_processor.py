@@ -86,9 +86,16 @@ class StubExtractor:
         self.firecrawl = object()
 
     async def extract_content_pure(
-        self, url: str, correlation_id: str | None = None
+        self,
+        url: str,
+        correlation_id: str | None = None,
+        request_id: int | None = None,
     ) -> tuple[str, str, dict[str, Any]]:
-        return self._content, "markdown", {"url": url, "cid": correlation_id}
+        return (
+            self._content,
+            "markdown",
+            {"url": url, "cid": correlation_id, "request_id": request_id},
+        )
 
 
 class StubSummarizer:

@@ -47,6 +47,9 @@ jobs:
             pyproject.toml
             uv.lock
 
+      - name: Refresh uv.lock
+        run: uv lock
+
       - name: Compile locked requirements (runtime)
         run: uv pip compile --python-version 3.13 pyproject.toml -o requirements.txt
 
@@ -70,12 +73,12 @@ jobs:
       - name: Check for changes
         id: changes
         run: |
-          if git diff --quiet requirements.txt requirements-dev.txt; then
+          if git diff --quiet uv.lock requirements.txt requirements-dev.txt; then
             echo "changes=false" >> $GITHUB_OUTPUT
-            echo "No changes detected in requirements files"
+            echo "No lockfile changes detected"
           else
             echo "changes=true" >> $GITHUB_OUTPUT
-            echo "Changes detected in requirements files"
+            echo "Lockfile changes detected"
           fi
 
       # Prefer a personal access token if provided, since some repos block GITHUB_TOKEN PRs
@@ -90,11 +93,13 @@ jobs:
           body: |
             Automated lockfile refresh from pyproject.toml.
 
+            - Updated `uv.lock` with `uv lock`.
             - Updated requirements.txt and requirements-dev.txt using `uv pip compile`.
           branch: chore/update-locks
           delete-branch: true
           labels: dependencies, automated pr
           add-paths: |
+            uv.lock
             requirements.txt
             requirements-dev.txt
 
@@ -109,11 +114,13 @@ jobs:
           body: |
             Automated lockfile refresh from pyproject.toml.
 
+            - Updated `uv.lock` with `uv lock`.
             - Updated requirements.txt and requirements-dev.txt using `uv pip compile`.
           branch: chore/update-locks
           delete-branch: true
           labels: dependencies, automated pr
           add-paths: |
+            uv.lock
             requirements.txt
             requirements-dev.txt
 
@@ -133,4 +140,4 @@ jobs:
 
       - name: No changes detected
         if: steps.changes.outputs.changes == 'false'
-        run: echo "Requirements files are up to date, no PR needed"
+        run: echo "Lockfiles are up to date, no PR needed"

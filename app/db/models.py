@@ -137,6 +137,7 @@ class Request(BaseModel):
     error_message = peewee.TextField(null=True)  # Human-readable error description
     error_timestamp = peewee.DateTimeField(null=True)  # When the error occurred
     processing_time_ms = peewee.IntegerField(null=True)  # Total processing time in milliseconds
+    error_context_json = JSONField(null=True)  # Structured failure snapshot/context
 
     class Meta:
         table_name = "requests"

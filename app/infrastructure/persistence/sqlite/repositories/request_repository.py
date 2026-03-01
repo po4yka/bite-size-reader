@@ -250,6 +250,7 @@ class SqliteRequestRepositoryAdapter(SqliteBaseRepository):
         error_type: str | None = None,
         error_message: str | None = None,
         processing_time_ms: int | None = None,
+        error_context_json: Any | None = None,
     ) -> None:
         """Update a request with error information.
 
@@ -272,9 +273,25 @@ class SqliteRequestRepositoryAdapter(SqliteBaseRepository):
                 update_data[Request.error_message] = error_message
             if processing_time_ms is not None:
                 update_data[Request.processing_time_ms] = processing_time_ms
+            if error_context_json is not None:
+                update_data[Request.error_context_json] = prepare_json_payload(
+                    error_context_json, default={}
+                )
             Request.update(update_data).where(Request.id == request_id).execute()
 
         await self._execute(_update, operation_name="update_request_error")
+
+    async def async_get_request_error_context(self, request_id: int) -> dict[str, Any] | None:
+        """Get structured request error context snapshot."""
+
+        def _get() -> dict[str, Any] | None:
+            row = Request.select(Request.error_context_json).where(Request.id == request_id).first()
+            if not row:
+                return None
+            value = row.error_context_json
+            return value if isinstance(value, dict) else None
+
+        return await self._execute(_get, operation_name="get_request_error_context", read_only=True)
 
     async def async_create_minimal_request(
         self,

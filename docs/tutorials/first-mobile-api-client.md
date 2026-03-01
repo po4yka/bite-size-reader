@@ -41,7 +41,7 @@ Ensure these are set in your `.env`:
 ```bash
 # Mobile API
 JWT_SECRET_KEY=your_secret_key_here  # 32+ random characters
-API_RATE_LIMIT_PER_MINUTE=100
+API_RATE_LIMIT_DEFAULT=100
 
 # Telegram (for login exchange)
 BOT_TOKEN=your_bot_token

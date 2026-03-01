@@ -9,8 +9,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from app.adapters.twitter.article_link_resolver import TwitterArticleLinkResolution
 from app.adapters.twitter.graphql_parser import ExtractionResult, TweetData
 from app.adapters.twitter.twitter_extractor import TwitterExtractor
+from app.core.url_utils import compute_dedupe_hash
 
 
 class _DummySemCtx:
@@ -26,14 +28,21 @@ class _DummySemCtx:
         return False
 
 
-def _make_cfg(*, playwright_enabled: bool = False) -> SimpleNamespace:
+def _make_cfg(
+    *,
+    playwright_enabled: bool = False,
+    prefer_firecrawl: bool = True,
+    article_redirect_resolution_enabled: bool = True,
+) -> SimpleNamespace:
     return SimpleNamespace(
         twitter=SimpleNamespace(
             cookies_path="/tmp/nonexistent-twitter-cookies.txt",
-            prefer_firecrawl=True,
+            prefer_firecrawl=prefer_firecrawl,
             playwright_enabled=playwright_enabled,
             headless=True,
             page_timeout_ms=15000,
+            article_redirect_resolution_enabled=article_redirect_resolution_enabled,
+            article_resolution_timeout_sec=5.0,
         )
     )
 
@@ -79,6 +88,93 @@ async def test_try_firecrawl_accepts_short_tweet_content() -> None:
     assert ok is True
     assert content_source == "markdown"
     assert "Yes" in content_text
+
+
+@pytest.mark.asyncio
+async def test_extract_content_pure_requires_at_least_one_tier() -> None:
+    crawl_result = SimpleNamespace(status="ok", content_markdown="unused", content_html=None)
+    extractor = _make_extractor(
+        cfg=_make_cfg(playwright_enabled=False, prefer_firecrawl=False),
+        crawl_result=crawl_result,
+    )
+
+    with pytest.raises(ValueError, match="both Firecrawl and Playwright are disabled"):
+        await extractor.extract_content_pure("https://x.com/user/status/1", correlation_id="cid")
+
+
+@pytest.mark.asyncio
+async def test_extract_content_pure_resolves_redirected_article_links() -> None:
+    crawl_result = SimpleNamespace(status="error", content_markdown=None, content_html=None)
+    extractor = _make_extractor(cfg=_make_cfg(playwright_enabled=True), crawl_result=crawl_result)
+    resolution = TwitterArticleLinkResolution(
+        input_url="https://t.co/abc",
+        resolved_url="https://x.com/i/article/42",
+        canonical_url="https://x.com/i/article/42",
+        article_id="42",
+        is_article=True,
+        reason="redirect_match",
+    )
+
+    with patch(
+        "app.adapters.twitter.twitter_extractor.resolve_twitter_article_link",
+        new=AsyncMock(return_value=resolution),
+    ):
+        with patch.object(
+            extractor,
+            "_pw_extract_article",
+            new=AsyncMock(return_value=("Article body", "twitter_article", {"title": "T"})),
+        ) as pw_extract_article:
+            content_text, content_source, metadata = await extractor.extract_content_pure(
+                "https://t.co/abc",
+                correlation_id="cid",
+            )
+
+    assert content_text == "Article body"
+    assert content_source == "twitter_article"
+    assert metadata["is_article"] is True
+    assert metadata["article_id"] == "42"
+    assert metadata["article_resolution_reason"] == "redirect_match"
+    assert metadata["article_canonical_url"] == "https://x.com/i/article/42"
+    assert metadata["article_extraction_stage"] == "playwright"
+    pw_extract_article.assert_awaited_once()
+    assert pw_extract_article.await_args.args[0] == "https://x.com/i/article/42"
+
+
+@pytest.mark.asyncio
+async def test_extract_and_process_uses_canonical_article_for_dedupe() -> None:
+    crawl_result = SimpleNamespace(status="error", content_markdown=None, content_html=None)
+    extractor = _make_extractor(cfg=_make_cfg(playwright_enabled=False), crawl_result=crawl_result)
+    resolution = TwitterArticleLinkResolution(
+        input_url="https://t.co/abc",
+        resolved_url="https://x.com/i/article/777",
+        canonical_url="https://x.com/i/article/777",
+        article_id="777",
+        is_article=True,
+        reason="redirect_match",
+    )
+    expected_hash = compute_dedupe_hash("https://x.com/i/article/777")
+
+    with patch(
+        "app.adapters.twitter.twitter_extractor.resolve_twitter_article_link",
+        new=AsyncMock(return_value=resolution),
+    ):
+        with patch.object(
+            extractor,
+            "_try_firecrawl",
+            new=AsyncMock(return_value=(True, "Article text", "markdown")),
+        ):
+            req_id, *_rest = await extractor.extract_and_process(
+                message=MagicMock(),
+                url_text="https://t.co/abc",
+                correlation_id="cid",
+                interaction_id=None,
+                silent=True,
+            )
+
+    assert req_id == 1
+    handle_request_mock: Any = extractor._handle_request_dedupe_or_create
+    handle_call = handle_request_mock.await_args
+    assert handle_call.args[3] == expected_hash
 
 
 @pytest.mark.asyncio
@@ -246,6 +342,58 @@ async def test_pw_extract_article_rejects_login_wall_content() -> None:
         new=AsyncMock(return_value=article_data),
     ):
         with pytest.raises(ValueError, match="UI/login content"):
+            await extractor._pw_extract_article(
+                url="https://x.com/i/article/1",
+                cookies=None,
+                headless=True,
+                timeout_ms=30000,
+                correlation_id="cid",
+            )
+
+
+@pytest.mark.asyncio
+async def test_pw_extract_article_returns_resolved_and_canonical_metadata() -> None:
+    crawl_result = SimpleNamespace(status="error", content_markdown=None, content_html=None)
+    extractor = _make_extractor(cfg=_make_cfg(playwright_enabled=True), crawl_result=crawl_result)
+
+    article_data = {
+        "title": "X",
+        "author": "",
+        "content": "My title\nAuthor Name\n@author\nBody paragraph one.\nBody paragraph two.",
+        "finalUrl": "https://x.com/i/article/42",
+        "canonicalUrl": "https://x.com/i/article/42",
+        "selectorFallbackUsed": True,
+        "contentSelector": "main",
+    }
+    with patch(
+        "app.adapters.twitter.playwright_client.scrape_article",
+        new=AsyncMock(return_value=article_data),
+    ):
+        content_text, source, metadata = await extractor._pw_extract_article(
+            url="https://x.com/i/article/42",
+            cookies=None,
+            headless=True,
+            timeout_ms=30000,
+            correlation_id="cid",
+        )
+
+    assert source == "twitter_article"
+    assert content_text
+    assert metadata["article_resolved_url"] == "https://x.com/i/article/42"
+    assert metadata["article_canonical_url"] == "https://x.com/i/article/42"
+    assert metadata["article_id"] == "42"
+
+
+@pytest.mark.asyncio
+async def test_pw_extract_article_rejects_empty_content_with_reason() -> None:
+    crawl_result = SimpleNamespace(status="error", content_markdown=None, content_html=None)
+    extractor = _make_extractor(cfg=_make_cfg(playwright_enabled=True), crawl_result=crawl_result)
+
+    with patch(
+        "app.adapters.twitter.playwright_client.scrape_article",
+        new=AsyncMock(return_value={"title": "X", "author": "", "content": "   "}),
+    ):
+        with pytest.raises(ValueError, match="reason=empty_content"):
             await extractor._pw_extract_article(
                 url="https://x.com/i/article/1",
                 cookies=None,

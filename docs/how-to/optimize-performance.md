@@ -48,7 +48,7 @@ OPENROUTER_FALLBACK_MODELS=qwen/qwen3-max,google/gemini-2.0-flash-001:free
 ```bash
 REDIS_ENABLED=true
 REDIS_URL=redis://localhost:6379/0
-REDIS_CACHE_TTL_SECONDS=3600  # 1 hour
+REDIS_LLM_TTL_SECONDS=3600  # 1 hour
 ```
 
 **Hit rate**: 30-40% for users who re-read articles.
@@ -167,7 +167,7 @@ ENABLE_FIRECRAWL_CACHE=true
 ENABLE_LLM_CACHE=true
 
 # Long cache TTL (7 days)
-REDIS_CACHE_TTL_SECONDS=604800
+REDIS_LLM_TTL_SECONDS=604800
 ```
 
 ### Firecrawl Free Tier Strategy
@@ -191,7 +191,7 @@ CONTENT_EXTRACTION_FALLBACK=true
 CHROMA_EMBEDDING_MODEL=all-MiniLM-L6-v2  # 90 MB
 
 # Disable ChromaDB if not using search
-ENABLE_CHROMA=false
+CHROMA_REQUIRED=false
 
 # Limit ChromaDB memory
 CHROMA_MAX_MEMORY_MB=256
@@ -217,7 +217,7 @@ TOKEN_COUNTING_MODE=fast  # len(text)//4 approximation
 
 ```bash
 # YouTube auto-cleanup
-YOUTUBE_AUTO_CLEANUP_DAYS=3  # Delete after 3 days
+YOUTUBE_CLEANUP_AFTER_DAYS=3  # Delete after 3 days
 YOUTUBE_MAX_STORAGE_GB=5     # Max 5 GB
 
 # Database vacuum (reclaim space)
@@ -273,7 +273,7 @@ sqlite3 data/app.db "
 # Target: 512 MB RAM, minimal cost
 OPENROUTER_MODEL=google/gemini-2.0-flash-001:free
 MAX_CONCURRENT_CALLS=2
-ENABLE_CHROMA=false
+CHROMA_REQUIRED=false
 REDIS_ENABLED=false
 WEB_SEARCH_ENABLED=false
 YOUTUBE_DOWNLOAD_ENABLED=false
@@ -285,7 +285,7 @@ YOUTUBE_DOWNLOAD_ENABLED=false
 # Target: 1 GB RAM, ~$15/month
 OPENROUTER_MODEL=qwen/qwen3-max
 MAX_CONCURRENT_CALLS=4
-ENABLE_CHROMA=true
+CHROMA_REQUIRED=true
 REDIS_ENABLED=true
 WEB_SEARCH_ENABLED=false
 YOUTUBE_DOWNLOAD_ENABLED=true
@@ -298,7 +298,7 @@ CHROMA_EMBEDDING_MODEL=all-MiniLM-L6-v2
 # Target: 2 GB RAM, ~$50/month, <3s summaries
 OPENROUTER_MODEL=qwen/qwen3-max
 MAX_CONCURRENT_CALLS=10
-ENABLE_CHROMA=true
+CHROMA_REQUIRED=true
 REDIS_ENABLED=true
 WEB_SEARCH_ENABLED=true
 YOUTUBE_DOWNLOAD_ENABLED=true

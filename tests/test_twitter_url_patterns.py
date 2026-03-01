@@ -6,6 +6,7 @@ import pytest
 
 from app.adapters.twitter.url_patterns import parse_article_url, parse_tweet_url
 from app.core.url_utils import (
+    compute_dedupe_hash,
     extract_tweet_id,
     is_twitter_article_url,
     is_twitter_url,
@@ -26,7 +27,10 @@ class TestIsTwitterUrl:
             "https://mobile.twitter.com/user/status/444",
             "http://x.com/user/status/555",
             "https://x.com/user/status/666?s=20",
+            "https://x.com/user/status/666/photo/1",
+            "https://x.com/i/web/status/777",
             "https://x.com/i/article/1234567890",
+            "https://x.com/i/article/1234567890/preview",
             "https://twitter.com/i/article/9876543210",
         ],
     )
@@ -40,6 +44,9 @@ class TestIsTwitterUrl:
             "https://example.com/x.com/status/123",
             "https://x.com/user/likes",
             "https://x.com/user",
+            "https://my-x.com/user/status/123",
+            "https://foo.twitter.com/user/status/123",
+            "https://example.com/redirect?target=https://x.com/user/status/123",
             "https://notx.com/user/status/123",
             "",
             None,
@@ -60,6 +67,12 @@ class TestExtractTweetId:
 
     def test_with_query_params(self) -> None:
         assert extract_tweet_id("https://x.com/user/status/111?s=20&t=abc") == "111"
+
+    def test_i_web_status(self) -> None:
+        assert extract_tweet_id("https://x.com/i/web/status/1234567890") == "1234567890"
+
+    def test_status_with_media_suffix(self) -> None:
+        assert extract_tweet_id("https://x.com/user/status/111/photo/1") == "111"
 
     def test_mobile(self) -> None:
         assert extract_tweet_id("https://mobile.x.com/user/status/222") == "222"
@@ -132,3 +145,14 @@ class TestParseArticleUrl:
 
     def test_with_trailing_slash(self) -> None:
         assert parse_article_url("https://x.com/i/article/789/") == "789"
+
+    def test_with_safe_suffix(self) -> None:
+        assert parse_article_url("https://x.com/i/article/789/preview") == "789"
+
+
+class TestTwitterDedupeCanonicalization:
+    def test_share_params_do_not_change_dedupe_hash(self) -> None:
+        h1 = compute_dedupe_hash("https://x.com/user/status/123?s=20&t=AAA")
+        h2 = compute_dedupe_hash("https://x.com/user/status/123?s=20&t=BBB")
+        h3 = compute_dedupe_hash("https://x.com/i/web/status/123?utm_source=twitter")
+        assert h1 == h2 == h3

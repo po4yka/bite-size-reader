@@ -408,6 +408,21 @@ class RequestStatus(BaseModel):
         serialization_alias="errorMessage",
         description="Human-readable error description (failed only)",
     )
+    error_reason_code: str | None = Field(
+        default=None,
+        serialization_alias="errorReasonCode",
+        description="Stable machine-readable reason code for failed requests",
+    )
+    retryable: bool | None = Field(
+        default=None,
+        serialization_alias="retryable",
+        description="Whether the latest failure is retryable",
+    )
+    debug: dict[str, Any] | None = Field(
+        default=None,
+        serialization_alias="debug",
+        description="Optional sanitized debug context for failed requests",
+    )
     can_retry: bool = Field(
         default=False,
         serialization_alias="canRetry",

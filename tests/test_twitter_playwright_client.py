@@ -2,9 +2,15 @@
 
 from __future__ import annotations
 
+from types import SimpleNamespace
+
+import pytest
+
 from app.adapters.twitter.playwright_client import (
+    _load_cookies_netscape,
     _merge_captured_tweets,
     _response_matches_requested_tweet,
+    resolve_tco_url,
 )
 
 
@@ -102,3 +108,48 @@ def test_response_matches_requested_tweet_with_raw_query_value() -> None:
     response_url = "https://x.com/i/api/graphql/abc/TweetDetail?focalTweetId=67890"
     assert _response_matches_requested_tweet(response_url, "67890") is True
     assert _response_matches_requested_tweet(response_url, "11111") is False
+
+
+def test_load_cookies_netscape_keeps_httponly_entries(tmp_path) -> None:
+    cookies_file = tmp_path / "cookies.txt"
+    cookies_file.write_text(
+        "\n".join(
+            [
+                "# Netscape HTTP Cookie File",
+                "#HttpOnly_.x.com\tTRUE\t/\tTRUE\t2147483647\tauth_token\tsecret",
+                ".x.com\tTRUE\t/\tTRUE\t2147483647\tct0\tcsrf",
+            ]
+        )
+    )
+
+    cookies = _load_cookies_netscape(cookies_file)
+
+    assert len(cookies) == 2
+    assert cookies[0]["name"] == "auth_token"
+    assert cookies[0]["httpOnly"] is True
+    assert cookies[1]["name"] == "ct0"
+    assert cookies[1]["httpOnly"] is False
+
+
+@pytest.mark.asyncio
+async def test_resolve_tco_url_accepts_http_and_mixed_case_scheme(monkeypatch) -> None:
+    class _FakeAsyncClient:
+        def __init__(self, *args, **kwargs) -> None:
+            pass
+
+        async def __aenter__(self) -> _FakeAsyncClient:
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb) -> bool:
+            return False
+
+        async def head(self, url: str) -> SimpleNamespace:
+            return SimpleNamespace(url="https://resolved.example/final")
+
+    monkeypatch.setattr(
+        "app.adapters.twitter.playwright_client.httpx.AsyncClient", _FakeAsyncClient
+    )
+
+    assert await resolve_tco_url("http://t.co/abc123") == "https://resolved.example/final"
+    assert await resolve_tco_url("HTTPS://t.co/abc123") == "https://resolved.example/final"
+    assert await resolve_tco_url("https://example.com/nope") is None

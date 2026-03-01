@@ -107,7 +107,7 @@ Yes, but with caveats:
 ```bash
 # Pi-optimized config
 CHROMA_DEVICE=cpu
-ENABLE_CHROMA=false  # Or use lightweight embedding model
+CHROMA_REQUIRED=false  # Or use lightweight embedding model
 YOUTUBE_VIDEO_QUALITY=720  # Lower quality for smaller downloads
 ```
 
@@ -332,7 +332,7 @@ Depends on video quality and length:
 **Storage management**:
 
 ```bash
-YOUTUBE_AUTO_CLEANUP_DAYS=7      # Delete after 7 days
+YOUTUBE_CLEANUP_AFTER_DAYS=7      # Delete after 7 days
 YOUTUBE_MAX_STORAGE_GB=10        # Max 10 GB total
 ```
 
@@ -382,7 +382,7 @@ Optional feature that queries the web for current context before summarizing:
 ```bash
 # Enable
 WEB_SEARCH_ENABLED=true
-WEB_SEARCH_PROVIDER=duckduckgo  # Or google (requires API key)
+WEB_SEARCH_TIMEOUT_SEC=10
 ```
 
 ### Does it cost extra?
@@ -457,7 +457,7 @@ Yes. Several optimizations:
 CHROMA_EMBEDDING_MODEL=all-MiniLM-L6-v2  # ~100 MB
 
 # Disable ChromaDB if not using search
-ENABLE_CHROMA=false
+CHROMA_REQUIRED=false
 
 # Limit ChromaDB memory
 CHROMA_MAX_MEMORY_MB=512
@@ -582,8 +582,8 @@ Not directly, but you can:
 
 ```bash
 # Enable Karakeep sync
-KARAKEEP_SYNC_ENABLED=true
-KARAKEEP_BASE_URL=https://karakeep.example.com
+KARAKEEP_ENABLED=true
+KARAKEEP_API_URL=https://karakeep.example.com
 KARAKEEP_API_KEY=...
 
 # Sync command
@@ -627,7 +627,7 @@ See [HEXAGONAL_ARCHITECTURE_QUICKSTART.md](HEXAGONAL_ARCHITECTURE_QUICKSTART.md)
 
    ```bash
    ENABLE_REDIS=true
-   REDIS_CACHE_TTL_SECONDS=86400  # 24 hours
+   REDIS_LLM_TTL_SECONDS=86400  # 24 hours
    ```
 
 4. **Disable optional features**:
@@ -695,7 +695,7 @@ Yes, but requires setup:
 
 ```bash
 ENABLE_REDIS=true
-REDIS_CACHE_TTL_SECONDS=604800  # 7 days
+REDIS_LLM_TTL_SECONDS=604800  # 7 days
 ```
 
 ---

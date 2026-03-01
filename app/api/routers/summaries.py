@@ -52,6 +52,14 @@ from app.services.topic_search_utils import ensure_mapping
 logger = get_logger(__name__)
 router = APIRouter()
 
+# Internal schema stores "med"; API contract exposes "medium".
+_HR_NORMALIZE: dict[str, str] = {"med": "medium"}
+
+
+def _normalize_hallucination_risk(raw: str) -> str:
+    """Map internal short-form values to the API contract enum."""
+    return _HR_NORMALIZE.get(raw, raw)
+
 
 def _isotime(dt: Any) -> str:
     """Safely convert datetime to ISO string."""
@@ -142,7 +150,9 @@ async def get_summaries(
                 lang=summary_dict.get("lang") or "auto",
                 created_at=_isotime(summary_dict.get("created_at")),
                 confidence=json_payload.get("confidence", 0.0),
-                hallucination_risk=json_payload.get("hallucination_risk", "unknown"),
+                hallucination_risk=_normalize_hallucination_risk(
+                    json_payload.get("hallucination_risk", "unknown")
+                ),
                 image_url=metadata.get("image")
                 or metadata.get("og:image")
                 or metadata.get("ogImage"),
@@ -288,7 +298,9 @@ async def get_summary(
         "processing_time_ms": processing.get("latency_ms"),
         "crawl_time_ms": processing.get("crawl_latency_ms"),
         "confidence": json_payload.get("confidence"),
-        "hallucination_risk": json_payload.get("hallucination_risk"),
+        "hallucination_risk": _normalize_hallucination_risk(
+            json_payload.get("hallucination_risk") or "unknown"
+        ),
     }
 
     return success_response(

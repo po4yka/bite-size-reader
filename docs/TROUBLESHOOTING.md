@@ -70,7 +70,21 @@ SELECT * FROM summaries WHERE request_id = '<correlation_id>';
 
 -- See Telegram messages
 SELECT * FROM telegram_messages WHERE request_id = '<correlation_id>';
+
+-- See normalized latest failure snapshot (if request failed)
+SELECT id, status, error_type, error_message, error_context_json
+FROM requests
+WHERE id = '<correlation_id>';
 ```
+
+Common `error_context_json.reason_code` values:
+
+- `FIRECRAWL_ERROR`
+- `FIRECRAWL_LOW_VALUE`
+- `PLAYWRIGHT_EMPTY_CONTENT`
+- `PLAYWRIGHT_UI_OR_LOGIN`
+- `RESOLVE_FAILED`
+- `EXTRACTION_EMPTY_OUTPUT`
 
 **Pro Tip**: Use `DEBUG_PAYLOADS=1` to log full request/response bodies (Authorization headers redacted).
 
@@ -334,7 +348,7 @@ docker restart bite-size-reader
 echo "MAX_CONCURRENT_CALLS=2" >> .env  # Default: 3
 
 # Add rate limit delay
-echo "RATE_LIMIT_DELAY_SECONDS=1.0" >> .env
+echo "RATE_LIMIT_WINDOW_SECONDS=60" >> .env
 
 # Check OpenRouter dashboard for usage
 # https://openrouter.ai/account
@@ -461,7 +475,7 @@ du -sh /data/youtube_downloads/
 find /data/youtube_downloads/ -type f -mtime +7 -delete
 
 # Or configure auto-cleanup
-echo "YOUTUBE_AUTO_CLEANUP_DAYS=7" >> .env  # Delete after 7 days
+echo "YOUTUBE_CLEANUP_AFTER_DAYS=7" >> .env  # Delete after 7 days
 echo "YOUTUBE_MAX_STORAGE_GB=10" >> .env    # Max 10 GB storage
 
 # Restart bot
@@ -504,7 +518,7 @@ docker restart bite-size-reader
 
 ```bash
 # Increase timeout
-echo "DB_TIMEOUT=30" >> .env  # Default: 5 seconds
+echo "DB_OPERATION_TIMEOUT=30" >> .env  # Default: 5 seconds
 
 # Or use WAL mode (Write-Ahead Logging)
 sqlite3 data/app.db "PRAGMA journal_mode=WAL;"
@@ -648,7 +662,7 @@ redis-cli FLUSHALL
 redis-cli KEYS "summary:*" | xargs redis-cli DEL
 
 # Adjust cache TTL
-echo "REDIS_CACHE_TTL_SECONDS=3600" >> .env  # Default: 1 hour
+echo "REDIS_LLM_TTL_SECONDS=3600" >> .env  # Default: 1 hour
 ```
 
 ---
@@ -675,8 +689,7 @@ docker run -d -p 8000:8000 chromadb/chroma:latest
 chroma run --host localhost --port 8000
 
 # Update connection settings
-echo "CHROMA_HOST=localhost" >> .env
-echo "CHROMA_PORT=8000" >> .env
+echo "CHROMA_HOST=http://localhost:8000" >> .env
 
 # Restart bot
 docker restart bite-size-reader
@@ -741,7 +754,7 @@ grep JWT_SECRET .env
 
 # If missing, generate new secret
 openssl rand -hex 32
-echo "JWT_SECRET=<generated_secret>" >> .env
+echo "JWT_SECRET_KEY=<generated_secret>" >> .env
 
 # Restart API
 docker restart bite-size-reader
@@ -782,7 +795,7 @@ curl -X POST http://localhost:8000/v1/sync/summaries?mode=full \
 
 ```bash
 # Increase rate limit
-echo "API_RATE_LIMIT_PER_MINUTE=200" >> .env
+echo "API_RATE_LIMIT_DEFAULT=200" >> .env
 
 # Or disable rate limiting (not recommended for production)
 echo "API_ENABLE_RATE_LIMIT=false" >> .env
@@ -893,7 +906,7 @@ echo "CHROMA_EMBEDDING_MODEL=all-MiniLM-L6-v2" >> .env  # Smallest, still good q
 echo "CHROMA_MAX_MEMORY_MB=512" >> .env
 
 # Disable ChromaDB if not needed
-echo "ENABLE_CHROMA=false" >> .env
+echo "CHROMA_REQUIRED=false" >> .env
 
 # Restart bot with memory limit (Docker)
 docker run --memory=1g bite-size-reader

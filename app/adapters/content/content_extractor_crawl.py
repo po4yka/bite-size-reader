@@ -16,6 +16,12 @@ from app.adapters.content.quality_filters import detect_low_value_content
 from app.adapters.external.firecrawl.models import FirecrawlResult
 from app.core.async_utils import raise_if_cancelled
 from app.core.html_utils import clean_markdown_article_text, html_to_text, normalize_text
+from app.observability.failure_observability import (
+    REASON_DIRECT_FETCH_FAILED,
+    REASON_FIRECRAWL_ERROR,
+    REASON_FIRECRAWL_LOW_VALUE,
+    persist_request_failure,
+)
 
 logger = logging.getLogger("app.adapters.content.content_extractor")
 
@@ -441,6 +447,33 @@ class ContentExtractorCrawlMixin:
                 "cid": correlation_id,
                 "status": crawl.status,
                 "http_status": crawl.http_status,
+                "has_markdown": has_markdown,
+                "has_html": has_html,
+            },
+        )
+        reason_code = REASON_FIRECRAWL_ERROR
+        quality_reason = None
+        if crawl.error_text and "insufficient_useful_content" in crawl.error_text:
+            reason_code = REASON_FIRECRAWL_LOW_VALUE
+            quality_reason = crawl.error_text
+        elif crawl.endpoint == "direct_fetch":
+            reason_code = REASON_DIRECT_FETCH_FAILED
+        await persist_request_failure(
+            request_repo=self.message_persistence.request_repo,
+            logger=logger,
+            request_id=req_id,
+            correlation_id=correlation_id,
+            stage="extraction",
+            component="firecrawl",
+            reason_code=reason_code,
+            error=ValueError(crawl.error_text or "Firecrawl extraction failed"),
+            retryable=True,
+            http_status=crawl.http_status,
+            latency_ms=crawl.latency_ms,
+            source_url=crawl.source_url,
+            provider_error_code=crawl.firecrawl_error_code,
+            quality_reason=quality_reason,
+            content_signals={
                 "has_markdown": has_markdown,
                 "has_html": has_html,
             },

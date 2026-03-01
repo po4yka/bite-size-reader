@@ -200,7 +200,7 @@ packaging==26.0
     #   weasel
 pathspec==1.0.4
     # via mypy
-peewee==3.19.0
+peewee==4.0.0
     # via
     #   -c .requirements-all.tmp.txt
     #   bite-size-reader (pyproject.toml)

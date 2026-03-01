@@ -45,9 +45,10 @@ jobs:
       - name: Install Python 3.13
         run: uv python install 3.13
 
-      - name: Regenerate lockfiles (uv compile)
+      - name: Regenerate lockfiles
         run: |
           set -euo pipefail
+          uv lock
           uv pip compile --python-version 3.13 pyproject.toml -o requirements.txt
           TMP_REQ=.requirements-all.tmp.txt
           uv pip compile \
@@ -73,6 +74,10 @@ jobs:
           body: "Automated lockfile regeneration triggered by CI failure."
           branch: chore/regen-lockfiles
           labels: dependencies
+          add-paths: |
+            uv.lock
+            requirements.txt
+            requirements-dev.txt
 
       - name: Create Pull Request (best-effort with GITHUB_TOKEN)
         if: ${{ env.ACTIONS_PR_TOKEN == '' }}
@@ -84,6 +89,10 @@ jobs:
           body: "Automated lockfile regeneration triggered by CI failure."
           branch: chore/regen-lockfiles
           labels: dependencies
+          add-paths: |
+            uv.lock
+            requirements.txt
+            requirements-dev.txt
 
       - name: Note PR permission restriction
         if: ${{ env.ACTIONS_PR_TOKEN == '' }}

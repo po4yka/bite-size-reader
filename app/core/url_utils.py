@@ -430,7 +430,8 @@ def compute_dedupe_hash(url: str) -> str:
         ValueError: If URL is invalid
     """
     normalized = normalize_url(url)
-    return url_hash_sha256(normalized)
+    twitter_canonical = canonicalize_twitter_url(normalized)
+    return url_hash_sha256(twitter_canonical or normalized)
 
 
 def looks_like_url(text: str, max_text_length_kb: int = 50) -> bool:
@@ -571,21 +572,39 @@ _YOUTUBE_PATTERNS = [
 
 
 # Twitter/X URL patterns
-_TWITTER_PATTERNS = [
-    # Standard tweet status URLs: x.com/user/status/ID or twitter.com/user/status/ID
-    re.compile(
-        r"(?:https?://)?(?:(?:www|mobile)\.)?(?<![a-z])(?:x|twitter)\.com/(?P<user>[^/]+)/status/(?P<id>\d+)",
-        re.IGNORECASE,
-    ),
-    # X Article URLs: x.com/i/article/ID
-    re.compile(
-        r"(?:https?://)?(?:(?:www|mobile)\.)?(?<![a-z])(?:x|twitter)\.com/i/article/(?P<id>\d+)",
-        re.IGNORECASE,
-    ),
-]
+_TWITTER_HOSTS: frozenset[str] = frozenset(
+    {
+        "x.com",
+        "twitter.com",
+        "www.x.com",
+        "www.twitter.com",
+        "mobile.x.com",
+        "mobile.twitter.com",
+    }
+)
+_TWEET_STATUS_PATH_RE = re.compile(
+    r"^/(?P<user>[^/]+)/status/(?P<id>\d+)(?:/.*)?$",
+    re.IGNORECASE,
+)
+_TWEET_I_WEB_STATUS_PATH_RE = re.compile(r"^/i/web/status/(?P<id>\d+)(?:/.*)?$", re.IGNORECASE)
+_ARTICLE_PATH_RE = re.compile(r"^/i/article/(?P<id>\d+)(?:/.*)?$", re.IGNORECASE)
 
-_TWEET_STATUS_RE = _TWITTER_PATTERNS[0]
-_ARTICLE_RE = _TWITTER_PATTERNS[1]
+
+def _parse_twitter_url_host_path(url: str) -> tuple[str, str] | None:
+    """Parse a URL and return normalized ``(host, path)`` for Twitter matching."""
+    if not url or not isinstance(url, str):
+        return None
+    candidate = url.strip()
+    if not candidate:
+        return None
+    if "://" not in candidate:
+        candidate = f"https://{candidate}"
+    parsed = urlparse(candidate)
+    host = (parsed.hostname or "").lower()
+    if not host:
+        return None
+    path = (parsed.path or "/").rstrip("/") or "/"
+    return host, path
 
 
 def is_twitter_url(url: str) -> bool:
@@ -594,6 +613,7 @@ def is_twitter_url(url: str) -> bool:
     Supports:
     - x.com/user/status/ID
     - twitter.com/user/status/ID
+    - x.com/i/web/status/ID
     - x.com/i/article/ID
     - mobile.x.com, www.x.com variants
 
@@ -603,10 +623,8 @@ def is_twitter_url(url: str) -> bool:
     Returns:
         True if URL is a Twitter/X URL, False otherwise
     """
-    if not url or not isinstance(url, str):
-        return False
     try:
-        return any(pattern.search(url) for pattern in _TWITTER_PATTERNS)
+        return extract_tweet_id(url) is not None or extract_twitter_article_id(url) is not None
     except Exception as e:
         logger.exception("is_twitter_url_failed", extra={"error": str(e), "url": url[:100]})
         return False
@@ -621,6 +639,9 @@ def extract_tweet_id(url: str) -> str | None:
     Returns:
         Tweet ID string or None if not found
     """
+    tweet_id = extract_twitter_status_id(url)
+    if tweet_id:
+        return tweet_id
     parts = extract_twitter_status_parts(url)
     return parts[1] if parts else None
 
@@ -634,11 +655,14 @@ def extract_twitter_status_parts(url: str) -> tuple[str, str] | None:
     Returns:
         Tuple ``(username, tweet_id)`` when matched, else ``None``
     """
-    if not url or not isinstance(url, str):
-        return None
     try:
-        cleaned = url.split("?", maxsplit=1)[0].rstrip("/")
-        m = _TWEET_STATUS_RE.match(cleaned)
+        parsed = _parse_twitter_url_host_path(url)
+        if not parsed:
+            return None
+        host, path = parsed
+        if host not in _TWITTER_HOSTS:
+            return None
+        m = _TWEET_STATUS_PATH_RE.match(path)
         if m:
             return m.group("user"), m.group("id")
         return None
@@ -647,6 +671,31 @@ def extract_twitter_status_parts(url: str) -> tuple[str, str] | None:
             "extract_twitter_status_parts_failed",
             extra={"error": str(e), "url": url[:100]},
         )
+        return None
+
+
+def extract_twitter_status_id(url: str) -> str | None:
+    """Extract tweet ID from a Twitter/X status URL.
+
+    Supports:
+    - /<user>/status/<id>
+    - /i/web/status/<id>
+    """
+    if not url or not isinstance(url, str):
+        return None
+    try:
+        parts = extract_twitter_status_parts(url)
+        if parts:
+            return parts[1]
+        parsed = _parse_twitter_url_host_path(url)
+        if not parsed:
+            return None
+        host, path = parsed
+        if host not in _TWITTER_HOSTS:
+            return None
+        match = _TWEET_I_WEB_STATUS_PATH_RE.match(path)
+        return match.group("id") if match else None
+    except Exception:
         return None
 
 
@@ -659,14 +708,30 @@ def extract_twitter_article_id(url: str) -> str | None:
     Returns:
         Article ID string if URL points to an article, else ``None``
     """
-    if not url or not isinstance(url, str):
-        return None
     try:
-        cleaned = url.split("?", maxsplit=1)[0].rstrip("/")
-        m = _ARTICLE_RE.match(cleaned)
+        parsed = _parse_twitter_url_host_path(url)
+        if not parsed:
+            return None
+        host, path = parsed
+        if host not in _TWITTER_HOSTS:
+            return None
+        m = _ARTICLE_PATH_RE.match(path)
         return m.group("id") if m else None
     except Exception:
         return None
+
+
+def canonicalize_twitter_url(url: str) -> str | None:
+    """Canonicalize supported Twitter/X URLs for stable dedupe hashing."""
+    tweet_id = extract_twitter_status_id(url)
+    if tweet_id:
+        return f"https://x.com/i/web/status/{tweet_id}"
+
+    article_id = extract_twitter_article_id(url)
+    if article_id:
+        return f"https://x.com/i/article/{article_id}"
+
+    return None
 
 
 def is_twitter_article_url(url: str) -> bool:

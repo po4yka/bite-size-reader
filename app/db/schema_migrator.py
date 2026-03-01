@@ -41,6 +41,7 @@ class SchemaMigrator:
     def _coerce_json_columns(self) -> None:
         """Ensure JSON columns contain valid JSON data."""
         columns_map: dict[str, tuple[str, ...]] = {
+            "requests": ("error_context_json",),
             "telegram_messages": (
                 "entities_json",
                 "media_file_ids_json",
