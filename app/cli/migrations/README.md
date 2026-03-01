@@ -305,6 +305,6 @@ python -m bot
 
 ## Resources
 
-- [Peewee Migrations](http://docs.peewee-orm.com/en/latest/peewee/playhouse.html#schema-migrations)
+- [Peewee Migrations](https://docs.peewee-orm.com/en/latest/peewee/schema.html#schema-migrations)
 - [SQLite ALTER TABLE](https://www.sqlite.org/lang_altertable.html)
 - [Database Migration Best Practices](https://www.brunton-spall.co.uk/post/2014/05/06/database-migrations-done-right/)

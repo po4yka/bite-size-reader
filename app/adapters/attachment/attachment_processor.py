@@ -422,7 +422,7 @@ class AttachmentProcessor:
                     record.extracted_text_length = len(result.get("tldr", ""))
                 record.save()
             except AttachmentProcessing.DoesNotExist:
-                pass
+                logger.debug("attachment_record_not_found", extra={"request_id": req_id})
 
         await asyncio.to_thread(_update)
 
@@ -660,7 +660,7 @@ class AttachmentProcessor:
                 )
                 record.save()
             except AttachmentProcessing.DoesNotExist:
-                pass
+                logger.debug("attachment_record_not_found_pdf", extra={"request_id": req_id})
 
         await asyncio.to_thread(_update)
 

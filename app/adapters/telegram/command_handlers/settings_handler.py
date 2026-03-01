@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, TypedDict
 
 from app.adapters.telegram.command_handlers.decorators import combined_handler
 
@@ -17,6 +17,10 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 _DIGEST_MINI_APP_PATH = "/static/digest/index.html"
+
+
+class _UserPrefs(TypedDict, total=False):
+    verbosity: str
 
 
 class SettingsHandlerImpl:
@@ -34,9 +38,8 @@ class SettingsHandlerImpl:
     async def handle_debug(self, ctx: CommandExecutionContext) -> None:
         """Toggle verbosity between reader and debug mode."""
         user = await ctx.user_repo.async_get_user_by_telegram_id(ctx.uid)
-        prefs = (user or {}).get("preferences_json") or {}
-        if not isinstance(prefs, dict):
-            prefs = {}
+        raw_prefs = (user or {}).get("preferences_json") or {}
+        prefs: _UserPrefs = raw_prefs if isinstance(raw_prefs, dict) else {}
 
         current = prefs.get("verbosity", "reader")
         new = "debug" if current == "reader" else "reader"

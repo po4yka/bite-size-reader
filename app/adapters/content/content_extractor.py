@@ -137,8 +137,11 @@ class ContentExtractor(
                     )
 
                     return content_text, content_source, metadata
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug(
+                    "html_salvage_failed",
+                    extra={"cid": correlation_id, "url": url, "error": str(exc)},
+                )
 
             error_msg = crawl.error_text or "Firecrawl extraction failed"
             if request_id is not None:

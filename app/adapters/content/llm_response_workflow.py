@@ -149,5 +149,5 @@ class LLMResponseWorkflow(
                         "hint": "semaphore timeout should be shorter than LLM call timeout",
                     },
                 )
-        except (TypeError, ValueError):
-            pass
+        except (TypeError, ValueError) as exc:
+            logger.debug("timeout_config_parse_error", extra={"error": str(exc)})

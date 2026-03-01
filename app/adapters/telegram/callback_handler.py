@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import html
 import logging
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, TypedDict
 
 from app.core.logging_utils import generate_correlation_id
 from app.core.ui_strings import t
@@ -16,6 +16,11 @@ if TYPE_CHECKING:
     from app.services.hybrid_search_service import HybridSearchService
 
 logger = logging.getLogger(__name__)
+
+
+class _Insights(TypedDict, total=False):
+    topic_overview: str
+    new_facts: list[dict[str, Any]]
 
 
 # Callback data format: "action:summary_id:param"
@@ -618,9 +623,8 @@ class CallbackHandler:
         if not summary_1000:
             summary_1000 = str(summary_data.get("tldr") or "").strip()
 
-        insights = summary_data.get("insights") or {}
-        if not isinstance(insights, dict):
-            insights = {}
+        raw_insights = summary_data.get("insights") or {}
+        insights: _Insights = raw_insights if isinstance(raw_insights, dict) else {}
 
         tags = summary_data.get("topic_tags") or []
         if not isinstance(tags, list):

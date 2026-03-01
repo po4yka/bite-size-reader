@@ -7,7 +7,7 @@ import contextlib
 import json
 import logging
 import time
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, TypedDict
 from urllib.parse import urlparse
 
 if TYPE_CHECKING:
@@ -25,6 +25,16 @@ from app.security.file_validation import FileValidationError
 from app.utils.progress_tracker import ProgressTracker
 
 logger = logging.getLogger(__name__)
+
+
+class _SummaryPayload(TypedDict, total=False):
+    title: str | None
+    author: str | None
+    published_at: str | None
+    topic_tags: list[str]
+    entities: list[Any]
+    summary_250: str | None
+    summary_1000: str | None
 
 
 def is_txt_file_with_urls(message: Any) -> bool:
@@ -363,7 +373,7 @@ async def process_url_batch(
                     if isinstance(payload, str):
                         try:
                             payload = json.loads(payload)
-                        except Exception:
+                        except (json.JSONDecodeError, ValueError):
                             payload = {}
 
                     from app.adapters.content.url_processor import URLProcessingFlowResult
@@ -726,12 +736,12 @@ async def process_url_batch(
                         extra={"consecutive_failures": edit_consecutive_failures},
                     )
             return msg_id
-        except Exception:
+        except Exception as exc:
             edit_consecutive_failures += 1
             if edit_consecutive_failures >= edit_circuit_breaker_threshold:
                 logger.warning(
                     "progress_edit_circuit_breaker_open",
-                    extra={"consecutive_failures": edit_consecutive_failures},
+                    extra={"consecutive_failures": edit_consecutive_failures, "error": str(exc)},
                 )
             return msg_id
 
@@ -742,7 +752,8 @@ async def process_url_batch(
             initial_message_id = await response_formatter.safe_reply_with_id(
                 message, initial_text, parse_mode="HTML"
             )
-        except Exception:
+        except Exception as exc:
+            logger.debug("initial_progress_message_failed", extra={"error": str(exc)})
             initial_message_id = None
 
     # Deliver cached summaries now that progress message is visible
@@ -803,7 +814,8 @@ async def process_url_batch(
         try:
             # Allow more time for final progress updates to sync, especially if rate limited
             await asyncio.wait_for(progress_task, timeout=10.0)
-        except Exception:
+        except Exception as exc:
+            logger.debug("progress_task_wait_failed", extra={"error": str(exc)})
             progress_task.cancel()
 
     # Small delay to avoid hitting Telegram's per-chat rate limit (30 messages/sec)
@@ -1015,12 +1027,13 @@ async def run_batch_relationship_analysis(
                 position=i,
             )
 
-            payload = summary_data.get("json_payload", {})
-            if isinstance(payload, str):
+            raw_payload = summary_data.get("json_payload", {})
+            if isinstance(raw_payload, str):
                 try:
-                    payload = json.loads(payload)
-                except Exception:
-                    payload = {}
+                    raw_payload = json.loads(raw_payload)
+                except (json.JSONDecodeError, ValueError):
+                    raw_payload = {}
+            payload: _SummaryPayload = raw_payload if isinstance(raw_payload, dict) else {}
 
             # Find the URL for this request_id
             url = next((u for u, rid in url_to_request_id.items() if rid == request_id), "")
@@ -1030,8 +1043,8 @@ async def run_batch_relationship_analysis(
             if url:
                 try:
                     domain = urlparse(url).netloc
-                except Exception:
-                    pass
+                except (ValueError, AttributeError):
+                    logger.debug("domain_parse_failed", extra={"url": url})
 
             # Extract entities as strings
             entities = []
