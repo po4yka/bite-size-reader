@@ -1,8 +1,8 @@
 # Minimal dependencies to run the unit test suite
 coverage==7.13.4
-fastapi==0.131.0
+fastapi==0.135.0
 httpx[http2]==0.28.1
-json_repair==0.58.0
+json_repair==0.58.1
 orjson==3.11.7
 peewee==3.19.0
 pyjwt==2.11.0
