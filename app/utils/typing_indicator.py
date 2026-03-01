@@ -72,10 +72,8 @@ class TypingIndicator:
                 pass
 
             try:
-                await asyncio.wait_for(
-                    self._stop_event.wait(),
-                    timeout=self._interval,
-                )
+                async with asyncio.timeout(self._interval):
+                    await self._stop_event.wait()
             except TimeoutError:
                 # Normal - interval elapsed, send another indicator
                 continue
@@ -142,7 +140,7 @@ async def typing_indicator(
     """Context manager for typing indicators.
 
     Args:
-        response_formatter: ResponseFormatter instance with send_chat_action method
+        response_formatter: ResponseFormatter instance with sender.send_chat_action method
         message: Telegram message object (to extract chat_id)
         action: The action type (default: "typing")
         interval: Refresh interval in seconds
@@ -154,13 +152,13 @@ async def typing_indicator(
     chat = getattr(message, "chat", None)
     chat_id = getattr(chat, "id", None) if chat else None
 
-    if not chat_id or not hasattr(response_formatter, "send_chat_action"):
+    if not chat_id or not hasattr(response_formatter, "sender"):
         # No chat ID or formatter doesn't support typing indicators
         yield
         return
 
     indicator = TypingIndicator(
-        send_chat_action_func=response_formatter.send_chat_action,
+        send_chat_action_func=response_formatter.sender.send_chat_action,
         chat_id=chat_id,
         action=action,
         interval=interval,
@@ -191,10 +189,10 @@ async def send_typing_once(
     chat = getattr(message, "chat", None)
     chat_id = getattr(chat, "id", None) if chat else None
 
-    if not chat_id or not hasattr(response_formatter, "send_chat_action"):
+    if not chat_id or not hasattr(response_formatter, "sender"):
         return False
 
     try:
-        return await response_formatter.send_chat_action(chat_id, action)
+        return await response_formatter.sender.send_chat_action(chat_id, action)
     except Exception:
         return False

@@ -185,10 +185,8 @@ class ProcessingClient:
                     self._channel = grpc.aio.insecure_channel(self.target, options=self.options)
 
                 # Wait for channel to be ready
-                await asyncio.wait_for(
-                    self._channel.channel_ready(),
-                    timeout=5.0,
-                )
+                async with asyncio.timeout(5.0):
+                    await self._channel.channel_ready()
 
                 self._stub = processing_pb2_grpc.ProcessingServiceStub(self._channel)
                 self._connected = True

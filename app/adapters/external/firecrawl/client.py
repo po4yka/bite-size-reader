@@ -305,10 +305,8 @@ class FirecrawlClient:
         while time.time() < deadline:
             try:
                 # Wrap each status check with a timeout to prevent indefinite hangs
-                status = await asyncio.wait_for(
-                    self.get_crawl_status(str(job_id)),
-                    timeout=status_check_timeout,
-                )
+                async with asyncio.timeout(status_check_timeout):
+                    status = await self.get_crawl_status(str(job_id))
             except TimeoutError:
                 self._logger.warning(
                     "crawl_status_check_timeout",

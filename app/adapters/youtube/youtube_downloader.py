@@ -155,7 +155,7 @@ class YouTubeDownloader:
 
                 if not silent:
                     try:
-                        await self.response_formatter.safe_reply(
+                        await self.response_formatter.sender.safe_reply(
                             message,
                             "♻️ Reusing previously downloaded video and transcript. Skipping re-download.",
                         )
@@ -189,7 +189,7 @@ class YouTubeDownloader:
 
             # Notify user: starting download
             if not silent:
-                await self.response_formatter.send_youtube_download_notification(
+                await self.response_formatter.notifications.send_youtube_download_notification(
                     message, url, silent=silent
                 )
 
@@ -258,8 +258,8 @@ class YouTubeDownloader:
                 ydl_opts = self._get_ydl_opts(video_id, output_dir)
 
                 # Download in thread pool (yt-dlp is sync); timeout prevents hangs
-                video_metadata = await asyncio.wait_for(
-                    asyncio.to_thread(
+                async with asyncio.timeout(600.0):
+                    video_metadata = await asyncio.to_thread(
                         self._download_video_sync,
                         url,
                         ydl_opts,
@@ -267,9 +267,7 @@ class YouTubeDownloader:
                         message,
                         silent,
                         correlation_id,
-                    ),
-                    timeout=600.0,
-                )
+                    )
 
                 # Mark stage 2 complete
                 if use_progress:
@@ -368,7 +366,7 @@ class YouTubeDownloader:
                     await updater.finalize(success_msg)
                 elif not silent:
                     # Debug mode: send completion notification
-                    await self.response_formatter.send_youtube_download_complete_notification(
+                    await self.response_formatter.notifications.send_youtube_download_complete_notification(
                         message,
                         video_metadata["title"],
                         video_metadata["resolution"],

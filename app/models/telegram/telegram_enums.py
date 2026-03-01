@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from enum import Enum
+from enum import StrEnum
 
 
-class ChatType(Enum):
+class ChatType(StrEnum):
     """Telegram chat types."""
 
     PRIVATE = "private"
@@ -14,7 +14,7 @@ class ChatType(Enum):
     CHANNEL = "channel"
 
 
-class MessageEntityType(Enum):
+class MessageEntityType(StrEnum):
     """Telegram message entity types."""
 
     MENTION = "mention"
@@ -36,7 +36,7 @@ class MessageEntityType(Enum):
     CUSTOM_EMOJI = "custom_emoji"
 
 
-class MediaType(Enum):
+class MediaType(StrEnum):
     """Telegram media types."""
 
     PHOTO = "photo"

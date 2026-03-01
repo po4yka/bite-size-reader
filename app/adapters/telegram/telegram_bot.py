@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, Any
 from app.adapters.telegram import telegram_client as telegram_client_module
 from app.core.async_utils import raise_if_cancelled
 from app.core.logging_utils import generate_correlation_id, setup_json_logging
-from app.core.time_utils import UTC
+from app.core.time_utils import UTC, format_iso_z
 from app.infrastructure.persistence.sqlite.repositories.audit_log_repository import (
     SqliteAuditLogRepositoryAdapter,
 )
@@ -254,7 +254,8 @@ class TelegramBot:
         firecrawl = getattr(self, "_firecrawl", None)
         if firecrawl is not None and hasattr(firecrawl, "aclose"):
             try:
-                await asyncio.wait_for(firecrawl.aclose(), timeout=drain_timeout)
+                async with asyncio.timeout(drain_timeout):
+                    await firecrawl.aclose()
             except Exception:
                 logger.warning("shutdown_firecrawl_close_failed", exc_info=True)
 
@@ -262,7 +263,8 @@ class TelegramBot:
         llm_client = getattr(self, "_llm_client", None)
         if llm_client is not None and hasattr(llm_client, "aclose"):
             try:
-                await asyncio.wait_for(llm_client.aclose(), timeout=drain_timeout)
+                async with asyncio.timeout(drain_timeout):
+                    await llm_client.aclose()
             except Exception:
                 logger.warning("shutdown_llm_client_close_failed", exc_info=True)
 
@@ -270,7 +272,8 @@ class TelegramBot:
         vector_store = getattr(self, "vector_store", None)
         if vector_store is not None and hasattr(vector_store, "aclose"):
             try:
-                await asyncio.wait_for(vector_store.aclose(), timeout=drain_timeout)
+                async with asyncio.timeout(drain_timeout):
+                    await vector_store.aclose()
             except Exception:
                 logger.warning("shutdown_vector_store_close_failed", exc_info=True)
 
@@ -278,7 +281,8 @@ class TelegramBot:
         embedding_service = getattr(self, "embedding_service", None)
         if embedding_service is not None and hasattr(embedding_service, "aclose"):
             try:
-                await asyncio.wait_for(embedding_service.aclose(), timeout=drain_timeout)
+                async with asyncio.timeout(drain_timeout):
+                    await embedding_service.aclose()
             except Exception:
                 logger.warning("shutdown_embedding_service_close_failed", exc_info=True)
 
@@ -286,10 +290,8 @@ class TelegramBot:
         audit_tasks: set[asyncio.Task[None]] = getattr(self, "_audit_tasks", set())
         if audit_tasks:
             with contextlib.suppress(Exception):
-                await asyncio.wait_for(
-                    asyncio.gather(*list(audit_tasks), return_exceptions=True),
-                    timeout=drain_timeout,
-                )
+                async with asyncio.timeout(drain_timeout):
+                    await asyncio.gather(*list(audit_tasks), return_exceptions=True)
 
         # Catch-all for orphaned OpenRouter connection pool entries that may
         # not be covered by _llm_client.aclose() (e.g. multiple instances).
@@ -297,7 +299,8 @@ class TelegramBot:
         try:
             from app.adapters.openrouter.openrouter_client import OpenRouterClient
 
-            await asyncio.wait_for(OpenRouterClient.cleanup_all_clients(), timeout=drain_timeout)
+            async with asyncio.timeout(drain_timeout):
+                await OpenRouterClient.cleanup_all_clients()
         except Exception:
             logger.warning("shutdown_openrouter_cleanup_failed", exc_info=True)
 
@@ -397,7 +400,7 @@ class TelegramBot:
                             "db_backup_recovered",
                             extra={
                                 "consecutive_failures": consecutive_failures,
-                                "recovery_time": datetime.now(UTC).isoformat(),
+                                "recovery_time": format_iso_z(datetime.now(UTC)),
                             },
                         )
                     consecutive_failures = 0
@@ -412,7 +415,7 @@ class TelegramBot:
                             "error": str(exc),
                             "consecutive_failures": consecutive_failures,
                             "last_success": (
-                                last_success_time.isoformat() if last_success_time else "never"
+                                format_iso_z(last_success_time) if last_success_time else "never"
                             ),
                         },
                     )
@@ -425,7 +428,7 @@ class TelegramBot:
                                 "consecutive_failures": consecutive_failures,
                                 "max_failures": max_consecutive_failures,
                                 "last_success": (
-                                    last_success_time.isoformat() if last_success_time else "never"
+                                    format_iso_z(last_success_time) if last_success_time else "never"
                                 ),
                                 "action_required": "Manual intervention required - backups failing",
                             },
@@ -438,7 +441,7 @@ class TelegramBot:
                                 {
                                     "consecutive_failures": consecutive_failures,
                                     "last_success": (
-                                        last_success_time.isoformat()
+                                        format_iso_z(last_success_time)
                                         if last_success_time
                                         else "never"
                                     ),
@@ -765,6 +768,6 @@ class TelegramBot:
                 self._sync_client_dependencies()
         if name in {"_safe_reply", "_reply_json"} and hasattr(self, "response_formatter"):
             if name == "_safe_reply":
-                self.response_formatter._safe_reply_func = value
+                self.response_formatter.sender._safe_reply_func = value
             else:
-                self.response_formatter._reply_json_func = value
+                self.response_formatter.sender._reply_json_func = value

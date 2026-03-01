@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import StrEnum
 from urllib.parse import urlparse
 
 
@@ -118,7 +118,7 @@ class URLProcessingResult:
         )
 
 
-class URLStatus(Enum):
+class URLStatus(StrEnum):
     """Status of a URL in batch processing."""
 
     PENDING = "pending"

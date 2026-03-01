@@ -105,7 +105,7 @@ class ForwardProcessor:
 
             if forward_shaped:
                 # Send formatted preview for forward flow with action buttons
-                await self.response_formatter.send_forward_summary_response(
+                await self.response_formatter.summaries.send_forward_summary_response(
                     message,
                     forward_shaped,
                     summary_id=f"req:{req_id}" if req_id else None,
@@ -142,7 +142,7 @@ class ForwardProcessor:
         except Exception as e:
             logger.exception("forward_flow_error", extra={"error": str(e), "cid": correlation_id})
             try:
-                await self.response_formatter.send_error_notification(
+                await self.response_formatter.notifications.send_error_notification(
                     message,
                     "processing_failed",
                     correlation_id or "unknown",
@@ -157,7 +157,8 @@ class ForwardProcessor:
     ) -> asyncio.Task[Any] | None:
         async def _with_timeout() -> Any:
             try:
-                return await asyncio.wait_for(coro, timeout=_BACKGROUND_TASK_TIMEOUT_SEC)
+                async with asyncio.timeout(_BACKGROUND_TASK_TIMEOUT_SEC):
+                    return await coro
             except TimeoutError:
                 logger.warning(
                     "background_task_timeout",
@@ -233,8 +234,8 @@ class ForwardProcessor:
         except json.JSONDecodeError:
             return False
 
-        await self.response_formatter.send_cached_summary_notification(message)
-        await self.response_formatter.send_forward_summary_response(
+        await self.response_formatter.notifications.send_cached_summary_notification(message)
+        await self.response_formatter.summaries.send_forward_summary_response(
             message,
             shaped,
             summary_id=f"req:{req_id}" if req_id else None,
@@ -329,7 +330,7 @@ class ForwardProcessor:
         llm_summarizer = self._get_llm_summarizer()
 
         try:
-            await self.response_formatter.safe_reply(
+            await self.response_formatter.sender.safe_reply(
                 message,
                 "📝 Crafting a standalone article from topics & tags…",
             )
@@ -350,7 +351,7 @@ class ForwardProcessor:
         )
 
         if article:
-            await self.response_formatter.send_custom_article(message, article)
+            await self.response_formatter.summaries.send_custom_article(message, article)
             logger.info(
                 "custom_article_sent_for_forward",
                 extra={"cid": correlation_id, "has_article": True},
@@ -413,7 +414,7 @@ class ForwardProcessor:
                     },
                 )
 
-                await self.response_formatter.send_additional_insights_message(
+                await self.response_formatter.summaries.send_additional_insights_message(
                     message, insights, correlation_id
                 )
 

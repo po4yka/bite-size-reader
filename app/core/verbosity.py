@@ -7,8 +7,8 @@ Supports two modes:
 
 from __future__ import annotations
 
-import enum
 import logging
+from enum import StrEnum
 import time
 from typing import TYPE_CHECKING, Any
 
@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 _CACHE_TTL_SEC = 300  # 5 minutes
 
 
-class VerbosityLevel(enum.Enum):
+class VerbosityLevel(StrEnum):
     """User-facing verbosity modes."""
 
     READER = "reader"

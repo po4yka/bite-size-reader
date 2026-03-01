@@ -144,7 +144,7 @@ class ContentExtractorCrawlMixin:
         latency_val = existing_crawl.get("latency_ms")
         latency_sec = (latency_val / 1000.0) if isinstance(latency_val, int | float) else None
 
-        await self.response_formatter.send_content_reuse_notification(
+        await self.response_formatter.notifications.send_content_reuse_notification(
             message,
             http_status=existing_crawl.get("http_status"),
             crawl_status=existing_crawl.get("status"),
@@ -182,7 +182,7 @@ class ContentExtractorCrawlMixin:
             options_obj = (
                 cached_crawl.options_json if isinstance(cached_crawl.options_json, dict) else None
             )
-            await self.response_formatter.send_content_reuse_notification(
+            await self.response_formatter.notifications.send_content_reuse_notification(
                 message,
                 http_status=cached_crawl.http_status,
                 crawl_status=cached_crawl.status,
@@ -204,7 +204,7 @@ class ContentExtractorCrawlMixin:
                     )
             return result
 
-        await self.response_formatter.send_firecrawl_start_notification(
+        await self.response_formatter.notifications.send_firecrawl_start_notification(
             message, url=url_text, silent=silent
         )
 
@@ -323,7 +323,7 @@ class ContentExtractorCrawlMixin:
                     req_id, salvage_crawl, correlation_id
                 )
 
-                await self.response_formatter.send_html_fallback_notification(
+                await self.response_formatter.notifications.send_html_fallback_notification(
                     message,
                     len(html_to_text(salvage_html)),
                     silent=silent,
@@ -437,7 +437,7 @@ class ContentExtractorCrawlMixin:
             f"⚠️ Error: {crawl.error_text or 'unknown'}\n"
             f"🧩 Content received: md:{int(has_markdown)} html:{int(has_html)}"
         )
-        await self.response_formatter.send_error_notification(
+        await self.response_formatter.notifications.send_error_notification(
             message, "firecrawl_error", correlation_id, details=details
         )
         logger.error(
@@ -551,7 +551,8 @@ class ContentExtractorCrawlMixin:
                         return None
                     return html
 
-            return await asyncio.wait_for(_fetch_html(), timeout=overall_timeout)
+            async with asyncio.timeout(overall_timeout):
+                return await _fetch_html()
         except TimeoutError:
             logger.warning(
                 "direct_html_salvage_timeout",
@@ -613,7 +614,7 @@ class ContentExtractorCrawlMixin:
             len(crawl.content_html) if crawl.content_html else 0
         )
         latency_sec = (crawl.latency_ms or 0) / 1000.0
-        await self.response_formatter.send_firecrawl_success_notification(
+        await self.response_formatter.notifications.send_firecrawl_success_notification(
             message,
             excerpt_len,
             latency_sec,
@@ -640,7 +641,7 @@ class ContentExtractorCrawlMixin:
                     "cleaned_text_len": len(content_text),
                 },
             )
-            await self.response_formatter.send_html_fallback_notification(
+            await self.response_formatter.notifications.send_html_fallback_notification(
                 message, len(content_text), silent=silent
             )
         else:

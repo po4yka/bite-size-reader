@@ -238,16 +238,14 @@ class OpenRouterRerankingService:
         ]
 
         try:
-            response = await asyncio.wait_for(
-                self._client.chat(
+            async with asyncio.timeout(self._timeout_sec):
+                response = await self._client.chat(
                     messages,
                     temperature=0.0,
                     max_tokens=400,
                     response_format={"type": "json_schema", "json_schema": schema},
                     model_override=self._model_override,
-                ),
-                timeout=self._timeout_sec,
-            )
+                )
         except Exception:
             logger.exception(
                 "llm_rerank_failed",

@@ -204,15 +204,14 @@ class ProgressTracker:
 
             try:
                 # Wait for updates with timeout to allow checking shutdown
-                completed, total = await asyncio.wait_for(self._update_queue.get(), timeout=0.5)
-            except Exception as exc:
-                if isinstance(exc, asyncio.CancelledError):
+                async with asyncio.timeout(0.5):
+                    completed, total = await self._update_queue.get()
+            except asyncio.CancelledError:
+                break
+            except TimeoutError:
+                if self._shutdown_event.is_set():
                     break
-                if isinstance(exc, asyncio.TimeoutError | TimeoutError):
-                    if self._shutdown_event.is_set():
-                        break
-                    continue
-                raise
+                continue
 
             try:
                 # Call the formatter to send/edit the message

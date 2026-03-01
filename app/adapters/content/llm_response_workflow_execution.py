@@ -54,9 +54,8 @@ class LLMWorkflowExecutionMixin:
         tasks = list(self._background_tasks)
         if tasks:
             try:
-                await asyncio.wait_for(
-                    asyncio.gather(*tasks, return_exceptions=True), timeout=timeout
-                )
+                async with asyncio.timeout(timeout):
+                    await asyncio.gather(*tasks, return_exceptions=True)
             except TimeoutError:
                 logger.warning(
                     "llm_workflow_shutdown_timeout", extra={"pending": len(self._background_tasks)}
@@ -116,7 +115,9 @@ class LLMWorkflowExecutionMixin:
 
             summary = None
             try:
-                summary = await self._process_attempt(
+                from app.adapters.content.llm_response_workflow import AttemptContext
+
+                attempt_ctx = AttemptContext(
                     message=message,
                     llm=llm,
                     req_id=req_id,
@@ -128,11 +129,12 @@ class LLMWorkflowExecutionMixin:
                     notifications=notifications,
                     ensure_summary=ensure_summary,
                     on_success=on_success,
-                    required_summary_fields=required_summary_fields,
+                    required_summary_fields=tuple(required_summary_fields),
                     is_last_attempt=is_last_attempt,
                     failed_attempts=failed_attempts,
                     defer_persistence=defer_persistence,
                 )
+                summary = await self._process_attempt(attempt_ctx)
             except Exception as exc:  # pragma: no cover - defensive
                 logger.exception(
                     "summary_attempt_processing_failed",

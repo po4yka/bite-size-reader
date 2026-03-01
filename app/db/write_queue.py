@@ -80,7 +80,8 @@ class DbWriteQueue:
         await self._queue.put(_SENTINEL)
 
         try:
-            await asyncio.wait_for(self._worker_task, timeout=timeout)
+            async with asyncio.timeout(timeout):
+                await self._worker_task
         except TimeoutError:
             logger.warning("DbWriteQueue worker did not finish within %.1fs; cancelling", timeout)
             self._worker_task.cancel()

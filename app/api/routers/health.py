@@ -17,7 +17,7 @@ from fastapi import APIRouter, Request
 
 from app.api.models.responses import success_response
 from app.core.logging_utils import get_logger
-from app.core.time_utils import UTC
+from app.core.time_utils import UTC, format_iso_z
 
 logger = get_logger(__name__)
 
@@ -97,14 +97,15 @@ async def _check_redis() -> dict[str, Any]:
             last_attempt = conn_state["last_attempt"]
             last_error = conn_state["last_error"]
             if isinstance(last_attempt, float) and last_attempt > 0:
-                result["last_attempt"] = datetime.fromtimestamp(last_attempt, tz=UTC).isoformat()
+                result["last_attempt"] = format_iso_z(datetime.fromtimestamp(last_attempt, tz=UTC))
             if isinstance(last_error, str) and last_error:
                 result["error"] = last_error
             return result
 
         ping_result = redis_client.ping()
         if asyncio.iscoroutine(ping_result):
-            await asyncio.wait_for(ping_result, timeout=5.0)
+            async with asyncio.timeout(5.0):
+                await ping_result
         latency_ms = (time.perf_counter() - start) * 1000
         return {
             "status": "healthy",
@@ -149,14 +150,12 @@ async def detailed_health_check(request: Request):
 
     # Run component checks concurrently
     try:
-        db_status, redis_status = await asyncio.wait_for(
-            asyncio.gather(
+        async with asyncio.timeout(10.0):
+            db_status, redis_status = await asyncio.gather(
                 _check_database(),
                 _check_redis(),
                 return_exceptions=True,
-            ),
-            timeout=10.0,
-        )
+            )
     except TimeoutError:
         db_status = {"status": "timeout", "error": "Health check timed out"}
         redis_status = {"status": "timeout", "error": "Health check timed out"}
@@ -193,7 +192,7 @@ async def detailed_health_check(request: Request):
         data={
             "status": overall_status,
             "health_score": health_score,
-            "timestamp": datetime.now(UTC).isoformat(),
+            "timestamp": format_iso_z(datetime.now(UTC)),
             "total_latency_ms": round(total_latency_ms, 2),
             "components": {
                 "database": db_status,
@@ -217,7 +216,7 @@ async def readiness_check():
         return success_response(
             data={
                 "ready": True,
-                "timestamp": datetime.now(UTC).isoformat(),
+                "timestamp": format_iso_z(datetime.now(UTC)),
             }
         )
 
@@ -228,7 +227,7 @@ async def readiness_check():
         content={
             "ready": False,
             "error": db_status.get("error", "Database not ready"),
-            "timestamp": datetime.now(UTC).isoformat(),
+            "timestamp": format_iso_z(datetime.now(UTC)),
         },
     )
 
@@ -243,6 +242,6 @@ async def liveness_check():
     return success_response(
         data={
             "alive": True,
-            "timestamp": datetime.now(UTC).isoformat(),
+            "timestamp": format_iso_z(datetime.now(UTC)),
         }
     )

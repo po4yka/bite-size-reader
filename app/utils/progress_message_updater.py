@@ -78,7 +78,8 @@ class ProgressMessageUpdater:
         self._stop_event.set()
         if self._task:
             try:
-                await asyncio.wait_for(self._task, timeout=2.0)
+                async with asyncio.timeout(2.0):
+                    await self._task
             except TimeoutError:
                 self._task.cancel()
                 try:
@@ -100,7 +101,8 @@ class ProgressMessageUpdater:
 
                 # Wait for next update interval or stop signal
                 try:
-                    await asyncio.wait_for(self._stop_event.wait(), timeout=self._interval)
+                    async with asyncio.timeout(self._interval):
+                        await self._stop_event.wait()
                     break  # Stop event was set
                 except TimeoutError:
                     continue  # Interval elapsed, continue loop

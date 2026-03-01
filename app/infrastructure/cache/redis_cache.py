@@ -59,7 +59,8 @@ class RedisCache:
 
         key = redis_key(self.cfg.redis.prefix, *[p for p in parts if p])
         try:
-            raw = await asyncio.wait_for(client.get(key), timeout=self._timeout)
+            async with asyncio.timeout(self._timeout):
+                raw = await client.get(key)
         except Exception as exc:  # pragma: no cover - defensive
             logger.warning(
                 "redis_cache_get_failed",
@@ -94,10 +95,8 @@ class RedisCache:
             return False
 
         try:
-            await asyncio.wait_for(
-                client.set(key, payload, ex=ttl_seconds),
-                timeout=self._timeout,
-            )
+            async with asyncio.timeout(self._timeout):
+                await client.set(key, payload, ex=ttl_seconds)
             return True
         except Exception as exc:  # pragma: no cover - defensive
             logger.warning(

@@ -13,7 +13,9 @@ from app.db.user_interactions import async_safe_update_user_interaction
 from app.utils.json_validation import finalize_summary_texts
 
 if TYPE_CHECKING:
-    from collections.abc import Awaitable, Callable, Sequence
+    from collections.abc import Sequence
+
+    from app.adapters.content.llm_response_workflow import AttemptContext
 
 logger = logging.getLogger("app.adapters.content.llm_response_workflow")
 
@@ -21,149 +23,134 @@ logger = logging.getLogger("app.adapters.content.llm_response_workflow")
 class LLMWorkflowAttemptsMixin:
     """Per-attempt processing, summary finalization, and persistence."""
 
-    async def _process_attempt(
-        self,
-        *,
-        message: Any,
-        llm: Any,
-        req_id: int,
-        correlation_id: str | None,
-        interaction_config: Any,
-        persistence: Any,
-        repair_context: Any,
-        request_config: Any,
-        notifications: Any | None,
-        ensure_summary: Callable[[dict[str, Any]], Awaitable[dict[str, Any]]] | None,
-        on_success: Callable[[dict[str, Any], Any], Awaitable[None]] | None,
-        required_summary_fields: Sequence[str],
-        is_last_attempt: bool = False,
-        failed_attempts: list[tuple[Any, Any]] | None = None,
-        defer_persistence: bool = False,
-    ) -> dict[str, Any] | None:
-        if llm.status != "ok":
+    async def _process_attempt(self, ctx: AttemptContext) -> dict[str, Any] | None:
+        """Process a single LLM attempt using a typed context bundle."""
+        if ctx.llm.status != "ok":
             salvage = None
-            if (llm.error_text or "") == "structured_output_parse_error":
-                salvage = await self._attempt_salvage_parsing(llm, correlation_id)
+            if (ctx.llm.error_text or "") == "structured_output_parse_error":
+                salvage = await self._attempt_salvage_parsing(ctx.llm, ctx.correlation_id)
             if salvage is not None:
                 return await self._finalize_success(
                     salvage,
-                    llm,
-                    req_id,
-                    correlation_id,
-                    interaction_config,
-                    persistence,
-                    ensure_summary,
-                    on_success,
-                    defer_persistence,
+                    ctx.llm,
+                    ctx.req_id,
+                    ctx.correlation_id,
+                    ctx.interaction_config,
+                    ctx.persistence,
+                    ctx.ensure_summary,
+                    ctx.on_success,
+                    ctx.defer_persistence,
                 )
 
-            if is_last_attempt:
+            if ctx.is_last_attempt:
                 await self._handle_llm_error(
-                    message,
-                    llm,
-                    req_id,
-                    correlation_id,
-                    interaction_config,
-                    notifications,
+                    ctx.message,
+                    ctx.llm,
+                    ctx.req_id,
+                    ctx.correlation_id,
+                    ctx.interaction_config,
+                    ctx.notifications,
                     is_final_error=True,
                 )
             else:
-                await self.request_repo.async_update_request_status(req_id, "error")
+                await self.request_repo.async_update_request_status(ctx.req_id, "error")
             return None
 
         json_parse_timeout = getattr(self.cfg.runtime, "json_parse_timeout_sec", 60.0)
         try:
             from app.adapters.content import llm_response_workflow as workflow_module
 
-            parse_result = await asyncio.wait_for(
-                asyncio.to_thread(
-                    workflow_module.parse_summary_response, llm.response_json, llm.response_text
-                ),
-                timeout=json_parse_timeout,
-            )
+            async with asyncio.timeout(json_parse_timeout):
+                parse_result = await asyncio.to_thread(
+                    workflow_module.parse_summary_response,
+                    ctx.llm.response_json,
+                    ctx.llm.response_text,
+                )
         except TimeoutError:
             logger.error(
                 "json_parse_timeout",
-                extra={"cid": correlation_id, "timeout_sec": json_parse_timeout},
+                extra={"cid": ctx.correlation_id, "timeout_sec": json_parse_timeout},
             )
-            self._set_failure_context(llm, "json_parse_timeout")
+            self._set_failure_context(ctx.llm, "json_parse_timeout")
             return None
         shaped = parse_result.shaped if parse_result else None
 
         if shaped is None:
             shaped = await self._attempt_json_repair(
-                message,
-                llm,
-                req_id,
-                correlation_id,
-                interaction_config,
-                repair_context,
-                request_config,
-                notifications,
+                ctx.message,
+                ctx.llm,
+                ctx.req_id,
+                ctx.correlation_id,
+                ctx.interaction_config,
+                ctx.repair_context,
+                ctx.request_config,
+                ctx.notifications,
                 parse_result=parse_result,
             )
 
         if shaped is None:
-            self._set_failure_context(llm, "summary_parse_failed")
+            self._set_failure_context(ctx.llm, "summary_parse_failed")
             return None
 
         finalize_summary_texts(shaped)
 
-        if not self._summary_has_content(shaped, required_summary_fields):
+        if not self._summary_has_content(shaped, ctx.required_summary_fields):
             logger.warning(
                 "summary_fields_empty",
                 extra={
-                    "cid": correlation_id,
+                    "cid": ctx.correlation_id,
                     "stage": "attempt",
-                    "preset": request_config.preset_name,
-                    "model": request_config.model_override,
+                    "preset": ctx.request_config.preset_name,
+                    "model": ctx.request_config.model_override,
                 },
             )
 
             try:
                 repair_hint = SimpleNamespace(errors=["missing_summary_fields"])
                 repaired = await self._attempt_json_repair(
-                    message,
-                    llm,
-                    req_id,
-                    correlation_id,
-                    interaction_config,
-                    repair_context,
-                    request_config,
-                    notifications,
+                    ctx.message,
+                    ctx.llm,
+                    ctx.req_id,
+                    ctx.correlation_id,
+                    ctx.interaction_config,
+                    ctx.repair_context,
+                    ctx.request_config,
+                    ctx.notifications,
                     parse_result=repair_hint,
                 )
-                if repaired and self._summary_has_content(repaired, required_summary_fields):
+                if repaired and self._summary_has_content(
+                    repaired, ctx.required_summary_fields
+                ):
                     return await self._finalize_success(
                         repaired,
-                        llm,
-                        req_id,
-                        correlation_id,
-                        interaction_config,
-                        persistence,
-                        ensure_summary,
-                        on_success,
-                        defer_persistence,
+                        ctx.llm,
+                        ctx.req_id,
+                        ctx.correlation_id,
+                        ctx.interaction_config,
+                        ctx.persistence,
+                        ctx.ensure_summary,
+                        ctx.on_success,
+                        ctx.defer_persistence,
                     )
             except Exception as exc:
                 logger.warning(
                     "summary_repair_failed",
-                    extra={"cid": correlation_id, "error": str(exc)},
+                    extra={"cid": ctx.correlation_id, "error": str(exc)},
                 )
 
-            self._set_failure_context(llm, "summary_fields_empty")
+            self._set_failure_context(ctx.llm, "summary_fields_empty")
             return None
 
         return await self._finalize_success(
             shaped,
-            llm,
-            req_id,
-            correlation_id,
-            interaction_config,
-            persistence,
-            ensure_summary,
-            on_success,
-            defer_persistence,
+            ctx.llm,
+            ctx.req_id,
+            ctx.correlation_id,
+            ctx.interaction_config,
+            ctx.persistence,
+            ctx.ensure_summary,
+            ctx.on_success,
+            ctx.defer_persistence,
         )
 
     async def _finalize_success(
@@ -174,8 +161,8 @@ class LLMWorkflowAttemptsMixin:
         correlation_id: str | None,
         interaction_config: Any,
         persistence: Any,
-        ensure_summary: Callable[[dict[str, Any]], Awaitable[dict[str, Any]]] | None,
-        on_success: Callable[[dict[str, Any], Any], Awaitable[None]] | None,
+        ensure_summary: Any | None,
+        on_success: Any | None,
         defer_persistence: bool,
     ) -> dict[str, Any]:
         from app.adapters.external.formatting.data_formatter import DataFormatterImpl

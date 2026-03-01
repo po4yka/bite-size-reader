@@ -57,13 +57,11 @@ async def extract_transcript_via_api(
 
     for attempt in range(_TRANSCRIPT_MAX_RETRIES):
         try:
-            transcript_list = await asyncio.wait_for(
-                asyncio.to_thread(
+            async with asyncio.timeout(30.0):
+                transcript_list = await asyncio.to_thread(
                     cast("Any", youtube_transcript_api).list_transcripts,
                     video_id,
-                ),
-                timeout=30.0,
-            )
+                )
 
             transcript = None
             auto_generated = False
@@ -117,10 +115,8 @@ async def extract_transcript_via_api(
                     )
                     return "", "en", False, "youtube-transcript-api"
 
-            transcript_data = await asyncio.wait_for(
-                asyncio.to_thread(transcript.fetch),
-                timeout=30.0,
-            )
+            async with asyncio.timeout(30.0):
+                transcript_data = await asyncio.to_thread(transcript.fetch)
 
             transcript_text = format_transcript(
                 transcript_data, max_chars=max_transcript_chars, log=logger_

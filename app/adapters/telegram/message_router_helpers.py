@@ -63,7 +63,7 @@ async def handle_document_file(
         # Download and parse the file
         file_path = await download_file(router, message)
         if not file_path:
-            await router.response_formatter.send_error_notification(
+            await router.response_formatter.notifications.send_error_notification(
                 message,
                 "unexpected_error",
                 correlation_id,
@@ -79,13 +79,13 @@ async def handle_document_file(
                 "file_validation_failed",
                 extra={"error": str(exc), "cid": correlation_id},
             )
-            await router.response_formatter.safe_reply(
+            await router.response_formatter.sender.safe_reply(
                 message, f"❌ File validation failed: {exc!s}"
             )
             return
 
         if not urls:
-            await router.response_formatter.send_error_notification(
+            await router.response_formatter.notifications.send_error_notification(
                 message,
                 "no_urls_found",
                 correlation_id,
@@ -95,7 +95,7 @@ async def handle_document_file(
 
         # Security check: limit batch size
         if len(urls) > router.response_formatter.MAX_BATCH_URLS:
-            await router.response_formatter.safe_reply(
+            await router.response_formatter.sender.safe_reply(
                 message,
                 f"❌ Too many URLs ({len(urls)}). "
                 f"Maximum allowed: {router.response_formatter.MAX_BATCH_URLS}.",
@@ -112,14 +112,14 @@ async def handle_document_file(
         # Validate each URL for security
         valid_urls = []
         for url in urls:
-            is_valid, error_msg = router.response_formatter._validate_url(url)
+            is_valid, error_msg = router.response_formatter.validator.validate_url(url)
             if is_valid:
                 valid_urls.append(url)
             else:
                 logger.warning("invalid_url_in_batch", extra={"url": url, "error": error_msg})
 
         if not valid_urls:
-            await router.response_formatter.safe_reply(
+            await router.response_formatter.sender.safe_reply(
                 message, "❌ No valid URLs found in the file after security checks."
             )
             return
@@ -128,7 +128,7 @@ async def handle_document_file(
         urls = valid_urls
 
         # Send initial confirmation message (kept as a standalone message)
-        await router.response_formatter.safe_reply(
+        await router.response_formatter.sender.safe_reply(
             message, f"📄 File accepted. Processing {len(urls)} links."
         )
         # Respect formatter rate limits before sending the progress message we'll edit later
@@ -142,7 +142,7 @@ async def handle_document_file(
             raise_if_cancelled(exc)
         # Create a dedicated progress message that we will edit in-place
         # We use a simple placeholder first, then process_url_batch will update it with BatchProgressFormatter
-        progress_message_id = await router.response_formatter.safe_reply_with_id(
+        progress_message_id = await router.response_formatter.sender.safe_reply_with_id(
             message,
             f"🔄 Preparing to process {len(urls)} links...",
         )
@@ -183,7 +183,7 @@ async def handle_document_file(
 
     except Exception:
         logger.exception("document_file_processing_error", extra={"cid": correlation_id})
-        await router.response_formatter.send_error_notification(
+        await router.response_formatter.notifications.send_error_notification(
             message,
             "unexpected_error",
             correlation_id,
@@ -633,7 +633,7 @@ async def process_url_batch(
                                 req_id = getattr(
                                     result, "request_id", None
                                 ) or url_to_request_id.get(url)
-                                await response_formatter.send_structured_summary_response(
+                                await response_formatter.summaries.send_structured_summary_response(
                                     message,
                                     result.summary_json,
                                     llm=None,
@@ -723,7 +723,7 @@ async def process_url_batch(
             progress_text = BatchProgressFormatter.format_progress_message(batch_status)
             chat_id = getattr(message.chat, "id", None)
             if chat_id and msg_id:
-                edit_success = await response_formatter.edit_message(
+                edit_success = await response_formatter.sender.edit_message(
                     chat_id, msg_id, progress_text, parse_mode="HTML"
                 )
                 if edit_success:
@@ -749,7 +749,7 @@ async def process_url_batch(
     if initial_message_id is None:
         try:
             initial_text = BatchProgressFormatter.format_progress_message(batch_status)
-            initial_message_id = await response_formatter.safe_reply_with_id(
+            initial_message_id = await response_formatter.sender.safe_reply_with_id(
                 message, initial_text, parse_mode="HTML"
             )
         except Exception as exc:
@@ -765,8 +765,8 @@ async def process_url_batch(
         )
         for cached_url, cached_payload, cached_req_id in cached_summaries:
             try:
-                await response_formatter.send_cached_summary_notification(message, silent=False)
-                await response_formatter.send_structured_summary_response(
+                await response_formatter.notifications.send_cached_summary_notification(message, silent=False)
+                await response_formatter.summaries.send_structured_summary_response(
                     message,
                     cached_payload,
                     chunk_llm_stub=None,
@@ -813,7 +813,8 @@ async def process_url_batch(
         progress_tracker.mark_complete()
         try:
             # Allow more time for final progress updates to sync, especially if rate limited
-            await asyncio.wait_for(progress_task, timeout=10.0)
+            async with asyncio.timeout(10.0):
+                await progress_task
         except Exception as exc:
             logger.debug("progress_task_wait_failed", extra={"error": str(exc)})
             progress_task.cancel()
@@ -828,7 +829,7 @@ async def process_url_batch(
         "sending_batch_completion",
         extra={"uid": uid, "total": len(urls), "success": batch_status.success_count},
     )
-    await response_formatter.safe_reply(message, completion_message, parse_mode="HTML")
+    await response_formatter.sender.safe_reply(message, completion_message, parse_mode="HTML")
 
     if interaction_id and start_time:
         await async_safe_update_user_interaction(
@@ -1301,4 +1302,4 @@ async def _send_batch_analysis_result(
             parts.append(f"\n<b>{time_header}:</b> {combined_summary.total_reading_time_min} min")
 
     text = "\n".join(parts)
-    await response_formatter.safe_reply(message, text, parse_mode="HTML")
+    await response_formatter.sender.safe_reply(message, text, parse_mode="HTML")
