@@ -1,4 +1,4 @@
-FROM chromadb/chroma:1.5.1
+FROM chromadb/chroma:1.5.2
 
 # Install curl for health checks
 USER root
