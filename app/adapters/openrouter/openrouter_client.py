@@ -1,15 +1,16 @@
 from __future__ import annotations
 
-import asyncio
 import logging
 import os
 import threading
 import weakref
 from contextlib import asynccontextmanager
 from importlib.util import find_spec
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 if TYPE_CHECKING:
+    import asyncio
+
     from collections.abc import AsyncGenerator, Callable
     from typing import Self
 
@@ -265,8 +266,13 @@ class OpenRouterClient:
         """Async context manager exit."""
         await self.aclose()
 
-    aclose = BaseLLMClient.aclose
-    _ensure_client = BaseLLMClient._ensure_client
+    async def aclose(self) -> None:
+        """Close pooled HTTP clients associated with the current loop/client key."""
+        await BaseLLMClient.aclose(cast("BaseLLMClient", self))
+
+    async def _ensure_client(self) -> httpx.AsyncClient:
+        """Ensure an AsyncClient exists for the current event loop and return it."""
+        return await BaseLLMClient._ensure_client(cast("BaseLLMClient", self))
 
     def _get_error_message(self, status_code: int, data: dict[str, Any] | None) -> str:
         return client_validation.get_error_message(status_code, data)

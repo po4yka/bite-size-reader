@@ -118,9 +118,7 @@ class LLMWorkflowAttemptsMixin:
                     ctx.notifications,
                     parse_result=repair_hint,
                 )
-                if repaired and self._summary_has_content(
-                    repaired, ctx.required_summary_fields
-                ):
+                if repaired and self._summary_has_content(repaired, ctx.required_summary_fields):
                     return await self._finalize_success(
                         repaired,
                         ctx.llm,

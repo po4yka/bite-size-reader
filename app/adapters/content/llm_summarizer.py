@@ -85,6 +85,220 @@ def _detect_content_type_hint(content: str) -> str:
     return ""
 
 
+def _clamp_float(value: float, min_value: float, max_value: float) -> float:
+    return max(min_value, min(max_value, value))
+
+
+def _build_summary_requests_for(
+    summarizer: LLMSummarizer,
+    *,
+    messages: list[dict[str, Any]],
+    base_model: str,
+    content_for_summary: str,
+    user_content: str,
+    silent: bool,
+) -> list[LLMRequestConfig]:
+    """Construct ordered LLM request attempts for summary generation."""
+    response_format_schema = summarizer._workflow.build_structured_response_format()
+    response_format_json_object = summarizer._workflow.build_structured_response_format(
+        mode="json_object"
+    )
+    max_tokens_schema = summarizer._select_max_tokens(content_for_summary)
+    max_tokens_json_object = summarizer._select_max_tokens(user_content)
+    base_temperature = summarizer.cfg.openrouter.temperature
+    base_top_p = (
+        summarizer.cfg.openrouter.top_p if summarizer.cfg.openrouter.top_p is not None else 0.9
+    )
+
+    json_temperature = summarizer.cfg.openrouter.summary_temperature_json_fallback or _clamp_float(
+        base_temperature - 0.05, 0.0, 0.5
+    )
+    json_top_p = summarizer.cfg.openrouter.summary_top_p_json_fallback or _clamp_float(
+        base_top_p, 0.0, 0.95
+    )
+
+    requests: list[LLMRequestConfig] = []
+
+    def _add_request(
+        *,
+        preset: str,
+        model_name: str,
+        response_format: dict[str, Any],
+        max_tokens: int | None,
+        temperature: float,
+        top_p: float | None,
+    ) -> None:
+        requests.append(
+            LLMRequestConfig(
+                preset_name=preset,
+                messages=messages,
+                response_format=response_format,
+                max_tokens=max_tokens,
+                temperature=temperature,
+                top_p=top_p,
+                model_override=model_name,
+                silent=silent,
+            )
+        )
+
+    _add_request(
+        preset="schema_strict",
+        model_name=base_model,
+        response_format=response_format_schema,
+        max_tokens=max_tokens_schema,
+        temperature=base_temperature,
+        top_p=base_top_p,
+    )
+    _add_request(
+        preset="json_object_guardrail",
+        model_name=base_model,
+        response_format=response_format_json_object,
+        max_tokens=max_tokens_json_object,
+        temperature=json_temperature,
+        top_p=json_top_p,
+    )
+
+    fallback_models = [
+        model
+        for model in summarizer.cfg.openrouter.fallback_models
+        if model and model != base_model
+    ]
+    flash_models: list[str] = []
+    flash_model = getattr(summarizer.cfg.openrouter, "flash_model", None)
+    if flash_model:
+        flash_models.append(flash_model)
+    flash_fallback_models = getattr(summarizer.cfg.openrouter, "flash_fallback_models", [])
+    if flash_fallback_models:
+        flash_models.extend(flash_fallback_models)
+
+    added_flash_models: set[str] = set()
+    for model_name in flash_models:
+        if model_name and model_name != base_model and model_name not in added_flash_models:
+            _add_request(
+                preset="json_object_flash",
+                model_name=model_name,
+                response_format=response_format_json_object,
+                max_tokens=max_tokens_json_object,
+                temperature=json_temperature,
+                top_p=json_top_p,
+            )
+            added_flash_models.add(model_name)
+
+    if fallback_models:
+        fallback_model = fallback_models[0]
+        if fallback_model not in added_flash_models:
+            _add_request(
+                preset="json_object_fallback",
+                model_name=fallback_model,
+                response_format=response_format_json_object,
+                max_tokens=max_tokens_json_object,
+                temperature=json_temperature,
+                top_p=json_top_p,
+            )
+    return requests
+
+
+async def _execute_summary_with_progress_for(
+    summarizer: LLMSummarizer,
+    *,
+    message: Any,
+    req_id: int,
+    correlation_id: str | None,
+    interaction_config: LLMInteractionConfig,
+    persistence: LLMSummaryPersistenceSettings,
+    repair_context: LLMRepairContext,
+    requests: list[LLMRequestConfig],
+    notifications: LLMWorkflowNotifications,
+    ensure_summary: Callable[[dict[str, Any]], Awaitable[dict[str, Any]]],
+    on_attempt: Callable[[Any], Awaitable[None]],
+    on_success: Callable[[dict[str, Any], Any], Awaitable[None]],
+    defer_persistence: bool,
+    progress_tracker: ProgressTracker | None,
+    content_for_summary: str,
+    model_for_cache: str,
+    chosen_lang: str,
+) -> dict[str, Any] | None:
+    """Run workflow with reader progress updates or debug typing indicator."""
+    use_progress = progress_tracker is not None
+    updater: ProgressMessageUpdater | None = None
+    typing_ctx: Any = None
+    start_time = time.time()
+
+    try:
+        if use_progress and progress_tracker is not None:
+            updater = ProgressMessageUpdater(progress_tracker, message)
+
+            def analyzing_formatter(elapsed: float) -> str:
+                return SingleURLProgressFormatter.format_llm_progress(
+                    content_length=len(content_for_summary),
+                    model=model_for_cache,
+                    elapsed_sec=elapsed,
+                    phase="analyzing",
+                )
+
+            await updater.start(analyzing_formatter)
+        else:
+            typing_ctx = typing_indicator(summarizer.response_formatter, message, action="typing")
+            await typing_ctx.__aenter__()
+
+        summary = await summarizer._workflow.execute_summary_workflow(
+            message=message,
+            req_id=req_id,
+            correlation_id=correlation_id,
+            interaction_config=interaction_config,
+            persistence=persistence,
+            repair_context=repair_context,
+            requests=requests,
+            notifications=notifications,
+            ensure_summary=ensure_summary,
+            on_attempt=on_attempt,
+            on_success=on_success,
+            defer_persistence=defer_persistence,
+        )
+
+        if summary and summarizer.cfg.runtime.summary_two_pass_enabled:
+            if use_progress and updater is not None:
+
+                def enriching_formatter(elapsed: float) -> str:
+                    return SingleURLProgressFormatter.format_llm_progress(
+                        content_length=len(content_for_summary),
+                        model=model_for_cache,
+                        elapsed_sec=elapsed,
+                        phase="enriching",
+                    )
+
+                await updater.update_formatter(enriching_formatter)
+            summary = await summarizer._enrich_summary_two_pass(
+                summary, content_for_summary, chosen_lang, correlation_id
+            )
+
+        elapsed_total = time.time() - start_time
+        if use_progress and updater is not None:
+            success_msg = SingleURLProgressFormatter.format_llm_complete(
+                model=model_for_cache,
+                elapsed_sec=elapsed_total,
+                success=summary is not None,
+                correlation_id=correlation_id if summary is None else None,
+            )
+            await updater.finalize(success_msg)
+        elif typing_ctx:
+            await typing_ctx.__aexit__(None, None, None)
+        return summary
+    except Exception:
+        if use_progress and updater is not None:
+            error_msg = SingleURLProgressFormatter.format_llm_complete(
+                model=model_for_cache,
+                elapsed_sec=time.time() - start_time,
+                success=False,
+                error_msg="Processing failed",
+                correlation_id=correlation_id,
+            )
+            await updater.finalize(error_msg)
+        elif typing_ctx:
+            await typing_ctx.__aexit__(None, None, None)
+        raise
+
+
 class LLMSummarizer:
     """Handles AI summarization calls and response processing."""
 
@@ -212,7 +426,8 @@ class LLMSummarizer:
         self._last_llm_result = None
         self._insights_helper.reset_state()
 
-        requests = self._build_summary_requests(
+        requests = _build_summary_requests_for(
+            self,
             messages=messages,
             base_model=base_model,
             content_for_summary=content_for_summary,
@@ -273,7 +488,8 @@ class LLMSummarizer:
             url=url,
             silent=silent,
         )
-        summary = await self._execute_summary_with_progress(
+        summary = await _execute_summary_with_progress_for(
+            self,
             message=message,
             req_id=req_id,
             correlation_id=correlation_id,
@@ -370,114 +586,6 @@ class LLMSummarizer:
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": content_parts},  # type: ignore[dict-item]
         ]
-
-    @staticmethod
-    def _clamp(value: float, min_value: float, max_value: float) -> float:
-        return max(min_value, min(max_value, value))
-
-    def _build_summary_requests(
-        self,
-        *,
-        messages: list[dict[str, Any]],
-        base_model: str,
-        content_for_summary: str,
-        user_content: str,
-        silent: bool,
-    ) -> list[LLMRequestConfig]:
-        """Construct ordered LLM request attempts for summary generation."""
-        response_format_schema = self._workflow.build_structured_response_format()
-        response_format_json_object = self._workflow.build_structured_response_format(
-            mode="json_object"
-        )
-        max_tokens_schema = self._select_max_tokens(content_for_summary)
-        max_tokens_json_object = self._select_max_tokens(user_content)
-        base_temperature = self.cfg.openrouter.temperature
-        base_top_p = self.cfg.openrouter.top_p if self.cfg.openrouter.top_p is not None else 0.9
-
-        json_temperature = self.cfg.openrouter.summary_temperature_json_fallback or self._clamp(
-            base_temperature - 0.05, 0.0, 0.5
-        )
-        json_top_p = self.cfg.openrouter.summary_top_p_json_fallback or self._clamp(
-            base_top_p, 0.0, 0.95
-        )
-
-        requests: list[LLMRequestConfig] = []
-
-        def _add_request(
-            *,
-            preset: str,
-            model_name: str,
-            response_format: dict[str, Any],
-            max_tokens: int | None,
-            temperature: float,
-            top_p: float | None,
-        ) -> None:
-            requests.append(
-                LLMRequestConfig(
-                    preset_name=preset,
-                    messages=messages,
-                    response_format=response_format,
-                    max_tokens=max_tokens,
-                    temperature=temperature,
-                    top_p=top_p,
-                    model_override=model_name,
-                    silent=silent,
-                )
-            )
-
-        _add_request(
-            preset="schema_strict",
-            model_name=base_model,
-            response_format=response_format_schema,
-            max_tokens=max_tokens_schema,
-            temperature=base_temperature,
-            top_p=base_top_p,
-        )
-        _add_request(
-            preset="json_object_guardrail",
-            model_name=base_model,
-            response_format=response_format_json_object,
-            max_tokens=max_tokens_json_object,
-            temperature=json_temperature,
-            top_p=json_top_p,
-        )
-
-        fallback_models = [
-            model for model in self.cfg.openrouter.fallback_models if model and model != base_model
-        ]
-        flash_models: list[str] = []
-        flash_model = getattr(self.cfg.openrouter, "flash_model", None)
-        if flash_model:
-            flash_models.append(flash_model)
-        flash_fallback_models = getattr(self.cfg.openrouter, "flash_fallback_models", [])
-        if flash_fallback_models:
-            flash_models.extend(flash_fallback_models)
-
-        added_flash_models: set[str] = set()
-        for model_name in flash_models:
-            if model_name and model_name != base_model and model_name not in added_flash_models:
-                _add_request(
-                    preset="json_object_flash",
-                    model_name=model_name,
-                    response_format=response_format_json_object,
-                    max_tokens=max_tokens_json_object,
-                    temperature=json_temperature,
-                    top_p=json_top_p,
-                )
-                added_flash_models.add(model_name)
-
-        if fallback_models:
-            fallback_model = fallback_models[0]
-            if fallback_model not in added_flash_models:
-                _add_request(
-                    preset="json_object_fallback",
-                    model_name=fallback_model,
-                    response_format=response_format_json_object,
-                    max_tokens=max_tokens_json_object,
-                    temperature=json_temperature,
-                    top_p=json_top_p,
-                )
-        return requests
 
     def _build_summary_repair_context(
         self, system_prompt: str, user_content: str
@@ -648,106 +756,6 @@ class LLMSummarizer:
                 url_hash, model_for_cache, chosen_lang, shaped
             )
         return shaped
-
-    async def _execute_summary_with_progress(
-        self,
-        *,
-        message: Any,
-        req_id: int,
-        correlation_id: str | None,
-        interaction_config: LLMInteractionConfig,
-        persistence: LLMSummaryPersistenceSettings,
-        repair_context: LLMRepairContext,
-        requests: list[LLMRequestConfig],
-        notifications: LLMWorkflowNotifications,
-        ensure_summary: Callable[[dict[str, Any]], Awaitable[dict[str, Any]]],
-        on_attempt: Callable[[Any], Awaitable[None]],
-        on_success: Callable[[dict[str, Any], Any], Awaitable[None]],
-        defer_persistence: bool,
-        progress_tracker: ProgressTracker | None,
-        content_for_summary: str,
-        model_for_cache: str,
-        chosen_lang: str,
-    ) -> dict[str, Any] | None:
-        """Run workflow with reader progress updates or debug typing indicator."""
-        use_progress = progress_tracker is not None
-        updater: ProgressMessageUpdater | None = None
-        typing_ctx: Any = None
-        start_time = time.time()
-
-        try:
-            if use_progress and progress_tracker is not None:
-                updater = ProgressMessageUpdater(progress_tracker, message)
-
-                def analyzing_formatter(elapsed: float) -> str:
-                    return SingleURLProgressFormatter.format_llm_progress(
-                        content_length=len(content_for_summary),
-                        model=model_for_cache,
-                        elapsed_sec=elapsed,
-                        phase="analyzing",
-                    )
-
-                await updater.start(analyzing_formatter)
-            else:
-                typing_ctx = typing_indicator(self.response_formatter, message, action="typing")
-                await typing_ctx.__aenter__()
-
-            summary = await self._workflow.execute_summary_workflow(
-                message=message,
-                req_id=req_id,
-                correlation_id=correlation_id,
-                interaction_config=interaction_config,
-                persistence=persistence,
-                repair_context=repair_context,
-                requests=requests,
-                notifications=notifications,
-                ensure_summary=ensure_summary,
-                on_attempt=on_attempt,
-                on_success=on_success,
-                defer_persistence=defer_persistence,
-            )
-
-            if summary and self.cfg.runtime.summary_two_pass_enabled:
-                if use_progress and updater is not None:
-
-                    def enriching_formatter(elapsed: float) -> str:
-                        return SingleURLProgressFormatter.format_llm_progress(
-                            content_length=len(content_for_summary),
-                            model=model_for_cache,
-                            elapsed_sec=elapsed,
-                            phase="enriching",
-                        )
-
-                    await updater.update_formatter(enriching_formatter)
-                summary = await self._enrich_summary_two_pass(
-                    summary, content_for_summary, chosen_lang, correlation_id
-                )
-
-            elapsed_total = time.time() - start_time
-            if use_progress and updater is not None:
-                success_msg = SingleURLProgressFormatter.format_llm_complete(
-                    model=model_for_cache,
-                    elapsed_sec=elapsed_total,
-                    success=summary is not None,
-                    correlation_id=correlation_id if summary is None else None,
-                )
-                await updater.finalize(success_msg)
-            elif typing_ctx:
-                await typing_ctx.__aexit__(None, None, None)
-            return summary
-        except Exception:
-            if use_progress and updater is not None:
-                error_msg = SingleURLProgressFormatter.format_llm_complete(
-                    model=model_for_cache,
-                    elapsed_sec=time.time() - start_time,
-                    success=False,
-                    error_msg="Processing failed",
-                    correlation_id=correlation_id,
-                )
-                await updater.finalize(error_msg)
-            elif typing_ctx:
-                await typing_ctx.__aexit__(None, None, None)
-            raise
 
     async def summarize_content_pure(
         self,

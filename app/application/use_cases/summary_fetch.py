@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from app.application.ports import SummaryRepositoryPort
 from app.domain.exceptions.domain_exceptions import ResourceNotFoundError
+
+if TYPE_CHECKING:
+    from app.application.ports import SummaryRepositoryPort
 
 logger = logging.getLogger(__name__)
 

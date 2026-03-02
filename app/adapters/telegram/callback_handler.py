@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import html
 import logging
-from typing import TYPE_CHECKING, Any, TypedDict
+from typing import TYPE_CHECKING, Any, TypedDict, cast
 
 from app.core.logging_utils import generate_correlation_id
 from app.core.ui_strings import t
@@ -104,7 +104,9 @@ class CallbackHandler:
         try:
             match action:
                 case "dg":
-                    return await self._handle_digest_full_summary(message, uid, parts, correlation_id)
+                    return await self._handle_digest_full_summary(
+                        message, uid, parts, correlation_id
+                    )
                 case "export":
                     return await self._handle_export(message, uid, parts, correlation_id)
                 case "translate":
@@ -158,7 +160,9 @@ class CallbackHandler:
             msg_id = int(parts[2])
         except (ValueError, IndexError):
             logger.warning("digest_callback_invalid_params", extra={"parts": parts})
-            await self.response_formatter.sender.safe_reply(message, "Invalid digest callback data.")
+            await self.response_formatter.sender.safe_reply(
+                message, "Invalid digest callback data."
+            )
             return True
 
         from app.db.models import Channel, ChannelPost
@@ -177,7 +181,9 @@ class CallbackHandler:
             await self.response_formatter.sender.safe_reply(message, "Post not found in database.")
             return True
 
-        await self.response_formatter.sender.safe_reply(message, t("cb_generating_summary", self._lang))
+        await self.response_formatter.sender.safe_reply(
+            message, t("cb_generating_summary", self._lang)
+        )
 
         # If the post has a t.me URL and we have a URL handler, pipe through full BSR pipeline
         post_url = post.url or ""
@@ -335,7 +341,9 @@ class CallbackHandler:
         summary_id = ":".join(parts[1:]).strip()
         summary_data = await self._load_summary_payload(summary_id, correlation_id=correlation_id)
         if not summary_data:
-            await self.response_formatter.sender.safe_reply(message, t("cb_summary_not_found", self._lang))
+            await self.response_formatter.sender.safe_reply(
+                message, t("cb_summary_not_found", self._lang)
+            )
             return True
 
         if summary_data.get("lang") == "ru":
@@ -412,7 +420,9 @@ class CallbackHandler:
         summary_id = ":".join(parts[1:]).strip()
         summary_data = await self._load_summary_payload(summary_id, correlation_id=correlation_id)
         if not summary_data:
-            await self.response_formatter.sender.safe_reply(message, t("cb_summary_not_found", self._lang))
+            await self.response_formatter.sender.safe_reply(
+                message, t("cb_summary_not_found", self._lang)
+            )
             return True
 
         if not self.hybrid_search:
@@ -446,7 +456,9 @@ class CallbackHandler:
 
         query = " ".join(query_parts).strip()
         if not query:
-            await self.response_formatter.sender.safe_reply(message, t("cb_not_enough_info", self._lang))
+            await self.response_formatter.sender.safe_reply(
+                message, t("cb_not_enough_info", self._lang)
+            )
             return True
 
         await self.response_formatter.sender.safe_reply(
@@ -470,7 +482,9 @@ class CallbackHandler:
                 filtered_results.append(r)
 
             if not filtered_results:
-                await self.response_formatter.sender.safe_reply(message, t("cb_no_similar", self._lang))
+                await self.response_formatter.sender.safe_reply(
+                    message, t("cb_no_similar", self._lang)
+                )
             else:
                 await self.response_formatter.database.send_topic_search_results(
                     message,
@@ -610,7 +624,9 @@ class CallbackHandler:
         summary_id = ":".join(parts[1:]).strip()
         summary_data = await self._load_summary_payload(summary_id, correlation_id=correlation_id)
         if not summary_data:
-            await self.response_formatter.sender.safe_reply(message, t("cb_summary_not_found", self._lang))
+            await self.response_formatter.sender.safe_reply(
+                message, t("cb_summary_not_found", self._lang)
+            )
             return True
 
         meta = summary_data.get("metadata") or {}
@@ -625,7 +641,9 @@ class CallbackHandler:
             summary_1000 = str(summary_data.get("tldr") or "").strip()
 
         raw_insights = summary_data.get("insights") or {}
-        insights: _Insights = raw_insights if isinstance(raw_insights, dict) else {}
+        insights: _Insights = (
+            cast("_Insights", raw_insights) if isinstance(raw_insights, dict) else {}
+        )
 
         tags = summary_data.get("topic_tags") or []
         if not isinstance(tags, list):

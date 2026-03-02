@@ -7,7 +7,7 @@ import contextlib
 import json
 import logging
 import time
-from typing import TYPE_CHECKING, Any, TypedDict
+from typing import TYPE_CHECKING, Any, TypedDict, cast
 from urllib.parse import urlparse
 
 if TYPE_CHECKING:
@@ -959,7 +959,9 @@ def _payload_to_dict(summary_data: dict[str, Any]) -> _SummaryPayload:
             raw_payload = json.loads(raw_payload)
         except (json.JSONDecodeError, ValueError):
             raw_payload = {}
-    return raw_payload if isinstance(raw_payload, dict) else {}
+    if isinstance(raw_payload, dict):
+        return cast("_SummaryPayload", raw_payload)
+    return cast("_SummaryPayload", {})
 
 
 def _extract_entity_names(raw_entities: Any) -> list[str]:
@@ -1019,7 +1021,7 @@ async def _build_articles_for_analysis(
                 language=summary_data.get("lang"),
             )
         )
-        full_summaries.append(payload)
+        full_summaries.append(cast("dict[str, Any]", payload))
     return articles, full_summaries
 
 

@@ -2,14 +2,15 @@ from __future__ import annotations
 
 import logging
 import time
-from typing import Any
-
-import httpx
+from typing import TYPE_CHECKING, Any
 
 from app.adapters.openrouter.exceptions import ValidationError
 from app.core.async_utils import raise_if_cancelled
 from app.core.http_utils import ResponseSizeError, validate_response_size
 from app.models.llm.llm_models import ChatRequest, LLMCallResult
+
+if TYPE_CHECKING:
+    import httpx
 
 logger = logging.getLogger(__name__)
 

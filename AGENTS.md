@@ -1,5 +1,6 @@
 <!-- desloppify-begin -->
 <!-- desloppify-skill-version: 2 -->
+<!-- markdownlint-disable MD003 MD029 -->
 ---
 
 name: desloppify

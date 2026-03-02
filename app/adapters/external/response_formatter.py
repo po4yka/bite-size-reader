@@ -148,6 +148,26 @@ class ResponseFormatter:
         """Expose progress tracker for single-URL progress messages."""
         return self._progress_tracker
 
+    @property
+    def sender(self) -> ResponseSenderImpl:
+        """Expose response sender for backward-compatible direct access."""
+        return self._response_sender
+
+    @property
+    def notifications(self) -> NotificationFormatterImpl:
+        """Expose notification formatter for backward-compatible direct access."""
+        return self._notification_formatter
+
+    @property
+    def summaries(self) -> SummaryPresenterImpl:
+        """Expose summary presenter for backward-compatible direct access."""
+        return self._summary_presenter
+
+    @property
+    def database(self) -> DatabasePresenterImpl:
+        """Expose database presenter for backward-compatible direct access."""
+        return self._database_presenter
+
     async def is_reader_mode(self, message: Any) -> bool:
         """Return True when the user prefers Reader (consolidated) UX."""
         if self._verbosity_resolver is None:

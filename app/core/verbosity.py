@@ -8,8 +8,8 @@ Supports two modes:
 from __future__ import annotations
 
 import logging
-from enum import StrEnum
 import time
+from enum import StrEnum
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
