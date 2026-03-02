@@ -6,6 +6,11 @@ import re
 from typing import Any
 
 from app.core.summary_schema import SummaryModel
+from app.core.summary_text_utils import (
+    cap_text as _cap_text,
+    dedupe_case_insensitive as _dedupe_case_insensitive,
+    hash_tagify as _hash_tagify,
+)
 from app.types.summary_types import (
     Entities,
     KeyStat,
@@ -195,30 +200,6 @@ def _is_numeric(value: Any) -> bool:
         return False
 
 
-def _cap_text(text: str, limit: int) -> str:
-    # Security: Validate inputs
-    if not isinstance(text, str):
-        text = str(text) if text is not None else ""
-    if not isinstance(limit, int) or limit <= 0:
-        msg = "Limit must be a positive integer"
-        raise ValueError(msg)
-
-    # Security: Prevent extremely large limits
-    if limit > 10000:
-        msg = "Limit too large"
-        raise ValueError(msg)
-
-    if len(text) <= limit:
-        return text
-    # cut to limit and then trim to last sentence/phrase boundary
-    snippet = text[:limit]
-    for sep in (". ", "! ", "? ", "; ", ", "):
-        idx = snippet.rfind(sep)
-        if idx > 0:
-            return snippet[: idx + len(sep)].strip()
-    return snippet.strip()
-
-
 def _normalize_whitespace(text: str) -> str:
     if not isinstance(text, str):
         return ""
@@ -250,62 +231,6 @@ def _tldr_needs_enrichment(tldr: str, summary_1000: str) -> bool:
             return True
 
     return len(tldr_norm) <= len(summary_norm) + 40
-
-
-def _hash_tagify(tags: list[str], max_tags: int = 10) -> list[str]:
-    # Security: Validate inputs
-    if not isinstance(tags, list):
-        return []
-    if not isinstance(max_tags, int) or max_tags <= 0 or max_tags > 100:
-        max_tags = 10
-
-    seen: set[str] = set()
-    result: list[str] = []
-    for t in tags:
-        if not isinstance(t, str):
-            continue
-        t = t.strip()
-        if not t:
-            continue
-        # Security: Prevent extremely long tags
-        if len(t) > 100:
-            continue
-        # Security: Prevent dangerous content in tags
-        if any(char in t.lower() for char in ["<", ">", "script", "javascript"]):
-            continue
-
-        if not t.startswith("#"):
-            t = f"#{t}"
-        key = t.lower()
-        if key not in seen:
-            seen.add(key)
-            result.append(t)
-        if len(result) >= max_tags:
-            break
-    return result
-
-
-def _dedupe_case_insensitive(items: list[str]) -> list[str]:
-    # Security: Validate inputs
-    if not isinstance(items, list):
-        return []
-
-    seen: set[str] = set()
-    out: list[str] = []
-    for it in items:
-        if not isinstance(it, str):
-            continue
-        key = it.strip().lower()
-        if key and key not in seen:
-            # Security: Prevent extremely long items
-            if len(key) > 500:
-                continue
-            # Security: Prevent dangerous content
-            if any(char in key for char in ["<", ">", "script", "javascript"]):
-                continue
-            seen.add(key)
-            out.append(it.strip())
-    return out
 
 
 def _summary_fallback_from_supporting_fields(payload: SummaryJSON) -> str | None:

@@ -145,6 +145,7 @@ class CrawlResultRepository(Protocol):
         request_id: int,
         success: bool,
         markdown: str | None = None,
+        html: str | None = None,
         error: str | None = None,
         metadata_json: dict[str, Any] | None = None,
         *,

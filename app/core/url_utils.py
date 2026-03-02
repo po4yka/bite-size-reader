@@ -21,6 +21,20 @@ _dns_cache: contextvars.ContextVar[dict[str, list] | None] = contextvars.Context
 )
 
 
+def extract_domain(url: str | None) -> str | None:
+    """Extract normalized domain from URL (lowercase, without ``www.``)."""
+    if not url:
+        return None
+    try:
+        parsed = urlparse(url)
+        domain = parsed.netloc or parsed.path.split("/")[0]
+        if domain.startswith("www."):
+            domain = domain[4:]
+        return domain.lower() if domain else None
+    except Exception:
+        return None
+
+
 @contextmanager
 def dns_cache_scope() -> Generator[None]:
     """Enable DNS resolution caching for the duration of this scope.
@@ -167,7 +181,7 @@ def _validate_url_input(url: str) -> None:
                 ip_obj = ipaddress.ip_address(hostname)
             except ValueError:
                 # Not a valid IP address - will check domain patterns below
-                pass
+                logger.debug("url_hostname_not_ip_address", extra={"hostname": hostname_lower})
 
             if ip_obj is not None:
                 # Valid IP address - check if it's blocked
@@ -231,6 +245,10 @@ def _validate_url_input(url: str) -> None:
                     try:
                         ip_candidate = ipaddress.ip_address(info[4][0])
                     except ValueError:
+                        logger.debug(
+                            "url_resolved_ip_parse_failed",
+                            extra={"hostname": hostname_lower, "candidate": str(info[4][0])},
+                        )
                         continue
                     if (
                         ip_candidate.is_private

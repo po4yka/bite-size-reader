@@ -64,11 +64,25 @@ async def get_user_preferences(user=Depends(get_current_user)):
         "app_settings": {"theme": "dark", "font_size": "medium"},
     }
 
-    # Get stored preferences or use defaults
-    if user_record and user_record.get("preferences_json"):
-        preferences = {**default_preferences, **user_record["preferences_json"]}
-    else:
-        preferences = default_preferences
+    # Build a normalized preference object with safe defaults.
+    preferences = {
+        "lang_preference": default_preferences["lang_preference"],
+        "notification_settings": dict(default_preferences["notification_settings"]),
+        "app_settings": dict(default_preferences["app_settings"]),
+    }
+    stored_preferences = user_record.get("preferences_json") if user_record else None
+    if isinstance(stored_preferences, dict):
+        lang_preference = stored_preferences.get("lang_preference")
+        if isinstance(lang_preference, str) and lang_preference:
+            preferences["lang_preference"] = lang_preference
+
+        notification_settings = stored_preferences.get("notification_settings")
+        if isinstance(notification_settings, dict):
+            preferences["notification_settings"].update(notification_settings)
+
+        app_settings = stored_preferences.get("app_settings")
+        if isinstance(app_settings, dict):
+            preferences["app_settings"].update(app_settings)
 
     return success_response(
         PreferencesData(

@@ -5,6 +5,7 @@ This adapter handles FTS index maintenance and search operations.
 
 from __future__ import annotations
 
+import logging
 import operator
 import re
 from functools import reduce
@@ -27,6 +28,8 @@ from app.services.topic_search_utils import (
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
+
+logger = logging.getLogger(__name__)
 
 
 class TopicSearchIndexRebuiltError(RuntimeError):
@@ -273,8 +276,11 @@ class SqliteTopicSearchRepositoryAdapter(SqliteBaseRepository):
                     if rid not in seen:
                         request_ids.append(rid)
                         seen.add(rid)
-                except (ValueError, TypeError):
-                    pass
+                except (ValueError, TypeError) as exc:
+                    logger.debug(
+                        "topic_search_invalid_request_id_value",
+                        extra={"value": str(val), "error": str(exc)},
+                    )
         return request_ids
 
     def _search_documents_via_index(self, topic: str, limit: int) -> list[TopicSearchDocument]:
@@ -336,7 +342,11 @@ class SqliteTopicSearchRepositoryAdapter(SqliteBaseRepository):
                 seen_urls.add(url)
                 if len(documents) >= limit:
                     break
-            except (ValueError, TypeError, IndexError):
+            except (ValueError, TypeError, IndexError) as exc:
+                logger.debug(
+                    "topic_search_document_row_skipped",
+                    extra={"error": str(exc), "row_preview": str(row)[:200]},
+                )
                 continue
 
         return documents

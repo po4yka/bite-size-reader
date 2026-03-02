@@ -139,36 +139,18 @@ class LLMInsightsGenerator:
         if not content_text.strip():
             return None
 
-        summary_candidate = summary or self._last_summary_shaped
-        if summary_candidate is None:
-            try:
-                row = await self._summary_repo.async_get_summary_by_request(req_id)
-                json_payload = row.get("json_payload") if row else None
-                if json_payload:
-                    summary_candidate = (
-                        json_payload if isinstance(json_payload, dict) else json.loads(json_payload)
-                    )
-            except Exception as exc:
-                raise_if_cancelled(exc)
-                logger.debug(
-                    "insights_summary_load_failed",
-                    extra={"cid": correlation_id, "error": str(exc)},
-                )
-
-        if summary_candidate and isinstance(summary_candidate, dict):
-            insights_payload = summary_candidate.get("insights")
-            if isinstance(insights_payload, dict) and insights_has_content(insights_payload):
-                logger.info(
-                    "insights_reused_from_summary",
-                    extra={
-                        "cid": correlation_id,
-                        "request_id": req_id,
-                        "source": "summary_payload",
-                    },
-                )
-                self._last_summary_shaped = summary_candidate
-                self._last_insights = insights_payload
-                return insights_payload
+        summary_candidate = await self._resolve_summary_candidate(
+            req_id=req_id,
+            summary=summary,
+            correlation_id=correlation_id,
+        )
+        reused_insights = self._reuse_summary_insights(
+            summary_candidate=summary_candidate,
+            req_id=req_id,
+            correlation_id=correlation_id,
+        )
+        if reused_insights is not None:
+            return reused_insights
 
         candidate_models: list[str] = [self._cfg.openrouter.model]
         candidate_models.extend(
@@ -286,6 +268,54 @@ class LLMInsightsGenerator:
             )
             self._last_insights = None
             return None
+
+    async def _resolve_summary_candidate(
+        self,
+        *,
+        req_id: int,
+        summary: dict[str, Any] | None,
+        correlation_id: str | None,
+    ) -> dict[str, Any] | None:
+        """Return the best summary payload candidate for insights generation."""
+        summary_candidate = summary or self._last_summary_shaped
+        if summary_candidate is not None:
+            return summary_candidate if isinstance(summary_candidate, dict) else None
+
+        try:
+            row = await self._summary_repo.async_get_summary_by_request(req_id)
+            json_payload = row.get("json_payload") if row else None
+            if not json_payload:
+                return None
+            return json_payload if isinstance(json_payload, dict) else json.loads(json_payload)
+        except Exception as exc:
+            raise_if_cancelled(exc)
+            logger.debug(
+                "insights_summary_load_failed",
+                extra={"cid": correlation_id, "error": str(exc)},
+            )
+            return None
+
+    def _reuse_summary_insights(
+        self,
+        *,
+        summary_candidate: dict[str, Any] | None,
+        req_id: int,
+        correlation_id: str | None,
+    ) -> dict[str, Any] | None:
+        """Return cached insights embedded in summary payload when available."""
+        if not isinstance(summary_candidate, dict):
+            return None
+        insights_payload = summary_candidate.get("insights")
+        if not (isinstance(insights_payload, dict) and insights_has_content(insights_payload)):
+            return None
+
+        logger.info(
+            "insights_reused_from_summary",
+            extra={"cid": correlation_id, "request_id": req_id, "source": "summary_payload"},
+        )
+        self._last_summary_shaped = summary_candidate
+        self._last_insights = insights_payload
+        return insights_payload
 
     def _build_insights_source_text(self, content_text: str, summary: dict[str, Any] | None) -> str:
         parts: list[str] = []

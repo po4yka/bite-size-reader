@@ -47,6 +47,11 @@ class ContentExtractorCrawlMixin:
         if isinstance(existing_crawl, Mapping):
             existing_crawl = dict(existing_crawl)
 
+        if existing_crawl:
+            # Normalize expected payload keys for downstream consumers.
+            existing_crawl.setdefault("content_markdown", None)
+            existing_crawl.setdefault("content_html", None)
+
         if existing_crawl and (
             existing_crawl.get("content_markdown") or existing_crawl.get("content_html")
         ):
@@ -117,6 +122,7 @@ class ContentExtractorCrawlMixin:
             if getattr(self.cfg.runtime, "enable_textacy", False):
                 content_text = normalize_text(content_text)
         except (AttributeError, RuntimeError) as e:
+            raise_if_cancelled(e)
             logger.debug("normalization_skipped", extra={"reason": str(e)})
 
         self._audit("INFO", "reuse_crawl_result", {"request_id": None, "cid": correlation_id})
@@ -195,13 +201,9 @@ class ContentExtractorCrawlMixin:
             result = await self._process_successful_crawl_with_title(
                 message, cached_crawl, correlation_id, silent
             )
-            if persist_task:
-                try:
-                    await persist_task
-                except Exception as e:
-                    logger.warning(
-                        "persist_wait_failed", extra={"cid": correlation_id, "error": str(e)}
-                    )
+            await self._await_persist_task(
+                persist_task, correlation_id=correlation_id, event_name="persist_wait_failed"
+            )
             return result
 
         await self.response_formatter.notifications.send_firecrawl_start_notification(
@@ -213,52 +215,11 @@ class ContentExtractorCrawlMixin:
         async with typing_indicator(self.response_formatter, message, action="typing"), self._sem():
             crawl = await self.firecrawl.scrape_markdown(url_text, request_id=req_id)
 
-        quality_issue = detect_low_value_content(crawl)
-        if quality_issue:
-            metrics = quality_issue["metrics"]
-            reason_label = quality_issue["reason"]
-            metric_parts = [
-                f"chars={metrics['char_length']}",
-                f"words={metrics['word_count']}",
-                f"unique={metrics['unique_word_count']}",
-            ]
-            if metrics.get("top_word"):
-                metric_parts.append(
-                    f"top_word={metrics['top_word']}, top_ratio={metrics['top_ratio']:.2f}"
-                )
-            metric_parts.append(f"overlay_ratio={metrics['overlay_ratio']:.2f}")
-            metric_str = ", ".join(metric_parts)
-
-            crawl.status = "error"
-            crawl.error_text = f"insufficient_useful_content:{reason_label} ({metric_str})"
-
-            if self._audit:
-                try:
-                    audit_payload = {
-                        "request_id": req_id,
-                        "cid": correlation_id,
-                        "reason": reason_label,
-                        "char_length": metrics["char_length"],
-                        "word_count": metrics["word_count"],
-                        "unique_word_count": metrics["unique_word_count"],
-                        "overlay_ratio": round(metrics["overlay_ratio"], 3),
-                    }
-                    if metrics.get("top_word"):
-                        audit_payload["top_word"] = metrics["top_word"]
-                        audit_payload["top_ratio"] = round(metrics["top_ratio"], 3)
-                    self._audit("WARNING", "firecrawl_low_value_content", audit_payload)
-                except Exception as e:
-                    logger.warning("audit_failed", extra={"cid": correlation_id, "error": str(e)})
-
-            logger.warning(
-                "firecrawl_low_value_content",
-                extra={
-                    "cid": correlation_id,
-                    "reason": reason_label,
-                    **metrics,
-                    "preview": quality_issue["preview"],
-                },
-            )
+        quality_issue = self._apply_low_value_guard(
+            crawl=crawl,
+            req_id=req_id,
+            correlation_id=correlation_id,
+        )
 
         persist_task = self._schedule_crawl_persistence(req_id, crawl, correlation_id)
 
@@ -284,88 +245,175 @@ class ContentExtractorCrawlMixin:
             has_html = False
 
         if crawl.status != "ok" or not (has_markdown or has_html):
-            try:
-                salvage_html = await self._attempt_direct_html_salvage(url_text)
-            except (OSError, TimeoutError, RuntimeError):
-                salvage_html = None
-
-            if salvage_html:
-                logger.info(
-                    "direct_html_salvage_success",
-                    extra={
-                        "cid": correlation_id,
-                        "html_len": len(salvage_html or ""),
-                        "reason": (crawl.error_text or "no_content_from_firecrawl"),
-                    },
-                )
-
-                salvage_crawl = FirecrawlResult(
-                    status="ok",
-                    http_status=200,
-                    content_markdown=None,
-                    content_html=salvage_html,
-                    structured_json=None,
-                    metadata_json=None,
-                    links_json=None,
-                    response_success=None,
-                    response_error_code=None,
-                    response_error_message=None,
-                    response_details=None,
-                    latency_ms=None,
-                    error_text=None,
-                    source_url=url_text,
-                    endpoint="direct_fetch",
-                    options_json={"direct_fetch": True},
-                    correlation_id=None,
-                )
-
-                salvage_persist_task = self._schedule_crawl_persistence(
-                    req_id, salvage_crawl, correlation_id
-                )
-
-                await self.response_formatter.notifications.send_html_fallback_notification(
-                    message,
-                    len(html_to_text(salvage_html)),
-                    silent=silent,
-                )
-
-                result = await self._process_successful_crawl_with_title(
-                    message, salvage_crawl, correlation_id, silent
-                )
-                await self._write_firecrawl_cache(dedupe_hash, salvage_crawl)
-                if salvage_persist_task:
-                    try:
-                        await salvage_persist_task
-                    except Exception as e:
-                        logger.warning(
-                            "salvage_persist_wait_failed",
-                            extra={"cid": correlation_id, "error": str(e)},
-                        )
-                return result
-
-            if persist_task:
-                try:
-                    await persist_task
-                except Exception as e:
-                    logger.warning(
-                        "persist_wait_failed", extra={"cid": correlation_id, "error": str(e)}
-                    )
-            await self._handle_crawl_error(
+            return await self._recover_or_raise_crawl_failure(
                 message,
-                req_id,
-                crawl,
-                correlation_id,
-                interaction_id,
-                has_markdown,
-                has_html,
-                silent,
+                req_id=req_id,
+                crawl=crawl,
+                url_text=url_text,
+                dedupe_hash=dedupe_hash,
+                correlation_id=correlation_id,
+                interaction_id=interaction_id,
+                persist_task=persist_task,
+                has_markdown=has_markdown,
+                has_html=has_html,
+                silent=silent,
             )
-            failure_reason = crawl.error_text or "Firecrawl extraction failed"
-            raise ValueError(f"Firecrawl extraction failed: {failure_reason}") from None
 
         return await self._process_successful_crawl_with_title(
             message, crawl, correlation_id, silent
         )
+
+    async def _await_persist_task(
+        self,
+        persist_task: asyncio.Task[None] | None,
+        *,
+        correlation_id: str | None,
+        event_name: str,
+    ) -> None:
+        if not persist_task:
+            return
+        try:
+            await persist_task
+        except Exception as e:
+            raise_if_cancelled(e)
+            logger.warning(event_name, extra={"cid": correlation_id, "error": str(e)})
+
+    def _apply_low_value_guard(
+        self,
+        *,
+        crawl: FirecrawlResult,
+        req_id: int,
+        correlation_id: str | None,
+    ) -> dict[str, Any] | None:
+        quality_issue = detect_low_value_content(crawl)
+        if not quality_issue:
+            return None
+
+        metrics = quality_issue["metrics"]
+        reason_label = quality_issue["reason"]
+        metric_parts = [
+            f"chars={metrics['char_length']}",
+            f"words={metrics['word_count']}",
+            f"unique={metrics['unique_word_count']}",
+        ]
+        if metrics.get("top_word"):
+            metric_parts.append(
+                f"top_word={metrics['top_word']}, top_ratio={metrics['top_ratio']:.2f}"
+            )
+        metric_parts.append(f"overlay_ratio={metrics['overlay_ratio']:.2f}")
+        crawl.status = "error"
+        crawl.error_text = f"insufficient_useful_content:{reason_label} ({', '.join(metric_parts)})"
+
+        if self._audit:
+            try:
+                audit_payload = {
+                    "request_id": req_id,
+                    "cid": correlation_id,
+                    "reason": reason_label,
+                    "char_length": metrics["char_length"],
+                    "word_count": metrics["word_count"],
+                    "unique_word_count": metrics["unique_word_count"],
+                    "overlay_ratio": round(metrics["overlay_ratio"], 3),
+                }
+                if metrics.get("top_word"):
+                    audit_payload["top_word"] = metrics["top_word"]
+                    audit_payload["top_ratio"] = round(metrics["top_ratio"], 3)
+                self._audit("WARNING", "firecrawl_low_value_content", audit_payload)
+            except Exception as e:
+                raise_if_cancelled(e)
+                logger.warning("audit_failed", extra={"cid": correlation_id, "error": str(e)})
+
+        logger.warning(
+            "firecrawl_low_value_content",
+            extra={
+                "cid": correlation_id,
+                "reason": reason_label,
+                **metrics,
+                "preview": quality_issue["preview"],
+            },
+        )
+        return quality_issue
+
+    async def _recover_or_raise_crawl_failure(
+        self,
+        message: Any,
+        *,
+        req_id: int,
+        crawl: FirecrawlResult,
+        url_text: str,
+        dedupe_hash: str,
+        correlation_id: str | None,
+        interaction_id: int | None,
+        persist_task: asyncio.Task[None] | None,
+        has_markdown: bool,
+        has_html: bool,
+        silent: bool,
+    ) -> tuple[str, str, str | None, list[str]]:
+        try:
+            salvage_html = await self._attempt_direct_html_salvage(url_text)
+        except (OSError, TimeoutError, RuntimeError):
+            salvage_html = None
+
+        if salvage_html:
+            logger.info(
+                "direct_html_salvage_success",
+                extra={
+                    "cid": correlation_id,
+                    "html_len": len(salvage_html or ""),
+                    "reason": (crawl.error_text or "no_content_from_firecrawl"),
+                },
+            )
+            salvage_crawl = FirecrawlResult(
+                status="ok",
+                http_status=200,
+                content_markdown=None,
+                content_html=salvage_html,
+                structured_json=None,
+                metadata_json=None,
+                links_json=None,
+                response_success=None,
+                response_error_code=None,
+                response_error_message=None,
+                response_details=None,
+                latency_ms=None,
+                error_text=None,
+                source_url=url_text,
+                endpoint="direct_fetch",
+                options_json={"direct_fetch": True},
+                correlation_id=None,
+            )
+            salvage_persist_task = self._schedule_crawl_persistence(
+                req_id, salvage_crawl, correlation_id
+            )
+            await self.response_formatter.notifications.send_html_fallback_notification(
+                message, len(html_to_text(salvage_html)), silent=silent
+            )
+            result = await self._process_successful_crawl_with_title(
+                message, salvage_crawl, correlation_id, silent
+            )
+            await self._write_firecrawl_cache(dedupe_hash, salvage_crawl)
+            await self._await_persist_task(
+                salvage_persist_task,
+                correlation_id=correlation_id,
+                event_name="salvage_persist_wait_failed",
+            )
+            return result
+
+        await self._await_persist_task(
+            persist_task, correlation_id=correlation_id, event_name="persist_wait_failed"
+        )
+        await self._handle_crawl_error(
+            message,
+            req_id,
+            crawl,
+            correlation_id,
+            interaction_id,
+            has_markdown,
+            has_html,
+            silent,
+        )
+        failure_reason = crawl.error_text or "Firecrawl extraction failed"
+        raise ValueError(f"Firecrawl extraction failed: {failure_reason}") from None
 
     async def _get_cached_crawl(
         self, dedupe_hash: str, correlation_id: str | None
@@ -485,6 +533,7 @@ class ContentExtractorCrawlMixin:
                 {"request_id": req_id, "cid": correlation_id, "error": crawl.error_text},
             )
         except Exception as e:
+            raise_if_cancelled(e)
             logger.debug("audit_failed", extra={"cid": correlation_id, "error": str(e)})
 
         if interaction_id:
@@ -660,6 +709,7 @@ class ContentExtractorCrawlMixin:
             if getattr(self.cfg.runtime, "enable_textacy", False):
                 content_text = normalize_text(content_text)
         except (AttributeError, RuntimeError) as e:
+            raise_if_cancelled(e)
             logger.debug("normalization_skipped", extra={"reason": str(e)})
 
         return content_text, content_source, title, images

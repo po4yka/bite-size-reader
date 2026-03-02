@@ -6,11 +6,14 @@ Similar to TypingIndicator but for editable progress messages in Reader mode.
 """
 
 import asyncio
+import logging
 import time
 from collections.abc import Callable
 from typing import Any
 
 from app.core.progress_tracker import ProgressTracker
+
+logger = logging.getLogger(__name__)
 
 
 class ProgressMessageUpdater:
@@ -82,33 +85,29 @@ class ProgressMessageUpdater:
                     await self._task
             except TimeoutError:
                 self._task.cancel()
-                try:
-                    await self._task
-                except asyncio.CancelledError:
-                    pass
+                result = await asyncio.gather(self._task, return_exceptions=True)
+                task_error = result[0] if result else None
+                if isinstance(task_error, Exception) and not isinstance(
+                    task_error, asyncio.CancelledError
+                ):
+                    logger.debug(
+                        "progress_message_updater_finalize_wait_failed",
+                        extra={"error": str(task_error)},
+                    )
+            finally:
+                self._task = None
 
         # Send final message
         await self._tracker.finalize(self._message, final_text)
 
     async def _update_loop(self) -> None:
         """Internal loop for periodic progress updates."""
-        try:
-            while not self._stop_event.is_set():
-                if self._current_formatter:
-                    elapsed = time.time() - self._start_time
-                    text = self._current_formatter(elapsed)
-                    await self._tracker.update(self._message, text)
-
-                # Wait for next update interval or stop signal
-                try:
-                    async with asyncio.timeout(self._interval):
-                        await self._stop_event.wait()
-                    break  # Stop event was set
-                except TimeoutError:
-                    continue  # Interval elapsed, continue loop
-
-        except asyncio.CancelledError:
-            pass  # Task was cancelled, exit gracefully
+        while not self._stop_event.is_set():
+            if self._current_formatter:
+                elapsed = time.time() - self._start_time
+                text = self._current_formatter(elapsed)
+                await self._tracker.update(self._message, text)
+            await asyncio.sleep(self._interval)
 
     async def __aenter__(self) -> "ProgressMessageUpdater":
         """Context manager entry."""
@@ -120,7 +119,13 @@ class ProgressMessageUpdater:
         self._stop_event.set()
         if self._task:
             self._task.cancel()
-            try:
-                await self._task
-            except asyncio.CancelledError:
-                pass
+            result = await asyncio.gather(self._task, return_exceptions=True)
+            task_error = result[0] if result else None
+            if isinstance(task_error, Exception) and not isinstance(
+                task_error, asyncio.CancelledError
+            ):
+                logger.debug(
+                    "progress_message_updater_context_exit_wait_failed",
+                    extra={"error": str(task_error)},
+                )
+            self._task = None

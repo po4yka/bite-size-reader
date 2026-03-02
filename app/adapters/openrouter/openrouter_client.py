@@ -18,6 +18,7 @@ if TYPE_CHECKING:
 
 import httpx
 
+from app.adapters.llm.base_client import BaseLLMClient
 from app.adapters.openrouter import chat_completions, client_validation
 from app.adapters.openrouter.error_handler import ErrorHandler
 from app.adapters.openrouter.exceptions import (
@@ -65,51 +66,9 @@ class OpenRouterClient:
     # Thread lock to protect async lock initialization (fixes race condition)
     _lock_init_lock = threading.Lock()
 
-    @classmethod
-    def _get_event_loop(cls) -> asyncio.AbstractEventLoop:
-        """Return the running event loop.
-
-        Raises RuntimeError if called outside an async context -- this is
-        intentional, as the client pool must only be accessed from async code.
-        """
-        return asyncio.get_running_loop()
-
-    @classmethod
-    def _get_pool_lock(cls) -> asyncio.Lock:
-        """Get or create the async lock for client pool access.
-
-        Thread-safe initialization using double-checked locking pattern.
-        Prevents race condition where multiple threads could create different locks.
-        """
-        loop = cls._get_event_loop()
-
-        # Fast path: lock already exists (no thread lock needed for read)
-        lock = cls._client_pool_locks.get(loop)
-        if lock is not None:
-            return lock
-
-        # Slow path: create the lock with thread-safe initialization
-        with cls._lock_init_lock:
-            lock = cls._client_pool_locks.get(loop)
-            if lock is None:
-                lock = asyncio.Lock()
-                cls._client_pool_locks[loop] = lock
-            return lock
-
-    @classmethod
-    def _get_pool(cls) -> dict[str, httpx.AsyncClient]:
-        """Get or create the client pool for the current event loop."""
-        loop = cls._get_event_loop()
-        pool = cls._client_pools.get(loop)
-        if pool is not None:
-            return pool
-
-        with cls._lock_init_lock:
-            pool = cls._client_pools.get(loop)
-            if pool is None:
-                pool = {}
-                cls._client_pools[loop] = pool
-            return pool
+    _get_event_loop = BaseLLMClient.__dict__["_get_event_loop"]
+    _get_pool_lock = BaseLLMClient.__dict__["_get_pool_lock"]
+    _get_pool = BaseLLMClient.__dict__["_get_pool"]
 
     def __init__(
         self,
@@ -296,19 +255,7 @@ class OpenRouterClient:
         """Return the provider name for LLMClientProtocol compliance."""
         return self._provider_name
 
-    @classmethod
-    async def cleanup_all_clients(cls) -> None:
-        """Clean up all shared HTTP clients."""
-        with cls._lock_init_lock:
-            pools = list(cls._client_pools.values())
-            cls._client_pools = weakref.WeakKeyDictionary()
-            cls._client_pool_locks = weakref.WeakKeyDictionary()
-
-        clients = [client for pool in pools for client in pool.values()]
-
-        # Close all clients concurrently
-        if clients:
-            await asyncio.gather(*[client.aclose() for client in clients], return_exceptions=True)
+    cleanup_all_clients = BaseLLMClient.__dict__["cleanup_all_clients"]
 
     async def __aenter__(self) -> Self:
         """Async context manager entry."""
@@ -318,44 +265,8 @@ class OpenRouterClient:
         """Async context manager exit."""
         await self.aclose()
 
-    async def aclose(self) -> None:
-        """Close the underlying HTTP client."""
-        if self._closed:
-            return
-
-        self._closed = True
-
-        # Don't close shared clients, just remove our reference
-        if self._client is not None:
-            self._client = None
-
-    async def _ensure_client(self) -> httpx.AsyncClient:
-        """Lazily construct or reuse a pooled AsyncClient instance."""
-        if self._closed:
-            msg = "Client has been closed"
-            raise RuntimeError(msg)
-
-        # Check if we already have a client reference
-        if self._client is not None:
-            return self._client
-
-        # Use shared client pool for better connection reuse
-        async with self._get_pool_lock():
-            pool = self._get_pool()
-            client = pool.get(self._client_key)
-            if client is None or client.is_closed:
-                client = httpx.AsyncClient(
-                    base_url=self._base_url,
-                    timeout=self._timeout,
-                    limits=self._limits,
-                    # Additional performance settings
-                    http2=HTTP2_AVAILABLE,
-                    follow_redirects=True,
-                )
-                pool[self._client_key] = client
-
-            self._client = client
-            return client
+    aclose = BaseLLMClient.aclose
+    _ensure_client = BaseLLMClient._ensure_client
 
     def _get_error_message(self, status_code: int, data: dict[str, Any] | None) -> str:
         return client_validation.get_error_message(status_code, data)

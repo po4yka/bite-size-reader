@@ -14,362 +14,210 @@ from app.models.llm.llm_models import ChatRequest, LLMCallResult
 logger = logging.getLogger(__name__)
 
 
-async def chat(
+def _message_content_length(message: dict[str, Any]) -> int:
+    content = message.get("content")
+    if isinstance(content, str):
+        return len(content)
+    if isinstance(content, list):
+        return sum(len(part.get("text", "")) for part in content if isinstance(part, dict))
+    return 0
+
+
+def _build_attempt_request_payload(
     self,
-    messages: list[dict[str, Any]],
     *,
-    temperature: float = 0.2,
-    max_tokens: int | None = None,
-    top_p: float | None = None,
-    stream: bool = False,
-    request_id: int | None = None,
-    response_format: dict[str, Any] | None = None,
-    model_override: str | None = None,
-    fallback_models_override: tuple[str, ...] | list[str] | None = None,
-) -> LLMCallResult:
-    """Enhanced chat method with structured output support."""
-    if self._closed:
-        msg = "Client has been closed"
-        raise RuntimeError(msg)
+    model: str,
+    sanitized_messages: list[dict[str, Any]],
+    request: ChatRequest,
+    rf_mode_current: str,
+    response_format_current: dict[str, Any] | None,
+) -> tuple[list[dict[str, Any]], dict[str, str], dict[str, Any], bool, bool, str | None]:
+    cacheable_messages = self.request_builder.build_cacheable_messages(sanitized_messages, model)
+    self.request_builder._structured_output_mode = rf_mode_current
+    headers = self.request_builder.build_headers()
+    body = self.request_builder.build_request_body(
+        model, cacheable_messages, request, response_format_current
+    )
+    if rf_mode_current == "json_object" and "response_format" in body:
+        body["response_format"] = {"type": "json_object"}
 
-    # Check circuit breaker before proceeding
-    if self._circuit_breaker and not self._circuit_breaker.can_proceed():
-        logger.warning(
-            "openrouter_circuit_breaker_open",
-            extra={
-                "request_id": request_id,
-                "circuit_state": self._circuit_breaker.state.value,
-                "failure_count": self._circuit_breaker.failure_count,
-            },
-        )
-        return LLMCallResult(
-            status="error",
-            model=None,
-            response_text=None,
-            error_text="Service temporarily unavailable (circuit breaker open)",
-            tokens_prompt=0,
-            tokens_completion=0,
-            cost_usd=0.0,
-            latency_ms=0,
-        )
+    should_compress, transform_type = self.request_builder.should_apply_compression(
+        cacheable_messages, model
+    )
+    if should_compress and transform_type:
+        body["transforms"] = [transform_type]
+        total_length = sum(_message_content_length(msg) for msg in cacheable_messages)
+        self.payload_logger.log_compression_applied(total_length, 200000, model)
 
-    # Early validation to fail fast
-    if not messages:
-        msg = "Messages cannot be empty"
-        raise ValidationError(msg, context={"messages_count": 0})
+    rf_included = "response_format" in body
+    structured_output_used = rf_included
+    structured_output_mode_used = rf_mode_current if rf_included else None
+    return (
+        cacheable_messages,
+        headers,
+        body,
+        rf_included,
+        structured_output_used,
+        structured_output_mode_used,
+    )
 
-    if not isinstance(messages, list):
-        msg = f"Messages must be a list, got {type(messages).__name__}"
-        raise ValidationError(
-            msg,
-            context={"messages_type": type(messages).__name__},
-        )
 
-    # Create request without strict validation
-    request = ChatRequest(
-        messages=messages,
-        temperature=temperature,
+def _copy_request_with_max_tokens(request: ChatRequest, max_tokens: int) -> ChatRequest:
+    return ChatRequest(
+        messages=request.messages,
+        temperature=request.temperature,
         max_tokens=max_tokens,
-        top_p=top_p,
-        stream=stream,
-        request_id=request_id,
-        response_format=response_format,
-        model_override=model_override,
+        top_p=request.top_p,
+        stream=request.stream,
+        request_id=request.request_id,
+        response_format=request.response_format,
+        model_override=request.model_override,
     )
 
-    # Pre-process and validate with specific error handling
-    try:
-        self.request_builder.validate_chat_request(request)
-        sanitized_messages = self.request_builder.sanitize_messages(messages)
-    except Exception as e:
-        raise_if_cancelled(e)
-        msg = f"Request validation failed: {e}"
-        raise ValidationError(
-            msg,
-            context={"original_error": str(e), "messages_count": len(messages)},
-        ) from e
 
-    # Calculate message metrics
-    message_lengths = [len(str(msg.get("content", ""))) for msg in sanitized_messages]
-    message_roles = [msg.get("role", "?") for msg in sanitized_messages]
-    total_chars = sum(message_lengths)
+async def _run_attempts_for_model(
+    self,
+    *,
+    client: httpx.AsyncClient,
+    model: str,
+    request: ChatRequest,
+    sanitized_messages: list[dict[str, Any]],
+    message_lengths: list[int],
+    message_roles: list[str],
+    total_chars: int,
+    request_id: int | None,
+    builder_rf_mode_original: str,
+    response_format_initial: dict[str, Any] | None,
+    structured_output_used: bool,
+    structured_output_mode_used: str | None,
+) -> dict[str, Any]:
+    rf_mode_current = builder_rf_mode_original
+    response_format_current = response_format_initial
+    truncation_count = 0
+    state: dict[str, Any] = {
+        "terminal_result": None,
+        "request": request,
+        "last_error_text": None,
+        "last_data": None,
+        "last_latency": None,
+        "last_model_reported": None,
+        "last_response_text": None,
+        "last_error_context": None,
+        "structured_parse_error": False,
+        "structured_output_used": structured_output_used,
+        "structured_output_mode_used": structured_output_mode_used,
+    }
 
-    # Determine models to try
-    primary_model = model_override if model_override else self._model
-    fallback_models = (
-        list(fallback_models_override) if fallback_models_override else self._fallback_models
-    )
-    models_to_try = self.model_capabilities.build_model_fallback_list(
-        primary_model, fallback_models, response_format, self._enable_structured_outputs
-    )
+    for attempt in range(self.error_handler._max_retries + 1):
+        try:
+            result = await self._attempt_request(
+                client=client,
+                model=model,
+                attempt=attempt,
+                sanitized_messages=sanitized_messages,
+                request=state["request"],
+                rf_mode_current=rf_mode_current,
+                response_format_current=response_format_current,
+                message_lengths=message_lengths,
+                message_roles=message_roles,
+                total_chars=total_chars,
+                request_id=request_id,
+            )
+        except Exception as e:
+            raise_if_cancelled(e)
+            state["last_error_text"] = f"Unexpected error: {e!s}"
+            state["last_error_context"] = {
+                "status_code": None,
+                "message": "Client exception",
+                "api_error": str(e),
+            }
+            if attempt < self.error_handler._max_retries:
+                await self.error_handler.sleep_backoff(attempt)
+                continue
+            break
 
-    if not models_to_try:
-        msg = "No models available to try"
-        raise ValueError(msg)
+        if result.get("success"):
+            state["terminal_result"] = result["llm_result"]
+            return state
 
-    # State tracking
-    builder_rf_mode_original = self.request_builder._structured_output_mode
-    response_format_initial = response_format if isinstance(response_format, dict) else None
+        if result.get("should_retry"):
+            rf_mode_current = result.get("new_rf_mode", rf_mode_current)
+            response_format_current = result.get("new_response_format", response_format_current)
+            state["structured_output_used"] = result.get(
+                "structured_output_used", state["structured_output_used"]
+            )
+            state["structured_output_mode_used"] = result.get(
+                "structured_output_mode_used", state["structured_output_mode_used"]
+            )
 
-    # Initialize state variables
-    last_error_text = None
-    last_data = None
-    last_latency = None
-    last_model_reported = None
-    last_response_text = None
-    structured_output_used = False
-    structured_output_mode_used = None
-    structured_parse_error = False
-    last_error_context: dict[str, Any] | None = None
-
-    try:
-        async with self._request_context() as client:
-            # Try each model
-            for model_idx, model in enumerate(models_to_try):
-                # Skip models that don't support structured outputs if required
-                if response_format and self._enable_structured_outputs:
-                    try:
-                        await self.model_capabilities.ensure_structured_supported_models()
-                        if not self.model_capabilities.supports_structured_outputs(model):
-                            if model == primary_model:
-                                self.error_handler.log_skip_model(
-                                    model, "no_structured_outputs_primary", request_id
-                                )
-                                structured_output_used = False
-                                structured_output_mode_used = None
-                            else:
-                                self.error_handler.log_skip_model(
-                                    model, "no_structured_outputs", request_id
-                                )
-                                continue
-                    except Exception as e:
-                        raise_if_cancelled(e)
-                        # Log but continue with assumption that model supports it
-                        logger.warning("Failed to check model capabilities: %s", e)
-
-                # Determine response format mode for this model
-                rf_mode_current = builder_rf_mode_original
-                response_format_current = response_format_initial
-                truncation_count = 0  # Track truncations per model
-
-                # Retry logic for each model
-                for attempt in range(self.error_handler._max_retries + 1):
-                    try:
-                        result = await self._attempt_request(
-                            client=client,
-                            model=model,
-                            attempt=attempt,
-                            sanitized_messages=sanitized_messages,
-                            request=request,
-                            rf_mode_current=rf_mode_current,
-                            response_format_current=response_format_current,
-                            message_lengths=message_lengths,
-                            message_roles=message_roles,
-                            total_chars=total_chars,
-                            request_id=request_id,
-                        )
-
-                        # Handle successful result
-                        if result.get("success"):
-                            self.request_builder._structured_output_mode = builder_rf_mode_original
-                            # Record circuit breaker success
-                            if self._circuit_breaker:
-                                self._circuit_breaker.record_success()
-                            return result["llm_result"]
-
-                        # Handle retry/fallback logic
-                        if result.get("should_retry"):
-                            rf_mode_current = result.get("new_rf_mode", rf_mode_current)
-                            response_format_current = result.get(
-                                "new_response_format", response_format_current
-                            )
-                            structured_output_used = result.get(
-                                "structured_output_used", structured_output_used
-                            )
-                            structured_output_mode_used = result.get(
-                                "structured_output_mode_used", structured_output_mode_used
-                            )
-
-                            # Handle truncation recovery - increase max_tokens
-                            truncation_recovery = result.get("truncation_recovery")
-                            if truncation_recovery:
-                                truncation_count += 1
-                                # Fail faster: after 2 truncations, skip to next model
-                                if truncation_count >= 2:
-                                    logger.warning(
-                                        "truncation_limit_reached",
-                                        extra={
-                                            "model": model,
-                                            "count": truncation_count,
-                                            "request_id": request_id,
-                                        },
-                                    )
-                                    last_error_text = "repeated_truncation"
-                                    last_error_context = {
-                                        "status_code": None,
-                                        "message": "Repeated truncation - trying next model",
-                                        "truncation_count": truncation_count,
-                                    }
-                                    break  # Try next model
-
-                                new_max = truncation_recovery.get("suggested_max_tokens")
-                                if new_max and (
-                                    not request.max_tokens or new_max > request.max_tokens
-                                ):
-                                    logger.info(
-                                        "truncation_recovery_increasing_max_tokens",
-                                        extra={
-                                            "model": model,
-                                            "original_max": request.max_tokens,
-                                            "new_max": new_max,
-                                            "attempt": attempt + 1,
-                                            "truncation_count": truncation_count,
-                                        },
-                                    )
-                                    # Create new request with increased max_tokens
-                                    request = ChatRequest(
-                                        messages=request.messages,
-                                        temperature=request.temperature,
-                                        max_tokens=new_max,
-                                        top_p=request.top_p,
-                                        stream=request.stream,
-                                        request_id=request.request_id,
-                                        response_format=request.response_format,
-                                        model_override=request.model_override,
-                                    )
-
-                            # Apply backoff
-                            if result.get("backoff_needed"):
-                                await self.error_handler.sleep_backoff(attempt)
-                            continue
-
-                        # Update state for potential fallback
-                        last_error_text = result.get("error_text")
-                        last_data = result.get("data")
-                        last_latency = result.get("latency")
-                        last_model_reported = result.get("model_reported")
-                        last_response_text = result.get("response_text")
-                        last_error_context = result.get("error_context")
-                        structured_parse_error = result.get("structured_parse_error", False)
-
-                        if result.get("should_try_next_model"):
-                            break  # Try next model
-
-                        # Return error result
-                        if result.get("error_result"):
-                            self.request_builder._structured_output_mode = builder_rf_mode_original
-                            # Record circuit breaker failure
-                            if self._circuit_breaker:
-                                self._circuit_breaker.record_failure()
-                            return result["error_result"]
-
-                    except httpx.TimeoutException as e:
-                        # Handle timeout -- skip directly to next model
-                        # instead of burning retries on the same slow model
-                        last_error_text = f"Request timeout: {e!s}"
-                        last_error_context = {
-                            "status_code": None,
-                            "message": "Request timeout",
-                            "api_error": str(e),
-                            "timeout": True,
-                        }
-                        logger.warning(
-                            "timeout_fallback_to_next_model",
-                            extra={
-                                "model": model,
-                                "attempt": attempt,
-                                "request_id": request_id,
-                                "error": str(e),
-                            },
-                        )
-                        break  # Try next model immediately
-                    except httpx.ConnectError as e:
-                        # Handle connection errors specifically
-                        last_error_text = f"Connection error: {e!s}"
-                        last_error_context = {
-                            "status_code": None,
-                            "message": "Connection failed",
-                            "api_error": str(e),
-                        }
-                        # Connection errors should be retried if within retry limits
-                        if attempt < self.error_handler._max_retries:
-                            await self.error_handler.sleep_backoff(attempt)
-                            continue
-                        break  # Try next model
-                    except httpx.HTTPStatusError as e:
-                        # Handle HTTP status errors specifically
-                        last_error_text = f"HTTP {e.response.status_code} error: {e!s}"
-                        last_error_context = {
-                            "status_code": e.response.status_code,
-                            "message": "HTTP status error",
-                            "api_error": str(e),
-                        }
-                        # HTTP errors should be retried if within retry limits
-                        if attempt < self.error_handler._max_retries:
-                            await self.error_handler.sleep_backoff(attempt)
-                            continue
-                        break  # Try next model
-                    except Exception as e:
-                        raise_if_cancelled(e)
-                        # Handle other unexpected exceptions
-                        last_error_text = f"Unexpected error: {e!s}"
-                        last_error_context = {
-                            "status_code": None,
-                            "message": "Client exception",
-                            "api_error": str(e),
-                        }
-                        # Generic exceptions should be retried if within retry limits
-                        if attempt < self.error_handler._max_retries:
-                            await self.error_handler.sleep_backoff(attempt)
-                            continue
-                        break  # Try next model
-
-                # On structured output parse error, try next model instead of breaking
-                # Different models may have better JSON compliance
-                if structured_parse_error:
+            truncation_recovery = result.get("truncation_recovery")
+            if truncation_recovery:
+                truncation_count += 1
+                if truncation_count >= 2:
+                    logger.warning(
+                        "truncation_limit_reached",
+                        extra={"model": model, "count": truncation_count, "request_id": request_id},
+                    )
+                    state["last_error_text"] = "repeated_truncation"
+                    state["last_error_context"] = {
+                        "status_code": None,
+                        "message": "Repeated truncation - trying next model",
+                        "truncation_count": truncation_count,
+                    }
+                    break
+                new_max = truncation_recovery.get("suggested_max_tokens")
+                if new_max and (
+                    not state["request"].max_tokens or new_max > state["request"].max_tokens
+                ):
                     logger.info(
-                        "structured_parse_error_trying_next_model",
+                        "truncation_recovery_increasing_max_tokens",
                         extra={
                             "model": model,
-                            "request_id": request_id,
-                            "models_remaining": len(models_to_try) - model_idx - 1,
+                            "original_max": state["request"].max_tokens,
+                            "new_max": new_max,
+                            "attempt": attempt + 1,
+                            "truncation_count": truncation_count,
                         },
                     )
-                    # Continue to next model instead of breaking
+                    state["request"] = _copy_request_with_max_tokens(state["request"], new_max)
 
-                # Log fallback to next model
-                if model_idx < len(models_to_try) - 1:
-                    next_model = models_to_try[model_idx + 1]
-                    self.error_handler.log_fallback(model, next_model, request_id)
+            if result.get("backoff_needed"):
+                await self.error_handler.sleep_backoff(attempt)
+            continue
 
-    except Exception as e:
-        raise_if_cancelled(e)
-        # Handle context manager or other critical errors
-        last_error_text = f"Critical error: {e!s}"
-        last_error_context = {
-            "status_code": None,
-            "message": "Critical client error",
-            "api_error": str(e),
-            "error_type": "critical",
-        }
+        state["last_error_text"] = result.get("error_text")
+        state["last_data"] = result.get("data")
+        state["last_latency"] = result.get("latency")
+        state["last_model_reported"] = result.get("model_reported")
+        state["last_response_text"] = result.get("response_text")
+        state["last_error_context"] = result.get("error_context")
+        state["structured_parse_error"] = result.get("structured_parse_error", False)
+        if result.get("error_result"):
+            state["terminal_result"] = result["error_result"]
+            return state
+        if result.get("should_try_next_model"):
+            break
 
-    finally:
-        # Always restore original mode
-        self.request_builder._structured_output_mode = builder_rf_mode_original
+    return state
 
-    # All models exhausted - build final error result
+
+def _build_exhausted_chat_result(
+    self,
+    *,
+    last_model_reported: str | None,
+    last_response_text: str | None,
+    last_data: dict[str, Any] | None,
+    last_latency: int | None,
+    structured_parse_error: bool,
+    last_error_text: str | None,
+    sanitized_messages: list[dict[str, Any]],
+    structured_output_used: bool,
+    structured_output_mode_used: str | None,
+    last_error_context: dict[str, Any] | None,
+) -> LLMCallResult:
     redacted_headers = self.request_builder.get_redacted_headers(
         {"Authorization": "REDACTED", "Content-Type": "application/json"}
     )
-
-    self.error_handler.log_exhausted(
-        models_to_try, self.error_handler._max_retries + 1, last_error_text, request_id
-    )
-
-    # Record circuit breaker failure when all retries exhausted
-    if self._circuit_breaker:
-        self._circuit_breaker.record_failure()
-
     return LLMCallResult(
         status="error",
         model=last_model_reported,
@@ -395,6 +243,303 @@ async def chat(
     )
 
 
+def _prepare_chat_context(
+    self,
+    *,
+    messages: list[dict[str, Any]],
+    temperature: float,
+    max_tokens: int | None,
+    top_p: float | None,
+    stream: bool,
+    request_id: int | None,
+    response_format: dict[str, Any] | None,
+    model_override: str | None,
+    fallback_models_override: tuple[str, ...] | list[str] | None,
+) -> tuple[
+    ChatRequest,
+    list[dict[str, Any]],
+    list[int],
+    list[str],
+    int,
+    str,
+    list[str],
+]:
+    if not messages:
+        msg = "Messages cannot be empty"
+        raise ValidationError(msg, context={"messages_count": 0})
+    if not isinstance(messages, list):
+        msg = f"Messages must be a list, got {type(messages).__name__}"
+        raise ValidationError(msg, context={"messages_type": type(messages).__name__})
+
+    request = ChatRequest(
+        messages=messages,
+        temperature=temperature,
+        max_tokens=max_tokens,
+        top_p=top_p,
+        stream=stream,
+        request_id=request_id,
+        response_format=response_format,
+        model_override=model_override,
+    )
+    try:
+        self.request_builder.validate_chat_request(request)
+        sanitized_messages = self.request_builder.sanitize_messages(messages)
+    except Exception as e:
+        raise_if_cancelled(e)
+        msg = f"Request validation failed: {e}"
+        raise ValidationError(
+            msg,
+            context={"original_error": str(e), "messages_count": len(messages)},
+        ) from e
+
+    message_lengths = [len(str(msg.get("content", ""))) for msg in sanitized_messages]
+    message_roles = [msg.get("role", "?") for msg in sanitized_messages]
+    total_chars = sum(message_lengths)
+    primary_model = model_override if model_override else self._model
+    fallback_models = (
+        list(fallback_models_override) if fallback_models_override else self._fallback_models
+    )
+    models_to_try = self.model_capabilities.build_model_fallback_list(
+        primary_model, fallback_models, response_format, self._enable_structured_outputs
+    )
+    if not models_to_try:
+        msg = "No models available to try"
+        raise ValueError(msg)
+    return (
+        request,
+        sanitized_messages,
+        message_lengths,
+        message_roles,
+        total_chars,
+        primary_model,
+        models_to_try,
+    )
+
+
+async def _maybe_skip_unsupported_structured_model(
+    self,
+    *,
+    model: str,
+    primary_model: str,
+    response_format: dict[str, Any] | None,
+    request_id: int | None,
+    structured_output_used: bool,
+    structured_output_mode_used: str | None,
+) -> tuple[bool, bool, str | None]:
+    if not (response_format and self._enable_structured_outputs):
+        return False, structured_output_used, structured_output_mode_used
+    try:
+        await self.model_capabilities.ensure_structured_supported_models()
+        if self.model_capabilities.supports_structured_outputs(model):
+            return False, structured_output_used, structured_output_mode_used
+    except Exception as e:
+        raise_if_cancelled(e)
+        logger.warning("Failed to check model capabilities: %s", e)
+        return False, structured_output_used, structured_output_mode_used
+
+    reason = "no_structured_outputs_primary" if model == primary_model else "no_structured_outputs"
+    self.error_handler.log_skip_model(model, reason, request_id)
+    if model == primary_model:
+        return False, False, None
+    return True, structured_output_used, structured_output_mode_used
+
+
+def _circuit_breaker_open_result(self, request_id: int | None) -> LLMCallResult:
+    logger.warning(
+        "openrouter_circuit_breaker_open",
+        extra={
+            "request_id": request_id,
+            "circuit_state": self._circuit_breaker.state.value,
+            "failure_count": self._circuit_breaker.failure_count,
+        },
+    )
+    return LLMCallResult(
+        status="error",
+        model=None,
+        response_text=None,
+        error_text="Service temporarily unavailable (circuit breaker open)",
+        tokens_prompt=0,
+        tokens_completion=0,
+        cost_usd=0.0,
+        latency_ms=0,
+    )
+
+
+def _unpack_model_state(model_state: dict[str, Any]) -> tuple[Any, ...]:
+    return (
+        model_state["request"],
+        model_state["structured_output_used"],
+        model_state["structured_output_mode_used"],
+        model_state["last_error_text"],
+        model_state["last_data"],
+        model_state["last_latency"],
+        model_state["last_model_reported"],
+        model_state["last_response_text"],
+        model_state["last_error_context"],
+        model_state["structured_parse_error"],
+    )
+
+
+def _critical_chat_error_payload(error: Exception) -> tuple[str, dict[str, Any]]:
+    return (
+        f"Critical error: {error!s}",
+        {
+            "status_code": None,
+            "message": "Critical client error",
+            "api_error": str(error),
+            "error_type": "critical",
+        },
+    )
+
+
+async def chat(
+    self,
+    messages: list[dict[str, Any]],
+    *,
+    temperature: float = 0.2,
+    max_tokens: int | None = None,
+    top_p: float | None = None,
+    stream: bool = False,
+    request_id: int | None = None,
+    response_format: dict[str, Any] | None = None,
+    model_override: str | None = None,
+    fallback_models_override: tuple[str, ...] | list[str] | None = None,
+) -> LLMCallResult:
+    """Enhanced chat method with structured output support."""
+    if self._closed:
+        msg = "Client has been closed"
+        raise RuntimeError(msg)
+
+    if self._circuit_breaker and not self._circuit_breaker.can_proceed():
+        return _circuit_breaker_open_result(self, request_id)
+
+    (
+        request,
+        sanitized_messages,
+        message_lengths,
+        message_roles,
+        total_chars,
+        primary_model,
+        models_to_try,
+    ) = _prepare_chat_context(
+        self,
+        messages=messages,
+        temperature=temperature,
+        max_tokens=max_tokens,
+        top_p=top_p,
+        stream=stream,
+        request_id=request_id,
+        response_format=response_format,
+        model_override=model_override,
+        fallback_models_override=fallback_models_override,
+    )
+
+    builder_rf_mode_original = self.request_builder._structured_output_mode
+    response_format_initial = response_format if isinstance(response_format, dict) else None
+    last_error_text: str | None = None
+    last_data: dict[str, Any] | None = None
+    last_latency: int | None = None
+    last_model_reported: str | None = None
+    last_response_text: str | None = None
+    structured_output_used = False
+    structured_output_mode_used: str | None = None
+    structured_parse_error = False
+    last_error_context: dict[str, Any] | None = None
+
+    try:
+        async with self._request_context() as client:
+            for model_idx, model in enumerate(models_to_try):
+                (
+                    skip_model,
+                    structured_output_used,
+                    structured_output_mode_used,
+                ) = await _maybe_skip_unsupported_structured_model(
+                    self,
+                    model=model,
+                    primary_model=primary_model,
+                    response_format=response_format,
+                    request_id=request_id,
+                    structured_output_used=structured_output_used,
+                    structured_output_mode_used=structured_output_mode_used,
+                )
+                if skip_model:
+                    continue
+
+                model_state = await _run_attempts_for_model(
+                    self,
+                    client=client,
+                    model=model,
+                    request=request,
+                    sanitized_messages=sanitized_messages,
+                    message_lengths=message_lengths,
+                    message_roles=message_roles,
+                    total_chars=total_chars,
+                    request_id=request_id,
+                    builder_rf_mode_original=builder_rf_mode_original,
+                    response_format_initial=response_format_initial,
+                    structured_output_used=structured_output_used,
+                    structured_output_mode_used=structured_output_mode_used,
+                )
+                (
+                    request,
+                    structured_output_used,
+                    structured_output_mode_used,
+                    last_error_text,
+                    last_data,
+                    last_latency,
+                    last_model_reported,
+                    last_response_text,
+                    last_error_context,
+                    structured_parse_error,
+                ) = _unpack_model_state(model_state)
+
+                if model_state["terminal_result"] is not None:
+                    terminal_result = model_state["terminal_result"]
+                    if self._circuit_breaker:
+                        if getattr(terminal_result, "status", None) == "ok":
+                            self._circuit_breaker.record_success()
+                        else:
+                            self._circuit_breaker.record_failure()
+                    return terminal_result
+
+                if structured_parse_error:
+                    logger.info(
+                        "structured_parse_error_trying_next_model",
+                        extra={
+                            "model": model,
+                            "request_id": request_id,
+                            "models_remaining": len(models_to_try) - model_idx - 1,
+                        },
+                    )
+                if model_idx < len(models_to_try) - 1:
+                    self.error_handler.log_fallback(model, models_to_try[model_idx + 1], request_id)
+
+    except Exception as e:
+        raise_if_cancelled(e)
+        last_error_text, last_error_context = _critical_chat_error_payload(e)
+    finally:
+        self.request_builder._structured_output_mode = builder_rf_mode_original
+
+    self.error_handler.log_exhausted(
+        models_to_try, self.error_handler._max_retries + 1, last_error_text, request_id
+    )
+    if self._circuit_breaker:
+        self._circuit_breaker.record_failure()
+    return _build_exhausted_chat_result(
+        self,
+        last_model_reported=last_model_reported,
+        last_response_text=last_response_text,
+        last_data=last_data,
+        last_latency=last_latency,
+        structured_parse_error=structured_parse_error,
+        last_error_text=last_error_text,
+        sanitized_messages=sanitized_messages,
+        structured_output_used=structured_output_used,
+        structured_output_mode_used=structured_output_mode_used,
+        last_error_context=last_error_context,
+    )
+
+
 async def _attempt_request(
     self,
     client: httpx.AsyncClient,
@@ -411,40 +556,21 @@ async def _attempt_request(
 ) -> dict[str, Any]:
     """Attempt a single request with comprehensive error handling."""
     self.error_handler.log_attempt(attempt, model, request_id)
-
-    # Apply prompt caching to messages if enabled for supported providers
-    cacheable_messages = self.request_builder.build_cacheable_messages(sanitized_messages, model)
-
-    # Build request components
-    self.request_builder._structured_output_mode = rf_mode_current
-    headers = self.request_builder.build_headers()
-    body = self.request_builder.build_request_body(
-        model, cacheable_messages, request, response_format_current
+    (
+        cacheable_messages,
+        headers,
+        body,
+        rf_included,
+        structured_output_used,
+        structured_output_mode_used,
+    ) = _build_attempt_request_payload(
+        self,
+        model=model,
+        sanitized_messages=sanitized_messages,
+        request=request,
+        rf_mode_current=rf_mode_current,
+        response_format_current=response_format_current,
     )
-
-    if rf_mode_current == "json_object" and "response_format" in body:
-        body["response_format"] = {"type": "json_object"}
-
-    # Apply content compression if needed
-    should_compress, transform_type = self.request_builder.should_apply_compression(
-        cacheable_messages, model
-    )
-    if should_compress and transform_type:
-        body["transforms"] = [transform_type]
-        total_length = sum(
-            len(msg.get("content", ""))
-            if isinstance(msg.get("content"), str)
-            else sum(len(p.get("text", "")) for p in msg.get("content", []) if isinstance(p, dict))
-            for msg in cacheable_messages
-        )
-        self.payload_logger.log_compression_applied(total_length, 200000, model)
-
-    # Check if response format is included
-    rf_included = "response_format" in body
-    structured_output_used = rf_included
-    structured_output_mode_used = rf_mode_current if rf_included else None
-
-    # Make request with timeout and error handling
     started = time.perf_counter()
     try:
         self.payload_logger.log_request(
@@ -465,12 +591,10 @@ async def _attempt_request(
             )
 
         resp = await client.post(
-            "/chat/completions",  # Use relative URL since base_url is set
+            "/chat/completions",
             headers=headers,
             json=body,
         )
-
-        # Validate response size before parsing
         try:
             await validate_response_size(resp, self._max_response_size_bytes, "OpenRouter")
         except ResponseSizeError as size_exc:
@@ -483,8 +607,6 @@ async def _attempt_request(
             }
 
         latency = int((time.perf_counter() - started) * 1000)
-
-        # Parse response with error handling
         try:
             data = resp.json()
         except Exception as e:
@@ -564,6 +686,193 @@ async def _attempt_request(
         }
 
 
+def _build_truncation_response(
+    self,
+    *,
+    rf_included: bool,
+    response_format_current: dict[str, Any] | None,
+    rf_mode_current: str,
+    attempt: int,
+    text: Any,
+    max_tokens: int | None,
+) -> dict[str, Any]:
+    current_max = max_tokens or 8192
+    suggested_max = min(int(current_max * 1.5), 32768)
+    truncation_recovery = {
+        "original_max_tokens": current_max,
+        "suggested_max_tokens": suggested_max,
+    }
+
+    if rf_included and response_format_current:
+        if rf_mode_current == "json_schema":
+            return {
+                "success": False,
+                "should_retry": True,
+                "new_rf_mode": "json_object",
+                "new_response_format": {"type": "json_object"},
+                "backoff_needed": True,
+                "structured_output_used": True,
+                "structured_output_mode_used": "json_object",
+                "truncation_recovery": truncation_recovery,
+            }
+        if rf_mode_current == "json_object":
+            return {
+                "success": False,
+                "should_retry": True,
+                "new_rf_mode": rf_mode_current,
+                "new_response_format": None,
+                "backoff_needed": True,
+                "structured_output_used": False,
+                "structured_output_mode_used": None,
+                "truncation_recovery": truncation_recovery,
+            }
+
+    if attempt < self.error_handler._max_retries:
+        return {
+            "success": False,
+            "should_retry": True,
+            "backoff_needed": True,
+            "truncation_recovery": truncation_recovery,
+        }
+    return {
+        "success": False,
+        "error_text": "completion_truncated",
+        "response_text": text if isinstance(text, str) else None,
+        "should_try_next_model": True,
+        "truncation_recovery": truncation_recovery,
+    }
+
+
+def _validate_structured_success_payload(
+    self,
+    *,
+    text: Any,
+    rf_included: bool,
+    response_format_current: dict[str, Any] | None,
+    rf_mode_current: str,
+    attempt: int,
+    model: str,
+) -> tuple[Any, dict[str, Any] | None]:
+    if not (rf_included and response_format_current):
+        return text, None
+
+    is_valid, processed_text = self.response_processor.validate_structured_response(
+        text, rf_included, response_format_current
+    )
+    if is_valid:
+        return processed_text, None
+
+    if rf_mode_current == "json_schema" and attempt < self.error_handler._max_retries:
+        logger.warning(
+            "structured_output_downgrading_json_schema_to_json_object",
+            extra={"model": model, "attempt": attempt + 1},
+        )
+        return text, {
+            "success": False,
+            "should_retry": True,
+            "new_rf_mode": "json_object",
+            "new_response_format": {"type": "json_object"},
+            "backoff_needed": True,
+        }
+    if rf_mode_current == "json_object" and attempt < self.error_handler._max_retries:
+        logger.warning(
+            "structured_output_disabling_after_json_object_failure",
+            extra={"model": model, "attempt": attempt + 1},
+        )
+        return text, {
+            "success": False,
+            "should_retry": True,
+            "new_rf_mode": None,
+            "new_response_format": None,
+            "backoff_needed": True,
+        }
+    return text, {
+        "success": False,
+        "error_text": "structured_output_parse_error",
+        "response_text": processed_text or None,
+        "structured_parse_error": True,
+        "should_try_next_model": True,
+    }
+
+
+def _extract_finish_reason(data: dict[str, Any]) -> tuple[Any, Any]:
+    finish_reason = None
+    native_finish = None
+    choices = data.get("choices") if isinstance(data, dict) else None
+    if isinstance(choices, list) and choices:
+        first_choice = choices[0] or {}
+        if isinstance(first_choice, dict):
+            finish_reason = first_choice.get("finish_reason")
+            native_finish = first_choice.get("native_finish_reason")
+    return finish_reason, native_finish
+
+
+def _estimate_cost_if_missing(
+    self,
+    *,
+    cost_usd: float | None,
+    tokens_prompt: Any,
+    tokens_completion: Any,
+) -> float | None:
+    if cost_usd is not None or tokens_prompt is None or tokens_completion is None:
+        return cost_usd
+    if self._price_input_per_1k is None or self._price_output_per_1k is None:
+        return cost_usd
+    try:
+        return (float(tokens_prompt) / 1000.0) * self._price_input_per_1k + (
+            float(tokens_completion) / 1000.0
+        ) * self._price_output_per_1k
+    except Exception:
+        return None
+
+
+def _build_successful_llm_result(
+    *,
+    data: dict[str, Any],
+    model_reported: str,
+    text: Any,
+    tokens_prompt: Any,
+    tokens_completion: Any,
+    cost_usd: float | None,
+    latency: int,
+    redacted_headers: dict[str, str],
+    sanitized_messages: list[dict[str, Any]],
+    structured_output_used: bool,
+    structured_output_mode_used: str | None,
+    cache_metrics: Any,
+) -> dict[str, Any]:
+    return {
+        "success": True,
+        "llm_result": LLMCallResult(
+            status="ok",
+            model=model_reported,
+            response_text=text,
+            response_json=data,
+            openrouter_response_text=text,
+            openrouter_response_json=data,
+            tokens_prompt=tokens_prompt,
+            tokens_completion=tokens_completion,
+            cost_usd=cost_usd,
+            latency_ms=latency,
+            error_text=None,
+            request_headers=redacted_headers,
+            request_messages=sanitized_messages,
+            endpoint="/api/v1/chat/completions",
+            structured_output_used=structured_output_used,
+            structured_output_mode=structured_output_mode_used,
+            cache_read_tokens=(
+                cache_metrics.cache_read_tokens if cache_metrics.cache_read_tokens > 0 else None
+            ),
+            cache_creation_tokens=(
+                cache_metrics.cache_creation_tokens
+                if cache_metrics.cache_creation_tokens > 0
+                else None
+            ),
+            cache_discount=cache_metrics.cache_discount,
+        ),
+    }
+
+
 async def _handle_successful_response(
     self,
     data: dict[str, Any],
@@ -605,75 +914,23 @@ async def _handle_successful_response(
         },
     )
 
-    # Check for truncation
     truncated, truncated_finish, truncated_native = self.response_processor.is_completion_truncated(
         data
     )
-
     if truncated:
         self.error_handler.log_truncated_completion(
             model, truncated_finish, truncated_native, request_id
         )
+        return _build_truncation_response(
+            self,
+            rf_included=rf_included,
+            response_format_current=response_format_current,
+            rf_mode_current=rf_mode_current,
+            attempt=attempt,
+            text=text,
+            max_tokens=max_tokens,
+        )
 
-        # Calculate increased max_tokens for truncation recovery
-        current_max = max_tokens or 8192
-        suggested_max = min(int(current_max * 1.5), 32768)  # Increase by 50%, cap at 32k
-
-        # Handle truncation with structured output downgrade
-        if rf_included and response_format_current:
-            if rf_mode_current == "json_schema":
-                return {
-                    "success": False,
-                    "should_retry": True,
-                    "new_rf_mode": "json_object",
-                    "new_response_format": {"type": "json_object"},
-                    "backoff_needed": True,
-                    "structured_output_used": True,
-                    "structured_output_mode_used": "json_object",
-                    "truncation_recovery": {
-                        "original_max_tokens": current_max,
-                        "suggested_max_tokens": suggested_max,
-                    },
-                }
-            if rf_mode_current == "json_object":
-                return {
-                    "success": False,
-                    "should_retry": True,
-                    "new_rf_mode": rf_mode_current,
-                    "new_response_format": None,
-                    "backoff_needed": True,
-                    "structured_output_used": False,
-                    "structured_output_mode_used": None,
-                    "truncation_recovery": {
-                        "original_max_tokens": current_max,
-                        "suggested_max_tokens": suggested_max,
-                    },
-                }
-
-        if attempt < self.error_handler._max_retries:
-            return {
-                "success": False,
-                "should_retry": True,
-                "backoff_needed": True,
-                "truncation_recovery": {
-                    "original_max_tokens": current_max,
-                    "suggested_max_tokens": suggested_max,
-                },
-            }
-
-        # Final attempt with truncation - include recovery info for caller
-        return {
-            "success": False,
-            "error_text": "completion_truncated",
-            "response_text": text if isinstance(text, str) else None,
-            "should_try_next_model": True,
-            "truncation_recovery": {
-                "original_max_tokens": current_max,
-                "suggested_max_tokens": suggested_max,
-            },
-        }
-
-    # Validate structured output if expected
     if rf_included and response_format_current:
         logger.debug(
             "processing_successful_response",
@@ -683,66 +940,23 @@ async def _handle_successful_response(
                 "rf_mode": rf_mode_current,
             },
         )
-        is_valid, processed_text = self.response_processor.validate_structured_response(
-            text, rf_included, response_format_current
+        text, validation_result = _validate_structured_success_payload(
+            self,
+            text=text,
+            rf_included=rf_included,
+            response_format_current=response_format_current,
+            rf_mode_current=rf_mode_current,
+            attempt=attempt,
+            model=model,
         )
-        if not is_valid:
-            # Tiered fallback for invalid JSON:
-            # 1. json_schema -> json_object (simpler format)
-            # 2. json_object -> no structured output (let model respond freely)
-            # 3. If all fail, mark as parse error but allow trying next model
-            if rf_mode_current == "json_schema" and attempt < self.error_handler._max_retries:
-                logger.warning(
-                    "structured_output_downgrading_json_schema_to_json_object",
-                    extra={"model": model, "attempt": attempt + 1},
-                )
-                return {
-                    "success": False,
-                    "should_retry": True,
-                    "new_rf_mode": "json_object",
-                    "new_response_format": {"type": "json_object"},
-                    "backoff_needed": True,
-                }
+        if validation_result is not None:
+            return validation_result
 
-            if rf_mode_current == "json_object" and attempt < self.error_handler._max_retries:
-                # Downgrade to no structured output - let model respond freely
-                logger.warning(
-                    "structured_output_disabling_after_json_object_failure",
-                    extra={"model": model, "attempt": attempt + 1},
-                )
-                return {
-                    "success": False,
-                    "should_retry": True,
-                    "new_rf_mode": None,
-                    "new_response_format": None,
-                    "backoff_needed": True,
-                }
-
-            # All structured output modes exhausted - try next model
-            return {
-                "success": False,
-                "error_text": "structured_output_parse_error",
-                "response_text": processed_text or None,
-                "structured_parse_error": True,
-                "should_try_next_model": True,  # Allow trying other models
-            }
-        text = processed_text
-
-    # Extract finish reason and tokens
-    finish_reason = None
-    native_finish = None
-    choices = data.get("choices") if isinstance(data, dict) else None
-    if isinstance(choices, list) and choices:
-        first_choice = choices[0] or {}
-        if isinstance(first_choice, dict):
-            finish_reason = first_choice.get("finish_reason")
-            native_finish = first_choice.get("native_finish_reason")
-
+    finish_reason, native_finish = _extract_finish_reason(data)
     tokens_prompt = usage.get("prompt_tokens") if isinstance(usage, dict) else None
     tokens_completion = usage.get("completion_tokens") if isinstance(usage, dict) else None
     tokens_total = usage.get("total_tokens") if isinstance(usage, dict) else None
 
-    # Extract cache metrics from response
     cache_metrics = self.response_processor.extract_cache_metrics(data)
     if cache_metrics.cache_hit or cache_metrics.cache_creation_tokens > 0:
         logger.info(
@@ -757,15 +971,12 @@ async def _handle_successful_response(
             },
         )
 
-    # If API did not provide cost, optionally estimate using env-provided rates
-    if cost_usd is None and tokens_prompt is not None and tokens_completion is not None:
-        if self._price_input_per_1k is not None and self._price_output_per_1k is not None:
-            try:
-                cost_usd = (float(tokens_prompt) / 1000.0) * self._price_input_per_1k + (
-                    float(tokens_completion) / 1000.0
-                ) * self._price_output_per_1k
-            except Exception:
-                cost_usd = None
+    cost_usd = _estimate_cost_if_missing(
+        self,
+        cost_usd=cost_usd,
+        tokens_prompt=tokens_prompt,
+        tokens_completion=tokens_completion,
+    )
 
     # Log successful response
     self.payload_logger.log_response(
@@ -795,41 +1006,112 @@ async def _handle_successful_response(
         request_id,
     )
 
-    # Prepare redacted headers
     redacted_headers = self.request_builder.get_redacted_headers(headers)
+    return _build_successful_llm_result(
+        data=data,
+        model_reported=model_reported,
+        text=text,
+        tokens_prompt=tokens_prompt,
+        tokens_completion=tokens_completion,
+        cost_usd=cost_usd,
+        latency=latency,
+        redacted_headers=redacted_headers,
+        sanitized_messages=sanitized_messages,
+        structured_output_used=structured_output_used,
+        structured_output_mode_used=structured_output_mode_used,
+        cache_metrics=cache_metrics,
+    )
 
-    # Return successful result
+
+def _maybe_downgrade_on_response_format_error(
+    self,
+    *,
+    status_code: int,
+    data: dict[str, Any],
+    rf_included: bool,
+    rf_mode_current: str,
+    attempt: int,
+    model: str,
+    request_id: int | None,
+) -> dict[str, Any] | None:
+    if not self.response_processor.should_downgrade_response_format(status_code, data, rf_included):
+        return None
+
+    should_downgrade, new_mode = self.error_handler.should_downgrade_response_format(
+        status_code, data, rf_mode_current, rf_included, attempt
+    )
+    if not should_downgrade:
+        return None
+    if new_mode:
+        self.error_handler.log_response_format_downgrade(model, "json_schema", new_mode, request_id)
+        return {
+            "success": False,
+            "should_retry": True,
+            "new_rf_mode": new_mode,
+            "new_response_format": {"type": "json_object"} if new_mode == "json_object" else None,
+            "backoff_needed": True,
+        }
+
+    self.error_handler.log_structured_outputs_disabled(model, request_id)
     return {
-        "success": True,
-        "llm_result": LLMCallResult(
-            status="ok",
-            model=model_reported,
-            response_text=text,
-            response_json=data,
-            openrouter_response_text=text,
-            openrouter_response_json=data,
-            tokens_prompt=tokens_prompt,
-            tokens_completion=tokens_completion,
-            cost_usd=cost_usd,
-            latency_ms=latency,
-            error_text=None,
-            request_headers=redacted_headers,
-            request_messages=sanitized_messages,
-            endpoint="/api/v1/chat/completions",
-            structured_output_used=structured_output_used,
-            structured_output_mode=structured_output_mode_used,
-            # Prompt caching metrics
-            cache_read_tokens=(
-                cache_metrics.cache_read_tokens if cache_metrics.cache_read_tokens > 0 else None
-            ),
-            cache_creation_tokens=(
-                cache_metrics.cache_creation_tokens
-                if cache_metrics.cache_creation_tokens > 0
-                else None
-            ),
-            cache_discount=cache_metrics.cache_discount,
-        ),
+        "success": False,
+        "should_retry": True,
+        "new_rf_mode": rf_mode_current,
+        "new_response_format": None,
+        "structured_output_used": False,
+        "structured_output_mode_used": None,
+        "backoff_needed": True,
     }
+
+
+def _maybe_downgrade_on_endpoint_capability_error(
+    self,
+    *,
+    status_code: int,
+    error_message: str,
+    error_context: dict[str, Any],
+    rf_included: bool,
+    response_format_current: dict[str, Any] | None,
+    rf_mode_current: str,
+    model: str,
+    request_id: int | None,
+) -> dict[str, Any] | None:
+    api_error_lower = str(error_context.get("api_error", "")).lower()
+    if not (
+        rf_included
+        and response_format_current
+        and (
+            status_code == 404
+            or "no endpoints found" in error_message.lower()
+            or "no endpoints found" in api_error_lower
+            or "does not support structured" in api_error_lower
+        )
+    ):
+        return None
+
+    if rf_mode_current == "json_schema":
+        self.error_handler.log_response_format_downgrade(
+            model, "json_schema", "json_object", request_id
+        )
+        return {
+            "success": False,
+            "should_retry": True,
+            "new_rf_mode": "json_object",
+            "new_response_format": {"type": "json_object"},
+            "backoff_needed": True,
+        }
+    if rf_mode_current == "json_object":
+        self.error_handler.log_structured_outputs_disabled(model, request_id)
+        return {
+            "success": False,
+            "should_retry": True,
+            "new_rf_mode": rf_mode_current,
+            "new_response_format": None,
+            "structured_output_used": False,
+            "structured_output_mode_used": None,
+            "backoff_needed": True,
+        }
+    return None
 
 
 async def _handle_error_response(
@@ -849,43 +1131,23 @@ async def _handle_error_response(
     sanitized_messages: list[dict[str, Any]],
 ) -> dict[str, Any]:
     """Handle error responses with appropriate retry/fallback logic."""
-    # Handle response format errors with graceful degradation
-    if self.response_processor.should_downgrade_response_format(status_code, data, rf_included):
-        should_downgrade, new_mode = self.error_handler.should_downgrade_response_format(
-            status_code, data, rf_mode_current, rf_included, attempt
-        )
-        if should_downgrade:
-            if new_mode:
-                self.error_handler.log_response_format_downgrade(
-                    model,
-                    "json_schema",
-                    new_mode,
-                    request_id,
-                )
-                return {
-                    "success": False,
-                    "should_retry": True,
-                    "new_rf_mode": new_mode,
-                    "new_response_format": (
-                        {"type": "json_object"} if new_mode == "json_object" else None
-                    ),
-                    "backoff_needed": True,
-                }
-            self.error_handler.log_structured_outputs_disabled(model, request_id)
-            return {
-                "success": False,
-                "should_retry": True,
-                "new_rf_mode": rf_mode_current,
-                "new_response_format": None,
-                "structured_output_used": False,
-                "structured_output_mode_used": None,
-                "backoff_needed": True,
-            }
+    downgrade_result = _maybe_downgrade_on_response_format_error(
+        self,
+        status_code=status_code,
+        data=data,
+        rf_included=rf_included,
+        rf_mode_current=rf_mode_current,
+        attempt=attempt,
+        model=model,
+        request_id=request_id,
+    )
+    if downgrade_result is not None:
+        return downgrade_result
 
     # Extract response content and error context
-    text, usage, _cost_usd = self.response_processor.extract_response_data(data, rf_included)
+    text, usage, _ = self.response_processor.extract_response_data(data, rf_included)
     error_context = self.response_processor.get_error_context(status_code, data)
-    error_message = error_context["message"]
+    error_message = str(error_context["message"])
 
     # Prepare redacted headers
     redacted_headers = self.request_builder.get_redacted_headers(headers)
@@ -910,50 +1172,19 @@ async def _handle_error_response(
 
     # 404 / 408 / 504 / timeout text: Try next model if available
     if self.error_handler.should_try_next_model(status_code, error_message):
-        # Handle structured output parameter errors
-        api_error_lower = (
-            str(error_context.get("api_error", "")).lower()
-            if isinstance(error_context, dict)
-            else ""
+        structured_downgrade = _maybe_downgrade_on_endpoint_capability_error(
+            self,
+            status_code=status_code,
+            error_message=error_message,
+            error_context=error_context,
+            rf_included=rf_included,
+            response_format_current=response_format_current,
+            rf_mode_current=rf_mode_current,
+            model=model,
+            request_id=request_id,
         )
-
-        if (
-            rf_included
-            and response_format_current
-            and (
-                status_code == 404
-                or (
-                    isinstance(error_message, str) and "no endpoints found" in error_message.lower()
-                )
-                or "no endpoints found" in api_error_lower
-                or "does not support structured" in api_error_lower
-            )
-        ):
-            if rf_mode_current == "json_schema":
-                self.error_handler.log_response_format_downgrade(
-                    model,
-                    "json_schema",
-                    "json_object",
-                    request_id,
-                )
-                return {
-                    "success": False,
-                    "should_retry": True,
-                    "new_rf_mode": "json_object",
-                    "new_response_format": {"type": "json_object"},
-                    "backoff_needed": True,
-                }
-            if rf_mode_current == "json_object":
-                self.error_handler.log_structured_outputs_disabled(model, request_id)
-                return {
-                    "success": False,
-                    "should_retry": True,
-                    "new_rf_mode": rf_mode_current,
-                    "new_response_format": None,
-                    "structured_output_used": False,
-                    "structured_output_mode_used": None,
-                    "backoff_needed": True,
-                }
+        if structured_downgrade is not None:
+            return structured_downgrade
 
         # Log and try next model
         self.error_handler.log_error(attempt, model, status_code, error_message, request_id, "WARN")

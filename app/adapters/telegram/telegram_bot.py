@@ -173,6 +173,7 @@ class TelegramBot:
                 await adaptive_timeout.warm_cache()
                 logger.info("adaptive_timeout_cache_warmed_on_startup")
             except Exception as e:
+                raise_if_cancelled(e)
                 logger.warning(
                     "adaptive_timeout_warmup_failed_on_startup",
                     extra={"error": str(e)},
@@ -183,6 +184,7 @@ class TelegramBot:
             cleaned = await self.url_processor.clear_cache()
             logger.info("startup_cache_cleared", extra={"count": cleaned})
         except Exception as e:
+            raise_if_cancelled(e)
             logger.warning("startup_cache_clear_failed", extra={"error": str(e)})
 
         # Start background scheduler for periodic tasks (e.g., Karakeep sync)
@@ -229,6 +231,7 @@ class TelegramBot:
                     log_level=level, event_type=event, details=details
                 )
             except Exception as e:
+                raise_if_cancelled(e)
                 logger.warning("audit_persist_failed", extra={"error": str(e), "event": event})
 
         try:
@@ -247,7 +250,8 @@ class TelegramBot:
         if hasattr(self, "url_processor") and hasattr(self.url_processor, "aclose"):
             try:
                 await self.url_processor.aclose(timeout=drain_timeout)
-            except Exception:
+            except Exception as e:
+                raise_if_cancelled(e)
                 logger.warning("shutdown_url_processor_close_failed", exc_info=True)
 
         # 1. Close Firecrawl client
@@ -256,7 +260,8 @@ class TelegramBot:
             try:
                 async with asyncio.timeout(drain_timeout):
                     await firecrawl.aclose()
-            except Exception:
+            except Exception as e:
+                raise_if_cancelled(e)
                 logger.warning("shutdown_firecrawl_close_failed", exc_info=True)
 
         # 2. Close LLM client
@@ -265,7 +270,8 @@ class TelegramBot:
             try:
                 async with asyncio.timeout(drain_timeout):
                     await llm_client.aclose()
-            except Exception:
+            except Exception as e:
+                raise_if_cancelled(e)
                 logger.warning("shutdown_llm_client_close_failed", exc_info=True)
 
         # 3. Close vector store
@@ -274,7 +280,8 @@ class TelegramBot:
             try:
                 async with asyncio.timeout(drain_timeout):
                     await vector_store.aclose()
-            except Exception:
+            except Exception as e:
+                raise_if_cancelled(e)
                 logger.warning("shutdown_vector_store_close_failed", exc_info=True)
 
         # 4. Close embedding service
@@ -283,7 +290,8 @@ class TelegramBot:
             try:
                 async with asyncio.timeout(drain_timeout):
                     await embedding_service.aclose()
-            except Exception:
+            except Exception as e:
+                raise_if_cancelled(e)
                 logger.warning("shutdown_embedding_service_close_failed", exc_info=True)
 
         # 5. Drain audit tasks
@@ -301,7 +309,8 @@ class TelegramBot:
 
             async with asyncio.timeout(drain_timeout):
                 await OpenRouterClient.cleanup_all_clients()
-        except Exception:
+        except Exception as e:
+            raise_if_cancelled(e)
             logger.warning("shutdown_openrouter_cleanup_failed", exc_info=True)
 
         logger.info("bot_shutdown_complete")
@@ -428,7 +437,9 @@ class TelegramBot:
                                 "consecutive_failures": consecutive_failures,
                                 "max_failures": max_consecutive_failures,
                                 "last_success": (
-                                    format_iso_z(last_success_time) if last_success_time else "never"
+                                    format_iso_z(last_success_time)
+                                    if last_success_time
+                                    else "never"
                                 ),
                                 "action_required": "Manual intervention required - backups failing",
                             },

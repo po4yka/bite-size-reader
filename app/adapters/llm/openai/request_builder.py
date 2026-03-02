@@ -5,6 +5,8 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from app.adapters.llm.message_sanitizer import sanitize_messages_for_logging
+
 logger = logging.getLogger(__name__)
 
 
@@ -145,17 +147,7 @@ class OpenAIRequestBuilder:
             redacted["Authorization"] = "Bearer [REDACTED]"
         return redacted
 
-    def sanitize_messages(self, messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        """Sanitize messages for logging/storage."""
-        sanitized = []
-        for msg in messages:
-            sanitized_msg = dict(msg)
-            # Truncate very long content for logging
-            content = sanitized_msg.get("content", "")
-            if isinstance(content, str) and len(content) > 1000:
-                sanitized_msg["content"] = content[:1000] + "...[truncated]"
-            sanitized.append(sanitized_msg)
-        return sanitized
+    sanitize_messages = staticmethod(sanitize_messages_for_logging)
 
 
 def calculate_cost(

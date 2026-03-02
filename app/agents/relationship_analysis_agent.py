@@ -213,7 +213,11 @@ class RelationshipAnalysisAgent(BaseAgent[RelationshipAnalysisInput, Relationshi
                 try:
                     domains.append(urlparse(a.url).netloc)
                 except Exception:
-                    pass
+                    logger.debug(
+                        "relationship_domain_parse_failed",
+                        extra={"url": a.url},
+                        exc_info=True,
+                    )
         same_domain = len(set(domains)) == 1 and len(domains) >= 2
 
         # Detect series numbering in titles
@@ -229,7 +233,11 @@ class RelationshipAnalysisAgent(BaseAgent[RelationshipAnalysisInput, Relationshi
                         series_numbers.append((article.request_id, num))
                         break
                     except (ValueError, IndexError):
-                        pass
+                        logger.debug(
+                            "relationship_series_number_parse_failed",
+                            extra={"title": article.title},
+                            exc_info=True,
+                        )
 
         # Find shared entities
         all_entities: list[set[str]] = []

@@ -238,7 +238,7 @@ class Database(
     # ------------------------------------------------------------------
 
     def get_database_overview(self) -> dict[str, Any]:
-        return self._diagnostics.get_database_overview()
+        return self._mgr.get_database_overview()
 
     def verify_processing_integrity(
         self,
@@ -246,7 +246,7 @@ class Database(
         required_fields: Iterable[str] | None = None,
         limit: int | None = None,
     ) -> dict[str, Any]:
-        return self._diagnostics.verify_processing_integrity(
+        return self._mgr.verify_processing_integrity(
             required_fields=required_fields,
             limit=limit,
         )

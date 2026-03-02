@@ -87,7 +87,7 @@ class TopicSearchService:
                         },
                     )
                 except (RuntimeError, ValueError, TypeError):  # pragma: no cover - defensive audit
-                    pass
+                    logger.debug("topic_search_audit_failed", exc_info=True)
             raise RuntimeError(message)
 
         articles = self._normalize_articles(result.results)
@@ -105,7 +105,7 @@ class TopicSearchService:
                     },
                 )
             except (RuntimeError, ValueError, TypeError):  # pragma: no cover - defensive audit
-                pass
+                logger.debug("topic_search_completion_audit_failed", exc_info=True)
 
         return articles
 
@@ -199,7 +199,7 @@ class LocalTopicSearchService:
                     },
                 )
             except (RuntimeError, ValueError, TypeError):  # pragma: no cover - defensive audit
-                pass
+                logger.debug("local_topic_search_completion_audit_failed", exc_info=True)
 
         return articles
 

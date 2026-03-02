@@ -20,10 +20,10 @@ class ErrorCode(StrEnum):
     SESSION_EXPIRED = "SESSION_EXPIRED"
 
     # Token/Auth-specific errors
-    TOKEN_EXPIRED = "TOKEN_EXPIRED"
-    TOKEN_INVALID = "TOKEN_INVALID"
-    TOKEN_REVOKED = "TOKEN_REVOKED"
-    TOKEN_WRONG_TYPE = "TOKEN_WRONG_TYPE"
+    AUTH_EXPIRED = "TOKEN_EXPIRED"
+    AUTH_INVALID = "TOKEN_INVALID"
+    AUTH_REVOKED = "TOKEN_REVOKED"
+    AUTH_WRONG_TYPE = "TOKEN_WRONG_TYPE"
     REFRESH_RATE_LIMITED = "REFRESH_RATE_LIMITED"
 
     # Sync-specific errors
@@ -71,10 +71,10 @@ _ERROR_TYPE_MAP: dict[ErrorCode, ErrorType] = {
     ErrorCode.CONFLICT: ErrorType.CONFLICT,
     ErrorCode.RATE_LIMIT_EXCEEDED: ErrorType.RATE_LIMIT,
     ErrorCode.SESSION_EXPIRED: ErrorType.AUTHENTICATION,
-    ErrorCode.TOKEN_EXPIRED: ErrorType.AUTHENTICATION,
-    ErrorCode.TOKEN_INVALID: ErrorType.AUTHENTICATION,
-    ErrorCode.TOKEN_REVOKED: ErrorType.AUTHENTICATION,
-    ErrorCode.TOKEN_WRONG_TYPE: ErrorType.AUTHENTICATION,
+    ErrorCode.AUTH_EXPIRED: ErrorType.AUTHENTICATION,
+    ErrorCode.AUTH_INVALID: ErrorType.AUTHENTICATION,
+    ErrorCode.AUTH_REVOKED: ErrorType.AUTHENTICATION,
+    ErrorCode.AUTH_WRONG_TYPE: ErrorType.AUTHENTICATION,
     ErrorCode.REFRESH_RATE_LIMITED: ErrorType.RATE_LIMIT,
     ErrorCode.AUTH_SERVICE_UNAVAILABLE: ErrorType.INTERNAL,
     ErrorCode.SYNC_SESSION_EXPIRED: ErrorType.SYNC,
@@ -96,7 +96,7 @@ _ERROR_TYPE_MAP: dict[ErrorCode, ErrorType] = {
 _RETRYABLE_CODES: set[ErrorCode] = {
     ErrorCode.RATE_LIMIT_EXCEEDED,
     ErrorCode.SESSION_EXPIRED,
-    ErrorCode.TOKEN_EXPIRED,  # Can retry with re-login
+    ErrorCode.AUTH_EXPIRED,  # Can retry with re-login
     ErrorCode.REFRESH_RATE_LIMITED,  # Can retry after delay
     ErrorCode.AUTH_SERVICE_UNAVAILABLE,  # Temporary, can retry
     ErrorCode.SYNC_SESSION_EXPIRED,
@@ -366,7 +366,7 @@ class TokenExpiredError(APIException):
     def __init__(self, token_type: str = "access"):
         super().__init__(
             message=f"{token_type.capitalize()} token has expired. Please re-authenticate.",
-            error_code=ErrorCode.TOKEN_EXPIRED,
+            error_code=ErrorCode.AUTH_EXPIRED,
             status_code=401,
             details={"token_type": token_type},
             retryable=True,
@@ -382,7 +382,7 @@ class TokenInvalidError(APIException):
             message += f": {reason}"
         super().__init__(
             message=message,
-            error_code=ErrorCode.TOKEN_INVALID,
+            error_code=ErrorCode.AUTH_INVALID,
             status_code=401,
             details={"reason": reason} if reason else {},
             retryable=False,
@@ -395,7 +395,7 @@ class TokenRevokedError(APIException):
     def __init__(self):
         super().__init__(
             message="Token has been revoked. Please re-authenticate.",
-            error_code=ErrorCode.TOKEN_REVOKED,
+            error_code=ErrorCode.AUTH_REVOKED,
             status_code=401,
             retryable=False,
         )
@@ -407,7 +407,7 @@ class TokenWrongTypeError(APIException):
     def __init__(self, expected: str, received: str):
         super().__init__(
             message=f"Wrong token type. Expected {expected} token, got {received} token.",
-            error_code=ErrorCode.TOKEN_WRONG_TYPE,
+            error_code=ErrorCode.AUTH_WRONG_TYPE,
             status_code=401,
             details={"expected": expected, "received": received},
             retryable=False,

@@ -157,13 +157,10 @@ class ResponseSenderImpl:
             _, success = await retry_telegram_operation(do_send, operation_name="safe_reply")
 
             if success:
-                try:
-                    logger.debug(
-                        "reply_text_sent",
-                        extra={"length": len(text), "has_buttons": reply_markup is not None},
-                    )
-                except Exception:
-                    pass
+                logger.debug(
+                    "reply_text_sent",
+                    extra={"length": len(text), "has_buttons": reply_markup is not None},
+                )
             else:
                 logger.warning(
                     "safe_reply_retry_failed",
@@ -177,6 +174,156 @@ class ResponseSenderImpl:
                 extra={"error": str(e), "text_length": len(text)},
             )
 
+    def _prepare_text_for_reply_with_id(self, text: str, parse_mode: str | None) -> str | None:
+        """Validate and normalize text used by safe_reply_with_id."""
+        if not text or not text.strip():
+            logger.warning(
+                "safe_reply_with_id_empty_text",
+                extra={"parse_mode": parse_mode is not None},
+            )
+            return None
+
+        is_safe, error_msg = self._validator.is_safe_content(text)
+        if not is_safe:
+            logger.warning(
+                "safe_reply_with_id_unsafe_content_blocked",
+                extra={"error": error_msg, "text_length": len(text), "text_preview": text[:100]},
+            )
+            text = "❌ Message blocked for security reasons."
+
+        if len(text) > self._max_message_chars:
+            logger.warning(
+                "safe_reply_with_id_message_too_long",
+                extra={"length": len(text), "max": self._max_message_chars},
+            )
+            text = text[: self._max_message_chars - 10] + "..."
+        return text
+
+    @staticmethod
+    def _build_message_kwargs(
+        *,
+        parse_mode: str | None = None,
+        reply_markup: Any | None = None,
+        disable_web_page_preview: bool | None = None,
+    ) -> dict[str, Any]:
+        """Build optional kwargs for Telegram send/edit methods."""
+        kwargs: dict[str, Any] = {}
+        if parse_mode is not None:
+            kwargs["parse_mode"] = parse_mode
+        if reply_markup is not None:
+            kwargs["reply_markup"] = reply_markup
+        if disable_web_page_preview is not None:
+            kwargs["disable_web_page_preview"] = disable_web_page_preview
+        return kwargs
+
+    @staticmethod
+    def _extract_message_id(sent_message: Any) -> int | None:
+        """Extract a Telegram message ID from API response object."""
+        message_id = getattr(sent_message, "message_id", None)
+        if message_id is None:
+            message_id = getattr(sent_message, "id", None)
+        return message_id
+
+    async def _send_via_client_with_id(
+        self,
+        client: Any,
+        chat_id: int,
+        text: str,
+        *,
+        parse_mode: str | None = None,
+        reply_markup: Any | None = None,
+        disable_web_page_preview: bool | None = None,
+    ) -> int | None:
+        """Send using Telegram client.send_message and return message ID."""
+
+        async def do_send() -> Any:
+            kwargs = {"chat_id": chat_id, "text": text}
+            kwargs.update(
+                self._build_message_kwargs(
+                    parse_mode=parse_mode,
+                    reply_markup=reply_markup,
+                    disable_web_page_preview=disable_web_page_preview,
+                )
+            )
+            return await client.send_message(**kwargs)
+
+        sent, success = await retry_telegram_operation(
+            do_send, operation_name="send_message_with_id"
+        )
+        if not success or sent is None:
+            logger.warning(
+                "reply_with_id_retry_failed",
+                extra={"chat_id": chat_id, "text_length": len(text)},
+            )
+            return None
+
+        message_id = self._extract_message_id(sent)
+        logger.debug(
+            "reply_with_id_result",
+            extra={"message_id": message_id, "sent_message_type": type(sent).__name__},
+        )
+        return message_id
+
+    async def _invoke_safe_reply_callback(
+        self,
+        message: Any,
+        text: str,
+        *,
+        parse_mode: str | None = None,
+        reply_markup: Any | None = None,
+        disable_web_page_preview: bool | None = None,
+    ) -> None:
+        """Invoke compatibility reply callback and handle older signatures."""
+        if self._safe_reply_func is None:
+            return
+        kwargs = self._build_message_kwargs(
+            parse_mode=parse_mode,
+            reply_markup=reply_markup,
+            disable_web_page_preview=disable_web_page_preview,
+        )
+        try:
+            await self._safe_reply_func(message, text, **kwargs)
+        except TypeError:
+            kwargs.pop("reply_markup", None)
+            kwargs.pop("disable_web_page_preview", None)
+            await self._safe_reply_func(message, text, **kwargs)
+
+    async def _reply_text_with_id(
+        self,
+        message: Any,
+        text: str,
+        *,
+        parse_mode: str | None = None,
+        reply_markup: Any | None = None,
+        disable_web_page_preview: bool | None = None,
+    ) -> int | None:
+        """Fallback flow that replies to the incoming message and returns message ID."""
+        msg_any: Any = message
+
+        async def do_reply() -> Any:
+            kwargs = self._build_message_kwargs(
+                parse_mode=parse_mode,
+                reply_markup=reply_markup,
+                disable_web_page_preview=disable_web_page_preview,
+            )
+            return await msg_any.reply_text(text, **kwargs)
+
+        sent_message, success = await retry_telegram_operation(
+            do_reply, operation_name="reply_text_with_id"
+        )
+        if not success or sent_message is None:
+            logger.warning("reply_text_retry_failed", extra={"text_length": len(text)})
+            return None
+
+        logger.debug("reply_text_sent", extra={"length": len(text)})
+
+        message_id = getattr(sent_message, "message_id", None)
+        logger.debug(
+            "reply_with_id_result",
+            extra={"message_id": message_id, "sent_message_type": type(sent_message).__name__},
+        )
+        return message_id
+
     async def safe_reply_with_id(
         self,
         message: Any,
@@ -187,42 +334,15 @@ class ResponseSenderImpl:
         disable_web_page_preview: bool | None = None,
     ) -> int | None:
         """Safely reply to a message and return the message ID for progress tracking with security checks."""
-        # Input validation
-        if not text or not text.strip():
-            logger.warning(
-                "safe_reply_with_id_empty_text", extra={"parse_mode": parse_mode is not None}
-            )
+        prepared_text = self._prepare_text_for_reply_with_id(text, parse_mode)
+        if prepared_text is None:
             return None
+        text = prepared_text
 
-        # Security content check
-        is_safe, error_msg = self._validator.is_safe_content(text)
-        if not is_safe:
-            logger.warning(
-                "safe_reply_with_id_unsafe_content_blocked",
-                extra={"error": error_msg, "text_length": len(text), "text_preview": text[:100]},
-            )
-            # Send safe error message instead
-            safe_text = "❌ Message blocked for security reasons."
-            text = safe_text
-
-        # Length check
-        if len(text) > self._max_message_chars:
-            logger.warning(
-                "safe_reply_with_id_message_too_long",
-                extra={"length": len(text), "max": self._max_message_chars},
-            )
-            # Truncate if too long
-            text = text[: self._max_message_chars - 10] + "..."
-
-        # Rate limiting check
         if not await self._validator.check_rate_limit():
             logger.warning("safe_reply_with_id_rate_limited", extra={"text_length": len(text)})
 
         if self._safe_reply_func is not None:
-            # When a custom reply function is provided (e.g., compatibility layer),
-            # we still want to obtain a Telegram message_id for progress updates.
-            # If a Telegram client is available, prefer sending via the client so
-            # that we can return the created message_id and enable edits.
             try:
                 client = getattr(getattr(self, "_telegram_client", None), "client", None)
                 chat = getattr(message, "chat", None)
@@ -236,103 +356,51 @@ class ResponseSenderImpl:
                             "chat_id": chat_id,
                         },
                     )
-
-                    # Define send operation for retry logic
-                    async def do_send() -> Any:
-                        kwargs: dict[str, Any] = {"chat_id": chat_id, "text": text}
-                        if parse_mode is not None:
-                            kwargs["parse_mode"] = parse_mode
-                        if reply_markup is not None:
-                            kwargs["reply_markup"] = reply_markup
-                        if disable_web_page_preview is not None:
-                            kwargs["disable_web_page_preview"] = disable_web_page_preview
-                        return await client.send_message(**kwargs)
-
-                    # Retry the send operation with exponential backoff
-                    sent, success = await retry_telegram_operation(
-                        do_send, operation_name="send_message_with_id"
+                    message_id = await self._send_via_client_with_id(
+                        client,
+                        chat_id,
+                        text,
+                        parse_mode=parse_mode,
+                        reply_markup=reply_markup,
+                        disable_web_page_preview=disable_web_page_preview,
                     )
-
-                    if success and sent is not None:
-                        message_id = getattr(sent, "message_id", None)
-                        if message_id is None:
-                            message_id = getattr(sent, "id", None)
-                        logger.debug(
-                            "reply_with_id_result",
-                            extra={
-                                "message_id": message_id,
-                                "sent_message_type": type(sent).__name__,
-                            },
-                        )
+                    if message_id is not None:
                         return message_id
-                    logger.warning(
-                        "reply_with_id_retry_failed",
-                        extra={"chat_id": chat_id, "text_length": len(text)},
-                    )
-                    return None
             except Exception as e:
                 raise_if_cancelled(e)
-                # Fall back to the custom function if direct client send failed
                 logger.warning("reply_with_client_failed_fallback_custom", extra={"error": str(e)})
 
             logger.debug(
                 "reply_with_custom_function",
                 extra={"text_length": len(text), "has_parse_mode": parse_mode is not None},
             )
-            kwargs: dict[str, Any] = {"parse_mode": parse_mode} if parse_mode is not None else {}
-            if reply_markup is not None:
-                kwargs["reply_markup"] = reply_markup
-            if disable_web_page_preview is not None:
-                kwargs["disable_web_page_preview"] = disable_web_page_preview
             try:
-                await self._safe_reply_func(message, text, **kwargs)
-            except TypeError:
-                # Backward-compat: not all recorders accept reply_markup.
-                kwargs.pop("reply_markup", None)
-                kwargs.pop("disable_web_page_preview", None)
-                await self._safe_reply_func(message, text, **kwargs)
+                await self._invoke_safe_reply_callback(
+                    message,
+                    text,
+                    parse_mode=parse_mode,
+                    reply_markup=reply_markup,
+                    disable_web_page_preview=disable_web_page_preview,
+                )
+            except Exception as e:
+                raise_if_cancelled(e)
+                logger.error(
+                    "reply_failed",
+                    exc_info=True,
+                    extra={"error": str(e), "text_length": len(text)},
+                )
+                return None
             logger.warning("reply_with_id_no_message_id", extra={"reason": "custom_reply_function"})
-            return None  # Can't get message ID from custom function
+            return None
 
         try:
-            msg_any: Any = message
-
-            # Define reply operation for retry logic
-            async def do_reply() -> Any:
-                kwargs: dict[str, Any] = {}
-                if parse_mode:
-                    kwargs["parse_mode"] = parse_mode
-                if reply_markup is not None:
-                    kwargs["reply_markup"] = reply_markup
-                if disable_web_page_preview is not None:
-                    kwargs["disable_web_page_preview"] = disable_web_page_preview
-                return await msg_any.reply_text(text, **kwargs)
-
-            # Retry the reply operation with exponential backoff
-            sent_message, success = await retry_telegram_operation(
-                do_reply, operation_name="reply_text_with_id"
+            return await self._reply_text_with_id(
+                message,
+                text,
+                parse_mode=parse_mode,
+                reply_markup=reply_markup,
+                disable_web_page_preview=disable_web_page_preview,
             )
-
-            if success and sent_message is not None:
-                try:
-                    logger.debug("reply_text_sent", extra={"length": len(text)})
-                except Exception:
-                    pass
-
-                message_id = getattr(sent_message, "message_id", None)
-                logger.debug(
-                    "reply_with_id_result",
-                    extra={
-                        "message_id": message_id,
-                        "sent_message_type": type(sent_message).__name__,
-                    },
-                )
-                return message_id
-            logger.warning(
-                "reply_text_retry_failed",
-                extra={"text_length": len(text)},
-            )
-            return None
         except Exception as e:
             raise_if_cancelled(e)
             logger.error(
@@ -417,147 +485,33 @@ class ResponseSenderImpl:
         Returns:
             True if the message was successfully edited, False otherwise
         """
-        try:
-            # Input validation
-            if not text or not text.strip():
-                logger.warning(
-                    "edit_message_empty_text", extra={"chat_id": chat_id, "message_id": message_id}
-                )
-                return False
+        text = self._prepare_text_for_edit(chat_id, message_id, text)
+        if text is None:
+            return False
 
-            # Security content check
-            is_safe, error_msg = self._validator.is_safe_content(text)
-            if not is_safe:
-                logger.warning(
-                    "edit_message_unsafe_content_blocked",
-                    extra={
-                        "error": error_msg,
-                        "chat_id": chat_id,
-                        "message_id": message_id,
-                        "text_preview": text[:100],
-                    },
-                )
-                return False
-
-            # Length check -- truncate instead of rejecting (consistent with safe_reply)
-            if len(text) > self._max_message_chars:
-                logger.warning(
-                    "edit_message_too_long_truncating",
-                    extra={
-                        "length": len(text),
-                        "max": self._max_message_chars,
-                        "chat_id": chat_id,
-                        "message_id": message_id,
-                    },
-                )
-                text = text[: self._max_message_chars - 10] + "..."
-
-            # Rate limiting check
-            if not await self._validator.check_rate_limit():
-                logger.warning(
-                    "edit_message_rate_limited",
-                    extra={"chat_id": chat_id, "message_id": message_id},
-                )
-                # Continue despite rate limit warning, but note it
-                # This maintains backward compatibility
-
-            logger.debug(
-                "edit_message_attempt",
-                extra={
-                    "chat_id": chat_id,
-                    "message_id": message_id,
-                    "has_telegram_client": self._telegram_client is not None,
-                    "telegram_client_has_client": (
-                        hasattr(self._telegram_client, "client") if self._telegram_client else False
-                    ),
-                    "client": self._telegram_client.client if self._telegram_client else None,
-                },
-            )
-
-            if self._telegram_client and hasattr(self._telegram_client, "client"):
-                client = self._telegram_client.client
-                if client and hasattr(client, "edit_message_text"):
-                    # Validate inputs before making the API call
-                    if not isinstance(chat_id, int) or not isinstance(message_id, int):
-                        logger.warning(
-                            "edit_message_invalid_params",
-                            extra={
-                                "chat_id": chat_id,
-                                "message_id": message_id,
-                                "text_length": len(text),
-                            },
-                        )
-                        return False
-
-                    # Define API call for retry logic
-                    last_error_exc: Exception | None = None
-
-                    async def do_edit() -> None:
-                        nonlocal last_error_exc
-                        local_text = text
-                        if parse_mode == "HTML" and "Updated at" not in local_text:
-                            now = datetime.now(UTC).strftime("%H:%M:%S")
-                            local_text += f"\n\n<i>Updated at {now} UTC</i>"
-
-                        kwargs: dict[str, Any] = {
-                            "chat_id": chat_id,
-                            "message_id": message_id,
-                            "text": local_text,
-                        }
-                        normalized_mode = _normalize_parse_mode(parse_mode)
-                        if normalized_mode is not None:
-                            kwargs["parse_mode"] = normalized_mode
-                        if reply_markup is not None:
-                            kwargs["reply_markup"] = reply_markup
-                        if disable_web_page_preview is not None:
-                            kwargs["disable_web_page_preview"] = disable_web_page_preview
-
-                        try:
-                            await client.edit_message_text(**kwargs)
-                        except Exception as e:
-                            last_error_exc = e
-                            raise
-
-                    # Retry the API call with exponential backoff
-                    _, success = await retry_telegram_operation(
-                        do_edit, operation_name="edit_message"
-                    )
-
-                    if success:
-                        logger.debug(
-                            "edit_message_success",
-                            extra={"chat_id": chat_id, "message_id": message_id},
-                        )
-                        return True
-
-                    # Handle "message not modified" as success
-                    if last_error_exc:
-                        exc_str = str(last_error_exc).lower()
-                        if (
-                            "message is not modified" in exc_str
-                            or "message_not_modified" in exc_str
-                        ):
-                            logger.debug(
-                                "edit_message_not_modified_success",
-                                extra={"chat_id": chat_id, "message_id": message_id},
-                            )
-                            return True
-
-                    logger.warning(
-                        "edit_message_retry_failed",
-                        extra={"chat_id": chat_id, "message_id": message_id},
-                    )
-                    return False
-                logger.warning(
-                    "edit_message_no_client_method",
-                    extra={"chat_id": chat_id, "message_id": message_id},
-                )
-                return False
+        if not await self._validator.check_rate_limit():
             logger.warning(
-                "edit_message_no_telegram_client",
+                "edit_message_rate_limited",
                 extra={"chat_id": chat_id, "message_id": message_id},
             )
+
+        self._log_edit_attempt(chat_id, message_id)
+        client = self._resolve_edit_client(chat_id, message_id)
+        if client is None:
             return False
+        if not self._validate_edit_identifiers(chat_id, message_id, text):
+            return False
+
+        try:
+            return await self._perform_edit_message(
+                client,
+                chat_id,
+                message_id,
+                text,
+                parse_mode=parse_mode,
+                reply_markup=reply_markup,
+                disable_web_page_preview=disable_web_page_preview,
+            )
         except Exception as e:
             raise_if_cancelled(e)
             logger.warning(
@@ -566,6 +520,153 @@ class ResponseSenderImpl:
                 extra={"error": str(e), "chat_id": chat_id, "message_id": message_id},
             )
             return False
+
+    def _prepare_text_for_edit(self, chat_id: int, message_id: int, text: str) -> str | None:
+        """Validate and normalize edit text before calling Telegram APIs."""
+        if not text or not text.strip():
+            logger.warning(
+                "edit_message_empty_text",
+                extra={"chat_id": chat_id, "message_id": message_id},
+            )
+            return None
+
+        is_safe, error_msg = self._validator.is_safe_content(text)
+        if not is_safe:
+            logger.warning(
+                "edit_message_unsafe_content_blocked",
+                extra={
+                    "error": error_msg,
+                    "chat_id": chat_id,
+                    "message_id": message_id,
+                    "text_preview": text[:100],
+                },
+            )
+            return None
+
+        if len(text) > self._max_message_chars:
+            logger.warning(
+                "edit_message_too_long_truncating",
+                extra={
+                    "length": len(text),
+                    "max": self._max_message_chars,
+                    "chat_id": chat_id,
+                    "message_id": message_id,
+                },
+            )
+            text = text[: self._max_message_chars - 10] + "..."
+        return text
+
+    def _log_edit_attempt(self, chat_id: int, message_id: int) -> None:
+        """Log edit attempt diagnostics once per request."""
+        logger.debug(
+            "edit_message_attempt",
+            extra={
+                "chat_id": chat_id,
+                "message_id": message_id,
+                "has_telegram_client": self._telegram_client is not None,
+                "telegram_client_has_client": (
+                    hasattr(self._telegram_client, "client") if self._telegram_client else False
+                ),
+                "client": self._telegram_client.client if self._telegram_client else None,
+            },
+        )
+
+    def _resolve_edit_client(self, chat_id: int, message_id: int) -> Any | None:
+        """Resolve Telegram client object for message editing."""
+        if not self._telegram_client or not hasattr(self._telegram_client, "client"):
+            logger.warning(
+                "edit_message_no_telegram_client",
+                extra={"chat_id": chat_id, "message_id": message_id},
+            )
+            return None
+
+        client = self._telegram_client.client
+        if not client or not hasattr(client, "edit_message_text"):
+            logger.warning(
+                "edit_message_no_client_method",
+                extra={"chat_id": chat_id, "message_id": message_id},
+            )
+            return None
+        return client
+
+    def _validate_edit_identifiers(self, chat_id: int, message_id: int, text: str) -> bool:
+        """Validate primitive edit call inputs before API invocation."""
+        if isinstance(chat_id, int) and isinstance(message_id, int):
+            return True
+        logger.warning(
+            "edit_message_invalid_params",
+            extra={"chat_id": chat_id, "message_id": message_id, "text_length": len(text)},
+        )
+        return False
+
+    def _build_edit_text(self, text: str, parse_mode: str | None) -> str:
+        """Append UTC update hint for HTML progress edits."""
+        if parse_mode != "HTML" or "Updated at" in text:
+            return text
+        now = datetime.now(UTC).strftime("%H:%M:%S")
+        return f"{text}\n\n<i>Updated at {now} UTC</i>"
+
+    @staticmethod
+    def _is_message_not_modified_error(exc: Exception | None) -> bool:
+        """Return True when Telegram edit failure is equivalent to success."""
+        if exc is None:
+            return False
+        exc_str = str(exc).lower()
+        return "message is not modified" in exc_str or "message_not_modified" in exc_str
+
+    async def _perform_edit_message(
+        self,
+        client: Any,
+        chat_id: int,
+        message_id: int,
+        text: str,
+        *,
+        parse_mode: str | None = None,
+        reply_markup: Any | None = None,
+        disable_web_page_preview: bool | None = None,
+    ) -> bool:
+        """Perform Telegram edit with retries and semantic success handling."""
+        last_error_exc: Exception | None = None
+
+        async def do_edit() -> None:
+            nonlocal last_error_exc
+            kwargs: dict[str, Any] = {
+                "chat_id": chat_id,
+                "message_id": message_id,
+                "text": self._build_edit_text(text, parse_mode),
+            }
+            normalized_mode = _normalize_parse_mode(parse_mode)
+            if normalized_mode is not None:
+                kwargs["parse_mode"] = normalized_mode
+            if reply_markup is not None:
+                kwargs["reply_markup"] = reply_markup
+            if disable_web_page_preview is not None:
+                kwargs["disable_web_page_preview"] = disable_web_page_preview
+            try:
+                await client.edit_message_text(**kwargs)
+            except Exception as e:
+                raise_if_cancelled(e)
+                last_error_exc = e
+                raise
+
+        _, success = await retry_telegram_operation(do_edit, operation_name="edit_message")
+        if success:
+            logger.debug(
+                "edit_message_success", extra={"chat_id": chat_id, "message_id": message_id}
+            )
+            return True
+
+        if self._is_message_not_modified_error(last_error_exc):
+            logger.debug(
+                "edit_message_not_modified_success",
+                extra={"chat_id": chat_id, "message_id": message_id},
+            )
+            return True
+
+        logger.warning(
+            "edit_message_retry_failed", extra={"chat_id": chat_id, "message_id": message_id}
+        )
+        return False
 
     async def send_chat_action(
         self,
@@ -606,6 +707,7 @@ class ResponseSenderImpl:
                         )
                         return True
                     except Exception as e:
+                        raise_if_cancelled(e)
                         # Don't log as error - typing indicators are non-critical
                         logger.debug(
                             "chat_action_send_failed",
@@ -650,6 +752,7 @@ class ResponseSenderImpl:
             await msg_any.reply_document(bio, caption="📊 Full Summary JSON attached")
             return
         except Exception as e:
+            raise_if_cancelled(e)
             logger.error("reply_document_failed", extra={"error": str(e)})
         await self.safe_reply(message, f"```json\n{pretty}\n```")
 
@@ -700,7 +803,8 @@ class ResponseSenderImpl:
             client = getattr(self._telegram_client, "client", None)
             if client is not None and hasattr(client, "send_message"):
                 await client.send_message(chat_id=self._admin_log_chat_id, text=text[:4096])
-        except Exception:
+        except Exception as e:
+            raise_if_cancelled(e)
             logger.warning("admin_log_send_failed", extra={"chat_id": self._admin_log_chat_id})
 
     def _slugify(self, text: str, *, max_len: int = 60) -> str:

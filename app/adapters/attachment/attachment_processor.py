@@ -117,6 +117,7 @@ class AttachmentProcessor:
 
         file_path: str | None = None
         progress_tracker: ProgressTracker | None = None
+        progress_task: asyncio.Task[Any] | None = None
         current_status_text: str = ""
 
         async def progress_formatter(current: int, total: int, msg_id: int | None) -> int | None:
@@ -175,10 +176,6 @@ class AttachmentProcessor:
 
             file_path = await self._download_attachment(message)
             if not file_path:
-                if progress_tracker:
-                    progress_tracker.mark_complete()
-                    if "progress_task" in locals():
-                        await progress_task
                 await self.response_formatter.send_error_notification(
                     message,
                     "processing_failed",
@@ -190,85 +187,25 @@ class AttachmentProcessor:
             # Get caption for context
             caption = (getattr(message, "caption", None) or "").strip() or None
 
-            # Create request record
-            req_id = await self._create_request(message, correlation_id, file_type)
-
-            # Detect language from caption or default
-            text_for_lang = caption or ""
-            user_lang_code = getattr(getattr(message, "from_user", None), "language_code", None)
-            user_lang = user_lang_code[:2] if user_lang_code else "en"
-            detected = detect_language(text_for_lang) if text_for_lang else user_lang
-            chosen_lang = choose_language(self.cfg.runtime.preferred_lang, detected)
-
-            # Create attachment processing record
-            file_size = os.path.getsize(file_path) if os.path.exists(file_path) else None
-            await self._create_attachment_record(
-                req_id=req_id,
+            req_id, result = await self._process_downloaded_attachment(
+                message=message,
+                file_path=file_path,
                 file_type=file_type,
                 mime_type=mime_type,
                 file_name=file_name,
-                file_size=file_size,
+                caption=caption,
+                correlation_id=correlation_id,
+                interaction_id=interaction_id,
+                progress_tracker=progress_tracker,
+                status_updater=status_updater,
             )
 
-            # Process based on type
-            if file_type == "image":
-                result = await self._process_image(
-                    file_path,
-                    caption,
-                    chosen_lang,
-                    req_id,
-                    correlation_id,
-                    interaction_id,
-                    message,
-                    progress_tracker=progress_tracker,
-                    status_updater=status_updater,
-                )
-            else:
-                result = await self._process_pdf(
-                    file_path,
-                    caption,
-                    chosen_lang,
-                    req_id,
-                    correlation_id,
-                    interaction_id,
-                    message,
-                    progress_tracker=progress_tracker,
-                    status_updater=status_updater,
-                )
-
             if result:
-                if progress_tracker:
-                    progress_tracker.mark_complete()
-                    if "progress_task" in locals():
-                        await progress_task
-
                 # Update attachment record with success details
                 await self._update_attachment_status(req_id, "completed", result)
-
-                # Send formatted summary
-                await self.response_formatter.send_forward_summary_response(
-                    message,
-                    result,
-                    summary_id=f"req:{req_id}",
-                )
-
-                if interaction_id:
-                    await async_safe_update_user_interaction(
-                        self.user_repo,
-                        interaction_id=interaction_id,
-                        response_sent=True,
-                        response_type="summary",
-                        request_id=req_id,
-                        logger_=logger,
-                    )
+                await self._send_attachment_result(message, result, req_id, interaction_id)
 
         except Exception as exc:
-            if progress_tracker:
-                progress_tracker.mark_complete()
-                if "progress_task" in locals():
-                    with contextlib.suppress(Exception):
-                        await progress_task
-
             logger.exception(
                 "attachment_flow_error",
                 extra={"error": str(exc), "cid": correlation_id},
@@ -284,6 +221,9 @@ class AttachmentProcessor:
                     "attachment_error_notification_failed", extra={"cid": correlation_id}
                 )
         finally:
+            await self._complete_progress(
+                progress_tracker, progress_task, suppress_task_errors=True
+            )
             # Clean up temp file
             if file_path and os.path.exists(file_path):
                 try:
@@ -406,6 +346,108 @@ class AttachmentProcessor:
 
         await asyncio.to_thread(_create)
 
+    def _choose_attachment_language(self, caption: str | None, message: Any) -> str:
+        """Determine the language for attachment analysis response."""
+        text_for_lang = caption or ""
+        user_lang_code = getattr(getattr(message, "from_user", None), "language_code", None)
+        user_lang = user_lang_code[:2] if user_lang_code else "en"
+        detected = detect_language(text_for_lang) if text_for_lang else user_lang
+        return choose_language(self.cfg.runtime.preferred_lang, detected)
+
+    async def _process_downloaded_attachment(
+        self,
+        *,
+        message: Any,
+        file_path: str,
+        file_type: str,
+        mime_type: str | None,
+        file_name: str | None,
+        caption: str | None,
+        correlation_id: str | None,
+        interaction_id: int | None,
+        progress_tracker: Any | None = None,
+        status_updater: Callable[[str], Awaitable[None]] | None = None,
+    ) -> tuple[int, dict[str, Any] | None]:
+        """Create records and dispatch processing based on attachment type."""
+        req_id = await self._create_request(message, correlation_id, file_type)
+        chosen_lang = self._choose_attachment_language(caption, message)
+
+        file_size = os.path.getsize(file_path) if os.path.exists(file_path) else None
+        await self._create_attachment_record(
+            req_id=req_id,
+            file_type=file_type,
+            mime_type=mime_type,
+            file_name=file_name,
+            file_size=file_size,
+        )
+
+        if file_type == "image":
+            result = await self._process_image(
+                file_path,
+                caption,
+                chosen_lang,
+                req_id,
+                correlation_id,
+                interaction_id,
+                message,
+                progress_tracker=progress_tracker,
+                status_updater=status_updater,
+            )
+        else:
+            result = await self._process_pdf(
+                file_path,
+                caption,
+                chosen_lang,
+                req_id,
+                correlation_id,
+                interaction_id,
+                message,
+                progress_tracker=progress_tracker,
+                status_updater=status_updater,
+            )
+        return req_id, result
+
+    async def _send_attachment_result(
+        self,
+        message: Any,
+        result: dict[str, Any],
+        req_id: int,
+        interaction_id: int | None,
+    ) -> None:
+        """Send final summary and persist interaction status."""
+        await self.response_formatter.send_forward_summary_response(
+            message,
+            result,
+            summary_id=f"req:{req_id}",
+        )
+        if interaction_id:
+            await async_safe_update_user_interaction(
+                self.user_repo,
+                interaction_id=interaction_id,
+                response_sent=True,
+                response_type="summary",
+                request_id=req_id,
+                logger_=logger,
+            )
+
+    async def _complete_progress(
+        self,
+        progress_tracker: Any | None,
+        progress_task: asyncio.Task[Any] | None,
+        *,
+        suppress_task_errors: bool = False,
+    ) -> None:
+        """Stop progress updates and wait for the progress task."""
+        if progress_tracker:
+            progress_tracker.mark_complete()
+        if not progress_task:
+            return
+        if suppress_task_errors:
+            with contextlib.suppress(Exception):
+                await progress_task
+            return
+        await progress_task
+
     async def _update_attachment_status(
         self, req_id: int, status: str, result: dict[str, Any] | None = None
     ) -> None:
@@ -423,6 +465,12 @@ class AttachmentProcessor:
                 record.save()
             except AttachmentProcessing.DoesNotExist:
                 logger.debug("attachment_record_not_found", extra={"request_id": req_id})
+                record = AttachmentProcessing.create(
+                    request=req_id,
+                    status=status,
+                    extracted_text_length=len(result.get("tldr", "")) if result else None,
+                )
+                record.save()
 
         await asyncio.to_thread(_update)
 
@@ -528,29 +576,7 @@ class AttachmentProcessor:
                 detected = detect_language(content_text)
                 chosen_lang = choose_language(self.cfg.runtime.preferred_lang, detected)
 
-        # Build metadata header for the prompt
-        metadata_parts = []
-        md = pdf_content.metadata
-        if md.get("title"):
-            metadata_parts.append(f"Title: {md['title']}")
-        if md.get("author"):
-            metadata_parts.append(f"Author: {md['author']}")
-        if md.get("subject"):
-            metadata_parts.append(f"Subject: {md['subject']}")
-        if md.get("keywords"):
-            metadata_parts.append(f"Keywords: {md['keywords']}")
-
-        if pdf_content.toc:
-            toc_lines = []
-            for lvl, title, page in pdf_content.toc[:30]:  # Limit TOC entries
-                indent = "  " * (lvl - 1)
-                toc_lines.append(f"{indent}- {title} (page {page})")
-            if toc_lines:
-                metadata_parts.append("Table of Contents:\n" + "\n".join(toc_lines))
-
-        metadata_header = ""
-        if metadata_parts:
-            metadata_header = "Document Metadata:\n" + "\n".join(metadata_parts) + "\n\n"
+        metadata_header = self._build_pdf_metadata_header(pdf_content)
 
         system_prompt = _load_prompt("pdf_analysis", chosen_lang)
         lang_label = "Russian" if chosen_lang == LANG_RU else "English"
@@ -636,6 +662,31 @@ class AttachmentProcessor:
             status_updater=status_updater,
         )
 
+    def _build_pdf_metadata_header(self, pdf_content: Any) -> str:
+        """Build compact document metadata header for PDF prompts."""
+        metadata_parts = []
+        md = pdf_content.metadata
+        if md.get("title"):
+            metadata_parts.append(f"Title: {md['title']}")
+        if md.get("author"):
+            metadata_parts.append(f"Author: {md['author']}")
+        if md.get("subject"):
+            metadata_parts.append(f"Subject: {md['subject']}")
+        if md.get("keywords"):
+            metadata_parts.append(f"Keywords: {md['keywords']}")
+
+        if pdf_content.toc:
+            toc_lines = []
+            for lvl, title, page in pdf_content.toc[:30]:
+                indent = "  " * (lvl - 1)
+                toc_lines.append(f"{indent}- {title} (page {page})")
+            if toc_lines:
+                metadata_parts.append("Table of Contents:\n" + "\n".join(toc_lines))
+
+        if not metadata_parts:
+            return ""
+        return "Document Metadata:\n" + "\n".join(metadata_parts) + "\n\n"
+
     async def _update_pdf_metadata(self, req_id: int, pdf_content: Any) -> None:
         """Update attachment record with PDF-specific metadata."""
         import asyncio
@@ -661,6 +712,24 @@ class AttachmentProcessor:
                 record.save()
             except AttachmentProcessing.DoesNotExist:
                 logger.debug("attachment_record_not_found_pdf", extra={"request_id": req_id})
+                record = AttachmentProcessing.create(
+                    request=req_id,
+                    status="processing",
+                    page_count=pdf_content.page_count,
+                    extracted_text_length=len(pdf_content.text),
+                    vision_used=bool(pdf_content.image_pages),
+                    vision_pages_count=len(pdf_content.image_pages)
+                    if pdf_content.image_pages
+                    else None,
+                    processing_method=(
+                        "hybrid"
+                        if pdf_content.image_pages and pdf_content.text.strip()
+                        else "vision"
+                        if pdf_content.is_scanned
+                        else "text_extraction"
+                    ),
+                )
+                record.save()
 
         await asyncio.to_thread(_update)
 

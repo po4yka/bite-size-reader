@@ -6,12 +6,11 @@ This script demonstrates usage of the ProcessingClient library.
 
 import argparse
 import asyncio
-import sys
 
 from app.grpc import ProcessingClient, ProcessingUpdate, SyncProcessingClient
 
 
-async def test_async_client(url: str, target: str) -> None:
+async def test_async_client(url: str, target: str) -> bool:
     """Test the async client."""
     print(f"Testing async client: {url}")
     print("-" * 60)
@@ -31,16 +30,16 @@ async def test_async_client(url: str, target: str) -> None:
             if result.is_success:
                 print(f"✅ Success! Summary ID: {result.summary_id}")
                 print(f"   Duration: {result.duration_seconds:.2f}s")
-            else:
-                print(f"❌ Failed: {result.error}")
-                sys.exit(1)
+                return True
+            print(f"❌ Failed: {result.error}")
+            return False
 
         except Exception as e:
             print(f"❌ Error: {e}")
-            sys.exit(1)
+            return False
 
 
-def test_sync_client(url: str, target: str) -> None:
+def test_sync_client(url: str, target: str) -> bool:
     """Test the sync client."""
     print(f"\nTesting sync client: {url}")
     print("-" * 60)
@@ -53,13 +52,13 @@ def test_sync_client(url: str, target: str) -> None:
             if result.is_success:
                 print(f"✅ Success! Summary ID: {result.summary_id}")
                 print(f"   Duration: {result.duration_seconds:.2f}s")
-            else:
-                print(f"❌ Failed: {result.error}")
-                sys.exit(1)
+                return True
+            print(f"❌ Failed: {result.error}")
+            return False
 
         except Exception as e:
             print(f"❌ Error: {e}")
-            sys.exit(1)
+            return False
 
 
 async def test_batch(urls: list[str], target: str) -> None:
@@ -89,7 +88,7 @@ async def test_batch(urls: list[str], target: str) -> None:
         print(f"  {status} {short_url:<40} {result.status}")
 
 
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser(description="Test ProcessingService gRPC client")
     parser.add_argument(
         "--target",
@@ -122,9 +121,10 @@ def main():
         ]
         asyncio.run(test_batch(test_urls, args.target))
     elif args.sync:
-        test_sync_client(args.url, args.target)
-    else:
-        asyncio.run(test_async_client(args.url, args.target))
+        if not test_sync_client(args.url, args.target):
+            raise SystemExit(1)
+    elif not asyncio.run(test_async_client(args.url, args.target)):
+        raise SystemExit(1)
 
 
 if __name__ == "__main__":

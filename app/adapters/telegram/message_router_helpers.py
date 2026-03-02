@@ -50,6 +50,55 @@ def is_txt_file_with_urls(message: Any) -> bool:
     return file_name.lower().endswith(".txt")
 
 
+def _filter_valid_batch_urls(router: Any, urls: list[str]) -> list[str]:
+    valid_urls: list[str] = []
+    for url in urls:
+        is_valid, error_msg = router.response_formatter.validator.validate_url(url)
+        if is_valid:
+            valid_urls.append(url)
+        else:
+            logger.warning("invalid_url_in_batch", extra={"url": url, "error": error_msg})
+    return valid_urls
+
+
+async def _cleanup_downloaded_file(router: Any, file_path: str, correlation_id: str) -> None:
+    cleanup_attempts = 0
+    max_cleanup_attempts = 3
+    while cleanup_attempts < max_cleanup_attempts:
+        try:
+            router._file_validator.cleanup_file(file_path)
+            return
+        except PermissionError as exc:
+            cleanup_attempts += 1
+            if cleanup_attempts >= max_cleanup_attempts:
+                logger.error(
+                    "file_cleanup_permission_denied",
+                    extra={
+                        "error": str(exc),
+                        "file_path": file_path,
+                        "cid": correlation_id,
+                        "attempts": cleanup_attempts,
+                    },
+                )
+            else:
+                await asyncio.sleep(0.1 * cleanup_attempts)
+        except FileNotFoundError:
+            return
+        except Exception as exc:
+            cleanup_attempts += 1
+            logger.error(
+                "file_cleanup_unexpected_error",
+                extra={
+                    "error": str(exc),
+                    "file_path": file_path,
+                    "cid": correlation_id,
+                    "error_type": type(exc).__name__,
+                    "attempts": cleanup_attempts,
+                },
+            )
+            return
+
+
 async def handle_document_file(
     router: Any,
     message: Any,
@@ -109,15 +158,7 @@ async def handle_document_file(
             )
             return
 
-        # Validate each URL for security
-        valid_urls = []
-        for url in urls:
-            is_valid, error_msg = router.response_formatter.validator.validate_url(url)
-            if is_valid:
-                valid_urls.append(url)
-            else:
-                logger.warning("invalid_url_in_batch", extra={"url": url, "error": error_msg})
-
+        valid_urls = _filter_valid_batch_urls(router, urls)
         if not valid_urls:
             await router.response_formatter.sender.safe_reply(
                 message, "❌ No valid URLs found in the file after security checks."
@@ -190,45 +231,8 @@ async def handle_document_file(
             details="An error occurred while parsing or downloading the uploaded file.",
         )
     finally:
-        # Clean up downloaded file with retry logic
         if file_path:
-            cleanup_attempts = 0
-            max_cleanup_attempts = 3
-            cleanup_success = False
-
-            while cleanup_attempts < max_cleanup_attempts and not cleanup_success:
-                try:
-                    router._file_validator.cleanup_file(file_path)
-                    cleanup_success = True
-                except PermissionError as exc:
-                    cleanup_attempts += 1
-                    if cleanup_attempts >= max_cleanup_attempts:
-                        logger.error(
-                            "file_cleanup_permission_denied",
-                            extra={
-                                "error": str(exc),
-                                "file_path": file_path,
-                                "cid": correlation_id,
-                                "attempts": cleanup_attempts,
-                            },
-                        )
-                    else:
-                        await asyncio.sleep(0.1 * cleanup_attempts)
-                except FileNotFoundError:
-                    cleanup_success = True
-                except Exception as exc:
-                    cleanup_attempts += 1
-                    logger.error(
-                        "file_cleanup_unexpected_error",
-                        extra={
-                            "error": str(exc),
-                            "file_path": file_path,
-                            "cid": correlation_id,
-                            "error_type": type(exc).__name__,
-                            "attempts": cleanup_attempts,
-                        },
-                    )
-                    break
+            await _cleanup_downloaded_file(router, file_path, correlation_id)
 
 
 async def download_file(router: Any, message: Any) -> str | None:
@@ -765,7 +769,9 @@ async def process_url_batch(
         )
         for cached_url, cached_payload, cached_req_id in cached_summaries:
             try:
-                await response_formatter.notifications.send_cached_summary_notification(message, silent=False)
+                await response_formatter.notifications.send_cached_summary_notification(
+                    message, silent=False
+                )
                 await response_formatter.summaries.send_structured_summary_response(
                     message,
                     cached_payload,
@@ -799,7 +805,8 @@ async def process_url_batch(
                 await progress_tracker.force_update()
             except asyncio.CancelledError:
                 break
-            except Exception:
+            except Exception as exc:
+                raise_if_cancelled(exc)
                 logger.debug("progress_heartbeat_failed", exc_info=True)
 
     heartbeat_task = asyncio.create_task(heartbeat())
@@ -816,6 +823,7 @@ async def process_url_batch(
             async with asyncio.timeout(10.0):
                 await progress_task
         except Exception as exc:
+            raise_if_cancelled(exc)
             logger.debug("progress_task_wait_failed", extra={"error": str(exc)})
             progress_task.cancel()
 
@@ -933,6 +941,251 @@ class BatchContext:
         self.uid = uid
 
 
+def _collect_successful_request_ids(
+    batch_status: URLBatchStatus, url_to_request_id: dict[str, int]
+) -> list[int]:
+    successful_request_ids: list[int] = []
+    for url, request_id in url_to_request_id.items():
+        entry = batch_status._find_entry(url)
+        if entry and entry.status in (URLStatus.COMPLETE, URLStatus.CACHED):
+            successful_request_ids.append(request_id)
+    return successful_request_ids
+
+
+def _payload_to_dict(summary_data: dict[str, Any]) -> _SummaryPayload:
+    raw_payload = summary_data.get("json_payload", {})
+    if isinstance(raw_payload, str):
+        try:
+            raw_payload = json.loads(raw_payload)
+        except (json.JSONDecodeError, ValueError):
+            raw_payload = {}
+    return raw_payload if isinstance(raw_payload, dict) else {}
+
+
+def _extract_entity_names(raw_entities: Any) -> list[str]:
+    entities: list[str] = []
+    if isinstance(raw_entities, list):
+        for entity in raw_entities:
+            if isinstance(entity, dict) and "name" in entity:
+                entities.append(entity["name"])
+            elif isinstance(entity, str):
+                entities.append(entity)
+    return entities
+
+
+async def _build_articles_for_analysis(
+    *,
+    session_id: int,
+    successful_request_ids: list[int],
+    summaries: dict[int, dict[str, Any]],
+    url_to_request_id: dict[str, int],
+    batch_session_repo: Any,
+) -> tuple[list[Any], list[dict[str, Any]]]:
+    from app.models.batch_analysis import ArticleMetadata
+
+    articles: list[Any] = []
+    full_summaries: list[dict[str, Any]] = []
+    for i, request_id in enumerate(successful_request_ids):
+        summary_data = summaries.get(request_id)
+        if not summary_data:
+            continue
+
+        await batch_session_repo.async_add_batch_session_item(
+            session_id=session_id,
+            request_id=request_id,
+            position=i,
+        )
+        payload = _payload_to_dict(summary_data)
+        url = next((u for u, rid in url_to_request_id.items() if rid == request_id), "")
+        domain = None
+        if url:
+            try:
+                domain = urlparse(url).netloc
+            except (ValueError, AttributeError):
+                logger.debug("domain_parse_failed", extra={"url": url})
+
+        articles.append(
+            ArticleMetadata(
+                request_id=request_id,
+                url=url,
+                title=payload.get("title"),
+                author=payload.get("author"),
+                domain=domain,
+                published_at=payload.get("published_at"),
+                topic_tags=payload.get("topic_tags", []),
+                entities=_extract_entity_names(payload.get("entities", [])),
+                summary_250=payload.get("summary_250"),
+                summary_1000=payload.get("summary_1000"),
+                language=summary_data.get("lang"),
+            )
+        )
+        full_summaries.append(payload)
+    return articles, full_summaries
+
+
+async def _persist_series_item_order(
+    *, session_id: int, article_order: list[int], series_title: str | None, batch_session_repo: Any
+) -> None:
+    items = await batch_session_repo.async_get_batch_session_items(session_id)
+    for i, req_id in enumerate(article_order, 1):
+        for item in items:
+            if item.get("request") == req_id:
+                await batch_session_repo.async_update_batch_session_item_series_info(
+                    item["id"],
+                    is_series_part=True,
+                    series_order=i,
+                    series_title=series_title,
+                )
+                break
+
+
+async def _maybe_generate_combined_summary(
+    *,
+    llm_client: Any,
+    batch_config: BatchAnalysisConfig,
+    correlation_id: str,
+    articles: list[Any],
+    relationship: Any,
+    full_summaries: list[dict[str, Any]],
+    language: str,
+) -> Any | None:
+    if not (batch_config.combined_summary_enabled and llm_client):
+        return None
+
+    from app.agents.combined_summary_agent import CombinedSummaryAgent
+    from app.models.batch_analysis import CombinedSummaryInput
+
+    combined_agent = CombinedSummaryAgent(
+        llm_client=llm_client,
+        correlation_id=correlation_id,
+    )
+    combined_input = CombinedSummaryInput(
+        articles=articles,
+        relationship=relationship,
+        full_summaries=full_summaries,
+        correlation_id=correlation_id,
+        language=language,
+    )
+    combined_result = await combined_agent.execute(combined_input)
+    if combined_result.success and combined_result.output:
+        return combined_result.output
+    return None
+
+
+async def _prepare_batch_analysis_inputs(
+    *,
+    batch_status: URLBatchStatus,
+    url_to_request_id: dict[str, int],
+    batch_session_repo: Any,
+    summary_repo: Any,
+    batch_config: BatchAnalysisConfig,
+    uid: int,
+    correlation_id: str,
+) -> tuple[int, list[Any], list[dict[str, Any]], str] | None:
+    session_id = await batch_session_repo.async_create_batch_session(
+        user_id=uid,
+        correlation_id=correlation_id,
+        total_urls=batch_status.total,
+    )
+    successful_request_ids = _collect_successful_request_ids(batch_status, url_to_request_id)
+    if len(successful_request_ids) < batch_config.min_articles:
+        await batch_session_repo.async_update_batch_session_status(
+            session_id, "completed", analysis_status="skipped"
+        )
+        return None
+
+    summaries = await summary_repo.async_get_summaries_by_request_ids(successful_request_ids)
+    articles, full_summaries = await _build_articles_for_analysis(
+        session_id=session_id,
+        successful_request_ids=successful_request_ids,
+        summaries=summaries,
+        url_to_request_id=url_to_request_id,
+        batch_session_repo=batch_session_repo,
+    )
+    if len(articles) < batch_config.min_articles:
+        await batch_session_repo.async_update_batch_session_status(
+            session_id, "completed", analysis_status="skipped"
+        )
+        return None
+
+    await batch_session_repo.async_update_batch_session_counts(
+        session_id,
+        successful_count=batch_status.success_count,
+        failed_count=batch_status.fail_count,
+    )
+    languages = [article.language for article in articles if article.language]
+    language = languages[0] if languages else "en"
+    return session_id, articles, full_summaries, language
+
+
+async def _run_relationship_analysis(
+    *,
+    session_id: int,
+    llm_client: Any,
+    correlation_id: str,
+    articles: list[Any],
+    language: str,
+    batch_config: BatchAnalysisConfig,
+    batch_session_repo: Any,
+) -> Any | None:
+    from app.agents.relationship_analysis_agent import RelationshipAnalysisAgent
+    from app.models.batch_analysis import RelationshipAnalysisInput
+
+    await batch_session_repo.async_update_batch_session_status(
+        session_id, "processing", analysis_status="analyzing"
+    )
+    relationship_agent = RelationshipAnalysisAgent(
+        llm_client=llm_client if batch_config.use_llm_for_analysis else None,
+        correlation_id=correlation_id,
+    )
+    analysis_input = RelationshipAnalysisInput(
+        articles=articles,
+        correlation_id=correlation_id,
+        language=language,
+        series_threshold=batch_config.series_threshold,
+        cluster_threshold=batch_config.cluster_threshold,
+    )
+    analysis_result = await relationship_agent.execute(analysis_input)
+    if not analysis_result.success or not analysis_result.output:
+        logger.warning(
+            "batch_relationship_analysis_failed",
+            extra={"error": analysis_result.error, "cid": correlation_id},
+        )
+        await batch_session_repo.async_update_batch_session_status(
+            session_id, "completed", analysis_status="error"
+        )
+        return None
+    return analysis_result.output
+
+
+def _build_relationship_metadata(relationship: Any) -> dict[str, Any]:
+    return {
+        "series_info": relationship.series_info.model_dump() if relationship.series_info else None,
+        "cluster_info": relationship.cluster_info.model_dump()
+        if relationship.cluster_info
+        else None,
+        "reasoning": relationship.reasoning,
+        "signals_used": relationship.signals_used,
+    }
+
+
+async def _complete_unrelated_batch(
+    *,
+    session_id: int,
+    start_time_ms: float,
+    batch_session_repo: Any,
+    correlation_id: str,
+) -> None:
+    processing_time_ms = int(time.time() * 1000 - start_time_ms)
+    await batch_session_repo.async_update_batch_session_status(
+        session_id, "completed", processing_time_ms=processing_time_ms
+    )
+    logger.info(
+        "batch_analysis_complete_unrelated",
+        extra={"session_id": session_id, "cid": correlation_id},
+    )
+
+
 async def run_batch_relationship_analysis(
     batch_context: BatchContext,
     message: Any,
@@ -960,12 +1213,7 @@ async def run_batch_relationship_analysis(
         llm_client: LLM client for agents
         batch_config: Batch analysis configuration
     """
-    from app.agents.combined_summary_agent import CombinedSummaryAgent
-    from app.agents.relationship_analysis_agent import RelationshipAnalysisAgent
     from app.models.batch_analysis import (
-        ArticleMetadata,
-        CombinedSummaryInput,
-        RelationshipAnalysisInput,
         RelationshipType,
     )
 
@@ -989,209 +1237,67 @@ async def run_batch_relationship_analysis(
     start_time_ms = time.time() * 1000
 
     try:
-        # Create batch session record
-        session_id = await batch_session_repo.async_create_batch_session(
-            user_id=uid,
-            correlation_id=correlation_id,
-            total_urls=batch_status.total,
-        )
-
-        # Get successful request IDs
-        successful_request_ids = []
-        for url, request_id in url_to_request_id.items():
-            entry = batch_status._find_entry(url)
-            if entry and entry.status in (URLStatus.COMPLETE, URLStatus.CACHED):
-                successful_request_ids.append(request_id)
-
-        if len(successful_request_ids) < batch_config.min_articles:
-            await batch_session_repo.async_update_batch_session_status(
-                session_id, "completed", analysis_status="skipped"
-            )
-            return
-
-        # Fetch summaries for successful requests
-        summaries = await summary_repo.async_get_summaries_by_request_ids(successful_request_ids)
-
-        # Build article metadata for analysis
-        articles: list[ArticleMetadata] = []
-        full_summaries: list[dict[str, Any]] = []
-
-        for i, request_id in enumerate(successful_request_ids):
-            summary_data = summaries.get(request_id)
-            if not summary_data:
-                continue
-
-            # Add batch session item
-            await batch_session_repo.async_add_batch_session_item(
-                session_id=session_id,
-                request_id=request_id,
-                position=i,
-            )
-
-            raw_payload = summary_data.get("json_payload", {})
-            if isinstance(raw_payload, str):
-                try:
-                    raw_payload = json.loads(raw_payload)
-                except (json.JSONDecodeError, ValueError):
-                    raw_payload = {}
-            payload: _SummaryPayload = raw_payload if isinstance(raw_payload, dict) else {}
-
-            # Find the URL for this request_id
-            url = next((u for u, rid in url_to_request_id.items() if rid == request_id), "")
-
-            # Extract domain from URL
-            domain = None
-            if url:
-                try:
-                    domain = urlparse(url).netloc
-                except (ValueError, AttributeError):
-                    logger.debug("domain_parse_failed", extra={"url": url})
-
-            # Extract entities as strings
-            entities = []
-            raw_entities = payload.get("entities", [])
-            if isinstance(raw_entities, list):
-                for e in raw_entities:
-                    if isinstance(e, dict) and "name" in e:
-                        entities.append(e["name"])
-                    elif isinstance(e, str):
-                        entities.append(e)
-
-            articles.append(
-                ArticleMetadata(
-                    request_id=request_id,
-                    url=url,
-                    title=payload.get("title"),
-                    author=payload.get("author"),
-                    domain=domain,
-                    published_at=payload.get("published_at"),
-                    topic_tags=payload.get("topic_tags", []),
-                    entities=entities,
-                    summary_250=payload.get("summary_250"),
-                    summary_1000=payload.get("summary_1000"),
-                    language=summary_data.get("lang"),
-                )
-            )
-            full_summaries.append(payload)
-
-        if len(articles) < batch_config.min_articles:
-            await batch_session_repo.async_update_batch_session_status(
-                session_id, "completed", analysis_status="skipped"
-            )
-            return
-
-        # Update session counts
-        await batch_session_repo.async_update_batch_session_counts(
-            session_id,
-            successful_count=batch_status.success_count,
-            failed_count=batch_status.fail_count,
-        )
-
-        # Determine language from articles
-        languages = [a.language for a in articles if a.language]
-        language = languages[0] if languages else "en"
-
-        # Run relationship analysis
-        await batch_session_repo.async_update_batch_session_status(
-            session_id, "processing", analysis_status="analyzing"
-        )
-
-        relationship_agent = RelationshipAnalysisAgent(
-            llm_client=llm_client if batch_config.use_llm_for_analysis else None,
+        prepared = await _prepare_batch_analysis_inputs(
+            batch_status=batch_status,
+            url_to_request_id=url_to_request_id,
+            batch_session_repo=batch_session_repo,
+            summary_repo=summary_repo,
+            batch_config=batch_config,
+            uid=uid,
             correlation_id=correlation_id,
         )
-
-        analysis_input = RelationshipAnalysisInput(
+        if prepared is None:
+            return
+        session_id, articles, full_summaries, language = prepared
+        relationship = await _run_relationship_analysis(
+            session_id=session_id,
+            llm_client=llm_client,
+            correlation_id=correlation_id,
             articles=articles,
-            correlation_id=correlation_id,
             language=language,
-            series_threshold=batch_config.series_threshold,
-            cluster_threshold=batch_config.cluster_threshold,
+            batch_config=batch_config,
+            batch_session_repo=batch_session_repo,
         )
-
-        analysis_result = await relationship_agent.execute(analysis_input)
-
-        if not analysis_result.success or not analysis_result.output:
-            logger.warning(
-                "batch_relationship_analysis_failed",
-                extra={"error": analysis_result.error, "cid": correlation_id},
-            )
-            await batch_session_repo.async_update_batch_session_status(
-                session_id, "completed", analysis_status="error"
-            )
+        if relationship is None:
             return
-
-        relationship = analysis_result.output
-
-        # Persist relationship results
-        relationship_metadata = {
-            "series_info": relationship.series_info.model_dump()
-            if relationship.series_info
-            else None,
-            "cluster_info": relationship.cluster_info.model_dump()
-            if relationship.cluster_info
-            else None,
-            "reasoning": relationship.reasoning,
-            "signals_used": relationship.signals_used,
-        }
 
         await batch_session_repo.async_update_batch_session_relationship(
             session_id,
             relationship_type=relationship.relationship_type.value,
             relationship_confidence=relationship.confidence,
-            relationship_metadata=relationship_metadata,
+            relationship_metadata=_build_relationship_metadata(relationship),
         )
 
-        # If unrelated, we're done
         if relationship.relationship_type == RelationshipType.UNRELATED:
-            processing_time_ms = int(time.time() * 1000 - start_time_ms)
-            await batch_session_repo.async_update_batch_session_status(
-                session_id, "completed", processing_time_ms=processing_time_ms
-            )
-            logger.info(
-                "batch_analysis_complete_unrelated",
-                extra={"session_id": session_id, "cid": correlation_id},
+            await _complete_unrelated_batch(
+                session_id=session_id,
+                start_time_ms=start_time_ms,
+                batch_session_repo=batch_session_repo,
+                correlation_id=correlation_id,
             )
             return
 
-        # Update series info for items if detected
         if relationship.series_info and relationship.series_info.article_order:
-            for i, req_id in enumerate(relationship.series_info.article_order, 1):
-                # Find the item and update it
-                items = await batch_session_repo.async_get_batch_session_items(session_id)
-                for item in items:
-                    if item.get("request") == req_id:
-                        await batch_session_repo.async_update_batch_session_item_series_info(
-                            item["id"],
-                            is_series_part=True,
-                            series_order=i,
-                            series_title=relationship.series_info.series_title,
-                        )
-                        break
-
-        # Generate combined summary if enabled
-        combined_summary = None
-        if batch_config.combined_summary_enabled and llm_client:
-            combined_agent = CombinedSummaryAgent(
-                llm_client=llm_client,
-                correlation_id=correlation_id,
+            await _persist_series_item_order(
+                session_id=session_id,
+                article_order=relationship.series_info.article_order,
+                series_title=relationship.series_info.series_title,
+                batch_session_repo=batch_session_repo,
             )
 
-            combined_input = CombinedSummaryInput(
-                articles=articles,
-                relationship=relationship,
-                full_summaries=full_summaries,
-                correlation_id=correlation_id,
-                language=language,
+        combined_summary = await _maybe_generate_combined_summary(
+            llm_client=llm_client,
+            batch_config=batch_config,
+            correlation_id=correlation_id,
+            articles=articles,
+            relationship=relationship,
+            full_summaries=full_summaries,
+            language=language,
+        )
+        if combined_summary is not None:
+            await batch_session_repo.async_update_batch_session_combined_summary(
+                session_id, combined_summary.model_dump()
             )
-
-            combined_result = await combined_agent.execute(combined_input)
-
-            if combined_result.success and combined_result.output:
-                combined_summary = combined_result.output
-                await batch_session_repo.async_update_batch_session_combined_summary(
-                    session_id, combined_summary.model_dump()
-                )
 
         processing_time_ms = int(time.time() * 1000 - start_time_ms)
         await batch_session_repo.async_update_batch_session_status(

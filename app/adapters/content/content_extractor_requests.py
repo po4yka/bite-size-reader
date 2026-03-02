@@ -43,6 +43,7 @@ class ContentExtractorRequestsMixin:
                 request_id=req_id,
                 success=crawl.response_success,
                 markdown=crawl.content_markdown,
+                html=crawl.content_html,
                 error=crawl.error_text,
                 metadata_json=crawl.metadata_json,
                 source_url=crawl.source_url,

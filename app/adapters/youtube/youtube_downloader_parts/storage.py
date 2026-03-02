@@ -50,6 +50,9 @@ def auto_cleanup_storage(
         try:
             stat = file_path.stat()
         except OSError:
+            logger.debug(
+                "youtube_cleanup_stat_failed", extra={"path": str(file_path)}, exc_info=True
+            )
             continue
         modified = datetime.fromtimestamp(stat.st_mtime, UTC)
         if modified < cutoff:
@@ -97,6 +100,11 @@ def cleanup_partial_download_files(
             partial.unlink()
             deleted_count += 1
         except OSError:
+            logger.debug(
+                "youtube_partial_cleanup_unlink_failed",
+                extra={"path": str(partial)},
+                exc_info=True,
+            )
             continue
 
     # Remove empty date directory
@@ -104,6 +112,10 @@ def cleanup_partial_download_files(
         if not any(output_dir.iterdir()):
             output_dir.rmdir()
     except OSError:
-        pass
+        logger.debug(
+            "youtube_partial_cleanup_rmdir_failed",
+            extra={"path": str(output_dir)},
+            exc_info=True,
+        )
 
     return deleted_count

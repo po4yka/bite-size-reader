@@ -29,6 +29,10 @@ from app.db.models import (
     UserDigestPreference,
     _utcnow,
 )
+from app.services.digest_subscription_ops import (
+    subscribe_channel_atomic,
+    unsubscribe_channel_atomic,
+)
 
 logger = logging.getLogger(__name__)
 _background_digest_tasks: set[asyncio.Task[None]] = set()
@@ -106,40 +110,7 @@ class DigestAPIService:
 
         return {"status": status, "username": username}
 
-    @staticmethod
-    def _subscribe_atomic(user_id: int, username: str) -> str:
-        """Run subscribe logic inside a single transaction.
-
-        Mirrors digest_handler._subscribe_atomic for consistency.
-        """
-        channel, _ = Channel.get_or_create(
-            username=username,
-            defaults={"title": username, "is_active": True},
-        )
-
-        existing = (
-            ChannelSubscription.select()
-            .where(
-                ChannelSubscription.user == user_id,
-                ChannelSubscription.channel == channel,
-            )
-            .first()
-        )
-
-        if existing:
-            if existing.is_active:
-                return "already_subscribed"
-            existing.is_active = True
-            existing.updated_at = _utcnow()
-            existing.save()
-            return "reactivated"
-
-        ChannelSubscription.create(
-            user=user_id,
-            channel=channel,
-            is_active=True,
-        )
-        return "created"
+    _subscribe_atomic = staticmethod(subscribe_channel_atomic)
 
     def unsubscribe_channel(self, user_id: int, raw_username: str) -> dict[str, str]:
         """Unsubscribe from a channel."""
@@ -158,33 +129,7 @@ class DigestAPIService:
 
         return {"status": status, "username": username}
 
-    @staticmethod
-    def _unsubscribe_atomic(user_id: int, username: str) -> str:
-        """Run unsubscribe logic inside a single transaction.
-
-        Mirrors digest_handler._unsubscribe_atomic for consistency.
-        """
-        channel = Channel.get_or_none(Channel.username == username)
-        if not channel:
-            return "not_found"
-
-        sub = (
-            ChannelSubscription.select()
-            .where(
-                ChannelSubscription.user == user_id,
-                ChannelSubscription.channel == channel,
-                ChannelSubscription.is_active == True,  # noqa: E712
-            )
-            .first()
-        )
-
-        if not sub:
-            return "not_subscribed"
-
-        sub.is_active = False
-        sub.updated_at = _utcnow()
-        sub.save()
-        return "unsubscribed"
+    _unsubscribe_atomic = staticmethod(unsubscribe_channel_atomic)
 
     def get_preferences(self, user_id: int) -> DigestPreferenceResponse:
         """Get merged preferences (user overrides + global defaults)."""

@@ -10,18 +10,16 @@ import logging
 import time
 from typing import TYPE_CHECKING, ClassVar
 
+from app.adapters.telegram.command_handlers.base_handler import HandlerDependenciesMixin
 from app.db.user_interactions import async_safe_update_user_interaction
 from app.infrastructure.persistence.sqlite.repositories.karakeep_sync_repository import (
     SqliteKarakeepSyncRepositoryAdapter,
 )
 
 if TYPE_CHECKING:
-    from app.adapters.external.response_formatter import ResponseFormatter
     from app.adapters.telegram.command_handlers.execution_context import (
         CommandExecutionContext,
     )
-    from app.config import AppConfig
-    from app.db.session import DatabaseSessionManager
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +27,7 @@ logger = logging.getLogger(__name__)
 KARAKEEP_SYNC_COOLDOWN_SECONDS = 300
 
 
-class KarakeepHandlerImpl:
+class KarakeepHandlerImpl(HandlerDependenciesMixin):
     """Implementation of Karakeep sync commands.
 
     Handles bidirectional sync between Bite-Size Reader and Karakeep
@@ -38,23 +36,6 @@ class KarakeepHandlerImpl:
 
     # Class-level rate limiting for Karakeep sync
     _last_sync: ClassVar[dict[int, float]] = {}
-
-    def __init__(
-        self,
-        cfg: AppConfig,
-        db: DatabaseSessionManager,
-        response_formatter: ResponseFormatter,
-    ) -> None:
-        """Initialize the Karakeep handler.
-
-        Args:
-            cfg: Application configuration.
-            db: Database session manager.
-            response_formatter: Response formatter for sending messages.
-        """
-        self._cfg = cfg
-        self._db = db
-        self._formatter = response_formatter
 
     async def handle_sync_karakeep(self, ctx: CommandExecutionContext) -> None:
         """Handle /sync_karakeep command.

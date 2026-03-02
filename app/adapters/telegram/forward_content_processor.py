@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any
 
+from app.core.async_utils import raise_if_cancelled
 from app.core.html_utils import normalize_text
 from app.core.lang import choose_language, detect_language
 from app.infrastructure.persistence.message_persistence import MessagePersistence
@@ -86,7 +87,8 @@ class ForwardContentProcessor:
         try:
             if getattr(self.cfg.runtime, "enable_textacy", False):
                 prompt = normalize_text(prompt)
-        except Exception:
+        except Exception as exc:
+            raise_if_cancelled(exc)
             logger.debug("forward_text_normalize_failed", exc_info=True)
 
         # Create request with content text
@@ -102,6 +104,7 @@ class ForwardContentProcessor:
                 req_id, detected
             )
         except Exception as e:
+            raise_if_cancelled(e)
             logger.exception("persist_lang_detected_error", extra={"error": str(e)})
 
         chosen_lang = choose_language(self.cfg.runtime.preferred_lang, detected)
@@ -193,6 +196,7 @@ class ForwardContentProcessor:
         try:
             await self._persist_message_snapshot(req_id, message)
         except Exception as e:
+            raise_if_cancelled(e)
             logger.exception("snapshot_error", extra={"error": str(e)})
 
         return req_id

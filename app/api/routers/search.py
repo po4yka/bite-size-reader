@@ -223,14 +223,16 @@ def _passes_filters(
             if created_dt.date() < start_dt.date():
                 return False
         except ValueError:
-            pass
+            logger.debug("search_filter_invalid_start_date", extra={"start_date": start_date})
+            start_date = None
     if created_dt and end_date:
         try:
             end_dt = datetime.fromisoformat(end_date)
             if created_dt.date() > end_dt.date():
                 return False
         except ValueError:
-            pass
+            logger.debug("search_filter_invalid_end_date", extra={"end_date": end_date})
+            end_date = None
 
     return True
 
@@ -273,6 +275,9 @@ def _period_tag_counts(
             try:
                 created_at = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
             except ValueError:
+                logger.debug(
+                    "period_tag_counts_invalid_created_at", extra={"created_at": created_at}
+                )
                 continue
         if created_at < start or created_at >= end:
             continue
@@ -281,6 +286,424 @@ def _period_tag_counts(
             if normalized:
                 counts[normalized] += 1
     return counts
+
+
+def _build_fts_hits(fts_results: list[dict[str, Any]]) -> dict[int, dict[str, Any]]:
+    hits: dict[int, dict[str, Any]] = {}
+    for idx, row in enumerate(fts_results):
+        try:
+            req_id = int(row["request_id"])
+        except (KeyError, TypeError, ValueError):
+            logger.debug("search_result_request_id_parse_failed", extra={"row_index": idx})
+            continue
+        if req_id in hits:
+            continue
+        hits[req_id] = {
+            "position": idx,
+            "score": max(0.0, 1.0 - (idx / max(len(fts_results), 1))),
+            "row": row,
+        }
+    return hits
+
+
+async def _build_semantic_hits(
+    *,
+    q: str,
+    resolved_mode: str,
+    language: str | None,
+    tags: list[str] | None,
+    user_id: int,
+    fetch_limit: int,
+    min_similarity: float,
+) -> dict[int, dict[str, Any]]:
+    hits: dict[int, dict[str, Any]] = {}
+    if resolved_mode not in {"semantic", "hybrid"}:
+        return hits
+
+    try:
+        chroma_service = await get_chroma_search_service()
+    except Exception:
+        chroma_service = None
+        logger.warning("search_chroma_unavailable", exc_info=True)
+
+    semantic_tags = tags or _extract_query_tags(q) or None
+    if chroma_service is None:
+        return hits
+
+    semantic_results = await chroma_service.search(
+        q,
+        language=language,
+        tags=semantic_tags,
+        user_id=user_id,
+        limit=fetch_limit,
+        offset=0,
+    )
+    for idx, result in enumerate(semantic_results.results):
+        if result.similarity_score < min_similarity:
+            continue
+        if result.request_id in hits:
+            continue
+        hits[result.request_id] = {
+            "position": idx,
+            "score": float(result.similarity_score),
+            "row": result,
+        }
+    return hits
+
+
+def _candidate_request_ids(
+    resolved_mode: str,
+    fts_by_request_id: dict[int, dict[str, Any]],
+    semantic_by_request_id: dict[int, dict[str, Any]],
+) -> list[int]:
+    if resolved_mode == "keyword":
+        return list(fts_by_request_id.keys())
+    if resolved_mode == "semantic":
+        return list(semantic_by_request_id.keys())
+    return list(dict.fromkeys([*fts_by_request_id.keys(), *semantic_by_request_id.keys()]))
+
+
+def _build_ranked_search_rows(
+    *,
+    q: str,
+    resolved_mode: str,
+    candidate_request_ids: list[int],
+    requests_map: dict[int, dict[str, Any]],
+    summaries_map: dict[int, dict[str, Any]],
+    fts_by_request_id: dict[int, dict[str, Any]],
+    semantic_by_request_id: dict[int, dict[str, Any]],
+    language: str | None,
+    tags: list[str] | None,
+    domains: list[str] | None,
+    start_date: str | None,
+    end_date: str | None,
+    is_read: bool | None,
+    is_favorited: bool | None,
+) -> list[dict[str, Any]]:
+    ranked_rows: list[dict[str, Any]] = []
+    for req_id in candidate_request_ids:
+        request = requests_map.get(req_id)
+        summary = summaries_map.get(req_id)
+        if not request or not summary:
+            continue
+
+        payload = ensure_mapping(summary.get("json_payload"))
+        metadata = ensure_mapping(payload.get("metadata"))
+        if not _passes_filters(
+            request=request,
+            summary=summary,
+            payload=payload,
+            lang=language,
+            tags=tags,
+            domains=domains,
+            start_date=start_date,
+            end_date=end_date,
+            is_read=is_read,
+            is_favorited=is_favorited,
+        ):
+            continue
+
+        fts_hit = fts_by_request_id.get(req_id)
+        semantic_hit = semantic_by_request_id.get(req_id)
+        fts_score = float(fts_hit["score"]) if fts_hit else 0.0
+        semantic_score = float(semantic_hit["score"]) if semantic_hit else 0.0
+        freshness = _freshness_score(request.get("created_at"))
+        popularity = _popularity_score(summary, payload)
+        snippet = (
+            (semantic_hit["row"].snippet if semantic_hit and semantic_hit["row"].snippet else None)
+            or (fts_hit["row"].get("snippet") if fts_hit else None)
+            or payload.get("summary_250")
+            or payload.get("tldr", "")
+        )
+        lexical = _lexical_overlap(q, f"{metadata.get('title', '')} {snippet or ''}")
+        score = _score_result(
+            mode=resolved_mode,
+            fts_score=fts_score,
+            semantic_score=semantic_score,
+            freshness=freshness,
+            popularity=popularity,
+            lexical=lexical,
+        )
+        signals, reason = _build_match_explanation(
+            mode=resolved_mode,
+            fts_score=fts_score,
+            semantic_score=semantic_score,
+            freshness=freshness,
+            popularity=popularity,
+        )
+        ranked_rows.append(
+            {
+                "request_id": req_id,
+                "summary_id": summary.get("id"),
+                "url": request.get("input_url") or request.get("normalized_url"),
+                "title": (semantic_hit["row"].title if semantic_hit else None)
+                or (fts_hit["row"].get("title") if fts_hit else None)
+                or metadata.get("title", "Untitled"),
+                "domain": metadata.get("domain")
+                or (fts_hit["row"].get("source") if fts_hit else ""),
+                "snippet": snippet,
+                "tldr": payload.get("tldr", ""),
+                "published_at": metadata.get("published_at")
+                or (fts_hit["row"].get("published_at") if fts_hit else None),
+                "created_at": _isotime(request.get("created_at")),
+                "relevance_score": round(score, 4),
+                "topic_tags": payload.get("topic_tags", []),
+                "is_read": summary.get("is_read", False),
+                "lang": summary.get("lang"),
+                "match_signals": signals,
+                "match_explanation": reason,
+                "score_breakdown": {
+                    "fts": round(fts_score, 4),
+                    "semantic": round(semantic_score, 4),
+                    "freshness": round(freshness, 4),
+                    "popularity": round(popularity, 4),
+                    "lexical": round(lexical, 4),
+                },
+            }
+        )
+    ranked_rows.sort(key=lambda item: float(item.get("relevance_score", 0.0)), reverse=True)
+    return ranked_rows
+
+
+def _rows_to_search_results(rows: list[dict[str, Any]]) -> list[SearchResult]:
+    results: list[SearchResult] = []
+    for item in rows:
+        results.append(
+            SearchResult(
+                request_id=item["request_id"],
+                summary_id=item["summary_id"],
+                url=item["url"],
+                title=item["title"],
+                domain=item["domain"],
+                snippet=item["snippet"],
+                tldr=item["tldr"],
+                published_at=item["published_at"],
+                created_at=item["created_at"],
+                relevance_score=item["relevance_score"],
+                topic_tags=item["topic_tags"],
+                is_read=item["is_read"],
+                match_signals=item["match_signals"],
+                match_explanation=item["match_explanation"],
+                score_breakdown=item["score_breakdown"],
+            )
+        )
+    return results
+
+
+def _build_semantic_filtered_rows(
+    *,
+    q: str,
+    min_similarity: float,
+    language: str | None,
+    tags: list[str] | None,
+    domains: list[str] | None,
+    start_date: str | None,
+    end_date: str | None,
+    is_read: bool | None,
+    is_favorited: bool | None,
+    search_results: Any,
+    requests_map: dict[int, dict[str, Any]],
+    summaries_map: dict[int, dict[str, Any]],
+) -> list[dict[str, Any]]:
+    filtered_rows: list[dict[str, Any]] = []
+    for result in search_results.results:
+        request = requests_map.get(result.request_id)
+        if not request:
+            continue
+        summary = summaries_map.get(result.request_id)
+        if not summary:
+            continue
+
+        json_payload = ensure_mapping(summary.get("json_payload"))
+        metadata = ensure_mapping(json_payload.get("metadata"))
+        if result.similarity_score < min_similarity:
+            continue
+        if not _passes_filters(
+            request=request,
+            summary=summary,
+            payload=json_payload,
+            lang=language,
+            tags=tags,
+            domains=domains,
+            start_date=start_date,
+            end_date=end_date,
+            is_read=is_read,
+            is_favorited=is_favorited,
+        ):
+            continue
+
+        snippet = result.snippet or json_payload.get("summary_250") or json_payload.get("tldr")
+        freshness = _freshness_score(request.get("created_at"))
+        popularity = _popularity_score(summary, json_payload)
+        lexical = _lexical_overlap(q, f"{metadata.get('title', '')} {snippet or ''}")
+        relevance = _score_result(
+            mode="semantic",
+            fts_score=0.0,
+            semantic_score=float(result.similarity_score),
+            freshness=freshness,
+            popularity=popularity,
+            lexical=lexical,
+        )
+        signals, reason = _build_match_explanation(
+            mode="semantic",
+            fts_score=0.0,
+            semantic_score=float(result.similarity_score),
+            freshness=freshness,
+            popularity=popularity,
+        )
+        filtered_rows.append(
+            {
+                "request_id": result.request_id,
+                "summary_id": summary.get("id"),
+                "url": result.url or request.get("input_url") or request.get("normalized_url"),
+                "title": result.title or metadata.get("title", "Untitled"),
+                "domain": metadata.get("domain") or metadata.get("source", ""),
+                "snippet": snippet,
+                "tldr": json_payload.get("tldr", ""),
+                "published_at": metadata.get("published_at") or metadata.get("published"),
+                "created_at": _isotime(request.get("created_at")),
+                "relevance_score": round(relevance, 4),
+                "topic_tags": json_payload.get("topic_tags") or result.tags,
+                "is_read": summary.get("is_read", False),
+                "match_signals": signals,
+                "match_explanation": reason,
+                "score_breakdown": {
+                    "fts": 0.0,
+                    "semantic": round(float(result.similarity_score), 4),
+                    "freshness": round(freshness, 4),
+                    "popularity": round(popularity, 4),
+                    "lexical": round(lexical, 4),
+                },
+                "lang": summary.get("lang"),
+            }
+        )
+    filtered_rows.sort(key=lambda item: float(item.get("relevance_score", 0.0)), reverse=True)
+    return filtered_rows
+
+
+def _compute_search_insights_payload(
+    *,
+    rows: list[dict[str, Any]],
+    now: datetime,
+    current_start: datetime,
+    previous_start: datetime,
+    days: int,
+    limit: int,
+) -> dict[str, Any]:
+    tag_rows: list[tuple[datetime, list[str]]] = []
+    entity_counts: Counter[str] = Counter()
+    domain_counts: Counter[str] = Counter()
+    lang_counts: Counter[str] = Counter()
+    keyword_counts: Counter[str] = Counter()
+    tag_counts_total: Counter[str] = Counter()
+    total_articles = 0
+
+    for row in rows:
+        payload = ensure_mapping(row.get("json_payload"))
+        metadata = ensure_mapping(payload.get("metadata"))
+        entities = ensure_mapping(payload.get("entities"))
+        request_data = ensure_mapping(row.get("request"))
+        created_at = request_data.get("created_at")
+        if created_at is None:
+            continue
+        total_articles += 1
+
+        tags = [str(t).strip().lower() for t in (payload.get("topic_tags") or []) if str(t).strip()]
+        tag_rows.append((created_at, tags))
+        tag_counts_total.update(tags)
+
+        domain = str(metadata.get("domain") or "").strip().lower()
+        if domain:
+            domain_counts[domain] += 1
+        lang = str(row.get("lang") or "unknown").strip().lower()
+        lang_counts[lang] += 1
+
+        for bucket in ("people", "organizations", "locations"):
+            values = entities.get(bucket) or []
+            for value in values[:40]:
+                normalized = str(value).strip()
+                if normalized:
+                    entity_counts[normalized] += 1
+        for kw in payload.get("seo_keywords") or []:
+            normalized_kw = str(kw).strip().lower()
+            if normalized_kw:
+                keyword_counts[normalized_kw] += 1
+
+    current_tags = _period_tag_counts(tag_rows, current_start, now)
+    previous_tags = _period_tag_counts(tag_rows, previous_start, current_start)
+    trending_topics: list[dict[str, Any]] = []
+    for tag, count in current_tags.most_common(limit):
+        prev = previous_tags.get(tag, 0)
+        trend_delta = count - prev
+        trend_score = round((count - prev) / prev, 3) if prev > 0 else 1.0 if count > 0 else 0.0
+        trending_topics.append(
+            {
+                "tag": tag,
+                "count": count,
+                "prev_count": prev,
+                "trend_delta": trend_delta,
+                "trend_score": trend_score,
+            }
+        )
+
+    rising_entities = [
+        {"entity": entity, "count": count} for entity, count in entity_counts.most_common(limit)
+    ]
+    source_diversity = {
+        "unique_domains": len(domain_counts),
+        "top_domains": [
+            {"domain": domain, "count": count} for domain, count in domain_counts.most_common(limit)
+        ],
+    }
+    if total_articles > 0:
+        entropy = 0.0
+        for count in domain_counts.values():
+            p = count / total_articles
+            if p > 0:
+                entropy -= p * math.log2(p)
+        source_diversity["shannon_entropy"] = round(entropy, 4)
+    else:
+        source_diversity["shannon_entropy"] = 0.0
+
+    language_mix = {
+        "total": total_articles,
+        "languages": [
+            {
+                "language": lang,
+                "count": count,
+                "ratio": round((count / total_articles), 4) if total_articles else 0.0,
+            }
+            for lang, count in lang_counts.most_common(limit)
+        ],
+    }
+    tag_tokens = {tag.lstrip("#") for tag in tag_counts_total}
+    gaps: list[dict[str, Any]] = []
+    for keyword, count in keyword_counts.most_common(limit * 4):
+        if keyword in tag_tokens or count < 2:
+            continue
+        gaps.append(
+            {
+                "term": keyword,
+                "mentions": count,
+                "tag_coverage": 0,
+                "gap_score": round(count / max(1, total_articles), 4),
+            }
+        )
+        if len(gaps) >= limit:
+            break
+
+    return {
+        "period_days": days,
+        "window": {
+            "start": current_start.isoformat().replace("+00:00", "Z"),
+            "end": now.isoformat().replace("+00:00", "Z"),
+        },
+        "topic_trends": trending_topics,
+        "rising_entities": rising_entities,
+        "source_diversity": source_diversity,
+        "language_mix": language_mix,
+        "coverage_gaps": gaps,
+    }
 
 
 @router.get("/search")
@@ -312,64 +735,24 @@ async def search_summaries(
     try:
         intent = _infer_intent(q)
         resolved_mode = _resolve_mode(mode, intent)
-
         fetch_limit = min(300, max(limit * 4, limit + 25))
-
         fts_query = re.sub(r"#", " ", q).strip() or q
         fts_results, _ = await search_use_case.fts_search_paginated(
             fts_query, limit=fetch_limit, offset=0
         )
-        fts_by_request_id: dict[int, dict[str, Any]] = {}
-        for idx, row in enumerate(fts_results):
-            try:
-                req_id = int(row["request_id"])
-            except (KeyError, TypeError, ValueError):
-                continue
-            if req_id in fts_by_request_id:
-                continue
-            fts_by_request_id[req_id] = {
-                "position": idx,
-                "score": max(0.0, 1.0 - (idx / max(len(fts_results), 1))),
-                "row": row,
-            }
-
-        semantic_by_request_id: dict[int, dict[str, Any]] = {}
-        if resolved_mode in {"semantic", "hybrid"}:
-            try:
-                chroma_service = await get_chroma_search_service()
-            except Exception:
-                chroma_service = None
-                logger.warning("search_chroma_unavailable", exc_info=True)
-
-            semantic_tags = tags or _extract_query_tags(q) or None
-            if chroma_service is not None:
-                semantic_results = await chroma_service.search(
-                    q,
-                    language=language,
-                    tags=semantic_tags,
-                    user_id=user["user_id"],
-                    limit=fetch_limit,
-                    offset=0,
-                )
-                for idx, result in enumerate(semantic_results.results):
-                    if result.similarity_score < min_similarity:
-                        continue
-                    if result.request_id in semantic_by_request_id:
-                        continue
-                    semantic_by_request_id[result.request_id] = {
-                        "position": idx,
-                        "score": float(result.similarity_score),
-                        "row": result,
-                    }
-
-        if resolved_mode == "keyword":
-            candidate_request_ids = list(fts_by_request_id.keys())
-        elif resolved_mode == "semantic":
-            candidate_request_ids = list(semantic_by_request_id.keys())
-        else:
-            candidate_request_ids = list(
-                dict.fromkeys([*fts_by_request_id.keys(), *semantic_by_request_id.keys()])
-            )
+        fts_by_request_id = _build_fts_hits(fts_results)
+        semantic_by_request_id = await _build_semantic_hits(
+            q=q,
+            resolved_mode=resolved_mode,
+            language=language,
+            tags=tags,
+            user_id=user["user_id"],
+            fetch_limit=fetch_limit,
+            min_similarity=min_similarity,
+        )
+        candidate_request_ids = _candidate_request_ids(
+            resolved_mode, fts_by_request_id, semantic_by_request_id
+        )
 
         requests_map = await search_use_case.get_requests_by_ids(
             candidate_request_ids, user_id=user["user_id"]
@@ -377,122 +760,25 @@ async def search_summaries(
         summaries_map = await search_use_case.get_summaries_by_request_ids(
             list(requests_map.keys())
         )
-
-        ranked_rows: list[dict[str, Any]] = []
-        for req_id in candidate_request_ids:
-            request = requests_map.get(req_id)
-            summary = summaries_map.get(req_id)
-            if not request or not summary:
-                continue
-
-            payload = ensure_mapping(summary.get("json_payload"))
-            metadata = ensure_mapping(payload.get("metadata"))
-
-            if not _passes_filters(
-                request=request,
-                summary=summary,
-                payload=payload,
-                lang=language,
-                tags=tags,
-                domains=domains,
-                start_date=start_date,
-                end_date=end_date,
-                is_read=is_read,
-                is_favorited=is_favorited,
-            ):
-                continue
-
-            fts_hit = fts_by_request_id.get(req_id)
-            semantic_hit = semantic_by_request_id.get(req_id)
-            fts_score = float(fts_hit["score"]) if fts_hit else 0.0
-            semantic_score = float(semantic_hit["score"]) if semantic_hit else 0.0
-            freshness = _freshness_score(request.get("created_at"))
-            popularity = _popularity_score(summary, payload)
-
-            snippet = (
-                (
-                    semantic_hit["row"].snippet
-                    if semantic_hit and semantic_hit["row"].snippet
-                    else None
-                )
-                or (fts_hit["row"].get("snippet") if fts_hit else None)
-                or payload.get("summary_250")
-                or payload.get("tldr", "")
-            )
-            lexical = _lexical_overlap(q, f"{metadata.get('title', '')} {snippet or ''}")
-            score = _score_result(
-                mode=resolved_mode,
-                fts_score=fts_score,
-                semantic_score=semantic_score,
-                freshness=freshness,
-                popularity=popularity,
-                lexical=lexical,
-            )
-            signals, reason = _build_match_explanation(
-                mode=resolved_mode,
-                fts_score=fts_score,
-                semantic_score=semantic_score,
-                freshness=freshness,
-                popularity=popularity,
-            )
-
-            ranked_rows.append(
-                {
-                    "request_id": req_id,
-                    "summary_id": summary.get("id"),
-                    "url": request.get("input_url") or request.get("normalized_url"),
-                    "title": (semantic_hit["row"].title if semantic_hit else None)
-                    or (fts_hit["row"].get("title") if fts_hit else None)
-                    or metadata.get("title", "Untitled"),
-                    "domain": metadata.get("domain")
-                    or (fts_hit["row"].get("source") if fts_hit else ""),
-                    "snippet": snippet,
-                    "tldr": payload.get("tldr", ""),
-                    "published_at": metadata.get("published_at")
-                    or (fts_hit["row"].get("published_at") if fts_hit else None),
-                    "created_at": _isotime(request.get("created_at")),
-                    "relevance_score": round(score, 4),
-                    "topic_tags": payload.get("topic_tags", []),
-                    "is_read": summary.get("is_read", False),
-                    "lang": summary.get("lang"),
-                    "match_signals": signals,
-                    "match_explanation": reason,
-                    "score_breakdown": {
-                        "fts": round(fts_score, 4),
-                        "semantic": round(semantic_score, 4),
-                        "freshness": round(freshness, 4),
-                        "popularity": round(popularity, 4),
-                        "lexical": round(lexical, 4),
-                    },
-                }
-            )
-
-        ranked_rows.sort(key=lambda item: float(item.get("relevance_score", 0.0)), reverse=True)
+        ranked_rows = _build_ranked_search_rows(
+            q=q,
+            resolved_mode=resolved_mode,
+            candidate_request_ids=candidate_request_ids,
+            requests_map=requests_map,
+            summaries_map=summaries_map,
+            fts_by_request_id=fts_by_request_id,
+            semantic_by_request_id=semantic_by_request_id,
+            language=language,
+            tags=tags,
+            domains=domains,
+            start_date=start_date,
+            end_date=end_date,
+            is_read=is_read,
+            is_favorited=is_favorited,
+        )
         facets = _build_facets(ranked_rows)
         paged = ranked_rows[offset : offset + limit]
-
-        result_models = []
-        for item in paged:
-            result_models.append(
-                SearchResult(
-                    request_id=item["request_id"],
-                    summary_id=item["summary_id"],
-                    url=item["url"],
-                    title=item["title"],
-                    domain=item["domain"],
-                    snippet=item["snippet"],
-                    tldr=item["tldr"],
-                    published_at=item["published_at"],
-                    created_at=item["created_at"],
-                    relevance_score=item["relevance_score"],
-                    topic_tags=item["topic_tags"],
-                    is_read=item["is_read"],
-                    match_signals=item["match_signals"],
-                    match_explanation=item["match_explanation"],
-                    score_breakdown=item["score_breakdown"],
-                )
-            )
-
+        result_models = _rows_to_search_results(paged)
         pagination = PaginationInfo(
             total=len(ranked_rows),
             limit=limit,
@@ -557,109 +843,23 @@ async def semantic_search_summaries(
         # Batch load summaries
         authorized_request_ids = list(requests_map.keys())
         summaries_map = await search_use_case.get_summaries_by_request_ids(authorized_request_ids)
-
-        filtered_rows: list[dict[str, Any]] = []
-        for result in search_results.results:
-            request = requests_map.get(result.request_id)
-            if not request:
-                continue
-
-            summary = summaries_map.get(result.request_id)
-            if not summary:
-                continue
-
-            json_payload = ensure_mapping(summary.get("json_payload"))
-            metadata = ensure_mapping(json_payload.get("metadata"))
-
-            if result.similarity_score < min_similarity:
-                continue
-
-            if not _passes_filters(
-                request=request,
-                summary=summary,
-                payload=json_payload,
-                lang=language,
-                tags=tags,
-                domains=domains,
-                start_date=start_date,
-                end_date=end_date,
-                is_read=is_read,
-                is_favorited=is_favorited,
-            ):
-                continue
-
-            snippet = result.snippet or json_payload.get("summary_250") or json_payload.get("tldr")
-            freshness = _freshness_score(request.get("created_at"))
-            popularity = _popularity_score(summary, json_payload)
-            lexical = _lexical_overlap(q, f"{metadata.get('title', '')} {snippet or ''}")
-            relevance = _score_result(
-                mode="semantic",
-                fts_score=0.0,
-                semantic_score=float(result.similarity_score),
-                freshness=freshness,
-                popularity=popularity,
-                lexical=lexical,
-            )
-            signals, reason = _build_match_explanation(
-                mode="semantic",
-                fts_score=0.0,
-                semantic_score=float(result.similarity_score),
-                freshness=freshness,
-                popularity=popularity,
-            )
-
-            filtered_rows.append(
-                {
-                    "request_id": result.request_id,
-                    "summary_id": summary.get("id"),
-                    "url": result.url or request.get("input_url") or request.get("normalized_url"),
-                    "title": result.title or metadata.get("title", "Untitled"),
-                    "domain": metadata.get("domain") or metadata.get("source", ""),
-                    "snippet": snippet,
-                    "tldr": json_payload.get("tldr", ""),
-                    "published_at": metadata.get("published_at") or metadata.get("published"),
-                    "created_at": _isotime(request.get("created_at")),
-                    "relevance_score": round(relevance, 4),
-                    "topic_tags": json_payload.get("topic_tags") or result.tags,
-                    "is_read": summary.get("is_read", False),
-                    "match_signals": signals,
-                    "match_explanation": reason,
-                    "score_breakdown": {
-                        "fts": 0.0,
-                        "semantic": round(float(result.similarity_score), 4),
-                        "freshness": round(freshness, 4),
-                        "popularity": round(popularity, 4),
-                        "lexical": round(lexical, 4),
-                    },
-                    "lang": summary.get("lang"),
-                }
-            )
-
-        filtered_rows.sort(key=lambda item: float(item.get("relevance_score", 0.0)), reverse=True)
+        filtered_rows = _build_semantic_filtered_rows(
+            q=q,
+            min_similarity=min_similarity,
+            language=language,
+            tags=tags,
+            domains=domains,
+            start_date=start_date,
+            end_date=end_date,
+            is_read=is_read,
+            is_favorited=is_favorited,
+            search_results=search_results,
+            requests_map=requests_map,
+            summaries_map=summaries_map,
+        )
         facets = _build_facets(filtered_rows)
         paged_rows = filtered_rows[offset : offset + limit]
-        result_models: list[SearchResult] = []
-        for item in paged_rows:
-            result_models.append(
-                SearchResult(
-                    request_id=item["request_id"],
-                    summary_id=item["summary_id"],
-                    url=item["url"],
-                    title=item["title"],
-                    domain=item["domain"],
-                    snippet=item["snippet"],
-                    tldr=item["tldr"],
-                    published_at=item["published_at"],
-                    created_at=item["created_at"],
-                    relevance_score=item["relevance_score"],
-                    topic_tags=item["topic_tags"],
-                    is_read=item["is_read"],
-                    match_signals=item["match_signals"],
-                    match_explanation=item["match_explanation"],
-                    score_breakdown=item["score_breakdown"],
-                )
-            )
-
+        result_models = _rows_to_search_results(paged_rows)
         estimated_total = len(filtered_rows) + (1 if search_results.has_more else 0)
 
         pagination = PaginationInfo(
@@ -720,135 +920,15 @@ async def get_search_insights(
         previous_start=previous_start,
         limit=max(limit * 60, 1200),
     )
-
-    def _compute_insights() -> dict[str, Any]:
-        tag_rows: list[tuple[datetime, list[str]]] = []
-        entity_counts: Counter[str] = Counter()
-        domain_counts: Counter[str] = Counter()
-        lang_counts: Counter[str] = Counter()
-        keyword_counts: Counter[str] = Counter()
-        tag_counts_total: Counter[str] = Counter()
-        total_articles = 0
-
-        for row in rows:
-            payload = ensure_mapping(row.get("json_payload"))
-            metadata = ensure_mapping(payload.get("metadata"))
-            entities = ensure_mapping(payload.get("entities"))
-            request_data = ensure_mapping(row.get("request"))
-            created_at = request_data.get("created_at")
-            if created_at is None:
-                continue
-            total_articles += 1
-
-            tags = [
-                str(t).strip().lower() for t in (payload.get("topic_tags") or []) if str(t).strip()
-            ]
-            tag_rows.append((created_at, tags))
-            tag_counts_total.update(tags)
-
-            domain = str(metadata.get("domain") or "").strip().lower()
-            if domain:
-                domain_counts[domain] += 1
-
-            lang = str(row.get("lang") or "unknown").strip().lower()
-            lang_counts[lang] += 1
-
-            for bucket in ("people", "organizations", "locations"):
-                values = entities.get(bucket) or []
-                for value in values[:40]:
-                    normalized = str(value).strip()
-                    if normalized:
-                        entity_counts[normalized] += 1
-
-            for kw in payload.get("seo_keywords") or []:
-                normalized_kw = str(kw).strip().lower()
-                if normalized_kw:
-                    keyword_counts[normalized_kw] += 1
-
-        current_tags = _period_tag_counts(tag_rows, current_start, now)
-        previous_tags = _period_tag_counts(tag_rows, previous_start, current_start)
-
-        trending_topics: list[dict[str, Any]] = []
-        for tag, count in current_tags.most_common(limit):
-            prev = previous_tags.get(tag, 0)
-            trend_delta = count - prev
-            trend_score = round((count - prev) / prev, 3) if prev > 0 else 1.0 if count > 0 else 0.0
-            trending_topics.append(
-                {
-                    "tag": tag,
-                    "count": count,
-                    "prev_count": prev,
-                    "trend_delta": trend_delta,
-                    "trend_score": trend_score,
-                }
-            )
-
-        rising_entities = [
-            {"entity": entity, "count": count} for entity, count in entity_counts.most_common(limit)
-        ]
-
-        source_diversity = {
-            "unique_domains": len(domain_counts),
-            "top_domains": [
-                {"domain": domain, "count": count}
-                for domain, count in domain_counts.most_common(limit)
-            ],
-        }
-        if total_articles > 0:
-            entropy = 0.0
-            for count in domain_counts.values():
-                p = count / total_articles
-                if p > 0:
-                    entropy -= p * math.log2(p)
-            source_diversity["shannon_entropy"] = round(entropy, 4)
-        else:
-            source_diversity["shannon_entropy"] = 0.0
-
-        language_mix = {
-            "total": total_articles,
-            "languages": [
-                {
-                    "language": lang,
-                    "count": count,
-                    "ratio": round((count / total_articles), 4) if total_articles else 0.0,
-                }
-                for lang, count in lang_counts.most_common(limit)
-            ],
-        }
-
-        # Coverage gaps: keywords seen often in summaries but not reflected in topic tags.
-        tag_tokens = {tag.lstrip("#") for tag in tag_counts_total}
-        gaps: list[dict[str, Any]] = []
-        for keyword, count in keyword_counts.most_common(limit * 4):
-            if keyword in tag_tokens:
-                continue
-            if count < 2:
-                continue
-            gaps.append(
-                {
-                    "term": keyword,
-                    "mentions": count,
-                    "tag_coverage": 0,
-                    "gap_score": round(count / max(1, total_articles), 4),
-                }
-            )
-            if len(gaps) >= limit:
-                break
-
-        return {
-            "period_days": days,
-            "window": {
-                "start": current_start.isoformat().replace("+00:00", "Z"),
-                "end": now.isoformat().replace("+00:00", "Z"),
-            },
-            "topic_trends": trending_topics,
-            "rising_entities": rising_entities,
-            "source_diversity": source_diversity,
-            "language_mix": language_mix,
-            "coverage_gaps": gaps,
-        }
-
-    payload = await asyncio.to_thread(_compute_insights)
+    payload = await asyncio.to_thread(
+        _compute_search_insights_payload,
+        rows=rows,
+        now=now,
+        current_start=current_start,
+        previous_start=previous_start,
+        days=days,
+        limit=limit,
+    )
     pagination = {
         "total": len(payload.get("topic_trends", [])),
         "limit": limit,

@@ -54,14 +54,17 @@ class SecureFileValidator:
             allowed.append(temp_dir)
         except (OSError, ValueError, RuntimeError) as e:
             logger.warning("failed_to_resolve_temp_dir", extra={"error": str(e)})
+            fallback_temp = Path("/tmp")
+            if fallback_temp.exists():
+                allowed.append(fallback_temp.resolve())
 
         # Pyrogram download directory (if exists)
         try:
             pyrogram_temp = Path.home() / "Downloads" / "pyrogram"
             if pyrogram_temp.exists():
                 allowed.append(pyrogram_temp.resolve())
-        except (OSError, ValueError, RuntimeError):
-            pass
+        except (OSError, ValueError, RuntimeError) as e:
+            logger.debug("failed_to_resolve_pyrogram_temp_dir", extra={"error": str(e)})
 
         return allowed
 
@@ -119,8 +122,20 @@ class SecureFileValidator:
                         is_in_allowed_dir = True
                         break
                     except ValueError:
+                        logger.debug(
+                            "file_path_not_in_allowed_dir_candidate",
+                            extra={
+                                "file_path": str(resolved_path),
+                                "allowed_dir": str(allowed_dir),
+                            },
+                        )
                         continue
             except (OSError, AttributeError, TypeError):
+                logger.debug(
+                    "file_allowed_dir_check_failed",
+                    extra={"file_path": str(resolved_path), "allowed_dir": str(allowed_dir)},
+                    exc_info=True,
+                )
                 continue
 
         if not is_in_allowed_dir:
@@ -238,3 +253,5 @@ class SecureFileValidator:
             logger.warning("file_cleanup_skipped_validation_failed", extra={"file_path": file_path})
         except Exception as e:
             logger.exception("file_cleanup_failed", extra={"file_path": file_path, "error": str(e)})
+            msg = f"Failed to cleanup file: {file_path}"
+            raise FileValidationError(msg) from e

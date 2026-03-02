@@ -219,6 +219,10 @@ async def get_summary(
             "domain": metadata.get("domain"),
             "author": metadata.get("author"),
             "published_at": metadata.get("published_at"),
+            "word_count": summary.get("word_count"),
+            "content_type": metadata.get("content_type")
+            or metadata.get("og:type")
+            or metadata.get("type"),
             "http_status": crawl_result.get("http_status"),
             "image_url": metadata.get("image")
             or metadata.get("og:image")

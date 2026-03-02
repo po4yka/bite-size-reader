@@ -140,7 +140,8 @@ class MessagePersistence:
                     if callable(ts_val):
                         return int(ts_val())
                 except Exception:
-                    pass
+                    logger.debug("message_timestamp_attr_call_failed", exc_info=True)
+                    return None
             return int(val)  # may raise if not int-like
         except Exception:
             return None
@@ -160,7 +161,8 @@ class MessagePersistence:
                         if isinstance(entity_dict, dict):
                             return entity_dict
                     except Exception:
-                        pass
+                        logger.debug("message_entity_to_dict_failed", exc_info=True)
+                        return {}
                 return getattr(e, "__dict__", {})
 
             return [_ent_to_dict(e) for e in entities_obj]
@@ -217,7 +219,9 @@ class MessagePersistence:
                 if fid:
                     media_file_ids.append(fid)
         except Exception:
-            pass
+            logger.debug("message_media_info_extraction_failed", exc_info=True)
+            media_type = None
+            media_file_ids = []
 
         # Filter out non-string values (like MagicMock objects) from media_file_ids
         valid_media_file_ids = [fid for fid in media_file_ids if isinstance(fid, str)]

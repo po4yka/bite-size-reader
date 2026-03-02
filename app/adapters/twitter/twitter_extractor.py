@@ -19,6 +19,7 @@ from app.adapters.twitter.article_link_resolver import (
     TwitterArticleLinkResolution,
     resolve_twitter_article_link,
 )
+from app.adapters.twitter.article_quality import is_low_quality_article_content
 from app.adapters.twitter.text_formatter import (
     BAD_TITLES,
     _has_article_header,
@@ -890,28 +891,4 @@ class TwitterExtractor:
         reason = str(quality_issue.get("reason") or "")
         return reason in {"content_too_short", "content_low_variation"}
 
-    @staticmethod
-    def _is_low_quality_article_content(content: str) -> bool:
-        """Detect login walls and UI chrome mistakenly scraped as article content."""
-        normalized = re.sub(r"\s+", " ", content).strip().lower()
-        if len(normalized) < 60:
-            return True
-
-        login_wall_phrases = (
-            "log in to x",
-            "sign in to x",
-            "sign up for x",
-            "join x today",
-            "by signing up, you agree",
-            "terms of service",
-            "privacy policy",
-        )
-        if any(phrase in normalized for phrase in login_wall_phrases) and len(normalized) < 240:
-            return True
-
-        tokens = re.findall(r"[a-z0-9']+", normalized)
-        if not tokens:
-            return True
-        ui_terms = {"log", "login", "sign", "signup", "signin", "cookie", "cookies", "privacy"}
-        ui_ratio = sum(1 for token in tokens if token in ui_terms) / len(tokens)
-        return len(tokens) < 80 and ui_ratio >= 0.18
+    _is_low_quality_article_content = staticmethod(is_low_quality_article_content)

@@ -74,6 +74,31 @@ def _pyrogram_to_dict(obj: Any) -> dict[str, Any]:
     return converted if isinstance(converted, dict) else {}
 
 
+def _coerce_non_negative_int(value: Any, *, default: int = 0) -> int:
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return default
+    return max(0, parsed)
+
+
+def _parse_message_entity(entity: Any, *, label: str) -> MessageEntity:
+    """Parse a MessageEntity while preserving a safe fallback."""
+    entity_dict = _pyrogram_to_dict(entity)
+    try:
+        return MessageEntity.from_dict(entity_dict)
+    except Exception as exc:
+        logger.warning("failed_to_parse_message_entity", extra={"label": label, "error": str(exc)})
+        return MessageEntity(
+            type=entity_dict.get("type", MessageEntityType.MENTION),
+            offset=_coerce_non_negative_int(entity_dict.get("offset")),
+            length=_coerce_non_negative_int(entity_dict.get("length")),
+            url=entity_dict.get("url"),
+            language=entity_dict.get("language"),
+            custom_emoji_id=entity_dict.get("custom_emoji_id"),
+        )
+
+
 class TelegramMessage(BaseModel):
     """Comprehensive Telegram Message model."""
 
@@ -168,20 +193,12 @@ class TelegramMessage(BaseModel):
             entities = []
             entities_data = getattr(message, "entities", []) or []
             for entity in entities_data:
-                try:
-                    entity_dict = _pyrogram_to_dict(entity)
-                    entities.append(MessageEntity.from_dict(entity_dict))
-                except Exception as e:
-                    logger.warning("Failed to parse entity", extra={"error": str(e)})
+                entities.append(_parse_message_entity(entity, label="text"))
 
             caption_entities = []
             caption_entities_data = getattr(message, "caption_entities", []) or []
             for entity in caption_entities_data:
-                try:
-                    entity_dict = _pyrogram_to_dict(entity)
-                    caption_entities.append(MessageEntity.from_dict(entity_dict))
-                except Exception as e:
-                    logger.warning("Failed to parse caption entity", extra={"error": str(e)})
+                caption_entities.append(_parse_message_entity(entity, label="caption"))
 
             # Extract media information
             photo = getattr(message, "photo", None)

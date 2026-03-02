@@ -35,19 +35,21 @@ class DatabaseDiagnostics:
 
         try:
             with self._database.connection_context():
-                tables = {}
+                table_counts: dict[str, int] = {}
+                table_names: set[str] = set()
                 for table in sorted(self._database.get_tables()):
+                    table_names.add(table)
                     try:
-                        tables[table] = self._count_table_rows(table)
+                        table_counts[table] = self._count_table_rows(table)
                     except peewee.DatabaseError as exc:
                         overview["errors"].append(f"Failed to count rows for table '{table}'")
                         self._logger.exception(
                             "db_table_count_failed",
                             extra={"table": table, "error": str(exc)},
                         )
-                overview["tables"] = tables
+                overview["tables"] = table_counts
 
-                if "requests" in tables:
+                if "requests" in table_names:
                     try:
                         status_rows = list(
                             Request.select(Request.status, fn.COUNT(Request.id).alias("cnt"))
@@ -67,12 +69,12 @@ class DatabaseDiagnostics:
                         "SELECT created_at FROM requests ORDER BY created_at DESC LIMIT 1"
                     )
 
-                if "summaries" in tables:
+                if "summaries" in table_names:
                     overview["last_summary_at"] = self._fetch_single_value(
                         "SELECT created_at FROM summaries ORDER BY created_at DESC LIMIT 1"
                     )
 
-                if "audit_logs" in tables:
+                if "audit_logs" in table_names:
                     overview["last_audit_at"] = self._fetch_single_value(
                         "SELECT ts FROM audit_logs ORDER BY ts DESC LIMIT 1"
                     )

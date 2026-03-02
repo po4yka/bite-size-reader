@@ -10,12 +10,12 @@ import logging
 import threading
 import time
 import weakref
-from contextlib import asynccontextmanager
 from importlib.util import find_spec
 from typing import TYPE_CHECKING, Any
 
 import httpx
 
+from app.adapters.llm.base_client import BaseLLMClient
 from app.adapters.llm.openai.request_builder import (
     OpenAIRequestBuilder,
     calculate_cost,
@@ -25,7 +25,7 @@ from app.core.http_utils import ResponseSizeError, validate_response_size
 from app.models.llm.llm_models import LLMCallResult
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncGenerator, Callable
+    from collections.abc import Callable
 
     from app.utils.circuit_breaker import CircuitBreaker
 
@@ -147,43 +147,9 @@ class OpenAIClient:
         """Return the circuit breaker instance if configured."""
         return self._circuit_breaker
 
-    @classmethod
-    def _get_event_loop(cls) -> asyncio.AbstractEventLoop:
-        """Return the current event loop."""
-        try:
-            return asyncio.get_running_loop()
-        except RuntimeError:
-            return asyncio.get_event_loop()
-
-    @classmethod
-    def _get_pool_lock(cls) -> asyncio.Lock:
-        """Get or create the async lock for client pool access."""
-        loop = cls._get_event_loop()
-        lock = cls._client_pool_locks.get(loop)
-        if lock is not None:
-            return lock
-
-        with cls._lock_init_lock:
-            lock = cls._client_pool_locks.get(loop)
-            if lock is None:
-                lock = asyncio.Lock()
-                cls._client_pool_locks[loop] = lock
-            return lock
-
-    @classmethod
-    def _get_pool(cls) -> dict[str, httpx.AsyncClient]:
-        """Get or create the client pool for the current event loop."""
-        loop = cls._get_event_loop()
-        pool = cls._client_pools.get(loop)
-        if pool is not None:
-            return pool
-
-        with cls._lock_init_lock:
-            pool = cls._client_pools.get(loop)
-            if pool is None:
-                pool = {}
-                cls._client_pools[loop] = pool
-            return pool
+    _get_event_loop = BaseLLMClient.__dict__["_get_event_loop"]
+    _get_pool_lock = BaseLLMClient.__dict__["_get_pool_lock"]
+    _get_pool = BaseLLMClient.__dict__["_get_pool"]
 
     async def __aenter__(self) -> OpenAIClient:
         """Async context manager entry."""
@@ -202,43 +168,9 @@ class OpenAIClient:
 
     async def _ensure_client(self) -> httpx.AsyncClient:
         """Lazily construct or reuse a pooled AsyncClient instance."""
-        if self._closed:
-            msg = "Client has been closed"
-            raise RuntimeError(msg)
+        return await BaseLLMClient._ensure_client(self)  # type: ignore[arg-type]
 
-        if self._client is not None:
-            return self._client
-
-        async with self._get_pool_lock():
-            pool = self._get_pool()
-            client = pool.get(self._client_key)
-            if client is None or client.is_closed:
-                client = httpx.AsyncClient(
-                    base_url=self._base_url,
-                    timeout=self._timeout,
-                    limits=self._limits,
-                    http2=HTTP2_AVAILABLE,
-                    follow_redirects=True,
-                )
-                pool[self._client_key] = client
-
-            self._client = client
-            return client
-
-    @asynccontextmanager
-    async def _request_context(self) -> AsyncGenerator[httpx.AsyncClient]:
-        """Context manager for request handling."""
-        if self._closed:
-            msg = "Cannot use client after it has been closed"
-            raise RuntimeError(msg)
-
-        client = await self._ensure_client()
-        try:
-            yield client
-        except httpx.TimeoutException as e:
-            raise TimeoutError(f"Request timeout: {e}") from e
-        except httpx.ConnectError as e:
-            raise ConnectionError(f"Connection failed: {e}") from e
+    _request_context = BaseLLMClient.__dict__["_request_context"]
 
     async def _sleep_backoff(self, attempt: int) -> None:
         """Sleep with exponential backoff and jitter."""

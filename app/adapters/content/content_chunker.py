@@ -302,8 +302,10 @@ class ContentChunker:
             try:
                 if (resp.response_text or "").strip():
                     parsed = json.loads((resp.response_text or "").strip().strip("` "))
-            except Exception:
+            except Exception as exc:
+                raise_if_cancelled(exc)
                 logger.debug("chunk_json_parse_fallback_failed", exc_info=True)
+                parsed = None
 
         return parsed
 

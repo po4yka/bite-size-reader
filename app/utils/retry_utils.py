@@ -50,8 +50,9 @@ def is_transient_error(error: Exception) -> bool:
             # Message is not modified (400) is NOT transient/retryable
             if status_code == 400 and "not modified" in str(error).lower():
                 return False
-        except (ValueError, TypeError):
-            pass
+        except (ValueError, TypeError) as exc:
+            status_code = None
+            logger.debug("retry_utils_response_status_parse_failed", extra={"error": str(exc)})
 
     # Check for status_code attribute directly
     if hasattr(error, "status_code"):
@@ -61,8 +62,9 @@ def is_transient_error(error: Exception) -> bool:
                 return True
             if status_code == 400 and "not modified" in str(error).lower():
                 return False
-        except (ValueError, TypeError):
-            pass
+        except (ValueError, TypeError) as exc:
+            status_code = None
+            logger.debug("retry_utils_status_parse_failed", extra={"error": str(exc)})
 
     error_str = str(error).lower()
 

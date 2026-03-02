@@ -75,7 +75,11 @@ def _extract_tweet_sync(
     This is a synchronous function -- call via asyncio.to_thread().
     """
     try:
-        from playwright.sync_api import sync_playwright
+        from playwright.sync_api import (
+            Error as PlaywrightError,
+            TimeoutError as PlaywrightTimeoutError,
+            sync_playwright,
+        )
     except ImportError as exc:
         msg = (
             "Playwright is required for Twitter extraction. "
@@ -93,8 +97,9 @@ def _extract_tweet_sync(
                 and _response_matches_requested_tweet(response.url, expected_tweet_id)
             ):
                 captured_responses.append(response.json())
-        except Exception:
-            pass
+        except (TypeError, ValueError):
+            logger.debug("tweet_graphql_response_parse_failed", exc_info=True)
+            return
 
     with sync_playwright() as p:
         browser = p.chromium.launch(
@@ -111,15 +116,20 @@ def _extract_tweet_sync(
         page = context.new_page()
         page.on("response", _on_response)
 
+        page_load_failed = False
         try:
             page.goto(url, wait_until="networkidle", timeout=timeout_ms)
-        except Exception:
-            pass  # Page may not fully load but we might still capture GraphQL
+        except (PlaywrightTimeoutError, PlaywrightError):
+            page_load_failed = True
+            logger.debug("tweet_page_goto_failed_partial_capture_mode", exc_info=True)
 
-        # Scroll once to trigger thread loading
-        time.sleep(2)
-        page.evaluate("window.scrollBy(0, window.innerHeight * 2)")
-        time.sleep(2)
+        # Scroll once to trigger thread loading (skip when initial load failed)
+        if not page_load_failed:
+            time.sleep(2)
+            page.evaluate("window.scrollBy(0, window.innerHeight * 2)")
+            time.sleep(2)
+        else:
+            time.sleep(1)
 
         page.close()
         browser.close()
@@ -140,7 +150,11 @@ def _scrape_article_sync(
     This is a synchronous function -- call via asyncio.to_thread().
     """
     try:
-        from playwright.sync_api import sync_playwright
+        from playwright.sync_api import (
+            Error as PlaywrightError,
+            TimeoutError as PlaywrightTimeoutError,
+            sync_playwright,
+        )
     except ImportError as exc:
         msg = (
             "Playwright is required for Twitter extraction. "
@@ -162,24 +176,28 @@ def _scrape_article_sync(
 
         page = context.new_page()
         try:
+            page_load_failed = False
             try:
                 page.goto(url, wait_until="domcontentloaded", timeout=timeout_ms)
-            except Exception:
-                pass
+            except (PlaywrightTimeoutError, PlaywrightError):
+                page_load_failed = True
+                logger.debug("article_page_goto_failed", exc_info=True)
 
             # Prefer locator-based readiness before falling back to scripted scraping.
             try:
                 page.locator("article").first.wait_for(
                     state="visible", timeout=max(2_000, timeout_ms // 2)
                 )
-            except Exception:
+            except (PlaywrightTimeoutError, PlaywrightError):
+                page_load_failed = True
                 try:
                     page.locator("main").first.wait_for(
                         state="visible",
                         timeout=max(2_000, timeout_ms // 3),
                     )
-                except Exception:
-                    pass
+                except (PlaywrightTimeoutError, PlaywrightError):
+                    page_load_failed = True
+                    logger.debug("article_readiness_probe_failed", exc_info=True)
 
             for _ in range(8):
                 page.evaluate("window.scrollBy(0, window.innerHeight * 1.5)")
@@ -187,6 +205,8 @@ def _scrape_article_sync(
 
             page.evaluate("window.scrollTo(0, 0)")
             page.wait_for_timeout(200)
+            if page_load_failed:
+                page.wait_for_timeout(200)
 
             expand_labels = [
                 "show more",

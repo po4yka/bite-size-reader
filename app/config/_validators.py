@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import logging
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 
 def validate_model_name(model: str) -> str:
@@ -54,5 +57,25 @@ def _parse_allowed_user_ids(value: Any) -> tuple[int, ...]:
         try:
             user_ids.append(int(piece))
         except ValueError:
+            logger.debug("allowed_user_id_parse_failed", extra={"value": piece})
             continue
     return tuple(user_ids)
+
+
+def parse_fallback_models(value: Any) -> tuple[str, ...]:
+    """Parse comma-separated/list fallback model names with validation."""
+    if value in (None, ""):
+        return ()
+    iterable = value if isinstance(value, list | tuple) else str(value).split(",")
+
+    validated: list[str] = []
+    for raw in iterable:
+        candidate = str(raw).strip()
+        if not candidate:
+            continue
+        try:
+            validated.append(validate_model_name(candidate))
+        except ValueError:
+            logger.debug("fallback_model_validation_failed", extra={"model": candidate})
+            continue
+    return tuple(validated)

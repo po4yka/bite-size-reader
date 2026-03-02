@@ -4,7 +4,14 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from ._validators import _ensure_api_key, validate_model_name
+from ._validators import _ensure_api_key, parse_fallback_models, validate_model_name
+
+
+class _FallbackModelsMixin:
+    @field_validator("fallback_models", mode="before")
+    @classmethod
+    def _parse_fallback_models(cls, value: Any) -> tuple[str, ...]:
+        return parse_fallback_models(value)
 
 
 class OpenRouterConfig(BaseModel):
@@ -99,20 +106,7 @@ class OpenRouterConfig(BaseModel):
     @field_validator("fallback_models", "flash_fallback_models", mode="before")
     @classmethod
     def _parse_fallback_models(cls, value: Any) -> tuple[str, ...]:
-        if value in (None, ""):
-            return ()
-        iterable = value if isinstance(value, list | tuple) else str(value).split(",")
-
-        validated: list[str] = []
-        for raw in iterable:
-            candidate = str(raw).strip()
-            if not candidate:
-                continue
-            try:
-                validated.append(validate_model_name(candidate))
-            except ValueError:
-                continue
-        return tuple(validated)
+        return parse_fallback_models(value)
 
     @field_validator("long_context_model", "flash_model", mode="before")
     @classmethod
@@ -274,7 +268,7 @@ class OpenRouterConfig(BaseModel):
         return threshold
 
 
-class OpenAIConfig(BaseModel):
+class OpenAIConfig(_FallbackModelsMixin, BaseModel):
     """OpenAI API configuration for direct API access."""
 
     model_config = ConfigDict(frozen=True, populate_by_name=True)
@@ -304,24 +298,6 @@ class OpenAIConfig(BaseModel):
             return "gpt-4o"
         return validate_model_name(str(value))
 
-    @field_validator("fallback_models", mode="before")
-    @classmethod
-    def _parse_fallback_models(cls, value: Any) -> tuple[str, ...]:
-        if value in (None, ""):
-            return ()
-        iterable = value if isinstance(value, list | tuple) else str(value).split(",")
-
-        validated: list[str] = []
-        for raw in iterable:
-            candidate = str(raw).strip()
-            if not candidate:
-                continue
-            try:
-                validated.append(validate_model_name(candidate))
-            except ValueError:
-                continue
-        return tuple(validated)
-
     @field_validator("organization", mode="before")
     @classmethod
     def _validate_organization(cls, value: Any) -> str | None:
@@ -334,7 +310,7 @@ class OpenAIConfig(BaseModel):
         return org
 
 
-class AnthropicConfig(BaseModel):
+class AnthropicConfig(_FallbackModelsMixin, BaseModel):
     """Anthropic API configuration for direct API access."""
 
     model_config = ConfigDict(frozen=True, populate_by_name=True)
@@ -362,21 +338,3 @@ class AnthropicConfig(BaseModel):
         if value in (None, ""):
             return "claude-sonnet-4-5-20250929"
         return validate_model_name(str(value))
-
-    @field_validator("fallback_models", mode="before")
-    @classmethod
-    def _parse_fallback_models(cls, value: Any) -> tuple[str, ...]:
-        if value in (None, ""):
-            return ()
-        iterable = value if isinstance(value, list | tuple) else str(value).split(",")
-
-        validated: list[str] = []
-        for raw in iterable:
-            candidate = str(raw).strip()
-            if not candidate:
-                continue
-            try:
-                validated.append(validate_model_name(candidate))
-            except ValueError:
-                continue
-        return tuple(validated)

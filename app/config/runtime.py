@@ -5,6 +5,8 @@ from typing import Any
 
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field, ValidationInfo, field_validator
 
+from app.config.validation_helpers import parse_positive_int
+
 logger = logging.getLogger(__name__)
 
 
@@ -98,15 +100,7 @@ class RuntimeConfig(BaseModel):
     @classmethod
     def _validate_positive_int(cls, value: Any, info: ValidationInfo) -> int:
         default = cls.model_fields[info.field_name].default
-        try:
-            parsed = int(str(value if value not in (None, "") else default))
-        except ValueError as exc:  # pragma: no cover - defensive
-            msg = f"{info.field_name.replace('_', ' ')} must be a valid integer"
-            raise ValueError(msg) from exc
-        if parsed <= 0:
-            msg = f"{info.field_name.replace('_', ' ').capitalize()} must be positive"
-            raise ValueError(msg)
-        return parsed
+        return parse_positive_int(value, field_name=info.field_name, default=default)
 
     @field_validator(
         "telegram_reply_timeout_sec",

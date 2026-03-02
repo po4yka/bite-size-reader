@@ -14,18 +14,14 @@ def get_error_message(status_code: int, data: dict[str, Any] | None) -> str:
     """
     # Extract optional message from payload (string or nested {error: {message}})
     payload_message: str | None = None
-    if data:
-        try:
-            err = data.get("error")
-            if isinstance(err, dict):
-                msg = err.get("message")
-                if isinstance(msg, str) and msg:
-                    payload_message = msg
-            elif isinstance(err, str) and err:
-                payload_message = err
-        except (AttributeError, TypeError):
-            # Handle malformed data gracefully
-            pass
+    if isinstance(data, dict):
+        err = data.get("error")
+        if isinstance(err, dict):
+            msg = err.get("message")
+            if isinstance(msg, str) and msg:
+                payload_message = msg
+        elif isinstance(err, str) and err:
+            payload_message = err
 
     base_map: dict[int, str] = {
         400: "Invalid or missing request parameters",

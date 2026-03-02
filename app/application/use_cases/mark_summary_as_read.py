@@ -12,11 +12,11 @@ from dataclasses import dataclass
 from datetime import datetime
 
 from app.application.ports import SummaryRepositoryPort
+from app.application.use_cases.summary_fetch import fetch_summary_or_raise
 from app.core.time_utils import UTC
 from app.domain.events.summary_events import SummaryMarkedAsRead
 from app.domain.exceptions.domain_exceptions import (
     InvalidStateTransitionError,
-    ResourceNotFoundError,
 )
 from app.domain.services.summary_validator import SummaryValidator
 
@@ -89,7 +89,7 @@ class MarkSummaryAsReadUseCase:
         )
 
         # 1. Fetch summary from repository
-        summary_data = await self._fetch_summary(command.summary_id)
+        summary_data = await fetch_summary_or_raise(self._summary_repo, command.summary_id)
 
         # 2. Convert to domain model
         summary = self._summary_repo.to_domain_model(summary_data)
@@ -144,29 +144,3 @@ class MarkSummaryAsReadUseCase:
         )
 
         return event
-
-    async def _fetch_summary(self, summary_id: int) -> dict:
-        """Fetch summary by ID.
-
-        Args:
-            summary_id: ID of the summary to fetch.
-
-        Returns:
-            Summary data dictionary.
-
-        Raises:
-            ResourceNotFoundError: If summary doesn't exist.
-
-        """
-        # Fetch the summary by ID from the repository
-        logger.debug("fetch_summary", extra={"summary_id": summary_id})
-
-        summary_data = await self._summary_repo.async_get_summary_by_id(summary_id)
-        if not summary_data:
-            msg = f"Summary with ID {summary_id} not found"
-            raise ResourceNotFoundError(
-                msg,
-                details={"summary_id": summary_id},
-            )
-
-        return summary_data

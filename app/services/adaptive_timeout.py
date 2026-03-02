@@ -11,7 +11,8 @@ import logging
 import time
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
-from urllib.parse import urlparse
+
+from app.core.url_utils import extract_domain
 
 if TYPE_CHECKING:
     from app.config.adaptive_timeout import AdaptiveTimeoutConfig
@@ -125,17 +126,10 @@ class TimeoutCache:
 
 def _extract_domain(url: str | None) -> str | None:
     """Extract domain from URL, normalizing www prefix."""
-    if not url:
-        return None
-    try:
-        parsed = urlparse(url)
-        domain = parsed.netloc or parsed.path.split("/")[0]
-        if domain.startswith("www."):
-            domain = domain[4:]
-        return domain.lower() if domain else None
-    except Exception:
+    domain = extract_domain(url)
+    if url and domain is None:
         logger.debug("adaptive_timeout_domain_extraction_failed", exc_info=True)
-        return None
+    return domain
 
 
 class AdaptiveTimeoutService:

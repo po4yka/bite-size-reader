@@ -175,7 +175,7 @@ class QueryProfiler:
             )
 
 
-class AsyncQueryProfiler:
+class AsyncQueryProfiler(QueryProfiler):
     """Async context manager for profiling database queries.
 
     Usage:
@@ -184,25 +184,6 @@ class AsyncQueryProfiler:
 
         print(f"Query took {profiler.elapsed_ms}ms")
     """
-
-    def __init__(
-        self,
-        operation: str = "query",
-        threshold_ms: float = 100.0,
-        auto_log: bool = True,
-    ):
-        """Initialize async query profiler.
-
-        Args:
-            operation: Operation name for logging/metrics.
-            threshold_ms: Log warning if query exceeds this.
-            auto_log: If True, automatically log slow queries.
-        """
-        self.operation = operation
-        self.threshold_ms = threshold_ms
-        self.auto_log = auto_log
-        self.elapsed_ms: float = 0.0
-        self._start: float = 0.0
 
     async def __aenter__(self) -> AsyncQueryProfiler:
         self._start = time.perf_counter()

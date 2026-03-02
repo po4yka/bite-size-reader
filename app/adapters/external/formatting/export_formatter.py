@@ -130,8 +130,11 @@ class ExportFormatter:
                 fd.close()
                 try:
                     os.unlink(fd.name)
-                except OSError:
-                    pass
+                except OSError as cleanup_err:
+                    logger.debug(
+                        "export_markdown_temp_cleanup_failed",
+                        extra={"path": fd.name, "error": str(cleanup_err)},
+                    )
                 raise
 
             logger.info(
@@ -170,8 +173,11 @@ class ExportFormatter:
                 fd.close()
                 try:
                     os.unlink(fd.name)
-                except OSError:
-                    pass
+                except OSError as cleanup_err:
+                    logger.debug(
+                        "export_html_temp_cleanup_failed",
+                        extra={"path": fd.name, "error": str(cleanup_err)},
+                    )
                 raise
 
             logger.info(
@@ -213,8 +219,11 @@ class ExportFormatter:
                 except Exception:
                     try:
                         os.unlink(pdf_file.name)
-                    except OSError:
-                        pass
+                    except OSError as cleanup_err:
+                        logger.debug(
+                            "export_pdf_temp_cleanup_failed",
+                            extra={"path": pdf_file.name, "error": str(cleanup_err)},
+                        )
                     raise
 
                 logger.info(
@@ -249,8 +258,11 @@ class ExportFormatter:
                     fd.close()
                     try:
                         os.unlink(fd.name)
-                    except OSError:
-                        pass
+                    except OSError as cleanup_err:
+                        logger.debug(
+                            "export_pdf_fallback_temp_cleanup_failed",
+                            extra={"path": fd.name, "error": str(cleanup_err)},
+                        )
                     raise
 
                 # Change extension to indicate it's not a real PDF

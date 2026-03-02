@@ -9,9 +9,9 @@ from __future__ import annotations
 import datetime as _dt
 import math
 from dataclasses import dataclass
-from urllib.parse import urlparse
 
 from app.core.time_utils import UTC
+from app.core.url_utils import extract_domain
 from app.db.models import CrawlResult, LLMCall, Request
 from app.infrastructure.persistence.sqlite.base import SqliteBaseRepository
 
@@ -62,18 +62,7 @@ def _compute_percentile(values: list[int], percentile: float) -> float | None:
     )
 
 
-def _extract_domain(url: str | None) -> str | None:
-    """Extract domain from URL, normalizing www prefix."""
-    if not url:
-        return None
-    try:
-        parsed = urlparse(url)
-        domain = parsed.netloc or parsed.path.split("/")[0]
-        if domain.startswith("www."):
-            domain = domain[4:]
-        return domain.lower() if domain else None
-    except Exception:
-        return None
+_extract_domain = extract_domain
 
 
 class SqliteLatencyStatsRepositoryAdapter(SqliteBaseRepository):

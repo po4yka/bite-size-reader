@@ -263,8 +263,6 @@ class URLProcessor:
                 logger.warning(
                     "url_processor_shutdown_timeout", extra={"pending": len(self._background_tasks)}
                 )
-            except Exception as e:
-                logger.error("url_processor_shutdown_error", extra={"error": str(e)})
         logger.info("url_processor_shutdown_complete")
 
     async def _await_persistence_task(self, task: asyncio.Task | None) -> None:

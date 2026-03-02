@@ -10,6 +10,8 @@ import pytest
 
 from app.adapters.openrouter.openrouter_client import OpenRouterClient
 
+TEST_OPENROUTER_AUTH = "test-openrouter-auth"
+
 
 class FakeResponse:
     def __init__(self, status_code, json_data, headers=None, content=None, text=None, history=None):
@@ -42,7 +44,7 @@ class TestOpenRouterCompliance(unittest.TestCase):
     def setUp(self) -> None:
         """Set up test fixtures."""
         self.client = OpenRouterClient(
-            api_key="sk-or-test-key",
+            api_key=TEST_OPENROUTER_AUTH,
             model="deepseek/deepseek-v3.2",
             fallback_models=["google/gemini-2.5-pro"],
             http_referer="https://github.com/test-repo",
@@ -97,7 +99,7 @@ class TestOpenRouterCompliance(unittest.TestCase):
                 # Verify Authorization header
                 call_args = mock_client.return_value.post.call_args
                 headers = call_args[1]["headers"]
-                assert headers["Authorization"] == "Bearer sk-or-test-key"
+                assert headers["Authorization"] == f"Bearer {TEST_OPENROUTER_AUTH}"
 
         asyncio.run(_test())
 

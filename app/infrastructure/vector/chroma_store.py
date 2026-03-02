@@ -251,9 +251,11 @@ class ChromaVectorStore:
             msg = "top_k must be positive"
             raise ValueError(msg)
 
-        filter_payload = dict(filters or {})
-        filter_payload.pop("environment", None)
-        filter_payload.pop("user_scope", None)
+        filter_payload = {
+            key: value
+            for key, value in (filters or {}).items()
+            if key not in {"environment", "user_scope"}
+        }
         validated_filters = ChromaQueryFilters(
             environment=self._environment,
             user_scope=self._user_scope,

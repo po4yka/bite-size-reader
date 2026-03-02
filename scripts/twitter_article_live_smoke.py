@@ -32,6 +32,7 @@ if str(PROJECT_ROOT) not in sys.path:
 from app.adapters.content.quality_filters import detect_low_value_content
 from app.adapters.external.firecrawl_parser import FirecrawlClient
 from app.adapters.twitter.article_link_resolver import resolve_twitter_article_link
+from app.adapters.twitter.article_quality import is_low_quality_article_content
 from app.adapters.twitter.playwright_client import scrape_article
 from app.core.html_utils import clean_markdown_article_text, html_to_text
 
@@ -87,30 +88,7 @@ def _collect_urls(cli_urls: list[str], urls_arg: str, urls_env: str) -> list[str
     return ordered
 
 
-def _is_low_quality_article_content(content: str) -> bool:
-    normalized = re.sub(r"\s+", " ", content).strip().lower()
-    if len(normalized) < 60:
-        return True
-
-    login_wall_phrases = (
-        "log in to x",
-        "sign in to x",
-        "sign up for x",
-        "join x today",
-        "by signing up, you agree",
-        "terms of service",
-        "privacy policy",
-    )
-    if any(phrase in normalized for phrase in login_wall_phrases) and len(normalized) < 240:
-        return True
-
-    tokens = re.findall(r"[a-z0-9']+", normalized)
-    if not tokens:
-        return True
-
-    ui_terms = {"log", "login", "sign", "signup", "signin", "cookie", "cookies", "privacy"}
-    ui_ratio = sum(1 for token in tokens if token in ui_terms) / len(tokens)
-    return len(tokens) < 80 and ui_ratio >= 0.18
+_is_low_quality_article_content = is_low_quality_article_content
 
 
 def _build_firecrawl_client(api_key: str, timeout_sec: float) -> FirecrawlClient | None:

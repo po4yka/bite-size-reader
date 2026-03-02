@@ -8,35 +8,27 @@ from typing import TYPE_CHECKING
 
 import peewee
 
+from app.adapters.telegram.command_handlers.base_handler import HandlerDependenciesMixin
 from app.core.channel_utils import parse_channel_input
-from app.db.models import Channel, ChannelSubscription, _utcnow
+from app.db.models import Channel, ChannelSubscription
+from app.services.digest_subscription_ops import (
+    subscribe_channel_atomic,
+    unsubscribe_channel_atomic,
+)
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
 
     from app.adapters.digest.digest_service import DigestService
-    from app.adapters.external.response_formatter import ResponseFormatter
     from app.adapters.telegram.command_handlers.execution_context import (
         CommandExecutionContext,
     )
-    from app.config import AppConfig
-    from app.db.session import DatabaseSessionManager
 
 logger = logging.getLogger(__name__)
 
 
-class DigestHandlerImpl:
+class DigestHandlerImpl(HandlerDependenciesMixin):
     """Implementation of channel digest commands."""
-
-    def __init__(
-        self,
-        cfg: AppConfig,
-        db: DatabaseSessionManager,
-        response_formatter: ResponseFormatter,
-    ) -> None:
-        self._cfg = cfg
-        self._db = db
-        self._formatter = response_formatter
 
     @asynccontextmanager
     async def _digest_context(self, ctx: CommandExecutionContext) -> AsyncIterator[DigestService]:
@@ -215,40 +207,7 @@ class DigestHandlerImpl:
 
         await self._formatter.safe_reply(ctx.message, "\n".join(lines))
 
-    @staticmethod
-    def _subscribe_atomic(user_id: int, username: str) -> str:
-        """Run subscribe logic inside a single transaction.
-
-        Returns a status string: "already_subscribed", "reactivated", or "created".
-        """
-        channel, _ = Channel.get_or_create(
-            username=username,
-            defaults={"title": username, "is_active": True},
-        )
-
-        existing = (
-            ChannelSubscription.select()
-            .where(
-                ChannelSubscription.user == user_id,
-                ChannelSubscription.channel == channel,
-            )
-            .first()
-        )
-
-        if existing:
-            if existing.is_active:
-                return "already_subscribed"
-            existing.is_active = True
-            existing.updated_at = _utcnow()
-            existing.save()
-            return "reactivated"
-
-        ChannelSubscription.create(
-            user=user_id,
-            channel=channel,
-            is_active=True,
-        )
-        return "created"
+    _subscribe_atomic = staticmethod(subscribe_channel_atomic)
 
     async def handle_subscribe(self, ctx: CommandExecutionContext) -> None:
         """Handle /subscribe @channel_name command."""
@@ -296,33 +255,7 @@ class DigestHandlerImpl:
                 extra={"uid": ctx.uid, "channel": username, "cid": ctx.correlation_id},
             )
 
-    @staticmethod
-    def _unsubscribe_atomic(user_id: int, username: str) -> str:
-        """Run unsubscribe logic inside a single transaction.
-
-        Returns a status string: "not_found", "not_subscribed", or "unsubscribed".
-        """
-        channel = Channel.get_or_none(Channel.username == username)
-        if not channel:
-            return "not_found"
-
-        sub = (
-            ChannelSubscription.select()
-            .where(
-                ChannelSubscription.user == user_id,
-                ChannelSubscription.channel == channel,
-                ChannelSubscription.is_active == True,  # noqa: E712
-            )
-            .first()
-        )
-
-        if not sub:
-            return "not_subscribed"
-
-        sub.is_active = False
-        sub.updated_at = _utcnow()
-        sub.save()
-        return "unsubscribed"
+    _unsubscribe_atomic = staticmethod(unsubscribe_channel_atomic)
 
     async def handle_unsubscribe(self, ctx: CommandExecutionContext) -> None:
         """Handle /unsubscribe @channel_name command."""

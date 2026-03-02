@@ -150,4 +150,13 @@ class LLMResponseWorkflow(
                     },
                 )
         except (TypeError, ValueError) as exc:
-            logger.debug("timeout_config_parse_error", extra={"error": str(exc)})
+            sem_timeout = 30.0
+            llm_timeout = 180.0
+            logger.debug(
+                "timeout_config_parse_error",
+                extra={
+                    "error": str(exc),
+                    "fallback_semaphore_timeout": sem_timeout,
+                    "fallback_llm_timeout": llm_timeout,
+                },
+            )

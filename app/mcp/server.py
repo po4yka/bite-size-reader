@@ -245,8 +245,9 @@ def _ensure_mapping(value: Any) -> dict:
             parsed = json.loads(value)
             if isinstance(parsed, dict):
                 return parsed
-        except (json.JSONDecodeError, TypeError):
-            pass
+        except (json.JSONDecodeError, TypeError) as exc:
+            logger.debug("mcp_ensure_mapping_parse_failed", extra={"error": str(exc)})
+            return {}
     return {}
 
 
@@ -495,7 +496,11 @@ def _build_semantic_results(
         raw_summary_id = row.get("summary_id")
         try:
             summary_id = int(raw_summary_id)
-        except (TypeError, ValueError):
+        except (TypeError, ValueError) as exc:
+            logger.debug(
+                "mcp_semantic_row_invalid_summary_id",
+                extra={"summary_id": str(raw_summary_id), "error": str(exc)},
+            )
             continue
 
         score = float(row.get("similarity_score", 0.0))
@@ -655,7 +660,11 @@ async def _search_local_vectors(
         for row_dict in rows_data:
             try:
                 candidate = embedding_service.deserialize_embedding(row_dict.pop("embedding_blob"))
-            except Exception:
+            except Exception as exc:
+                logger.debug(
+                    "mcp_local_vector_deserialize_failed",
+                    extra={"summary_id": row_dict.get("summary_id"), "error": str(exc)},
+                )
                 continue
 
             similarity = _cosine_similarity(query_vector, candidate)
@@ -741,6 +750,7 @@ async def _run_semantic_candidates(
                 }
         except Exception:
             logger.exception("semantic_chroma_search_failed")
+            chroma = None
 
     local_rows = await _search_local_vectors(
         query,
@@ -824,7 +834,11 @@ def search_articles(query: str, limit: int = 10) -> str:
                 continue
             try:
                 request_id = int(raw_request_id)
-            except (TypeError, ValueError):
+            except (TypeError, ValueError) as exc:
+                logger.debug(
+                    "mcp_fts_invalid_request_id",
+                    extra={"request_id": str(raw_request_id), "error": str(exc)},
+                )
                 continue
             if request_id in seen_request_ids:
                 continue
@@ -1000,7 +1014,7 @@ def list_articles(
 
         return json.dumps(
             {
-                "articles": results,
+                "results": results,
                 "total": total,
                 "limit": limit,
                 "offset": offset,
@@ -1271,7 +1285,7 @@ def list_collections(limit: int = 20, offset: int = 0) -> str:
 
         return json.dumps(
             {
-                "collections": results,
+                "results": results,
                 "total": total,
                 "limit": limit,
                 "offset": offset,
@@ -1414,7 +1428,7 @@ def list_videos(limit: int = 20, offset: int = 0, status: str | None = None) -> 
 
         return json.dumps(
             {
-                "videos": results,
+                "results": results,
                 "total": total,
                 "limit": limit,
                 "offset": offset,

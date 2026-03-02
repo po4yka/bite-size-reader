@@ -159,7 +159,8 @@ class YouTubeDownloader:
                             message,
                             "♻️ Reusing previously downloaded video and transcript. Skipping re-download.",
                         )
-                    except Exception:
+                    except Exception as e:
+                        raise_if_cancelled(e)
                         logger.warning("youtube_cached_reply_failed", exc_info=True)
 
                 self._url_locks.pop(dedupe, None)
@@ -458,7 +459,8 @@ class YouTubeDownloader:
                                     "files_removed": deleted_count,
                                 },
                             )
-                except Exception:
+                except Exception as e:
+                    raise_if_cancelled(e)
                     logger.warning("youtube_partial_cleanup_failed", exc_info=True)
 
     async def _extract_transcript_api(

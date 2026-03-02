@@ -11,6 +11,7 @@ from app.adapters.telegram.command_processor import CommandProcessor
 from app.adapters.telegram.message_router import MessageRouter
 from app.adapters.telegram.task_manager import UserTaskManager
 from app.adapters.telegram.url_handler import URLHandler
+from app.core.async_utils import raise_if_cancelled
 from app.infrastructure.persistence.sqlite.repositories.audit_log_repository import (
     SqliteAuditLogRepositoryAdapter,
 )
@@ -139,6 +140,7 @@ class MessageHandler:
             try:
                 await callback_query.answer()
             except Exception as e:
+                raise_if_cancelled(e)
                 logger.warning("callback_answer_failed", extra={"error": str(e)})
 
             # Route to the unified callback handler for all other actions
@@ -149,6 +151,7 @@ class MessageHandler:
                 logger.warning("unhandled_callback_data", extra={"data": callback_data})
 
         except Exception as e:
+            raise_if_cancelled(e)
             logger.exception("callback_query_handler_failed", extra={"error": str(e)})
 
     def _audit(self, level: str, event: str, details: dict) -> None:
@@ -161,6 +164,7 @@ class MessageHandler:
                     log_level=level, event_type=event, details=details
                 )
             except Exception as e:
+                raise_if_cancelled(e)
                 logger.warning("audit_persist_failed", extra={"error": str(e), "event": event})
 
         try:

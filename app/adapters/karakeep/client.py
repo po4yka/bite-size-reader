@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import random
+from types import MappingProxyType
 from typing import TYPE_CHECKING, TypeVar
 
 import httpx
@@ -156,19 +157,21 @@ class KarakeepClient:
     """Async HTTP client for Karakeep API."""
 
     # Default per-endpoint timeouts (seconds)
-    DEFAULT_TIMEOUTS: dict[str, float] = {
-        "get_bookmarks": 30.0,
-        "get_all_bookmarks": 120.0,  # Longer for pagination
-        "get_bookmark": 15.0,
-        "create_bookmark": 30.0,
-        "update_bookmark": 15.0,
-        "delete_bookmark": 15.0,
-        "attach_tags": 15.0,
-        "detach_tag": 15.0,
-        "get_tags": 30.0,
-        "search_bookmarks": 30.0,
-        "health_check": 10.0,
-    }
+    DEFAULT_TIMEOUTS = MappingProxyType(
+        {
+            "get_bookmarks": 30.0,
+            "get_all_bookmarks": 120.0,  # Longer for pagination
+            "get_bookmark": 15.0,
+            "create_bookmark": 30.0,
+            "update_bookmark": 15.0,
+            "delete_bookmark": 15.0,
+            "attach_tags": 15.0,
+            "detach_tag": 15.0,
+            "get_tags": 30.0,
+            "search_bookmarks": 30.0,
+            "health_check": 10.0,
+        }
+    )
 
     def __init__(
         self,

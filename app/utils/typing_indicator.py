@@ -62,24 +62,28 @@ class TypingIndicator:
         self._task: asyncio.Task[Any] | None = None
         self._stop_event = asyncio.Event()
 
+    async def _send_action_once(self, *, initial: bool = False) -> bool:
+        """Send one chat-action event and convert failures to diagnostics."""
+        try:
+            return await self._send_chat_action(self._chat_id, self._action)
+        except Exception:
+            event = (
+                "typing_indicator_initial_send_failed"
+                if initial
+                else "typing_indicator_periodic_send_failed"
+            )
+            logger.debug(
+                event,
+                extra={"chat_id": self._chat_id, "action": self._action},
+                exc_info=True,
+            )
+            return False
+
     async def _typing_loop(self) -> None:
         """Background task that periodically sends typing indicators."""
         while not self._stop_event.is_set():
-            try:
-                await self._send_chat_action(self._chat_id, self._action)
-            except Exception:
-                # Typing indicators are non-critical, suppress errors
-                pass
-
-            try:
-                async with asyncio.timeout(self._interval):
-                    await self._stop_event.wait()
-            except TimeoutError:
-                # Normal - interval elapsed, send another indicator
-                continue
-            except asyncio.CancelledError:
-                # Task was cancelled
-                break
+            await self._send_action_once(initial=False)
+            await asyncio.sleep(self._interval)
 
     async def start(self) -> None:
         """Start the typing indicator."""
@@ -87,10 +91,9 @@ class TypingIndicator:
             return  # Already running
 
         # Send initial typing indicator
-        try:
-            await self._send_chat_action(self._chat_id, self._action)
-        except Exception:
-            pass
+        initial_send_ok = await self._send_action_once(initial=True)
+        if not initial_send_ok:
+            logger.debug("typing_indicator_start_continues_without_initial_send")
 
         self._stop_event.clear()
         self._task = asyncio.create_task(self._typing_loop())
@@ -106,13 +109,10 @@ class TypingIndicator:
 
         self._stop_event.set()
         self._task.cancel()
-
-        try:
-            await self._task
-        except asyncio.CancelledError:
-            pass
-        except Exception:
-            pass
+        result = await asyncio.gather(self._task, return_exceptions=True)
+        task_error = result[0] if result else None
+        if isinstance(task_error, Exception) and not isinstance(task_error, asyncio.CancelledError):
+            logger.debug("typing_indicator_stop_wait_failed", extra={"error": str(task_error)})
 
         self._task = None
         logger.debug(

@@ -7,6 +7,7 @@ import asyncio
 import logging
 from typing import TYPE_CHECKING, Any
 
+from app.core.async_utils import raise_if_cancelled
 from app.core.backoff import sleep_backoff
 
 if TYPE_CHECKING:
@@ -61,6 +62,7 @@ class LLMWorkflowExecutionMixin:
                     "llm_workflow_shutdown_timeout", extra={"pending": len(self._background_tasks)}
                 )
             except Exception as e:
+                raise_if_cancelled(e)
                 logger.error("llm_workflow_shutdown_error", extra={"error": str(e)})
 
     async def execute_summary_workflow(
@@ -151,7 +153,8 @@ class LLMWorkflowExecutionMixin:
                     context.setdefault("message", "summary_processing_exception")
                     context.setdefault("exception", str(exc))
                     llm.error_context = context
-                except Exception:
+                except Exception as exc:
+                    raise_if_cancelled(exc)
                     logger.exception("failed_to_attach_summary_processing_exception")
 
             if summary is not None:
@@ -272,7 +275,8 @@ class LLMWorkflowExecutionMixin:
                     if on_retry:
                         try:
                             await on_retry()
-                        except Exception:
+                        except Exception as exc:
+                            raise_if_cancelled(exc)
                             logger.exception("llm_on_retry_callback_failed")
 
                     await sleep_backoff(attempt, backoff_base=2.0, max_delay=30.0)

@@ -143,6 +143,246 @@ class SummaryPresenterImpl:
                 extra={"summary_id": summary_id, "error": str(e)},
             )
 
+    async def _is_reader_mode(self, message: Any) -> bool:
+        if self._verbosity_resolver is None:
+            return False
+        from app.core.verbosity import VerbosityLevel
+
+        return (await self._verbosity_resolver.get_verbosity(message)) == VerbosityLevel.READER
+
+    async def _finalize_compact_card(
+        self,
+        message: Any,
+        summary_shaped: dict[str, Any],
+        llm: Any,
+        chunks: int | None,
+        summary_id: int | str | None,
+        *,
+        reader: bool,
+    ) -> tuple[bool, str | None]:
+        card_text: str | None = None
+        try:
+            card_text = self._build_compact_card_html(summary_shaped, llm, chunks, reader=reader)
+            if self._progress_tracker is None:
+                return False, card_text
+
+            keyboard = self._create_inline_keyboard(summary_id) if summary_id else None
+            result = await self._progress_tracker.finalize(
+                message,
+                card_text,
+                parse_mode="HTML",
+                reply_markup=keyboard,
+            )
+            if result is not None:
+                return True, card_text
+            logger.warning(
+                "progress_finalize_failed_fallback",
+                extra={"request_message_id": getattr(message, "id", None)},
+            )
+        except Exception as exc:
+            raise_if_cancelled(exc)
+            logger.warning(
+                "compact_card_build_failed",
+                extra={
+                    "error": str(exc),
+                    "error_type": type(exc).__name__,
+                    "request_message_id": getattr(message, "id", None),
+                },
+            )
+        return False, card_text
+
+    async def _send_structured_header(self, message: Any, llm: Any, chunks: int | None) -> None:
+        method = (
+            f"{t('chunked', self._lang)} ({chunks} parts)"
+            if chunks
+            else t("single_pass", self._lang)
+        )
+        model_name = getattr(llm, "model", None)
+        header = (
+            f"{t('summary_ready', self._lang)}\n"
+            f"{t('model', self._lang)}: {model_name or 'unknown'}\n"
+            f"Method: {method}"
+        )
+        await self._response_sender.safe_reply(message, header)
+
+    @staticmethod
+    def _trim_trailing_blank_lines(lines: list[str]) -> list[str]:
+        while lines and not lines[-1]:
+            lines.pop()
+        return lines
+
+    @staticmethod
+    def _clean_string_list(values: Any) -> list[str]:
+        if not isinstance(values, list):
+            return []
+        return [str(v).strip() for v in values if str(v).strip()]
+
+    @staticmethod
+    def _summarize_visible_items(items: list[str], limit: int, *, joiner: str) -> str:
+        shown = items[:limit]
+        hidden = max(0, len(items) - len(shown))
+        tail = f" (+{hidden})" if hidden else ""
+        return joiner.join(shown) + tail
+
+    def _build_combined_summary_lines(
+        self, shaped: dict[str, Any], *, include_domain: bool
+    ) -> list[str]:
+        _l = self._lang
+        combined_lines: list[str] = []
+
+        tl_dr = str(shaped.get("summary_250", "")).strip()
+        if tl_dr:
+            tl_dr_clean = self._text_processor.sanitize_summary_text(tl_dr)
+            combined_lines.extend([f"\U0001f4cb {t('tldr', _l)}:", tl_dr_clean, ""])
+
+        tag_items = self._clean_string_list(shaped.get("topic_tags") or [])
+        if tag_items:
+            combined_lines.append(
+                f"\U0001f3f7\ufe0f {t('tags', _l)}: "
+                + self._summarize_visible_items(tag_items, 5, joiner=" ")
+            )
+            combined_lines.append("")
+
+        entities = shaped.get("entities") or {}
+        if isinstance(entities, dict):
+            people = self._clean_string_list(entities.get("people") or [])
+            orgs = self._clean_string_list(entities.get("organizations") or [])
+            locs = self._clean_string_list(entities.get("locations") or [])
+            if people or orgs or locs:
+                combined_lines.append(f"\U0001f9ed {t('entities', _l)}:")
+                if people:
+                    combined_lines.append(
+                        f"\u2022 {t('people', _l)}: "
+                        + self._summarize_visible_items(people, 5, joiner=", ")
+                    )
+                if orgs:
+                    combined_lines.append(
+                        f"\u2022 {t('orgs', _l)}: "
+                        + self._summarize_visible_items(orgs, 5, joiner=", ")
+                    )
+                if locs:
+                    combined_lines.append(
+                        f"\u2022 {t('places', _l)}: "
+                        + self._summarize_visible_items(locs, 5, joiner=", ")
+                    )
+                combined_lines.append("")
+
+        reading_time = shaped.get("estimated_reading_time_min")
+        if reading_time:
+            combined_lines.append(f"\u23f1\ufe0f {t('reading_time', _l)}: ~{reading_time} min")
+            combined_lines.append("")
+
+        key_stats = shaped.get("key_stats") or []
+        if isinstance(key_stats, list) and key_stats:
+            ks_lines = self._data_formatter.format_key_stats(key_stats[:10])
+            if ks_lines:
+                combined_lines.append(f"\U0001f4c8 {t('key_stats', _l)}:")
+                combined_lines.extend(ks_lines)
+                combined_lines.append("")
+
+        readability = shaped.get("readability") or {}
+        readability_line = self._data_formatter.format_readability(readability)
+        if readability_line:
+            combined_lines.append(f"\U0001f9ee {t('readability', _l)} \u2014 {readability_line}")
+            combined_lines.append("")
+
+        metadata = shaped.get("metadata") or {}
+        if isinstance(metadata, dict):
+            meta_parts = []
+            if metadata.get("title"):
+                meta_parts.append(f"📰 {metadata['title']}")
+            if metadata.get("author"):
+                meta_parts.append(f"✍️ {metadata['author']}")
+            if include_domain and metadata.get("domain"):
+                meta_parts.append(f"🌐 {metadata['domain']}")
+            if meta_parts:
+                combined_lines.extend(meta_parts)
+                combined_lines.append("")
+
+        categories = self._clean_string_list(shaped.get("categories") or [])
+        if categories:
+            combined_lines.append(
+                f"\U0001f4c1 {t('categories', _l)}: " + ", ".join(categories[:10])
+            )
+            combined_lines.append("")
+
+        confidence = shaped.get("confidence", 1.0)
+        low_confidence = isinstance(confidence, (int, float)) and confidence < 1.0
+        risk = str(shaped.get("hallucination_risk", "low"))
+        if low_confidence:
+            combined_lines.append(f"\U0001f3af {t('confidence', _l)}: {confidence:.1%}")
+        if risk != "low":
+            risk_emoji = "\u26a0\ufe0f" if risk == "med" else "\U0001f6a8"
+            combined_lines.append(f"{risk_emoji} {t('hallucination_risk', _l)}: {risk}")
+        if low_confidence or risk != "low":
+            combined_lines.append("")
+
+        return self._trim_trailing_blank_lines(combined_lines)
+
+    async def _send_combined_summary_lines(
+        self, message: Any, shaped: dict[str, Any], *, include_domain: bool
+    ) -> None:
+        combined_lines = self._build_combined_summary_lines(shaped, include_domain=include_domain)
+        if combined_lines:
+            await self._text_processor.send_long_text(message, "\n".join(combined_lines))
+
+    @staticmethod
+    def _summary_sort_key(field_name: str) -> int:
+        if field_name == "tldr":
+            return 10_000
+        try:
+            return int(field_name.split("_", 1)[1])
+        except Exception:
+            logger.debug("sort_key_extraction_failed", exc_info=True)
+            return 0
+
+    @staticmethod
+    def _summary_field_keys(shaped: dict[str, Any], *, include_tldr: bool) -> list[str]:
+        fields = [
+            key
+            for key in shaped
+            if (key.startswith("summary_") and key.split("_", 1)[1].isdigit())
+            or (include_tldr and key == "tldr")
+        ]
+        return sorted(fields, key=SummaryPresenterImpl._summary_sort_key)
+
+    async def _send_summary_fields(
+        self, message: Any, shaped: dict[str, Any], *, include_tldr: bool
+    ) -> None:
+        _l = self._lang
+        for key in self._summary_field_keys(shaped, include_tldr=include_tldr):
+            content = str(shaped.get(key, "")).strip()
+            if not content:
+                continue
+            content = self._text_processor.sanitize_summary_text(content)
+            label = f"\U0001f9fe {t('tldr', _l)}"
+            if key != "tldr":
+                label = f"\U0001f9fe {t('summary_n', _l)} {key.split('_', 1)[1]}"
+            await self._text_processor.send_labelled_text(message, label, content)
+
+    async def _send_key_ideas(self, message: Any, shaped: dict[str, Any]) -> None:
+        ideas = self._clean_string_list(shaped.get("key_ideas") or [])
+        if not ideas:
+            return
+
+        chunk: list[str] = []
+        for idea in ideas:
+            chunk.append(f"• {idea}")
+            if sum(len(line) + 1 for line in chunk) > 3000:
+                await self._text_processor.send_long_text(
+                    message,
+                    f"<b>\U0001f4a1 {t('key_ideas', self._lang)}</b>\n" + "\n".join(chunk),
+                    parse_mode="HTML",
+                )
+                chunk = []
+
+        if chunk:
+            await self._text_processor.send_long_text(
+                message,
+                f"<b>\U0001f4a1 {t('key_ideas', self._lang)}</b>\n" + "\n".join(chunk),
+                parse_mode="HTML",
+            )
+
     async def send_structured_summary_response(
         self,
         message: Any,
@@ -164,259 +404,43 @@ class SummaryPresenterImpl:
             correlation_id: Request correlation ID for tracing (optional)
         """
         try:
-            # Determine verbosity once (default: DEBUG when resolver isn't available)
-            reader = False
-            if self._verbosity_resolver is not None:
-                from app.core.verbosity import VerbosityLevel
+            reader = await self._is_reader_mode(message)
+            job_card_finalized, card_text = await self._finalize_compact_card(
+                message,
+                summary_shaped,
+                llm,
+                chunks,
+                summary_id,
+                reader=reader,
+            )
 
-                reader = (
-                    await self._verbosity_resolver.get_verbosity(message)
-                ) == VerbosityLevel.READER
+            if reader and job_card_finalized:
+                return
 
-            # In Reader mode (and when a ProgressTracker is available), edit the existing
-            # consolidated "job card" message into the final summary instead of sending
-            # multiple messages.
-            job_card_finalized = False
-
-            try:
-                card_text = self._build_compact_card_html(
-                    summary_shaped,
-                    llm,
-                    chunks,
-                    reader=reader,
-                )
-
-                if self._progress_tracker is not None:
-                    keyboard = self._create_inline_keyboard(summary_id) if summary_id else None
-                    result = await self._progress_tracker.finalize(
-                        message,
-                        card_text,
-                        parse_mode="HTML",
-                        reply_markup=keyboard,
-                    )
-                    if result is not None:
-                        job_card_finalized = True
-                        if reader:
-                            return
-                    else:
-                        logger.warning(
-                            "progress_finalize_failed_fallback",
-                            extra={"request_message_id": getattr(message, "id", None)},
-                        )
-            except Exception as exc:
-                raise_if_cancelled(exc)
-                logger.warning(
-                    "compact_card_build_failed",
-                    extra={
-                        "error": str(exc),
-                        "error_type": type(exc).__name__,
-                        "request_message_id": getattr(message, "id", None),
-                    },
-                )
-
-            # Optional short header (only when we didn't finalize into a job card)
             if not reader and not job_card_finalized:
                 try:
-                    method = (
-                        f"{t('chunked', self._lang)} ({chunks} parts)"
-                        if chunks
-                        else t("single_pass", self._lang)
-                    )
-                    model_name = getattr(llm, "model", None)
-                    header = (
-                        f"{t('summary_ready', self._lang)}\n"
-                        f"{t('model', self._lang)}: {model_name or 'unknown'}\n"
-                        f"Method: {method}"
-                    )
-                    await self._response_sender.safe_reply(message, header)
+                    await self._send_structured_header(message, llm, chunks)
                 except Exception as exc:
                     raise_if_cancelled(exc)
 
-            # Combined first message: TL;DR, Tags, Entities, Reading Time, Key Stats, Readability
-            combined_lines: list[str] = []
-
-            _l = self._lang
-
-            tl_dr = str(summary_shaped.get("summary_250", "")).strip()
-            if tl_dr:
-                tl_dr_clean = self._text_processor.sanitize_summary_text(tl_dr)
-                combined_lines.extend([f"\U0001f4cb {t('tldr', _l)}:", tl_dr_clean, ""])
-
-            tag_items = [
-                str(tg).strip()
-                for tg in (summary_shaped.get("topic_tags") or [])
-                if str(tg).strip()
-            ]
-            if tag_items:
-                shown = tag_items[:5]
-                hidden = max(0, len(tag_items) - len(shown))
-                tail = f" (+{hidden})" if hidden else ""
-                combined_lines.append(
-                    f"\U0001f3f7\ufe0f {t('tags', _l)}: " + " ".join(shown) + tail
+            if not job_card_finalized:
+                await self._send_combined_summary_lines(
+                    message, summary_shaped, include_domain=True
                 )
-                combined_lines.append("")
 
-            entities = summary_shaped.get("entities") or {}
-            if isinstance(entities, dict):
-                people = [str(x).strip() for x in (entities.get("people") or []) if str(x).strip()]
-                orgs = [
-                    str(x).strip() for x in (entities.get("organizations") or []) if str(x).strip()
-                ]
-                locs = [str(x).strip() for x in (entities.get("locations") or []) if str(x).strip()]
-                if people or orgs or locs:
-                    combined_lines.append(f"\U0001f9ed {t('entities', _l)}:")
-                    if people:
-                        shown = people[:5]
-                        hidden = max(0, len(people) - len(shown))
-                        tail = f" (+{hidden})" if hidden else ""
-                        combined_lines.append(
-                            f"\u2022 {t('people', _l)}: " + ", ".join(shown) + tail
-                        )
-                    if orgs:
-                        shown = orgs[:5]
-                        hidden = max(0, len(orgs) - len(shown))
-                        tail = f" (+{hidden})" if hidden else ""
-                        combined_lines.append(f"\u2022 {t('orgs', _l)}: " + ", ".join(shown) + tail)
-                    if locs:
-                        shown = locs[:5]
-                        hidden = max(0, len(locs) - len(shown))
-                        tail = f" (+{hidden})" if hidden else ""
-                        combined_lines.append(
-                            f"\u2022 {t('places', _l)}: " + ", ".join(shown) + tail
-                        )
-                    combined_lines.append("")
-
-            reading_time = summary_shaped.get("estimated_reading_time_min")
-            if reading_time:
-                combined_lines.append(f"\u23f1\ufe0f {t('reading_time', _l)}: ~{reading_time} min")
-                combined_lines.append("")
-
-            key_stats = summary_shaped.get("key_stats") or []
-            if isinstance(key_stats, list) and key_stats:
-                ks_lines = self._data_formatter.format_key_stats(key_stats[:10])
-                if ks_lines:
-                    combined_lines.append(f"\U0001f4c8 {t('key_stats', _l)}:")
-                    combined_lines.extend(ks_lines)
-                    combined_lines.append("")
-
-            readability = summary_shaped.get("readability") or {}
-            readability_line = self._data_formatter.format_readability(readability)
-            if readability_line:
-                combined_lines.append(
-                    f"\U0001f9ee {t('readability', _l)} \u2014 {readability_line}"
-                )
-                combined_lines.append("")
-
-            metadata = summary_shaped.get("metadata") or {}
-            if isinstance(metadata, dict):
-                meta_parts = []
-                if metadata.get("title"):
-                    meta_parts.append(f"📰 {metadata['title']}")
-                if metadata.get("author"):
-                    meta_parts.append(f"✍️ {metadata['author']}")
-                if metadata.get("domain"):
-                    meta_parts.append(f"🌐 {metadata['domain']}")
-                if meta_parts:
-                    combined_lines.extend(meta_parts)
-                    combined_lines.append("")
-
-            # Categories & Topic Taxonomy
-            categories = [
-                str(c).strip() for c in (summary_shaped.get("categories") or []) if str(c).strip()
-            ]
-            if categories:
-                combined_lines.append(
-                    f"\U0001f4c1 {t('categories', _l)}: " + ", ".join(categories[:10])
-                )
-                combined_lines.append("")
-
-            # Confidence & Risk
-            confidence = summary_shaped.get("confidence", 1.0)
-            risk = summary_shaped.get("hallucination_risk", "low")
-            if isinstance(confidence, int | float) and confidence < 1.0:
-                combined_lines.append(f"\U0001f3af {t('confidence', _l)}: {confidence:.1%}")
-            if risk != "low":
-                risk_emoji = "\u26a0\ufe0f" if risk == "med" else "\U0001f6a8"
-                combined_lines.append(f"{risk_emoji} {t('hallucination_risk', _l)}: {risk}")
-            if confidence < 1.0 or risk != "low":
-                combined_lines.append("")
-
-            if combined_lines and not job_card_finalized:
-                # Remove trailing empty lines
-                while combined_lines and not combined_lines[-1]:
-                    combined_lines.pop()
-                await self._text_processor.send_long_text(message, "\n".join(combined_lines))
-
-            # Send separated summary fields (summary_250, summary_500, tldr, ...)
-            summary_fields = [
-                k
-                for k in summary_shaped
-                if ((k.startswith("summary_") and k.split("_", 1)[1].isdigit()) or k == "tldr")
-            ]
-            if job_card_finalized:
-                # The card already shows tldr; skip it in the expanded fields
-                summary_fields = [k for k in summary_fields if k != "tldr"]
-
-            def _key_num(k: str) -> int:
-                if k == "tldr":
-                    return 10_000
-                try:
-                    return int(k.split("_", 1)[1])
-                except Exception:
-                    logger.debug("sort_key_extraction_failed", exc_info=True)
-                    return 0
-
-            for key in sorted(summary_fields, key=_key_num):
-                content = str(summary_shaped.get(key, "")).strip()
-                if content:
-                    content = self._text_processor.sanitize_summary_text(content)
-                    if key == "tldr":
-                        label = f"\U0001f9fe {t('tldr', _l)}"
-                    else:
-                        label = f"\U0001f9fe {t('summary_n', _l)} {key.split('_', 1)[1]}"
-                    await self._text_processor.send_labelled_text(
-                        message,
-                        label,
-                        content,
-                    )
-
-            # Key ideas as separate messages
-            ideas = [
-                str(x).strip() for x in (summary_shaped.get("key_ideas") or []) if str(x).strip()
-            ]
-            if ideas:
-                chunk: list[str] = []
-                for idea in ideas:
-                    chunk.append(f"• {idea}")
-                    if sum(len(c) + 1 for c in chunk) > 3000:
-                        await self._text_processor.send_long_text(
-                            message,
-                            f"<b>\U0001f4a1 {t('key_ideas', self._lang)}</b>\n" + "\n".join(chunk),
-                            parse_mode="HTML",
-                        )
-                        chunk = []
-                if chunk:
-                    await self._text_processor.send_long_text(
-                        message,
-                        f"<b>\U0001f4a1 {t('key_ideas', self._lang)}</b>\n" + "\n".join(chunk),
-                        parse_mode="HTML",
-                    )
-
-            # Send new field messages
+            await self._send_summary_fields(
+                message, summary_shaped, include_tldr=not job_card_finalized
+            )
+            await self._send_key_ideas(message, summary_shaped)
             await self._send_new_field_messages(message, summary_shaped)
-
-            # Finally attach full JSON as a document with a descriptive filename
             await self._response_sender.reply_json(message, summary_shaped)
 
-            # Add action buttons after summary if summary_id is available
             if summary_id and not job_card_finalized:
                 await self._send_action_buttons(message, summary_id, correlation_id)
 
-            # Crosspost compact card to categorized forum topic thread
             await self._crosspost_to_topic(
                 message, summary_shaped, llm, chunks, summary_id, correlation_id, card_text
             )
-
         except Exception as exc:
             raise_if_cancelled(exc)
             # Fallback to simpler format
@@ -488,45 +512,80 @@ class SummaryPresenterImpl:
         await self._response_sender.safe_reply(message, header)
         await self._text_processor.send_long_text(message, cleaned)
 
+    def _insights_cap_text(self, text: str, max_chars: int) -> str:
+        cleaned = self._text_processor.sanitize_summary_text(text.strip())
+        if len(cleaned) <= max_chars:
+            return cleaned
+        return cleaned[: max(0, max_chars - 1)].rstrip() + "…"
+
+    def _insights_safe_html(self, text: str, *, max_chars: int = 900) -> str:
+        return self._text_processor.linkify_urls(
+            html.escape(self._insights_cap_text(text, max_chars))
+        )
+
+    def _insights_clean_list(
+        self, items: list[Any], *, limit: int, item_max_chars: int = 220
+    ) -> list[str]:
+        cleaned: list[str] = []
+        for item in items:
+            text = str(item).strip()
+            if not text:
+                continue
+            cleaned.append(self._insights_safe_html(text, max_chars=item_max_chars))
+            if len(cleaned) >= limit:
+                break
+        return cleaned
+
+    def _build_new_facts_section(self, insights: dict[str, Any]) -> list[str]:
+        facts_section: list[str] = []
+        facts = insights.get("new_facts")
+        if not isinstance(facts, list):
+            return facts_section
+
+        _l = self._lang
+        for idx, fact in enumerate(facts[:5], start=1):
+            if not isinstance(fact, dict):
+                continue
+            fact_text = str(fact.get("fact", "")).strip()
+            if not fact_text:
+                continue
+
+            fact_lines = [f"<b>{idx}.</b> {self._insights_safe_html(fact_text, max_chars=320)}"]
+            why_matters = str(fact.get("why_it_matters", "")).strip()
+            if why_matters:
+                fact_lines.append(
+                    f"\u2022 <i>{t('why_matters', _l)}:</i> "
+                    f"{self._insights_safe_html(why_matters, max_chars=260)}"
+                )
+
+            source_hint = str(fact.get("source_hint", "")).strip()
+            if source_hint:
+                fact_lines.append(
+                    f"\u2022 <i>{t('source_hint', _l)}:</i> "
+                    f"{self._insights_safe_html(source_hint, max_chars=160)}"
+                )
+
+            confidence = fact.get("confidence")
+            if confidence is not None:
+                try:
+                    conf_val = float(confidence)
+                    fact_lines.append(f"• <i>Confidence:</i> <code>{conf_val:.0%}</code>")
+                except Exception:
+                    logger.debug("confidence_score_conversion_failed", exc_info=True)
+                    fact_lines.append(
+                        f"• <i>Confidence:</i> <code>{html.escape(str(confidence))}</code>"
+                    )
+
+            facts_section.append("\n".join(fact_lines))
+        return facts_section
+
     async def send_additional_insights_message(
         self, message: Any, insights: dict[str, Any], correlation_id: str | None = None
     ) -> None:
         """Send follow-up message summarizing additional research insights."""
         try:
-            import html
-
-            # Skip sending in Reader mode (the calling code should already gate on this),
-            # but keep the check here for safety when called directly.
-            if self._verbosity_resolver is not None:
-                from app.core.verbosity import VerbosityLevel
-
-                if (await self._verbosity_resolver.get_verbosity(message)) == VerbosityLevel.READER:
-                    return
-
-            def _cap(text: str, max_chars: int) -> str:
-                cleaned = self._text_processor.sanitize_summary_text(text.strip())
-                if len(cleaned) <= max_chars:
-                    return cleaned
-                return cleaned[: max(0, max_chars - 1)].rstrip() + "…"
-
-            def _safe_html(text: str, *, max_chars: int = 900) -> str:
-                cleaned = _cap(text, max_chars)
-                escaped = html.escape(cleaned)
-                return self._text_processor.linkify_urls(escaped)
-
-            def _clean_list(
-                items: list[Any], *, limit: int, item_max_chars: int = 220
-            ) -> list[str]:
-                cleaned: list[str] = []
-                for item in items:
-                    text = str(item).strip()
-                    if not text:
-                        continue
-                    cleaned.append(_safe_html(text, max_chars=item_max_chars))
-                    if len(cleaned) >= limit:
-                        break
-                return cleaned
-
+            if await self._is_reader_mode(message):
+                return
             _l = self._lang
             lines: list[str] = [f"<b>\U0001f50e {t('research_highlights', _l)}</b>"]
             if correlation_id:
@@ -543,45 +602,11 @@ class SummaryPresenterImpl:
                     [
                         "",
                         f"<b>\U0001f9ed {t('overview', _l)}</b>",
-                        _safe_html(overview, max_chars=1200),
+                        self._insights_safe_html(overview, max_chars=1200),
                     ]
                 )
 
-            facts_section: list[str] = []
-            facts = insights.get("new_facts")
-            if isinstance(facts, list):
-                for idx, fact in enumerate(facts[:5], start=1):
-                    if not isinstance(fact, dict):
-                        continue
-                    fact_text = str(fact.get("fact", "")).strip()
-                    if not fact_text:
-                        continue
-                    fact_lines = [f"<b>{idx}.</b> {_safe_html(fact_text, max_chars=320)}"]
-
-                    why_matters = str(fact.get("why_it_matters", "")).strip()
-                    if why_matters:
-                        fact_lines.append(
-                            f"\u2022 <i>{t('why_matters', _l)}:</i> {_safe_html(why_matters, max_chars=260)}"
-                        )
-
-                    source_hint = str(fact.get("source_hint", "")).strip()
-                    if source_hint:
-                        fact_lines.append(
-                            f"\u2022 <i>{t('source_hint', _l)}:</i> {_safe_html(source_hint, max_chars=160)}"
-                        )
-
-                    confidence = fact.get("confidence")
-                    if confidence is not None:
-                        try:
-                            conf_val = float(confidence)
-                            fact_lines.append(f"• <i>Confidence:</i> <code>{conf_val:.0%}</code>")
-                        except Exception:
-                            logger.debug("confidence_score_conversion_failed", exc_info=True)
-                            fact_lines.append(
-                                f"• <i>Confidence:</i> <code>{html.escape(str(confidence))}</code>"
-                            )
-
-                    facts_section.append("\n".join(fact_lines))
+            facts_section = self._build_new_facts_section(insights)
             if facts_section:
                 sections_sent = True
                 lines.extend(
@@ -590,7 +615,7 @@ class SummaryPresenterImpl:
 
             open_questions = insights.get("open_questions")
             if isinstance(open_questions, list):
-                questions = _clean_list(open_questions, limit=5)
+                questions = self._insights_clean_list(open_questions, limit=5)
                 if questions:
                     sections_sent = True
                     lines.extend(
@@ -603,7 +628,7 @@ class SummaryPresenterImpl:
 
             suggested_sources = insights.get("suggested_sources")
             if isinstance(suggested_sources, list):
-                sources = _clean_list(suggested_sources, limit=5, item_max_chars=260)
+                sources = self._insights_clean_list(suggested_sources, limit=5, item_max_chars=260)
                 if sources:
                     sections_sent = True
                     lines.extend(
@@ -616,7 +641,7 @@ class SummaryPresenterImpl:
 
             expansion = insights.get("expansion_topics")
             if isinstance(expansion, list):
-                exp_clean = _clean_list(expansion, limit=6)
+                exp_clean = self._insights_clean_list(expansion, limit=6)
                 if exp_clean:
                     sections_sent = True
                     lines.extend(
@@ -629,7 +654,7 @@ class SummaryPresenterImpl:
 
             next_steps = insights.get("next_exploration")
             if isinstance(next_steps, list):
-                nxt_clean = _clean_list(next_steps, limit=6)
+                nxt_clean = self._insights_clean_list(next_steps, limit=6)
                 if nxt_clean:
                     sections_sent = True
                     lines.extend(
@@ -647,7 +672,7 @@ class SummaryPresenterImpl:
                     [
                         "",
                         f"<b>\u26a0\ufe0f {t('caveats', _l)}</b>",
-                        _safe_html(caution, max_chars=900),
+                        self._insights_safe_html(caution, max_chars=900),
                     ]
                 )
 
@@ -723,11 +748,9 @@ class SummaryPresenterImpl:
         """
         try:
             _l = self._lang
-            # Finalize progress tracker -- edit the progress message into the final header
             if self._progress_tracker is not None:
                 result = await self._progress_tracker.finalize(
-                    message,
-                    t("forward_summary_ready", _l),
+                    message, t("forward_summary_ready", _l)
                 )
                 if result is None:
                     logger.warning(
@@ -737,321 +760,175 @@ class SummaryPresenterImpl:
             else:
                 await self._response_sender.safe_reply(message, t("forward_summary_ready", _l))
 
-            combined_lines: list[str] = []
-            tl_dr = str(forward_shaped.get("summary_250", "")).strip()
-            if tl_dr:
-                tl_dr_clean = self._text_processor.sanitize_summary_text(tl_dr)
-                combined_lines.extend([f"\U0001f4cb {t('tldr', _l)}:", tl_dr_clean, ""])
-
-            tag_items = [
-                str(tg).strip()
-                for tg in (forward_shaped.get("topic_tags") or [])
-                if str(tg).strip()
-            ]
-            if tag_items:
-                shown = tag_items[:5]
-                hidden = max(0, len(tag_items) - len(shown))
-                tail = f" (+{hidden})" if hidden else ""
-                combined_lines.append(
-                    f"\U0001f3f7\ufe0f {t('tags', _l)}: " + " ".join(shown) + tail
-                )
-                combined_lines.append("")
-
-            entities = forward_shaped.get("entities") or {}
-            if isinstance(entities, dict):
-                people = [str(x).strip() for x in (entities.get("people") or []) if str(x).strip()]
-                orgs = [
-                    str(x).strip() for x in (entities.get("organizations") or []) if str(x).strip()
-                ]
-                locs = [str(x).strip() for x in (entities.get("locations") or []) if str(x).strip()]
-                if people or orgs or locs:
-                    combined_lines.append(f"\U0001f9ed {t('entities', _l)}:")
-                    if people:
-                        shown = people[:5]
-                        hidden = max(0, len(people) - len(shown))
-                        tail = f" (+{hidden})" if hidden else ""
-                        combined_lines.append(
-                            f"\u2022 {t('people', _l)}: " + ", ".join(shown) + tail
-                        )
-                    if orgs:
-                        shown = orgs[:5]
-                        hidden = max(0, len(orgs) - len(shown))
-                        tail = f" (+{hidden})" if hidden else ""
-                        combined_lines.append(f"\u2022 {t('orgs', _l)}: " + ", ".join(shown) + tail)
-                    if locs:
-                        shown = locs[:5]
-                        hidden = max(0, len(locs) - len(shown))
-                        tail = f" (+{hidden})" if hidden else ""
-                        combined_lines.append(
-                            f"\u2022 {t('places', _l)}: " + ", ".join(shown) + tail
-                        )
-                    combined_lines.append("")
-
-            reading_time = forward_shaped.get("estimated_reading_time_min")
-            if reading_time:
-                combined_lines.append(f"\u23f1\ufe0f {t('reading_time', _l)}: ~{reading_time} min")
-                combined_lines.append("")
-
-            key_stats = forward_shaped.get("key_stats") or []
-            if isinstance(key_stats, list) and key_stats:
-                ks_lines = self._data_formatter.format_key_stats(key_stats[:10])
-                if ks_lines:
-                    combined_lines.append(f"\U0001f4c8 {t('key_stats', _l)}:")
-                    combined_lines.extend(ks_lines)
-                    combined_lines.append("")
-
-            readability = forward_shaped.get("readability") or {}
-            readability_line = self._data_formatter.format_readability(readability)
-            if readability_line:
-                combined_lines.append(
-                    f"\U0001f9ee {t('readability', _l)} \u2014 {readability_line}"
-                )
-                combined_lines.append("")
-
-            # Metadata for forward posts
-            metadata = forward_shaped.get("metadata") or {}
-            if isinstance(metadata, dict):
-                meta_parts = []
-                if metadata.get("title"):
-                    meta_parts.append(f"📰 {metadata['title']}")
-                if metadata.get("author"):
-                    meta_parts.append(f"✍️ {metadata['author']}")
-                if meta_parts:
-                    combined_lines.extend(meta_parts)
-                    combined_lines.append("")
-
-            # Categories & Risk for forwards
-            categories = [
-                str(c).strip() for c in (forward_shaped.get("categories") or []) if str(c).strip()
-            ]
-            if categories:
-                combined_lines.append(
-                    f"\U0001f4c1 {t('categories', _l)}: " + ", ".join(categories[:10])
-                )
-                combined_lines.append("")
-
-            confidence = forward_shaped.get("confidence", 1.0)
-            risk = forward_shaped.get("hallucination_risk", "low")
-            if isinstance(confidence, int | float) and confidence < 1.0:
-                combined_lines.append(f"\U0001f3af {t('confidence', _l)}: {confidence:.1%}")
-            if risk != "low":
-                risk_emoji = "\u26a0\ufe0f" if risk == "med" else "\U0001f6a8"
-                combined_lines.append(f"{risk_emoji} {t('hallucination_risk', _l)}: {risk}")
-            if confidence < 1.0 or risk != "low":
-                combined_lines.append("")
-
-            if combined_lines:
-                # Remove trailing empty lines
-                while combined_lines and not combined_lines[-1]:
-                    combined_lines.pop()
-                await self._text_processor.send_long_text(message, "\n".join(combined_lines))
-
-            # Separated summary fields
-            summary_fields = [
-                k
-                for k in forward_shaped
-                if k.startswith("summary_") and k.split("_", 1)[1].isdigit()
-            ]
-
-            def _key_num_f(k: str) -> int:
-                try:
-                    return int(k.split("_", 1)[1])
-                except Exception:
-                    logger.debug("sort_key_extraction_failed", exc_info=True)
-                    return 0
-
-            for key in sorted(summary_fields, key=_key_num_f):
-                content = str(forward_shaped.get(key, "")).strip()
-                if content:
-                    content = self._text_processor.sanitize_summary_text(content)
-                    await self._text_processor.send_labelled_text(
-                        message,
-                        f"\U0001f9fe {t('summary_n', _l)} {key.split('_', 1)[1]}",
-                        content,
-                    )
-
-            ideas = [
-                str(x).strip() for x in (forward_shaped.get("key_ideas") or []) if str(x).strip()
-            ]
-            if ideas:
-                await self._text_processor.send_long_text(
-                    message,
-                    f"<b>\U0001f4a1 {t('key_ideas', _l)}</b>\n"
-                    + "\n".join([f"\u2022 {i}" for i in ideas]),
-                    parse_mode="HTML",
-                )
-
-            # Send new field messages for forwards
+            await self._send_combined_summary_lines(message, forward_shaped, include_domain=False)
+            await self._send_summary_fields(message, forward_shaped, include_tldr=False)
+            await self._send_key_ideas(message, forward_shaped)
             await self._send_new_field_messages(message, forward_shaped)
         except Exception as exc:
             raise_if_cancelled(exc)
 
         await self._response_sender.reply_json(message, forward_shaped)
-
-        # Add action buttons after forward summary if summary_id is available
         if summary_id:
             await self._send_action_buttons(message, summary_id)
 
+    def _build_extractive_quotes_message(self, shaped: dict[str, Any]) -> str | None:
+        quotes = shaped.get("extractive_quotes") or []
+        if not isinstance(quotes, list) or not quotes:
+            return None
+        lines = [f"<b>\U0001f4ac {t('key_quotes', self._lang)}</b>"]
+        for i, quote in enumerate(quotes[:5], 1):
+            if not isinstance(quote, dict) or not quote.get("text"):
+                continue
+            text = str(quote["text"]).strip()
+            if text:
+                lines.append(f"<blockquote>{i}. {html.escape(text)}</blockquote>")
+        return "\n".join(lines) if len(lines) > 1 else None
+
+    def _build_bullet_message(
+        self, title: str, values: list[str], *, limit: int, escape: bool = False
+    ) -> str | None:
+        if not values:
+            return None
+        items = values[:limit]
+        if escape:
+            items = [html.escape(item) for item in items]
+        return title + "\n" + "\n".join(f"\u2022 {item}" for item in items)
+
+    def _build_questions_answered_message(self, shaped: dict[str, Any]) -> str | None:
+        questions_answered = shaped.get("questions_answered") or []
+        if not isinstance(questions_answered, list) or not questions_answered:
+            return None
+
+        qa_lines = [f"<b>\u2753 {t('questions_answered', self._lang)}</b>"]
+        for i, qa in enumerate(questions_answered[:10], 1):
+            if not isinstance(qa, dict):
+                continue
+            question = str(qa.get("question", "")).strip()
+            if not question:
+                continue
+            answer = str(qa.get("answer", "")).strip()
+            qa_lines.append(f"\n{i}. <b>Q:</b> {html.escape(question)}")
+            if answer:
+                qa_lines.append(f"   <b>A:</b> {html.escape(answer)}")
+            else:
+                qa_lines.append(f"   <b>A:</b> <i>{t('no_answer', self._lang)}</i>")
+        return "\n".join(qa_lines) if len(qa_lines) > 1 else None
+
+    def _build_insights_messages(self, shaped: dict[str, Any]) -> list[str]:
+        insights = shaped.get("insights")
+        if not isinstance(insights, dict):
+            return []
+
+        messages: list[str] = []
+        caution = str(insights.get("caution") or "").strip()
+        if caution:
+            messages.append(
+                f"<b>\u26a0\ufe0f {t('caveats', self._lang)}</b>\n{html.escape(caution)}"
+            )
+
+        critique = insights.get("critique")
+        if isinstance(critique, list) and critique:
+            crit_lines = [f"• {html.escape(str(c).strip())}" for c in critique if str(c).strip()]
+            if crit_lines:
+                messages.append(
+                    f"<b>\U0001f914 {t('critical_analysis', self._lang)}</b>\n"
+                    + "\n".join(crit_lines[:5])
+                )
+        return messages
+
+    def _build_quality_message(self, shaped: dict[str, Any]) -> str | None:
+        quality = shaped.get("quality")
+        if not isinstance(quality, dict):
+            return None
+
+        _l = self._lang
+        lines: list[str] = []
+        bias = str(quality.get("author_bias") or "").strip()
+        tone = str(quality.get("emotional_tone") or "").strip()
+        evidence = str(quality.get("evidence_quality") or "").strip()
+        missing = quality.get("missing_perspectives")
+
+        if bias:
+            lines.append(f"\u2022 <b>{t('bias', _l)}:</b> {html.escape(bias)}")
+        if tone:
+            lines.append(f"\u2022 <b>{t('tone', _l)}:</b> {html.escape(tone)}")
+        if evidence:
+            lines.append(f"\u2022 <b>{t('evidence', _l)}:</b> {html.escape(evidence)}")
+        if isinstance(missing, list) and missing:
+            clean_missing = [str(m).strip() for m in missing if str(m).strip()]
+            if clean_missing:
+                lines.append(f"\u2022 <b>{t('missing_context', _l)}:</b>")
+                lines.extend(f"  - {html.escape(item)}" for item in clean_missing[:3])
+
+        if not lines:
+            return None
+        return f"<b>\u2696\ufe0f {t('perspective_quality', _l)}</b>\n" + "\n".join(lines)
+
+    def _build_taxonomy_message(self, shaped: dict[str, Any]) -> str | None:
+        taxonomy = shaped.get("topic_taxonomy") or []
+        if not isinstance(taxonomy, list) or not taxonomy:
+            return None
+
+        lines = [f"<b>\U0001f3f7\ufe0f {t('topic_classification', self._lang)}</b>"]
+        for tax in taxonomy[:5]:
+            if not isinstance(tax, dict) or not tax.get("label"):
+                continue
+            label = str(tax["label"]).strip()
+            score = tax.get("score", 0.0)
+            if isinstance(score, (int, float)) and score > 0:
+                lines.append(f"• {label} ({score:.1%})")
+            else:
+                lines.append(f"• {label}")
+        return "\n".join(lines) if len(lines) > 1 else None
+
+    def _build_forward_extras_message(self, shaped: dict[str, Any]) -> str | None:
+        fwd_extras = shaped.get("forwarded_post_extras")
+        if not isinstance(fwd_extras, dict):
+            return None
+
+        _l = self._lang
+        fwd_parts: list[str] = []
+        if fwd_extras.get("channel_title"):
+            fwd_parts.append(f"📺 Channel: {fwd_extras['channel_title']}")
+        if fwd_extras.get("channel_username"):
+            fwd_parts.append(f"@{fwd_extras['channel_username']}")
+        hashtags = self._clean_string_list(fwd_extras.get("hashtags") or [])
+        if hashtags:
+            fwd_parts.append(
+                f"{t('tags', _l)}: "
+                + " ".join(f"#{h}" if not h.startswith("#") else h for h in hashtags[:5])
+            )
+        if not fwd_parts:
+            return None
+        return f"<b>\U0001f4e4 {t('forward_info', _l)}</b>\n" + "\n".join(fwd_parts)
+
     async def _send_new_field_messages(self, message: Any, shaped: dict[str, Any]) -> None:
-        """Send messages for new fields like extractive quotes, highlights, etc."""
+        """Send messages for new fields like extractive quotes, highlights, and taxonomy."""
         try:
             _l = self._lang
-
-            # Extractive quotes with HTML blockquotes
-            quotes = shaped.get("extractive_quotes") or []
-            if isinstance(quotes, list) and quotes:
-                quote_lines = [f"<b>\U0001f4ac {t('key_quotes', _l)}</b>"]
-                for i, quote in enumerate(quotes[:5], 1):
-                    if isinstance(quote, dict) and quote.get("text"):
-                        text = str(quote["text"]).strip()
-                        if text:
-                            escaped_text = html.escape(text)
-                            quote_lines.append(f"<blockquote>{i}. {escaped_text}</blockquote>")
-                if len(quote_lines) > 1:
-                    await self._text_processor.send_long_text(
-                        message, "\n".join(quote_lines), parse_mode="HTML"
-                    )
-
-            highlights = [
-                str(h).strip() for h in (shaped.get("highlights") or []) if str(h).strip()
+            html_blocks = [
+                self._build_extractive_quotes_message(shaped),
+                self._build_bullet_message(
+                    f"<b>\u2728 {t('highlights', _l)}</b>",
+                    self._clean_string_list(shaped.get("highlights") or []),
+                    limit=10,
+                ),
+                self._build_questions_answered_message(shaped),
+                self._build_bullet_message(
+                    f"<b>\U0001f3af {t('key_points', _l)}</b>",
+                    self._clean_string_list(shaped.get("key_points_to_remember") or []),
+                    limit=10,
+                ),
+                self._build_quality_message(shaped),
+                self._build_taxonomy_message(shaped),
+                self._build_forward_extras_message(shaped),
             ]
-            if highlights:
-                await self._text_processor.send_long_text(
-                    message,
-                    f"<b>\u2728 {t('highlights', _l)}</b>\n"
-                    + "\n".join([f"\u2022 {h}" for h in highlights[:10]]),
-                    parse_mode="HTML",
-                )
 
-            # Questions answered (as Q&A pairs) with HTML formatting
-            questions_answered = shaped.get("questions_answered") or []
-            if isinstance(questions_answered, list) and questions_answered:
-                qa_lines = [f"<b>\u2753 {t('questions_answered', _l)}</b>"]
-                for i, qa in enumerate(questions_answered[:10], 1):
-                    if isinstance(qa, dict):
-                        question = str(qa.get("question", "")).strip()
-                        answer = str(qa.get("answer", "")).strip()
-                        if question:
-                            escaped_question = html.escape(question)
-                            qa_lines.append(f"\n{i}. <b>Q:</b> {escaped_question}")
-                            if answer:
-                                escaped_answer = html.escape(answer)
-                                qa_lines.append(f"   <b>A:</b> {escaped_answer}")
-                            else:
-                                qa_lines.append(f"   <b>A:</b> <i>{t('no_answer', _l)}</i>")
-                if len(qa_lines) > 1:
-                    await self._text_processor.send_long_text(
-                        message, "\n".join(qa_lines), parse_mode="HTML"
-                    )
+            for block in html_blocks:
+                if block:
+                    await self._text_processor.send_long_text(message, block, parse_mode="HTML")
 
-            # Key points to remember
-            key_points = [
-                str(kp).strip()
-                for kp in (shaped.get("key_points_to_remember") or [])
-                if str(kp).strip()
-            ]
-            if key_points:
-                await self._text_processor.send_long_text(
-                    message,
-                    f"<b>\U0001f3af {t('key_points', _l)}</b>\n"
-                    + "\n".join([f"\u2022 {kp}" for kp in key_points[:10]]),
-                    parse_mode="HTML",
-                )
-
-            # Insights: Caution/Caveats
-            insights = shaped.get("insights")
-            if isinstance(insights, dict):
-                caution = str(insights.get("caution") or "").strip()
-                if caution:
-                    await self._text_processor.send_long_text(
-                        message,
-                        f"<b>\u26a0\ufe0f {t('caveats', _l)}</b>\n{html.escape(caution)}",
-                        parse_mode="HTML",
-                    )
-
-                critique = insights.get("critique")
-                if isinstance(critique, list) and critique:
-                    crit_lines = [
-                        f"• {html.escape(str(c).strip())}" for c in critique if str(c).strip()
-                    ]
-                    if crit_lines:
-                        await self._text_processor.send_long_text(
-                            message,
-                            f"<b>\U0001f914 {t('critical_analysis', _l)}</b>\n"
-                            + "\n".join(crit_lines[:5]),
-                            parse_mode="HTML",
-                        )
-
-            # Perspective & Quality
-            quality = shaped.get("quality")
-            if isinstance(quality, dict):
-                q_lines = []
-                bias = str(quality.get("author_bias") or "").strip()
-                tone = str(quality.get("emotional_tone") or "").strip()
-                evidence = str(quality.get("evidence_quality") or "").strip()
-                missing = quality.get("missing_perspectives")
-
-                if bias:
-                    q_lines.append(f"\u2022 <b>{t('bias', _l)}:</b> {html.escape(bias)}")
-                if tone:
-                    q_lines.append(f"\u2022 <b>{t('tone', _l)}:</b> {html.escape(tone)}")
-                if evidence:
-                    q_lines.append(f"\u2022 <b>{t('evidence', _l)}:</b> {html.escape(evidence)}")
-
-                if isinstance(missing, list) and missing:
-                    clean_missing = [str(m).strip() for m in missing if str(m).strip()]
-                    if clean_missing:
-                        q_lines.append(f"\u2022 <b>{t('missing_context', _l)}:</b>")
-                        for m in clean_missing[:3]:
-                            q_lines.append(f"  - {html.escape(m)}")
-
-                if q_lines:
-                    await self._text_processor.send_long_text(
-                        message,
-                        f"<b>\u2696\ufe0f {t('perspective_quality', _l)}</b>\n"
-                        + "\n".join(q_lines),
-                        parse_mode="HTML",
-                    )
-
-            # Topic taxonomy (if present and not empty)
-            taxonomy = shaped.get("topic_taxonomy") or []
-            if isinstance(taxonomy, list) and taxonomy:
-                tax_lines = [f"<b>\U0001f3f7\ufe0f {t('topic_classification', _l)}</b>"]
-                for tax in taxonomy[:5]:
-                    if isinstance(tax, dict) and tax.get("label"):
-                        label = str(tax["label"]).strip()
-                        score = tax.get("score", 0.0)
-                        if isinstance(score, int | float) and score > 0:
-                            tax_lines.append(f"• {label} ({score:.1%})")
-                        else:
-                            tax_lines.append(f"• {label}")
-                if len(tax_lines) > 1:
-                    await self._text_processor.send_long_text(
-                        message, "\n".join(tax_lines), parse_mode="HTML"
-                    )
-
-            # Forwarded post extras
-            fwd_extras = shaped.get("forwarded_post_extras")
-            if isinstance(fwd_extras, dict):
-                fwd_parts = []
-                if fwd_extras.get("channel_title"):
-                    fwd_parts.append(f"📺 Channel: {fwd_extras['channel_title']}")
-                if fwd_extras.get("channel_username"):
-                    fwd_parts.append(f"@{fwd_extras['channel_username']}")
-                hashtags = [
-                    str(h).strip() for h in (fwd_extras.get("hashtags") or []) if str(h).strip()
-                ]
-                if hashtags:
-                    fwd_parts.append(
-                        f"{t('tags', _l)}: "
-                        + " ".join([f"#{h}" if not h.startswith("#") else h for h in hashtags[:5]])
-                    )
-                if fwd_parts:
-                    await self._text_processor.send_long_text(
-                        message,
-                        f"<b>\U0001f4e4 {t('forward_info', _l)}</b>\n" + "\n".join(fwd_parts),
-                        parse_mode="HTML",
-                    )
-
+            for block in self._build_insights_messages(shaped):
+                await self._text_processor.send_long_text(message, block, parse_mode="HTML")
         except Exception as exc:
             raise_if_cancelled(exc)

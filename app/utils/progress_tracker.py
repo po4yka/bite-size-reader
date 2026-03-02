@@ -177,16 +177,17 @@ class ProgressTracker:
 
         Useful for phase changes that affect the display without completing items.
         """
-        try:
-            # Drop stale update if present
-            try:
-                self._update_queue.get_nowait()
-                self._update_queue.task_done()
-            except asyncio.QueueEmpty:
-                pass
-            self._update_queue.put_nowait((self._completed, self.total))
-        except asyncio.QueueFull:
-            pass  # Best effort
+        # Drop stale update if present
+        if not self._update_queue.empty():
+            self._update_queue.get_nowait()
+            self._update_queue.task_done()
+        else:
+            logger.debug("progress_force_update_queue_empty")
+
+        if self._update_queue.full():
+            logger.debug("progress_force_update_queue_full")  # Best effort
+            return
+        self._update_queue.put_nowait((self._completed, self.total))
 
     async def process_update_queue(self) -> None:
         """Process queued progress updates in the background.
