@@ -102,6 +102,23 @@ class URLProcessingFlowResult:
         )
 
 
+@dataclass
+class URLFlowContext:
+    """Prepared context for URL extraction + summarization flow."""
+
+    dedupe_hash: str
+    req_id: int
+    content_text: str
+    title: str | None
+    images: list[str] | None
+    chosen_lang: str
+    needs_ru_translation: bool
+    system_prompt: str
+    should_chunk: bool
+    max_chars: int
+    chunks: list[str] | None
+
+
 def _get_system_prompt(lang: str) -> str:
     """Load the system prompt for the given language using PromptManager.
 
@@ -334,150 +351,52 @@ class URLProcessor:
             return cached_result
 
         try:
-            dedupe_hash = compute_dedupe_hash(url_text)
-            # Signal phase: extracting content
-            if on_phase_change:
-                await on_phase_change("extracting", None, None, None)
-
-            # Extract and process content
-            (
-                req_id,
-                content_text,
-                _content_source,
-                detected,
-                title,
-                images,
-            ) = await self.content_extractor.extract_and_process_content(
-                message, url_text, correlation_id, interaction_id, notify_silent, progress_tracker
+            context = await self._prepare_url_flow_context(
+                message=message,
+                url_text=url_text,
+                correlation_id=correlation_id,
+                interaction_id=interaction_id,
+                notify_silent=notify_silent,
+                silent=silent,
+                batch_mode=batch_mode,
+                on_phase_change=on_phase_change,
+                progress_tracker=progress_tracker,
             )
-
-            # Choose language and load system prompt
-            chosen_lang = choose_language(self.cfg.runtime.preferred_lang, detected)
-            needs_ru_translation = not silent and LANG_RU not in (detected, chosen_lang)
-            system_prompt = await self._load_system_prompt(chosen_lang)
-
-            logger.debug(
-                "language_choice",
-                extra={"detected": detected, "chosen": chosen_lang, "cid": correlation_id},
-            )
-
-            # Notify: language detected with content preview (skip if silent or batch)
-            if not silent and not batch_mode:
-                content_preview = (
-                    content_text[:150] + "..." if len(content_text) > 150 else content_text
-                )
-                await self.response_formatter.notifications.send_language_detection_notification(
-                    message, detected, content_preview, url=url_text, silent=silent
-                )
-
-            # Check if content should be chunked
-            should_chunk, max_chars, chunks = self.content_chunker.should_chunk_content(
-                content_text, chosen_lang
-            )
-
-            if should_chunk and self.cfg.openrouter.long_context_model:
-                logger.info(
-                    "chunking_bypassed_long_context",
-                    extra={
-                        "cid": correlation_id,
-                        "long_context_model": self.cfg.openrouter.long_context_model,
-                        "content_length": len(content_text),
-                    },
-                )
-                should_chunk = False
-                chunks = None
-
-            # Inform the user how the content will be handled (skip if silent or batch)
-            if not batch_mode:
-                await self.response_formatter.notifications.send_content_analysis_notification(
-                    message,
-                    len(content_text),
-                    max_chars,
-                    should_chunk,
-                    chunks,
-                    self.cfg.openrouter.structured_output_mode,
-                    silent=silent,
-                )
-
-            logger.info(
-                "content_handling",
-                extra={
-                    "cid": correlation_id,
-                    "length": len(content_text),
-                    "should_chunk": should_chunk,
-                    "chunks": len(chunks) if chunks else 0,
-                },
-            )
-
-            # Signal phase: analyzing / summarizing content
             if on_phase_change:
                 await on_phase_change(
-                    "analyzing", title, len(content_text), self.cfg.openrouter.model
+                    "analyzing",
+                    context.title,
+                    len(context.content_text),
+                    self.cfg.openrouter.model,
                 )
 
-            # Process content (either chunked or single)
-            summary_json: dict[str, Any] | None
-            if should_chunk and chunks:
-                summary_json = await self.content_chunker.process_chunks(
-                    chunks,
-                    system_prompt,
-                    chosen_lang,
-                    req_id,
-                    correlation_id,
-                )
-                if summary_json:
-                    summary_json = await self.llm_summarizer.enrich_summary_rag_fields(
-                        summary_json,
-                        content_text=content_text,
-                        chosen_lang=chosen_lang,
-                        req_id=req_id,
-                    )
-            else:
-                summary_json = await self.llm_summarizer.summarize_content(
-                    message,
-                    content_text,
-                    chosen_lang,
-                    system_prompt,
-                    req_id,
-                    max_chars,
-                    correlation_id,
-                    interaction_id,
-                    url_hash=dedupe_hash,
-                    url=url_text,
-                    silent=notify_silent,
-                    on_phase_change=on_phase_change,
-                    images=images,
-                    progress_tracker=progress_tracker,
-                )
+            summary_json = await self._summarize_url_content(
+                message=message,
+                url_text=url_text,
+                context=context,
+                correlation_id=correlation_id,
+                interaction_id=interaction_id,
+                notify_silent=notify_silent,
+                on_phase_change=on_phase_change,
+                progress_tracker=progress_tracker,
+            )
 
             if summary_json is None:
-                logger.error(
-                    "summarization_failed",
-                    extra={"cid": correlation_id, "url": url_text},
+                return await self._handle_summarization_failure(
+                    message=message,
+                    url_text=url_text,
+                    correlation_id=correlation_id,
+                    silent=silent,
+                    batch_mode=batch_mode,
                 )
-                if not silent and not batch_mode:
-                    await self.response_formatter.notifications.send_error_notification(
-                        message,
-                        "processing_failed",
-                        correlation_id or "unknown",
-                    )
-                return URLProcessingFlowResult(success=False)
 
-            if should_chunk and chunks:
-                persist_task = self._schedule_persistence_task(
-                    self._persist_summary(
-                        req_id=req_id,
-                        chosen_lang=chosen_lang,
-                        summary_json=summary_json,
-                        correlation_id=correlation_id,
-                        interaction_id=interaction_id,
-                        silent=silent,
-                    ),
-                    correlation_id,
-                    "persist_summary",
-                )
-            else:
-                persist_task = None
+            persist_task = self._schedule_chunk_persistence_if_needed(
+                context=context,
+                summary_json=summary_json,
+                correlation_id=correlation_id,
+                interaction_id=interaction_id,
+                silent=silent,
+            )
 
             # Format and send the response (skip if silent or batch)
             if not silent and not batch_mode:
@@ -487,8 +406,8 @@ class URLProcessor:
                     message,
                     summary_json,
                     llm_result,
-                    chunks=len(chunks) if should_chunk and chunks else None,
-                    summary_id=f"req:{req_id}" if req_id else None,
+                    chunks=len(context.chunks) if context.should_chunk and context.chunks else None,
+                    summary_id=f"req:{context.req_id}" if context.req_id else None,
                     correlation_id=correlation_id,
                 )
 
@@ -496,14 +415,14 @@ class URLProcessor:
             if not batch_mode:
                 await self._schedule_post_summary_tasks(
                     message,
-                    content_text,
-                    chosen_lang,
-                    req_id,
+                    context.content_text,
+                    context.chosen_lang,
+                    context.req_id,
                     correlation_id,
                     summary_json,
-                    needs_ru_translation=needs_ru_translation,
+                    needs_ru_translation=context.needs_ru_translation,
                     silent=silent,
-                    url_hash=dedupe_hash,
+                    url_hash=context.dedupe_hash,
                 )
 
             # For silent or batch mode, we need to ensure persistence completes
@@ -511,7 +430,7 @@ class URLProcessor:
                 await self._await_persistence_task(persist_task)
 
             # Return result with extracted title and payload for batch card delivery
-            return URLProcessingFlowResult.from_summary(summary_json, request_id=req_id)
+            return URLProcessingFlowResult.from_summary(summary_json, request_id=context.req_id)
 
         except Exception as exc:
             raise_if_cancelled(exc)
@@ -526,6 +445,216 @@ class URLProcessor:
                     correlation_id or "unknown",
                 )
             return URLProcessingFlowResult(success=False)
+
+    async def _prepare_url_flow_context(
+        self,
+        *,
+        message: Any,
+        url_text: str,
+        correlation_id: str | None,
+        interaction_id: int | None,
+        notify_silent: bool,
+        silent: bool,
+        batch_mode: bool,
+        on_phase_change: Callable[[str, str | None, int | None, str | None], Awaitable[None]]
+        | None,
+        progress_tracker: ProgressTracker | None,
+    ) -> URLFlowContext:
+        """Extract content and build the processing context for summarization."""
+        dedupe_hash = compute_dedupe_hash(url_text)
+        if on_phase_change:
+            await on_phase_change("extracting", None, None, None)
+
+        (
+            req_id,
+            content_text,
+            _content_source,
+            detected,
+            title,
+            images,
+        ) = await self.content_extractor.extract_and_process_content(
+            message,
+            url_text,
+            correlation_id,
+            interaction_id,
+            notify_silent,
+            progress_tracker,
+        )
+        chosen_lang = choose_language(self.cfg.runtime.preferred_lang, detected)
+        needs_ru_translation = not silent and LANG_RU not in (detected, chosen_lang)
+        system_prompt = await self._load_system_prompt(chosen_lang)
+
+        logger.debug(
+            "language_choice",
+            extra={"detected": detected, "chosen": chosen_lang, "cid": correlation_id},
+        )
+        if not silent and not batch_mode:
+            content_preview = (
+                content_text[:150] + "..." if len(content_text) > 150 else content_text
+            )
+            await self.response_formatter.notifications.send_language_detection_notification(
+                message,
+                detected,
+                content_preview,
+                url=url_text,
+                silent=silent,
+            )
+
+        should_chunk, max_chars, chunks = self._compute_chunk_strategy(
+            content_text=content_text,
+            chosen_lang=chosen_lang,
+            correlation_id=correlation_id,
+        )
+        if not batch_mode:
+            await self.response_formatter.notifications.send_content_analysis_notification(
+                message,
+                len(content_text),
+                max_chars,
+                should_chunk,
+                chunks,
+                self.cfg.openrouter.structured_output_mode,
+                silent=silent,
+            )
+
+        return URLFlowContext(
+            dedupe_hash=dedupe_hash,
+            req_id=req_id,
+            content_text=content_text,
+            title=title,
+            images=images,
+            chosen_lang=chosen_lang,
+            needs_ru_translation=needs_ru_translation,
+            system_prompt=system_prompt,
+            should_chunk=should_chunk,
+            max_chars=max_chars,
+            chunks=chunks,
+        )
+
+    def _compute_chunk_strategy(
+        self,
+        *,
+        content_text: str,
+        chosen_lang: str,
+        correlation_id: str | None,
+    ) -> tuple[bool, int, list[str] | None]:
+        """Choose chunking strategy with long-context model bypass."""
+        should_chunk, max_chars, chunks = self.content_chunker.should_chunk_content(
+            content_text, chosen_lang
+        )
+        if should_chunk and self.cfg.openrouter.long_context_model:
+            logger.info(
+                "chunking_bypassed_long_context",
+                extra={
+                    "cid": correlation_id,
+                    "long_context_model": self.cfg.openrouter.long_context_model,
+                    "content_length": len(content_text),
+                },
+            )
+            should_chunk = False
+            chunks = None
+
+        logger.info(
+            "content_handling",
+            extra={
+                "cid": correlation_id,
+                "length": len(content_text),
+                "should_chunk": should_chunk,
+                "chunks": len(chunks) if chunks else 0,
+            },
+        )
+        return should_chunk, max_chars, chunks
+
+    async def _summarize_url_content(
+        self,
+        *,
+        message: Any,
+        url_text: str,
+        context: URLFlowContext,
+        correlation_id: str | None,
+        interaction_id: int | None,
+        notify_silent: bool,
+        on_phase_change: Callable[[str, str | None, int | None, str | None], Awaitable[None]]
+        | None,
+        progress_tracker: ProgressTracker | None,
+    ) -> dict[str, Any] | None:
+        """Run either chunked or single-pass summarization."""
+        if context.should_chunk and context.chunks:
+            summary_json = await self.content_chunker.process_chunks(
+                context.chunks,
+                context.system_prompt,
+                context.chosen_lang,
+                context.req_id,
+                correlation_id,
+            )
+            if summary_json:
+                return await self.llm_summarizer.enrich_summary_rag_fields(
+                    summary_json,
+                    content_text=context.content_text,
+                    chosen_lang=context.chosen_lang,
+                    req_id=context.req_id,
+                )
+            return summary_json
+
+        return await self.llm_summarizer.summarize_content(
+            message,
+            context.content_text,
+            context.chosen_lang,
+            context.system_prompt,
+            context.req_id,
+            context.max_chars,
+            correlation_id,
+            interaction_id,
+            url_hash=context.dedupe_hash,
+            url=url_text,
+            silent=notify_silent,
+            on_phase_change=on_phase_change,
+            images=context.images,
+            progress_tracker=progress_tracker,
+        )
+
+    async def _handle_summarization_failure(
+        self,
+        *,
+        message: Any,
+        url_text: str,
+        correlation_id: str | None,
+        silent: bool,
+        batch_mode: bool,
+    ) -> URLProcessingFlowResult:
+        """Notify and return flow failure payload when summarization fails."""
+        logger.error("summarization_failed", extra={"cid": correlation_id, "url": url_text})
+        if not silent and not batch_mode:
+            await self.response_formatter.notifications.send_error_notification(
+                message,
+                "processing_failed",
+                correlation_id or "unknown",
+            )
+        return URLProcessingFlowResult(success=False)
+
+    def _schedule_chunk_persistence_if_needed(
+        self,
+        *,
+        context: URLFlowContext,
+        summary_json: dict[str, Any],
+        correlation_id: str | None,
+        interaction_id: int | None,
+        silent: bool,
+    ) -> asyncio.Task[Any] | None:
+        """Persist chunked summaries because single-pass flow persists internally."""
+        if not (context.should_chunk and context.chunks):
+            return None
+        return self._schedule_persistence_task(
+            self._persist_summary(
+                req_id=context.req_id,
+                chosen_lang=context.chosen_lang,
+                summary_json=summary_json,
+                correlation_id=correlation_id,
+                interaction_id=interaction_id,
+                silent=silent,
+            ),
+            correlation_id,
+            "persist_summary",
+        )
 
     async def _load_system_prompt(self, lang: str) -> str:
         """Load system prompt for the given language.

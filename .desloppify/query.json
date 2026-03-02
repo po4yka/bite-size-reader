@@ -2,46 +2,6 @@
   "command": "next",
   "items": [
     {
-      "id": "smells::app/adapters/content/llm_summarizer.py::monster_function",
-      "kind": "finding",
-      "tier": 2,
-      "effective_tier": 2,
-      "confidence": "medium",
-      "detector": "smells",
-      "file": "app/adapters/content/llm_summarizer.py",
-      "summary": "1x Monster function (>150 LOC)",
-      "detail": {
-        "smell_id": "monster_function",
-        "severity": "high",
-        "count": 1,
-        "lines": [
-          166
-        ]
-      },
-      "status": "open",
-      "primary_command": "desloppify resolve fixed \"smells::app/adapters/content/llm_summarizer.py::monster_function\" --note \"<what you did>\" --attest \"I have actually [DESCRIBE THE CONCRETE CHANGE YOU MADE] and I am not gaming the score by resolving without fixing.\""
-    },
-    {
-      "id": "smells::app/adapters/content/url_processor.py::monster_function",
-      "kind": "finding",
-      "tier": 2,
-      "effective_tier": 2,
-      "confidence": "medium",
-      "detector": "smells",
-      "file": "app/adapters/content/url_processor.py",
-      "summary": "1x Monster function (>150 LOC)",
-      "detail": {
-        "smell_id": "monster_function",
-        "severity": "high",
-        "count": 1,
-        "lines": [
-          297
-        ]
-      },
-      "status": "open",
-      "primary_command": "desloppify resolve fixed \"smells::app/adapters/content/url_processor.py::monster_function\" --note \"<what you did>\" --attest \"I have actually [DESCRIBE THE CONCRETE CHANGE YOU MADE] and I am not gaming the score by resolving without fixing.\""
-    },
-    {
       "id": "smells::app/adapters/external/formatting/export_formatter.py::monster_function",
       "kind": "finding",
       "tier": 2,
@@ -100,14 +60,54 @@
       },
       "status": "open",
       "primary_command": "desloppify resolve fixed \"smells::app/adapters/karakeep/sync/status_updates.py::monster_function\" --note \"<what you did>\" --attest \"I have actually [DESCRIBE THE CONCRETE CHANGE YOU MADE] and I am not gaming the score by resolving without fixing.\""
+    },
+    {
+      "id": "smells::app/adapters/openrouter/model_capabilities.py::silent_except",
+      "kind": "finding",
+      "tier": 2,
+      "effective_tier": 2,
+      "confidence": "medium",
+      "detector": "smells",
+      "file": "app/adapters/openrouter/model_capabilities.py",
+      "summary": "1x Except handler silently suppresses error (pass/continue, no log)",
+      "detail": {
+        "smell_id": "silent_except",
+        "severity": "high",
+        "count": 1,
+        "lines": [
+          305
+        ]
+      },
+      "status": "open",
+      "primary_command": "desloppify resolve fixed \"smells::app/adapters/openrouter/model_capabilities.py::silent_except\" --note \"<what you did>\" --attest \"I have actually [DESCRIBE THE CONCRETE CHANGE YOU MADE] and I am not gaming the score by resolving without fixing.\""
+    },
+    {
+      "id": "smells::app/adapters/openrouter/openrouter_client.py::monster_function",
+      "kind": "finding",
+      "tier": 2,
+      "effective_tier": 2,
+      "confidence": "medium",
+      "detector": "smells",
+      "file": "app/adapters/openrouter/openrouter_client.py",
+      "summary": "1x Monster function (>150 LOC)",
+      "detail": {
+        "smell_id": "monster_function",
+        "severity": "high",
+        "count": 1,
+        "lines": [
+          73
+        ]
+      },
+      "status": "open",
+      "primary_command": "desloppify resolve fixed \"smells::app/adapters/openrouter/openrouter_client.py::monster_function\" --note \"<what you did>\" --attest \"I have actually [DESCRIBE THE CONCRETE CHANGE YOU MADE] and I am not gaming the score by resolving without fixing.\""
     }
   ],
   "queue": {
     "tier_counts": {
       "1": 0,
-      "2": 116,
-      "3": 20893,
-      "4": 441
+      "2": 113,
+      "3": 20889,
+      "4": 439
     },
     "requested_tier": null,
     "selected_tier": null,
@@ -117,10 +117,10 @@
       3,
       4
     ],
-    "total": 21450
+    "total": 21441
   },
   "narrative": {
-    "phase": "regression",
+    "phase": "middle_grind",
     "headline": "\u26a0 20075 security findings \u2014 review before other cleanup. All T1 items cleared!",
     "dimensions": {
       "lowest_dimensions": [
@@ -156,17 +156,17 @@
         },
         {
           "name": "Code quality",
-          "strict": 91.4,
+          "strict": 91.5,
           "stuck_scans": 4
         },
         {
           "name": "Duplication",
-          "strict": 97.0,
+          "strict": 97.1,
           "stuck_scans": 4
         },
         {
           "name": "Test health",
-          "strict": 49.0,
+          "strict": 49.4,
           "stuck_scans": 4
         },
         {
@@ -350,8 +350,8 @@
       {
         "type": "refactor",
         "detector": "test_coverage",
-        "count": 188,
-        "description": "188 test_coverage findings \u2014 add tests for untested production modules \u2014 prioritize by import count",
+        "count": 187,
+        "description": "187 test_coverage findings \u2014 add tests for untested production modules \u2014 prioritize by import count",
         "command": "desloppify show test_coverage --status open",
         "impact": 0.0,
         "dimension": "Test health",
@@ -372,8 +372,8 @@
       {
         "type": "refactor",
         "detector": "boilerplate_duplication",
-        "count": 105,
-        "description": "105 boilerplate_duplication findings \u2014 extract shared boilerplate into reusable helpers or base classes",
+        "count": 102,
+        "description": "102 boilerplate_duplication findings \u2014 extract shared boilerplate into reusable helpers or base classes",
         "command": "desloppify show boilerplate_duplication --status open",
         "impact": 0.0,
         "dimension": "Duplication",
@@ -383,8 +383,8 @@
       {
         "type": "manual_fix",
         "detector": "smells",
-        "count": 391,
-        "description": "391 smells findings \u2014 inspect with `desloppify next` and fix manually",
+        "count": 388,
+        "description": "388 smells findings \u2014 inspect with `desloppify next` and fix manually",
         "command": "desloppify show smells --status open",
         "impact": 0.0,
         "dimension": "Code quality",
@@ -427,8 +427,8 @@
       {
         "type": "manual_fix",
         "detector": "subjective_review",
-        "count": 363,
-        "description": "363 files need design review \u2014 run design review with dimension templates",
+        "count": 361,
+        "description": "361 files need design review \u2014 run design review with dimension templates",
         "command": "desloppify fix review",
         "impact": 0.0,
         "dimension": "Test health",
@@ -439,7 +439,7 @@
     "strategy": {
       "fixer_leverage": {
         "auto_fixable_count": 0,
-        "total_count": 21450,
+        "total_count": 21441,
         "coverage": 0.0,
         "impact_ratio": 0.0,
         "recommendation": "none"
@@ -473,7 +473,7 @@
             17,
             18
           ],
-          "file_count": 2010,
+          "file_count": 2008,
           "total_impact": 0.0,
           "automation": "manual",
           "run_first": false
@@ -482,7 +482,7 @@
           "actions": [
             11
           ],
-          "file_count": 188,
+          "file_count": 187,
           "total_impact": 0.0,
           "automation": "manual",
           "run_first": false
@@ -511,7 +511,7 @@
       }
     },
     "debt": {
-      "overall_gap": 0.1,
+      "overall_gap": 0.0,
       "wontfix_count": 4,
       "worst_dimension": "Test health",
       "worst_gap": 0.3,
@@ -531,7 +531,7 @@
       {
         "type": "wontfix_gap",
         "severity": "medium",
-        "message": "Strict/lenient gap is 0.1 pts with 4 wontfix findings"
+        "message": "Strict/lenient gap is 0.0 pts with 4 wontfix findings"
       }
     ],
     "strict_target": {
@@ -544,7 +544,7 @@
     "reminders": [],
     "reminder_history": {
       "zone_classification": 3,
-      "report_scores": 7,
+      "report_scores": 8,
       "feedback_nudge": 3,
       "stagnant_nudge": 15,
       "badge_recommendation": 1,
@@ -567,18 +567,18 @@
     {
       "name": "Code quality",
       "score": 91.5,
-      "strict": 91.4,
+      "strict": 91.5,
       "checks": 3096,
-      "issues": 506,
+      "issues": 503,
       "tier": 3,
       "subjective": false
     },
     {
       "name": "Duplication",
-      "score": 97.0,
-      "strict": 97.0,
-      "checks": 2563,
-      "issues": 113,
+      "score": 97.1,
+      "strict": 97.1,
+      "checks": 2580,
+      "issues": 110,
       "tier": 3,
       "subjective": false
     },
@@ -593,10 +593,10 @@
     },
     {
       "name": "Test health",
-      "score": 49.3,
-      "strict": 49.0,
-      "checks": 5682,
-      "issues": 551,
+      "score": 49.7,
+      "strict": 49.4,
+      "checks": 5685,
+      "issues": 548,
       "tier": 4,
       "subjective": false
     }
