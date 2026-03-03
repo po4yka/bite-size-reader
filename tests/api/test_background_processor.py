@@ -419,3 +419,41 @@ async def test_url_processing_prefers_extractor_detected_lang_metadata():
 
     await processor.process(5, correlation_id="cid-youtube-lang")
     assert summarizer.last_chosen_lang == "ru"
+
+
+def test_resolve_request_language_prefers_explicit_request_lang():
+    cfg = DummyCfg()
+    processor = BackgroundProcessor(
+        cfg=cfg,
+        db=StubDB(),
+        url_processor=StubURLProcessor(StubExtractor(), StubSummarizer()),
+        redis=None,
+        semaphore=asyncio.Semaphore(1),
+        audit_func=lambda *_args, **_kwargs: None,
+    )
+
+    lang = processor._resolve_request_language(
+        {"lang_detected": "en"},
+        "Привет мир",
+        metadata={"detected_lang": "ru"},
+    )
+    assert lang == "en"
+
+
+def test_resolve_request_language_falls_back_to_detected_content_when_metadata_invalid():
+    cfg = DummyCfg()
+    processor = BackgroundProcessor(
+        cfg=cfg,
+        db=StubDB(),
+        url_processor=StubURLProcessor(StubExtractor(), StubSummarizer()),
+        redis=None,
+        semaphore=asyncio.Semaphore(1),
+        audit_func=lambda *_args, **_kwargs: None,
+    )
+
+    lang = processor._resolve_request_language(
+        {"lang_detected": "auto"},
+        "Привет мир",
+        metadata={"detected_lang": "de"},
+    )
+    assert lang == "ru"

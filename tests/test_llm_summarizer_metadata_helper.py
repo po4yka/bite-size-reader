@@ -25,3 +25,26 @@ def test_extract_heading_title_prefers_markdown_heading() -> None:
     content = "# Main Heading\n\nBody text."
 
     assert LLMSummaryMetadataHelper._extract_heading_title(content) == "Main Heading"
+
+
+def test_extract_heading_title_skips_metadata_only_lines() -> None:
+    content = (
+        "[Source: YouTube video transcript.]\n\n"
+        "Channel: Ferris TV\n"
+        "Duration: 10m 0s\n"
+        "Resolution: 1080p\n"
+        "Clean fallback title\n"
+    )
+
+    assert LLMSummaryMetadataHelper._extract_heading_title(content) == "Clean fallback title"
+
+
+def test_extract_heading_title_returns_none_when_no_suitable_line() -> None:
+    content = (
+        "[Source: YouTube video transcript.]\n\n"
+        "Channel: Ferris TV\n"
+        "Duration: 10m 0s\n"
+        "Resolution: 1080p\n" + ("A" * 141) + "\n"
+    )
+
+    assert LLMSummaryMetadataHelper._extract_heading_title(content) is None

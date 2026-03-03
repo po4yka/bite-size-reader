@@ -1232,6 +1232,12 @@ class TestCombineMetadataAndTranscript(TestYouTubeDownloader):
         self.assertIn("[Source: YouTube video transcript", result)
         self.assertIn("hello world", result)
 
+    def test_combined_text_contains_contract_hints_for_source_type_and_watch_time(self):
+        result = self.downloader._combine_metadata_and_transcript({}, "hello world")
+        self.assertIn("estimated_reading_time_min", result)
+        self.assertIn("source_type", result)
+        self.assertIn("news, blog, research, opinion, tutorial, reference", result)
+
 
 class TestNotifications(TestYouTubeDownloader):
     """Test user notification system."""
