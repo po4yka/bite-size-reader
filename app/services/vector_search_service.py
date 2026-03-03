@@ -12,6 +12,9 @@ from app.core.lang import detect_language
 from app.infrastructure.persistence.sqlite.repositories.embedding_repository import (
     SqliteEmbeddingRepositoryAdapter,
 )
+from app.infrastructure.persistence.sqlite.repositories.topic_search_repository import (
+    SqliteTopicSearchRepositoryAdapter,
+)
 
 if TYPE_CHECKING:
     from app.db.session import DatabaseSessionManager
@@ -46,6 +49,8 @@ class VectorSearchService:
         *,
         max_results: int = 25,
         min_similarity: float = 0.3,
+        candidate_multiplier: int = 40,
+        fallback_scan_limit: int = 5000,
     ) -> None:
         """Initialize vector search service.
 
@@ -61,12 +66,21 @@ class VectorSearchService:
         if not 0.0 <= min_similarity <= 1.0:
             msg = "min_similarity must be between 0.0 and 1.0"
             raise ValueError(msg)
+        if candidate_multiplier <= 0:
+            msg = "candidate_multiplier must be positive"
+            raise ValueError(msg)
+        if fallback_scan_limit <= 0:
+            msg = "fallback_scan_limit must be positive"
+            raise ValueError(msg)
 
         self._db = db
         self._repo = SqliteEmbeddingRepositoryAdapter(db)
+        self._topic_repo = SqliteTopicSearchRepositoryAdapter(db)
         self._embedding_service = embedding_service
         self._max_results = max_results
         self._min_similarity = min_similarity
+        self._candidate_multiplier = candidate_multiplier
+        self._fallback_scan_limit = fallback_scan_limit
 
     async def search(
         self,
@@ -104,8 +118,19 @@ class VectorSearchService:
             )
             return []
 
-        # Fetch all embeddings from database
-        candidates = await self._fetch_all_embeddings()
+        # Two-stage retrieval:
+        # 1) Try topic-index prefilter to get a smaller request-id candidate set.
+        # 2) If unavailable, use bounded recent embeddings as a safe fallback.
+        candidate_limit = max(self._max_results * self._candidate_multiplier, self._max_results)
+        candidate_request_ids = await self._topic_repo.async_search_request_ids(
+            query,
+            candidate_limit=candidate_limit,
+        )
+
+        if candidate_request_ids:
+            candidates = await self._fetch_embeddings_by_request_ids(candidate_request_ids)
+        else:
+            candidates = await self._fetch_recent_embeddings(limit=self._fallback_scan_limit)
 
         if not candidates:
             logger.warning("no_embeddings_available", extra={"cid": correlation_id})
@@ -142,14 +167,32 @@ class VectorSearchService:
 
         return filtered[: self._max_results]
 
-    async def _fetch_all_embeddings(self) -> list[dict[str, Any]]:
-        """Fetch all embeddings with metadata from database.
+    async def _fetch_embeddings_by_request_ids(
+        self,
+        request_ids: list[int],
+    ) -> list[dict[str, Any]]:
+        """Fetch scoped embeddings with metadata from database.
 
         Returns:
             List of dicts with keys: request_id, summary_id, embedding,
                 url, title, snippet, source, published_at
         """
-        rows = await self._repo.async_get_all_embeddings()
+        rows = await self._repo.async_get_embeddings_by_request_ids(request_ids)
+        return self._materialize_candidates(rows)
+
+    async def _fetch_recent_embeddings(self, *, limit: int) -> list[dict[str, Any]]:
+        """Fetch bounded recent embeddings with metadata from database.
+
+        Returns:
+            List of dicts with keys: request_id, summary_id, embedding,
+                url, title, snippet, source, published_at
+        """
+        rows = await self._repo.async_get_recent_embeddings(limit=limit)
+
+        return self._materialize_candidates(rows)
+
+    def _materialize_candidates(self, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Deserialize embeddings and normalize metadata for similarity matching."""
         results = []
 
         for row in rows:

@@ -18,7 +18,6 @@ from app.api.models.responses import (
     RequestDetailResponse,
     RequestDetailSummary,
     RequestStatus,
-    RequestStatusData,
     RetryRequestResponse,
     SubmitRequestData,
     SubmitRequestResponse,
@@ -225,7 +224,7 @@ async def get_request_status(
         updated_at=datetime.now(UTC).isoformat().replace("+00:00", "Z"),
     )
 
-    return success_response(RequestStatusData(status=status_payload))
+    return success_response(status_payload)
 
 
 @router.post("/{request_id}/retry")

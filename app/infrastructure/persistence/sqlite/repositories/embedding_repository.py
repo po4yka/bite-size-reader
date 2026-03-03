@@ -44,6 +44,74 @@ class SqliteEmbeddingRepositoryAdapter(SqliteBaseRepository):
 
         return await self._execute(_query, operation_name="get_all_embeddings", read_only=True)
 
+    async def async_get_embeddings_by_request_ids(
+        self,
+        request_ids: list[int],
+    ) -> list[dict[str, Any]]:
+        """Fetch embeddings scoped to specific request IDs."""
+
+        def _query() -> list[dict[str, Any]]:
+            if not request_ids:
+                return []
+
+            rows = (
+                SummaryEmbedding.select(SummaryEmbedding, Summary, Request)
+                .join(Summary)
+                .join(Request)
+                .where(Request.id.in_(request_ids))
+            )
+
+            results: list[dict[str, Any]] = []
+            for row in rows:
+                results.append(
+                    {
+                        "request_id": row.summary.request.id,
+                        "summary_id": row.summary.id,
+                        "embedding_blob": row.embedding_blob,
+                        "json_payload": row.summary.json_payload,
+                        "normalized_url": row.summary.request.normalized_url,
+                        "input_url": row.summary.request.input_url,
+                    }
+                )
+            return results
+
+        return await self._execute(
+            _query,
+            operation_name="get_embeddings_by_request_ids",
+            read_only=True,
+        )
+
+    async def async_get_recent_embeddings(self, *, limit: int) -> list[dict[str, Any]]:
+        """Fetch the most recent embeddings bounded by a hard limit."""
+
+        def _query() -> list[dict[str, Any]]:
+            if limit <= 0:
+                return []
+
+            rows = (
+                SummaryEmbedding.select(SummaryEmbedding, Summary, Request)
+                .join(Summary)
+                .join(Request)
+                .order_by(Request.created_at.desc())
+                .limit(limit)
+            )
+
+            results: list[dict[str, Any]] = []
+            for row in rows:
+                results.append(
+                    {
+                        "request_id": row.summary.request.id,
+                        "summary_id": row.summary.id,
+                        "embedding_blob": row.embedding_blob,
+                        "json_payload": row.summary.json_payload,
+                        "normalized_url": row.summary.request.normalized_url,
+                        "input_url": row.summary.request.input_url,
+                    }
+                )
+            return results
+
+        return await self._execute(_query, operation_name="get_recent_embeddings", read_only=True)
+
     async def async_create_or_update_summary_embedding(
         self,
         summary_id: int,

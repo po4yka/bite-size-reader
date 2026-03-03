@@ -499,10 +499,8 @@ class SubmitRequestData(BaseModel):
     request: SubmitRequestResponse
 
 
-class RequestStatusData(BaseModel):
-    """Wrapper for request status polling."""
-
-    status: RequestStatus
+class RequestStatusData(RequestStatus):
+    """Backward-compatible alias for request status payload."""
 
 
 class DuplicateCheckData(BaseModel):
