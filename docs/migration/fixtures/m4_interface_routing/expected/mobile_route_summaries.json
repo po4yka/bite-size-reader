@@ -1,0 +1,6 @@
+{
+  "route_key": "summaries",
+  "rate_limit_bucket": "summaries",
+  "requires_auth": true,
+  "handled": true
+}

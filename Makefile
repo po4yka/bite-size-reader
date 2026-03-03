@@ -1,4 +1,4 @@
-.PHONY: format lint type test test-unit test-integration test-all all setup-dev venv pre-commit-install pre-commit-run check-lock check-openapi check-openapi-validate pre-migration-checks parity-suite m2-parity-suite m3-parity-suite capture-baseline rust-check rust-test
+.PHONY: format lint type test test-unit test-integration test-all all setup-dev venv pre-commit-install pre-commit-run check-lock check-openapi check-openapi-validate pre-migration-checks parity-suite m2-parity-suite m3-parity-suite m4-parity-suite capture-baseline rust-check rust-test
 
 format:
 	ruff format .
@@ -36,6 +36,9 @@ m2-parity-suite:
 
 m3-parity-suite:
 	bash scripts/migration/run_m3_parity_suite.sh
+
+m4-parity-suite:
+	bash scripts/migration/run_m4_parity_suite.sh
 
 capture-baseline:
 	python scripts/migration/capture_python_baseline.py

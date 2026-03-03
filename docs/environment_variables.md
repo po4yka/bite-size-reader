@@ -126,6 +126,17 @@ API_RATE_LIMIT_DEFAULT=100
 | `MIGRATION_SHADOW_MODE_EMIT_MATCH_LOGS` | `false` | Emit match logs in addition to mismatches/errors |
 | `PIPELINE_SHADOW_RUST_BIN` | _(auto-discover)_ | Absolute path to `bsr-pipeline-shadow` binary override |
 
+## [OPTIONAL] Migration / M4 Interface Router
+
+| Variable | Default | Description |
+| ---------- | --------- | ------------- |
+| `MIGRATION_INTERFACE_BACKEND` | `python` | Interface routing backend: `python`, `canary`, or `rust` |
+| `MIGRATION_INTERFACE_SAMPLE_RATE` | `0.0` | Deterministic sample ratio in `[0.0, 1.0]` for `canary` mode |
+| `MIGRATION_INTERFACE_TIMEOUT_MS` | `150` | Timeout per Rust interface router call (milliseconds) |
+| `MIGRATION_INTERFACE_EMIT_MATCH_LOGS` | `false` | Emit match logs in addition to mismatches/errors |
+| `MIGRATION_INTERFACE_MAX_DIFFS` | `8` | Max mismatch diff paths logged per comparison |
+| `INTERFACE_ROUTER_RUST_BIN` | _(auto-discover)_ | Absolute path to `bsr-interface-router` binary override |
+
 ## [OPTIONAL] LLM Provider Selection
 
 | Variable | Default | Description |
@@ -426,6 +437,11 @@ uv run python scripts/twitter_article_live_smoke.py \
 | `MIGRATION_SHADOW_MODE_TIMEOUT_MS` | `250` | Per-slice Rust shadow timeout (ms) |
 | `MIGRATION_SHADOW_MODE_MAX_DIFFS` | `8` | Max diff paths emitted per mismatch |
 | `MIGRATION_SHADOW_MODE_EMIT_MATCH_LOGS` | `false` | Emit logs for successful shadow matches |
+| `MIGRATION_INTERFACE_BACKEND` | `python` | M4 interface backend (`python`, `canary`, `rust`) |
+| `MIGRATION_INTERFACE_SAMPLE_RATE` | `0.0` | Deterministic sample ratio for M4 canary mode |
+| `MIGRATION_INTERFACE_TIMEOUT_MS` | `150` | Per-call Rust interface timeout (ms) |
+| `MIGRATION_INTERFACE_EMIT_MATCH_LOGS` | `false` | Emit logs for successful interface matches |
+| `MIGRATION_INTERFACE_MAX_DIFFS` | `8` | Max diff paths emitted per interface mismatch |
 | `TELEGRAM_REPLY_TIMEOUT_SEC` | `30.0` | Timeout for Telegram reply operations |
 
 ---

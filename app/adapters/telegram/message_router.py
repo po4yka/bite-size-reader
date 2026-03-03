@@ -19,6 +19,7 @@ from app.db.session import DatabaseSessionManager
 from app.infrastructure.persistence.sqlite.repositories.user_repository import (
     SqliteUserRepositoryAdapter,
 )
+from app.migration.interface_router import InterfaceRouterRunner
 from app.security.file_validation import SecureFileValidator
 from app.security.rate_limiter import RateLimitConfig, RedisUserRateLimiter, UserRateLimiter
 
@@ -71,6 +72,7 @@ class MessageRouter(
         self._task_manager = task_manager
 
         self._url_processor = url_handler.url_processor
+        self.interface_router = InterfaceRouterRunner(cfg.runtime)
 
         self._rate_limiter_config = RateLimitConfig(
             max_requests=cfg.api_limits.requests_limit,

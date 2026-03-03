@@ -49,6 +49,21 @@ class RuntimeConfig(BaseModel):
     migration_shadow_mode_max_diffs: int = Field(
         default=8, validation_alias="MIGRATION_SHADOW_MODE_MAX_DIFFS"
     )
+    migration_interface_backend: str = Field(
+        default="python", validation_alias="MIGRATION_INTERFACE_BACKEND"
+    )
+    migration_interface_sample_rate: float = Field(
+        default=0.0, validation_alias="MIGRATION_INTERFACE_SAMPLE_RATE"
+    )
+    migration_interface_timeout_ms: int = Field(
+        default=150, validation_alias="MIGRATION_INTERFACE_TIMEOUT_MS"
+    )
+    migration_interface_emit_match_logs: bool = Field(
+        default=False, validation_alias="MIGRATION_INTERFACE_EMIT_MATCH_LOGS"
+    )
+    migration_interface_max_diffs: int = Field(
+        default=8, validation_alias="MIGRATION_INTERFACE_MAX_DIFFS"
+    )
     jwt_secret_key: str = Field(
         default="", validation_alias=AliasChoices("JWT_SECRET_KEY", "JWT_SECRET")
     )
@@ -237,6 +252,58 @@ class RuntimeConfig(BaseModel):
             raise ValueError(msg) from exc
         if parsed < 1 or parsed > 64:
             msg = "Migration shadow max diffs must be between 1 and 64"
+            raise ValueError(msg)
+        return parsed
+
+    @field_validator("migration_interface_backend", mode="before")
+    @classmethod
+    def _validate_migration_interface_backend(cls, value: Any) -> str:
+        backend = str(value or "python").strip().lower()
+        allowed = {"python", "canary", "rust"}
+        if backend not in allowed:
+            msg = f"Migration interface backend must be one of {sorted(allowed)}"
+            raise ValueError(msg)
+        return backend
+
+    @field_validator("migration_interface_sample_rate", mode="before")
+    @classmethod
+    def _validate_migration_interface_sample_rate(cls, value: Any) -> float:
+        default = cls.model_fields["migration_interface_sample_rate"].default
+        try:
+            parsed = float(str(value if value not in (None, "") else default))
+        except (ValueError, TypeError) as exc:
+            msg = "Migration interface sample rate must be a valid number"
+            raise ValueError(msg) from exc
+        if parsed < 0.0 or parsed > 1.0:
+            msg = "Migration interface sample rate must be between 0.0 and 1.0"
+            raise ValueError(msg)
+        return parsed
+
+    @field_validator("migration_interface_timeout_ms", mode="before")
+    @classmethod
+    def _validate_migration_interface_timeout_ms(cls, value: Any) -> int:
+        default = cls.model_fields["migration_interface_timeout_ms"].default
+        try:
+            parsed = int(str(value if value not in (None, "") else default))
+        except ValueError as exc:
+            msg = "Migration interface timeout must be a valid integer"
+            raise ValueError(msg) from exc
+        if parsed < 25 or parsed > 10000:
+            msg = "Migration interface timeout must be between 25 and 10000 milliseconds"
+            raise ValueError(msg)
+        return parsed
+
+    @field_validator("migration_interface_max_diffs", mode="before")
+    @classmethod
+    def _validate_migration_interface_max_diffs(cls, value: Any) -> int:
+        default = cls.model_fields["migration_interface_max_diffs"].default
+        try:
+            parsed = int(str(value if value not in (None, "") else default))
+        except ValueError as exc:
+            msg = "Migration interface max diffs must be a valid integer"
+            raise ValueError(msg) from exc
+        if parsed < 1 or parsed > 64:
+            msg = "Migration interface max diffs must be between 1 and 64"
             raise ValueError(msg)
         return parsed
 

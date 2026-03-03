@@ -53,6 +53,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "bsr-interface-router"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "thiserror",
+]
+
+[[package]]
 name = "bsr-logging"
 version = "0.1.0"
 dependencies = [

@@ -111,38 +111,58 @@ class MessageRouterContentMixin:
         start_time: float,
     ) -> bool:
         """Route command message. Returns True when command was handled."""
-        if text.startswith("/start"):
+        route_probe = text
+        interface_router = getattr(self, "interface_router", None)
+        if interface_router is not None:
+            decision = await interface_router.resolve_telegram_command(
+                text=text,
+                correlation_id=correlation_id,
+                actor_key=str(uid),
+            )
+            if decision.handled and decision.command:
+                route_probe = decision.command
+
+        if route_probe.startswith("/start"):
             await self.command_processor.handle_start_command(
                 message, uid, correlation_id, interaction_id, start_time
             )
             return True
 
-        if text.startswith("/help"):
+        if route_probe.startswith("/help"):
             await self.command_processor.handle_help_command(
                 message, uid, correlation_id, interaction_id, start_time
             )
             return True
 
-        if text.startswith("/dbinfo"):
+        if route_probe.startswith("/dbinfo"):
             await self.command_processor.handle_dbinfo_command(
                 message, uid, correlation_id, interaction_id, start_time
             )
             return True
 
-        if text.startswith("/dbverify"):
+        if route_probe.startswith("/dbverify"):
             await self.command_processor.handle_dbverify_command(
                 message, uid, correlation_id, interaction_id, start_time
             )
             return True
 
-        if text.startswith("/clearcache"):
+        if route_probe.startswith("/clearcache"):
             await self.command_processor.handle_clearcache_command(
                 message, uid, correlation_id, interaction_id, start_time
             )
             return True
 
-        for local_command in ("/finddb", "/findlocal"):
-            if text.startswith(local_command):
+        def _match_original_alias(aliases: tuple[str, ...]) -> str | None:
+            for alias in aliases:
+                if text.startswith(alias):
+                    return alias
+            return None
+
+        local_aliases = ("/finddb", "/findlocal")
+        original_local_command = _match_original_alias(local_aliases)
+
+        for local_command in local_aliases:
+            if route_probe.startswith(local_command):
                 await self.command_processor.handle_find_local_command(
                     message,
                     text,
@@ -150,12 +170,15 @@ class MessageRouterContentMixin:
                     correlation_id,
                     interaction_id,
                     start_time,
-                    command=local_command,
+                    command=original_local_command or local_command,
                 )
                 return True
 
-        for online_command in ("/findweb", "/findonline", "/find"):
-            if text.startswith(online_command):
+        online_aliases = ("/findweb", "/findonline", "/find")
+        original_online_command = _match_original_alias(online_aliases)
+
+        for online_command in online_aliases:
+            if route_probe.startswith(online_command):
                 await self.command_processor.handle_find_online_command(
                     message,
                     text,
@@ -163,17 +186,17 @@ class MessageRouterContentMixin:
                     correlation_id,
                     interaction_id,
                     start_time,
-                    command=online_command,
+                    command=original_online_command or online_command,
                 )
                 return True
 
-        if text.startswith("/summarize_all"):
+        if route_probe.startswith("/summarize_all"):
             await self.command_processor.handle_summarize_all_command(
                 message, text, uid, correlation_id, interaction_id, start_time
             )
             return True
 
-        if text.startswith("/summarize"):
+        if route_probe.startswith("/summarize"):
             action, _should_continue = await self.command_processor.handle_summarize_command(
                 message, text, uid, correlation_id, interaction_id, start_time
             )
@@ -181,37 +204,37 @@ class MessageRouterContentMixin:
                 await self.url_handler.add_awaiting_user(uid)
             return True
 
-        if text.startswith("/cancel"):
+        if route_probe.startswith("/cancel"):
             await self.command_processor.handle_cancel_command(
                 message, uid, correlation_id, interaction_id, start_time
             )
             return True
 
-        if text.startswith("/unread"):
+        if route_probe.startswith("/unread"):
             await self.command_processor.handle_unread_command(
                 message, text, uid, correlation_id, interaction_id, start_time
             )
             return True
 
-        if text.startswith("/read"):
+        if route_probe.startswith("/read"):
             await self.command_processor.handle_read_command(
                 message, text, uid, correlation_id, interaction_id, start_time
             )
             return True
 
-        if text.startswith("/search"):
+        if route_probe.startswith("/search"):
             await self.command_processor.handle_search_command(
                 message, text, uid, correlation_id, interaction_id, start_time
             )
             return True
 
-        if text.startswith("/sync_karakeep"):
+        if route_probe.startswith("/sync_karakeep"):
             await self.command_processor.handle_sync_karakeep_command(
                 message, text, uid, correlation_id, interaction_id, start_time
             )
             return True
 
-        if text.startswith("/cdigest"):
+        if route_probe.startswith("/cdigest"):
             await self.command_processor.handle_cdigest_command(
                 message,
                 text,
@@ -222,43 +245,43 @@ class MessageRouterContentMixin:
             )
             return True
 
-        if text.startswith("/digest"):
+        if route_probe.startswith("/digest"):
             await self.command_processor.handle_digest_command(
                 message, text, uid, correlation_id, interaction_id, start_time
             )
             return True
 
-        if text.startswith("/channels"):
+        if route_probe.startswith("/channels"):
             await self.command_processor.handle_channels_command(
                 message, text, uid, correlation_id, interaction_id, start_time
             )
             return True
 
-        if text.startswith("/subscribe"):
+        if route_probe.startswith("/subscribe"):
             await self.command_processor.handle_subscribe_command(
                 message, text, uid, correlation_id, interaction_id, start_time
             )
             return True
 
-        if text.startswith("/unsubscribe"):
+        if route_probe.startswith("/unsubscribe"):
             await self.command_processor.handle_unsubscribe_command(
                 message, text, uid, correlation_id, interaction_id, start_time
             )
             return True
 
-        if text.startswith("/init_session"):
+        if route_probe.startswith("/init_session"):
             await self.command_processor.handle_init_session_command(
                 message, text, uid, correlation_id, interaction_id, start_time
             )
             return True
 
-        if text.startswith("/settings"):
+        if route_probe.startswith("/settings"):
             await self.command_processor.handle_settings_command(
                 message, text, uid, correlation_id, interaction_id, start_time
             )
             return True
 
-        if text.startswith("/debug"):
+        if route_probe.startswith("/debug"):
             await self.command_processor.handle_debug_command(
                 message, uid, correlation_id, interaction_id, start_time
             )

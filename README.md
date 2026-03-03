@@ -49,6 +49,7 @@ Current completed milestones:
 - ✅ **M1**: Rust workspace foundation with shared crates for config, logging, and summary-contract validation (`rust/`)
 - ✅ **M2**: Rust summary-contract service + fixture parity corpus + SQLite compatibility checks (`docs/migration/m2.md`)
 - ✅ **M3**: Pipeline shadow-mode slices (extraction/chunking/LLM wrapper plan) with Rust parity fixtures (`docs/migration/m3.md`)
+- ✅ **M4**: Interface-layer canary routing for Mobile API + Telegram commands with Rust parity fixtures (`docs/migration/m4.md`)
 
 ---
 

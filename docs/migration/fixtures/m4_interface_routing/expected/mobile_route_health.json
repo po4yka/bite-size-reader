@@ -1,0 +1,6 @@
+{
+  "route_key": "health",
+  "rate_limit_bucket": "default",
+  "requires_auth": false,
+  "handled": true
+}

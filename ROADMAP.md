@@ -57,7 +57,7 @@ This roadmap tracks the project-wide migration from the current Python runtime t
 
 **Exit criteria:** shadow mismatch rate below agreed threshold; no regression in p95 latency.
 
-### M4 — Interface Layer Migration
+### M4 — Interface Layer Migration ✅ Implemented
 
 - Migrate mobile API and Telegram command routing to Rust.
 - Keep identical API paths and response contracts.
@@ -102,6 +102,17 @@ This roadmap tracks the project-wide migration from the current Python runtime t
   - M3 suite runner: `scripts/migration/run_m3_parity_suite.sh` (`make m3-parity-suite`)
   - CI job: `m3-pipeline-shadow-parity` in `.github/workflows/ci.yml`
   - Detailed notes: `docs/migration/m3.md`
+- **M4 artifacts**
+  - Rust interface router service: `rust/crates/bsr-interface-router/src/lib.rs`, `src/main.rs`
+  - Python interface router canary bridge: `app/migration/interface_router.py`
+  - Runtime hooks for interface routing:
+    - Mobile API middleware: `app/api/middleware.py`
+    - Telegram command routing: `app/adapters/telegram/message_router.py`, `app/adapters/telegram/message_router_content.py`
+  - Fixture corpus: `docs/migration/fixtures/m4_interface_routing/`
+  - Fixture generator/check: `scripts/migration/generate_m4_interface_fixtures.py`
+  - M4 suite runner: `scripts/migration/run_m4_parity_suite.sh` (`make m4-parity-suite`)
+  - CI job: `m4-interface-router-parity` in `.github/workflows/ci.yml`
+  - Detailed notes: `docs/migration/m4.md`
 
 ## Cross-Cutting Workstreams
 
