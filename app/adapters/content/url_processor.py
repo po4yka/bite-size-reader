@@ -814,7 +814,7 @@ class URLProcessor:
         if not silent:
             if not reader_mode:
                 try:
-                    await self.response_formatter.sender.safe_reply(
+                    await self.response_formatter.safe_reply(
                         message,
                         "🧠 Generating additional research insights…",
                     )
@@ -842,7 +842,7 @@ class URLProcessor:
             if (topics or tags) and isinstance(topics, list) and isinstance(tags, list):
                 if not reader_mode:
                     try:
-                        await self.response_formatter.sender.safe_reply(
+                        await self.response_formatter.safe_reply(
                             message,
                             "📝 Crafting a standalone article from topics & tags…",
                         )
@@ -893,7 +893,7 @@ class URLProcessor:
                 )
                 return
 
-            await self.response_formatter.sender.safe_reply(
+            await self.response_formatter.safe_reply(
                 message,
                 (
                     "⚠️ Unable to generate Russian translation right now. Error ID: "
@@ -906,7 +906,7 @@ class URLProcessor:
                 "ru_translation_failed", extra={"cid": correlation_id, "error": str(exc)}
             )
             try:
-                await self.response_formatter.sender.safe_reply(
+                await self.response_formatter.safe_reply(
                     message,
                     f"⚠️ Russian translation failed. Error ID: {correlation_id or 'unknown'}.",
                 )

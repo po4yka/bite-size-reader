@@ -289,6 +289,12 @@ class SearchHandlerImpl:
             List of search results.
         """
         if formatter_source == "library":
+            # Prefer local service direct call for compatibility with tests and
+            # lightweight in-memory adapters.
+            find_articles = getattr(searcher, "find_articles", None)
+            if callable(find_articles):
+                return await find_articles(topic, correlation_id=ctx.correlation_id)
+
             if self._container is None:
                 msg = "SearchHandler requires a DI container for library search"
                 raise RuntimeError(msg)

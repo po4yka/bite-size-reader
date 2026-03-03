@@ -96,7 +96,23 @@ def _make_url_handler() -> URLHandler:
     response_formatter.MAX_BATCH_URLS = 20
     url_processor = MagicMock()
     url_processor.handle_url_flow = AsyncMock()
-    return URLHandler(db=db, response_formatter=response_formatter, url_processor=url_processor)
+    handler = URLHandler(db=db, response_formatter=response_formatter, url_processor=url_processor)
+
+    # Avoid hitting real repository internals in fail-fast timing tests.
+    next_request_id = 0
+
+    async def _create_minimal_request(**_kwargs):
+        nonlocal next_request_id
+        next_request_id += 1
+        return next_request_id, True
+
+    handler.request_repo = MagicMock()
+    handler.request_repo.async_get_request_by_dedupe_hash = AsyncMock(return_value=None)
+    handler.request_repo.async_create_minimal_request = AsyncMock(
+        side_effect=_create_minimal_request
+    )
+    handler.request_repo.async_update_request_error = AsyncMock()
+    return handler
 
 
 def _make_message(uid: int = 1) -> MagicMock:

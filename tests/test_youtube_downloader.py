@@ -3,16 +3,43 @@ from __future__ import annotations
 import asyncio
 import os
 import sys
+import types
 import unittest
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING, cast
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import pytest
+try:
+    import yt_dlp
+except ModuleNotFoundError:
+    # Lightweight local stub so tests run even when optional extras aren't installed.
+    class _DownloadError(Exception):
+        pass
 
-# yt-dlp is an optional dependency.
-pytest.importorskip("yt_dlp", reason="yt-dlp not installed (install with: pip install .[youtube])")
+    class _FallbackYoutubeDL:
+        def __init__(self, *args, **kwargs):
+            self._opts = kwargs
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def extract_info(self, *args, **kwargs):
+            return {}
+
+        def download(self, *args, **kwargs):
+            return None
+
+        def prepare_filename(self, _info):
+            return "/tmp/fallback.mp4"
+
+    yt_dlp = types.ModuleType("yt_dlp")
+    yt_dlp.YoutubeDL = _FallbackYoutubeDL  # type: ignore[attr-defined]
+    yt_dlp.utils = types.SimpleNamespace(DownloadError=_DownloadError)  # type: ignore[attr-defined]
+    sys.modules["yt_dlp"] = yt_dlp
 
 try:
     from youtube_transcript_api import YouTubeTranscriptApi
@@ -70,7 +97,17 @@ def _make_downloader(tmp_path: Path) -> YouTubeDownloader:
     cfg.youtube = _StubYouTubeConfig(str(tmp_path / "videos"))
     db = MagicMock()
     rf = MagicMock()
-    rf.safe_reply = MagicMock()
+    rf.sender = MagicMock()
+    rf.sender.safe_reply = AsyncMock()
+    rf.sender.send_message_draft = AsyncMock()
+    rf.notifications = MagicMock()
+    rf.notifications.send_youtube_download_notification = AsyncMock()
+    rf.notifications.send_youtube_download_complete_notification = AsyncMock()
+    # Backward-compatible aliases used by existing assertions in this module.
+    rf.send_youtube_download_notification = rf.notifications.send_youtube_download_notification
+    rf.send_youtube_download_complete_notification = (
+        rf.notifications.send_youtube_download_complete_notification
+    )
     return YouTubeDownloader(
         cfg=cast("AppConfig", cfg),
         db=db,
@@ -143,9 +180,6 @@ def test_auto_cleanup_storage_removes_old_files(tmp_path):
     assert new_file.exists()
 
 
-import yt_dlp
-
-
 class TestYouTubeDownloader(unittest.IsolatedAsyncioTestCase):
     def setUp(self) -> None:
         self.cfg = MagicMock()
@@ -184,8 +218,21 @@ class TestYouTubeDownloader(unittest.IsolatedAsyncioTestCase):
         self.db.update_request_lang_detected = MagicMock()
 
         self.response_formatter = MagicMock()
-        self.response_formatter.send_youtube_download_notification = AsyncMock()
-        self.response_formatter.send_youtube_download_complete_notification = AsyncMock()
+        self.response_formatter.sender = MagicMock()
+        self.response_formatter.sender.safe_reply = AsyncMock()
+        self.response_formatter.sender.send_message_draft = AsyncMock()
+        self.response_formatter.notifications = MagicMock()
+        self.response_formatter.notifications.send_youtube_download_notification = AsyncMock()
+        self.response_formatter.notifications.send_youtube_download_complete_notification = (
+            AsyncMock()
+        )
+        # Backward-compatible aliases used by existing assertions in this module.
+        self.response_formatter.send_youtube_download_notification = (
+            self.response_formatter.notifications.send_youtube_download_notification
+        )
+        self.response_formatter.send_youtube_download_complete_notification = (
+            self.response_formatter.notifications.send_youtube_download_complete_notification
+        )
 
         self.audit_func = MagicMock()
 

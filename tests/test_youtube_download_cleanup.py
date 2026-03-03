@@ -9,15 +9,42 @@ from __future__ import annotations
 
 import asyncio
 import sys
+import types
 import unittest
 from pathlib import Path
 from typing import TYPE_CHECKING, cast
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import pytest
+try:
+    import yt_dlp
+except ModuleNotFoundError:
+    # Lightweight local stub so tests run even when optional extras aren't installed.
+    class _DownloadError(Exception):
+        pass
 
-# yt-dlp is an optional dependency.
-pytest.importorskip("yt_dlp", reason="yt-dlp not installed (install with: pip install .[youtube])")
+    class _FallbackYoutubeDL:
+        def __init__(self, *args, **kwargs):
+            self._opts = kwargs
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def extract_info(self, *args, **kwargs):
+            return {}
+
+        def download(self, *args, **kwargs):
+            return None
+
+        def prepare_filename(self, _info):
+            return "/tmp/fallback.mp4"
+
+    yt_dlp = types.ModuleType("yt_dlp")
+    yt_dlp.YoutubeDL = _FallbackYoutubeDL  # type: ignore[attr-defined]
+    yt_dlp.utils = types.SimpleNamespace(DownloadError=_DownloadError)  # type: ignore[attr-defined]
+    sys.modules["yt_dlp"] = yt_dlp
 
 try:
     from youtube_transcript_api import YouTubeTranscriptApi
@@ -76,9 +103,17 @@ def _make_downloader(tmp_path: Path) -> YouTubeDownloader:
     cfg.youtube = _StubYouTubeConfig(str(tmp_path / "videos"))
     db = MagicMock()
     rf = MagicMock()
-    rf.safe_reply = AsyncMock()
-    rf.send_youtube_download_notification = AsyncMock()
-    rf.send_youtube_download_complete_notification = AsyncMock()
+    rf.sender = MagicMock()
+    rf.sender.safe_reply = AsyncMock()
+    rf.sender.send_message_draft = AsyncMock()
+    rf.notifications = MagicMock()
+    rf.notifications.send_youtube_download_notification = AsyncMock()
+    rf.notifications.send_youtube_download_complete_notification = AsyncMock()
+    # Backward-compatible aliases used by existing assertions in this module.
+    rf.send_youtube_download_notification = rf.notifications.send_youtube_download_notification
+    rf.send_youtube_download_complete_notification = (
+        rf.notifications.send_youtube_download_complete_notification
+    )
     downloader = YouTubeDownloader(
         cfg=cast("AppConfig", cfg),
         db=db,
@@ -145,16 +180,8 @@ class TestCancelledErrorCleansUpPartialFiles(unittest.IsolatedAsyncioTestCase):
             async def _mock_extract_transcript(vid, cid):
                 return ("Some transcript", "en", False, "youtube-transcript-api")
 
-            # Mock the yt-dlp download to raise CancelledError AFTER output_dir is set.
-            # We do this by having asyncio.wait_for raise CancelledError.
-            async def _mock_wait_for(coro, *, timeout=None):
-                # The first wait_for in download_and_extract is the yt-dlp download
-                # (line 284). We need to consume the coroutine to avoid warnings,
-                # then raise CancelledError.
-                try:
-                    coro.close()
-                except AttributeError:
-                    pass
+            # Mock the yt-dlp thread handoff to raise CancelledError AFTER output_dir is set.
+            async def _mock_to_thread(*_args, **_kwargs):
                 raise asyncio.CancelledError()
 
             with (
@@ -180,8 +207,8 @@ class TestCancelledErrorCleansUpPartialFiles(unittest.IsolatedAsyncioTestCase):
                     "app.adapters.youtube.youtube_downloader.datetime",
                 ) as mock_dt,
                 patch(
-                    "asyncio.wait_for",
-                    side_effect=_mock_wait_for,
+                    "asyncio.to_thread",
+                    side_effect=_mock_to_thread,
                 ),
             ):
                 # Make datetime.now().strftime() return the same date dir name
@@ -313,11 +340,7 @@ class TestEmptyDateDirectoryCleanup(unittest.IsolatedAsyncioTestCase):
             async def _mock_extract_transcript(vid, cid):
                 return ("Transcript", "en", False, "youtube-transcript-api")
 
-            async def _mock_wait_for(coro, *, timeout=None):
-                try:
-                    coro.close()
-                except AttributeError:
-                    pass
+            async def _mock_to_thread(*_args, **_kwargs):
                 raise asyncio.CancelledError()
 
             with (
@@ -343,8 +366,8 @@ class TestEmptyDateDirectoryCleanup(unittest.IsolatedAsyncioTestCase):
                     "app.adapters.youtube.youtube_downloader.datetime",
                 ) as mock_dt,
                 patch(
-                    "asyncio.wait_for",
-                    side_effect=_mock_wait_for,
+                    "asyncio.to_thread",
+                    side_effect=_mock_to_thread,
                 ),
             ):
                 mock_dt.now.return_value.strftime.return_value = "20260204"

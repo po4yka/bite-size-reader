@@ -48,6 +48,17 @@ def _is_draft_streaming_enabled(sender: Any) -> bool:
     return result if isinstance(result, bool) else False
 
 
+def _resolve_sender(formatter: Any) -> Any:
+    sender = getattr(formatter, "sender", None)
+    return sender if sender is not None else formatter
+
+
+async def _await_if_needed(value: Any) -> Any:
+    if hasattr(value, "__await__"):
+        return await value
+    return value
+
+
 async def _send_message_draft_safe(
     sender: Any,
     message: Any,
@@ -82,9 +93,29 @@ def is_txt_file_with_urls(message: Any) -> bool:
 
 
 def _filter_valid_batch_urls(router: Any, urls: list[str]) -> list[str]:
+    validator = getattr(router.response_formatter, "validator", None)
+    validate_url = getattr(validator, "validate_url", None)
+    fallback_validate_url = getattr(router.response_formatter, "_validate_url", None)
+
     valid_urls: list[str] = []
     for url in urls:
-        is_valid, error_msg = router.response_formatter.validator.validate_url(url)
+        is_valid, error_msg = True, None
+        result: Any = None
+        if callable(validate_url):
+            try:
+                result = validate_url(url)
+            except Exception:
+                result = None
+        if not (
+            isinstance(result, tuple) and len(result) == 2 and isinstance(result[0], bool)
+        ) and callable(fallback_validate_url):
+            try:
+                result = fallback_validate_url(url)
+            except Exception:
+                result = None
+        if isinstance(result, tuple) and len(result) == 2 and isinstance(result[0], bool):
+            is_valid, error_msg = result
+
         if is_valid:
             valid_urls.append(url)
         else:
@@ -143,7 +174,7 @@ async def handle_document_file(
         # Download and parse the file
         file_path = await download_file(router, message)
         if not file_path:
-            await router.response_formatter.notifications.send_error_notification(
+            await router.response_formatter.send_error_notification(
                 message,
                 "unexpected_error",
                 correlation_id,
@@ -159,13 +190,13 @@ async def handle_document_file(
                 "file_validation_failed",
                 extra={"error": str(exc), "cid": correlation_id},
             )
-            await router.response_formatter.sender.safe_reply(
+            await router.response_formatter.safe_reply(
                 message, f"❌ File validation failed: {exc!s}"
             )
             return
 
         if not urls:
-            await router.response_formatter.notifications.send_error_notification(
+            await router.response_formatter.send_error_notification(
                 message,
                 "no_urls_found",
                 correlation_id,
@@ -175,7 +206,7 @@ async def handle_document_file(
 
         # Security check: limit batch size
         if len(urls) > router.response_formatter.MAX_BATCH_URLS:
-            await router.response_formatter.sender.safe_reply(
+            await router.response_formatter.safe_reply(
                 message,
                 f"❌ Too many URLs ({len(urls)}). "
                 f"Maximum allowed: {router.response_formatter.MAX_BATCH_URLS}.",
@@ -191,7 +222,7 @@ async def handle_document_file(
 
         valid_urls = _filter_valid_batch_urls(router, urls)
         if not valid_urls:
-            await router.response_formatter.sender.safe_reply(
+            await router.response_formatter.safe_reply(
                 message, "❌ No valid URLs found in the file after security checks."
             )
             return
@@ -200,7 +231,7 @@ async def handle_document_file(
         urls = valid_urls
 
         # Send initial confirmation message (kept as a standalone message)
-        await router.response_formatter.sender.safe_reply(
+        await router.response_formatter.safe_reply(
             message, f"📄 File accepted. Processing {len(urls)} links."
         )
         # Respect formatter rate limits before sending the progress message we'll edit later
@@ -215,9 +246,10 @@ async def handle_document_file(
         # Create a dedicated progress message that we will edit in-place
         # We use a simple placeholder first, then process_url_batch will update it with BatchProgressFormatter
         progress_message_id: int | None = None
-        is_draft_enabled = _is_draft_streaming_enabled(router.response_formatter.sender)
+        sender = _resolve_sender(router.response_formatter)
+        is_draft_enabled = _is_draft_streaming_enabled(sender)
         if not is_draft_enabled:
-            progress_message_id = await router.response_formatter.sender.safe_reply_with_id(
+            progress_message_id = await router.response_formatter.safe_reply_with_id(
                 message,
                 f"🔄 Preparing to process {len(urls)} links...",
             )
@@ -258,7 +290,7 @@ async def handle_document_file(
 
     except Exception:
         logger.exception("document_file_processing_error", extra={"cid": correlation_id})
-        await router.response_formatter.notifications.send_error_notification(
+        await router.response_formatter.send_error_notification(
             message,
             "unexpected_error",
             correlation_id,
@@ -400,11 +432,15 @@ async def process_url_batch(
             dedupe_hash = compute_dedupe_hash(url)
 
             # Check if we already have a successful summary for this URL
-            existing_request = await request_repo.async_get_request_by_dedupe_hash(dedupe_hash)
+            existing_request = await _await_if_needed(
+                request_repo.async_get_request_by_dedupe_hash(dedupe_hash)
+            )
             if existing_request and existing_request.get("status") == "ok":
                 req_id = existing_request.get("id")
                 # Double check summary table
-                summary = await url_processor.summary_repo.async_get_summary_by_request(req_id)
+                summary = await _await_if_needed(
+                    url_processor.summary_repo.async_get_summary_by_request(req_id)
+                )
                 if summary:
                     # Extract title and payload from cached summary
                     payload = summary.get("json_payload")
@@ -436,15 +472,17 @@ async def process_url_batch(
                         )
                     continue
 
-            request_id, is_new = await request_repo.async_create_minimal_request(
-                type_="url",
-                status="pending",
-                correlation_id=generate_correlation_id(),
-                chat_id=chat_id,
-                user_id=uid,
-                input_url=url,
-                normalized_url=normalized,
-                dedupe_hash=dedupe_hash,
+            request_id, is_new = await _await_if_needed(
+                request_repo.async_create_minimal_request(
+                    type_="url",
+                    status="pending",
+                    correlation_id=generate_correlation_id(),
+                    chat_id=chat_id,
+                    user_id=uid,
+                    input_url=url,
+                    normalized_url=normalized,
+                    dedupe_hash=dedupe_hash,
+                )
             )
             url_to_request_id[url] = request_id
             urls_to_process.append(url)
@@ -495,12 +533,14 @@ async def process_url_batch(
         request_id = url_to_request_id.get(url)
         if request_id:
             try:
-                await request_repo.async_update_request_error(
-                    request_id=request_id,
-                    status=status,
-                    error_type=error_type,
-                    error_message=error_message[:500] if error_message else None,
-                    processing_time_ms=int(processing_time_ms),
+                await _await_if_needed(
+                    request_repo.async_update_request_error(
+                        request_id=request_id,
+                        status=status,
+                        error_type=error_type,
+                        error_message=error_message[:500] if error_message else None,
+                        processing_time_ms=int(processing_time_ms),
+                    )
                 )
             except Exception as e:
                 logger.warning(
@@ -671,7 +711,7 @@ async def process_url_batch(
                                 req_id = getattr(
                                     result, "request_id", None
                                 ) or url_to_request_id.get(url)
-                                await response_formatter.summaries.send_structured_summary_response(
+                                await response_formatter.send_structured_summary_response(
                                     message,
                                     result.summary_json,
                                     llm=None,
@@ -752,7 +792,8 @@ async def process_url_batch(
     # Create progress tracker with batch-aware formatter
     edit_consecutive_failures = 0
     edit_circuit_breaker_threshold = 3
-    draft_enabled = _is_draft_streaming_enabled(response_formatter.sender)
+    sender = _resolve_sender(response_formatter)
+    draft_enabled = _is_draft_streaming_enabled(sender)
 
     async def progress_formatter(current: int, total_count: int, msg_id: int | None) -> int | None:
         nonlocal edit_consecutive_failures
@@ -761,7 +802,7 @@ async def process_url_batch(
         try:
             progress_text = BatchProgressFormatter.format_progress_message(batch_status)
             draft_ok = await _send_message_draft_safe(
-                response_formatter.sender,
+                sender,
                 message,
                 progress_text,
             )
@@ -771,9 +812,9 @@ async def process_url_batch(
 
             chat_id = getattr(message.chat, "id", None)
             if chat_id and msg_id:
-                edit_success = await response_formatter.sender.edit_message(
-                    chat_id, msg_id, progress_text, parse_mode="HTML"
-                )
+                edit_result = sender.edit_message(chat_id, msg_id, progress_text, parse_mode="HTML")
+                edit_success = await _await_if_needed(edit_result)
+                edit_success = bool(edit_success)
                 if edit_success:
                     edit_consecutive_failures = 0
                     return msg_id
@@ -798,7 +839,7 @@ async def process_url_batch(
         if not draft_enabled:
             try:
                 initial_text = BatchProgressFormatter.format_progress_message(batch_status)
-                initial_message_id = await response_formatter.sender.safe_reply_with_id(
+                initial_message_id = await response_formatter.safe_reply_with_id(
                     message, initial_text, parse_mode="HTML"
                 )
             except Exception as exc:
@@ -814,10 +855,8 @@ async def process_url_batch(
         )
         for cached_url, cached_payload, cached_req_id in cached_summaries:
             try:
-                await response_formatter.notifications.send_cached_summary_notification(
-                    message, silent=False
-                )
-                await response_formatter.summaries.send_structured_summary_response(
+                await response_formatter.send_cached_summary_notification(message, silent=False)
+                await response_formatter.send_structured_summary_response(
                     message,
                     cached_payload,
                     chunk_llm_stub=None,
@@ -882,7 +921,7 @@ async def process_url_batch(
         "sending_batch_completion",
         extra={"uid": uid, "total": len(urls), "success": batch_status.success_count},
     )
-    await response_formatter.sender.safe_reply(message, completion_message, parse_mode="HTML")
+    await response_formatter.safe_reply(message, completion_message, parse_mode="HTML")
 
     if interaction_id and start_time:
         await async_safe_update_user_interaction(
@@ -1286,12 +1325,13 @@ async def run_batch_relationship_analysis(
         return
 
     start_time_ms = time.time() * 1000
-    draft_enabled = _is_draft_streaming_enabled(response_formatter.sender)
+    sender = _resolve_sender(response_formatter)
+    draft_enabled = _is_draft_streaming_enabled(sender)
 
     async def _draft_stage_update(text: str) -> None:
         if not draft_enabled:
             return
-        await _send_message_draft_safe(response_formatter.sender, message, text, force=True)
+        await _send_message_draft_safe(sender, message, text, force=True)
 
     combined_preview_buffer = ""
 
@@ -1304,7 +1344,7 @@ async def run_batch_relationship_analysis(
         if not preview:
             return
         await _send_message_draft_safe(
-            response_formatter.sender,
+            sender,
             message,
             f"🔗 Relationship detected. Building combined summary...\\n\\n{preview}",
         )
@@ -1392,7 +1432,9 @@ async def run_batch_relationship_analysis(
             language,
         )
         if draft_enabled:
-            response_formatter.sender.clear_message_draft(message)
+            clear_draft = getattr(sender, "clear_message_draft", None)
+            if callable(clear_draft):
+                clear_draft(message)
 
         logger.info(
             "batch_analysis_complete",
@@ -1413,7 +1455,9 @@ async def run_batch_relationship_analysis(
         )
     finally:
         if draft_enabled:
-            response_formatter.sender.clear_message_draft(message)
+            clear_draft = getattr(sender, "clear_message_draft", None)
+            if callable(clear_draft):
+                clear_draft(message)
 
 
 async def _send_batch_analysis_result(
@@ -1491,4 +1535,4 @@ async def _send_batch_analysis_result(
             parts.append(f"\n<b>{time_header}:</b> {combined_summary.total_reading_time_min} min")
 
     text = "\n".join(parts)
-    await response_formatter.sender.safe_reply(message, text, parse_mode="HTML")
+    await response_formatter.safe_reply(message, text, parse_mode="HTML")

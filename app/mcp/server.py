@@ -1015,6 +1015,7 @@ def list_articles(
         return json.dumps(
             {
                 "results": results,
+                "articles": results,
                 "total": total,
                 "limit": limit,
                 "offset": offset,
