@@ -166,7 +166,7 @@ class AuthConfig(BaseModel):
             return None
         pepper = str(value).strip()
         if len(pepper) < 16:
-            logger.warning("SECRET_LOGIN_PEPPER is shorter than 16 characters - use stronger value")
+            logger.warning("Login pepper length is below recommended minimum (16 characters)")
         if len(pepper) > 500:
             msg = "SECRET_LOGIN_PEPPER appears too long"
             raise ValueError(msg)

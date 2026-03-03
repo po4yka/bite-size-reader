@@ -241,8 +241,8 @@ class TelegramBot:
                 self._audit_tasks: set[asyncio.Task] = set()
             self._audit_tasks.add(task)
             task.add_done_callback(self._audit_tasks.discard)
-        except RuntimeError:
-            pass
+        except RuntimeError as exc:
+            logger.debug("audit_task_schedule_skipped", extra={"error": str(exc)})
 
     async def _shutdown(self, drain_timeout: float = 5.0) -> None:
         """Close external clients and drain in-flight tasks."""

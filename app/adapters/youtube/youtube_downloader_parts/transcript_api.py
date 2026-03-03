@@ -80,6 +80,7 @@ async def extract_transcript_via_api(
                         )
                         break
                     except no_transcript_found_exc:
+                        logger_.debug("youtube_transcript_manual_missing_for_language", extra={"video_id": video_id, "language": lang, "cid": correlation_id})
                         continue
             except (transcripts_disabled_exc, video_unavailable_exc):
                 raise
