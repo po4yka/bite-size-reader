@@ -2,11 +2,27 @@
 
 Upgrade Bite-Size Reader to a new version safely.
 
+> **Migration context:** the project is transitioning from a Python runtime to a Rust runtime in phases.
+> Use this guide for both normal upgrades and dual-runtime migration windows.
+> See [ROADMAP.md](../../ROADMAP.md) for milestone-level planning.
+
 **Audience:** Operators
 **Difficulty:** Intermediate
 **Estimated Time:** 10-15 minutes
 
 ---
+
+## Runtime Track Matrix (Python → Rust)
+
+During migration, choose one of these tracks per release:
+
+| Track | When to use | Runtime | Risk profile |
+| --- | --- | --- | --- |
+| `python-stable` | Default production path | Python | Lowest |
+| `rust-canary` | Validation/canary environments | Mixed (Rust components enabled) | Medium |
+| `rust-primary` | After cutover milestone | Rust-first | Depends on cutover readiness |
+
+Recommended progression: `python-stable` → `rust-canary` → `rust-primary`.
 
 ## Before You Start
 
@@ -386,3 +402,20 @@ docker run -d \
 ---
 
 **Last Updated:** 2026-02-09
+
+
+## Migration-Specific Validation Checklist
+
+Run this checklist whenever changing runtime track:
+
+1. **Contract parity**
+   - Verify API schema compatibility (`docs/openapi/mobile_api.yaml`).
+   - Validate summary JSON contract behavior (`docs/reference/summary-contract.md`).
+2. **Operational parity**
+   - Compare latency/error metrics before and after switching track.
+   - Confirm logging, alerts, and health checks are still reporting correctly.
+3. **Rollback readiness**
+   - Keep previous image/tag available.
+   - Confirm rollback command path is tested in staging.
+
+If any parity check fails, revert to `python-stable` and open a migration blocker issue.
