@@ -39,8 +39,14 @@ Bite-Size Reader is currently **Python-first in production** and is being migrat
 - Canonical plan: [ROADMAP.md](ROADMAP.md)
 - Documentation hub migration entrypoint: [docs/README.md](docs/README.md)
 - Version/operator migration playbook: [docs/how-to/migrate-versions.md](docs/how-to/migrate-versions.md)
+- Baseline metrics guide: [docs/migration/baseline-metrics.md](docs/migration/baseline-metrics.md)
 
 The migration follows a parity-first approach: external contracts remain stable while internals move from Python modules to Rust components over time.
+
+Current completed milestones:
+
+- ✅ **M0**: Contract freeze + parity suite + baseline metrics capture (`scripts/migration/*`, `docs/migration/baseline_metrics.json`)
+- ✅ **M1**: Rust workspace foundation with shared crates for config, logging, and summary-contract validation (`rust/`)
 
 ---
 

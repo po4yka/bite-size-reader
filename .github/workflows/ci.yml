@@ -282,6 +282,68 @@ jobs:
       - name: Type check (mypy)
         run: mypy app tests --show-error-codes --pretty --cache-dir .mypy_cache
 
+
+  parity-suite:
+    name: Migration Parity Suite (M0)
+    needs: prepare-environment
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Download compiled requirements
+        uses: actions/download-artifact@v8
+        with:
+          name: compiled-requirements
+          path: .
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          version: "0.8.17"
+          enable-cache: true
+          cache-dependency-glob: |
+            pyproject.toml
+            uv.lock
+
+      - name: Install dependencies
+        run: uv pip sync --system requirements-all.txt requirements-dev.txt
+
+      - name: Run M0 parity suite
+        run: bash scripts/migration/run_parity_suite.sh
+
+  rust-foundation:
+    name: Rust Foundation (M1)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            rust/target
+          key: rust-${{ runner.os }}-${{ hashFiles('rust/Cargo.toml', 'rust/crates/**/Cargo.toml') }}
+
+      - name: Build workspace
+        run: cargo check --workspace --manifest-path rust/Cargo.toml
+
+      - name: Test workspace
+        run: cargo test --workspace --manifest-path rust/Cargo.toml
+
   test:
     name: Unit Tests and Coverage
     needs: prepare-environment

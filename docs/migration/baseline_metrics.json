@@ -1,0 +1,18 @@
+{
+  "captured_at_utc": "2026-03-03T16:10:55.850200+00:00",
+  "git_commit": "8a0b5d86d8e6ee4b8167c156e3a2cc19ced3072f",
+  "runtime": "python",
+  "suite": "m0_parity",
+  "command": "bash scripts/migration/run_parity_suite.sh",
+  "exit_code": 0,
+  "wall_time_seconds": 2.265,
+  "cpu_user_seconds": 2.411,
+  "cpu_system_seconds": 0.744,
+  "max_rss_kb": 64864,
+  "environment": {
+    "python": "3.13.8",
+    "platform": "Linux-6.12.47-x86_64-with-glibc2.39",
+    "machine": "x86_64",
+    "cpu_count": 3
+  }
+}
