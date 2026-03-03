@@ -1,4 +1,4 @@
-.PHONY: format lint type test test-unit test-integration test-all all setup-dev venv pre-commit-install pre-commit-run check-lock check-openapi check-openapi-validate
+.PHONY: format lint type test test-unit test-integration test-all all setup-dev venv pre-commit-install pre-commit-run check-lock check-openapi check-openapi-validate pre-migration-checks
 
 format:
 	ruff format .
@@ -24,6 +24,9 @@ test-all:
 
 test-fast:
 	pytest tests/ -m "not slow and not integration" -v -x
+
+pre-migration-checks:
+	bash scripts/run_pre_migration_checks.sh
 
 all: format lint type test
 
