@@ -434,6 +434,19 @@ class LLMSummarizer:
             user_content=user_content,
             silent=silent,
         )
+        stream_coordinator = None
+        if self._summary_streaming_enabled(silent=silent):
+            from app.adapters.telegram.summary_draft_streaming import SummaryDraftStreamCoordinator
+
+            stream_coordinator = SummaryDraftStreamCoordinator(
+                response_formatter=self.response_formatter,
+                message=message,
+                correlation_id=correlation_id,
+            )
+            for request in requests:
+                request.stream = True
+                request.on_stream_delta = stream_coordinator.on_delta
+
         repair_context = self._build_summary_repair_context(system_prompt, user_content)
         notifications = self._build_summary_notifications(
             message=message,
@@ -488,31 +501,58 @@ class LLMSummarizer:
             url=url,
             silent=silent,
         )
-        summary = await _execute_summary_with_progress_for(
-            self,
-            message=message,
-            req_id=req_id,
-            correlation_id=correlation_id,
-            interaction_config=interaction_config,
-            persistence=persistence,
-            repair_context=repair_context,
-            requests=requests,
-            notifications=notifications,
-            ensure_summary=ensure_summary,
-            on_attempt=_on_attempt,
-            on_success=_on_success,
-            defer_persistence=defer_persistence,
-            progress_tracker=progress_tracker,
-            content_for_summary=content_for_summary,
-            model_for_cache=model_for_cache,
-            chosen_lang=chosen_lang,
-        )
+        try:
+            summary = await _execute_summary_with_progress_for(
+                self,
+                message=message,
+                req_id=req_id,
+                correlation_id=correlation_id,
+                interaction_config=interaction_config,
+                persistence=persistence,
+                repair_context=repair_context,
+                requests=requests,
+                notifications=notifications,
+                ensure_summary=ensure_summary,
+                on_attempt=_on_attempt,
+                on_success=_on_success,
+                defer_persistence=defer_persistence,
+                progress_tracker=progress_tracker,
+                content_for_summary=content_for_summary,
+                model_for_cache=model_for_cache,
+                chosen_lang=chosen_lang,
+            )
+        finally:
+            if stream_coordinator is not None:
+                await stream_coordinator.finalize()
+
         if summary and url_hash:
             chosen_model = getattr(self._last_llm_result, "model", model_for_cache)
             await self._cache_helper.write_summary_cache(
                 url_hash, chosen_model, chosen_lang, summary
             )
         return summary
+
+    def _summary_streaming_enabled(self, *, silent: bool) -> bool:
+        if silent:
+            return False
+        if not getattr(self.cfg.runtime, "summary_streaming_enabled", True):
+            return False
+        if getattr(self.cfg.runtime, "summary_streaming_mode", "section") != "section":
+            return False
+        telegram_cfg = getattr(self.cfg, "telegram", None)
+        if telegram_cfg is None:
+            return False
+        if not getattr(telegram_cfg, "draft_streaming_enabled", True):
+            return False
+
+        scope = getattr(self.cfg.runtime, "summary_streaming_provider_scope", "openrouter")
+        scope = str(scope).strip().lower()
+        if scope == "disabled":
+            return False
+        if scope == "all":
+            return True
+        provider_name = str(getattr(self.openrouter, "provider_name", "openrouter")).lower()
+        return provider_name == scope
 
     def _prepare_summary_content(
         self,

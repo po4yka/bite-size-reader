@@ -53,6 +53,16 @@ class ProgressTracker:
                 )
                 return None
 
+            # Prefer draft updates when available; if draft transport is not
+            # available for this request, sender returns False and we fallback.
+            draft_sender = getattr(self._response_sender, "send_message_draft", None)
+            if callable(draft_sender):
+                maybe_awaitable = draft_sender(message, text)
+                if hasattr(maybe_awaitable, "__await__"):
+                    draft_ok = await maybe_awaitable
+                    if draft_ok:
+                        return self._progress_msgs.get(key)
+
             existing_id = self._progress_msgs.get(key)
             if existing_id is not None:
                 chat_id = key[0]

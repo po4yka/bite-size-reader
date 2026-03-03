@@ -346,6 +346,10 @@ uv run python scripts/twitter_article_live_smoke.py \
 | `TELEGRAM_MAX_URL_LENGTH` | `2048` | Max URL length (RFC 2616) |
 | `TELEGRAM_MAX_BATCH_URLS` | `200` | Max URLs in a batch operation |
 | `TELEGRAM_MIN_MESSAGE_INTERVAL_MS` | `100` | Min interval between messages (rate limiting) |
+| `TELEGRAM_DRAFT_STREAMING_ENABLED` | `true` | Enable draft updates via `sendMessageDraft` transport |
+| `TELEGRAM_DRAFT_MIN_INTERVAL_MS` | `700` | Minimum interval between draft sends (ms) |
+| `TELEGRAM_DRAFT_MIN_DELTA_CHARS` | `40` | Minimum meaningful text delta before draft update |
+| `TELEGRAM_DRAFT_MAX_CHARS` | `3500` | Maximum characters per draft update payload |
 
 ## Content Processing
 
@@ -396,6 +400,9 @@ uv run python scripts/twitter_article_live_smoke.py \
 | `CHUNKING_ENABLED` | `false` | Enable content chunking for long articles |
 | `CHUNK_MAX_CHARS` | `200000` | Max chars per content chunk |
 | `SUMMARY_PROMPT_VERSION` | `v1` | Summary prompt template version |
+| `SUMMARY_STREAMING_ENABLED` | `true` | Enable section-based summary streaming |
+| `SUMMARY_STREAMING_MODE` | `section` | Streaming mode (`section` or `disabled`) |
+| `SUMMARY_STREAMING_PROVIDER_SCOPE` | `openrouter` | Provider scope for token streaming (`openrouter`, `all`, `disabled`) |
 | `TELEGRAM_REPLY_TIMEOUT_SEC` | `30.0` | Timeout for Telegram reply operations |
 
 ---

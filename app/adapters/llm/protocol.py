@@ -9,6 +9,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
+    from collections.abc import Awaitable, Callable
+
     from app.models.llm.llm_models import LLMCallResult
 
 
@@ -43,6 +45,7 @@ class LLMClientProtocol(Protocol):
         request_id: int | None = None,
         response_format: dict[str, Any] | None = None,
         model_override: str | None = None,
+        on_stream_delta: Callable[[str], Awaitable[None] | None] | None = None,
     ) -> LLMCallResult:
         """Send a chat completion request to the LLM provider.
 
@@ -61,6 +64,7 @@ class LLMClientProtocol(Protocol):
             response_format: Optional structured output format specification.
                            Provider-specific handling applies.
             model_override: Optional model name to use instead of the default.
+            on_stream_delta: Optional callback invoked with streamed text deltas.
 
         Returns:
             LLMCallResult containing the response text, token usage, cost,

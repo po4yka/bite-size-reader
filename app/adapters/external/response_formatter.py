@@ -53,6 +53,7 @@ class ResponseFormatter:
         reply_json_func: Callable[[Any, dict], Awaitable[None]] | None = None,
         telegram_client: Any = None,
         telegram_limits: Any = None,
+        telegram_config: Any = None,
         verbosity_resolver: VerbosityResolver | None = None,
         admin_log_chat_id: int | None = None,
         topic_manager: TopicManager | None = None,
@@ -103,6 +104,12 @@ class ResponseFormatter:
             reply_json_func=reply_json_func,
             telegram_client=telegram_client,
             admin_log_chat_id=admin_log_chat_id,
+            draft_streaming_enabled=bool(getattr(telegram_config, "draft_streaming_enabled", True)),
+            draft_min_interval_ms=int(getattr(telegram_config, "draft_min_interval_ms", 700)),
+            draft_min_delta_chars=int(getattr(telegram_config, "draft_min_delta_chars", 40)),
+            draft_max_chars=int(
+                getattr(telegram_config, "draft_max_chars", self.MAX_MESSAGE_CHARS)
+            ),
         )
 
         self._text_processor = TextProcessorImpl(
@@ -186,7 +193,7 @@ class ResponseFormatter:
         # Propagate telegram_client changes to response sender for backward compatibility
         # with tests that set _telegram_client after initialization
         if name == "_telegram_client" and hasattr(self, "_response_sender"):
-            self._response_sender._telegram_client = value
+            self._response_sender.set_telegram_client(value)
 
     # =========================================================================
     # ResponseSender delegation (core Telegram sending)
@@ -201,10 +208,20 @@ class ResponseFormatter:
         )
 
     async def safe_reply_with_id(
-        self, message: Any, text: str, *, parse_mode: str | None = None
+        self,
+        message: Any,
+        text: str,
+        *,
+        parse_mode: str | None = None,
+        message_thread_id: int | None = None,
     ) -> int | None:
         """Safely reply to a message and return the message ID."""
-        return await self._response_sender.safe_reply_with_id(message, text, parse_mode=parse_mode)
+        return await self._response_sender.safe_reply_with_id(
+            message,
+            text,
+            parse_mode=parse_mode,
+            message_thread_id=message_thread_id,
+        )
 
     async def edit_message(
         self, chat_id: int, message_id: int, text: str, *, parse_mode: str | None = None
@@ -229,6 +246,26 @@ class ResponseFormatter:
             True if the action was sent successfully, False otherwise
         """
         return await self._response_sender.send_chat_action(chat_id, action)
+
+    async def send_message_draft(
+        self,
+        message: Any,
+        text: str,
+        *,
+        message_thread_id: int | None = None,
+        force: bool = False,
+    ) -> bool:
+        """Send Telegram draft update with automatic per-request fallback detection."""
+        return await self._response_sender.send_message_draft(
+            message,
+            text,
+            message_thread_id=message_thread_id,
+            force=force,
+        )
+
+    def clear_message_draft(self, message: Any) -> None:
+        """Clear request-scoped draft state."""
+        self._response_sender.clear_message_draft(message)
 
     async def reply_json(
         self, message: Any, obj: dict, *, correlation_id: str | None = None, success: bool = True

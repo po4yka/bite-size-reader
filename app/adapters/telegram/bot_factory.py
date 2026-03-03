@@ -146,6 +146,7 @@ class BotFactory:
             safe_reply_func=safe_reply_func,
             reply_json_func=reply_json_func,
             telegram_limits=cfg.telegram_limits,
+            telegram_config=cfg.telegram,
             verbosity_resolver=verbosity_resolver,
             admin_log_chat_id=cfg.telegram.admin_log_chat_id,
             lang=ui_lang,

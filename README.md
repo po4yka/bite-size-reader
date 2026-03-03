@@ -209,6 +209,7 @@ OPENROUTER_MODEL=deepseek/deepseek-v3.2  # Primary LLM model
 | **YouTube** | `YOUTUBE_DOWNLOAD_ENABLED=true`<br>`YOUTUBE_PREFERRED_QUALITY=1080p`<br>`YOUTUBE_STORAGE_PATH=/data/videos` | Summarize YouTube videos |
 | **Web Search** | `WEB_SEARCH_ENABLED=false`<br>`WEB_SEARCH_MAX_QUERIES=3` | Add real-time context to summaries |
 | **Redis** | `REDIS_ENABLED=true`<br>`REDIS_URL` or `REDIS_HOST`/`REDIS_PORT` | Cache responses, speed up bot |
+| **Draft Streaming** | `SUMMARY_STREAMING_ENABLED=true`<br>`SUMMARY_STREAMING_MODE=section`<br>`TELEGRAM_DRAFT_STREAMING_ENABLED=true` | Live section previews during OpenRouter summaries |
 | **ChromaDB** | `CHROMA_HOST=http://localhost:8000`<br>`CHROMA_AUTH_TOKEN` | Semantic search |
 | **MCP Server** | `MCP_ENABLED=false`<br>`MCP_TRANSPORT=stdio`<br>`MCP_PORT=8200` | AI agent integration (Claude Desktop) |
 | **Mobile API** | `JWT_SECRET_KEY`<br>`ALLOWED_CLIENT_IDS`<br>`API_RATE_LIMIT_*` | Build mobile clients |

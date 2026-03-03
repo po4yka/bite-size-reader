@@ -109,6 +109,18 @@ class ForwardSummarizer:
                 top_p=self.cfg.openrouter.top_p,
             )
         ]
+        stream_coordinator = None
+        if self._summary_streaming_enabled():
+            from app.adapters.telegram.summary_draft_streaming import SummaryDraftStreamCoordinator
+
+            stream_coordinator = SummaryDraftStreamCoordinator(
+                response_formatter=self.response_formatter,
+                message=message,
+                correlation_id=correlation_id,
+            )
+            for request in requests:
+                request.stream = True
+                request.on_stream_delta = stream_coordinator.on_delta
 
         repair_context = LLMRepairContext(
             base_messages=messages,
@@ -184,15 +196,39 @@ class ForwardSummarizer:
             is_read=True,
         )
 
-        # Send typing indicator during forward summarization (can take 30-60s)
-        async with typing_indicator(self.response_formatter, message, action="typing"):
-            return await self._workflow.execute_summary_workflow(
-                message=message,
-                req_id=req_id,
-                correlation_id=correlation_id,
-                interaction_config=interaction_config,
-                persistence=persistence,
-                repair_context=repair_context,
-                requests=requests,
-                notifications=notifications,
-            )
+        try:
+            async with typing_indicator(self.response_formatter, message, action="typing"):
+                return await self._workflow.execute_summary_workflow(
+                    message=message,
+                    req_id=req_id,
+                    correlation_id=correlation_id,
+                    interaction_config=interaction_config,
+                    persistence=persistence,
+                    repair_context=repair_context,
+                    requests=requests,
+                    notifications=notifications,
+                )
+        finally:
+            if stream_coordinator is not None:
+                await stream_coordinator.finalize()
+
+    def _summary_streaming_enabled(self) -> bool:
+        if not getattr(self.cfg.runtime, "summary_streaming_enabled", True):
+            return False
+        if getattr(self.cfg.runtime, "summary_streaming_mode", "section") != "section":
+            return False
+        telegram_cfg = getattr(self.cfg, "telegram", None)
+        if telegram_cfg is None:
+            return False
+        if not getattr(telegram_cfg, "draft_streaming_enabled", True):
+            return False
+
+        scope = str(
+            getattr(self.cfg.runtime, "summary_streaming_provider_scope", "openrouter")
+        ).lower()
+        if scope == "disabled":
+            return False
+        if scope == "all":
+            return True
+        provider_name = str(getattr(self.openrouter, "provider_name", "openrouter")).lower()
+        return provider_name == scope

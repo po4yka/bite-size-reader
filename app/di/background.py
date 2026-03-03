@@ -96,7 +96,11 @@ async def build_background_processor(
         _ui_lang = cfg.runtime.preferred_lang
         if _ui_lang == "auto":
             _ui_lang = "en"
-        response_formatter = ResponseFormatter(telegram_limits=cfg.telegram_limits, lang=_ui_lang)
+        response_formatter = ResponseFormatter(
+            telegram_limits=cfg.telegram_limits,
+            telegram_config=cfg.telegram,
+            lang=_ui_lang,
+        )
 
     if semaphore is None:
         limit = max(1, min(100, cfg.runtime.max_concurrent_calls))

@@ -237,9 +237,21 @@ class URLHandler:
             return
 
         if len(urls) > 1:
-            progress_message_id = await self.response_formatter.safe_reply_with_id(
-                message, f"🚀 Preparing to process {len(urls)} links..."
+            progress_message_id: int | None = None
+            draft_enabled = False
+            draft_checker = getattr(
+                self.response_formatter.sender, "is_draft_streaming_enabled", None
             )
+            if callable(draft_checker):
+                try:
+                    enabled = draft_checker()
+                    draft_enabled = enabled if isinstance(enabled, bool) else False
+                except Exception:
+                    draft_enabled = False
+            if not draft_enabled:
+                progress_message_id = await self.response_formatter.safe_reply_with_id(
+                    message, f"🚀 Preparing to process {len(urls)} links..."
+                )
             await self._process_multiple_urls_parallel(
                 message, urls, uid, correlation_id, initial_message_id=progress_message_id
             )
@@ -281,9 +293,21 @@ class URLHandler:
 
         if len(urls) > 1:
             # Process multiple URLs directly in parallel (no confirmation needed)
-            progress_message_id = await self.response_formatter.safe_reply_with_id(
-                message, f"Processing {len(urls)} links in parallel..."
+            progress_message_id: int | None = None
+            draft_enabled = False
+            draft_checker = getattr(
+                self.response_formatter.sender, "is_draft_streaming_enabled", None
             )
+            if callable(draft_checker):
+                try:
+                    enabled = draft_checker()
+                    draft_enabled = enabled if isinstance(enabled, bool) else False
+                except Exception:
+                    draft_enabled = False
+            if not draft_enabled:
+                progress_message_id = await self.response_formatter.safe_reply_with_id(
+                    message, f"Processing {len(urls)} links in parallel..."
+                )
             await self._process_multiple_urls_parallel(
                 message, urls, uid, correlation_id, initial_message_id=progress_message_id
             )

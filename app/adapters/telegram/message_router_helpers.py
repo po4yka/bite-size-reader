@@ -37,6 +37,37 @@ class _SummaryPayload(TypedDict, total=False):
     summary_1000: str | None
 
 
+def _is_draft_streaming_enabled(sender: Any) -> bool:
+    checker = getattr(sender, "is_draft_streaming_enabled", None)
+    if not callable(checker):
+        return False
+    try:
+        result = checker()
+    except Exception:
+        return False
+    return result if isinstance(result, bool) else False
+
+
+async def _send_message_draft_safe(
+    sender: Any,
+    message: Any,
+    text: str,
+    *,
+    force: bool = False,
+) -> bool:
+    send = getattr(sender, "send_message_draft", None)
+    if not callable(send):
+        return False
+    try:
+        maybe_awaitable = send(message, text, force=force)
+        if hasattr(maybe_awaitable, "__await__"):
+            result = await maybe_awaitable
+            return bool(result) if isinstance(result, bool) else False
+    except Exception:
+        return False
+    return False
+
+
 def is_txt_file_with_urls(message: Any) -> bool:
     """Check if message contains a .txt document that likely contains URLs."""
     if not hasattr(message, "document"):
@@ -183,10 +214,13 @@ async def handle_document_file(
             raise_if_cancelled(exc)
         # Create a dedicated progress message that we will edit in-place
         # We use a simple placeholder first, then process_url_batch will update it with BatchProgressFormatter
-        progress_message_id = await router.response_formatter.sender.safe_reply_with_id(
-            message,
-            f"🔄 Preparing to process {len(urls)} links...",
-        )
+        progress_message_id: int | None = None
+        is_draft_enabled = _is_draft_streaming_enabled(router.response_formatter.sender)
+        if not is_draft_enabled:
+            progress_message_id = await router.response_formatter.sender.safe_reply_with_id(
+                message,
+                f"🔄 Preparing to process {len(urls)} links...",
+            )
         logger.debug(
             "document_file_processing_started",
             extra={"url_count": len(urls)},
@@ -718,6 +752,7 @@ async def process_url_batch(
     # Create progress tracker with batch-aware formatter
     edit_consecutive_failures = 0
     edit_circuit_breaker_threshold = 3
+    draft_enabled = _is_draft_streaming_enabled(response_formatter.sender)
 
     async def progress_formatter(current: int, total_count: int, msg_id: int | None) -> int | None:
         nonlocal edit_consecutive_failures
@@ -725,6 +760,15 @@ async def process_url_batch(
             return msg_id
         try:
             progress_text = BatchProgressFormatter.format_progress_message(batch_status)
+            draft_ok = await _send_message_draft_safe(
+                response_formatter.sender,
+                message,
+                progress_text,
+            )
+            if draft_ok:
+                edit_consecutive_failures = 0
+                return msg_id
+
             chat_id = getattr(message.chat, "id", None)
             if chat_id and msg_id:
                 edit_success = await response_formatter.sender.edit_message(
@@ -751,14 +795,15 @@ async def process_url_batch(
 
     # If initial_message_id is not provided, send the initial message
     if initial_message_id is None:
-        try:
-            initial_text = BatchProgressFormatter.format_progress_message(batch_status)
-            initial_message_id = await response_formatter.sender.safe_reply_with_id(
-                message, initial_text, parse_mode="HTML"
-            )
-        except Exception as exc:
-            logger.debug("initial_progress_message_failed", extra={"error": str(exc)})
-            initial_message_id = None
+        if not draft_enabled:
+            try:
+                initial_text = BatchProgressFormatter.format_progress_message(batch_status)
+                initial_message_id = await response_formatter.sender.safe_reply_with_id(
+                    message, initial_text, parse_mode="HTML"
+                )
+            except Exception as exc:
+                logger.debug("initial_progress_message_failed", extra={"error": str(exc)})
+                initial_message_id = None
 
     # Deliver cached summaries now that progress message is visible
     # This ensures users see summaries for cached URLs without waiting
@@ -1050,6 +1095,8 @@ async def _maybe_generate_combined_summary(
     relationship: Any,
     full_summaries: list[dict[str, Any]],
     language: str,
+    stream: bool = False,
+    on_stream_delta: Callable[[str], Awaitable[None]] | None = None,
 ) -> Any | None:
     if not (batch_config.combined_summary_enabled and llm_client):
         return None
@@ -1060,6 +1107,8 @@ async def _maybe_generate_combined_summary(
     combined_agent = CombinedSummaryAgent(
         llm_client=llm_client,
         correlation_id=correlation_id,
+        stream=stream,
+        on_stream_delta=on_stream_delta,
     )
     combined_input = CombinedSummaryInput(
         articles=articles,
@@ -1237,8 +1286,31 @@ async def run_batch_relationship_analysis(
         return
 
     start_time_ms = time.time() * 1000
+    draft_enabled = _is_draft_streaming_enabled(response_formatter.sender)
+
+    async def _draft_stage_update(text: str) -> None:
+        if not draft_enabled:
+            return
+        await _send_message_draft_safe(response_formatter.sender, message, text, force=True)
+
+    combined_preview_buffer = ""
+
+    async def _combined_stream_delta(delta: str) -> None:
+        nonlocal combined_preview_buffer
+        if not draft_enabled or not delta:
+            return
+        combined_preview_buffer += delta
+        preview = combined_preview_buffer[-1400:].strip()
+        if not preview:
+            return
+        await _send_message_draft_safe(
+            response_formatter.sender,
+            message,
+            f"🔗 Relationship detected. Building combined summary...\\n\\n{preview}",
+        )
 
     try:
+        await _draft_stage_update("🔗 Batch analysis: preparing article relationships...")
         prepared = await _prepare_batch_analysis_inputs(
             batch_status=batch_status,
             url_to_request_id=url_to_request_id,
@@ -1251,6 +1323,7 @@ async def run_batch_relationship_analysis(
         if prepared is None:
             return
         session_id, articles, full_summaries, language = prepared
+        await _draft_stage_update("🧠 Batch analysis: running relationship detection...")
         relationship = await _run_relationship_analysis(
             session_id=session_id,
             llm_client=llm_client,
@@ -1287,6 +1360,7 @@ async def run_batch_relationship_analysis(
                 batch_session_repo=batch_session_repo,
             )
 
+        await _draft_stage_update("🧩 Batch analysis: generating combined summary...")
         combined_summary = await _maybe_generate_combined_summary(
             llm_client=llm_client,
             batch_config=batch_config,
@@ -1295,6 +1369,8 @@ async def run_batch_relationship_analysis(
             relationship=relationship,
             full_summaries=full_summaries,
             language=language,
+            stream=draft_enabled,
+            on_stream_delta=_combined_stream_delta if draft_enabled else None,
         )
         if combined_summary is not None:
             await batch_session_repo.async_update_batch_session_combined_summary(
@@ -1315,6 +1391,8 @@ async def run_batch_relationship_analysis(
             articles,
             language,
         )
+        if draft_enabled:
+            response_formatter.sender.clear_message_draft(message)
 
         logger.info(
             "batch_analysis_complete",
@@ -1333,6 +1411,9 @@ async def run_batch_relationship_analysis(
             "batch_relationship_analysis_error",
             extra={"error": str(e), "cid": correlation_id},
         )
+    finally:
+        if draft_enabled:
+            response_formatter.sender.clear_message_draft(message)
 
 
 async def _send_batch_analysis_result(

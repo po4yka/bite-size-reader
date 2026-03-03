@@ -63,7 +63,12 @@ class ResponseSender(Protocol):
         ...
 
     async def safe_reply_with_id(
-        self, message: Any, text: str, *, parse_mode: str | None = None
+        self,
+        message: Any,
+        text: str,
+        *,
+        parse_mode: str | None = None,
+        message_thread_id: int | None = None,
     ) -> int | None:
         """Safely reply to a message and return the message ID."""
         ...
@@ -76,6 +81,21 @@ class ResponseSender(Protocol):
         self, message: Any, obj: dict, *, correlation_id: str | None = None, success: bool = True
     ) -> None:
         """Reply with JSON object, using file upload for large content."""
+        ...
+
+    async def send_message_draft(
+        self,
+        message: Any,
+        text: str,
+        *,
+        message_thread_id: int | None = None,
+        force: bool = False,
+    ) -> bool:
+        """Send a Telegram draft update if enabled."""
+        ...
+
+    def clear_message_draft(self, message: Any) -> None:
+        """Clear request-level draft stream state."""
         ...
 
     def create_inline_keyboard(self, buttons: list[dict[str, str]]) -> Any:

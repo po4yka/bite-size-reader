@@ -15,6 +15,8 @@ from app.models.batch_analysis import (
 )
 
 if TYPE_CHECKING:
+    from collections.abc import Awaitable, Callable
+
     from app.adapters.llm import LLMClientProtocol
 
 logger = logging.getLogger(__name__)
@@ -38,6 +40,8 @@ class CombinedSummaryAgent(BaseAgent[CombinedSummaryInput, CombinedSummaryOutput
         self,
         llm_client: LLMClientProtocol,
         correlation_id: str | None = None,
+        stream: bool = False,
+        on_stream_delta: Callable[[str], Awaitable[None] | None] | None = None,
     ):
         """Initialize the combined summary agent.
 
@@ -47,6 +51,8 @@ class CombinedSummaryAgent(BaseAgent[CombinedSummaryInput, CombinedSummaryOutput
         """
         super().__init__(name="CombinedSummaryAgent", correlation_id=correlation_id)
         self._llm = llm_client
+        self._stream = stream
+        self._on_stream_delta = on_stream_delta
 
     async def execute(self, input_data: CombinedSummaryInput) -> AgentResult[CombinedSummaryOutput]:
         """Generate combined summary for related articles.
@@ -112,6 +118,8 @@ class CombinedSummaryAgent(BaseAgent[CombinedSummaryInput, CombinedSummaryOutput
             max_tokens=2000,
             temperature=0.3,  # Slightly higher for creative synthesis
             request_id=None,
+            stream=self._stream,
+            on_stream_delta=self._on_stream_delta,
         )
 
         if result.status != "ok":

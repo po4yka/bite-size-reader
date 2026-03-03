@@ -53,6 +53,8 @@ class LLMRequestConfig(BaseModel):
     model_override: str | None = None
     fallback_models_override: tuple[str, ...] | None = None
     silent: bool = False
+    stream: bool = False
+    on_stream_delta: Any | None = None
 
 
 class LLMRepairContext(BaseModel):
@@ -65,6 +67,28 @@ class LLMRepairContext(BaseModel):
     repair_max_tokens: int | None = None
     default_prompt: str
     missing_fields_prompt: str | None = None
+
+
+class AttemptContext(BaseModel):
+    """Per-attempt bundle passed into workflow attempt processing."""
+
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    message: Any
+    llm: Any
+    req_id: int
+    correlation_id: str | None
+    interaction_config: Any
+    persistence: Any
+    repair_context: Any
+    request_config: Any
+    notifications: Any | None = None
+    ensure_summary: Any | None = None
+    on_success: Any | None = None
+    required_summary_fields: tuple[str, ...] = ("tldr", "summary_250", "summary_1000")
+    is_last_attempt: bool = False
+    failed_attempts: list[tuple[Any, Any]] | None = None
+    defer_persistence: bool = False
 
 
 class LLMWorkflowNotifications(BaseModel):

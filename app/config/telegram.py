@@ -46,6 +46,28 @@ class TelegramConfig(BaseModel):
         validation_alias=AliasChoices("API_BASE_URL", "TELEGRAM_API_BASE_URL"),
         description="Public HTTPS base URL for the FastAPI instance (used for Mini App URLs)",
     )
+    draft_streaming_enabled: bool = Field(
+        default=True,
+        validation_alias=AliasChoices(
+            "TELEGRAM_DRAFT_STREAMING_ENABLED", "DRAFT_STREAMING_ENABLED"
+        ),
+        description="Enable Telegram draft streaming via sendMessageDraft",
+    )
+    draft_min_interval_ms: int = Field(
+        default=700,
+        validation_alias=AliasChoices("TELEGRAM_DRAFT_MIN_INTERVAL_MS", "DRAFT_MIN_INTERVAL_MS"),
+        description="Minimum interval between draft updates in milliseconds",
+    )
+    draft_min_delta_chars: int = Field(
+        default=40,
+        validation_alias=AliasChoices("TELEGRAM_DRAFT_MIN_DELTA_CHARS", "DRAFT_MIN_DELTA_CHARS"),
+        description="Minimum meaningful character delta before sending draft updates",
+    )
+    draft_max_chars: int = Field(
+        default=3500,
+        validation_alias=AliasChoices("TELEGRAM_DRAFT_MAX_CHARS", "DRAFT_MAX_CHARS"),
+        description="Maximum characters per draft update",
+    )
 
     @field_validator("api_id", mode="before")
     @classmethod
@@ -103,6 +125,46 @@ class TelegramConfig(BaseModel):
     @classmethod
     def _parse_allowed_users(cls, value: Any) -> tuple[int, ...]:
         return _parse_allowed_user_ids(value)
+
+    @field_validator("draft_min_interval_ms", mode="before")
+    @classmethod
+    def _validate_draft_min_interval_ms(cls, value: Any) -> int:
+        if value in (None, ""):
+            return 700
+        try:
+            parsed = int(str(value))
+        except ValueError as exc:
+            msg = "Draft min interval must be a valid integer"
+            raise ValueError(msg) from exc
+        if parsed < 0 or parsed > 10000:
+            msg = "Draft min interval must be between 0 and 10000ms"
+            raise ValueError(msg)
+        return parsed
+
+    @field_validator("draft_min_delta_chars", mode="before")
+    @classmethod
+    def _validate_draft_min_delta_chars(cls, value: Any) -> int:
+        if value in (None, ""):
+            return 40
+        try:
+            parsed = int(str(value))
+        except ValueError as exc:
+            msg = "Draft min delta chars must be a valid integer"
+            raise ValueError(msg) from exc
+        if parsed < 1 or parsed > 1000:
+            msg = "Draft min delta chars must be between 1 and 1000"
+            raise ValueError(msg)
+        return parsed
+
+    @field_validator("draft_max_chars", mode="before")
+    @classmethod
+    def _validate_draft_max_chars(cls, value: Any) -> int:
+        default = cls.model_fields["draft_max_chars"].default
+        parsed = parse_positive_int(value, field_name="draft_max_chars", default=default)
+        if parsed > 4096:
+            msg = "Draft max chars must be 4096 or less"
+            raise ValueError(msg)
+        return parsed
 
 
 class TelegramLimitsConfig(BaseModel):

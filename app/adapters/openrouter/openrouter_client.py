@@ -368,6 +368,7 @@ class OpenRouterClient:
         response_format: dict[str, Any] | None = None,
         model_override: str | None = None,
         fallback_models_override: tuple[str, ...] | list[str] | None = None,
+        on_stream_delta: Callable[[str], Any] | None = None,
     ) -> LLMCallResult:
         return await chat_completions.chat(
             self,
@@ -380,6 +381,7 @@ class OpenRouterClient:
             response_format=response_format,
             model_override=model_override,
             fallback_models_override=fallback_models_override,
+            on_stream_delta=on_stream_delta,
         )
 
     async def _attempt_request(
@@ -395,6 +397,7 @@ class OpenRouterClient:
         message_roles: list[str],
         total_chars: int,
         request_id: int | None,
+        on_stream_delta: Any | None = None,
     ) -> dict[str, Any]:
         return await chat_completions._attempt_request(
             self,
@@ -409,6 +412,7 @@ class OpenRouterClient:
             message_roles=message_roles,
             total_chars=total_chars,
             request_id=request_id,
+            on_stream_delta=on_stream_delta,
         )
 
     async def _handle_successful_response(

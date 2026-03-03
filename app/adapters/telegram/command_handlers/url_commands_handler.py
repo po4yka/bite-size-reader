@@ -92,9 +92,21 @@ class URLCommandsHandlerImpl:
                     ctx.message, urls, ctx.uid, ctx.correlation_id
                 )
                 if valid_urls:
-                    progress_id = await self._formatter.safe_reply_with_id(
-                        ctx.message, f"Processing {len(valid_urls)} links in parallel..."
+                    progress_id: int | None = None
+                    draft_enabled = False
+                    draft_checker = getattr(
+                        self._formatter.sender, "is_draft_streaming_enabled", None
                     )
+                    if callable(draft_checker):
+                        try:
+                            enabled = draft_checker()
+                            draft_enabled = enabled if isinstance(enabled, bool) else False
+                        except Exception:
+                            draft_enabled = False
+                    if not draft_enabled:
+                        progress_id = await self._formatter.safe_reply_with_id(
+                            ctx.message, f"Processing {len(valid_urls)} links in parallel..."
+                        )
                     await self._url_handler._process_multiple_urls_parallel(
                         ctx.message,
                         valid_urls,
@@ -179,9 +191,19 @@ class URLCommandsHandlerImpl:
             return
 
         # Use a single progress message that updates in-place
-        progress_message_id = await self._formatter.safe_reply_with_id(
-            ctx.message, f"🚀 Preparing to process {len(urls)} links..."
-        )
+        progress_message_id: int | None = None
+        draft_enabled = False
+        draft_checker = getattr(self._formatter.sender, "is_draft_streaming_enabled", None)
+        if callable(draft_checker):
+            try:
+                enabled = draft_checker()
+                draft_enabled = enabled if isinstance(enabled, bool) else False
+            except Exception:
+                draft_enabled = False
+        if not draft_enabled:
+            progress_message_id = await self._formatter.safe_reply_with_id(
+                ctx.message, f"🚀 Preparing to process {len(urls)} links..."
+            )
 
         if ctx.interaction_id:
             await async_safe_update_user_interaction(

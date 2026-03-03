@@ -191,6 +191,7 @@ class OpenAIClient:
         request_id: int | None = None,
         response_format: dict[str, Any] | None = None,
         model_override: str | None = None,
+        on_stream_delta: Any | None = None,
     ) -> LLMCallResult:
         """Send a chat completion request to OpenAI.
 
@@ -203,6 +204,7 @@ class OpenAIClient:
             request_id: Optional request ID for tracing.
             response_format: Optional structured output format.
             model_override: Optional model override.
+            on_stream_delta: Optional stream callback (ignored for OpenAI adapter).
 
         Returns:
             LLMCallResult with response data.
@@ -231,6 +233,12 @@ class OpenAIClient:
         if not messages:
             msg = "Messages cannot be empty"
             raise ValueError(msg)
+
+        if stream or on_stream_delta is not None:
+            logger.debug(
+                "openai_stream_ignored",
+                extra={"request_id": request_id, "stream": stream},
+            )
 
         # Build model list to try
         primary_model = model_override or self._model

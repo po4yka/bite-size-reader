@@ -149,14 +149,27 @@ class TestOpenRouterCompliance(unittest.TestCase):
 
         async def _test() -> None:
             with patch("httpx.AsyncClient") as mock_client:
-                mock_response = FakeResponse(
-                    status_code=200,
-                    json_data={
-                        "choices": [{"message": {"content": "Test response"}}],
-                        "usage": {"prompt_tokens": 10, "completion_tokens": 5},
-                    },
-                )
-                mock_client.return_value.post = AsyncMock(return_value=mock_response)
+
+                async def _iter_lines():
+                    yield (
+                        'data: {"model":"qwen/qwen3-max","choices":[{"index":0,'
+                        '"delta":{"content":"Test response"},"finish_reason":null}]}'
+                    )
+                    yield (
+                        'data: {"choices":[{"index":0,"delta":{},"finish_reason":"stop"}],'
+                        '"usage":{"prompt_tokens":10,"completion_tokens":5}}'
+                    )
+                    yield "data: [DONE]"
+                    yield ""
+
+                stream_response = MagicMock()
+                stream_response.status_code = 200
+                stream_response.aiter_lines = _iter_lines
+
+                stream_cm = AsyncMock()
+                stream_cm.__aenter__.return_value = stream_response
+                stream_cm.__aexit__.return_value = None
+                mock_client.return_value.stream.return_value = stream_cm
 
                 await self.client.chat(
                     [{"role": "user", "content": "Hello"}],
@@ -167,7 +180,7 @@ class TestOpenRouterCompliance(unittest.TestCase):
                 )
 
                 # Verify optional parameters
-                call_args = mock_client.return_value.post.call_args
+                call_args = mock_client.return_value.stream.call_args
                 body = call_args[1]["json"]
                 assert body["temperature"] == 0.5
                 assert body["max_tokens"] == 50

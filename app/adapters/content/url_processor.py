@@ -402,7 +402,7 @@ class URLProcessor:
             if not silent and not batch_mode:
                 llm_result = self.llm_summarizer.last_llm_result or self._create_chunk_llm_stub()
                 # Pass request ID prefixed with 'req:' for action button callbacks
-                await self.response_formatter.summaries.send_structured_summary_response(
+                await self.response_formatter.send_structured_summary_response(
                     message,
                     summary_json,
                     llm_result,
@@ -439,7 +439,7 @@ class URLProcessor:
                 extra={"cid": correlation_id, "url": url_text, "error": str(exc)},
             )
             if not silent and not batch_mode:
-                await self.response_formatter.notifications.send_error_notification(
+                await self.response_formatter.send_error_notification(
                     message,
                     "processing_failed",
                     correlation_id or "unknown",
@@ -492,7 +492,7 @@ class URLProcessor:
             content_preview = (
                 content_text[:150] + "..." if len(content_text) > 150 else content_text
             )
-            await self.response_formatter.notifications.send_language_detection_notification(
+            await self.response_formatter.send_language_detection_notification(
                 message,
                 detected,
                 content_preview,
@@ -506,7 +506,7 @@ class URLProcessor:
             correlation_id=correlation_id,
         )
         if not batch_mode:
-            await self.response_formatter.notifications.send_content_analysis_notification(
+            await self.response_formatter.send_content_analysis_notification(
                 message,
                 len(content_text),
                 max_chars,
@@ -624,7 +624,7 @@ class URLProcessor:
         """Notify and return flow failure payload when summarization fails."""
         logger.error("summarization_failed", extra={"cid": correlation_id, "url": url_text})
         if not silent and not batch_mode:
-            await self.response_formatter.notifications.send_error_notification(
+            await self.response_formatter.send_error_notification(
                 message,
                 "processing_failed",
                 correlation_id or "unknown",
@@ -713,10 +713,10 @@ class URLProcessor:
                             extra={"error": str(exc), "cid": correlation_id},
                         )
                 if not silent:
-                    await self.response_formatter.notifications.send_cached_summary_notification(
+                    await self.response_formatter.send_cached_summary_notification(
                         message, silent=silent
                     )
-                    await self.response_formatter.summaries.send_structured_summary_response(
+                    await self.response_formatter.send_structured_summary_response(
                         message,
                         payload,
                         self._create_chunk_llm_stub(),
@@ -888,7 +888,7 @@ class URLProcessor:
                 source_lang=source_lang,
             )
             if translated:
-                await self.response_formatter.summaries.send_russian_translation(
+                await self.response_formatter.send_russian_translation(
                     message, translated, correlation_id=correlation_id
                 )
                 return
@@ -960,7 +960,7 @@ class URLProcessor:
                         should_notify = True
 
                 if should_notify:
-                    await self.response_formatter.summaries.send_additional_insights_message(
+                    await self.response_formatter.send_additional_insights_message(
                         message, insights, correlation_id
                     )
                     logger.info("insights_message_sent", extra={"cid": correlation_id})
@@ -1017,7 +1017,7 @@ class URLProcessor:
                 url_hash=url_hash,
             )
             if article:
-                await self.response_formatter.summaries.send_custom_article(message, article)
+                await self.response_formatter.send_custom_article(message, article)
         except Exception as exc:
             raise_if_cancelled(exc)
             logger.error(

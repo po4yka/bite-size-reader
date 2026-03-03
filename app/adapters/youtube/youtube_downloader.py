@@ -188,11 +188,21 @@ class YouTubeDownloader:
                 download_id, "downloading", download_started_at=datetime.now(UTC)
             )
 
+            async def _draft_stage(text: str, *, force: bool = False) -> None:
+                if silent:
+                    return
+                await self.response_formatter.sender.send_message_draft(
+                    message,
+                    text,
+                    force=force,
+                )
+
             # Notify user: starting download
             if not silent:
                 await self.response_formatter.notifications.send_youtube_download_notification(
                     message, url, silent=silent
                 )
+            await _draft_stage("🎥 YouTube: extracting transcript...")
 
             # Choose between progress tracker (Reader mode) or typing indicator (Debug mode)
             use_progress = progress_tracker is not None
@@ -232,6 +242,7 @@ class YouTubeDownloader:
                     auto_generated,
                     transcript_source,
                 ) = await self._extract_transcript_api(video_id, correlation_id)
+                await _draft_stage("🎥 YouTube: transcript ready, downloading video...")
 
                 # Mark stage 1 complete
                 if use_progress:
@@ -279,6 +290,7 @@ class YouTubeDownloader:
                 # Fallback to downloaded VTT subtitles if API transcript is missing
                 if not transcript_text:
                     # Update to stage 3 (VTT fallback)
+                    await _draft_stage("🎥 YouTube: processing subtitle fallback...")
                     if use_progress:
 
                         def stage3_formatter(elapsed: float) -> str:
@@ -357,6 +369,9 @@ class YouTubeDownloader:
 
                 # Finalize progress message or notify completion
                 total_elapsed = time.time() - start_time
+                await _draft_stage(
+                    "✅ YouTube: transcript and metadata ready. Finalizing summary..."
+                )
                 if use_progress and updater:
                     success_msg = SingleURLProgressFormatter.format_youtube_complete(
                         title=video_metadata["title"],

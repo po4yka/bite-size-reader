@@ -25,6 +25,15 @@ class RuntimeConfig(BaseModel):
     topic_search_max_results: int = Field(default=5, validation_alias="TOPIC_SEARCH_MAX_RESULTS")
     max_concurrent_calls: int = Field(default=4, validation_alias="MAX_CONCURRENT_CALLS")
     summary_prompt_version: str = Field(default="v1", validation_alias="SUMMARY_PROMPT_VERSION")
+    summary_streaming_enabled: bool = Field(
+        default=True, validation_alias="SUMMARY_STREAMING_ENABLED"
+    )
+    summary_streaming_mode: str = Field(
+        default="section", validation_alias="SUMMARY_STREAMING_MODE"
+    )
+    summary_streaming_provider_scope: str = Field(
+        default="openrouter", validation_alias="SUMMARY_STREAMING_PROVIDER_SCOPE"
+    )
     jwt_secret_key: str = Field(
         default="", validation_alias=AliasChoices("JWT_SECRET_KEY", "JWT_SECRET")
     )
@@ -153,6 +162,26 @@ class RuntimeConfig(BaseModel):
             msg = "Summary prompt version cannot contain whitespace"
             raise ValueError(msg)
         return raw
+
+    @field_validator("summary_streaming_mode", mode="before")
+    @classmethod
+    def _validate_summary_streaming_mode(cls, value: Any) -> str:
+        mode = str(value or "section").strip().lower()
+        allowed = {"section", "disabled"}
+        if mode not in allowed:
+            msg = f"Summary streaming mode must be one of {sorted(allowed)}"
+            raise ValueError(msg)
+        return mode
+
+    @field_validator("summary_streaming_provider_scope", mode="before")
+    @classmethod
+    def _validate_summary_streaming_scope(cls, value: Any) -> str:
+        scope = str(value or "openrouter").strip().lower()
+        allowed = {"openrouter", "all", "disabled"}
+        if scope not in allowed:
+            msg = f"Summary streaming provider scope must be one of {sorted(allowed)}"
+            raise ValueError(msg)
+        return scope
 
     @field_validator("db_backup_interval_minutes", mode="before")
     @classmethod

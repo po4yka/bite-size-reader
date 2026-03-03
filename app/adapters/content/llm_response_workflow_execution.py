@@ -254,10 +254,12 @@ class LLMWorkflowExecutionMixin:
                         temperature=request.temperature,
                         max_tokens=request.max_tokens,
                         top_p=request.top_p,
+                        stream=bool(getattr(request, "stream", False)),
                         request_id=req_id,
                         response_format=request.response_format,
                         model_override=request.model_override,
                         fallback_models_override=request.fallback_models_override,
+                        on_stream_delta=getattr(request, "on_stream_delta", None),
                     )
             except TimeoutError:
                 if attempt < max_retries:

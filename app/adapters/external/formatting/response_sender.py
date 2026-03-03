@@ -9,6 +9,10 @@ import re
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
+from app.adapters.telegram.draft_stream_sender import (
+    DraftStreamSender,
+    DraftStreamSettings,
+)
 from app.api.models.responses import success_response
 from app.core.async_utils import raise_if_cancelled
 from app.utils.retry_utils import retry_telegram_operation
@@ -62,6 +66,10 @@ class ResponseSenderImpl:
         reply_json_func: Callable[[Any, dict], Awaitable[None]] | None = None,
         telegram_client: Any = None,
         admin_log_chat_id: int | None = None,
+        draft_streaming_enabled: bool = True,
+        draft_min_interval_ms: int = 700,
+        draft_min_delta_chars: int = 40,
+        draft_max_chars: int = 3500,
     ) -> None:
         """Initialize the response sender.
 
@@ -79,6 +87,15 @@ class ResponseSenderImpl:
         self._reply_json_func = reply_json_func
         self._telegram_client = telegram_client
         self._admin_log_chat_id = admin_log_chat_id
+        self._draft_stream_sender = DraftStreamSender(
+            telegram_client=telegram_client,
+            settings=DraftStreamSettings(
+                enabled=draft_streaming_enabled,
+                min_interval_ms=draft_min_interval_ms,
+                min_delta_chars=draft_min_delta_chars,
+                max_chars=draft_max_chars,
+            ),
+        )
 
     async def safe_reply(
         self,
@@ -233,6 +250,7 @@ class ResponseSenderImpl:
         parse_mode: str | None = None,
         reply_markup: Any | None = None,
         disable_web_page_preview: bool | None = None,
+        message_thread_id: int | None = None,
     ) -> int | None:
         """Send using Telegram client.send_message and return message ID."""
 
@@ -245,6 +263,8 @@ class ResponseSenderImpl:
                     disable_web_page_preview=disable_web_page_preview,
                 )
             )
+            if message_thread_id is not None:
+                kwargs["message_thread_id"] = message_thread_id
             return await client.send_message(**kwargs)
 
         sent, success = await retry_telegram_operation(
@@ -332,6 +352,7 @@ class ResponseSenderImpl:
         parse_mode: str | None = None,
         reply_markup: Any | None = None,
         disable_web_page_preview: bool | None = None,
+        message_thread_id: int | None = None,
     ) -> int | None:
         """Safely reply to a message and return the message ID for progress tracking with security checks."""
         prepared_text = self._prepare_text_for_reply_with_id(text, parse_mode)
@@ -363,6 +384,7 @@ class ResponseSenderImpl:
                         parse_mode=parse_mode,
                         reply_markup=reply_markup,
                         disable_web_page_preview=disable_web_page_preview,
+                        message_thread_id=message_thread_id,
                     )
                     if message_id is not None:
                         return message_id
@@ -394,6 +416,20 @@ class ResponseSenderImpl:
             return None
 
         try:
+            if message_thread_id is not None:
+                client = getattr(getattr(self, "_telegram_client", None), "client", None)
+                chat = getattr(message, "chat", None)
+                chat_id = getattr(chat, "id", None) if chat is not None else None
+                if client is not None and chat_id is not None and hasattr(client, "send_message"):
+                    return await self._send_via_client_with_id(
+                        client,
+                        chat_id,
+                        text,
+                        parse_mode=parse_mode,
+                        reply_markup=reply_markup,
+                        disable_web_page_preview=disable_web_page_preview,
+                        message_thread_id=message_thread_id,
+                    )
             return await self._reply_text_with_id(
                 message,
                 text,
@@ -419,6 +455,7 @@ class ResponseSenderImpl:
         parse_mode: str | None = None,
         reply_markup: Any | None = None,
         disable_web_page_preview: bool | None = None,
+        message_thread_id: int | None = None,
     ) -> int | None:
         """Edit existing message or send new if edit fails.
 
@@ -463,6 +500,7 @@ class ResponseSenderImpl:
             parse_mode=parse_mode,
             reply_markup=reply_markup,
             disable_web_page_preview=disable_web_page_preview,
+            message_thread_id=message_thread_id,
         )
 
     async def edit_message(
@@ -727,6 +765,67 @@ class ResponseSenderImpl:
                 extra={"chat_id": chat_id, "action": action, "error": str(e)},
             )
             return False
+
+    async def send_message_draft(
+        self,
+        message: Any,
+        text: str,
+        *,
+        message_thread_id: int | None = None,
+        force: bool = False,
+    ) -> bool:
+        """Send a draft update; returns False when caller should fallback to message flow."""
+        result = await self._draft_stream_sender.send_update(
+            message,
+            text,
+            message_thread_id=message_thread_id,
+            force=force,
+        )
+        return result.ok
+
+    def clear_message_draft(self, message: Any) -> None:
+        """Clear per-request draft stream state."""
+        self._draft_stream_sender.clear(message)
+
+    def is_draft_streaming_enabled(self) -> bool:
+        """Return whether draft streaming is globally enabled in config."""
+        return self._draft_stream_sender.enabled
+
+    def set_telegram_client(self, telegram_client: Any) -> None:
+        """Update Telegram client reference for both classic and draft transports."""
+        self._telegram_client = telegram_client
+        self._draft_stream_sender.set_telegram_client(telegram_client)
+
+    async def stream_or_edit_message(
+        self,
+        message: Any,
+        text: str,
+        *,
+        message_id: int | None = None,
+        parse_mode: str | None = "HTML",
+        reply_markup: Any | None = None,
+        disable_web_page_preview: bool | None = None,
+        message_thread_id: int | None = None,
+        force_draft: bool = False,
+    ) -> int | None:
+        """Attempt draft update first, then fallback to existing edit/send behavior."""
+        draft_ok = await self.send_message_draft(
+            message,
+            text,
+            message_thread_id=message_thread_id,
+            force=force_draft,
+        )
+        if draft_ok:
+            return message_id
+        return await self.edit_or_send(
+            message,
+            text,
+            message_id=message_id,
+            parse_mode=parse_mode,
+            reply_markup=reply_markup,
+            disable_web_page_preview=disable_web_page_preview,
+            message_thread_id=message_thread_id,
+        )
 
     async def reply_json(
         self, message: Any, obj: dict, *, correlation_id: str | None = None, success: bool = True

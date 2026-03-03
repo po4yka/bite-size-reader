@@ -241,7 +241,7 @@ requires-dist = [
     { name = "onnxruntime", marker = "extra == 'api'", specifier = ">=1.24.1" },
     { name = "onnxruntime", marker = "extra == 'ml'", specifier = ">=1.24.1" },
     { name = "orjson", specifier = ">=3.11.6" },
-    { name = "peewee", specifier = ">=3.19.0" },
+    { name = "peewee", specifier = ">=4.0.0" },
     { name = "pillow", specifier = ">=11.0.0" },
     { name = "playwright", marker = "extra == 'twitter'", specifier = ">=1.40" },
     { name = "pre-commit", marker = "extra == 'dev'", specifier = ">=4.5.1" },
