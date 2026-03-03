@@ -75,8 +75,8 @@ def _build_db_dump_response(request: Request, user: dict):
             if os.path.exists(temp_backup_path):
                 try:
                     os.remove(temp_backup_path)
-                except OSError:
-                    pass
+                except OSError as cleanup_exc:
+                    logger.debug("temp_backup_cleanup_failed", extra={"error": str(cleanup_exc)})
 
             raise ProcessingError(f"Backup failed: {e!s}") from e
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib
+import logging
 import re
 from typing import Any
 
@@ -14,6 +15,7 @@ except Exception:  # pragma: no cover
     orjson = None
     _HAS_ORJSON = False
 
+LOGGER = logging.getLogger(__name__)
 
 def loads(data: str | bytes) -> Any:
     """Parse JSON string or bytes using orjson if available, else stdlib json.
@@ -123,7 +125,7 @@ def extract_json(text: str) -> dict[str, Any] | None:
                 parsed = _try_parse(repaired.strip())
                 if parsed is not None:
                     return parsed
-    except Exception:
-        pass
+    except Exception as exc:
+        LOGGER.debug("json_repair_failed", extra={"error": str(exc)})
 
     return None

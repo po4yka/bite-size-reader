@@ -476,7 +476,13 @@ python -m app.cli.backfill_chroma_store --rebuild
 | `--rebuild` | flag | false | Delete and rebuild ChromaDB collection |
 | `--batch-size` | int | 100 | Documents per batch |
 | `--collection` | string | summaries | ChromaDB collection name |
+| `--chroma-host` | string | config/env | Override Chroma host URL |
+| `--chroma-token` | string | config/env | Override Chroma auth credential (prefer env var in automation) |
+| `--chroma-env` | string | config/env | Override environment namespace |
+| `--chroma-scope` | string | config/env | Override user/tenant scope |
+| `--chroma-version` | string | config/env | Override collection version suffix |
 | `--limit` | int | - | Limit to N summaries (for testing) |
+| `--force` | flag | false | Recompute/re-upsert even when embeddings already exist |
 
 ### Examples
 
@@ -521,6 +527,8 @@ python -m app.cli.backfill_chroma_store --limit 1
 # Upserting 1 document (test mode)
 # Success!
 ```
+
+**Security note:** Some credential-bearing options (such as `--chroma-token`) are intentionally minimized in inline CLI help text. They remain supported, but prefer environment variables/secrets managers in CI and production shells.
 
 ### Prerequisites
 

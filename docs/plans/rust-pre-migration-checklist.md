@@ -13,7 +13,7 @@ This checklist operationalizes the recommendations from `docs/audits/rust-migrat
 Command:
 
 ```bash
-pytest tests/characterization/test_immediate_backlog.py tests/characterization/test_auth_sync_characterization.py -v
+uv run pytest tests/characterization/test_immediate_backlog.py tests/characterization/test_auth_sync_characterization.py -v
 ```
 
 ## Phase 2: Code-quality debt burn down (desloppify)
@@ -46,3 +46,23 @@ desloppify next --cluster auto/orphaned --count 10
 2. Run full desloppify scan at least once daily during hardening sprint.
 3. Log score movement and blockers in PR descriptions.
 4. Only start a Rust slice when all migration readiness gates are met.
+
+
+## Current hardening status (last verified)
+
+- Characterization suite: ✅ `6 passed` on the two pre-migration characterization modules.
+- `desloppify` security cluster: ✅ clean in latest scan.
+- Broad/silent exception clusters: ⚠ still open (reduced but not yet at intentional-boundary-only target).
+- Orphaned module cluster: ✅ no open orphaned findings reported in focused queue checks.
+- Strict score > 60 gate: ❌ not yet met (strict score remains in the 30s while subjective review is unscored in this environment).
+
+### Operational caveats
+
+- This repository uses `uv` for reproducible test execution; prefer `uv run ...` commands in PR validation notes.
+- If `desloppify` is unavailable in CI/containers, install with:
+
+```bash
+python -m pip install --upgrade git+https://github.com/peteromallet/desloppify.git
+```
+
+- Subjective score import may fail in environments without a `codex` runner binary on `PATH`; record that blocker explicitly in PR notes when it occurs.
