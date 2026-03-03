@@ -88,6 +88,8 @@ class YouTubeDownloader:
         interaction_id: int | None = None,
         silent: bool = False,
         progress_tracker: ProgressTracker | None = None,
+        *,
+        request_id_override: int | None = None,
     ) -> tuple[int, str, str, str, dict]:
         """Download video and extract transcript.
 
@@ -112,24 +114,26 @@ class YouTubeDownloader:
         dedupe = url_hash_sha256(norm)
 
         # Get or create a lock for this URL's dedupe hash to prevent TOCTOU races
-        if dedupe not in self._url_locks:
-            self._url_locks[dedupe] = asyncio.Lock()
-        url_lock = self._url_locks[dedupe]
+        url_lock = self._url_locks.setdefault(dedupe, asyncio.Lock())
+        wait_for_existing_download = False
 
         async with url_lock:
-            # Fetch existing request by dedupe hash
-            existing_req = await self.request_repo.async_get_request_by_dedupe_hash(dedupe)
-            if isinstance(existing_req, Mapping):
-                req_id = int(existing_req["id"])
-                logger.info(
-                    "youtube_dedupe_hit",
-                    extra={"video_id": video_id, "request_id": req_id, "cid": correlation_id},
-                )
+            if request_id_override is not None:
+                req_id = request_id_override
             else:
-                # Create new request
-                req_id = await self._create_video_request(
-                    message, url, norm, dedupe, correlation_id
-                )
+                # Fetch existing request by dedupe hash
+                existing_req = await self.request_repo.async_get_request_by_dedupe_hash(dedupe)
+                if isinstance(existing_req, Mapping):
+                    req_id = int(existing_req["id"])
+                    logger.info(
+                        "youtube_dedupe_hit",
+                        extra={"video_id": video_id, "request_id": req_id, "cid": correlation_id},
+                    )
+                else:
+                    # Create new request
+                    req_id = await self._create_video_request(
+                        message, url, norm, dedupe, correlation_id
+                    )
 
             # Check for existing download
             existing_download = await self.video_repo.async_get_video_download_by_request(req_id)
@@ -139,19 +143,22 @@ class YouTubeDownloader:
                     extra={"video_id": video_id, "request_id": req_id, "cid": correlation_id},
                 )
                 metadata = self._build_metadata_dict(existing_download)
-                transcript_text = existing_download.get("transcript_text") or ""
+                transcript_value = existing_download.get("transcript_text")
+                transcript_text = (
+                    transcript_value
+                    if isinstance(transcript_value, str)
+                    else str(transcript_value or "")
+                )
+                if not transcript_text.strip():
+                    raise ValueError(
+                        "❌ Cached video found but no transcript or subtitles were available. "
+                        "Try re-downloading with subtitles enabled."
+                    )
                 transcript_source = existing_download.get("transcript_source") or "cached"
                 detected_lang = existing_download.get("subtitle_language") or detect_language(
                     transcript_text
                 )
                 combined_text = self._combine_metadata_and_transcript(metadata, transcript_text)
-
-                if not combined_text.strip():
-                    self._url_locks.pop(dedupe, None)
-                    raise ValueError(
-                        "❌ Cached video found but no transcript or subtitles were available. "
-                        "Try re-downloading with subtitles enabled."
-                    )
 
                 if not silent:
                     try:
@@ -163,7 +170,6 @@ class YouTubeDownloader:
                         raise_if_cancelled(e)
                         logger.warning("youtube_cached_reply_failed", exc_info=True)
 
-                self._url_locks.pop(dedupe, None)
                 return (
                     req_id,
                     combined_text,
@@ -172,12 +178,62 @@ class YouTubeDownloader:
                     metadata,
                 )
 
-            # 1. Create initial download record
-            download_id = await self.video_repo.async_create_video_download(
-                request_id=req_id, video_id=video_id, status="pending"
+            if existing_download and existing_download.get("status") in {"pending", "downloading"}:
+                wait_for_existing_download = True
+                download_id = existing_download.get("id")
+                logger.info(
+                    "youtube_download_in_progress_reuse",
+                    extra={
+                        "video_id": video_id,
+                        "request_id": req_id,
+                        "download_id": download_id,
+                        "status": existing_download.get("status"),
+                        "cid": correlation_id,
+                    },
+                )
+            else:
+                # 1. Create initial download record
+                download_id = await self.video_repo.async_create_video_download(
+                    request_id=req_id, video_id=video_id, status="pending"
+                )
+
+        if wait_for_existing_download:
+            existing_download = await self._await_existing_download_completion(
+                req_id, correlation_id
             )
-        # Lock released here; the actual download proceeds outside the lock
-        self._url_locks.pop(dedupe, None)
+            if not silent:
+                try:
+                    await self.response_formatter.sender.safe_reply(
+                        message,
+                        "⏳ Another request is already processing this video. Reusing the result.",
+                    )
+                except Exception as e:
+                    raise_if_cancelled(e)
+                    logger.warning("youtube_in_progress_reply_failed", exc_info=True)
+            metadata = self._build_metadata_dict(existing_download)
+            transcript_value = existing_download.get("transcript_text")
+            transcript_text = (
+                transcript_value
+                if isinstance(transcript_value, str)
+                else str(transcript_value or "")
+            )
+            if not transcript_text.strip():
+                raise ValueError(
+                    "❌ Reused video download has no transcript/subtitles. Try again later."
+                )
+            transcript_source = existing_download.get("transcript_source") or "cached"
+            detected_lang = existing_download.get("subtitle_language") or detect_language(
+                transcript_text
+            )
+            combined_text = self._combine_metadata_and_transcript(metadata, transcript_text)
+            return (
+                req_id,
+                combined_text,
+                transcript_source,
+                detected_lang,
+                metadata,
+            )
+        own_download_record = True
 
         output_dir: Path | None = None
         download_succeeded = False
@@ -432,11 +488,12 @@ class YouTubeDownloader:
 
         except Exception as e:
             raise_if_cancelled(e)
-            if download_id:
+            if own_download_record and download_id:
                 await self.video_repo.async_update_video_download_status(
                     download_id, "error", error_text=str(e)
                 )
-            await self.request_repo.async_update_request_status(req_id, "error")
+            if own_download_record:
+                await self.request_repo.async_update_request_status(req_id, "error")
 
             self._audit(
                 "ERROR",
@@ -477,6 +534,35 @@ class YouTubeDownloader:
                 except Exception as e:
                     raise_if_cancelled(e)
                     logger.warning("youtube_partial_cleanup_failed", exc_info=True)
+
+    async def _await_existing_download_completion(
+        self,
+        req_id: int,
+        correlation_id: str | None,
+        *,
+        timeout_sec: float = 620.0,
+        poll_interval_sec: float = 1.0,
+    ) -> dict[str, Any]:
+        """Wait for an in-flight download to complete and return the final row."""
+        deadline = time.monotonic() + timeout_sec
+        while time.monotonic() < deadline:
+            existing_download = await self.video_repo.async_get_video_download_by_request(req_id)
+            if not isinstance(existing_download, dict):
+                await asyncio.sleep(poll_interval_sec)
+                continue
+
+            status = str(existing_download.get("status") or "").lower()
+            if status == "completed":
+                return existing_download
+            if status == "error":
+                error_text = existing_download.get("error_text") or "YouTube download failed"
+                raise ValueError(f"❌ {error_text}")
+
+            await asyncio.sleep(poll_interval_sec)
+
+        raise TimeoutError(
+            "Timed out waiting for an existing YouTube download to finish. Please try again."
+        )
 
     async def _extract_transcript_api(
         self, video_id: str, correlation_id: str | None

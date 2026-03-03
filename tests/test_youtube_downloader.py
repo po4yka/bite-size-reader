@@ -662,6 +662,178 @@ class TestVideoDownload(TestYouTubeDownloader):
                         self.assertIn("Title: Test", transcript)
                         self.assertEqual(source, "cached")
 
+    async def test_deduplication_reuses_in_progress_download(self):
+        self.downloader.request_repo.async_get_request_by_dedupe_hash = AsyncMock(
+            return_value={"id": 789, "status": "processing"}
+        )
+        pending_download = {"id": 456, "status": "downloading"}
+        completed_download = {
+            "id": 456,
+            "status": "completed",
+            "video_id": "test_video",
+            "title": "Test",
+            "channel": "Channel",
+            "channel_id": "UC123",
+            "duration_sec": 120,
+            "resolution": "1080p",
+            "file_size_bytes": 1024,
+            "upload_date": "20250101",
+            "view_count": 1000,
+            "like_count": 100,
+            "video_file_path": "/tmp/video.mp4",
+            "subtitle_file_path": None,
+            "thumbnail_file_path": None,
+            "transcript_text": "Existing transcript",
+            "transcript_source": "cached",
+            "subtitle_language": "en",
+        }
+        self.downloader.video_repo.async_get_video_download_by_request = AsyncMock(
+            side_effect=[pending_download, completed_download]
+        )
+
+        message = self._create_mock_message()
+
+        with patch(
+            "app.adapters.youtube.youtube_downloader.extract_youtube_video_id",
+            return_value="test_video",
+        ):
+            with patch(
+                "app.adapters.youtube.youtube_downloader.normalize_url",
+                return_value="https://youtube.com/watch?v=test_video",
+            ):
+                with patch(
+                    "app.adapters.youtube.youtube_downloader.url_hash_sha256", return_value="abc123"
+                ):
+                    with patch.object(self.downloader, "_check_storage_limits", return_value=None):
+                        with patch(
+                            "app.adapters.youtube.youtube_downloader.asyncio.sleep",
+                            new=AsyncMock(return_value=None),
+                        ):
+                            (
+                                req_id,
+                                transcript,
+                                source,
+                                _lang,
+                                _metadata,
+                            ) = await self.downloader.download_and_extract(
+                                message,
+                                "https://www.youtube.com/watch?v=test_video",
+                                "cid",
+                                silent=True,
+                            )
+
+        self.assertEqual(req_id, 789)
+        self.assertIn("Existing transcript", transcript)
+        self.assertEqual(source, "cached")
+        self.downloader.video_repo.async_create_video_download.assert_not_called()
+
+    async def test_deduplication_existing_request_without_transcript_raises(self):
+        self.downloader.request_repo.async_get_request_by_dedupe_hash = AsyncMock(
+            return_value={"id": 789, "status": "ok"}
+        )
+        existing_download = {
+            "id": 456,
+            "status": "completed",
+            "video_id": "test_video",
+            "title": "Test",
+            "channel": "Channel",
+            "channel_id": "UC123",
+            "duration_sec": 120,
+            "resolution": "1080p",
+            "file_size_bytes": 1024,
+            "upload_date": "20250101",
+            "view_count": 1000,
+            "like_count": 100,
+            "video_file_path": "/tmp/video.mp4",
+            "subtitle_file_path": None,
+            "thumbnail_file_path": None,
+            "transcript_text": "",
+            "transcript_source": "cached",
+            "subtitle_language": "en",
+        }
+        self.downloader.video_repo.async_get_video_download_by_request = AsyncMock(
+            return_value=existing_download
+        )
+        message = self._create_mock_message()
+
+        with patch(
+            "app.adapters.youtube.youtube_downloader.extract_youtube_video_id",
+            return_value="test_video",
+        ):
+            with patch(
+                "app.adapters.youtube.youtube_downloader.normalize_url",
+                return_value="https://youtube.com/watch?v=test_video",
+            ):
+                with patch(
+                    "app.adapters.youtube.youtube_downloader.url_hash_sha256", return_value="abc123"
+                ):
+                    with patch.object(self.downloader, "_check_storage_limits", return_value=None):
+                        with self.assertRaises(ValueError) as ctx:
+                            await self.downloader.download_and_extract(
+                                message,
+                                "https://www.youtube.com/watch?v=test_video",
+                                "cid",
+                                silent=True,
+                            )
+
+        self.assertIn("no transcript or subtitles", str(ctx.exception).lower())
+
+    async def test_deduplication_reused_in_progress_without_transcript_raises(self):
+        self.downloader.request_repo.async_get_request_by_dedupe_hash = AsyncMock(
+            return_value={"id": 789, "status": "processing"}
+        )
+        pending_download = {"id": 456, "status": "downloading"}
+        completed_without_transcript = {
+            "id": 456,
+            "status": "completed",
+            "video_id": "test_video",
+            "title": "Test",
+            "channel": "Channel",
+            "channel_id": "UC123",
+            "duration_sec": 120,
+            "resolution": "1080p",
+            "file_size_bytes": 1024,
+            "upload_date": "20250101",
+            "view_count": 1000,
+            "like_count": 100,
+            "video_file_path": "/tmp/video.mp4",
+            "subtitle_file_path": None,
+            "thumbnail_file_path": None,
+            "transcript_text": "   ",
+            "transcript_source": "cached",
+            "subtitle_language": "en",
+        }
+        self.downloader.video_repo.async_get_video_download_by_request = AsyncMock(
+            side_effect=[pending_download, completed_without_transcript]
+        )
+        message = self._create_mock_message()
+
+        with patch(
+            "app.adapters.youtube.youtube_downloader.extract_youtube_video_id",
+            return_value="test_video",
+        ):
+            with patch(
+                "app.adapters.youtube.youtube_downloader.normalize_url",
+                return_value="https://youtube.com/watch?v=test_video",
+            ):
+                with patch(
+                    "app.adapters.youtube.youtube_downloader.url_hash_sha256", return_value="abc123"
+                ):
+                    with patch.object(self.downloader, "_check_storage_limits", return_value=None):
+                        with patch(
+                            "app.adapters.youtube.youtube_downloader.asyncio.sleep",
+                            new=AsyncMock(return_value=None),
+                        ):
+                            with self.assertRaises(ValueError) as ctx:
+                                await self.downloader.download_and_extract(
+                                    message,
+                                    "https://www.youtube.com/watch?v=test_video",
+                                    "cid",
+                                    silent=True,
+                                )
+
+        self.assertIn("no transcript/subtitles", str(ctx.exception).lower())
+
 
 class TestErrorHandling(TestYouTubeDownloader):
     """Test error handling for various failure scenarios."""

@@ -419,7 +419,7 @@ class BackgroundProcessor:
         await self._publish_update(
             request_id, "PROCESSING", "EXTRACTION", "Extracting content...", 0.2
         )
-        content_text, _content_source, _metadata = await self._run_stage(
+        content_text, _content_source, metadata = await self._run_stage(
             "extraction",
             correlation_id,
             lambda: url_processor.content_extractor.extract_content_pure(
@@ -434,8 +434,7 @@ class BackgroundProcessor:
                 "extraction", ValueError("Content extraction failed - no content returned")
             )
 
-        detected_lang = request.get("lang_detected") or detect_language(content_text)
-        lang = choose_language(self.cfg.runtime.preferred_lang, detected_lang)
+        lang = self._resolve_request_language(request, content_text, metadata=metadata)
         system_prompt = _get_system_prompt(lang)
 
         await self._publish_update(
@@ -457,6 +456,21 @@ class BackgroundProcessor:
                 "summarization", ValueError("Summary generation failed - no summary returned")
             )
 
+        await self._publish_update(
+            request_id, "PROCESSING", "VALIDATION", "Validating summary...", 0.8
+        )
+        summary_json = await self._run_stage(
+            "validation",
+            correlation_id,
+            lambda: url_processor.llm_summarizer.ensure_summary_payload(
+                summary_json,
+                req_id=request_id,
+                content_text=content_text,
+                chosen_lang=lang,
+                correlation_id=correlation_id,
+            ),
+        )
+
         await self._publish_update(request_id, "PROCESSING", "SAVING", "Saving summary...", 0.9)
         repo = self.summary_repo if db == self.db else SqliteSummaryRepositoryAdapter(db)
         await repo.async_upsert_summary(
@@ -465,6 +479,29 @@ class BackgroundProcessor:
             json_payload=summary_json,
             is_read=False,
         )
+
+    def _resolve_request_language(
+        self,
+        request: dict[str, Any],
+        content_text: str,
+        *,
+        metadata: dict[str, Any] | None = None,
+    ) -> str:
+        """Resolve output language, treating stored 'auto' as unresolved.
+
+        Prefers extractor-provided language hints (for example YouTube transcript
+        language) when available, then falls back to text detection.
+        """
+        preferred = str(request.get("lang_detected") or "").strip().lower()
+        if preferred in {"en", "ru"}:
+            return preferred
+        metadata_lang = ""
+        if isinstance(metadata, dict):
+            metadata_lang = str(metadata.get("detected_lang") or "").strip().lower()
+        if metadata_lang in {"en", "ru"}:
+            return choose_language(self.cfg.runtime.preferred_lang, metadata_lang)
+        detected = detect_language(content_text)
+        return choose_language(self.cfg.runtime.preferred_lang, detected)
 
     async def _process_forward_type(
         self,

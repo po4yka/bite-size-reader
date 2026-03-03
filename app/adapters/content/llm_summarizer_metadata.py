@@ -315,9 +315,23 @@ class LLMSummaryMetadataHelper:
         lines = [line.strip() for line in content_text.splitlines() if line.strip()]
         if not lines:
             return None
-        first_line = lines[0]
-        if len(first_line) <= 140:
-            return first_line
+        preamble_pattern = re.compile(r"^\[source:.*\]$", flags=re.IGNORECASE)
+        metadata_prefixes = ("channel:", "duration:", "resolution:")
+
+        for line in lines:
+            lower = line.lower()
+            if lower.startswith("title:"):
+                title_part = line.split("|", 1)[0]
+                candidate = title_part.split(":", 1)[1].strip()
+                if candidate:
+                    return candidate
+                continue
+            if preamble_pattern.match(line):
+                continue
+            if lower.startswith(metadata_prefixes):
+                continue
+            if len(line) <= 140:
+                return line
         return None
 
     async def _generate_metadata_completion(

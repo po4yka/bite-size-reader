@@ -81,8 +81,11 @@ class StubDB:
 
 
 class StubExtractor:
-    def __init__(self, content: str = "hello world") -> None:
+    def __init__(
+        self, content: str = "hello world", metadata: dict[str, Any] | None = None
+    ) -> None:
         self._content = content
+        self._metadata = metadata or {}
         self.firecrawl = object()
 
     async def extract_content_pure(
@@ -91,10 +94,12 @@ class StubExtractor:
         correlation_id: str | None = None,
         request_id: int | None = None,
     ) -> tuple[str, str, dict[str, Any]]:
+        metadata = {"url": url, "cid": correlation_id, "request_id": request_id}
+        metadata.update(self._metadata)
         return (
             self._content,
             "markdown",
-            {"url": url, "cid": correlation_id, "request_id": request_id},
+            metadata,
         )
 
 
@@ -104,6 +109,7 @@ class StubSummarizer:
         self.fail = fail
         self.calls = 0
         self.openrouter = object()
+        self.last_chosen_lang: str | None = None
 
     async def summarize_content_pure(
         self,
@@ -114,9 +120,25 @@ class StubSummarizer:
         correlation_id: str | None = None,
     ) -> Any:
         self.calls += 1
+        self.last_chosen_lang = chosen_lang
         if self.fail:
             raise RuntimeError("fail_summarize")
         return self._summary
+
+    async def ensure_summary_payload(
+        self,
+        summary: dict[str, Any],
+        *,
+        req_id: int,
+        content_text: str,
+        chosen_lang: str,
+        correlation_id: str | None = None,
+    ) -> dict[str, Any]:
+        _ = req_id
+        _ = content_text
+        _ = chosen_lang
+        _ = correlation_id
+        return dict(summary)
 
 
 class StubURLProcessor:
@@ -326,3 +348,74 @@ async def test_run_with_backoff_propagates_cancellation():
         await proc._run_with_backoff(cancelling_func, "test_stage", "cid-123")
 
     assert call_count == 1, "Should not retry on CancelledError"
+
+
+@pytest.mark.asyncio
+async def test_url_processing_auto_language_uses_detected_content():
+    cfg = DummyCfg()
+    db = StubDB()
+    extractor = StubExtractor(content="Привет мир. Это тестовый русский текст.")
+    summarizer = StubSummarizer(summary={"summary_250": "ok"})
+    processor = BackgroundProcessor(
+        cfg=cfg,
+        db=db,
+        url_processor=StubURLProcessor(extractor, summarizer),
+        redis=None,
+        semaphore=asyncio.Semaphore(1),
+        audit_func=lambda *_args, **_kwargs: None,
+    )
+
+    processor.request_repo = MagicMock()
+    processor.request_repo.async_get_request_by_id = AsyncMock(
+        return_value={
+            "id": 4,
+            "type": "url",
+            "input_url": "https://example.com",
+            "lang_detected": "auto",
+            "correlation_id": "cid-auto",
+        }
+    )
+    processor.request_repo.async_update_request_status_with_correlation = AsyncMock()
+    processor.summary_repo = MagicMock()
+    processor.summary_repo.async_get_summary_by_request = AsyncMock(return_value=None)
+    processor.summary_repo.async_upsert_summary = AsyncMock()
+
+    await processor.process(4, correlation_id="cid-auto")
+    assert summarizer.last_chosen_lang == "ru"
+
+
+@pytest.mark.asyncio
+async def test_url_processing_prefers_extractor_detected_lang_metadata():
+    cfg = DummyCfg()
+    db = StubDB()
+    extractor = StubExtractor(
+        content="[Source: YouTube video transcript]\n\nTitle: Example\n\nShort content.",
+        metadata={"detected_lang": "ru"},
+    )
+    summarizer = StubSummarizer(summary={"summary_250": "ok"})
+    processor = BackgroundProcessor(
+        cfg=cfg,
+        db=db,
+        url_processor=StubURLProcessor(extractor, summarizer),
+        redis=None,
+        semaphore=asyncio.Semaphore(1),
+        audit_func=lambda *_args, **_kwargs: None,
+    )
+
+    processor.request_repo = MagicMock()
+    processor.request_repo.async_get_request_by_id = AsyncMock(
+        return_value={
+            "id": 5,
+            "type": "url",
+            "input_url": "https://www.youtube.com/watch?v=abc123",
+            "lang_detected": "auto",
+            "correlation_id": "cid-youtube-lang",
+        }
+    )
+    processor.request_repo.async_update_request_status_with_correlation = AsyncMock()
+    processor.summary_repo = MagicMock()
+    processor.summary_repo.async_get_summary_by_request = AsyncMock(return_value=None)
+    processor.summary_repo.async_upsert_summary = AsyncMock()
+
+    await processor.process(5, correlation_id="cid-youtube-lang")
+    assert summarizer.last_chosen_lang == "ru"

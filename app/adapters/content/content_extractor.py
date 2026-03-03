@@ -72,9 +72,16 @@ class ContentExtractor(
         request_id: int | None = None,
     ) -> tuple[str, str, dict[str, Any]]:
         """Pure extraction method without message dependencies."""
-        from app.core.url_utils import is_twitter_url
+        from app.core.url_utils import is_twitter_url, is_youtube_url
 
         normalized_url = normalize_url(url)
+
+        if is_youtube_url(normalized_url):
+            logger.info(
+                "youtube_url_detected_pure",
+                extra={"url": url, "normalized": normalized_url, "cid": correlation_id},
+            )
+            return await self._extract_youtube_content_pure(url, correlation_id, request_id)
 
         if is_twitter_url(normalized_url) and self.cfg.twitter.enabled:
             logger.info(

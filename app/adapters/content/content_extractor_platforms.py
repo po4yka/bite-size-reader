@@ -131,3 +131,57 @@ class ContentExtractorPlatformsMixin:
             correlation_id=correlation_id,
             request_id=request_id,
         )
+
+    async def _extract_youtube_content_pure(
+        self,
+        url_text: str,
+        correlation_id: str | None,
+        request_id: int | None = None,
+    ) -> tuple[str, str, dict[str, Any]]:
+        """Extract YouTube transcript without message-bound notifications."""
+        if not self.cfg.youtube.enabled:
+            logger.warning(
+                "youtube_download_disabled_pure",
+                extra={"url": url_text, "cid": correlation_id},
+            )
+            raise ValueError("YouTube video download is disabled in configuration")
+
+        if self._youtube_downloader is None:
+            from app.adapters.youtube.youtube_downloader import YouTubeDownloader
+
+            self._youtube_downloader = YouTubeDownloader(
+                cfg=self.cfg,
+                db=self.db,
+                response_formatter=self.response_formatter,
+                audit_func=self._audit,
+            )
+
+        try:
+            (
+                req_id,
+                transcript_text,
+                content_source,
+                detected_lang,
+                video_metadata,
+            ) = await self._youtube_downloader.download_and_extract(
+                message=None,
+                url=url_text,
+                correlation_id=correlation_id,
+                interaction_id=None,
+                silent=True,
+                progress_tracker=None,
+                request_id_override=request_id,
+            )
+            metadata: dict[str, Any] = (
+                dict(video_metadata) if isinstance(video_metadata, dict) else {}
+            )
+            metadata["request_id"] = req_id
+            metadata["detected_lang"] = detected_lang
+            return transcript_text, content_source, metadata
+        except Exception as e:
+            raise_if_cancelled(e)
+            logger.exception(
+                "youtube_extraction_failed_pure",
+                extra={"url": url_text, "error": str(e), "cid": correlation_id},
+            )
+            raise

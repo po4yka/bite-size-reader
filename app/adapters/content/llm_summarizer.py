@@ -30,6 +30,7 @@ from app.adapters.external.formatting.single_url_progress_formatter import (
 from app.core.content_cleaner import clean_content_for_llm
 from app.core.json_utils import extract_json
 from app.core.lang import LANG_RU
+from app.core.summary_contract import validate_and_shape_summary
 from app.core.token_utils import count_tokens
 from app.db.user_interactions import async_safe_update_user_interaction
 from app.infrastructure.cache.redis_cache import RedisCache
@@ -934,6 +935,26 @@ class LLMSummarizer:
         )
 
         return summary
+
+    async def ensure_summary_payload(
+        self,
+        summary: dict[str, Any],
+        *,
+        req_id: int,
+        content_text: str,
+        chosen_lang: str,
+        correlation_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Normalize and enrich a parsed summary payload for persistence."""
+        if not isinstance(summary, dict):
+            raise ValueError("Summary payload must be a dictionary")
+
+        shaped = validate_and_shape_summary(summary)
+        shaped = await self._metadata_helper.ensure_summary_metadata(
+            shaped, req_id, content_text, correlation_id, chosen_lang
+        )
+        self._insights_helper.update_last_summary(shaped)
+        return shaped
 
     def _parse_summary_from_llm_result(self, llm_result: Any) -> dict[str, Any] | None:
         """Parse summary JSON from LLM result.

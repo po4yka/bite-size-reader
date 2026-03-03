@@ -44,6 +44,7 @@ def _dummy_cfg() -> AppConfig:
                 page_timeout_ms=15000,
                 cookies_path="/tmp/nonexistent-twitter-cookies.txt",
             ),
+            youtube=SimpleNamespace(enabled=True),
         ),
     )
 
@@ -76,5 +77,38 @@ async def test_extract_content_pure_routes_twitter_urls_to_twitter_extractor() -
         "https://x.com/user/status/123?s=20&t=abc",
         "cid",
         None,
+    )
+    assert firecrawl_scrape_mock.await_count == 0
+
+
+@pytest.mark.asyncio
+async def test_extract_content_pure_routes_youtube_urls_to_youtube_extractor() -> None:
+    firecrawl_scrape_mock = AsyncMock()
+    firecrawl = cast("FirecrawlClient", SimpleNamespace(scrape_markdown=firecrawl_scrape_mock))
+    extractor = ContentExtractor(
+        cfg=_dummy_cfg(),
+        db=cast("DatabaseSessionManager", SimpleNamespace()),
+        firecrawl=firecrawl,
+        response_formatter=cast("ResponseFormatter", SimpleNamespace()),
+        audit_func=lambda *args, **kwargs: None,
+        sem=_dummy_sem,
+    )
+    extract_youtube_mock: AsyncMock = AsyncMock(
+        return_value=("transcript text", "youtube-transcript-api", {"source": "youtube"})
+    )
+    with patch.object(extractor, "_extract_youtube_content_pure", new=extract_youtube_mock):
+        content_text, content_source, metadata = await extractor.extract_content_pure(
+            "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+            correlation_id="cid",
+            request_id=42,
+        )
+
+    assert content_text == "transcript text"
+    assert content_source == "youtube-transcript-api"
+    assert metadata["source"] == "youtube"
+    extract_youtube_mock.assert_awaited_once_with(
+        "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+        "cid",
+        42,
     )
     assert firecrawl_scrape_mock.await_count == 0

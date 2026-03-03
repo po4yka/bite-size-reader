@@ -7,9 +7,10 @@ if TYPE_CHECKING:
 
 _YOUTUBE_PREAMBLE = (
     "[Source: YouTube video transcript. "
-    "Summarize this as video content — "
-    "use watch time instead of reading time, "
-    "and set source_type to an appropriate value for video content.]"
+    "Treat this as spoken video content. "
+    "Use estimated_reading_time_min as approximate watch-time minutes, "
+    "and keep source_type within the allowed contract values "
+    "(news, blog, research, opinion, tutorial, reference).]"
 )
 
 
