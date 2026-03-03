@@ -2,6 +2,8 @@
 
 Welcome to the Bite-Size Reader documentation. This guide helps you find the right documentation for your needs.
 
+> Note: this directory keeps current, user-facing and engineering reference docs; temporary planning notes and historical implementation reports are removed after completion.
+
 ## Documentation by Audience
 
 ### 👤 I'm a User
@@ -55,6 +57,17 @@ You want to deploy, monitor, and maintain Bite-Size Reader in production.
 - [How to backup and restore](how-to/backup-and-restore.md)
 - [How to optimize performance](how-to/optimize-performance.md)
 
+
+### 🦀 Python → Rust Migration
+
+You want to track or contribute to the migration from Python to Rust.
+
+**Start here**:
+
+1. [Project Roadmap](../ROADMAP.md) - Official migration phases and milestones
+2. [How to migrate versions](how-to/migrate-versions.md) - Operator runbook during dual-runtime period
+3. [SPEC.md](SPEC.md) - Source-of-truth contracts that must stay stable through migration
+
 ### 🤝 I'm a Contributor
 
 You want to submit pull requests or improve the project.
@@ -95,6 +108,7 @@ You want to integrate Bite-Size Reader with other tools or build a client.
 
 **I want to...**
 
+- **Track Python → Rust migration status** → [ROADMAP.md](../ROADMAP.md)
 - **Get my first summary in 5 minutes** → [Quickstart Tutorial](tutorials/quickstart.md)
 - **Install on my server** → [DEPLOYMENT.md](DEPLOYMENT.md)
 - **Understand what this project does** → [README.md](../README.md) (project root)

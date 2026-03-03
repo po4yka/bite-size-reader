@@ -2,6 +2,8 @@
 
 This guide explains how to prepare environments, configure secrets, and run the service locally and in production (Docker).
 
+> **Migration note:** production is currently Python-first while Rust components are introduced incrementally. Track cutover phases in [ROADMAP.md](../ROADMAP.md) and use [how-to/migrate-versions.md](how-to/migrate-versions.md) during runtime-track changes.
+
 ## Prerequisites
 
 - Python 3.13+
@@ -9,6 +11,7 @@ This guide explains how to prepare environments, configure secrets, and run the 
 - OpenRouter API key
 - Firecrawl API key
 - Docker (for containerized deployment)
+- Rust toolchain (optional during migration/canary)
 - (Optional) Redis for API rate limits/sync locks
 
 ## Telegram Setup

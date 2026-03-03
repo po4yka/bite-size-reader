@@ -1,0 +1,104 @@
+# Roadmap: Python → Rust Migration
+
+This roadmap tracks the project-wide migration from the current Python runtime to a Rust-first runtime while preserving API and bot behavior.
+
+## Migration Goals
+
+- Preserve existing user workflows (`/summarize`, `/search`, `/digest`, mobile API, MCP).
+- Keep SQLite data compatible during and after migration.
+- Ship in incremental slices with rollback points.
+- Reduce memory footprint and improve throughput/latency in production.
+
+## Current State
+
+- **Production runtime:** Python (stable)
+- **Target runtime:** Rust (incremental adoption)
+- **Migration mode:** Strangler pattern (Rust services/modules replace Python components over time)
+
+## Milestones
+
+### M0 — Baseline and Contract Freeze
+
+- Freeze external behavior contracts:
+  - Telegram command semantics
+  - Mobile API request/response models
+  - Summary JSON contract
+- Add parity test suite for API + end-to-end bot flows.
+- Capture performance baseline (latency, memory, CPU, error rates).
+
+**Exit criteria:** parity tests green on Python baseline, baseline metrics recorded.
+
+### M1 — Rust Foundation (Non-Critical Path)
+
+- Introduce Rust workspace and CI jobs.
+- Build shared crates for:
+  - config loading
+  - structured logging
+  - summary schema validation
+- Keep Python as orchestrator.
+
+**Exit criteria:** Rust crates built/tested in CI; no user-facing behavior change.
+
+### M2 — Data & Contract Layer in Rust
+
+- Move summary-contract validation and normalization into Rust library/service.
+- Add compatibility fixtures to verify exact JSON output shape.
+- Ensure SQLite read/write compatibility with existing schema.
+
+**Exit criteria:** contract parity with Python implementation on fixture corpus.
+
+### M3 — Processing Pipeline Migration
+
+- Migrate URL/content processing pipeline in slices:
+  1. content extraction adapter
+  2. chunking + preprocessing
+  3. LLM orchestration wrappers
+- Run shadow mode (Python authoritative, Rust comparison path).
+
+**Exit criteria:** shadow mismatch rate below agreed threshold; no regression in p95 latency.
+
+### M4 — Interface Layer Migration
+
+- Migrate mobile API and Telegram command routing to Rust.
+- Keep identical API paths and response contracts.
+- Preserve auth/rate-limiting behavior and operational tooling.
+
+**Exit criteria:** canary traffic served by Rust path with rollback switch.
+
+### M5 — Cutover and Decommission
+
+- Default production traffic to Rust runtime.
+- Keep Python fallback for one release window.
+- Remove deprecated Python paths once stability SLO is met.
+
+**Exit criteria:** fallback unused for release window; decommission plan complete.
+
+## Cross-Cutting Workstreams
+
+- **Testing:** parity, characterization, integration, load, and migration tests.
+- **Observability:** unified metrics/log/tracing across Python and Rust components.
+- **Security:** dependency scanning, secrets handling, auth parity checks.
+- **Operations:** deployment templates, rollback docs, runbooks.
+
+## Risks and Mitigations
+
+- **Behavior drift:** enforce contract tests and golden fixtures.
+- **Schema drift:** migration tests against production-like snapshots.
+- **Operational complexity during dual runtime:** strict ownership per slice and feature flags.
+- **Team velocity drop:** keep slices small and reversible.
+
+## Documentation Requirements per Milestone
+
+Each milestone PR must update:
+
+1. `README.md` (runtime status)
+2. `docs/README.md` (navigation and migration status)
+3. Relevant reference/how-to docs in `docs/`
+4. This roadmap file (`ROADMAP.md`)
+
+## Success Metrics
+
+- p95 summarize latency improvement vs Python baseline
+- Memory usage reduction under representative load
+- Error-rate parity or better
+- 100% pass rate for parity contract suite

@@ -8,6 +8,7 @@
 ## Table of Contents
 
 - [Summary](#summary)
+- [Runtime Migration Status](#runtime-migration-status)
 - [Goals & Non‑Goals](#goals--non‑goals)
   - [Goals](#goals)
   - [Non‑Goals](#non‑goals)
@@ -54,6 +55,15 @@
 ---
 
 ## Summary
+
+
+## Runtime Migration Status
+
+- **Current production runtime:** Python
+- **Target runtime:** Rust (incremental migration)
+- **Roadmap:** [ROADMAP.md](../ROADMAP.md)
+
+This specification defines the contracts that must remain stable during migration (API shape, Telegram semantics, summary JSON schema, and SQLite compatibility).
 
 Telegram service that accepts either:
 

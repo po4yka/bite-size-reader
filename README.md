@@ -12,6 +12,7 @@ Async Telegram bot that summarizes web articles and YouTube videos into structur
 
 ## Table of Contents
 
+- [Migration Status](#migration-status)
 - [Architecture Overview](#architecture-overview)
 - [Quick Start](#quick-start)
 - [Common Use Cases](#common-use-cases)
@@ -28,6 +29,18 @@ Async Telegram bot that summarizes web articles and YouTube videos into structur
 - [Local CLI Summary Runner](#local-cli-summary-runner)
 - [Development](#dev-tooling)
 - [Documentation](#documentation)
+
+---
+
+## Migration status
+
+Bite-Size Reader is currently **Python-first in production** and is being migrated to a **Rust-first runtime** in incremental phases.
+
+- Canonical plan: [ROADMAP.md](ROADMAP.md)
+- Documentation hub migration entrypoint: [docs/README.md](docs/README.md)
+- Version/operator migration playbook: [docs/how-to/migrate-versions.md](docs/how-to/migrate-versions.md)
+
+The migration follows a parity-first approach: external contracts remain stable while internals move from Python modules to Rust components over time.
 
 ---
 
