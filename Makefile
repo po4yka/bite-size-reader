@@ -1,4 +1,4 @@
-.PHONY: format lint type test test-unit test-integration test-all all setup-dev venv pre-commit-install pre-commit-run check-lock check-openapi check-openapi-validate pre-migration-checks
+.PHONY: format lint type test test-unit test-integration test-all all setup-dev venv pre-commit-install pre-commit-run check-lock check-openapi check-openapi-validate pre-migration-checks parity-suite capture-baseline rust-check rust-test
 
 format:
 	ruff format .
@@ -27,6 +27,18 @@ test-fast:
 
 pre-migration-checks:
 	bash scripts/run_pre_migration_checks.sh
+
+parity-suite:
+	bash scripts/migration/run_parity_suite.sh
+
+capture-baseline:
+	python scripts/migration/capture_python_baseline.py
+
+rust-check:
+	cargo check --workspace --manifest-path rust/Cargo.toml
+
+rust-test:
+	cargo test --workspace --manifest-path rust/Cargo.toml
 
 all: format lint type test
 

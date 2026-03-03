@@ -17,7 +17,7 @@ This roadmap tracks the project-wide migration from the current Python runtime t
 
 ## Milestones
 
-### M0 — Baseline and Contract Freeze
+### M0 — Baseline and Contract Freeze ✅ Implemented
 
 - Freeze external behavior contracts:
   - Telegram command semantics
@@ -28,7 +28,7 @@ This roadmap tracks the project-wide migration from the current Python runtime t
 
 **Exit criteria:** parity tests green on Python baseline, baseline metrics recorded.
 
-### M1 — Rust Foundation (Non-Critical Path)
+### M1 — Rust Foundation (Non-Critical Path) ✅ Implemented
 
 - Introduce Rust workspace and CI jobs.
 - Build shared crates for:
@@ -72,6 +72,19 @@ This roadmap tracks the project-wide migration from the current Python runtime t
 - Remove deprecated Python paths once stability SLO is met.
 
 **Exit criteria:** fallback unused for release window; decommission plan complete.
+
+
+## Milestone Implementation Notes
+
+- **M0 artifacts**
+  - Parity suite entrypoint: `scripts/migration/run_parity_suite.sh`
+  - Baseline metrics capture: `scripts/migration/capture_python_baseline.py`
+  - Baseline output: `docs/migration/baseline_metrics.json`
+  - History log: `docs/migration/baseline_metrics_history.jsonl`
+- **M1 artifacts**
+  - Rust workspace: `rust/Cargo.toml`
+  - Shared crates: `rust/crates/bsr-config`, `rust/crates/bsr-logging`, `rust/crates/bsr-summary-contract`
+  - CI jobs: `parity-suite` and `rust-foundation` in `.github/workflows/ci.yml`
 
 ## Cross-Cutting Workstreams
 
