@@ -84,7 +84,7 @@ async def refresh_access_token(
         client_id,
     )
 
-    logger.info("token_refreshed", extra={"user_id": user_id, "client_id": client_id})
+    logger.info("session_refreshed", extra={"user_id": user_id, "client_id": client_id})
 
     tokens = TokenPair(
         access_token=access_token,
@@ -107,7 +107,7 @@ async def logout(
         token_hash = hashlib.sha256(token.encode()).hexdigest()
         revoked = await auth_repo.async_revoke_refresh_token(token_hash)
         if revoked:
-            logger.info("refresh_token_revoked", extra={"token_hash": token_hash[:8] + "..."})
+            logger.info("refresh_session_revoked")
     except Exception as e:
         log_exception(logger, "logout_failed", e, level="warning")
 

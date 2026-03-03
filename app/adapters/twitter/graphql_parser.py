@@ -6,7 +6,10 @@ Pure functions with no I/O -- suitable for unit testing with canned fixtures.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import logging
 from typing import Any
+
+LOGGER = logging.getLogger(__name__)
 
 
 @dataclass
@@ -99,8 +102,8 @@ def extract_tweets_from_graphql(response_json: dict[str, Any]) -> list[TweetData
                 tweet = _parse_single_tweet(result, 0)
                 if tweet:
                     tweets.append(tweet)
-    except (KeyError, TypeError):
-        pass
+    except (KeyError, TypeError) as exc:
+        LOGGER.debug("twitter_graphql_parse_skipped", extra={"error": str(exc)})
     return tweets
 
 

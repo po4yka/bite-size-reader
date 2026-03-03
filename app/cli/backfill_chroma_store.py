@@ -233,7 +233,6 @@ def main() -> int:
             print("Options:")
             print("  --db=PATH             Database path (default: /data/app.db)")
             print("  --chroma-host=URL     Chroma host (default from environment or config)")
-            print("  --chroma-token=TOKEN  Chroma auth token")
             print("  --chroma-env=NAME     Environment namespace for the collection")
             print("  --chroma-scope=NAME   User/tenant scope for the collection")
             print("  --chroma-version=VER  Collection version suffix (default from config)")

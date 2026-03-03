@@ -65,7 +65,6 @@ async def run_sync(
             return 1
 
         if not cfg.karakeep.api_key:
-            logger.error("Karakeep API key not configured. Set KARAKEEP_API_KEY.")
             return 1
 
         # Initialize database session

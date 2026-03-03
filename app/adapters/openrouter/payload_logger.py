@@ -105,8 +105,8 @@ class PayloadLogger:
             }
 
             self._logger.debug("openrouter_response_payload", extra={"preview": preview})
-        except Exception:
-            pass
+        except Exception as exc:
+            self._logger.debug("openrouter_response_payload_log_failed", extra={"error": str(exc)})
 
     def log_request(
         self,
