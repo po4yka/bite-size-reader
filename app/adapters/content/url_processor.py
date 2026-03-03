@@ -19,6 +19,7 @@ from app.infrastructure.persistence.message_persistence import MessagePersistenc
 from app.infrastructure.persistence.sqlite.repositories.summary_repository import (
     SqliteSummaryRepositoryAdapter,
 )
+from app.migration.pipeline_shadow import PipelineShadowRunner
 from app.prompts.manager import get_prompt_manager
 
 if TYPE_CHECKING:
@@ -198,6 +199,7 @@ class URLProcessor:
         )
 
         self.message_persistence = MessagePersistence(db=db)
+        self.pipeline_shadow = PipelineShadowRunner(cfg.runtime)
         # Registry for tracking background tasks to prevent GC and ensure shutdown
         self._background_tasks: set[asyncio.Task[Any]] = set()
 
@@ -480,6 +482,22 @@ class URLProcessor:
             notify_silent,
             progress_tracker,
         )
+        pipeline_shadow = getattr(self, "pipeline_shadow", None)
+        if pipeline_shadow is not None:
+            self._schedule_background_task(
+                pipeline_shadow.compare_extraction_adapter(
+                    correlation_id=correlation_id,
+                    request_id=req_id,
+                    url_hash=dedupe_hash,
+                    content_text=content_text,
+                    content_source=_content_source,
+                    title=title,
+                    images_count=len(images or []),
+                ),
+                correlation_id,
+                "m3_shadow_extraction_adapter",
+            )
+
         chosen_lang = choose_language(self.cfg.runtime.preferred_lang, detected)
         needs_ru_translation = not silent and LANG_RU not in (detected, chosen_lang)
         system_prompt = await self._load_system_prompt(chosen_lang)
@@ -505,6 +523,28 @@ class URLProcessor:
             chosen_lang=chosen_lang,
             correlation_id=correlation_id,
         )
+        if pipeline_shadow is not None:
+            enable_chunking_value = getattr(self.cfg.runtime, "enable_chunking", False)
+            enable_chunking = (
+                enable_chunking_value if isinstance(enable_chunking_value, bool) else False
+            )
+            long_context_model = getattr(self.cfg.openrouter, "long_context_model", None)
+            if not isinstance(long_context_model, str):
+                long_context_model = None
+            self._schedule_background_task(
+                pipeline_shadow.compare_chunking_preprocess(
+                    correlation_id=correlation_id,
+                    request_id=req_id,
+                    content_text=content_text,
+                    enable_chunking=enable_chunking,
+                    max_chars=max_chars,
+                    long_context_model=long_context_model,
+                    should_chunk=should_chunk,
+                ),
+                correlation_id,
+                "m3_shadow_chunking_preprocess",
+            )
+
         if not batch_mode:
             await self.response_formatter.send_content_analysis_notification(
                 message,

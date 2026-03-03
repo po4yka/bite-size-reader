@@ -1,0 +1,45 @@
+{
+  "request_count": 5,
+  "requests": [
+    {
+      "preset": "schema_strict",
+      "model": "deepseek/deepseek-v3.2",
+      "response_type": "json_schema",
+      "max_tokens": 4096,
+      "temperature": 0.2,
+      "top_p": 0.9
+    },
+    {
+      "preset": "json_object_guardrail",
+      "model": "deepseek/deepseek-v3.2",
+      "response_type": "json_object",
+      "max_tokens": 3072,
+      "temperature": 0.1,
+      "top_p": 0.9
+    },
+    {
+      "preset": "json_object_flash",
+      "model": "google/gemini-2.5-flash",
+      "response_type": "json_object",
+      "max_tokens": 3072,
+      "temperature": 0.1,
+      "top_p": 0.9
+    },
+    {
+      "preset": "json_object_flash",
+      "model": "openai/gpt-4o-mini",
+      "response_type": "json_object",
+      "max_tokens": 3072,
+      "temperature": 0.1,
+      "top_p": 0.9
+    },
+    {
+      "preset": "json_object_fallback",
+      "model": "deepseek/deepseek-r1",
+      "response_type": "json_object",
+      "max_tokens": 3072,
+      "temperature": 0.1,
+      "top_p": 0.9
+    }
+  ]
+}

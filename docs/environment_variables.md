@@ -115,6 +115,17 @@ API_RATE_LIMIT_DEFAULT=100
 | `SUMMARY_CONTRACT_BACKEND` | `python` | Summary contract backend: `python`, `auto`, or `rust` |
 | `SUMMARY_CONTRACT_RUST_BIN` | _(auto-discover)_ | Absolute path to `bsr-summary-contract` binary override |
 
+## [OPTIONAL] Migration / M3 Pipeline Shadow Mode
+
+| Variable | Default | Description |
+| ---------- | --------- | ------------- |
+| `MIGRATION_SHADOW_MODE_ENABLED` | `false` | Enable M3 shadow comparisons (Python authoritative, Rust comparison path) |
+| `MIGRATION_SHADOW_MODE_SAMPLE_RATE` | `0.0` | Deterministic sample ratio in `[0.0, 1.0]` |
+| `MIGRATION_SHADOW_MODE_TIMEOUT_MS` | `250` | Timeout per Rust shadow call (milliseconds) |
+| `MIGRATION_SHADOW_MODE_MAX_DIFFS` | `8` | Max mismatch diff paths logged per comparison |
+| `MIGRATION_SHADOW_MODE_EMIT_MATCH_LOGS` | `false` | Emit match logs in addition to mismatches/errors |
+| `PIPELINE_SHADOW_RUST_BIN` | _(auto-discover)_ | Absolute path to `bsr-pipeline-shadow` binary override |
+
 ## [OPTIONAL] LLM Provider Selection
 
 | Variable | Default | Description |
@@ -410,6 +421,11 @@ uv run python scripts/twitter_article_live_smoke.py \
 | `SUMMARY_STREAMING_ENABLED` | `true` | Enable section-based summary streaming |
 | `SUMMARY_STREAMING_MODE` | `section` | Streaming mode (`section` or `disabled`) |
 | `SUMMARY_STREAMING_PROVIDER_SCOPE` | `openrouter` | Provider scope for token streaming (`openrouter`, `all`, `disabled`) |
+| `MIGRATION_SHADOW_MODE_ENABLED` | `false` | Enable M3 shadow comparisons |
+| `MIGRATION_SHADOW_MODE_SAMPLE_RATE` | `0.0` | Deterministic sample ratio for M3 shadow comparisons |
+| `MIGRATION_SHADOW_MODE_TIMEOUT_MS` | `250` | Per-slice Rust shadow timeout (ms) |
+| `MIGRATION_SHADOW_MODE_MAX_DIFFS` | `8` | Max diff paths emitted per mismatch |
+| `MIGRATION_SHADOW_MODE_EMIT_MATCH_LOGS` | `false` | Emit logs for successful shadow matches |
 | `TELEGRAM_REPLY_TIMEOUT_SEC` | `30.0` | Timeout for Telegram reply operations |
 
 ---

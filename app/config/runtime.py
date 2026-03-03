@@ -34,6 +34,21 @@ class RuntimeConfig(BaseModel):
     summary_streaming_provider_scope: str = Field(
         default="openrouter", validation_alias="SUMMARY_STREAMING_PROVIDER_SCOPE"
     )
+    migration_shadow_mode_enabled: bool = Field(
+        default=False, validation_alias="MIGRATION_SHADOW_MODE_ENABLED"
+    )
+    migration_shadow_mode_sample_rate: float = Field(
+        default=0.0, validation_alias="MIGRATION_SHADOW_MODE_SAMPLE_RATE"
+    )
+    migration_shadow_mode_emit_match_logs: bool = Field(
+        default=False, validation_alias="MIGRATION_SHADOW_MODE_EMIT_MATCH_LOGS"
+    )
+    migration_shadow_mode_timeout_ms: int = Field(
+        default=250, validation_alias="MIGRATION_SHADOW_MODE_TIMEOUT_MS"
+    )
+    migration_shadow_mode_max_diffs: int = Field(
+        default=8, validation_alias="MIGRATION_SHADOW_MODE_MAX_DIFFS"
+    )
     jwt_secret_key: str = Field(
         default="", validation_alias=AliasChoices("JWT_SECRET_KEY", "JWT_SECRET")
     )
@@ -182,6 +197,48 @@ class RuntimeConfig(BaseModel):
             msg = f"Summary streaming provider scope must be one of {sorted(allowed)}"
             raise ValueError(msg)
         return scope
+
+    @field_validator("migration_shadow_mode_sample_rate", mode="before")
+    @classmethod
+    def _validate_migration_shadow_sample_rate(cls, value: Any) -> float:
+        default = cls.model_fields["migration_shadow_mode_sample_rate"].default
+        try:
+            parsed = float(str(value if value not in (None, "") else default))
+        except (ValueError, TypeError) as exc:
+            msg = "Migration shadow sample rate must be a valid number"
+            raise ValueError(msg) from exc
+        if parsed < 0.0 or parsed > 1.0:
+            msg = "Migration shadow sample rate must be between 0.0 and 1.0"
+            raise ValueError(msg)
+        return parsed
+
+    @field_validator("migration_shadow_mode_timeout_ms", mode="before")
+    @classmethod
+    def _validate_migration_shadow_timeout_ms(cls, value: Any) -> int:
+        default = cls.model_fields["migration_shadow_mode_timeout_ms"].default
+        try:
+            parsed = int(str(value if value not in (None, "") else default))
+        except ValueError as exc:
+            msg = "Migration shadow timeout must be a valid integer"
+            raise ValueError(msg) from exc
+        if parsed < 25 or parsed > 10000:
+            msg = "Migration shadow timeout must be between 25 and 10000 milliseconds"
+            raise ValueError(msg)
+        return parsed
+
+    @field_validator("migration_shadow_mode_max_diffs", mode="before")
+    @classmethod
+    def _validate_migration_shadow_max_diffs(cls, value: Any) -> int:
+        default = cls.model_fields["migration_shadow_mode_max_diffs"].default
+        try:
+            parsed = int(str(value if value not in (None, "") else default))
+        except ValueError as exc:
+            msg = "Migration shadow max diffs must be a valid integer"
+            raise ValueError(msg) from exc
+        if parsed < 1 or parsed > 64:
+            msg = "Migration shadow max diffs must be between 1 and 64"
+            raise ValueError(msg)
+        return parsed
 
     @field_validator("db_backup_interval_minutes", mode="before")
     @classmethod

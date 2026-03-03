@@ -221,7 +221,7 @@ class ModelCapabilities:
             if models:
                 self._structured_supported_models = models
                 self._structured_models = models
-                self._LOGGER.debug(
+                self._logger.debug(
                     "structured_outputs_capabilities_loaded",
                     extra={"models_count": len(models)},
                 )

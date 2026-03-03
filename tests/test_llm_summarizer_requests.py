@@ -108,3 +108,57 @@ class LLMSummarizerRequestTests(unittest.IsolatedAsyncioTestCase):
         assert captured_requests[-1].model_override == "fallback-model"
         assert captured_requests[2].response_format.get("type") == "json_object"
         assert captured_requests[0].response_format.get("type") == "json_schema"
+
+    @patch("app.adapters.content.llm_summarizer.RedisCache")
+    async def test_schedules_m3_shadow_llm_wrapper_comparison(
+        self, redis_cache_mock: MagicMock
+    ) -> None:
+        cache_stub = MagicMock()
+        cache_stub.enabled = False
+        cache_stub.get_json = AsyncMock(return_value=None)
+        cache_stub.set_json = AsyncMock()
+        redis_cache_mock.return_value = cache_stub
+
+        summarizer = LLMSummarizer(
+            cfg=cast("AppConfig", self.cfg),
+            db=self.db,
+            openrouter=self.openrouter,
+            response_formatter=self.response_formatter,
+            audit_func=lambda *args, **kwargs: None,
+            sem=lambda: _DummySemaphore(),
+        )
+        summarizer.pipeline_shadow = MagicMock()
+        summarizer.pipeline_shadow.compare_llm_wrapper_plan = AsyncMock(return_value=None)
+
+        async def _capture_requests(**_: Any):
+            return {"summary_250": "ok", "summary_1000": "ok", "tldr": "ok"}
+
+        with (
+            patch.object(
+                summarizer._workflow,
+                "execute_summary_workflow",
+                AsyncMock(side_effect=_capture_requests),
+            ),
+            patch.object(
+                summarizer._workflow,
+                "_schedule_background_task",
+                MagicMock(return_value=None),
+            ) as schedule_background,
+        ):
+            summary = await summarizer.summarize_content(
+                message=MagicMock(),
+                content_text="short content for testing.",
+                chosen_lang="en",
+                system_prompt="system prompt",
+                req_id=7,
+                max_chars=10_000,
+                correlation_id="cid-shadow",
+            )
+
+        assert summary is not None
+        assert schedule_background.call_count >= 1
+        shadow_call = schedule_background.call_args_list[0]
+        assert shadow_call.args[1] == "m3_shadow_llm_wrapper_plan"
+        assert shadow_call.args[2] == "cid-shadow"
+        shadow_call.args[0].close()
+        summarizer.pipeline_shadow.compare_llm_wrapper_plan.assert_called_once()

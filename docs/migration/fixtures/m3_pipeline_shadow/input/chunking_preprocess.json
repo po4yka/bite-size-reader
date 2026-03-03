@@ -1,0 +1,6 @@
+{
+  "content_text": "A very long article payload." ,
+  "enable_chunking": true,
+  "max_chars": 20,
+  "long_context_model": ""
+}

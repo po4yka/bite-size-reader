@@ -47,7 +47,7 @@ This roadmap tracks the project-wide migration from the current Python runtime t
 
 **Exit criteria:** contract parity with Python implementation on fixture corpus.
 
-### M3 — Processing Pipeline Migration
+### M3 — Processing Pipeline Migration ✅ Implemented
 
 - Migrate URL/content processing pipeline in slices:
   1. content extraction adapter
@@ -93,6 +93,15 @@ This roadmap tracks the project-wide migration from the current Python runtime t
   - M2 suite runner: `scripts/migration/run_m2_parity_suite.sh` (`make m2-parity-suite`)
   - CI job: `m2-contract-parity` in `.github/workflows/ci.yml`
   - Detailed notes: `docs/migration/m2.md`
+- **M3 artifacts**
+  - Rust pipeline shadow service: `rust/crates/bsr-pipeline-shadow/src/lib.rs`, `src/main.rs`
+  - Python shadow runner: `app/migration/pipeline_shadow.py`
+  - Shadow hooks in runtime flow: `app/adapters/content/url_processor.py`, `app/adapters/content/llm_summarizer.py`
+  - Fixture corpus: `docs/migration/fixtures/m3_pipeline_shadow/`
+  - Fixture generator/check: `scripts/migration/generate_m3_shadow_fixtures.py`
+  - M3 suite runner: `scripts/migration/run_m3_parity_suite.sh` (`make m3-parity-suite`)
+  - CI job: `m3-pipeline-shadow-parity` in `.github/workflows/ci.yml`
+  - Detailed notes: `docs/migration/m3.md`
 
 ## Cross-Cutting Workstreams
 

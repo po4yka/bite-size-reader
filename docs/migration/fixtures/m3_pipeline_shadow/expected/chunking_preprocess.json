@@ -1,0 +1,9 @@
+{
+  "content_length": 28,
+  "max_chars": 20,
+  "chunk_size": 4000,
+  "should_chunk": true,
+  "long_context_bypass": false,
+  "estimated_chunk_count": 1,
+  "first_chunk_size": 28
+}

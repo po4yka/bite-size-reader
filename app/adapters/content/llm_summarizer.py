@@ -43,6 +43,7 @@ from app.infrastructure.persistence.sqlite.repositories.request_repository impor
 from app.infrastructure.persistence.sqlite.repositories.summary_repository import (
     SqliteSummaryRepositoryAdapter,
 )
+from app.migration.pipeline_shadow import PipelineShadowRunner
 from app.utils.progress_message_updater import ProgressMessageUpdater
 from app.utils.typing_indicator import typing_indicator
 
@@ -300,6 +301,39 @@ async def _execute_summary_with_progress_for(
         raise
 
 
+def _schedule_m3_shadow_llm_wrapper_plan_for(
+    summarizer: LLMSummarizer,
+    *,
+    correlation_id: str | None,
+    request_id: int,
+    base_model: str,
+    requests: list[LLMRequestConfig],
+) -> None:
+    runner = getattr(summarizer, "pipeline_shadow", None)
+    if runner is None:
+        return
+
+    fallback_models = tuple(getattr(summarizer.cfg.openrouter, "fallback_models", ()) or ())
+    flash_model = getattr(summarizer.cfg.openrouter, "flash_model", None)
+    flash_fallback_models = tuple(
+        getattr(summarizer.cfg.openrouter, "flash_fallback_models", ()) or ()
+    )
+
+    summarizer._workflow._schedule_background_task(
+        runner.compare_llm_wrapper_plan(
+            correlation_id=correlation_id,
+            request_id=request_id,
+            base_model=base_model,
+            requests=requests,
+            fallback_models=fallback_models,
+            flash_model=flash_model if isinstance(flash_model, str) else None,
+            flash_fallback_models=flash_fallback_models,
+        ),
+        "m3_shadow_llm_wrapper_plan",
+        correlation_id,
+    )
+
+
 class LLMSummarizer:
     """Handles AI summarization calls and response processing."""
 
@@ -371,6 +405,7 @@ class LLMSummarizer:
             select_max_tokens=self._insights_helper.select_max_tokens,
             coerce_string_list=coerce_string_list,
         )
+        self.pipeline_shadow = PipelineShadowRunner(cfg.runtime)
         self._last_llm_result: Any | None = None
 
     @property
@@ -434,6 +469,13 @@ class LLMSummarizer:
             content_for_summary=content_for_summary,
             user_content=user_content,
             silent=silent,
+        )
+        _schedule_m3_shadow_llm_wrapper_plan_for(
+            self,
+            correlation_id=correlation_id,
+            request_id=req_id,
+            base_model=base_model,
+            requests=requests,
         )
         stream_coordinator = None
         if self._summary_streaming_enabled(silent=silent):

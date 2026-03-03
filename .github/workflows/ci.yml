@@ -359,6 +359,47 @@ jobs:
       - name: Run Rust M2 contract parity tests
         run: cargo test -p bsr-summary-contract --manifest-path rust/Cargo.toml
 
+  m3-pipeline-shadow-parity:
+    name: Migration Pipeline Shadow Parity (M3)
+    needs: prepare-environment
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Download compiled requirements
+        uses: actions/download-artifact@v8
+        with:
+          name: compiled-requirements
+          path: .
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          version: "0.8.17"
+          enable-cache: true
+          cache-dependency-glob: |
+            pyproject.toml
+            uv.lock
+
+      - name: Install dependencies
+        run: uv pip sync --system requirements-all.txt requirements-dev.txt
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Verify M3 fixture baselines
+        run: PYTHONPATH=. python scripts/migration/generate_m3_shadow_fixtures.py --check
+
+      - name: Run Rust M3 pipeline shadow parity tests
+        run: cargo test -p bsr-pipeline-shadow --manifest-path rust/Cargo.toml
+
   rust-foundation:
     name: Rust Foundation (M1)
     runs-on: ubuntu-latest

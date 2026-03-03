@@ -3,6 +3,7 @@ members = [
   "crates/bsr-config",
   "crates/bsr-logging",
   "crates/bsr-summary-contract",
+  "crates/bsr-pipeline-shadow",
 ]
 resolver = "2"
 
