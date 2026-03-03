@@ -108,6 +108,13 @@ API_RATE_LIMIT_DEFAULT=100
 | `FIRECRAWL_API_KEY` | Firecrawl API key |
 | `OPENROUTER_API_KEY` | OpenRouter API key |
 
+## [OPTIONAL] Migration / Rust Contract Backend
+
+| Variable | Default | Description |
+| ---------- | --------- | ------------- |
+| `SUMMARY_CONTRACT_BACKEND` | `python` | Summary contract backend: `python`, `auto`, or `rust` |
+| `SUMMARY_CONTRACT_RUST_BIN` | _(auto-discover)_ | Absolute path to `bsr-summary-contract` binary override |
+
 ## [OPTIONAL] LLM Provider Selection
 
 | Variable | Default | Description |

@@ -1,0 +1,19 @@
+{
+  "summary250": "a a a a a a a a a a.",
+  "summary1000": "a a a a a a a a a a a a a a.",
+  "tldr": "b b b b b b b b b b b b b b b b b b b b b b b b b b b b b b b b b b b b b b b b b b b b b.",
+  "keyIdeas": ["idea_one", "idea_two", "idea_two"],
+  "topicTags": ["Tech", "tech", "rust"],
+  "entities": {
+    "people": ["Alice", "alice"],
+    "organization": ["OpenAI", "openai"]
+  },
+  "estimatedReadingTimeMin": "7",
+  "keyStats": [
+    {"label": "score", "value": "12.5", "unit": "pt"},
+    {"label": "bad", "value": "n/a"}
+  ],
+  "answeredQuestions": ["One? Two"],
+  "seoKeywords": ["seo_one", "seo_two"],
+  "queryExpansionKeywords": ["qe_one", "qe_two"]
+}

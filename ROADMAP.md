@@ -39,7 +39,7 @@ This roadmap tracks the project-wide migration from the current Python runtime t
 
 **Exit criteria:** Rust crates built/tested in CI; no user-facing behavior change.
 
-### M2 — Data & Contract Layer in Rust
+### M2 — Data & Contract Layer in Rust ✅ Implemented
 
 - Move summary-contract validation and normalization into Rust library/service.
 - Add compatibility fixtures to verify exact JSON output shape.
@@ -85,6 +85,14 @@ This roadmap tracks the project-wide migration from the current Python runtime t
   - Rust workspace: `rust/Cargo.toml`
   - Shared crates: `rust/crates/bsr-config`, `rust/crates/bsr-logging`, `rust/crates/bsr-summary-contract`
   - CI jobs: `parity-suite` and `rust-foundation` in `.github/workflows/ci.yml`
+- **M2 artifacts**
+  - Rust summary contract service: `rust/crates/bsr-summary-contract/src/lib.rs`, `src/main.rs`
+  - Python backend toggle bridge: `app/core/summary_contract_impl/rust_backend.py`
+  - Fixture corpus: `docs/migration/fixtures/m2_summary_contract/`
+  - Fixture generator/check: `scripts/migration/generate_m2_contract_fixtures.py`
+  - M2 suite runner: `scripts/migration/run_m2_parity_suite.sh` (`make m2-parity-suite`)
+  - CI job: `m2-contract-parity` in `.github/workflows/ci.yml`
+  - Detailed notes: `docs/migration/m2.md`
 
 ## Cross-Cutting Workstreams
 

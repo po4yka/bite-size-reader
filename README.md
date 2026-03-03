@@ -47,6 +47,7 @@ Current completed milestones:
 
 - ✅ **M0**: Contract freeze + parity suite + baseline metrics capture (`scripts/migration/*`, `docs/migration/baseline_metrics.json`)
 - ✅ **M1**: Rust workspace foundation with shared crates for config, logging, and summary-contract validation (`rust/`)
+- ✅ **M2**: Rust summary-contract service + fixture parity corpus + SQLite compatibility checks (`docs/migration/m2.md`)
 
 ---
 

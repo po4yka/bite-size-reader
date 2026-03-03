@@ -1,0 +1,14 @@
+{
+  "summary_250": "c c c c c c c c.",
+  "summary_1000": "c c c c c c c c c c c c.",
+  "tldr": "d d d d d d d d d d d d d d d d d d d d d d d d d d d d d d d d d d d d d d d d d d d d d d d d.",
+  "entities": [
+    {"type": "people", "entities": ["Alice", {"name": "Bob"}]},
+    {"type": "organization", "names": ["OpenAI", "Anthropic"]},
+    {"label": "locations", "values": ["Tbilisi", "Berlin"]},
+    "Charlie"
+  ],
+  "topic_tags": ["news", "News", "updates"],
+  "questionsAnswered": ["Q: Why? A: Because.", "What happened? It happened."],
+  "topicTaxonomy": [{"label": "Tech", "score": "0.9", "path": "Root/Tech"}]
+}

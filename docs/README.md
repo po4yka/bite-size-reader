@@ -68,7 +68,8 @@ You want to track or contribute to the migration from Python to Rust.
 2. [How to migrate versions](how-to/migrate-versions.md) - Operator runbook during dual-runtime period
 3. [SPEC.md](SPEC.md) - Source-of-truth contracts that must stay stable through migration
 4. [M0-M1 Implementation Notes](migration/m0-m1.md) - Implemented parity/baseline and Rust foundation artifacts
-5. [Baseline Metrics Guide](migration/baseline-metrics.md) - How to capture and compare Python baseline runs
+5. [M2 Implementation Notes](migration/m2.md) - Rust contract layer, fixture parity, and SQLite compatibility artifacts
+6. [Baseline Metrics Guide](migration/baseline-metrics.md) - How to capture and compare Python baseline runs
 
 ### 🤝 I'm a Contributor
 

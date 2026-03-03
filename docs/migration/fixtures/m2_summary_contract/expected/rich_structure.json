@@ -1,0 +1,355 @@
+{
+  "shape": {
+    "type": "object",
+    "fields": {
+      "answered_questions": {
+        "type": "array",
+        "item": {
+          "type": "any"
+        }
+      },
+      "article_id": {
+        "type": "string"
+      },
+      "categories": {
+        "type": "array",
+        "item": {
+          "type": "any"
+        }
+      },
+      "confidence": {
+        "type": "number"
+      },
+      "entities": {
+        "type": "object",
+        "fields": {
+          "locations": {
+            "type": "array",
+            "item": {
+              "type": "any"
+            }
+          },
+          "organizations": {
+            "type": "array",
+            "item": {
+              "type": "any"
+            }
+          },
+          "people": {
+            "type": "array",
+            "item": {
+              "type": "any"
+            }
+          }
+        }
+      },
+      "estimated_reading_time_min": {
+        "type": "number"
+      },
+      "extractive_quotes": {
+        "type": "array",
+        "item": {
+          "type": "any"
+        }
+      },
+      "forwarded_post_extras": {
+        "type": "object",
+        "fields": {
+          "channel_id": {
+            "type": "number"
+          },
+          "channel_title": {
+            "type": "string"
+          },
+          "channel_username": {
+            "type": "null"
+          },
+          "hashtags": {
+            "type": "array",
+            "item": {
+              "type": "string"
+            }
+          },
+          "mentions": {
+            "type": "array",
+            "item": {
+              "type": "string"
+            }
+          },
+          "message_id": {
+            "type": "null"
+          },
+          "post_datetime": {
+            "type": "null"
+          }
+        }
+      },
+      "hallucination_risk": {
+        "type": "string"
+      },
+      "highlights": {
+        "type": "array",
+        "item": {
+          "type": "any"
+        }
+      },
+      "insights": {
+        "type": "object",
+        "fields": {
+          "caution": {
+            "type": "string"
+          },
+          "critique": {
+            "type": "array",
+            "item": {
+              "type": "any"
+            }
+          },
+          "expansion_topics": {
+            "type": "array",
+            "item": {
+              "type": "any"
+            }
+          },
+          "new_facts": {
+            "type": "array",
+            "item": {
+              "type": "object",
+              "fields": {
+                "confidence": {
+                  "type": "string"
+                },
+                "fact": {
+                  "type": "string"
+                },
+                "source_hint": {
+                  "type": "string"
+                },
+                "why_it_matters": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "next_exploration": {
+            "type": "array",
+            "item": {
+              "type": "any"
+            }
+          },
+          "open_questions": {
+            "type": "array",
+            "item": {
+              "type": "any"
+            }
+          },
+          "suggested_sources": {
+            "type": "array",
+            "item": {
+              "type": "any"
+            }
+          },
+          "topic_overview": {
+            "type": "string"
+          }
+        }
+      },
+      "key_ideas": {
+        "type": "array",
+        "item": {
+          "type": "any"
+        }
+      },
+      "key_points_to_remember": {
+        "type": "array",
+        "item": {
+          "type": "any"
+        }
+      },
+      "key_stats": {
+        "type": "array",
+        "item": {
+          "type": "any"
+        }
+      },
+      "metadata": {
+        "type": "object",
+        "fields": {
+          "author": {
+            "type": "null"
+          },
+          "canonical_url": {
+            "type": "string"
+          },
+          "domain": {
+            "type": "string"
+          },
+          "last_updated": {
+            "type": "null"
+          },
+          "published_at": {
+            "type": "null"
+          },
+          "title": {
+            "type": "string"
+          }
+        }
+      },
+      "quality": {
+        "type": "object",
+        "fields": {
+          "author_bias": {
+            "type": "string"
+          },
+          "emotional_tone": {
+            "type": "string"
+          },
+          "evidence_quality": {
+            "type": "string"
+          },
+          "missing_perspectives": {
+            "type": "array",
+            "item": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "query_expansion_keywords": {
+        "type": "array",
+        "item": {
+          "type": "any"
+        }
+      },
+      "questions_answered": {
+        "type": "array",
+        "item": {
+          "type": "any"
+        }
+      },
+      "readability": {
+        "type": "object",
+        "fields": {
+          "level": {
+            "type": "string"
+          },
+          "method": {
+            "type": "string"
+          },
+          "score": {
+            "type": "number"
+          }
+        }
+      },
+      "semantic_boosters": {
+        "type": "array",
+        "item": {
+          "type": "string"
+        }
+      },
+      "semantic_chunks": {
+        "type": "array",
+        "item": {
+          "type": "object",
+          "fields": {
+            "article_id": {
+              "type": "string"
+            },
+            "language": {
+              "type": "null"
+            },
+            "local_keywords": {
+              "type": "array",
+              "item": {
+                "type": "string"
+              }
+            },
+            "local_summary": {
+              "type": "string"
+            },
+            "section": {
+              "type": "string"
+            },
+            "text": {
+              "type": "string"
+            },
+            "topics": {
+              "type": "array",
+              "item": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
+      "seo_keywords": {
+        "type": "array",
+        "item": {
+          "type": "any"
+        }
+      },
+      "source_type": {
+        "type": "string"
+      },
+      "summary_1000": {
+        "type": "string"
+      },
+      "summary_250": {
+        "type": "string"
+      },
+      "temporal_freshness": {
+        "type": "string"
+      },
+      "tldr": {
+        "type": "string"
+      },
+      "topic_tags": {
+        "type": "array",
+        "item": {
+          "type": "any"
+        }
+      },
+      "topic_taxonomy": {
+        "type": "array",
+        "item": {
+          "type": "any"
+        }
+      }
+    }
+  },
+  "subset": {
+    "summary_250": "e e e e e e e e.",
+    "summary_1000": "e e e e e e e e e e e e e e.",
+    "tldr": "f f f f f f f f f f f f f f f f f f f f f f f f f f f f f f f f f f f f f f f f f f f f f f.",
+    "key_ideas": [],
+    "topic_tags": [],
+    "entities": {
+      "people": [],
+      "organizations": [],
+      "locations": []
+    },
+    "estimated_reading_time_min": 0,
+    "key_stats": [],
+    "questions_answered": [],
+    "topic_taxonomy": [],
+    "article_id": "https://example.com",
+    "source_type": "blog",
+    "temporal_freshness": "evergreen",
+    "hallucination_risk": "low",
+    "confidence": 1.0,
+    "forwarded_post_extras": {
+      "channel_id": 42,
+      "channel_title": "Daily",
+      "channel_username": null,
+      "message_id": null,
+      "post_datetime": null,
+      "hashtags": [
+        "#one",
+        "#one"
+      ],
+      "mentions": [
+        "@dev"
+      ]
+    }
+  }
+}

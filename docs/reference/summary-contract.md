@@ -14,6 +14,7 @@ Complete specification for the strict JSON schema enforced by Bite-Size Reader f
 **Last Updated:** 2026-02-09
 
 **Validation Location:** `app/core/summary_contract.py`
+**Rust Service/Library (M2):** `rust/crates/bsr-summary-contract`
 **Pydantic Model:** `app/core/summary_schema.py`
 
 ---

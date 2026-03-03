@@ -24,6 +24,30 @@ During migration, choose one of these tracks per release:
 
 Recommended progression: `python-stable` → `rust-canary` → `rust-primary`.
 
+### M2 Contract Backend Toggle
+
+During M2 validation/canary runs, you can route summary contract shaping through Rust:
+
+```bash
+# Default (stable)
+SUMMARY_CONTRACT_BACKEND=python
+
+# Use Rust when binary is present, fallback to Python
+SUMMARY_CONTRACT_BACKEND=auto
+
+# Prefer Rust explicitly (still fallback on runtime failure)
+SUMMARY_CONTRACT_BACKEND=rust
+
+# Optional: explicit binary path override
+SUMMARY_CONTRACT_RUST_BIN=/absolute/path/to/bsr-summary-contract
+```
+
+Run the milestone suite before promotion:
+
+```bash
+make m2-parity-suite
+```
+
 ## Before You Start
 
 ### Backup First
