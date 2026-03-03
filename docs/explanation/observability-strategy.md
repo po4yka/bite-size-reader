@@ -196,6 +196,44 @@ async def send_error_message(self, chat_id: int, error: Exception, correlation_i
 
 ---
 
+### 6. Exception Visibility Policy (No Silent Suppression)
+
+**Rule:** Avoid `except: pass` in production paths.
+
+When exceptions are intentionally swallowed (for resilience/fallback behavior), emit at least a debug-level event with enough context to diagnose the fallback path.
+
+**Preferred pattern:**
+
+```python
+try:
+    optional_operation()
+except KnownError as exc:
+    logger.debug("optional_operation_failed", extra={"error": str(exc), "context": context_id})
+    # continue with fallback
+```
+
+**Why:** This preserves user-facing resilience while preventing invisible failures that block root-cause analysis.
+
+---
+
+### 7. Sensitive Logging Guardrails
+
+Do not log raw credentials, bearer tokens, API keys, refresh tokens, or full token hashes.
+
+Use one of:
+
+- Omit sensitive fields entirely.
+- Log an irreversible short fingerprint only when required for diagnostics.
+- Prefer neutral wording in messages and CLI help (e.g., “credential” rather than key/token examples) when examples could encourage unsafe copy/paste into logs.
+
+**Review checklist for log changes:**
+
+1. Could this message leak a secret if copied to support tickets?
+2. Could this `extra` payload include auth headers or token-like fields?
+3. If this is a fallback path, is there enough context to debug without exposing sensitive values?
+
+---
+
 ## Tracing External API Calls
 
 ### Firecrawl API Tracing

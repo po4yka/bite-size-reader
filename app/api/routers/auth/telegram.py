@@ -89,13 +89,13 @@ def verify_telegram_auth(
     try:
         bot_token = Config.get("BOT_TOKEN")
     except ValueError as err:
-        logger.error("BOT_TOKEN not configured - cannot verify Telegram auth")
+        logger.error("Telegram auth credential is not configured - cannot verify request")
         raise ConfigurationError(
             "Server misconfiguration: BOT_TOKEN is not set.", config_key="BOT_TOKEN"
         ) from err
 
     if not bot_token:
-        logger.error("BOT_TOKEN is empty - cannot verify Telegram auth")
+        logger.error("Telegram auth credential is empty - cannot verify request")
         raise ConfigurationError(
             "Server misconfiguration: BOT_TOKEN is empty.", config_key="BOT_TOKEN"
         )

@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validator
 
 from ._validators import validate_model_name
+
+LOGGER = logging.getLogger(__name__)
 
 
 class YouTubeConfig(BaseModel):
@@ -200,6 +203,7 @@ class AttachmentConfig(BaseModel):
                 continue
             try:
                 validated.append(validate_model_name(candidate))
-            except ValueError:
+            except ValueError as exc:
+                LOGGER.debug("invalid_preferred_model_ignored", extra={"error": str(exc)})
                 continue
         return tuple(validated)

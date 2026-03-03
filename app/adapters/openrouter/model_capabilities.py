@@ -29,6 +29,8 @@ EXPLICIT_CACHING_PROVIDERS: frozenset[str] = frozenset({"anthropic", "google"})
 
 # Providers with automatic/implicit caching (no configuration needed)
 # These handle caching server-side without explicit cache_control
+LOGGER = logging.getLogger(__name__)
+
 AUTOMATIC_CACHING_PROVIDERS: frozenset[str] = frozenset(
     {
         "openai",  # Automatic, 1024 token minimum, free writes, 0.25-0.50x reads
@@ -302,7 +304,11 @@ class ModelCapabilities:
                     model_id = item.get("id") or item.get("name") or item.get("model")
                     if isinstance(model_id, str) and model_id:
                         models.add(model_id)
-            except Exception:
+            except Exception as exc:
+                LOGGER.debug(
+                    "openrouter_model_entry_parse_skipped",
+                    extra={"error": str(exc)},
+                )
                 continue
 
         return models

@@ -123,11 +123,11 @@ class ContentHandlerImpl:
         if not explicit_limit_set and topic_tokens:
             candidate_index = len(topic_tokens) - 1
             if candidate_index >= 0 and topic_tokens[candidate_index][1]:
-                candidate_token = topic_tokens[candidate_index][0]
+                raw_limit_value = topic_tokens[candidate_index][0]
                 try:
-                    parsed_limit = int(candidate_token)
+                    parsed_limit = int(raw_limit_value)
                 except ValueError:
-                    pass
+                    logger.debug("content_query_limit_parse_failed", extra={"raw_value": raw_limit_value})
                 else:
                     if parsed_limit <= max_limit:
                         has_non_digit_before = any(

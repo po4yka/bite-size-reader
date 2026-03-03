@@ -373,8 +373,8 @@ class InitSessionHandlerImpl:
                     import asyncio
 
                     asyncio.get_event_loop().create_task(state.client.disconnect())
-                except Exception:
-                    pass
+                except Exception as exc:
+                    logger.debug("init_session_disconnect_schedule_failed", extra={"uid": uid, "error": str(exc)})
             logger.info(
                 "init_session_expired",
                 extra={"uid": uid, "ttl": SESSION_INIT_TTL_SECONDS},

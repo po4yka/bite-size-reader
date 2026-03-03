@@ -21,7 +21,7 @@ def _get_encoder():
 
         _encoder = tiktoken.get_encoding("cl100k_base")
     except Exception:
-        logger.debug("tiktoken not available, using heuristic token counting")
+        logger.debug("encoder package unavailable, using heuristic budget estimation")
         _encoder = None
     return _encoder
 

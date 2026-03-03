@@ -188,8 +188,8 @@ class TelegramClient:
                         "Резюме статей и видео в краткие инсайты",
                         language_code="ru",
                     )
-                except Exception:
-                    pass
+                except Exception as exc:
+                    logger.debug("telegram_client_set_descriptions_failed", extra={"error": str(exc)})
 
                 # Set up persistent menu button that shows commands
                 # The default behavior shows the command menu when button is tapped

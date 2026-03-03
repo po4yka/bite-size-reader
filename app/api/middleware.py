@@ -76,8 +76,8 @@ async def webapp_auth_middleware(request: Request, call_next: Callable):
             user = verify_telegram_webapp_init_data(init_data)
             request.state.webapp_user = user
             request.state.user_id = str(user["user_id"])
-        except Exception:
-            pass  # Fall through to JWT auth
+        except Exception as exc:
+            logger.debug("webapp_auth_header_parse_failed", extra={"error": str(exc)})
     return await call_next(request)
 
 
@@ -134,7 +134,7 @@ def _get_user_id_from_auth_header(request: Request) -> str | None:
 
         payload = decode_token(token, expected_type="access")
     except Exception:
-        logger.warning("jwt_token_decode_failed", exc_info=True)
+        logger.warning("jwt_decode_failed_for_rate_limit")
         return None
     user_id = payload.get("user_id")
     if isinstance(user_id, int):
