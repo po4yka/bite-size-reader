@@ -343,6 +343,11 @@ First implementation slice after inventory lock:
   is covered in both `bsr-telegram-runtime` Rust tests and Python bridge
   routing tests to keep non-handled case-sensitive passthrough semantics stable
   for argumented command invocations without bot mentions.
+- **Leading-whitespace command-shape parity hardening (M6-S66):**
+  command-like fixture with leading whitespace `" /findonline rust"` is now
+  explicitly covered across existing `bsr-telegram-runtime` slash-at-start Rust
+  command-route tests and Python bridge routing tests to keep non-handled
+  passthrough semantics stable when slash-prefixed tokens are not at offset 0.
 
 Out-of-scope for M6-S1 (defer to later slices):
 
