@@ -104,7 +104,7 @@ def _build_python_command_decision(text: str) -> TelegramRuntimeCommandDecision:
 
 @dataclass(frozen=True)
 class TelegramRuntimeOptions:
-    backend: str = "python"
+    backend: str = "rust"
     timeout_ms: int = 150
 
 
@@ -113,7 +113,7 @@ class TelegramRuntimeRunner:
 
     def __init__(self, runtime_cfg: Any) -> None:
         self.options = TelegramRuntimeOptions(
-            backend=str(getattr(runtime_cfg, "migration_telegram_runtime_backend", "python"))
+            backend=str(getattr(runtime_cfg, "migration_telegram_runtime_backend", "rust"))
             .strip()
             .lower(),
             timeout_ms=int(getattr(runtime_cfg, "migration_telegram_runtime_timeout_ms", 150)),

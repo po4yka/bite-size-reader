@@ -65,7 +65,7 @@ class RuntimeConfig(BaseModel):
         default=8, validation_alias="MIGRATION_INTERFACE_MAX_DIFFS"
     )
     migration_telegram_runtime_backend: str = Field(
-        default="python", validation_alias="MIGRATION_TELEGRAM_RUNTIME_BACKEND"
+        default="rust", validation_alias="MIGRATION_TELEGRAM_RUNTIME_BACKEND"
     )
     migration_telegram_runtime_timeout_ms: int = Field(
         default=150, validation_alias="MIGRATION_TELEGRAM_RUNTIME_TIMEOUT_MS"
@@ -327,7 +327,7 @@ class RuntimeConfig(BaseModel):
     @field_validator("migration_telegram_runtime_backend", mode="before")
     @classmethod
     def _validate_migration_telegram_runtime_backend(cls, value: Any) -> str:
-        backend = str(value or "python").strip().lower()
+        backend = str(value or "rust").strip().lower()
         allowed = {"python", "rust"}
         if backend not in allowed:
             msg = f"MIGRATION_TELEGRAM_RUNTIME_BACKEND must be one of {sorted(allowed)}"

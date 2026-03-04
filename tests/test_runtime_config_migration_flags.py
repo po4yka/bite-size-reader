@@ -16,9 +16,9 @@ def test_m3_shadow_mode_disallows_disabled_value() -> None:
         RuntimeConfig(migration_shadow_mode_enabled=False)
 
 
-def test_m6_telegram_runtime_backend_defaults_to_python() -> None:
+def test_m6_telegram_runtime_backend_defaults_to_rust() -> None:
     cfg = RuntimeConfig()
-    assert cfg.migration_telegram_runtime_backend == "python"
+    assert cfg.migration_telegram_runtime_backend == "rust"
 
 
 def test_m6_telegram_runtime_backend_accepts_rust() -> None:

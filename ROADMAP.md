@@ -158,6 +158,10 @@ This roadmap tracks the project-wide migration from the current Python runtime t
     - M6-S4 config hardening (invalid backend rejection, no implicit fallback):
       `app/migration/telegram_runtime.py`,
       `tests/test_telegram_runtime_runner.py`
+    - M6-S5 rollout posture hardening (rust-default backend, explicit python rollback):
+      `app/config/runtime.py`, `app/migration/telegram_runtime.py`,
+      `.env.example`, `docs/environment_variables.md`,
+      `docs/how-to/migrate-versions.md`
 
 ## Cross-Cutting Workstreams
 

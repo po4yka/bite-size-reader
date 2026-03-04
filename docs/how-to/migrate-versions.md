@@ -71,15 +71,15 @@ MIGRATION_INTERFACE_BACKEND=rust
 M6 currently uses a scoped Telegram command route-decision toggle:
 
 ```bash
-# Explicit rollback mode
-MIGRATION_TELEGRAM_RUNTIME_BACKEND=python
+# Rust authoritative default mode (no implicit Python fallback on Rust failures)
+MIGRATION_TELEGRAM_RUNTIME_BACKEND=rust
 
-# Rust authoritative mode (no implicit Python fallback on Rust failures)
-# MIGRATION_TELEGRAM_RUNTIME_BACKEND=rust
+# Explicit rollback mode
+# MIGRATION_TELEGRAM_RUNTIME_BACKEND=python
 MIGRATION_TELEGRAM_RUNTIME_TIMEOUT_MS=150
 ```
 
-Run the M6 suite before enabling Rust authoritative mode:
+Run the M6 suite before rollout and when toggling to rollback mode:
 
 ```bash
 make m6-telegram-runtime-suite

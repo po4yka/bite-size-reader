@@ -10,7 +10,7 @@ from app.migration.telegram_runtime import TelegramRuntimeRunner
 
 def _runtime_cfg(**overrides: object) -> SimpleNamespace:
     defaults: dict[str, object] = {
-        "migration_telegram_runtime_backend": "python",
+        "migration_telegram_runtime_backend": "rust",
         "migration_telegram_runtime_timeout_ms": 150,
     }
     defaults.update(overrides)
@@ -18,9 +18,13 @@ def _runtime_cfg(**overrides: object) -> SimpleNamespace:
 
 
 @pytest.mark.asyncio
-async def test_runner_defaults_to_python_backend_when_not_configured() -> None:
+async def test_runner_defaults_to_rust_backend_when_not_configured() -> None:
     runner = TelegramRuntimeRunner(SimpleNamespace())
-    decision = await runner.resolve_command_route(text="/findonline rust")
+    with patch(
+        "app.migration.telegram_runtime.run_rust_telegram_runtime_command",
+        return_value={"command": "/find", "handled": True},
+    ):
+        decision = await runner.resolve_command_route(text="/findonline rust")
     assert decision.command == "/find"
     assert decision.handled is True
 
