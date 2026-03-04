@@ -1,6 +1,7 @@
 import asyncio
 
 import pytest
+from pydantic import HttpUrl, TypeAdapter
 
 from app.adapters.telegram.commands import CommandContext, CommandRegistry
 from app.api.models.requests import SubmitURLRequest
@@ -35,7 +36,8 @@ def test_telegram_command_aliases_route_consistently() -> None:
 
 
 def test_mobile_request_contract_defaults() -> None:
-    payload = SubmitURLRequest(input_url="https://example.com/article")
+    input_url: HttpUrl = TypeAdapter(HttpUrl).validate_python("https://example.com/article")
+    payload = SubmitURLRequest(input_url=input_url)
 
     assert payload.type == "url"
     assert str(payload.input_url) == "https://example.com/article"
