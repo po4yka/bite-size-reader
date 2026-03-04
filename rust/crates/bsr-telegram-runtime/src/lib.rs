@@ -568,6 +568,15 @@ mod tests {
     }
 
     #[test]
+    fn bare_canonical_command_without_bot_mention_is_case_sensitive() {
+        let decision = resolve_command_route(&TelegramCommandRouteInput {
+            text: "/Find".to_string(),
+        });
+        assert_eq!(decision.command, None);
+        assert!(!decision.handled);
+    }
+
+    #[test]
     fn canonical_command_with_bot_mention_is_case_sensitive() {
         let decision = resolve_command_route(&TelegramCommandRouteInput {
             text: "/Find@mybot rust".to_string(),
