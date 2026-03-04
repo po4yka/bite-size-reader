@@ -127,6 +127,11 @@ First implementation slice after inventory lock:
   covered in both `bsr-telegram-runtime` Rust tests and Python bridge routing
   tests to keep bot-username casing behavior stable for bot-directed
   invocations.
+- **Empty bot-mention suffix parity hardening (M6-S27):** explicit empty
+  username `@bot` suffix fixture for known-command canonical dispatch is
+  covered in both `bsr-telegram-runtime` Rust tests and Python bridge routing
+  tests to keep empty-mention suffix behavior stable for bot-directed
+  invocations.
 
 Out-of-scope for M6-S1 (defer to later slices):
 
