@@ -288,6 +288,18 @@ pub fn sqlite_roundtrip_smoke(db_path: impl AsRef<Path>) -> Result<(), SqliteCom
     request_insert_values.push(SqlValue::Text("url".to_string()));
     request_insert_cols.push("status");
     request_insert_values.push(SqlValue::Text("pending".to_string()));
+    if request_columns.contains("input_url") {
+        request_insert_cols.push("input_url");
+        request_insert_values.push(SqlValue::Text(
+            "https://example.com/rust-m2-smoke".to_string(),
+        ));
+    }
+    if request_columns.contains("normalized_url") {
+        request_insert_cols.push("normalized_url");
+        request_insert_values.push(SqlValue::Text(
+            "https://example.com/rust-m2-smoke".to_string(),
+        ));
+    }
     if request_columns.contains("created_at") {
         request_insert_cols.push("created_at");
         request_insert_values.push(SqlValue::Text("CURRENT_TIMESTAMP".to_string()));

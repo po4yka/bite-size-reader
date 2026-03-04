@@ -86,11 +86,17 @@ fn m2_fixture_shape_and_subset_parity() {
 
 #[test]
 fn sqlite_schema_compatibility_matches_python_snapshot() {
-    let snapshot = project_root().join("app_backup.db");
+    let (snapshot, checked_paths) = resolve_sqlite_snapshot().unwrap_or_else(|| {
+        panic!(
+            "expected sqlite snapshot at one of: {:?}",
+            sqlite_snapshot_candidates()
+        )
+    });
     assert!(
         snapshot.is_file(),
-        "expected sqlite snapshot at {:?}",
-        snapshot
+        "resolved sqlite snapshot is not a file: {:?} (checked: {:?})",
+        snapshot,
+        checked_paths
     );
 
     let report = check_sqlite_compatibility(&snapshot).expect("sqlite compatibility check");
@@ -110,6 +116,42 @@ fn project_root() -> PathBuf {
         .join("..")
         .join("..")
         .join("..")
+}
+
+fn sqlite_snapshot_candidates() -> Vec<PathBuf> {
+    let root = project_root();
+    let mut candidates = vec![
+        root.join("app_backup.db"),
+        root.join("data").join("app_backup.db"),
+        root.join("data").join("app.db"),
+    ];
+    if let Some(latest_backup) = latest_backup_snapshot(&root) {
+        candidates.push(latest_backup);
+    }
+    candidates
+}
+
+fn resolve_sqlite_snapshot() -> Option<(PathBuf, Vec<PathBuf>)> {
+    let candidates = sqlite_snapshot_candidates();
+    let selected = candidates.iter().find(|path| path.is_file()).cloned()?;
+    Some((selected, candidates))
+}
+
+fn latest_backup_snapshot(root: &Path) -> Option<PathBuf> {
+    let backup_dir = root.join("data").join("backups");
+    let mut backups: Vec<PathBuf> = fs::read_dir(backup_dir)
+        .ok()?
+        .filter_map(Result::ok)
+        .map(|entry| entry.path())
+        .filter(|path| path.extension().is_some_and(|ext| ext == "db"))
+        .filter(|path| {
+            path.file_name()
+                .and_then(|name| name.to_str())
+                .is_some_and(|name| name.starts_with("app-"))
+        })
+        .collect();
+    backups.sort();
+    backups.pop()
 }
 
 fn shape_signature(value: &Value) -> Value {
