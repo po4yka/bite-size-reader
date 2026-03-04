@@ -302,6 +302,60 @@ def build_python_chunk_synthesis_prompt_snapshot_from_input(
     }
 
 
+def build_python_summary_user_content_snapshot_from_input(
+    payload: dict[str, Any],
+) -> dict[str, Any]:
+    content_for_summary = str(payload.get("content_for_summary") or "")
+    chosen_lang = str(payload.get("chosen_lang") or "")
+    search_context = str(payload.get("search_context") or "")
+
+    lower = content_for_summary[:2000].lower()
+    if any(kw in lower for kw in ("abstract", "methodology", "doi:", "et al.", "arxiv")):
+        content_hint = (
+            "CONTENT HINT: Research paper. Focus on methodology, findings, and limitations.\n"
+        )
+    elif any(
+        kw in lower for kw in ("step 1", "how to", "tutorial", "prerequisites", "getting started")
+    ):
+        content_hint = "CONTENT HINT: Tutorial. Focus on steps, prerequisites, and outcomes.\n"
+    elif any(
+        kw in lower
+        for kw in (
+            "breaking:",
+            "reuters",
+            "reported today",
+            "press release",
+            "associated press",
+        )
+    ):
+        content_hint = "CONTENT HINT: News article. Focus on who, what, when, where, why.\n"
+    elif any(
+        kw in lower for kw in ("in my opinion", "i think", "i believe", "editorial", "commentary")
+    ):
+        content_hint = (
+            "CONTENT HINT: Opinion piece. Focus on the author's thesis and supporting arguments.\n"
+        )
+    else:
+        content_hint = ""
+
+    response_language = "Russian" if chosen_lang == "ru" else "English"
+    user_content = (
+        "Analyze the following content and output ONLY a valid JSON object that matches "
+        "the system contract exactly. "
+        f"Respond in {response_language}. "
+        "Do NOT include any text outside the JSON.\n\n"
+        f"{content_hint}"
+        f"CONTENT START\n{content_for_summary}\nCONTENT END"
+    )
+    if search_context:
+        user_content = f"{user_content}\n\n{search_context}"
+
+    return {
+        "content_hint": content_hint,
+        "user_content": user_content,
+    }
+
+
 def build_rust_llm_wrapper_input_from_requests(
     *,
     base_model: str,
@@ -640,6 +694,31 @@ class PipelineShadowRunner:
             correlation_id=correlation_id,
             request_id=request_id,
             surface="pipeline_chunk_synthesis_prompt",
+        )
+
+    async def resolve_summary_user_content(
+        self,
+        *,
+        correlation_id: str | None,
+        request_id: int | None,
+        content_for_summary: str,
+        chosen_lang: str,
+        search_context: str,
+    ) -> dict[str, Any]:
+        rust_input = {
+            "content_for_summary": content_for_summary,
+            "chosen_lang": chosen_lang,
+            "search_context": search_context,
+        }
+        if not self.options.enabled:
+            return build_python_summary_user_content_snapshot_from_input(rust_input)
+
+        return await self._run_authoritative_slice(
+            command="summary-user-content",
+            rust_input=rust_input,
+            correlation_id=correlation_id,
+            request_id=request_id,
+            surface="pipeline_summary_user_content",
         )
 
     async def _run_authoritative_slice(

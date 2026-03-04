@@ -15,6 +15,7 @@ from app.migration.pipeline_shadow import (
     build_python_extraction_adapter_snapshot,
     build_python_llm_wrapper_plan_snapshot_from_input,
     build_python_summary_aggregate_snapshot_from_input,
+    build_python_summary_user_content_snapshot_from_input,
 )
 
 INPUT_DIR = Path("docs/migration/fixtures/m3_pipeline_shadow/input")
@@ -47,6 +48,9 @@ def _build_expected(fixture_name: str, payload: dict[str, Any]) -> dict[str, Any
 
     if fixture_name == "chunk_synthesis_prompt":
         return build_python_chunk_synthesis_prompt_snapshot_from_input(payload)
+
+    if fixture_name == "summary_user_content":
+        return build_python_summary_user_content_snapshot_from_input(payload)
 
     msg = f"unknown fixture name: {fixture_name}"
     raise ValueError(msg)

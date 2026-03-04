@@ -132,6 +132,9 @@ class LLMSummarizerRequestTests(unittest.IsolatedAsyncioTestCase):
         summarizer.pipeline_shadow.resolve_content_cleaner = AsyncMock(
             return_value={"content_text": "short content for testing."}
         )
+        summarizer.pipeline_shadow.resolve_summary_user_content = AsyncMock(
+            return_value={"user_content": "RUST USER CONTENT"}
+        )
         summarizer.pipeline_shadow.resolve_llm_wrapper_plan = AsyncMock(
             return_value={
                 "request_count": 3,
@@ -187,8 +190,10 @@ class LLMSummarizerRequestTests(unittest.IsolatedAsyncioTestCase):
 
         assert summary is not None
         summarizer.pipeline_shadow.resolve_content_cleaner.assert_called_once()
+        summarizer.pipeline_shadow.resolve_summary_user_content.assert_called_once()
         summarizer.pipeline_shadow.resolve_llm_wrapper_plan.assert_called_once()
         assert captured_requests, "requests should be passed to the workflow"
+        assert captured_requests[0].messages[1]["content"] == "RUST USER CONTENT"
         assert [req.preset_name for req in captured_requests] == [
             "schema_strict",
             "json_object_guardrail",

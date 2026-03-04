@@ -114,6 +114,19 @@ pub struct ChunkSynthesisPromptSnapshot {
     pub user_content: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct SummaryUserContentInput {
+    pub content_for_summary: String,
+    pub chosen_lang: String,
+    pub search_context: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct SummaryUserContentSnapshot {
+    pub content_hint: String,
+    pub user_content: String,
+}
+
 pub fn build_extraction_adapter_snapshot(
     input: &ExtractionAdapterInput,
 ) -> ExtractionAdapterSnapshot {
@@ -299,6 +312,31 @@ pub fn build_chunk_synthesis_prompt_snapshot(
     );
     ChunkSynthesisPromptSnapshot {
         context_text,
+        user_content,
+    }
+}
+
+pub fn build_summary_user_content_snapshot(
+    input: &SummaryUserContentInput,
+) -> SummaryUserContentSnapshot {
+    let content_hint = detect_summary_content_type_hint(&input.content_for_summary);
+    let response_language = if input.chosen_lang == "ru" {
+        "Russian"
+    } else {
+        "English"
+    };
+
+    let mut user_content = format!(
+        "Analyze the following content and output ONLY a valid JSON object that matches the system contract exactly. Respond in {response_language}. Do NOT include any text outside the JSON.\n\n{content_hint}CONTENT START\n{}\nCONTENT END",
+        input.content_for_summary
+    );
+    if !input.search_context.is_empty() {
+        user_content.push_str("\n\n");
+        user_content.push_str(&input.search_context);
+    }
+
+    SummaryUserContentSnapshot {
+        content_hint,
         user_content,
     }
 }
@@ -1018,6 +1056,60 @@ fn python_json_dumps_value(value: &Value) -> String {
     }
 }
 
+fn detect_summary_content_type_hint(content: &str) -> String {
+    let lower: String = content
+        .chars()
+        .take(2000)
+        .collect::<String>()
+        .to_lowercase();
+    if ["abstract", "methodology", "doi:", "et al.", "arxiv"]
+        .iter()
+        .any(|needle| lower.contains(needle))
+    {
+        return "CONTENT HINT: Research paper. Focus on methodology, findings, and limitations.\n"
+            .to_string();
+    }
+    if [
+        "step 1",
+        "how to",
+        "tutorial",
+        "prerequisites",
+        "getting started",
+    ]
+    .iter()
+    .any(|needle| lower.contains(needle))
+    {
+        return "CONTENT HINT: Tutorial. Focus on steps, prerequisites, and outcomes.\n"
+            .to_string();
+    }
+    if [
+        "breaking:",
+        "reuters",
+        "reported today",
+        "press release",
+        "associated press",
+    ]
+    .iter()
+    .any(|needle| lower.contains(needle))
+    {
+        return "CONTENT HINT: News article. Focus on who, what, when, where, why.\n".to_string();
+    }
+    if [
+        "in my opinion",
+        "i think",
+        "i believe",
+        "editorial",
+        "commentary",
+    ]
+    .iter()
+    .any(|needle| lower.contains(needle))
+    {
+        return "CONTENT HINT: Opinion piece. Focus on the author's thesis and supporting arguments.\n"
+            .to_string();
+    }
+    String::new()
+}
+
 fn detect_language_hint(content: &str) -> String {
     let mut cyrillic = 0usize;
     let mut latin = 0usize;
@@ -1219,5 +1311,25 @@ mod tests {
         assert!(snapshot.user_content.contains("Respond in Russian."));
         assert!(snapshot.user_content.contains("DRAFT CONTENT START"));
         assert!(snapshot.user_content.contains("DRAFT CONTENT END"));
+    }
+
+    #[test]
+    fn summary_user_content_snapshot_builds_user_prompt() {
+        let input = SummaryUserContentInput {
+            content_for_summary: "Breaking: Reuters reported today that migration completed."
+                .to_string(),
+            chosen_lang: "ru".to_string(),
+            search_context: "WEB SEARCH CONTEXT:\n- source".to_string(),
+        };
+
+        let snapshot = build_summary_user_content_snapshot(&input);
+        assert_eq!(
+            snapshot.content_hint,
+            "CONTENT HINT: News article. Focus on who, what, when, where, why.\n"
+        );
+        assert!(snapshot.user_content.contains("Respond in Russian."));
+        assert!(snapshot.user_content.contains("CONTENT START"));
+        assert!(snapshot.user_content.contains("CONTENT END"));
+        assert!(snapshot.user_content.contains("WEB SEARCH CONTEXT"));
     }
 }

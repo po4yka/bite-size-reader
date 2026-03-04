@@ -1,0 +1,4 @@
+{
+  "content_hint": "CONTENT HINT: Research paper. Focus on methodology, findings, and limitations.\n",
+  "user_content": "Analyze the following content and output ONLY a valid JSON object that matches the system contract exactly. Respond in Russian. Do NOT include any text outside the JSON.\n\nCONTENT HINT: Research paper. Focus on methodology, findings, and limitations.\nCONTENT START\nBreaking: Reuters reported today that the migration pipeline reached stable parity. Press release notes include methodology, benchmarks, and rollout constraints.\nCONTENT END\n\nWEB SEARCH CONTEXT:\n- Source: https://example.com/migration\n- Key detail: zero fallback activations in release window"
+}

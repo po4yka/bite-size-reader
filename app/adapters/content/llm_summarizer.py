@@ -439,6 +439,40 @@ async def _prepare_summary_content_for(
     return content_for_summary, model_override
 
 
+async def _resolve_m3_rust_summary_user_content_for(
+    summarizer: LLMSummarizer,
+    *,
+    content_for_summary: str,
+    chosen_lang: str,
+    search_context: str,
+    correlation_id: str | None,
+    request_id: int,
+) -> str:
+    runner = getattr(summarizer, "pipeline_shadow", None)
+    if runner is None or not runner.options.enabled:
+        return summarizer._build_summary_user_content(
+            content_for_summary=content_for_summary,
+            chosen_lang=chosen_lang,
+            search_context=search_context,
+        )
+
+    payload = await runner.resolve_summary_user_content(
+        correlation_id=correlation_id,
+        request_id=request_id,
+        content_for_summary=content_for_summary,
+        chosen_lang=chosen_lang,
+        search_context=search_context,
+    )
+    rust_content = payload.get("user_content")
+    if isinstance(rust_content, str) and rust_content.strip():
+        return rust_content
+    return summarizer._build_summary_user_content(
+        content_for_summary=content_for_summary,
+        chosen_lang=chosen_lang,
+        search_context=search_context,
+    )
+
+
 class LLMSummarizer:
     """Handles AI summarization calls and response processing."""
 
@@ -555,10 +589,13 @@ class LLMSummarizer:
         search_context = await self._maybe_enrich_with_search(
             content_for_summary, chosen_lang, correlation_id
         )
-        user_content = self._build_summary_user_content(
+        user_content = await _resolve_m3_rust_summary_user_content_for(
+            self,
             content_for_summary=content_for_summary,
             chosen_lang=chosen_lang,
             search_context=search_context,
+            correlation_id=correlation_id,
+            request_id=req_id,
         )
         self._log_llm_content_validation(
             content_for_summary, system_prompt, user_content, correlation_id

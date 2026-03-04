@@ -56,6 +56,7 @@ This roadmap tracks the project-wide migration from the current Python runtime t
   4. LLM orchestration wrappers
   5. chunk summary aggregation
   6. chunk synthesis prompt assembly
+  7. summary user-content payload assembly
 - Support Rust-authoritative execution for M3 slices via runtime toggle.
 
 **Exit criteria:** Rust-authoritative M3 slice execution available with parity fixtures and no regression in p95 latency.
