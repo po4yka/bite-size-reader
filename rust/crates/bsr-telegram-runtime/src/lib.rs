@@ -118,6 +118,15 @@ mod tests {
     }
 
     #[test]
+    fn canonical_local_search_command_with_bot_mention_is_normalized() {
+        let decision = resolve_command_route(&TelegramCommandRouteInput {
+            text: "/finddb@mybot rust".to_string(),
+        });
+        assert_eq!(decision.command, Some("/finddb".to_string()));
+        assert!(decision.handled);
+    }
+
+    #[test]
     fn summarize_command_with_bot_mention_is_normalized() {
         let decision = resolve_command_route(&TelegramCommandRouteInput {
             text: "/summarize@mybot".to_string(),

@@ -182,6 +182,29 @@ async def test_route_command_message_preserves_original_local_alias_with_bot_men
 
 
 @pytest.mark.asyncio
+async def test_route_command_message_preserves_canonical_local_search_with_bot_mention() -> None:
+    router = _Router()
+    router.telegram_runtime_runner.resolve_command_route = AsyncMock(
+        return_value=TelegramRuntimeCommandDecision(command="/finddb", handled=True)
+    )
+
+    handled = await router._route_command_message(
+        message=SimpleNamespace(),
+        text="/finddb@mybot rust migration",
+        uid=26,
+        correlation_id="cid-26",
+        interaction_id=0,
+        start_time=0.0,
+    )
+
+    assert handled is True
+    router.command_processor.handle_find_local_command.assert_called_once()
+    call = router.command_processor.handle_find_local_command.call_args
+    assert call.args[1].startswith("/finddb@mybot ")
+    assert call.kwargs["command"] == "/finddb"
+
+
+@pytest.mark.asyncio
 async def test_route_command_message_marks_awaiting_user_for_summarize_prompt() -> None:
     router = _Router()
     router.telegram_runtime_runner.resolve_command_route = AsyncMock(
