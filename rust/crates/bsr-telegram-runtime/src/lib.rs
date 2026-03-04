@@ -370,6 +370,15 @@ mod tests {
     }
 
     #[test]
+    fn unknown_mixed_case_command_with_empty_bot_mention_suffix_is_not_handled() {
+        let decision = resolve_command_route(&TelegramCommandRouteInput {
+            text: "/Unknowncmd@ rust".to_string(),
+        });
+        assert_eq!(decision.command, None);
+        assert!(!decision.handled);
+    }
+
+    #[test]
     fn command_is_case_sensitive() {
         let decision = resolve_command_route(&TelegramCommandRouteInput {
             text: "/Findonline rust".to_string(),
