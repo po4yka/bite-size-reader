@@ -152,6 +152,9 @@ This roadmap tracks the project-wide migration from the current Python runtime t
       `.github/workflows/ci.yml`
     - Planning/status record:
       `docs/migration/runtime-inventory-matrix.md`
+    - M6-S3 fail-closed hardening:
+      `app/migration/telegram_runtime.py`,
+      `tests/test_telegram_runtime_runner.py`
 
 ## Cross-Cutting Workstreams
 

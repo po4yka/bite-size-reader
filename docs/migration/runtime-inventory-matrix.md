@@ -47,7 +47,7 @@ First implementation slice after inventory lock:
   - `rust/crates/bsr-telegram-runtime` (`command-route` CLI + canonical
     command mapping tests).
   - `app/migration/telegram_runtime.py` runner bridge with Rust failure event
-    capture and Python fallback.
+    capture and fail-closed errors in `rust` backend mode.
   - Telegram command route-decision wiring in
     `app/adapters/telegram/message_router.py` and
     `app/adapters/telegram/message_router_content.py`.
@@ -56,7 +56,8 @@ First implementation slice after inventory lock:
   non-command URL/plain text, unknown commands, and forwarded-ingress
   command/non-command payloads).
 - **Rollback switch policy:** `MIGRATION_TELEGRAM_RUNTIME_BACKEND=python|rust`
-  during rollout, defaulting to `python` in this scaffold stage.
+  during rollout; `python` remains explicit rollback mode while `rust` mode is
+  authoritative/fail-closed on Rust errors.
 
 Out-of-scope for M6-S1 (defer to later slices):
 

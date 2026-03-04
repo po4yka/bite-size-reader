@@ -47,7 +47,7 @@ async def test_rust_backend_uses_rust_runtime_command() -> None:
 
 
 @pytest.mark.asyncio
-async def test_rust_backend_falls_back_to_python_on_failure_and_records_event() -> None:
+async def test_rust_backend_raises_on_failure_without_python_fallback_and_records_event() -> None:
     runner = TelegramRuntimeRunner(_runtime_cfg(migration_telegram_runtime_backend="rust"))
     with (
         patch(
@@ -56,10 +56,9 @@ async def test_rust_backend_falls_back_to_python_on_failure_and_records_event() 
         ),
         patch("app.migration.telegram_runtime.record_cutover_event") as event_call,
     ):
-        decision = await runner.resolve_command_route(text="/findonline rust", correlation_id="cid")
+        with pytest.raises(RuntimeError, match="Python fallback is decommissioned"):
+            await runner.resolve_command_route(text="/findonline rust", correlation_id="cid")
 
-    assert decision.command == "/find"
-    assert decision.handled is True
     event_call.assert_called_once()
     assert event_call.call_args.kwargs["event_type"] == "rust_failure"
     assert event_call.call_args.kwargs["surface"] == "telegram_runtime_command_route"

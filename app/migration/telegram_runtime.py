@@ -109,7 +109,7 @@ class TelegramRuntimeOptions:
 
 
 class TelegramRuntimeRunner:
-    """M6-S1 command route-decision runner (Python default, Rust canary)."""
+    """M6 command route-decision runner (Python rollback, Rust fail-closed)."""
 
     def __init__(self, runtime_cfg: Any) -> None:
         self.options = TelegramRuntimeOptions(
@@ -167,4 +167,8 @@ class TelegramRuntimeRunner:
                 correlation_id=correlation_id,
                 metadata={"backend": backend},
             )
-            return _build_python_command_decision(text)
+            msg = (
+                "Rust telegram runtime command-route failed; "
+                "Python fallback is decommissioned for rust backend mode."
+            )
+            raise RuntimeError(msg) from exc
