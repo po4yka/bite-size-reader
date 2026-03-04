@@ -67,6 +67,29 @@ async def test_route_command_message_preserves_original_alias_for_handler_payloa
 
 
 @pytest.mark.asyncio
+async def test_route_command_message_preserves_original_alias_with_bot_mention() -> None:
+    router = _Router()
+    router.telegram_runtime_runner.resolve_command_route = AsyncMock(
+        return_value=TelegramRuntimeCommandDecision(command="/find", handled=True)
+    )
+
+    handled = await router._route_command_message(
+        message=SimpleNamespace(),
+        text="/findonline@mybot rust migration",
+        uid=11,
+        correlation_id="cid-11",
+        interaction_id=0,
+        start_time=0.0,
+    )
+
+    assert handled is True
+    router.command_processor.handle_find_online_command.assert_called_once()
+    call = router.command_processor.handle_find_online_command.call_args
+    assert call.args[1].startswith("/findonline@mybot ")
+    assert call.kwargs["command"] == "/findonline"
+
+
+@pytest.mark.asyncio
 async def test_route_command_message_preserves_original_local_alias_for_handler_payload() -> None:
     router = _Router()
     router.telegram_runtime_runner.resolve_command_route = AsyncMock(
@@ -86,6 +109,29 @@ async def test_route_command_message_preserves_original_local_alias_for_handler_
     router.command_processor.handle_find_local_command.assert_called_once()
     call = router.command_processor.handle_find_local_command.call_args
     assert call.args[1].startswith("/findlocal ")
+    assert call.kwargs["command"] == "/findlocal"
+
+
+@pytest.mark.asyncio
+async def test_route_command_message_preserves_original_local_alias_with_bot_mention() -> None:
+    router = _Router()
+    router.telegram_runtime_runner.resolve_command_route = AsyncMock(
+        return_value=TelegramRuntimeCommandDecision(command="/finddb", handled=True)
+    )
+
+    handled = await router._route_command_message(
+        message=SimpleNamespace(),
+        text="/findlocal@mybot rust migration",
+        uid=12,
+        correlation_id="cid-12",
+        interaction_id=0,
+        start_time=0.0,
+    )
+
+    assert handled is True
+    router.command_processor.handle_find_local_command.assert_called_once()
+    call = router.command_processor.handle_find_local_command.call_args
+    assert call.args[1].startswith("/findlocal@mybot ")
     assert call.kwargs["command"] == "/findlocal"
 
 

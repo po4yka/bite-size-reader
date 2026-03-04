@@ -68,6 +68,10 @@ First implementation slice after inventory lock:
   `MessageRouterContentMixin` is table-driven via shared dispatch helpers,
   preserving alias semantics while reducing branch complexity in the
   Python-side bridge.
+- **Bot-mention alias parity hardening (M6-S13):** explicit alias-command
+  fixtures with `@bot` mentions are covered in both
+  `bsr-telegram-runtime` Rust tests and Python bridge routing tests to keep
+  mention-stripping parity stable for `/findonline` and `/findlocal`.
 
 Out-of-scope for M6-S1 (defer to later slices):
 

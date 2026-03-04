@@ -82,6 +82,24 @@ mod tests {
     }
 
     #[test]
+    fn alias_command_with_bot_mention_is_normalized() {
+        let decision = resolve_command_route(&TelegramCommandRouteInput {
+            text: "/findonline@mybot rust".to_string(),
+        });
+        assert_eq!(decision.command, Some("/find".to_string()));
+        assert!(decision.handled);
+    }
+
+    #[test]
+    fn local_alias_command_with_bot_mention_is_normalized() {
+        let decision = resolve_command_route(&TelegramCommandRouteInput {
+            text: "/findlocal@mybot rust".to_string(),
+        });
+        assert_eq!(decision.command, Some("/finddb".to_string()));
+        assert!(decision.handled);
+    }
+
+    #[test]
     fn command_strips_bot_mention() {
         let decision = resolve_command_route(&TelegramCommandRouteInput {
             text: "/unread@mybot 10".to_string(),

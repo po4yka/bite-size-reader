@@ -194,6 +194,10 @@ This roadmap tracks the project-wide migration from the current Python runtime t
       `app/adapters/telegram/message_router_content.py`,
       `tests/test_message_router_interface_routing.py`,
       `docs/migration/runtime-inventory-matrix.md`
+    - M6-S13 bot-mention alias parity hardening (explicit `@bot` alias coverage in Rust + bridge tests):
+      `rust/crates/bsr-telegram-runtime/src/lib.rs`,
+      `tests/test_message_router_interface_routing.py`,
+      `docs/migration/runtime-inventory-matrix.md`
 
 ## Cross-Cutting Workstreams
 
