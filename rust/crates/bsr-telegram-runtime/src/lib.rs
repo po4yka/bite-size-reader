@@ -163,6 +163,33 @@ mod tests {
     }
 
     #[test]
+    fn dbinfo_command_with_bot_mention_is_normalized() {
+        let decision = resolve_command_route(&TelegramCommandRouteInput {
+            text: "/dbinfo@mybot".to_string(),
+        });
+        assert_eq!(decision.command, Some("/dbinfo".to_string()));
+        assert!(decision.handled);
+    }
+
+    #[test]
+    fn dbverify_command_with_bot_mention_is_normalized() {
+        let decision = resolve_command_route(&TelegramCommandRouteInput {
+            text: "/dbverify@mybot".to_string(),
+        });
+        assert_eq!(decision.command, Some("/dbverify".to_string()));
+        assert!(decision.handled);
+    }
+
+    #[test]
+    fn clearcache_command_with_bot_mention_is_normalized() {
+        let decision = resolve_command_route(&TelegramCommandRouteInput {
+            text: "/clearcache@mybot".to_string(),
+        });
+        assert_eq!(decision.command, Some("/clearcache".to_string()));
+        assert!(decision.handled);
+    }
+
+    #[test]
     fn summarize_all_command_with_bot_mention_is_normalized() {
         let decision = resolve_command_route(&TelegramCommandRouteInput {
             text: "/summarize_all@mybot".to_string(),

@@ -96,6 +96,10 @@ First implementation slice after inventory lock:
   mention fixtures for `/unread` and `/read` are covered in both
   `bsr-telegram-runtime` Rust tests and Python bridge routing tests to keep
   unread/read command-route dispatch stable for bot-directed invocations.
+- **Bot-mention db-admin parity hardening (M6-S20):** explicit `@bot`
+  mention fixtures for `/dbinfo`, `/dbverify`, and `/clearcache` are covered
+  in both `bsr-telegram-runtime` Rust tests and Python bridge routing tests to
+  keep admin command-route dispatch stable for bot-directed invocations.
 
 Out-of-scope for M6-S1 (defer to later slices):
 

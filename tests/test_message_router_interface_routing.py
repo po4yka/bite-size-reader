@@ -300,6 +300,72 @@ async def test_route_command_message_routes_help_with_bot_mention() -> None:
 
 
 @pytest.mark.asyncio
+async def test_route_command_message_routes_dbinfo_with_bot_mention() -> None:
+    router = _Router()
+    router.telegram_runtime_runner.resolve_command_route = AsyncMock(
+        return_value=TelegramRuntimeCommandDecision(command="/dbinfo", handled=True)
+    )
+
+    handled = await router._route_command_message(
+        message=SimpleNamespace(),
+        text="/dbinfo@mybot",
+        uid=23,
+        correlation_id="cid-23",
+        interaction_id=0,
+        start_time=0.0,
+    )
+
+    assert handled is True
+    router.command_processor.handle_dbinfo_command.assert_awaited_once()
+    call = router.command_processor.handle_dbinfo_command.call_args
+    assert call.args[1:] == (23, "cid-23", 0, 0.0)
+
+
+@pytest.mark.asyncio
+async def test_route_command_message_routes_dbverify_with_bot_mention() -> None:
+    router = _Router()
+    router.telegram_runtime_runner.resolve_command_route = AsyncMock(
+        return_value=TelegramRuntimeCommandDecision(command="/dbverify", handled=True)
+    )
+
+    handled = await router._route_command_message(
+        message=SimpleNamespace(),
+        text="/dbverify@mybot",
+        uid=24,
+        correlation_id="cid-24",
+        interaction_id=0,
+        start_time=0.0,
+    )
+
+    assert handled is True
+    router.command_processor.handle_dbverify_command.assert_awaited_once()
+    call = router.command_processor.handle_dbverify_command.call_args
+    assert call.args[1:] == (24, "cid-24", 0, 0.0)
+
+
+@pytest.mark.asyncio
+async def test_route_command_message_routes_clearcache_with_bot_mention() -> None:
+    router = _Router()
+    router.telegram_runtime_runner.resolve_command_route = AsyncMock(
+        return_value=TelegramRuntimeCommandDecision(command="/clearcache", handled=True)
+    )
+
+    handled = await router._route_command_message(
+        message=SimpleNamespace(),
+        text="/clearcache@mybot",
+        uid=25,
+        correlation_id="cid-25",
+        interaction_id=0,
+        start_time=0.0,
+    )
+
+    assert handled is True
+    router.command_processor.handle_clearcache_command.assert_awaited_once()
+    call = router.command_processor.handle_clearcache_command.call_args
+    assert call.args[1:] == (25, "cid-25", 0, 0.0)
+
+
+@pytest.mark.asyncio
 async def test_route_command_message_routes_search_with_bot_mention_and_preserves_text() -> None:
     router = _Router()
     router.telegram_runtime_runner.resolve_command_route = AsyncMock(
