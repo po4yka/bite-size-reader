@@ -388,6 +388,15 @@ mod tests {
     }
 
     #[test]
+    fn unknown_bare_command_without_bot_mention_is_not_handled() {
+        let decision = resolve_command_route(&TelegramCommandRouteInput {
+            text: "/unknowncmd".to_string(),
+        });
+        assert_eq!(decision.command, None);
+        assert!(!decision.handled);
+    }
+
+    #[test]
     fn unknown_mixed_case_command_without_bot_mention_is_not_handled() {
         let decision = resolve_command_route(&TelegramCommandRouteInput {
             text: "/Unknowncmd rust".to_string(),
