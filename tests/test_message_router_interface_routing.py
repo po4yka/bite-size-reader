@@ -2054,6 +2054,34 @@ async def test_route_command_message_ignores_slash_three_per_em_space_command_li
 
 
 @pytest.mark.asyncio
+async def test_route_command_message_ignores_slash_em_space_command_like_text() -> None:
+    router = _Router()
+    router.telegram_runtime_runner.resolve_command_route = AsyncMock(
+        return_value=TelegramRuntimeCommandDecision(command=None, handled=False)
+    )
+
+    handled = await router._route_command_message(
+        message=SimpleNamespace(),
+        text="/\u2003findonline rust",
+        uid=91,
+        correlation_id="cid-91",
+        interaction_id=0,
+        start_time=0.0,
+    )
+
+    assert handled is False
+    router.telegram_runtime_runner.resolve_command_route.assert_awaited_once_with(
+        text="/\u2003findonline rust",
+        correlation_id="cid-91",
+        actor_key="91",
+    )
+    router.command_processor.handle_find_online_command.assert_not_awaited()
+    router.command_processor.handle_find_local_command.assert_not_awaited()
+    router.command_processor.handle_start_command.assert_not_awaited()
+    router.command_processor.handle_debug_command.assert_not_awaited()
+
+
+@pytest.mark.asyncio
 async def test_route_command_message_ignores_mixed_case_canonical_command_without_bot_mention() -> (
     None
 ):
