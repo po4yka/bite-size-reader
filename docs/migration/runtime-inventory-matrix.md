@@ -243,6 +243,12 @@ First implementation slice after inventory lock:
   is covered in both `bsr-telegram-runtime` Rust tests and Python bridge
   routing tests to keep known-command case-sensitive bare mixed-case mention
   behavior stable for bot-directed command invocations.
+- **Mixed-case command bare empty bot-mention suffix case-sensitivity parity hardening (M6-S47):**
+  explicit mixed-case known-alias fixture with empty username suffix `@`
+  mention and without trailing arguments for non-handled passthrough semantics
+  is covered in both `bsr-telegram-runtime` Rust tests and Python bridge
+  routing tests to keep known-command case-sensitive bare empty-mention
+  behavior stable for bot-directed command invocations.
 
 Out-of-scope for M6-S1 (defer to later slices):
 
