@@ -118,6 +118,10 @@ First implementation slice after inventory lock:
   mention fixture for unknown command passthrough is covered in both
   `bsr-telegram-runtime` Rust tests and Python bridge routing tests to keep
   unknown-command non-handled semantics stable for bot-directed invocations.
+- **Mixed-case bot-mention parity hardening (M6-S25):** explicit `@bot`
+  mention fixture for mixed-case command passthrough is covered in both
+  `bsr-telegram-runtime` Rust tests and Python bridge routing tests to keep
+  case-sensitive non-handled semantics stable for bot-directed invocations.
 
 Out-of-scope for M6-S1 (defer to later slices):
 

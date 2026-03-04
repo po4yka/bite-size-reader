@@ -325,6 +325,15 @@ mod tests {
     }
 
     #[test]
+    fn command_with_bot_mention_is_case_sensitive() {
+        let decision = resolve_command_route(&TelegramCommandRouteInput {
+            text: "/Findonline@mybot rust".to_string(),
+        });
+        assert_eq!(decision.command, None);
+        assert!(!decision.handled);
+    }
+
+    #[test]
     fn command_requires_leading_slash_at_start() {
         let decision = resolve_command_route(&TelegramCommandRouteInput {
             text: " /findonline rust".to_string(),
