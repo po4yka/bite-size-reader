@@ -56,8 +56,8 @@ First implementation slice after inventory lock:
   non-command URL/plain text, unknown commands, and forwarded-ingress
   command/non-command payloads).
 - **Rollback switch policy:** command-route backend is fixed to Rust.
-  Legacy `MIGRATION_TELEGRAM_RUNTIME_BACKEND` values are ignored (no
-  implicit or explicit Python fallback path).
+  Legacy `MIGRATION_TELEGRAM_RUNTIME_BACKEND` values are ignored with warning
+  telemetry (no implicit or explicit Python fallback path).
 - **Routing ownership hardening:** `MessageRouterContentMixin` now requires
   `telegram_runtime_runner`; legacy command fallback through
   `interface_router` is decommissioned.
@@ -79,7 +79,7 @@ Implementation acceptance gates for M6-S1:
 2. Existing observability/cutover events remain emitted on Rust decision
    failures.
 3. Runtime execution remains Rust-only even if legacy backend toggles are set
-   (`MIGRATION_TELEGRAM_RUNTIME_BACKEND` is ignored when present).
+   (`MIGRATION_TELEGRAM_RUNTIME_BACKEND` is ignored with a warning when present).
 
 ## Verification Baseline Before and After Each Slice
 

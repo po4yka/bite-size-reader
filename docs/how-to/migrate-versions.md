@@ -72,7 +72,7 @@ M6 Telegram command route decisions are now Rust-authoritative:
 
 ```bash
 # Command-route backend is fixed to Rust.
-# Legacy MIGRATION_TELEGRAM_RUNTIME_BACKEND values are ignored.
+# Legacy MIGRATION_TELEGRAM_RUNTIME_BACKEND values are ignored with a warning.
 MIGRATION_TELEGRAM_RUNTIME_TIMEOUT_MS=150
 ```
 

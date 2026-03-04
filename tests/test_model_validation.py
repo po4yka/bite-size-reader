@@ -51,7 +51,7 @@ class TestModelValidation(unittest.TestCase):
         }
 
         with patch.dict(os.environ, test_env, clear=True):
-            settings = Settings(_env_file=None)  # type: ignore[call-arg]
+            settings = Settings(_env_file=None)
             cfg = settings.as_app_config()
 
             # fallback/model is a valid model name (alphanumeric + slash)
@@ -75,7 +75,7 @@ class TestModelValidation(unittest.TestCase):
         }
 
         with patch.dict(os.environ, test_env, clear=True):
-            settings = Settings(_env_file=None)  # type: ignore[call-arg]
+            settings = Settings(_env_file=None)
             cfg = settings.as_app_config()
 
             assert cfg.openrouter.max_tokens == 4096
@@ -97,7 +97,7 @@ class TestModelValidation(unittest.TestCase):
         }
 
         with patch.dict(os.environ, test_env, clear=True):
-            settings = Settings(_env_file=None)  # type: ignore[call-arg]
+            settings = Settings(_env_file=None)
             cfg = settings.as_app_config()
 
             # Check that defaults are applied when env vars are not set
@@ -112,6 +112,32 @@ class TestModelValidation(unittest.TestCase):
                 "deepseek/deepseek-r1",
             )
 
+    def test_load_config_warns_when_legacy_m6_backend_env_is_set(self) -> None:
+        from app.config import Settings
+
+        test_env = {
+            "API_ID": "123456",
+            "API_HASH": "a" * 32,
+            "BOT_TOKEN": "123456:abcdefghijklmnopqrstuvwxyz0123456789abcdefghij",
+            "FIRECRAWL_API_KEY": "fc_" + "n" * 20,
+            "OPENROUTER_API_KEY": "or_" + "o" * 20,
+            "ALLOWED_USER_IDS": "123456789",
+            "MIGRATION_TELEGRAM_RUNTIME_BACKEND": "python",
+        }
+
+        with (
+            patch.dict(os.environ, test_env, clear=True),
+            patch("app.config.settings.logger.warning") as warn_call,
+        ):
+            settings = Settings(_env_file=None)
+            cfg = settings.as_app_config()
+
+            assert cfg.runtime.migration_telegram_runtime_timeout_ms == 150
+            warn_call.assert_any_call(
+                "m6_telegram_runtime_legacy_backend_toggle_ignored",
+                extra={"requested_backend": "python"},
+            )
+
     def test_load_config_allows_stub_credentials(self) -> None:
         from app.config import Settings
 
@@ -124,9 +150,9 @@ class TestModelValidation(unittest.TestCase):
             # Provide stub telegram credentials directly
             # _env_file and telegram dict are pydantic-settings internals
             settings = Settings(
-                _env_file=None,  # type: ignore[call-arg]
+                _env_file=None,
                 allow_stub_telegram=True,
-                telegram={  # type: ignore[arg-type]
+                telegram={
                     "api_id": 1,
                     "api_hash": "test_api_hash_placeholder_value___",
                     "bot_token": "1000000000:TESTTOKENPLACEHOLDER1234567890ABC",
@@ -154,7 +180,7 @@ class TestModelValidation(unittest.TestCase):
 
         with patch.dict(os.environ, test_env, clear=True):
             with pytest.raises(RuntimeError):
-                Settings(_env_file=None)  # type: ignore[call-arg]
+                Settings(_env_file=None)
 
 
 if __name__ == "__main__":

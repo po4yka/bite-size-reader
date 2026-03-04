@@ -140,7 +140,7 @@ API_RATE_LIMIT_DEFAULT=100
 ## [OPTIONAL] Migration / M6-S1 Telegram Runtime Route Decisions
 
 Telegram command-route execution is fixed to Rust. Legacy
-`MIGRATION_TELEGRAM_RUNTIME_BACKEND` inputs are ignored.
+`MIGRATION_TELEGRAM_RUNTIME_BACKEND` inputs are ignored with a startup warning.
 
 | Variable | Default | Description |
 | ---------- | --------- | ------------- |

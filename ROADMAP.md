@@ -183,6 +183,11 @@ This roadmap tracks the project-wide migration from the current Python runtime t
       `.env.example`, `docs/environment_variables.md`,
       `docs/how-to/migrate-versions.md`,
       `docs/migration/runtime-inventory-matrix.md`
+    - M6-S10 decommission observability hardening (warn on legacy Telegram backend env toggle):
+      `app/config/settings.py`, `tests/test_model_validation.py`,
+      `docs/environment_variables.md`,
+      `docs/how-to/migrate-versions.md`,
+      `docs/migration/runtime-inventory-matrix.md`
 
 ## Cross-Cutting Workstreams
 
