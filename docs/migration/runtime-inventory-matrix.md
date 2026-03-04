@@ -249,6 +249,12 @@ First implementation slice after inventory lock:
   is covered in both `bsr-telegram-runtime` Rust tests and Python bridge
   routing tests to keep known-command case-sensitive bare empty-mention
   behavior stable for bot-directed command invocations.
+- **Lowercase known command bare bot-mention normalization parity hardening (M6-S48):**
+  explicit lowercase known-alias fixture `/findonline@mybot` without trailing
+  arguments is covered in both `bsr-telegram-runtime` Rust tests and Python
+  bridge routing tests to keep handled canonical normalization (`/find`) and
+  original alias payload semantics stable for bare bot-directed command
+  invocations.
 
 Out-of-scope for M6-S1 (defer to later slices):
 

@@ -91,6 +91,15 @@ mod tests {
     }
 
     #[test]
+    fn bare_alias_command_with_bot_mention_is_normalized() {
+        let decision = resolve_command_route(&TelegramCommandRouteInput {
+            text: "/findonline@mybot".to_string(),
+        });
+        assert_eq!(decision.command, Some("/find".to_string()));
+        assert!(decision.handled);
+    }
+
+    #[test]
     fn alias_command_with_mixed_case_bot_username_is_normalized() {
         let decision = resolve_command_route(&TelegramCommandRouteInput {
             text: "/findonline@MyBot rust".to_string(),
