@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from app.core.content_cleaner import clean_content_for_llm
+from app.core.html_utils import chunk_sentences, split_sentences
 from app.core.summary_aggregate import aggregate_chunk_summaries
 from app.migration.cutover_monitor import record_cutover_event
 
@@ -25,7 +26,12 @@ _SHADOW_BIN_ENV = "PIPELINE_SHADOW_RUST_BIN"
 _DEFAULT_STATS: dict[str, dict[str, int]] = {
     "extraction_adapter": {"total": 0, "matched": 0, "mismatched": 0, "errors": 0},
     "chunking_preprocess": {"total": 0, "matched": 0, "mismatched": 0, "errors": 0},
+    "chunk_sentence_plan": {"total": 0, "matched": 0, "mismatched": 0, "errors": 0},
+    "content_cleaner": {"total": 0, "matched": 0, "mismatched": 0, "errors": 0},
     "llm_wrapper_plan": {"total": 0, "matched": 0, "mismatched": 0, "errors": 0},
+    "summary_aggregate": {"total": 0, "matched": 0, "mismatched": 0, "errors": 0},
+    "chunk_synthesis_prompt": {"total": 0, "matched": 0, "mismatched": 0, "errors": 0},
+    "summary_user_content": {"total": 0, "matched": 0, "mismatched": 0, "errors": 0},
 }
 
 _SHADOW_STATS: dict[str, dict[str, int]] = deepcopy(_DEFAULT_STATS)
@@ -150,6 +156,31 @@ def build_python_chunking_preprocess_snapshot_from_input(
         long_context_model=long_context_model,
         should_chunk=should_chunk,
     )
+
+
+def build_python_chunk_sentence_plan_snapshot_from_input(
+    payload: dict[str, Any],
+) -> dict[str, Any]:
+    content_text = str(payload.get("content_text") or "")
+    max_chars = max(1, int(payload.get("max_chars") or 1))
+    lang_raw = str(payload.get("lang") or "en").strip().lower()
+    lang = "ru" if lang_raw == "ru" else "en"
+
+    sentences = split_sentences(content_text, lang)
+    chunk_size = max(4000, min(12000, max_chars // 10))
+    chunk_size = min(chunk_size, max_chars)
+    chunks = chunk_sentences(sentences, max_chars=chunk_size)
+    first_chunk_size = len(chunks[0]) if chunks else 0
+
+    return {
+        "lang": lang,
+        "max_chars": max_chars,
+        "chunk_size": chunk_size,
+        "sentences": sentences,
+        "chunks": chunks,
+        "chunk_count": len(chunks),
+        "first_chunk_size": first_chunk_size,
+    }
 
 
 def build_python_llm_wrapper_plan_snapshot_from_requests(
@@ -601,6 +632,31 @@ class PipelineShadowRunner:
             correlation_id=correlation_id,
             request_id=request_id,
             surface="pipeline_chunking_preprocess",
+        )
+
+    async def resolve_chunk_sentence_plan(
+        self,
+        *,
+        correlation_id: str | None,
+        request_id: int | None,
+        content_text: str,
+        lang: str,
+        max_chars: int,
+    ) -> dict[str, Any]:
+        rust_input = {
+            "content_text": content_text,
+            "lang": lang,
+            "max_chars": int(max_chars),
+        }
+        if not self.options.enabled:
+            return build_python_chunk_sentence_plan_snapshot_from_input(rust_input)
+
+        return await self._run_authoritative_slice(
+            command="chunk-sentence-plan",
+            rust_input=rust_input,
+            correlation_id=correlation_id,
+            request_id=request_id,
+            surface="pipeline_chunk_sentence_plan",
         )
 
     async def resolve_llm_wrapper_plan(

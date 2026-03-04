@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from app.migration.pipeline_shadow import (
+    build_python_chunk_sentence_plan_snapshot_from_input,
     build_python_chunk_synthesis_prompt_snapshot_from_input,
     build_python_chunking_preprocess_snapshot_from_input,
     build_python_content_cleaner_snapshot_from_input,
@@ -36,6 +37,9 @@ def _build_expected(fixture_name: str, payload: dict[str, Any]) -> dict[str, Any
 
     if fixture_name == "chunking_preprocess":
         return build_python_chunking_preprocess_snapshot_from_input(payload)
+
+    if fixture_name == "chunk_sentence_plan":
+        return build_python_chunk_sentence_plan_snapshot_from_input(payload)
 
     if fixture_name == "llm_wrapper_plan":
         return build_python_llm_wrapper_plan_snapshot_from_input(payload)

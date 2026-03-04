@@ -416,3 +416,91 @@ class TestPipelineShadowHooks(unittest.IsolatedAsyncioTestCase):
         assert context.req_id == 1
         proc.pipeline_shadow.resolve_extraction_adapter.assert_called_once()
         proc.pipeline_shadow.resolve_chunking_preprocess.assert_called_once()
+
+    async def test_compute_chunk_strategy_uses_rust_chunk_sentence_plan(self) -> None:
+        content_chunker = MagicMock()
+        content_chunker.should_chunk_content = MagicMock(return_value=(False, 10000, None))
+        proc = _make_processor(content_chunker=content_chunker)
+        proc.pipeline_shadow = MagicMock()
+        proc.pipeline_shadow.options.enabled = True
+        proc.pipeline_shadow.resolve_chunking_preprocess = AsyncMock(
+            return_value={
+                "content_length": 220,
+                "max_chars": 120,
+                "chunk_size": 120,
+                "should_chunk": True,
+                "long_context_bypass": False,
+                "estimated_chunk_count": 2,
+                "first_chunk_size": 110,
+            }
+        )
+        proc.pipeline_shadow.resolve_chunk_sentence_plan = AsyncMock(
+            return_value={
+                "lang": "en",
+                "max_chars": 120,
+                "chunk_size": 120,
+                "sentences": ["A.", "B.", "C."],
+                "chunks": ["A. B.", "C."],
+                "chunk_count": 2,
+                "first_chunk_size": 5,
+            }
+        )
+
+        should_chunk, max_chars, chunks = await proc._compute_chunk_strategy(
+            content_text="A. B. C.",
+            chosen_lang="en",
+            correlation_id="cid-shadow-chunk-plan",
+            request_id=7,
+        )
+
+        assert should_chunk is True
+        assert max_chars == 120
+        assert chunks == ["A. B.", "C."]
+        proc.pipeline_shadow.resolve_chunking_preprocess.assert_called_once()
+        proc.pipeline_shadow.resolve_chunk_sentence_plan.assert_called_once_with(
+            correlation_id="cid-shadow-chunk-plan",
+            request_id=7,
+            content_text="A. B. C.",
+            lang="en",
+            max_chars=120,
+        )
+
+    async def test_compute_chunk_strategy_disables_chunking_when_rust_chunks_empty(self) -> None:
+        content_chunker = MagicMock()
+        content_chunker.should_chunk_content = MagicMock(return_value=(False, 10000, None))
+        proc = _make_processor(content_chunker=content_chunker)
+        proc.pipeline_shadow = MagicMock()
+        proc.pipeline_shadow.options.enabled = True
+        proc.pipeline_shadow.resolve_chunking_preprocess = AsyncMock(
+            return_value={
+                "content_length": 220,
+                "max_chars": 120,
+                "chunk_size": 120,
+                "should_chunk": True,
+                "long_context_bypass": False,
+                "estimated_chunk_count": 2,
+                "first_chunk_size": 110,
+            }
+        )
+        proc.pipeline_shadow.resolve_chunk_sentence_plan = AsyncMock(
+            return_value={
+                "lang": "en",
+                "max_chars": 120,
+                "chunk_size": 120,
+                "sentences": ["A.", "B."],
+                "chunks": ["", "   "],
+                "chunk_count": 0,
+                "first_chunk_size": 0,
+            }
+        )
+
+        should_chunk, max_chars, chunks = await proc._compute_chunk_strategy(
+            content_text="A. B.",
+            chosen_lang="en",
+            correlation_id="cid-shadow-empty-chunks",
+            request_id=8,
+        )
+
+        assert should_chunk is False
+        assert max_chars == 120
+        assert chunks is None

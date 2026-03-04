@@ -1,0 +1,5 @@
+{
+  "content_text": "Rust now handles sentence planning. This keeps chunk boundaries deterministic. Python fallback is decommissioned here. Parity fixtures guard behavior.",
+  "lang": "en",
+  "max_chars": 120
+}

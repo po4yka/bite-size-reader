@@ -2,12 +2,12 @@ use std::env;
 use std::io::{self, Read};
 
 use bsr_pipeline_shadow::{
-    build_chunk_synthesis_prompt_snapshot, build_chunking_preprocess_snapshot,
-    build_content_cleaner_snapshot, build_extraction_adapter_snapshot,
-    build_llm_wrapper_plan_snapshot, build_summary_aggregate_snapshot,
-    build_summary_user_content_snapshot, ChunkSynthesisPromptInput, ChunkingPreprocessInput,
-    ContentCleanerInput, ExtractionAdapterInput, LlmWrapperPlanInput, SummaryAggregateInput,
-    SummaryUserContentInput,
+    build_chunk_sentence_plan_snapshot, build_chunk_synthesis_prompt_snapshot,
+    build_chunking_preprocess_snapshot, build_content_cleaner_snapshot,
+    build_extraction_adapter_snapshot, build_llm_wrapper_plan_snapshot,
+    build_summary_aggregate_snapshot, build_summary_user_content_snapshot, ChunkSentencePlanInput,
+    ChunkSynthesisPromptInput, ChunkingPreprocessInput, ContentCleanerInput,
+    ExtractionAdapterInput, LlmWrapperPlanInput, SummaryAggregateInput, SummaryUserContentInput,
 };
 use serde_json::Value;
 
@@ -34,6 +34,13 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             let payload = read_json_stdin()?;
             let input: ChunkingPreprocessInput = serde_json::from_value(payload)?;
             let output = build_chunking_preprocess_snapshot(&input);
+            println!("{}", serde_json::to_string_pretty(&output)?);
+            Ok(())
+        }
+        "chunk-sentence-plan" => {
+            let payload = read_json_stdin()?;
+            let input: ChunkSentencePlanInput = serde_json::from_value(payload)?;
+            let output = build_chunk_sentence_plan_snapshot(&input);
             println!("{}", serde_json::to_string_pretty(&output)?);
             Ok(())
         }
@@ -76,6 +83,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             println!("Usage:");
             println!("  bsr-pipeline-shadow extraction-adapter < input.json");
             println!("  bsr-pipeline-shadow chunking-preprocess < input.json");
+            println!("  bsr-pipeline-shadow chunk-sentence-plan < input.json");
             println!("  bsr-pipeline-shadow llm-wrapper-plan < input.json");
             println!("  bsr-pipeline-shadow content-cleaner < input.json");
             println!("  bsr-pipeline-shadow summary-aggregate < input.json");

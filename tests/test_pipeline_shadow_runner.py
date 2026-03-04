@@ -9,6 +9,7 @@ import pytest
 from app.adapters.content.llm_response_workflow import LLMRequestConfig
 from app.migration.pipeline_shadow import (
     PipelineShadowRunner,
+    build_python_chunk_sentence_plan_snapshot_from_input,
     build_python_chunk_synthesis_prompt_snapshot_from_input,
     build_python_chunking_preprocess_snapshot_from_input,
     build_python_extraction_adapter_snapshot,
@@ -122,6 +123,60 @@ async def test_resolve_chunking_preprocess_uses_python_when_disabled() -> None:
 
     rust_call.assert_not_called()
     assert result == expected
+
+
+@pytest.mark.asyncio
+async def test_resolve_chunk_sentence_plan_uses_python_when_disabled() -> None:
+    runner = PipelineShadowRunner(_runtime_cfg(migration_shadow_mode_enabled=False))
+    content_text = "Sentence one. Sentence two. Sentence three."
+    lang = "en"
+    max_chars = 120
+    payload = {
+        "content_text": content_text,
+        "lang": lang,
+        "max_chars": max_chars,
+    }
+    expected = build_python_chunk_sentence_plan_snapshot_from_input(payload)
+
+    with patch("app.migration.pipeline_shadow.run_rust_shadow_command") as rust_call:
+        result = await runner.resolve_chunk_sentence_plan(
+            correlation_id="cid",
+            request_id=99,
+            content_text=content_text,
+            lang=lang,
+            max_chars=max_chars,
+        )
+
+    rust_call.assert_not_called()
+    assert result == expected
+
+
+@pytest.mark.asyncio
+async def test_resolve_chunk_sentence_plan_uses_rust_when_enabled() -> None:
+    runner = PipelineShadowRunner(_runtime_cfg(migration_shadow_mode_enabled=True))
+    rust_payload = {
+        "lang": "ru",
+        "max_chars": 100,
+        "chunk_size": 100,
+        "sentences": ["Раз.", "Два."],
+        "chunks": ["Раз. Два."],
+        "chunk_count": 1,
+        "first_chunk_size": 9,
+    }
+
+    with patch(
+        "app.migration.pipeline_shadow.run_rust_shadow_command",
+        return_value=rust_payload,
+    ):
+        result = await runner.resolve_chunk_sentence_plan(
+            correlation_id="cid",
+            request_id=100,
+            content_text="Раз. Два.",
+            lang="ru",
+            max_chars=100,
+        )
+
+    assert result == rust_payload
 
 
 @pytest.mark.asyncio

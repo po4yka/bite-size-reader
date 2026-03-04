@@ -55,6 +55,24 @@ pub struct ChunkingPreprocessSnapshot {
     pub first_chunk_size: usize,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ChunkSentencePlanInput {
+    pub content_text: String,
+    pub lang: String,
+    pub max_chars: usize,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ChunkSentencePlanSnapshot {
+    pub lang: String,
+    pub max_chars: usize,
+    pub chunk_size: usize,
+    pub sentences: Vec<String>,
+    pub chunks: Vec<String>,
+    pub chunk_count: usize,
+    pub first_chunk_size: usize,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct LlmWrapperPlanInput {
     pub base_model: String,
@@ -198,6 +216,35 @@ pub fn build_chunking_preprocess_snapshot(
         should_chunk,
         long_context_bypass,
         estimated_chunk_count,
+        first_chunk_size,
+    }
+}
+
+pub fn build_chunk_sentence_plan_snapshot(
+    input: &ChunkSentencePlanInput,
+) -> ChunkSentencePlanSnapshot {
+    let max_chars = input.max_chars.max(1);
+    let chunk_size = (max_chars / 10).clamp(4_000, 12_000).min(max_chars);
+    let lang = if input.lang.trim().eq_ignore_ascii_case("ru") {
+        "ru".to_string()
+    } else {
+        "en".to_string()
+    };
+    let sentences = split_sentences_for_chunking(&input.content_text, &lang);
+    let chunks = chunk_sentences_for_chunking(&sentences, chunk_size);
+    let chunk_count = chunks.len();
+    let first_chunk_size = chunks
+        .first()
+        .map(|chunk| chunk.chars().count())
+        .unwrap_or(0);
+
+    ChunkSentencePlanSnapshot {
+        lang,
+        max_chars,
+        chunk_size,
+        sentences,
+        chunks,
+        chunk_count,
         first_chunk_size,
     }
 }
@@ -437,6 +484,78 @@ fn truncate_after_comments(text: &str) -> String {
         return text[..m.start()].trim_end().to_string();
     }
     text.to_string()
+}
+
+fn split_sentences_for_chunking(text: &str, _lang: &str) -> Vec<String> {
+    let trimmed = text.trim();
+    if trimmed.is_empty() {
+        return Vec::new();
+    }
+
+    let mut out: Vec<String> = Vec::new();
+    let mut current = String::new();
+    let mut chars = trimmed.chars().peekable();
+
+    while let Some(ch) = chars.next() {
+        current.push(ch);
+        if matches!(ch, '.' | '!' | '?') {
+            let mut consumed_whitespace = false;
+            while let Some(next) = chars.peek().copied() {
+                if next.is_whitespace() {
+                    consumed_whitespace = true;
+                    current.push(next);
+                    chars.next();
+                } else {
+                    break;
+                }
+            }
+            if consumed_whitespace {
+                let sentence = current.trim();
+                if !sentence.is_empty() {
+                    out.push(sentence.to_string());
+                }
+                current.clear();
+            }
+        }
+    }
+
+    let tail = current.trim();
+    if !tail.is_empty() {
+        out.push(tail.to_string());
+    }
+    out
+}
+
+fn chunk_sentences_for_chunking(sentences: &[String], max_chars: usize) -> Vec<String> {
+    let mut chunks: Vec<String> = Vec::new();
+    let mut buf: Vec<String> = Vec::new();
+    let mut size = 0usize;
+
+    for sentence in sentences {
+        let stripped = sentence.trim();
+        if stripped.is_empty() {
+            continue;
+        }
+
+        let sentence_len = stripped.chars().count();
+        let extra = if buf.is_empty() { 0 } else { 1 };
+        if size + sentence_len + extra > max_chars && !buf.is_empty() {
+            chunks.push(buf.join(" "));
+            buf = vec![stripped.to_string()];
+            size = sentence_len;
+        } else {
+            if !buf.is_empty() {
+                size += 1;
+            }
+            buf.push(stripped.to_string());
+            size += sentence_len;
+        }
+    }
+
+    if !buf.is_empty() {
+        chunks.push(buf.join(" "));
+    }
+    chunks
 }
 
 fn aggregate_chunk_summaries(summaries: &[Value]) -> Value {
@@ -1175,6 +1294,22 @@ mod tests {
         assert!(snapshot.long_context_bypass);
         assert!(!snapshot.should_chunk);
         assert_eq!(snapshot.estimated_chunk_count, 0);
+    }
+
+    #[test]
+    fn chunk_sentence_plan_snapshot_groups_sentences() {
+        let input = ChunkSentencePlanInput {
+            content_text: "First sentence. Second sentence! Third sentence?".to_string(),
+            lang: "en".to_string(),
+            max_chars: 20,
+        };
+
+        let snapshot = build_chunk_sentence_plan_snapshot(&input);
+        assert_eq!(snapshot.lang, "en");
+        assert_eq!(snapshot.chunk_size, 20);
+        assert_eq!(snapshot.sentences.len(), 3);
+        assert_eq!(snapshot.chunk_count, snapshot.chunks.len());
+        assert!(snapshot.chunk_count >= 2);
     }
 
     #[test]

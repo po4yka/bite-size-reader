@@ -598,9 +598,30 @@ class URLProcessor:
             )
             rust_should_chunk = bool(rust_snapshot.get("should_chunk", False))
             max_chars = int(rust_snapshot.get("max_chars", max_chars))
-            if not rust_should_chunk:
+            should_chunk = rust_should_chunk
+            if not should_chunk:
                 should_chunk = False
                 chunks = None
+            else:
+                chunk_plan = await pipeline_shadow.resolve_chunk_sentence_plan(
+                    correlation_id=correlation_id,
+                    request_id=request_id,
+                    content_text=content_text,
+                    lang=chosen_lang,
+                    max_chars=max_chars,
+                )
+                rust_chunks_raw = chunk_plan.get("chunks")
+                if isinstance(rust_chunks_raw, list):
+                    rust_chunks = [
+                        item.strip()
+                        for item in rust_chunks_raw
+                        if isinstance(item, str) and item.strip()
+                    ]
+                    chunks = rust_chunks or None
+                    should_chunk = chunks is not None
+                else:
+                    chunks = None
+                    should_chunk = False
 
         logger.info(
             "content_handling",

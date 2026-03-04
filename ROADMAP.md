@@ -52,11 +52,12 @@ This roadmap tracks the project-wide migration from the current Python runtime t
 - Migrate URL/content processing pipeline in slices:
   1. content extraction adapter
   2. chunking + preprocessing
-  3. content cleaning
-  4. LLM orchestration wrappers
-  5. chunk summary aggregation
-  6. chunk synthesis prompt assembly
-  7. summary user-content payload assembly
+  3. chunk sentence planning
+  4. content cleaning
+  5. LLM orchestration wrappers
+  6. chunk summary aggregation
+  7. chunk synthesis prompt assembly
+  8. summary user-content payload assembly
 - Support Rust-authoritative execution for M3 slices via runtime toggle.
 
 **Exit criteria:** Rust-authoritative M3 slice execution available with parity fixtures and no regression in p95 latency.
