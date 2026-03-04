@@ -384,6 +384,12 @@ First implementation slice after inventory lock:
   both `bsr-telegram-runtime` Rust command-route tests and Python bridge
   routing tests to keep non-handled passthrough semantics stable when
   slash-prefixed text is followed by a form feed rather than a command token.
+- **Slash-vertical-tab command-shape parity hardening (M6-S74):**
+  slash-vertical-tab fixture `"/\vfindonline rust"` is now explicitly covered
+  in both `bsr-telegram-runtime` Rust command-route tests and Python bridge
+  routing tests to keep non-handled passthrough semantics stable when
+  slash-prefixed text is followed by a vertical tab rather than a command
+  token.
 
 Out-of-scope for M6-S1 (defer to later slices):
 

@@ -1714,6 +1714,34 @@ async def test_route_command_message_ignores_slash_form_feed_command_like_text()
 
 
 @pytest.mark.asyncio
+async def test_route_command_message_ignores_slash_vertical_tab_command_like_text() -> None:
+    router = _Router()
+    router.telegram_runtime_runner.resolve_command_route = AsyncMock(
+        return_value=TelegramRuntimeCommandDecision(command=None, handled=False)
+    )
+
+    handled = await router._route_command_message(
+        message=SimpleNamespace(),
+        text="/\x0bfindonline rust",
+        uid=79,
+        correlation_id="cid-79",
+        interaction_id=0,
+        start_time=0.0,
+    )
+
+    assert handled is False
+    router.telegram_runtime_runner.resolve_command_route.assert_awaited_once_with(
+        text="/\x0bfindonline rust",
+        correlation_id="cid-79",
+        actor_key="79",
+    )
+    router.command_processor.handle_find_online_command.assert_not_awaited()
+    router.command_processor.handle_find_local_command.assert_not_awaited()
+    router.command_processor.handle_start_command.assert_not_awaited()
+    router.command_processor.handle_debug_command.assert_not_awaited()
+
+
+@pytest.mark.asyncio
 async def test_route_command_message_ignores_mixed_case_canonical_command_without_bot_mention() -> (
     None
 ):
