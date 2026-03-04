@@ -16,7 +16,8 @@ This workspace contains migration crates delivered across milestones **M1–M6**
 - Production defaults are Rust-first for migrated slices.
 - `SUMMARY_CONTRACT_BACKEND` and `MIGRATION_INTERFACE_BACKEND` require Rust.
 - `MIGRATION_SHADOW_MODE_ENABLED` must remain enabled (M3 disabled mode is decommissioned).
-- `MIGRATION_TELEGRAM_RUNTIME_BACKEND` defaults to `python` during M6-S1 rollout.
+- M6 Telegram command-route execution is Rust-authoritative.
+- Legacy `MIGRATION_TELEGRAM_RUNTIME_BACKEND` values are ignored with a warning.
 
 ## Local checks
 
@@ -29,4 +30,5 @@ bash scripts/migration/run_m2_parity_suite.sh
 bash scripts/migration/run_m3_parity_suite.sh
 bash scripts/migration/run_m4_parity_suite.sh
 bash scripts/migration/run_m5_cutover_suite.sh
+bash scripts/migration/run_m6_telegram_runtime_suite.sh
 ```
