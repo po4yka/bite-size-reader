@@ -160,6 +160,56 @@ async def test_route_command_message_marks_awaiting_user_for_summarize_prompt() 
 
 
 @pytest.mark.asyncio
+async def test_route_command_message_marks_awaiting_user_for_summarize_prompt_with_bot_mention() -> (
+    None
+):
+    router = _Router()
+    router.telegram_runtime_runner.resolve_command_route = AsyncMock(
+        return_value=TelegramRuntimeCommandDecision(command="/summarize", handled=True)
+    )
+    router.command_processor.handle_summarize_command = AsyncMock(
+        return_value=("awaiting_url", True)
+    )
+
+    handled = await router._route_command_message(
+        message=SimpleNamespace(),
+        text="/summarize@mybot",
+        uid=13,
+        correlation_id="cid-13",
+        interaction_id=0,
+        start_time=0.0,
+    )
+
+    assert handled is True
+    router.command_processor.handle_summarize_command.assert_called_once()
+    call = router.command_processor.handle_summarize_command.call_args
+    assert call.args[1] == "/summarize@mybot"
+    router.url_handler.add_awaiting_user.assert_awaited_once_with(13)
+
+
+@pytest.mark.asyncio
+async def test_route_command_message_routes_cancel_with_bot_mention() -> None:
+    router = _Router()
+    router.telegram_runtime_runner.resolve_command_route = AsyncMock(
+        return_value=TelegramRuntimeCommandDecision(command="/cancel", handled=True)
+    )
+
+    handled = await router._route_command_message(
+        message=SimpleNamespace(),
+        text="/cancel@mybot",
+        uid=14,
+        correlation_id="cid-14",
+        interaction_id=0,
+        start_time=0.0,
+    )
+
+    assert handled is True
+    router.command_processor.handle_cancel_command.assert_awaited_once()
+    call = router.command_processor.handle_cancel_command.call_args
+    assert call.args[1:] == (14, "cid-14", 0, 0.0)
+
+
+@pytest.mark.asyncio
 async def test_route_command_message_requires_telegram_runtime_runner() -> None:
     router = _Router()
     delattr(router, "telegram_runtime_runner")

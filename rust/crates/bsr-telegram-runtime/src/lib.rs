@@ -100,6 +100,24 @@ mod tests {
     }
 
     #[test]
+    fn summarize_command_with_bot_mention_is_normalized() {
+        let decision = resolve_command_route(&TelegramCommandRouteInput {
+            text: "/summarize@mybot".to_string(),
+        });
+        assert_eq!(decision.command, Some("/summarize".to_string()));
+        assert!(decision.handled);
+    }
+
+    #[test]
+    fn cancel_command_with_bot_mention_is_normalized() {
+        let decision = resolve_command_route(&TelegramCommandRouteInput {
+            text: "/cancel@mybot".to_string(),
+        });
+        assert_eq!(decision.command, Some("/cancel".to_string()));
+        assert!(decision.handled);
+    }
+
+    #[test]
     fn command_strips_bot_mention() {
         let decision = resolve_command_route(&TelegramCommandRouteInput {
             text: "/unread@mybot 10".to_string(),

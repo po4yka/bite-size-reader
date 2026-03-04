@@ -72,6 +72,10 @@ First implementation slice after inventory lock:
   fixtures with `@bot` mentions are covered in both
   `bsr-telegram-runtime` Rust tests and Python bridge routing tests to keep
   mention-stripping parity stable for `/findonline` and `/findlocal`.
+- **Bot-mention stateful-command parity hardening (M6-S14):** explicit
+  `@bot` mention fixtures for `/summarize` and `/cancel` are covered in both
+  `bsr-telegram-runtime` Rust tests and Python bridge routing tests to keep
+  stateful command-route behavior stable.
 
 Out-of-scope for M6-S1 (defer to later slices):
 
