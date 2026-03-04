@@ -373,6 +373,12 @@ First implementation slice after inventory lock:
   both `bsr-telegram-runtime` Rust command-route tests and Python bridge
   routing tests to keep non-handled passthrough semantics stable when
   slash-prefixed text is followed by a newline rather than a command token.
+- **Slash-carriage-return command-shape parity hardening (M6-S72):**
+  slash-carriage-return fixture `"/\rfindonline rust"` is now explicitly
+  covered in both `bsr-telegram-runtime` Rust command-route tests and Python
+  bridge routing tests to keep non-handled passthrough semantics stable when
+  slash-prefixed text is followed by a carriage return rather than a command
+  token.
 
 Out-of-scope for M6-S1 (defer to later slices):
 
