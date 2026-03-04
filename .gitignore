@@ -129,3 +129,6 @@ app/static/digest/
 # --- Claude Code ---
 # Local Claude Code settings (user-specific)
 .claude/settings.local.json
+
+# --- Rust ---
+rust/target/
