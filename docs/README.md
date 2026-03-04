@@ -65,12 +65,12 @@ You want to track or contribute to the migration from Python to Rust.
 **Start here**:
 
 1. [Project Roadmap](../ROADMAP.md) - Official migration phases and milestones
-2. [How to migrate versions](how-to/migrate-versions.md) - Operator runbook during dual-runtime period
+2. [How to migrate versions](how-to/migrate-versions.md) - Operator runbook for runtime-track selection and rollback
 3. [SPEC.md](SPEC.md) - Source-of-truth contracts that must stay stable through migration
 4. [M0-M1 Implementation Notes](migration/m0-m1.md) - Implemented parity/baseline and Rust foundation artifacts
 5. [M2 Implementation Notes](migration/m2.md) - Rust contract layer, fixture parity, and SQLite compatibility artifacts
 6. [M3 Implementation Notes](migration/m3.md) - Pipeline runtime bridge with Rust-authoritative toggle and parity path
-7. [M4 Implementation Notes](migration/m4.md) - Mobile API + Telegram interface canary routing with rollback switch
+7. [M4 Implementation Notes](migration/m4.md) - Mobile API + Telegram interface routing migration and decommission notes
 8. [M5 Implementation Notes](migration/m5.md) - Rust-first cutover defaults and fallback decommission for migrated slices
 9. [Baseline Metrics Guide](migration/baseline-metrics.md) - How to capture and compare Python baseline runs
 

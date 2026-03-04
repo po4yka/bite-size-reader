@@ -3,7 +3,7 @@
 Upgrade Bite-Size Reader to a new version safely.
 
 > **Migration context:** M5 cutover is complete and production is now Rust-first.
-> Use this guide for normal upgrades, Rust canary rollouts, and release-window rollback readiness.
+> Use this guide for normal upgrades, runtime-track selection, and rollback readiness.
 > See [ROADMAP.md](../../ROADMAP.md) for milestone-level planning.
 
 **Audience:** Operators
@@ -50,7 +50,7 @@ make m2-parity-suite
 M3 slices can run via Rust-authoritative execution through the legacy toggle name:
 
 ```bash
-# false (default): keep Python runtime path for M3 slices
+# false (default): keep compatibility bridge path for M3 slices
 # true: use Rust-authoritative M3 execution
 MIGRATION_SHADOW_MODE_ENABLED=true
 
