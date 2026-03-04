@@ -172,11 +172,20 @@ mod tests {
     }
 
     #[test]
-    fn command_strips_bot_mention() {
+    fn unread_command_with_bot_mention_is_normalized() {
         let decision = resolve_command_route(&TelegramCommandRouteInput {
             text: "/unread@mybot 10".to_string(),
         });
         assert_eq!(decision.command, Some("/unread".to_string()));
+        assert!(decision.handled);
+    }
+
+    #[test]
+    fn read_command_with_bot_mention_is_normalized() {
+        let decision = resolve_command_route(&TelegramCommandRouteInput {
+            text: "/read@mybot 10".to_string(),
+        });
+        assert_eq!(decision.command, Some("/read".to_string()));
         assert!(decision.handled);
     }
 

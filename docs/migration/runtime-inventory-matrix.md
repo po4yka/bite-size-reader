@@ -92,6 +92,10 @@ First implementation slice after inventory lock:
   mention fixture for `/summarize_all` is covered in both
   `bsr-telegram-runtime` Rust tests and Python bridge routing tests to keep
   summarize-all command-route dispatch stable for bot-directed invocations.
+- **Bot-mention unread/read parity hardening (M6-S19):** explicit `@bot`
+  mention fixtures for `/unread` and `/read` are covered in both
+  `bsr-telegram-runtime` Rust tests and Python bridge routing tests to keep
+  unread/read command-route dispatch stable for bot-directed invocations.
 
 Out-of-scope for M6-S1 (defer to later slices):
 

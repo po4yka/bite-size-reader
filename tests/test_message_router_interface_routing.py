@@ -348,6 +348,52 @@ async def test_route_command_message_routes_summarize_all_with_bot_mention_and_p
 
 
 @pytest.mark.asyncio
+async def test_route_command_message_routes_unread_with_bot_mention_and_preserves_text() -> None:
+    router = _Router()
+    router.telegram_runtime_runner.resolve_command_route = AsyncMock(
+        return_value=TelegramRuntimeCommandDecision(command="/unread", handled=True)
+    )
+
+    handled = await router._route_command_message(
+        message=SimpleNamespace(),
+        text="/unread@mybot 10",
+        uid=21,
+        correlation_id="cid-21",
+        interaction_id=0,
+        start_time=0.0,
+    )
+
+    assert handled is True
+    router.command_processor.handle_unread_command.assert_awaited_once()
+    call = router.command_processor.handle_unread_command.call_args
+    assert call.args[1] == "/unread@mybot 10"
+    assert call.args[2:] == (21, "cid-21", 0, 0.0)
+
+
+@pytest.mark.asyncio
+async def test_route_command_message_routes_read_with_bot_mention_and_preserves_text() -> None:
+    router = _Router()
+    router.telegram_runtime_runner.resolve_command_route = AsyncMock(
+        return_value=TelegramRuntimeCommandDecision(command="/read", handled=True)
+    )
+
+    handled = await router._route_command_message(
+        message=SimpleNamespace(),
+        text="/read@mybot 10",
+        uid=22,
+        correlation_id="cid-22",
+        interaction_id=0,
+        start_time=0.0,
+    )
+
+    assert handled is True
+    router.command_processor.handle_read_command.assert_awaited_once()
+    call = router.command_processor.handle_read_command.call_args
+    assert call.args[1] == "/read@mybot 10"
+    assert call.args[2:] == (22, "cid-22", 0, 0.0)
+
+
+@pytest.mark.asyncio
 async def test_route_command_message_requires_telegram_runtime_runner() -> None:
     router = _Router()
     delattr(router, "telegram_runtime_runner")
