@@ -538,7 +538,7 @@ def run_rust_shadow_command(
 
 @dataclass(frozen=True)
 class PipelineShadowRuntimeOptions:
-    enabled: bool = False
+    enabled: bool = True
     sample_rate: float = 0.0
     emit_match_logs: bool = False
     timeout_ms: int = 250
@@ -546,11 +546,20 @@ class PipelineShadowRuntimeOptions:
 
 
 class PipelineShadowRunner:
-    """Run M3 pipeline slices with Rust-authoritative execution when enabled."""
+    """Run M3 pipeline slices with Rust-authoritative execution."""
 
     def __init__(self, runtime_cfg: Any) -> None:
+        configured_enabled_raw = getattr(runtime_cfg, "migration_shadow_mode_enabled", None)
+        if configured_enabled_raw is None or bool(configured_enabled_raw):
+            effective_enabled = True
+        else:
+            logger.warning(
+                "m3_shadow_backend_decommissioned_mode_ignored",
+                extra={"requested_enabled": False, "effective_enabled": True},
+            )
+            effective_enabled = True
         self.options = PipelineShadowRuntimeOptions(
-            enabled=bool(getattr(runtime_cfg, "migration_shadow_mode_enabled", False)),
+            enabled=effective_enabled,
             sample_rate=float(getattr(runtime_cfg, "migration_shadow_mode_sample_rate", 0.0)),
             emit_match_logs=bool(
                 getattr(runtime_cfg, "migration_shadow_mode_emit_match_logs", False)
@@ -590,15 +599,6 @@ class PipelineShadowRunner:
             "title": title,
             "images_count": int(images_count),
         }
-        if not self.options.enabled:
-            return build_python_extraction_adapter_snapshot(
-                url_hash=url_hash,
-                content_text=content_text,
-                content_source=content_source,
-                title=title,
-                images_count=images_count,
-            )
-
         return await self._run_authoritative_slice(
             command="extraction-adapter",
             rust_input=rust_input,
@@ -623,9 +623,6 @@ class PipelineShadowRunner:
             "max_chars": int(max_chars),
             "long_context_model": long_context_model,
         }
-        if not self.options.enabled:
-            return build_python_chunking_preprocess_snapshot_from_input(rust_input)
-
         return await self._run_authoritative_slice(
             command="chunking-preprocess",
             rust_input=rust_input,
@@ -648,9 +645,6 @@ class PipelineShadowRunner:
             "lang": lang,
             "max_chars": int(max_chars),
         }
-        if not self.options.enabled:
-            return build_python_chunk_sentence_plan_snapshot_from_input(rust_input)
-
         return await self._run_authoritative_slice(
             command="chunk-sentence-plan",
             rust_input=rust_input,
@@ -678,10 +672,8 @@ class PipelineShadowRunner:
             flash_fallback_models=flash_fallback_models,
         )
         if rust_input is None:
-            return build_python_llm_wrapper_plan_snapshot_from_requests(requests)
-
-        if not self.options.enabled:
-            return build_python_llm_wrapper_plan_snapshot_from_input(rust_input)
+            msg = "Rust M3 llm-wrapper-plan input could not be prepared"
+            raise RuntimeError(msg)
 
         return await self._run_authoritative_slice(
             command="llm-wrapper-plan",
@@ -699,9 +691,6 @@ class PipelineShadowRunner:
         content_text: str,
     ) -> dict[str, Any]:
         rust_input = {"content_text": content_text}
-        if not self.options.enabled:
-            return build_python_content_cleaner_snapshot_from_input(rust_input)
-
         return await self._run_authoritative_slice(
             command="content-cleaner",
             rust_input=rust_input,
@@ -718,9 +707,6 @@ class PipelineShadowRunner:
         summaries: list[dict[str, Any]],
     ) -> dict[str, Any]:
         rust_input = {"summaries": summaries}
-        if not self.options.enabled:
-            return build_python_summary_aggregate_snapshot_from_input(rust_input)
-
         return await self._run_authoritative_slice(
             command="summary-aggregate",
             rust_input=rust_input,
@@ -741,9 +727,6 @@ class PipelineShadowRunner:
             "aggregated": aggregated,
             "chosen_lang": chosen_lang,
         }
-        if not self.options.enabled:
-            return build_python_chunk_synthesis_prompt_snapshot_from_input(rust_input)
-
         return await self._run_authoritative_slice(
             command="chunk-synthesis-prompt",
             rust_input=rust_input,
@@ -766,9 +749,6 @@ class PipelineShadowRunner:
             "chosen_lang": chosen_lang,
             "search_context": search_context,
         }
-        if not self.options.enabled:
-            return build_python_summary_user_content_snapshot_from_input(rust_input)
-
         return await self._run_authoritative_slice(
             command="summary-user-content",
             rust_input=rust_input,

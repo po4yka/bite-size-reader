@@ -119,7 +119,7 @@ API_RATE_LIMIT_DEFAULT=100
 
 | Variable | Default | Description |
 | ---------- | --------- | ------------- |
-| `MIGRATION_SHADOW_MODE_ENABLED` | `false` | Enable Rust-authoritative execution for M3 pipeline slices |
+| `MIGRATION_SHADOW_MODE_ENABLED` | `true` | M3 pipeline backend (Rust required; disabled mode is decommissioned). |
 | `MIGRATION_SHADOW_MODE_TIMEOUT_MS` | `250` | Timeout per Rust pipeline bridge call (milliseconds) |
 | `MIGRATION_SHADOW_MODE_SAMPLE_RATE` | `0.0` | Deprecated legacy shadow option (ignored in authoritative mode) |
 | `MIGRATION_SHADOW_MODE_MAX_DIFFS` | `8` | Deprecated legacy shadow option (ignored in authoritative mode) |
@@ -439,7 +439,7 @@ uv run python scripts/twitter_article_live_smoke.py \
 | `SUMMARY_STREAMING_ENABLED` | `true` | Enable section-based summary streaming |
 | `SUMMARY_STREAMING_MODE` | `section` | Streaming mode (`section` or `disabled`) |
 | `SUMMARY_STREAMING_PROVIDER_SCOPE` | `openrouter` | Provider scope for token streaming (`openrouter`, `all`, `disabled`) |
-| `MIGRATION_SHADOW_MODE_ENABLED` | `false` | Enable Rust-authoritative execution for M3 pipeline slices |
+| `MIGRATION_SHADOW_MODE_ENABLED` | `true` | M3 pipeline backend (Rust required; disabled mode is decommissioned) |
 | `MIGRATION_SHADOW_MODE_SAMPLE_RATE` | `0.0` | Deprecated legacy shadow option (ignored in authoritative mode) |
 | `MIGRATION_SHADOW_MODE_TIMEOUT_MS` | `250` | Per-call Rust pipeline timeout (ms) |
 | `MIGRATION_SHADOW_MODE_MAX_DIFFS` | `8` | Deprecated legacy shadow option (ignored in authoritative mode) |

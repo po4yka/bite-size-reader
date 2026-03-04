@@ -58,9 +58,9 @@ This roadmap tracks the project-wide migration from the current Python runtime t
   6. chunk summary aggregation
   7. chunk synthesis prompt assembly
   8. summary user-content payload assembly
-- Support Rust-authoritative execution for M3 slices via runtime toggle.
+- Enforce Rust-authoritative execution for M3 slices (fallback-disabled modes decommissioned).
 
-**Exit criteria:** Rust-authoritative M3 slice execution available with parity fixtures and no regression in p95 latency.
+**Exit criteria:** Rust-authoritative M3 slice execution enforced with parity fixtures and no regression in p95 latency.
 
 ### M4 — Interface Layer Migration ✅ Implemented
 

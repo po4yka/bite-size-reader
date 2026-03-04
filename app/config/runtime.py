@@ -35,7 +35,7 @@ class RuntimeConfig(BaseModel):
         default="openrouter", validation_alias="SUMMARY_STREAMING_PROVIDER_SCOPE"
     )
     migration_shadow_mode_enabled: bool = Field(
-        default=False, validation_alias="MIGRATION_SHADOW_MODE_ENABLED"
+        default=True, validation_alias="MIGRATION_SHADOW_MODE_ENABLED"
     )
     migration_shadow_mode_sample_rate: float = Field(
         default=0.0, validation_alias="MIGRATION_SHADOW_MODE_SAMPLE_RATE"
@@ -212,6 +212,29 @@ class RuntimeConfig(BaseModel):
             msg = f"Summary streaming provider scope must be one of {sorted(allowed)}"
             raise ValueError(msg)
         return scope
+
+    @field_validator("migration_shadow_mode_enabled", mode="before")
+    @classmethod
+    def _validate_migration_shadow_mode_enabled(cls, value: Any) -> bool:
+        raw = value if value not in (None, "") else True
+        if isinstance(raw, str):
+            normalized = raw.strip().lower()
+            if normalized in {"1", "true", "yes", "on"}:
+                enabled = True
+            elif normalized in {"0", "false", "no", "off"}:
+                enabled = False
+            else:
+                msg = "MIGRATION_SHADOW_MODE_ENABLED must be a boolean value"
+                raise ValueError(msg)
+        else:
+            enabled = bool(raw)
+        if not enabled:
+            msg = (
+                "Migration shadow fallback modes are decommissioned; "
+                "MIGRATION_SHADOW_MODE_ENABLED must be true"
+            )
+            raise ValueError(msg)
+        return True
 
     @field_validator("migration_shadow_mode_sample_rate", mode="before")
     @classmethod
