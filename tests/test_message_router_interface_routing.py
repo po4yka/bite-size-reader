@@ -198,6 +198,36 @@ async def test_route_command_message_preserves_original_alias_with_empty_bot_men
 
 
 @pytest.mark.asyncio
+async def test_route_command_message_preserves_original_bare_alias_with_empty_bot_mention_suffix() -> (
+    None
+):
+    router = _Router()
+    router.telegram_runtime_runner.resolve_command_route = AsyncMock(
+        return_value=TelegramRuntimeCommandDecision(command="/find", handled=True)
+    )
+
+    handled = await router._route_command_message(
+        message=SimpleNamespace(),
+        text="/findonline@",
+        uid=55,
+        correlation_id="cid-55",
+        interaction_id=0,
+        start_time=0.0,
+    )
+
+    assert handled is True
+    router.telegram_runtime_runner.resolve_command_route.assert_awaited_once_with(
+        text="/findonline@",
+        correlation_id="cid-55",
+        actor_key="55",
+    )
+    router.command_processor.handle_find_online_command.assert_called_once()
+    call = router.command_processor.handle_find_online_command.call_args
+    assert call.args[1] == "/findonline@"
+    assert call.kwargs["command"] == "/findonline"
+
+
+@pytest.mark.asyncio
 async def test_route_command_message_preserves_legacy_alias_with_bot_mention() -> None:
     router = _Router()
     router.telegram_runtime_runner.resolve_command_route = AsyncMock(

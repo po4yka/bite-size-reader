@@ -118,6 +118,15 @@ mod tests {
     }
 
     #[test]
+    fn bare_alias_command_with_empty_bot_mention_suffix_is_normalized() {
+        let decision = resolve_command_route(&TelegramCommandRouteInput {
+            text: "/findonline@".to_string(),
+        });
+        assert_eq!(decision.command, Some("/find".to_string()));
+        assert!(decision.handled);
+    }
+
+    #[test]
     fn alias_command_with_empty_bot_mention_suffix_is_normalized() {
         let decision = resolve_command_route(&TelegramCommandRouteInput {
             text: "/findonline@ rust".to_string(),
