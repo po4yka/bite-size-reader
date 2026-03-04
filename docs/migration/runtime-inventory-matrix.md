@@ -494,6 +494,12 @@ First implementation slice after inventory lock:
   and Python bridge routing tests to keep non-handled passthrough semantics
   stable when slash-prefixed text is followed by a paragraph separator rather
   than a command token.
+- **Slash-next-line command-shape parity hardening (M6-S93):**
+  slash-next-line fixture `"/\u0085findonline rust"` is now explicitly covered
+  in both `bsr-telegram-runtime` Rust command-route tests and Python bridge
+  routing tests to keep non-handled passthrough semantics stable when
+  slash-prefixed text is followed by a next line character rather than a
+  command token.
 
 Out-of-scope for M6-S1 (defer to later slices):
 
