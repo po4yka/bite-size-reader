@@ -578,6 +578,13 @@ First implementation slice after inventory lock:
   and Python bridge routing tests to keep non-handled passthrough semantics
   stable when slash-prefixed text is followed by a character-tabulation-set
   control character rather than a command token.
+- **Slash-character-tabulation-with-justification command-shape parity hardening (M6-S107):**
+  slash-character-tabulation-with-justification fixture `"/\u0089findonline rust"` is
+  now explicitly covered in both `bsr-telegram-runtime` Rust command-route
+  tests and Python bridge routing tests to keep non-handled passthrough
+  semantics stable when slash-prefixed text is followed by a
+  character-tabulation-with-justification control character rather than a
+  command token.
 
 Out-of-scope for M6-S1 (defer to later slices):
 
