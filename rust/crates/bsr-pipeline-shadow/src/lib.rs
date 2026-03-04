@@ -1,3 +1,5 @@
+use once_cell::sync::Lazy;
+use regex::Regex;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use thiserror::Error;
@@ -82,6 +84,16 @@ pub struct LlmRequestPlan {
 pub struct LlmWrapperPlanSnapshot {
     pub request_count: usize,
     pub requests: Vec<LlmRequestPlan>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ContentCleanerInput {
+    pub content_text: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ContentCleanerSnapshot {
+    pub content_text: String,
 }
 
 pub fn build_extraction_adapter_snapshot(
@@ -229,6 +241,108 @@ pub fn build_llm_wrapper_plan_snapshot(input: &LlmWrapperPlanInput) -> LlmWrappe
     }
 }
 
+pub fn build_content_cleaner_snapshot(input: &ContentCleanerInput) -> ContentCleanerSnapshot {
+    ContentCleanerSnapshot {
+        content_text: clean_content_for_llm(&input.content_text),
+    }
+}
+
+pub fn clean_content_for_llm(text: &str) -> String {
+    if text.trim().is_empty() {
+        return text.to_string();
+    }
+
+    let mut out = text.to_string();
+    out = collapse_whitespace(&out);
+    out = strip_markdown_link_urls(&out);
+    out = remove_boilerplate_sections(&out);
+    out = remove_repeated_nav_items(&out, 3);
+    out = truncate_after_comments(&out);
+    out.trim().to_string()
+}
+
+fn collapse_whitespace(text: &str) -> String {
+    static BLANK_LINES: Lazy<Regex> =
+        Lazy::new(|| Regex::new(r"\n{3,}").expect("valid blank-line regex"));
+    BLANK_LINES.replace_all(text, "\n\n").to_string()
+}
+
+fn strip_markdown_link_urls(text: &str) -> String {
+    static MD_LINK: Lazy<Regex> =
+        Lazy::new(|| Regex::new(r"\[([^\]]+)\]\([^)]+\)").expect("valid markdown-link regex"));
+    MD_LINK.replace_all(text, "$1").to_string()
+}
+
+fn remove_boilerplate_sections(text: &str) -> String {
+    static BOILERPLATE_HEADING: Lazy<Regex> = Lazy::new(|| {
+        Regex::new(
+            r"(?i)^#{1,4}\s*(?:related\s+(?:articles?|posts?|stories?|content|links?|reads?)|you\s+(?:may|might|could)\s+(?:also\s+)?(?:like|enjoy|read)|(?:more|other|similar)\s+(?:articles?|posts?|stories?|reads?)|(?:comments?|leave\s+a\s+(?:reply|comment))|(?:share\s+this|subscribe|newsletter|sign\s*up)|(?:advertisement|sponsored|promoted)|(?:footer|sidebar|navigation|breadcrumb))\s*$",
+        )
+        .expect("valid boilerplate-heading regex")
+    });
+    static HEADING_START: Lazy<Regex> =
+        Lazy::new(|| Regex::new(r"^#{1,4}\s+\S").expect("valid heading-start regex"));
+
+    let mut skipping = false;
+    let mut result: Vec<&str> = Vec::new();
+
+    for line in text.split('\n') {
+        if BOILERPLATE_HEADING.is_match(line.trim()) {
+            skipping = true;
+            continue;
+        }
+        if skipping && HEADING_START.is_match(line) {
+            skipping = false;
+        }
+        if !skipping {
+            result.push(line);
+        }
+    }
+
+    result.join("\n")
+}
+
+fn remove_repeated_nav_items(text: &str, threshold: usize) -> String {
+    use std::collections::{HashMap, HashSet};
+
+    let mut counter: HashMap<String, usize> = HashMap::new();
+    let lines: Vec<&str> = text.split('\n').collect();
+
+    for line in &lines {
+        let stripped = line.trim();
+        if stripped.is_empty() {
+            continue;
+        }
+        *counter.entry(stripped.to_string()).or_insert(0) += 1;
+    }
+
+    let repeated: HashSet<String> = counter
+        .into_iter()
+        .filter_map(|(line, count)| (count >= threshold).then_some(line))
+        .collect();
+    if repeated.is_empty() {
+        return text.to_string();
+    }
+
+    let kept: Vec<&str> = lines
+        .iter()
+        .copied()
+        .filter(|line| !repeated.contains(line.trim()))
+        .collect();
+    kept.join("\n")
+}
+
+fn truncate_after_comments(text: &str) -> String {
+    static COMMENT_MARKER: Lazy<Regex> = Lazy::new(|| {
+        Regex::new(r"(?im)^(?:#{1,4}\s+)?(?:\d+\s+)?(?:comments?|responses?|replies?|discussion)\s*$")
+            .expect("valid comments-marker regex")
+    });
+    if let Some(m) = COMMENT_MARKER.find(text) {
+        return text[..m.start()].trim_end().to_string();
+    }
+    text.to_string()
+}
+
 fn detect_language_hint(content: &str) -> String {
     let mut cyrillic = 0usize;
     let mut latin = 0usize;
@@ -321,5 +435,20 @@ mod tests {
             .requests
             .iter()
             .any(|req| req.preset == "json_object_fallback"));
+    }
+
+    #[test]
+    fn content_cleaner_removes_noise_sections() {
+        let input = ContentCleanerInput {
+            content_text: "Intro line.\n\n### Related Articles\njunk item\njunk item\njunk item\n\n## Main\nBody text.\n\nComments\nFirst!\n".to_string(),
+        };
+
+        let snapshot = build_content_cleaner_snapshot(&input);
+        assert!(snapshot.content_text.contains("Intro line."));
+        assert!(snapshot.content_text.contains("## Main"));
+        assert!(snapshot.content_text.contains("Body text."));
+        assert!(!snapshot.content_text.contains("Related Articles"));
+        assert!(!snapshot.content_text.contains("Comments"));
+        assert!(!snapshot.content_text.contains("junk item"));
     }
 }

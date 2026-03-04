@@ -129,6 +129,9 @@ class LLMSummarizerRequestTests(unittest.IsolatedAsyncioTestCase):
         )
         summarizer.pipeline_shadow = MagicMock()
         summarizer.pipeline_shadow.options.enabled = True
+        summarizer.pipeline_shadow.resolve_content_cleaner = AsyncMock(
+            return_value={"content_text": "short content for testing."}
+        )
         summarizer.pipeline_shadow.resolve_llm_wrapper_plan = AsyncMock(
             return_value={
                 "request_count": 3,
@@ -183,6 +186,7 @@ class LLMSummarizerRequestTests(unittest.IsolatedAsyncioTestCase):
             )
 
         assert summary is not None
+        summarizer.pipeline_shadow.resolve_content_cleaner.assert_called_once()
         summarizer.pipeline_shadow.resolve_llm_wrapper_plan.assert_called_once()
         assert captured_requests, "requests should be passed to the workflow"
         assert [req.preset_name for req in captured_requests] == [

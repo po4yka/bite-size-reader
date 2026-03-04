@@ -394,6 +394,51 @@ async def _resolve_m3_rust_llm_wrapper_plan_for(
     )
 
 
+async def _prepare_summary_content_for(
+    summarizer: LLMSummarizer,
+    *,
+    content_text: str,
+    max_chars: int,
+    correlation_id: str | None,
+    request_id: int | None,
+    images: list[str] | None,
+) -> tuple[str, str | None]:
+    """Choose model override/truncation strategy and return cleaned content."""
+    content_for_summary = content_text
+    model_override = summarizer.cfg.attachment.vision_model if images else None
+
+    if len(content_text) > max_chars:
+        if summarizer.cfg.openrouter.long_context_model:
+            model_override = summarizer.cfg.openrouter.long_context_model
+        else:
+            content_for_summary = truncate_content_text(content_text, max_chars)
+            logger.info(
+                "summary_content_truncated",
+                extra={
+                    "cid": correlation_id,
+                    "original_len": len(content_text),
+                    "truncated_len": len(content_for_summary),
+                    "max_chars": max_chars,
+                },
+            )
+
+    runner = getattr(summarizer, "pipeline_shadow", None)
+    if runner is not None and runner.options.enabled:
+        cleaned_payload = await runner.resolve_content_cleaner(
+            correlation_id=correlation_id,
+            request_id=request_id,
+            content_text=content_for_summary,
+        )
+        rust_cleaned = cleaned_payload.get("content_text")
+        content_for_summary = (
+            str(rust_cleaned) if isinstance(rust_cleaned, str) else content_for_summary
+        )
+    else:
+        content_for_summary = clean_content_for_llm(content_for_summary)
+
+    return content_for_summary, model_override
+
+
 class LLMSummarizer:
     """Handles AI summarization calls and response processing."""
 
@@ -499,10 +544,12 @@ class LLMSummarizer:
             await self._handle_empty_content_error(message, req_id, correlation_id, interaction_id)
             return None
 
-        content_for_summary, model_override = self._prepare_summary_content(
+        content_for_summary, model_override = await _prepare_summary_content_for(
+            self,
             content_text=content_text,
             max_chars=max_chars,
             correlation_id=correlation_id,
+            request_id=req_id,
             images=images,
         )
         search_context = await self._maybe_enrich_with_search(
@@ -656,35 +703,6 @@ class LLMSummarizer:
             return True
         provider_name = str(getattr(self.openrouter, "provider_name", "openrouter")).lower()
         return provider_name == scope
-
-    def _prepare_summary_content(
-        self,
-        *,
-        content_text: str,
-        max_chars: int,
-        correlation_id: str | None,
-        images: list[str] | None,
-    ) -> tuple[str, str | None]:
-        """Choose model override/truncation strategy and return cleaned content."""
-        content_for_summary = content_text
-        model_override = self.cfg.attachment.vision_model if images else None
-
-        if len(content_text) > max_chars:
-            if self.cfg.openrouter.long_context_model:
-                model_override = self.cfg.openrouter.long_context_model
-            else:
-                content_for_summary = truncate_content_text(content_text, max_chars)
-                logger.info(
-                    "summary_content_truncated",
-                    extra={
-                        "cid": correlation_id,
-                        "original_len": len(content_text),
-                        "truncated_len": len(content_for_summary),
-                        "max_chars": max_chars,
-                    },
-                )
-
-        return clean_content_for_llm(content_for_summary), model_override
 
     def _build_summary_user_content(
         self,

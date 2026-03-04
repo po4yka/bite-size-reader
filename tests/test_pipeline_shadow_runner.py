@@ -180,3 +180,38 @@ async def test_resolve_llm_wrapper_plan_uses_rust_when_enabled() -> None:
         )
 
     assert result == rust_plan
+
+
+@pytest.mark.asyncio
+async def test_resolve_content_cleaner_uses_python_when_disabled() -> None:
+    runner = PipelineShadowRunner(_runtime_cfg(migration_shadow_mode_enabled=False))
+    raw = "Line one.\n\n### Related Articles\nNav\nNav\nNav\n"
+
+    with patch("app.migration.pipeline_shadow.run_rust_shadow_command") as rust_call:
+        result = await runner.resolve_content_cleaner(
+            correlation_id="cid",
+            request_id=9,
+            content_text=raw,
+        )
+
+    rust_call.assert_not_called()
+    assert "Related Articles" not in result["content_text"]
+    assert "Line one." in result["content_text"]
+
+
+@pytest.mark.asyncio
+async def test_resolve_content_cleaner_uses_rust_when_enabled() -> None:
+    runner = PipelineShadowRunner(_runtime_cfg(migration_shadow_mode_enabled=True))
+    rust_payload = {"content_text": "rust-cleaned"}
+
+    with patch(
+        "app.migration.pipeline_shadow.run_rust_shadow_command",
+        return_value=rust_payload,
+    ):
+        result = await runner.resolve_content_cleaner(
+            correlation_id="cid",
+            request_id=10,
+            content_text="raw",
+        )
+
+    assert result == rust_payload

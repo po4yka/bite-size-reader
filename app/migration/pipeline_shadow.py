@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from app.core.content_cleaner import clean_content_for_llm
 from app.migration.cutover_monitor import record_cutover_event
 
 if TYPE_CHECKING:
@@ -249,6 +250,11 @@ def build_python_llm_wrapper_plan_snapshot_from_input(
         "request_count": len(requests),
         "requests": requests,
     }
+
+
+def build_python_content_cleaner_snapshot_from_input(payload: dict[str, Any]) -> dict[str, Any]:
+    content_text = str(payload.get("content_text") or "")
+    return {"content_text": clean_content_for_llm(content_text)}
 
 
 def build_rust_llm_wrapper_input_from_requests(
@@ -528,6 +534,25 @@ class PipelineShadowRunner:
             correlation_id=correlation_id,
             request_id=request_id,
             surface="pipeline_llm_wrapper_plan",
+        )
+
+    async def resolve_content_cleaner(
+        self,
+        *,
+        correlation_id: str | None,
+        request_id: int | None,
+        content_text: str,
+    ) -> dict[str, Any]:
+        rust_input = {"content_text": content_text}
+        if not self.options.enabled:
+            return build_python_content_cleaner_snapshot_from_input(rust_input)
+
+        return await self._run_authoritative_slice(
+            command="content-cleaner",
+            rust_input=rust_input,
+            correlation_id=correlation_id,
+            request_id=request_id,
+            surface="pipeline_content_cleaner",
         )
 
     async def _run_authoritative_slice(

@@ -2,9 +2,9 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use bsr_pipeline_shadow::{
-    build_chunking_preprocess_snapshot, build_extraction_adapter_snapshot,
-    build_llm_wrapper_plan_snapshot, ChunkingPreprocessInput, ExtractionAdapterInput,
-    LlmWrapperPlanInput,
+    build_chunking_preprocess_snapshot, build_content_cleaner_snapshot,
+    build_extraction_adapter_snapshot, build_llm_wrapper_plan_snapshot, ChunkingPreprocessInput,
+    ContentCleanerInput, ExtractionAdapterInput, LlmWrapperPlanInput,
 };
 use serde_json::Value;
 
@@ -67,6 +67,12 @@ fn m3_fixture_parity() {
                     serde_json::from_value(input).expect("valid llm wrapper fixture");
                 serde_json::to_value(build_llm_wrapper_plan_snapshot(&parsed))
                     .expect("serialize llm wrapper snapshot")
+            }
+            "content_cleaner" => {
+                let parsed: ContentCleanerInput =
+                    serde_json::from_value(input).expect("valid content cleaner fixture");
+                serde_json::to_value(build_content_cleaner_snapshot(&parsed))
+                    .expect("serialize content cleaner snapshot")
             }
             _ => panic!("unknown fixture name: {}", fixture_name),
         };

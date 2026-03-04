@@ -2,9 +2,9 @@ use std::env;
 use std::io::{self, Read};
 
 use bsr_pipeline_shadow::{
-    build_chunking_preprocess_snapshot, build_extraction_adapter_snapshot,
-    build_llm_wrapper_plan_snapshot, ChunkingPreprocessInput, ExtractionAdapterInput,
-    LlmWrapperPlanInput,
+    build_chunking_preprocess_snapshot, build_content_cleaner_snapshot,
+    build_extraction_adapter_snapshot, build_llm_wrapper_plan_snapshot, ChunkingPreprocessInput,
+    ContentCleanerInput, ExtractionAdapterInput, LlmWrapperPlanInput,
 };
 use serde_json::Value;
 
@@ -41,11 +41,19 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             println!("{}", serde_json::to_string_pretty(&output)?);
             Ok(())
         }
+        "content-cleaner" => {
+            let payload = read_json_stdin()?;
+            let input: ContentCleanerInput = serde_json::from_value(payload)?;
+            let output = build_content_cleaner_snapshot(&input);
+            println!("{}", serde_json::to_string_pretty(&output)?);
+            Ok(())
+        }
         _ => {
             println!("Usage:");
             println!("  bsr-pipeline-shadow extraction-adapter < input.json");
             println!("  bsr-pipeline-shadow chunking-preprocess < input.json");
             println!("  bsr-pipeline-shadow llm-wrapper-plan < input.json");
+            println!("  bsr-pipeline-shadow content-cleaner < input.json");
             Ok(())
         }
     }
