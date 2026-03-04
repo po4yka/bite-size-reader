@@ -143,7 +143,7 @@ def _get_interface_router_runner(cfg: AppConfig) -> InterfaceRouterRunner:
     runtime_cfg = getattr(cfg, "runtime", None)
     if runtime_cfg is None:
         runtime_cfg = SimpleNamespace(
-            migration_interface_backend="python",
+            migration_interface_backend="rust",
             migration_interface_sample_rate=0.0,
             migration_interface_timeout_ms=150,
             migration_interface_emit_match_logs=False,

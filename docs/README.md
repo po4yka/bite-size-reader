@@ -71,7 +71,8 @@ You want to track or contribute to the migration from Python to Rust.
 5. [M2 Implementation Notes](migration/m2.md) - Rust contract layer, fixture parity, and SQLite compatibility artifacts
 6. [M3 Implementation Notes](migration/m3.md) - Shadow-mode pipeline slices and Rust comparison path
 7. [M4 Implementation Notes](migration/m4.md) - Mobile API + Telegram interface canary routing with rollback switch
-8. [Baseline Metrics Guide](migration/baseline-metrics.md) - How to capture and compare Python baseline runs
+8. [M5 Implementation Notes](migration/m5.md) - Rust-first cutover defaults, fallback telemetry, and decommission gate
+9. [Baseline Metrics Guide](migration/baseline-metrics.md) - How to capture and compare Python baseline runs
 
 ### 🤝 I'm a Contributor
 

@@ -11,9 +11,9 @@ This roadmap tracks the project-wide migration from the current Python runtime t
 
 ## Current State
 
-- **Production runtime:** Python (stable)
-- **Target runtime:** Rust (incremental adoption)
-- **Migration mode:** Strangler pattern (Rust services/modules replace Python components over time)
+- **Production runtime:** Rust-first (with Python fallback window)
+- **Target runtime:** Rust
+- **Migration mode:** Cutover completed; fallback paths retained temporarily for release-window safety
 
 ## Milestones
 
@@ -65,7 +65,7 @@ This roadmap tracks the project-wide migration from the current Python runtime t
 
 **Exit criteria:** canary traffic served by Rust path with rollback switch.
 
-### M5 — Cutover and Decommission
+### M5 — Cutover and Decommission ✅ Implemented
 
 - Default production traffic to Rust runtime.
 - Keep Python fallback for one release window.
@@ -113,6 +113,17 @@ This roadmap tracks the project-wide migration from the current Python runtime t
   - M4 suite runner: `scripts/migration/run_m4_parity_suite.sh` (`make m4-parity-suite`)
   - CI job: `m4-interface-router-parity` in `.github/workflows/ci.yml`
   - Detailed notes: `docs/migration/m4.md`
+- **M5 artifacts**
+  - Rust-first cutover defaults:
+    - `app/core/summary_contract_impl/rust_backend.py` (`SUMMARY_CONTRACT_BACKEND` default)
+    - `app/config/runtime.py` (`MIGRATION_INTERFACE_BACKEND` default)
+  - Cutover fallback event monitor:
+    - `app/migration/cutover_monitor.py`
+  - Release-window fallback checker:
+    - `scripts/migration/check_m5_cutover_window.py`
+  - M5 suite runner: `scripts/migration/run_m5_cutover_suite.sh` (`make m5-cutover-suite`)
+  - CI job: `m5-cutover-suite` in `.github/workflows/ci.yml`
+  - Detailed notes: `docs/migration/m5.md`
 
 ## Cross-Cutting Workstreams
 

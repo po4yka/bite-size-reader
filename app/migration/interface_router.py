@@ -10,6 +10,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from app.migration.cutover_monitor import record_cutover_event
+
 logger = logging.getLogger(__name__)
 
 _ROUTER_BIN_ENV = "INTERFACE_ROUTER_RUST_BIN"
@@ -285,7 +287,7 @@ def run_rust_interface_command(
 
 @dataclass(frozen=True)
 class InterfaceRouterRuntimeOptions:
-    backend: str = "python"
+    backend: str = "rust"
     sample_rate: float = 0.0
     timeout_ms: int = 150
     emit_match_logs: bool = False
@@ -297,7 +299,7 @@ class InterfaceRouterRunner:
 
     def __init__(self, runtime_cfg: Any) -> None:
         self.options = InterfaceRouterRuntimeOptions(
-            backend=str(getattr(runtime_cfg, "migration_interface_backend", "python"))
+            backend=str(getattr(runtime_cfg, "migration_interface_backend", "rust"))
             .strip()
             .lower(),
             sample_rate=float(getattr(runtime_cfg, "migration_interface_sample_rate", 0.0)),
@@ -371,6 +373,13 @@ class InterfaceRouterRunner:
                 "m4_interface_router_error",
                 extra={"surface": "mobile", "cid": correlation_id, "error": str(exc)},
             )
+            record_cutover_event(
+                event_type="python_fallback",
+                surface="interface_mobile_route",
+                reason="rust_backend_failed",
+                correlation_id=correlation_id,
+                metadata={"backend": backend},
+            )
             return expected
 
         actual = MobileRouteDecision.from_mapping(actual_payload)
@@ -408,6 +417,13 @@ class InterfaceRouterRunner:
             logger.warning(
                 "m4_interface_router_error",
                 extra={"surface": "telegram", "cid": correlation_id, "error": str(exc)},
+            )
+            record_cutover_event(
+                event_type="python_fallback",
+                surface="interface_telegram_command",
+                reason="rust_backend_failed",
+                correlation_id=correlation_id,
+                metadata={"backend": backend},
             )
             return expected
 

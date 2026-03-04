@@ -50,7 +50,7 @@ class RuntimeConfig(BaseModel):
         default=8, validation_alias="MIGRATION_SHADOW_MODE_MAX_DIFFS"
     )
     migration_interface_backend: str = Field(
-        default="python", validation_alias="MIGRATION_INTERFACE_BACKEND"
+        default="rust", validation_alias="MIGRATION_INTERFACE_BACKEND"
     )
     migration_interface_sample_rate: float = Field(
         default=0.0, validation_alias="MIGRATION_INTERFACE_SAMPLE_RATE"
@@ -258,7 +258,7 @@ class RuntimeConfig(BaseModel):
     @field_validator("migration_interface_backend", mode="before")
     @classmethod
     def _validate_migration_interface_backend(cls, value: Any) -> str:
-        backend = str(value or "python").strip().lower()
+        backend = str(value or "rust").strip().lower()
         allowed = {"python", "canary", "rust"}
         if backend not in allowed:
             msg = f"Migration interface backend must be one of {sorted(allowed)}"

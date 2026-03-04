@@ -7,6 +7,8 @@ import subprocess
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from app.migration.cutover_monitor import record_cutover_event
+
 if TYPE_CHECKING:
     from collections.abc import Callable
 
@@ -81,7 +83,7 @@ def validate_with_backend(
     *,
     python_fallback: Callable[[dict[str, Any]], dict[str, Any]],
 ) -> dict[str, Any]:
-    backend = os.getenv(_BACKEND_ENV, "python").strip().lower()
+    backend = os.getenv(_BACKEND_ENV, "rust").strip().lower()
 
     if backend == "python":
         return python_fallback(payload)
@@ -94,6 +96,12 @@ def validate_with_backend(
                     "summary_contract_rust_binary_missing",
                     extra={"backend": backend, "env": _BINARY_ENV},
                 )
+            record_cutover_event(
+                event_type="python_fallback",
+                surface="summary_contract",
+                reason="rust_binary_missing",
+                metadata={"backend": backend},
+            )
             return python_fallback(payload)
 
         try:
@@ -103,10 +111,22 @@ def validate_with_backend(
                 "summary_contract_rust_backend_failed",
                 extra={"backend": backend, "error": str(exc)},
             )
+            record_cutover_event(
+                event_type="python_fallback",
+                surface="summary_contract",
+                reason="rust_backend_failed",
+                metadata={"backend": backend},
+            )
             return python_fallback(payload)
 
     logger.warning(
         "summary_contract_unknown_backend",
         extra={"backend": backend, "supported": ["python", "auto", "rust"]},
+    )
+    record_cutover_event(
+        event_type="python_fallback",
+        surface="summary_contract",
+        reason="unknown_backend",
+        metadata={"backend": backend},
     )
     return python_fallback(payload)

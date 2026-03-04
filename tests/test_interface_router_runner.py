@@ -64,6 +64,11 @@ def test_rewrite_command_prefix_preserves_arguments() -> None:
     assert rewritten == "/find rust migration"
 
 
+def test_runner_defaults_to_rust_backend_when_not_configured() -> None:
+    runner = InterfaceRouterRunner(SimpleNamespace())
+    assert runner.options.backend == "rust"
+
+
 @pytest.mark.asyncio
 async def test_canary_mode_uses_rust_for_sampled_mobile_route() -> None:
     runner = InterfaceRouterRunner(
@@ -88,11 +93,17 @@ async def test_canary_mode_uses_rust_for_sampled_mobile_route() -> None:
 @pytest.mark.asyncio
 async def test_rust_mode_falls_back_to_python_on_error() -> None:
     runner = InterfaceRouterRunner(_runtime_cfg(migration_interface_backend="rust"))
-    with patch(
-        "app.migration.interface_router.run_rust_interface_command",
-        side_effect=RuntimeError("boom"),
+    with (
+        patch(
+            "app.migration.interface_router.run_rust_interface_command",
+            side_effect=RuntimeError("boom"),
+        ),
+        patch("app.migration.interface_router.record_cutover_event") as event_call,
     ):
         decision = await runner.resolve_telegram_command(text="/findonline rust")
 
     assert decision.command == "/find"
     assert decision.handled is True
+    event_call.assert_called_once()
+    assert event_call.call_args.kwargs["event_type"] == "python_fallback"
+    assert event_call.call_args.kwargs["surface"] == "interface_telegram_command"

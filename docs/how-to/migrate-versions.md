@@ -18,9 +18,9 @@ During migration, choose one of these tracks per release:
 
 | Track | When to use | Runtime | Risk profile |
 | --- | --- | --- | --- |
-| `python-stable` | Default production path | Python | Lowest |
+| `python-stable` | Emergency rollback path | Python | Lowest |
 | `rust-canary` | Validation/canary environments | Mixed (Rust components enabled) | Medium |
-| `rust-primary` | After cutover milestone | Rust-first | Depends on cutover readiness |
+| `rust-primary` | Default after M5 cutover | Rust-first | Depends on fallback telemetry |
 
 Recommended progression: `python-stable` → `rust-canary` → `rust-primary`.
 
@@ -29,14 +29,14 @@ Recommended progression: `python-stable` → `rust-canary` → `rust-primary`.
 During M2 validation/canary runs, you can route summary contract shaping through Rust:
 
 ```bash
-# Default (stable)
-SUMMARY_CONTRACT_BACKEND=python
+# Default after M5 cutover
+SUMMARY_CONTRACT_BACKEND=rust
 
 # Use Rust when binary is present, fallback to Python
 SUMMARY_CONTRACT_BACKEND=auto
 
-# Prefer Rust explicitly (still fallback on runtime failure)
-SUMMARY_CONTRACT_BACKEND=rust
+# Force Python rollback path
+SUMMARY_CONTRACT_BACKEND=python
 
 # Optional: explicit binary path override
 SUMMARY_CONTRACT_RUST_BIN=/absolute/path/to/bsr-summary-contract
@@ -46,6 +46,32 @@ Run the milestone suite before promotion:
 
 ```bash
 make m2-parity-suite
+```
+
+### M4 Interface Router Toggle
+
+M4 interface routing is also Rust-first after M5:
+
+```bash
+# Default after M5 cutover
+MIGRATION_INTERFACE_BACKEND=rust
+
+# Canary path with deterministic sampling
+MIGRATION_INTERFACE_BACKEND=canary
+MIGRATION_INTERFACE_SAMPLE_RATE=0.05
+
+# Force Python rollback path
+MIGRATION_INTERFACE_BACKEND=python
+```
+
+### M5 Release-Window Fallback Gate
+
+During the post-cutover release window, verify that Python fallback paths remain unused:
+
+```bash
+PYTHONPATH=. python scripts/migration/check_m5_cutover_window.py \
+  --events-file /data/migration_cutover_events.jsonl \
+  --window-days 14
 ```
 
 ## Before You Start

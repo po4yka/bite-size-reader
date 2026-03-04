@@ -27,9 +27,9 @@ def validate_and_shape_summary(payload: SummaryJSON) -> SummaryJSON:
     """Validate and shape summary payload via configured backend.
 
     Backend selection:
-    - ``SUMMARY_CONTRACT_BACKEND=python`` (default): always use Python implementation
+    - ``SUMMARY_CONTRACT_BACKEND=rust`` (default): prefer Rust with Python fallback on failures
     - ``SUMMARY_CONTRACT_BACKEND=auto``: use Rust when binary is available, else Python fallback
-    - ``SUMMARY_CONTRACT_BACKEND=rust``: prefer Rust, fallback to Python on failure
+    - ``SUMMARY_CONTRACT_BACKEND=python``: force Python implementation
     """
 
     return validate_with_backend(payload, python_fallback=_validate_and_shape_summary_python)
