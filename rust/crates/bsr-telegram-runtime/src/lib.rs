@@ -406,6 +406,15 @@ mod tests {
     }
 
     #[test]
+    fn unknown_mixed_case_bare_command_without_bot_mention_is_not_handled() {
+        let decision = resolve_command_route(&TelegramCommandRouteInput {
+            text: "/Unknowncmd".to_string(),
+        });
+        assert_eq!(decision.command, None);
+        assert!(!decision.handled);
+    }
+
+    #[test]
     fn command_is_case_sensitive() {
         let decision = resolve_command_route(&TelegramCommandRouteInput {
             text: "/Findonline rust".to_string(),
