@@ -154,6 +154,15 @@ mod tests {
     }
 
     #[test]
+    fn bare_canonical_find_command_with_bot_mention_is_normalized() {
+        let decision = resolve_command_route(&TelegramCommandRouteInput {
+            text: "/find@mybot".to_string(),
+        });
+        assert_eq!(decision.command, Some("/find".to_string()));
+        assert!(decision.handled);
+    }
+
+    #[test]
     fn local_alias_command_with_bot_mention_is_normalized() {
         let decision = resolve_command_route(&TelegramCommandRouteInput {
             text: "/findlocal@mybot rust".to_string(),

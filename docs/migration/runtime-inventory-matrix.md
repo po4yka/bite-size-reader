@@ -267,6 +267,11 @@ First implementation slice after inventory lock:
   bridge routing tests to keep handled canonical normalization (`/find`) and
   original alias payload semantics stable for bare bot-directed command
   invocations.
+- **Lowercase canonical command bare bot-mention normalization parity hardening (M6-S51):**
+  explicit lowercase canonical fixture `/find@mybot` without trailing arguments
+  is covered in both `bsr-telegram-runtime` Rust tests and Python bridge
+  routing tests to keep handled canonical normalization (`/find`) and command
+  payload semantics stable for bare bot-directed command invocations.
 
 Out-of-scope for M6-S1 (defer to later slices):
 
