@@ -57,7 +57,8 @@ First implementation slice after inventory lock:
   command/non-command payloads).
 - **Rollback switch policy:** `MIGRATION_TELEGRAM_RUNTIME_BACKEND=python|rust`
   during rollout; `python` remains explicit rollback mode while `rust` mode is
-  authoritative/fail-closed on Rust errors.
+  authoritative/fail-closed on Rust errors; invalid backend values are
+  rejected (no implicit fallback).
 
 Out-of-scope for M6-S1 (defer to later slices):
 

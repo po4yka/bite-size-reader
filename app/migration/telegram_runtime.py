@@ -124,11 +124,12 @@ class TelegramRuntimeRunner:
         if backend in {"python", "rust"}:
             return backend
 
-        logger.warning(
-            "m6_telegram_runtime_invalid_backend_defaulting_to_python",
-            extra={"requested_backend": backend, "effective_backend": "python"},
+        logger.error(
+            "m6_telegram_runtime_invalid_backend",
+            extra={"requested_backend": backend},
         )
-        return "python"
+        msg = "MIGRATION_TELEGRAM_RUNTIME_BACKEND must be 'python' or 'rust'"
+        raise ValueError(msg)
 
     async def resolve_command_route(
         self,

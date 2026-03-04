@@ -155,6 +155,9 @@ This roadmap tracks the project-wide migration from the current Python runtime t
     - M6-S3 fail-closed hardening:
       `app/migration/telegram_runtime.py`,
       `tests/test_telegram_runtime_runner.py`
+    - M6-S4 config hardening (invalid backend rejection, no implicit fallback):
+      `app/migration/telegram_runtime.py`,
+      `tests/test_telegram_runtime_runner.py`
 
 ## Cross-Cutting Workstreams
 

@@ -65,8 +65,7 @@ async def test_rust_backend_raises_on_failure_without_python_fallback_and_record
 
 
 @pytest.mark.asyncio
-async def test_invalid_backend_value_defaults_to_python() -> None:
+async def test_invalid_backend_value_is_rejected() -> None:
     runner = TelegramRuntimeRunner(_runtime_cfg(migration_telegram_runtime_backend="unexpected"))
-    decision = await runner.resolve_command_route(text="/start")
-    assert decision.command == "/start"
-    assert decision.handled is True
+    with pytest.raises(ValueError, match="must be 'python' or 'rust'"):
+        await runner.resolve_command_route(text="/start")
