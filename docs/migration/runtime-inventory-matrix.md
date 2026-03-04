@@ -58,6 +58,9 @@ First implementation slice after inventory lock:
 - **Rollback switch policy:** `MIGRATION_TELEGRAM_RUNTIME_BACKEND` is Rust-only.
   Non-rust backend values are rejected (no implicit or explicit Python
   fallback path).
+- **Routing ownership hardening:** `MessageRouterContentMixin` now requires
+  `telegram_runtime_runner`; legacy command fallback through
+  `interface_router` is decommissioned.
 
 Out-of-scope for M6-S1 (defer to later slices):
 

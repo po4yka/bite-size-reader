@@ -65,3 +65,22 @@ async def test_route_command_message_preserves_original_alias_for_handler_payloa
     call = router.command_processor.handle_find_online_command.call_args
     assert call.args[1].startswith("/findonline ")
     assert call.kwargs["command"] == "/findonline"
+
+
+@pytest.mark.asyncio
+async def test_route_command_message_requires_telegram_runtime_runner() -> None:
+    router = _Router()
+    router.interface_router.resolve_telegram_command = AsyncMock()
+    delattr(router, "telegram_runtime_runner")
+
+    with pytest.raises(RuntimeError, match="fallback is decommissioned"):
+        await router._route_command_message(
+            message=SimpleNamespace(),
+            text="/start",
+            uid=1,
+            correlation_id="cid-missing-runner",
+            interaction_id=0,
+            start_time=0.0,
+        )
+
+    router.interface_router.resolve_telegram_command.assert_not_called()
