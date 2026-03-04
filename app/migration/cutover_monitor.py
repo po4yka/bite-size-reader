@@ -12,6 +12,9 @@ logger = logging.getLogger(__name__)
 
 _EVENTS_FILE_ENV = "MIGRATION_CUTOVER_EVENTS_FILE"
 _WINDOW_DAYS_ENV = "MIGRATION_RELEASE_WINDOW_DAYS"
+_PRIMARY_EVENT_TYPE = "rust_failure"
+_LEGACY_EVENT_TYPE = "python_fallback"
+_TRACKED_EVENT_TYPES = {_PRIMARY_EVENT_TYPE, _LEGACY_EVENT_TYPE}
 
 
 def _utc_now() -> datetime:
@@ -159,7 +162,8 @@ def evaluate_fallback_window(
             if event_time is None or event_time < start or event_time > end:
                 continue
 
-            if str(parsed.get("event_type") or "") != "python_fallback":
+            event_type = str(parsed.get("event_type") or "")
+            if event_type not in _TRACKED_EVENT_TYPES:
                 continue
 
             fallback_count += 1

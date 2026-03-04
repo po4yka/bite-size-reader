@@ -11,9 +11,9 @@ This roadmap tracks the project-wide migration from the current Python runtime t
 
 ## Current State
 
-- **Production runtime:** Rust-first (with Python fallback window)
+- **Production runtime:** Rust-first
 - **Target runtime:** Rust
-- **Migration mode:** Cutover completed; fallback paths retained temporarily for release-window safety
+- **Migration mode:** Cutover and fallback decommission completed for migrated slices
 
 ## Milestones
 
@@ -104,7 +104,7 @@ This roadmap tracks the project-wide migration from the current Python runtime t
   - Detailed notes: `docs/migration/m3.md`
 - **M4 artifacts**
   - Rust interface router service: `rust/crates/bsr-interface-router/src/lib.rs`, `src/main.rs`
-  - Python interface router canary bridge: `app/migration/interface_router.py`
+  - Python interface router integration bridge: `app/migration/interface_router.py`
   - Runtime hooks for interface routing:
     - Mobile API middleware: `app/api/middleware.py`
     - Telegram command routing: `app/adapters/telegram/message_router.py`, `app/adapters/telegram/message_router_content.py`
@@ -117,6 +117,9 @@ This roadmap tracks the project-wide migration from the current Python runtime t
   - Rust-first cutover defaults:
     - `app/core/summary_contract_impl/rust_backend.py` (`SUMMARY_CONTRACT_BACKEND` default)
     - `app/config/runtime.py` (`MIGRATION_INTERFACE_BACKEND` default)
+  - Python fallback decommission for migrated slices:
+    - Summary contract: `app/core/summary_contract_impl/rust_backend.py`
+    - Interface routing: `app/migration/interface_router.py`, `app/api/middleware.py`
   - Cutover fallback event monitor:
     - `app/migration/cutover_monitor.py`
   - Release-window fallback checker:

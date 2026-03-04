@@ -2,7 +2,7 @@
 
 This guide explains how to prepare environments, configure secrets, and run the service locally and in production (Docker).
 
-> **Migration note:** production is Rust-first after M5 cutover, with Python fallback switches retained during the release window. Track migration state in [ROADMAP.md](../ROADMAP.md) and use [how-to/migrate-versions.md](how-to/migrate-versions.md) for runtime-track changes and rollback procedures.
+> **Migration note:** production is Rust-first after M5 cutover, and Python fallbacks are decommissioned for migrated slices. Track migration state in [ROADMAP.md](../ROADMAP.md) and use [how-to/migrate-versions.md](how-to/migrate-versions.md) for runtime-track changes and rollback procedures.
 
 ## Prerequisites
 

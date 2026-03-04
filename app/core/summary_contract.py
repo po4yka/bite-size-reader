@@ -7,7 +7,6 @@ from app.core.summary_contract_impl.contract import (
     _extract_keywords_tfidf,
     _normalize_whitespace,
     get_summary_json_schema,
-    validate_and_shape_summary as _validate_and_shape_summary_python,
 )
 from app.core.summary_contract_impl.rust_backend import validate_with_backend
 from app.types.summary_types import (
@@ -27,12 +26,12 @@ def validate_and_shape_summary(payload: SummaryJSON) -> SummaryJSON:
     """Validate and shape summary payload via configured backend.
 
     Backend selection:
-    - ``SUMMARY_CONTRACT_BACKEND=rust`` (default): prefer Rust with Python fallback on failures
-    - ``SUMMARY_CONTRACT_BACKEND=auto``: use Rust when binary is available, else Python fallback
-    - ``SUMMARY_CONTRACT_BACKEND=python``: force Python implementation
+    - ``SUMMARY_CONTRACT_BACKEND=rust`` (default): Rust implementation (required)
+    - Legacy values are ignored and routed to Rust.
+    - Python fallback for this slice is decommissioned.
     """
 
-    return validate_with_backend(payload, python_fallback=_validate_and_shape_summary_python)
+    return validate_with_backend(payload)
 
 
 # Re-export typed versions for stricter typing

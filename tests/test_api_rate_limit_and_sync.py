@@ -1,4 +1,5 @@
 import json
+from types import SimpleNamespace
 
 import pytest
 
@@ -32,6 +33,32 @@ class DummyCfg:
         self.sync = SyncConfig(expiry_hours=1, default_limit=100, min_limit=1, max_limit=500)
 
 
+class DummyInterfaceRunner:
+    async def resolve_mobile_route(
+        self,
+        *,
+        method: str,
+        path: str,
+        correlation_id: str | None = None,
+        actor_key: str | None = None,
+    ) -> SimpleNamespace:
+        if path.startswith("/v1/summaries"):
+            bucket, route = "summaries", "summaries"
+        elif path.startswith("/v1/requests"):
+            bucket, route = "requests", "requests"
+        elif path.startswith("/v1/search"):
+            bucket, route = "search", "search"
+        else:
+            bucket, route = "default", "unknown"
+        _ = method, correlation_id, actor_key
+        return SimpleNamespace(
+            route_key=route,
+            rate_limit_bucket=bucket,
+            requires_auth=True,
+            handled=True,
+        )
+
+
 @pytest.mark.asyncio
 async def test_rate_limit_allows_then_blocks(monkeypatch):
     redis_client = fakeredis.aioredis.FakeRedis(decode_responses=True)
@@ -44,6 +71,9 @@ async def test_rate_limit_allows_then_blocks(monkeypatch):
         return redis_client
 
     monkeypatch.setattr(middleware, "get_redis", fake_get_redis)
+    monkeypatch.setattr(
+        middleware, "_get_interface_router_runner", lambda _cfg: DummyInterfaceRunner()
+    )
 
     async def call_next(_: Request):
         return Response(status_code=200)
@@ -99,6 +129,9 @@ async def test_rate_limit_backend_required_returns_503(monkeypatch):
         return None
 
     monkeypatch.setattr(middleware, "get_redis", fake_get_redis)
+    monkeypatch.setattr(
+        middleware, "_get_interface_router_runner", lambda _cfg: DummyInterfaceRunner()
+    )
 
     async def call_next(_: Request):
         return Response(status_code=200)
@@ -164,6 +197,9 @@ async def test_rate_limit_uses_webapp_user_id_over_client_host(monkeypatch):
         return redis_client
 
     monkeypatch.setattr(middleware, "get_redis", fake_get_redis)
+    monkeypatch.setattr(
+        middleware, "_get_interface_router_runner", lambda _cfg: DummyInterfaceRunner()
+    )
 
     async def call_next(_: Request):
         return Response(status_code=200)
@@ -187,3 +223,35 @@ async def test_rate_limit_uses_webapp_user_id_over_client_host(monkeypatch):
     assert not any(":rate:127.0.0.1:" in key for key in keys)
 
     await redis_client.flushall()
+
+
+@pytest.mark.asyncio
+async def test_rate_limit_returns_503_when_interface_router_unavailable(monkeypatch):
+    cfg = DummyCfg(limit=5, window_seconds=60)
+    middleware._cfg = cfg
+    middleware._redis_warning_logged = False
+
+    class FailingRunner:
+        async def resolve_mobile_route(self, **_kwargs):
+            raise RuntimeError("router down")
+
+    monkeypatch.setattr(middleware, "_get_interface_router_runner", lambda _cfg: FailingRunner())
+
+    async def call_next(_: Request):
+        return Response(status_code=200)
+
+    request = Request(
+        {
+            "type": "http",
+            "method": "GET",
+            "path": "/v1/requests",
+            "headers": [],
+            "client": ("127.0.0.1", 0),
+        }
+    )
+    resp = await middleware.rate_limit_middleware(request, call_next)
+
+    assert getattr(resp, "status_code", None) == 503
+    body = getattr(resp, "body", b"") or getattr(resp, "content", b"")
+    data = json.loads(body) if isinstance(body, bytes | bytearray) else body
+    assert data.get("error", {}).get("code") == "INTERFACE_ROUTER_UNAVAILABLE"

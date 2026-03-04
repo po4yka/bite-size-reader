@@ -34,7 +34,7 @@ Async Telegram bot that summarizes web articles and YouTube videos into structur
 
 ## Migration status
 
-Bite-Size Reader is now **Rust-first in production** (with Python fallbacks still available during the release window) after phased migration.
+Bite-Size Reader is now **Rust-first in production** with Python fallbacks decommissioned for migrated slices.
 
 - Canonical plan: [ROADMAP.md](ROADMAP.md)
 - Documentation hub migration entrypoint: [docs/README.md](docs/README.md)
@@ -49,8 +49,8 @@ Current completed milestones:
 - ✅ **M1**: Rust workspace foundation with shared crates for config, logging, and summary-contract validation (`rust/`)
 - ✅ **M2**: Rust summary-contract service + fixture parity corpus + SQLite compatibility checks (`docs/migration/m2.md`)
 - ✅ **M3**: Pipeline shadow-mode slices (extraction/chunking/LLM wrapper plan) with Rust parity fixtures (`docs/migration/m3.md`)
-- ✅ **M4**: Interface-layer canary routing for Mobile API + Telegram commands with Rust parity fixtures (`docs/migration/m4.md`)
-- ✅ **M5**: Rust-first cutover defaults + fallback monitoring/decommission runbook (`docs/migration/m5.md`)
+- ✅ **M4**: Interface-layer Rust routing for Mobile API + Telegram commands with parity fixtures (`docs/migration/m4.md`)
+- ✅ **M5**: Rust-first cutover defaults + Python fallback decommission for migrated slices (`docs/migration/m5.md`)
 
 ---
 

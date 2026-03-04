@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Check M5 release-window fallback usage from cutover JSONL events."""
+"""Check M5 release-window cutover incidents from JSONL events."""
 
 from __future__ import annotations
 
@@ -68,12 +68,12 @@ def main() -> int:
         return 0 if args.allow_missing_file else 2
 
     if report.fallback_count > 0:
-        print(f"status: fallback_detected ({report.fallback_count})")
+        print(f"status: cutover_incidents_detected ({report.fallback_count})")
         for surface, count in sorted(report.fallback_by_surface.items()):
             print(f"surface[{surface}]={count}")
         return 1
 
-    print("status: pass_no_fallbacks")
+    print("status: pass_no_cutover_incidents")
     return 0
 
 

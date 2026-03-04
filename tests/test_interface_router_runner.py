@@ -15,11 +15,8 @@ from app.migration.interface_router import (
 
 def _runtime_cfg(**overrides: object) -> SimpleNamespace:
     defaults: dict[str, object] = {
-        "migration_interface_backend": "python",
-        "migration_interface_sample_rate": 0.0,
+        "migration_interface_backend": "rust",
         "migration_interface_timeout_ms": 150,
-        "migration_interface_emit_match_logs": False,
-        "migration_interface_max_diffs": 8,
     }
     defaults.update(overrides)
     return SimpleNamespace(**defaults)
@@ -70,10 +67,8 @@ def test_runner_defaults_to_rust_backend_when_not_configured() -> None:
 
 
 @pytest.mark.asyncio
-async def test_canary_mode_uses_rust_for_sampled_mobile_route() -> None:
-    runner = InterfaceRouterRunner(
-        _runtime_cfg(migration_interface_backend="canary", migration_interface_sample_rate=1.0)
-    )
+async def test_legacy_backend_modes_are_ignored_and_rust_is_used() -> None:
+    runner = InterfaceRouterRunner(_runtime_cfg(migration_interface_backend="python"))
     rust_payload = {
         "route_key": "summaries",
         "rate_limit_bucket": "summaries",
@@ -91,7 +86,7 @@ async def test_canary_mode_uses_rust_for_sampled_mobile_route() -> None:
 
 
 @pytest.mark.asyncio
-async def test_rust_mode_falls_back_to_python_on_error() -> None:
+async def test_rust_mode_raises_on_error_without_python_fallback() -> None:
     runner = InterfaceRouterRunner(_runtime_cfg(migration_interface_backend="rust"))
     with (
         patch(
@@ -100,10 +95,9 @@ async def test_rust_mode_falls_back_to_python_on_error() -> None:
         ),
         patch("app.migration.interface_router.record_cutover_event") as event_call,
     ):
-        decision = await runner.resolve_telegram_command(text="/findonline rust")
+        with pytest.raises(RuntimeError, match="Python fallback is decommissioned"):
+            await runner.resolve_telegram_command(text="/findonline rust")
 
-    assert decision.command == "/find"
-    assert decision.handled is True
     event_call.assert_called_once()
-    assert event_call.call_args.kwargs["event_type"] == "python_fallback"
+    assert event_call.call_args.kwargs["event_type"] == "rust_failure"
     assert event_call.call_args.kwargs["surface"] == "interface_telegram_command"

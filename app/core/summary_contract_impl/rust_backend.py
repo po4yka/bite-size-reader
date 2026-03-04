@@ -5,12 +5,9 @@ import logging
 import os
 import subprocess
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from app.migration.cutover_monitor import record_cutover_event
-
-if TYPE_CHECKING:
-    from collections.abc import Callable
 
 logger = logging.getLogger(__name__)
 
@@ -80,53 +77,39 @@ def run_rust_validate_and_shape_summary(
 
 def validate_with_backend(
     payload: dict[str, Any],
-    *,
-    python_fallback: Callable[[dict[str, Any]], dict[str, Any]],
 ) -> dict[str, Any]:
-    backend = os.getenv(_BACKEND_ENV, "rust").strip().lower()
+    requested_backend = os.getenv(_BACKEND_ENV, "rust").strip().lower()
+    if requested_backend and requested_backend != "rust":
+        logger.warning(
+            "summary_contract_backend_decommissioned_mode_ignored",
+            extra={"requested_backend": requested_backend, "effective_backend": "rust"},
+        )
 
-    if backend == "python":
-        return python_fallback(payload)
+    binary = resolve_rust_binary()
+    if binary is None:
+        record_cutover_event(
+            event_type="rust_failure",
+            surface="summary_contract",
+            reason="rust_binary_missing",
+            metadata={"requested_backend": requested_backend or "rust"},
+        )
+        msg = (
+            "Rust summary-contract binary not found. "
+            "Python fallback is decommissioned for this slice."
+        )
+        raise FileNotFoundError(msg)
 
-    if backend in {"auto", "rust"}:
-        binary = resolve_rust_binary()
-        if binary is None:
-            if backend == "rust":
-                logger.warning(
-                    "summary_contract_rust_binary_missing",
-                    extra={"backend": backend, "env": _BINARY_ENV},
-                )
-            record_cutover_event(
-                event_type="python_fallback",
-                surface="summary_contract",
-                reason="rust_binary_missing",
-                metadata={"backend": backend},
-            )
-            return python_fallback(payload)
-
-        try:
-            return run_rust_validate_and_shape_summary(payload, binary_path=binary)
-        except Exception as exc:
-            logger.warning(
-                "summary_contract_rust_backend_failed",
-                extra={"backend": backend, "error": str(exc)},
-            )
-            record_cutover_event(
-                event_type="python_fallback",
-                surface="summary_contract",
-                reason="rust_backend_failed",
-                metadata={"backend": backend},
-            )
-            return python_fallback(payload)
-
-    logger.warning(
-        "summary_contract_unknown_backend",
-        extra={"backend": backend, "supported": ["python", "auto", "rust"]},
-    )
-    record_cutover_event(
-        event_type="python_fallback",
-        surface="summary_contract",
-        reason="unknown_backend",
-        metadata={"backend": backend},
-    )
-    return python_fallback(payload)
+    try:
+        return run_rust_validate_and_shape_summary(payload, binary_path=binary)
+    except Exception as exc:
+        record_cutover_event(
+            event_type="rust_failure",
+            surface="summary_contract",
+            reason="rust_backend_failed",
+            metadata={"requested_backend": requested_backend or "rust"},
+        )
+        logger.exception(
+            "summary_contract_rust_backend_failed_no_fallback",
+            extra={"error": str(exc)},
+        )
+        raise

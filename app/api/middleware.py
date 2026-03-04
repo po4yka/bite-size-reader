@@ -116,23 +116,17 @@ def _get_cfg() -> AppConfig:
     return _cfg
 
 
-def _resolve_limit(path: str, cfg: AppConfig) -> int:
-    return _resolve_limit_from_bucket(path=path, cfg=cfg, bucket=None)
+def _resolve_limit(_path: str, cfg: AppConfig) -> int:
+    return _resolve_limit_from_bucket(cfg=cfg, bucket=None)
 
 
-def _resolve_limit_from_bucket(path: str, cfg: AppConfig, bucket: str | None) -> int:
+def _resolve_limit_from_bucket(cfg: AppConfig, bucket: str | None) -> int:
     limits = cfg.api_limits
     if bucket == "summaries":
         return limits.summaries_limit
     if bucket == "requests":
         return limits.requests_limit
     if bucket == "search":
-        return limits.search_limit
-    if path.startswith("/v1/summaries"):
-        return limits.summaries_limit
-    if path.startswith("/v1/requests"):
-        return limits.requests_limit
-    if path.startswith("/v1/search"):
         return limits.search_limit
     return limits.default_limit
 
@@ -144,10 +138,7 @@ def _get_interface_router_runner(cfg: AppConfig) -> InterfaceRouterRunner:
     if runtime_cfg is None:
         runtime_cfg = SimpleNamespace(
             migration_interface_backend="rust",
-            migration_interface_sample_rate=0.0,
             migration_interface_timeout_ms=150,
-            migration_interface_emit_match_logs=False,
-            migration_interface_max_diffs=8,
         )
 
     if _interface_router_runner is None or runtime_cfg is not _interface_router_runtime_ref:
@@ -195,7 +186,6 @@ async def rate_limit_middleware(request: Request, call_next: Callable):
                 user_id = webapp_user_id
     if not user_id:
         user_id = request.client.host if request.client and request.client.host else "unknown"
-    route_decision = None
     try:
         route_decision = await _get_interface_router_runner(cfg).resolve_mobile_route(
             method=request.method,
@@ -204,20 +194,26 @@ async def rate_limit_middleware(request: Request, call_next: Callable):
             actor_key=str(user_id),
         )
     except Exception as exc:
-        logger.warning(
+        logger.error(
             "m4_interface_router_resolution_failed",
             extra={"error": str(exc), "path": request.url.path, "correlation_id": correlation_id},
         )
+        detail = make_error(
+            code="INTERFACE_ROUTER_UNAVAILABLE",
+            message="Interface router unavailable. Please try again later.",
+            error_type=ErrorType.INTERNAL,
+            retryable=True,
+        )
+        detail.correlation_id = correlation_id
+        return JSONResponse(
+            status_code=503,
+            content=error_response(detail, correlation_id=correlation_id),
+        )
 
-    if route_decision is not None:
-        request.state.interface_route_key = route_decision.route_key
-        request.state.interface_route_requires_auth = route_decision.requires_auth
+    request.state.interface_route_key = route_decision.route_key
+    request.state.interface_route_requires_auth = route_decision.requires_auth
 
-    bucket_limit = _resolve_limit_from_bucket(
-        path=request.url.path,
-        cfg=cfg,
-        bucket=route_decision.rate_limit_bucket if route_decision else None,
-    )
+    bucket_limit = _resolve_limit_from_bucket(cfg=cfg, bucket=route_decision.rate_limit_bucket)
     window = cfg.api_limits.window_seconds
     now = int(time.time())
     window_start = (now // window) * window

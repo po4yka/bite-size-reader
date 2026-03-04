@@ -112,7 +112,7 @@ API_RATE_LIMIT_DEFAULT=100
 
 | Variable | Default | Description |
 | ---------- | --------- | ------------- |
-| `SUMMARY_CONTRACT_BACKEND` | `rust` | Summary contract backend: `rust`, `auto`, or `python` |
+| `SUMMARY_CONTRACT_BACKEND` | `rust` | Summary contract backend (Rust required). Legacy values are ignored. |
 | `SUMMARY_CONTRACT_RUST_BIN` | _(auto-discover)_ | Absolute path to `bsr-summary-contract` binary override |
 
 ## [OPTIONAL] Migration / M3 Pipeline Shadow Mode
@@ -130,18 +130,18 @@ API_RATE_LIMIT_DEFAULT=100
 
 | Variable | Default | Description |
 | ---------- | --------- | ------------- |
-| `MIGRATION_INTERFACE_BACKEND` | `rust` | Interface routing backend: `rust`, `canary`, or `python` |
-| `MIGRATION_INTERFACE_SAMPLE_RATE` | `0.0` | Deterministic sample ratio in `[0.0, 1.0]` for `canary` mode |
+| `MIGRATION_INTERFACE_BACKEND` | `rust` | Interface routing backend (Rust required). Legacy `canary`/`python` modes are decommissioned. |
+| `MIGRATION_INTERFACE_SAMPLE_RATE` | `0.0` | Deprecated (ignored after fallback decommission). |
 | `MIGRATION_INTERFACE_TIMEOUT_MS` | `150` | Timeout per Rust interface router call (milliseconds) |
-| `MIGRATION_INTERFACE_EMIT_MATCH_LOGS` | `false` | Emit match logs in addition to mismatches/errors |
-| `MIGRATION_INTERFACE_MAX_DIFFS` | `8` | Max mismatch diff paths logged per comparison |
+| `MIGRATION_INTERFACE_EMIT_MATCH_LOGS` | `false` | Deprecated (ignored after fallback decommission). |
+| `MIGRATION_INTERFACE_MAX_DIFFS` | `8` | Deprecated (ignored after fallback decommission). |
 | `INTERFACE_ROUTER_RUST_BIN` | _(auto-discover)_ | Absolute path to `bsr-interface-router` binary override |
 
 ## [OPTIONAL] Migration / M5 Cutover Monitoring
 
 | Variable | Default | Description |
 | ---------- | --------- | ------------- |
-| `MIGRATION_CUTOVER_EVENTS_FILE` | `data/migration_cutover_events.jsonl` | JSONL file for standardized cutover events (including Python fallback usage) |
+| `MIGRATION_CUTOVER_EVENTS_FILE` | `data/migration_cutover_events.jsonl` | JSONL file for standardized migration events (including Rust path failures) |
 | `MIGRATION_RELEASE_WINDOW_DAYS` | `14` | Release-window length used by `check_m5_cutover_window.py` |
 
 ## [OPTIONAL] LLM Provider Selection
@@ -444,12 +444,12 @@ uv run python scripts/twitter_article_live_smoke.py \
 | `MIGRATION_SHADOW_MODE_TIMEOUT_MS` | `250` | Per-slice Rust shadow timeout (ms) |
 | `MIGRATION_SHADOW_MODE_MAX_DIFFS` | `8` | Max diff paths emitted per mismatch |
 | `MIGRATION_SHADOW_MODE_EMIT_MATCH_LOGS` | `false` | Emit logs for successful shadow matches |
-| `MIGRATION_INTERFACE_BACKEND` | `rust` | M4 interface backend (`rust`, `canary`, `python`) |
-| `MIGRATION_INTERFACE_SAMPLE_RATE` | `0.0` | Deterministic sample ratio for M4 canary mode |
+| `MIGRATION_INTERFACE_BACKEND` | `rust` | M4 interface backend (Rust required; legacy fallback modes are decommissioned) |
+| `MIGRATION_INTERFACE_SAMPLE_RATE` | `0.0` | Deprecated (ignored after fallback decommission) |
 | `MIGRATION_INTERFACE_TIMEOUT_MS` | `150` | Per-call Rust interface timeout (ms) |
-| `MIGRATION_INTERFACE_EMIT_MATCH_LOGS` | `false` | Emit logs for successful interface matches |
-| `MIGRATION_INTERFACE_MAX_DIFFS` | `8` | Max diff paths emitted per interface mismatch |
-| `MIGRATION_CUTOVER_EVENTS_FILE` | `data/migration_cutover_events.jsonl` | JSONL sink for M5 cutover/fallback events |
+| `MIGRATION_INTERFACE_EMIT_MATCH_LOGS` | `false` | Deprecated (ignored after fallback decommission) |
+| `MIGRATION_INTERFACE_MAX_DIFFS` | `8` | Deprecated (ignored after fallback decommission) |
+| `MIGRATION_CUTOVER_EVENTS_FILE` | `data/migration_cutover_events.jsonl` | JSONL sink for M5 migration events |
 | `MIGRATION_RELEASE_WINDOW_DAYS` | `14` | Release-window duration used by M5 fallback checker |
 | `TELEGRAM_REPLY_TIMEOUT_SEC` | `30.0` | Timeout for Telegram reply operations |
 

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import hashlib
 import json
 import logging
 import os
@@ -175,56 +174,6 @@ def rewrite_command_prefix(text: str, canonical_command: str) -> str:
     return f"{canonical_command} {remainder}".rstrip()
 
 
-def _normalize_for_compare(value: Any) -> Any:
-    if isinstance(value, float):
-        return round(value, 8)
-    if isinstance(value, dict):
-        return {k: _normalize_for_compare(v) for k, v in sorted(value.items())}
-    if isinstance(value, list):
-        return [_normalize_for_compare(item) for item in value]
-    return value
-
-
-def _diff_paths(expected: Any, actual: Any, *, limit: int = 8) -> list[str]:
-    diffs: list[str] = []
-
-    def _walk(lhs: Any, rhs: Any, path: str) -> None:
-        if len(diffs) >= limit:
-            return
-        if type(lhs) is not type(rhs):
-            diffs.append(path or "<root>")
-            return
-        if isinstance(lhs, dict):
-            lhs_keys = set(lhs.keys())
-            rhs_keys = set(rhs.keys())
-            for key in sorted(lhs_keys | rhs_keys):
-                next_path = f"{path}.{key}" if path else str(key)
-                if key not in lhs or key not in rhs:
-                    diffs.append(next_path)
-                    if len(diffs) >= limit:
-                        return
-                    continue
-                _walk(lhs[key], rhs[key], next_path)
-                if len(diffs) >= limit:
-                    return
-            return
-        if isinstance(lhs, list):
-            if len(lhs) != len(rhs):
-                diffs.append(f"{path}.length" if path else "length")
-                return
-            for idx, (lhs_item, rhs_item) in enumerate(zip(lhs, rhs, strict=True)):
-                next_path = f"{path}[{idx}]" if path else f"[{idx}]"
-                _walk(lhs_item, rhs_item, next_path)
-                if len(diffs) >= limit:
-                    return
-            return
-        if lhs != rhs:
-            diffs.append(path or "<root>")
-
-    _walk(_normalize_for_compare(expected), _normalize_for_compare(actual), "")
-    return diffs
-
-
 def _repo_root() -> Path:
     return Path(__file__).resolve().parents[2]
 
@@ -288,60 +237,28 @@ def run_rust_interface_command(
 @dataclass(frozen=True)
 class InterfaceRouterRuntimeOptions:
     backend: str = "rust"
-    sample_rate: float = 0.0
     timeout_ms: int = 150
-    emit_match_logs: bool = False
-    max_diffs: int = 8
 
 
 class InterfaceRouterRunner:
-    """M4 canary runner for mobile API and Telegram command routing."""
+    """M4 interface router runner (Rust path required)."""
 
     def __init__(self, runtime_cfg: Any) -> None:
         self.options = InterfaceRouterRuntimeOptions(
             backend=str(getattr(runtime_cfg, "migration_interface_backend", "rust"))
             .strip()
             .lower(),
-            sample_rate=float(getattr(runtime_cfg, "migration_interface_sample_rate", 0.0)),
             timeout_ms=int(getattr(runtime_cfg, "migration_interface_timeout_ms", 150)),
-            emit_match_logs=bool(
-                getattr(runtime_cfg, "migration_interface_emit_match_logs", False)
-            ),
-            max_diffs=int(getattr(runtime_cfg, "migration_interface_max_diffs", 8)),
         )
 
     def _normalized_backend(self) -> str:
-        if self.options.backend in {"python", "canary", "rust"}:
-            return self.options.backend
-        return "python"
-
-    def _should_sample(self, key: str) -> bool:
-        rate = self.options.sample_rate
-        if rate <= 0.0:
-            return False
-        if rate >= 1.0:
-            return True
-        digest = hashlib.sha256(key.encode("utf-8")).digest()[:8]
-        normalized = int.from_bytes(digest, byteorder="big") / float(2**64 - 1)
-        return normalized <= rate
-
-    def _log_compare(
-        self,
-        *,
-        surface: str,
-        correlation_id: str | None,
-        diffs: list[str],
-    ) -> None:
-        if diffs:
+        backend = self.options.backend
+        if backend != "rust":
             logger.warning(
-                "m4_interface_router_mismatch",
-                extra={"surface": surface, "cid": correlation_id, "diff_paths": diffs},
+                "m4_interface_router_backend_decommissioned_mode_ignored",
+                extra={"requested_backend": backend, "effective_backend": "rust"},
             )
-            return
-        if self.options.emit_match_logs:
-            logger.info(
-                "m4_interface_router_match", extra={"surface": surface, "cid": correlation_id}
-            )
+        return "rust"
 
     async def resolve_mobile_route(
         self,
@@ -351,15 +268,8 @@ class InterfaceRouterRunner:
         correlation_id: str | None = None,
         actor_key: str | None = None,
     ) -> MobileRouteDecision:
-        expected = build_python_mobile_route_decision(method, path)
         backend = self._normalized_backend()
-        if backend == "python":
-            return expected
-
-        if backend == "canary" and not self._should_sample(
-            f"mobile:{method}:{path}:{actor_key or correlation_id or ''}"
-        ):
-            return expected
+        _ = actor_key
 
         try:
             actual_payload = await asyncio.to_thread(
@@ -374,20 +284,16 @@ class InterfaceRouterRunner:
                 extra={"surface": "mobile", "cid": correlation_id, "error": str(exc)},
             )
             record_cutover_event(
-                event_type="python_fallback",
+                event_type="rust_failure",
                 surface="interface_mobile_route",
                 reason="rust_backend_failed",
                 correlation_id=correlation_id,
                 metadata={"backend": backend},
             )
-            return expected
+            msg = "Rust interface mobile-route failed; Python fallback is decommissioned."
+            raise RuntimeError(msg) from exc
 
-        actual = MobileRouteDecision.from_mapping(actual_payload)
-        diffs = _diff_paths(
-            expected.to_mapping(), actual.to_mapping(), limit=self.options.max_diffs
-        )
-        self._log_compare(surface="mobile", correlation_id=correlation_id, diffs=diffs)
-        return actual
+        return MobileRouteDecision.from_mapping(actual_payload)
 
     async def resolve_telegram_command(
         self,
@@ -396,15 +302,8 @@ class InterfaceRouterRunner:
         correlation_id: str | None = None,
         actor_key: str | None = None,
     ) -> TelegramCommandDecision:
-        expected = build_python_telegram_command_decision(text)
         backend = self._normalized_backend()
-        if backend == "python":
-            return expected
-
-        if backend == "canary" and not self._should_sample(
-            f"telegram:{text}:{actor_key or correlation_id or ''}"
-        ):
-            return expected
+        _ = actor_key
 
         try:
             actual_payload = await asyncio.to_thread(
@@ -419,17 +318,13 @@ class InterfaceRouterRunner:
                 extra={"surface": "telegram", "cid": correlation_id, "error": str(exc)},
             )
             record_cutover_event(
-                event_type="python_fallback",
+                event_type="rust_failure",
                 surface="interface_telegram_command",
                 reason="rust_backend_failed",
                 correlation_id=correlation_id,
                 metadata={"backend": backend},
             )
-            return expected
+            msg = "Rust interface telegram-command failed; Python fallback is decommissioned."
+            raise RuntimeError(msg) from exc
 
-        actual = TelegramCommandDecision.from_mapping(actual_payload)
-        diffs = _diff_paths(
-            expected.to_mapping(), actual.to_mapping(), limit=self.options.max_diffs
-        )
-        self._log_compare(surface="telegram", correlation_id=correlation_id, diffs=diffs)
-        return actual
+        return TelegramCommandDecision.from_mapping(actual_payload)

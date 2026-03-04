@@ -59,7 +59,7 @@
 
 ## Runtime Migration Status
 
-- **Current production runtime:** Rust-first (with release-window Python fallbacks)
+- **Current production runtime:** Rust-first (Python fallbacks decommissioned for migrated slices)
 - **Target runtime:** Rust
 - **Roadmap:** [ROADMAP.md](../ROADMAP.md)
 

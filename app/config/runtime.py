@@ -259,9 +259,11 @@ class RuntimeConfig(BaseModel):
     @classmethod
     def _validate_migration_interface_backend(cls, value: Any) -> str:
         backend = str(value or "rust").strip().lower()
-        allowed = {"python", "canary", "rust"}
-        if backend not in allowed:
-            msg = f"Migration interface backend must be one of {sorted(allowed)}"
+        if backend != "rust":
+            msg = (
+                "Migration interface backend fallback modes are decommissioned; "
+                "MIGRATION_INTERFACE_BACKEND must be 'rust'"
+            )
             raise ValueError(msg)
         return backend
 

@@ -19,13 +19,13 @@ Choose one runtime track per release:
 | Track | When to use | Runtime | Risk profile |
 | --- | --- | --- | --- |
 | `python-stable` | Emergency rollback path | Python | Lowest |
-| `rust-canary` | Validation/canary environments | Mixed (Rust components enabled) | Medium |
-| `rust-primary` | Default after M5 cutover | Rust-first | Depends on fallback telemetry |
+| `rust-canary` | Validation/canary environments | Rust-first with synthetic/parity checks | Medium |
+| `rust-primary` | Default after M5 cutover | Rust-first | Medium |
 
 Recommended progression for new environments: `rust-canary` → `rust-primary`.
 Keep `python-stable` available as the emergency rollback path.
 
-### M2 Contract Backend Toggle
+### M2 Contract Backend
 
 During M2 validation/canary runs, you can route summary contract shaping through Rust:
 
@@ -33,11 +33,7 @@ During M2 validation/canary runs, you can route summary contract shaping through
 # Default after M5 cutover
 SUMMARY_CONTRACT_BACKEND=rust
 
-# Use Rust when binary is present, fallback to Python
-SUMMARY_CONTRACT_BACKEND=auto
-
-# Force Python rollback path
-SUMMARY_CONTRACT_BACKEND=python
+# Legacy values (`auto`, `python`) are ignored after fallback decommission.
 
 # Optional: explicit binary path override
 SUMMARY_CONTRACT_RUST_BIN=/absolute/path/to/bsr-summary-contract
@@ -51,28 +47,13 @@ make m2-parity-suite
 
 ### M4 Interface Router Toggle
 
-M4 interface routing is also Rust-first after M5:
+M4 interface routing is Rust-only after fallback decommission:
 
 ```bash
-# Default after M5 cutover
+# Required
 MIGRATION_INTERFACE_BACKEND=rust
 
-# Canary path with deterministic sampling
-MIGRATION_INTERFACE_BACKEND=canary
-MIGRATION_INTERFACE_SAMPLE_RATE=0.05
-
-# Force Python rollback path
-MIGRATION_INTERFACE_BACKEND=python
-```
-
-### M5 Release-Window Fallback Gate
-
-During the post-cutover release window, verify that Python fallback paths remain unused:
-
-```bash
-PYTHONPATH=. python scripts/migration/check_m5_cutover_window.py \
-  --events-file /data/migration_cutover_events.jsonl \
-  --window-days 14
+# Legacy values (`canary`, `python`) are decommissioned for runtime execution.
 ```
 
 ## Before You Start
