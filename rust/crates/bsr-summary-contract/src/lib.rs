@@ -113,7 +113,7 @@ pub fn validate_and_shape_summary(payload: &Value) -> Result<Value, SummaryValid
     let estimated_reading_time_min = p
         .get("estimated_reading_time_min")
         .and_then(value_to_i64)
-        .map(|v| v.max(0) as i64)
+        .map(|v| v.max(0))
         .unwrap_or(0);
 
     let key_stats = shape_key_stats(p.get("key_stats"));
