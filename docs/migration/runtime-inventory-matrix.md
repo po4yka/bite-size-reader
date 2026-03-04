@@ -293,6 +293,11 @@ First implementation slice after inventory lock:
   bridge routing tests to keep handled canonical normalization (`/find`) and
   command payload semantics stable for argumented bot-directed command
   invocations.
+- **Mixed-case canonical command bot-mention argument case-sensitivity parity hardening (M6-S56):**
+  explicit mixed-case canonical fixture `/Find@mybot rust` with trailing
+  arguments is covered in both `bsr-telegram-runtime` Rust tests and Python
+  bridge routing tests to keep non-handled case-sensitive passthrough
+  semantics stable for argumented bot-directed command invocations.
 
 Out-of-scope for M6-S1 (defer to later slices):
 
