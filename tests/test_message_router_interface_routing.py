@@ -274,6 +274,31 @@ async def test_route_command_message_preserves_canonical_find_with_bot_mention()
 
 
 @pytest.mark.asyncio
+async def test_route_command_message_preserves_canonical_find_with_empty_bot_mention_suffix() -> (
+    None
+):
+    router = _Router()
+    router.telegram_runtime_runner.resolve_command_route = AsyncMock(
+        return_value=TelegramRuntimeCommandDecision(command="/find", handled=True)
+    )
+
+    handled = await router._route_command_message(
+        message=SimpleNamespace(),
+        text="/find@ rust migration",
+        uid=59,
+        correlation_id="cid-59",
+        interaction_id=0,
+        start_time=0.0,
+    )
+
+    assert handled is True
+    router.command_processor.handle_find_online_command.assert_called_once()
+    call = router.command_processor.handle_find_online_command.call_args
+    assert call.args[1].startswith("/find@ ")
+    assert call.kwargs["command"] == "/find"
+
+
+@pytest.mark.asyncio
 async def test_route_command_message_preserves_bare_canonical_find_with_bot_mention() -> None:
     router = _Router()
     router.telegram_runtime_runner.resolve_command_route = AsyncMock(
