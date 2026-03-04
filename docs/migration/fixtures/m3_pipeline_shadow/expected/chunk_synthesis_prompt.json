@@ -1,0 +1,4 @@
+{
+  "context_text": "TLDR DRAFT:\nDraft TLDR from chunk aggregation.\n\nDETAILED SUMMARY DRAFT:\nDraft summary section assembled from multiple chunk outputs.\n\nKEY IDEAS DRAFT:\n[\"Rust-authoritative M3\", \"Prompt assembly parity\", \"Стабильный формат\"]",
+  "user_content": "Synthesize the following draft summaries (generated from article chunks) into a single, cohesive, high-quality summary. Ensure the flow is natural and redundant information is removed. Output ONLY a valid JSON object matching the schema.\nRespond in Russian.\n\nDRAFT CONTENT START\nTLDR DRAFT:\nDraft TLDR from chunk aggregation.\n\nDETAILED SUMMARY DRAFT:\nDraft summary section assembled from multiple chunk outputs.\n\nKEY IDEAS DRAFT:\n[\"Rust-authoritative M3\", \"Prompt assembly parity\", \"Стабильный формат\"]\nDRAFT CONTENT END"
+}

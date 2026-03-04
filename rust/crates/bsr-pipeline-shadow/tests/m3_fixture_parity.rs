@@ -2,10 +2,11 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use bsr_pipeline_shadow::{
-    build_chunking_preprocess_snapshot, build_content_cleaner_snapshot,
-    build_extraction_adapter_snapshot, build_llm_wrapper_plan_snapshot,
-    build_summary_aggregate_snapshot, ChunkingPreprocessInput, ContentCleanerInput,
-    ExtractionAdapterInput, LlmWrapperPlanInput, SummaryAggregateInput,
+    build_chunk_synthesis_prompt_snapshot, build_chunking_preprocess_snapshot,
+    build_content_cleaner_snapshot, build_extraction_adapter_snapshot,
+    build_llm_wrapper_plan_snapshot, build_summary_aggregate_snapshot, ChunkSynthesisPromptInput,
+    ChunkingPreprocessInput, ContentCleanerInput, ExtractionAdapterInput, LlmWrapperPlanInput,
+    SummaryAggregateInput,
 };
 use serde_json::Value;
 
@@ -80,6 +81,12 @@ fn m3_fixture_parity() {
                     serde_json::from_value(input).expect("valid summary aggregate fixture");
                 serde_json::to_value(build_summary_aggregate_snapshot(&parsed))
                     .expect("serialize summary aggregate snapshot")
+            }
+            "chunk_synthesis_prompt" => {
+                let parsed: ChunkSynthesisPromptInput =
+                    serde_json::from_value(input).expect("valid chunk synthesis fixture");
+                serde_json::to_value(build_chunk_synthesis_prompt_snapshot(&parsed))
+                    .expect("serialize chunk synthesis snapshot")
             }
             _ => panic!("unknown fixture name: {}", fixture_name),
         };

@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from app.adapters.content.content_chunker import ContentChunker
+from app.adapters.content.content_chunker import ContentChunker, build_chunk_synthesis_user_content
 from app.core.summary_aggregate import aggregate_chunk_summaries
 
 
@@ -58,4 +58,40 @@ async def test_resolve_aggregated_summary_uses_rust_when_shadow_enabled() -> Non
         correlation_id="cid",
         request_id=2,
         summaries=[{"summary_250": "A"}],
+    )
+
+
+def test_build_chunk_synthesis_user_content_contains_language_and_context() -> None:
+    content = build_chunk_synthesis_user_content(
+        {"tldr": "TLDR", "summary_250": "Summary", "key_ideas": ["A", "B"]},
+        "ru",
+    )
+    assert "Respond in Russian." in content
+    assert "TLDR DRAFT:\nTLDR" in content
+    assert "DETAILED SUMMARY DRAFT:\nSummary" in content
+    assert 'KEY IDEAS DRAFT:\n["A", "B"]' in content
+
+
+@pytest.mark.asyncio
+async def test_resolve_chunk_synthesis_prompt_uses_rust_when_shadow_enabled() -> None:
+    chunker = _make_chunker()
+    chunker.pipeline_shadow = MagicMock()
+    chunker.pipeline_shadow.options.enabled = True
+    chunker.pipeline_shadow.resolve_chunk_synthesis_prompt = AsyncMock(
+        return_value={"user_content": "Rust prompt"}
+    )
+
+    result = await chunker._resolve_chunk_synthesis_prompt(
+        aggregated={"summary_250": "A"},
+        chosen_lang="en",
+        req_id=3,
+        correlation_id="cid",
+    )
+
+    assert result == "Rust prompt"
+    chunker.pipeline_shadow.resolve_chunk_synthesis_prompt.assert_called_once_with(
+        correlation_id="cid",
+        request_id=3,
+        aggregated={"summary_250": "A"},
+        chosen_lang="en",
     )

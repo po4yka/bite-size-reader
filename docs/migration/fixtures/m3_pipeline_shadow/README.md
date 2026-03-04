@@ -7,6 +7,7 @@ This fixture corpus validates parity for the M3 shadow slices:
 - `content_cleaner`
 - `llm_wrapper_plan`
 - `summary_aggregate`
+- `chunk_synthesis_prompt`
 
 ## Regenerate expected baselines
 

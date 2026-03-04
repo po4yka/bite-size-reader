@@ -267,6 +267,41 @@ def build_python_summary_aggregate_snapshot_from_input(payload: dict[str, Any]) 
     return aggregate_chunk_summaries(summaries)
 
 
+def build_python_chunk_synthesis_prompt_snapshot_from_input(
+    payload: dict[str, Any],
+) -> dict[str, Any]:
+    aggregated = payload.get("aggregated")
+    if not isinstance(aggregated, dict):
+        aggregated = {}
+
+    chosen_lang = str(payload.get("chosen_lang") or "en")
+    response_language = "Russian" if chosen_lang.strip().lower() == "ru" else "English"
+    key_ideas = aggregated.get("key_ideas")
+    try:
+        key_ideas_dump = json.dumps(
+            key_ideas if isinstance(key_ideas, list) else [], ensure_ascii=False
+        )
+    except Exception:
+        key_ideas_dump = "[]"
+
+    context_text = (
+        f"TLDR DRAFT:\n{aggregated.get('tldr', '')}\n\n"
+        f"DETAILED SUMMARY DRAFT:\n{aggregated.get('summary_250', '')}\n\n"
+        f"KEY IDEAS DRAFT:\n{key_ideas_dump}"
+    )
+    user_content = (
+        "Synthesize the following draft summaries (generated from article chunks) into a single, cohesive, high-quality summary. "
+        "Ensure the flow is natural and redundant information is removed. "
+        "Output ONLY a valid JSON object matching the schema.\n"
+        f"Respond in {response_language}.\n\n"
+        f"DRAFT CONTENT START\n{context_text}\nDRAFT CONTENT END"
+    )
+    return {
+        "context_text": context_text,
+        "user_content": user_content,
+    }
+
+
 def build_rust_llm_wrapper_input_from_requests(
     *,
     base_model: str,
@@ -582,6 +617,29 @@ class PipelineShadowRunner:
             correlation_id=correlation_id,
             request_id=request_id,
             surface="pipeline_summary_aggregate",
+        )
+
+    async def resolve_chunk_synthesis_prompt(
+        self,
+        *,
+        correlation_id: str | None,
+        request_id: int | None,
+        aggregated: dict[str, Any],
+        chosen_lang: str,
+    ) -> dict[str, Any]:
+        rust_input = {
+            "aggregated": aggregated,
+            "chosen_lang": chosen_lang,
+        }
+        if not self.options.enabled:
+            return build_python_chunk_synthesis_prompt_snapshot_from_input(rust_input)
+
+        return await self._run_authoritative_slice(
+            command="chunk-synthesis-prompt",
+            rust_input=rust_input,
+            correlation_id=correlation_id,
+            request_id=request_id,
+            surface="pipeline_chunk_synthesis_prompt",
         )
 
     async def _run_authoritative_slice(

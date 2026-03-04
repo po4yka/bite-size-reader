@@ -102,6 +102,18 @@ pub struct SummaryAggregateInput {
     pub summaries: Vec<Value>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct ChunkSynthesisPromptInput {
+    pub aggregated: Value,
+    pub chosen_lang: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ChunkSynthesisPromptSnapshot {
+    pub context_text: String,
+    pub user_content: String,
+}
+
 pub fn build_extraction_adapter_snapshot(
     input: &ExtractionAdapterInput,
 ) -> ExtractionAdapterSnapshot {
@@ -255,6 +267,40 @@ pub fn build_content_cleaner_snapshot(input: &ContentCleanerInput) -> ContentCle
 
 pub fn build_summary_aggregate_snapshot(input: &SummaryAggregateInput) -> Value {
     aggregate_chunk_summaries(&input.summaries)
+}
+
+pub fn build_chunk_synthesis_prompt_snapshot(
+    input: &ChunkSynthesisPromptInput,
+) -> ChunkSynthesisPromptSnapshot {
+    let aggregated = input.aggregated.as_object();
+    let tldr = aggregated
+        .and_then(|obj| obj.get("tldr"))
+        .map(stringify_like_python)
+        .unwrap_or_default();
+    let summary_250 = aggregated
+        .and_then(|obj| obj.get("summary_250"))
+        .map(stringify_like_python)
+        .unwrap_or_default();
+    let key_ideas_json = aggregated
+        .and_then(|obj| obj.get("key_ideas"))
+        .map(python_json_dumps_value)
+        .unwrap_or_else(|| "[]".to_string());
+
+    let context_text = format!(
+        "TLDR DRAFT:\n{tldr}\n\nDETAILED SUMMARY DRAFT:\n{summary_250}\n\nKEY IDEAS DRAFT:\n{key_ideas_json}"
+    );
+    let response_language = if input.chosen_lang.trim().eq_ignore_ascii_case("ru") {
+        "Russian"
+    } else {
+        "English"
+    };
+    let user_content = format!(
+        "Synthesize the following draft summaries (generated from article chunks) into a single, cohesive, high-quality summary. Ensure the flow is natural and redundant information is removed. Output ONLY a valid JSON object matching the schema.\nRespond in {response_language}.\n\nDRAFT CONTENT START\n{context_text}\nDRAFT CONTENT END"
+    );
+    ChunkSynthesisPromptSnapshot {
+        context_text,
+        user_content,
+    }
 }
 
 pub fn clean_content_for_llm(text: &str) -> String {
@@ -959,6 +1005,19 @@ fn value_from_f64(value: f64) -> Value {
     }
 }
 
+fn python_json_dumps_value(value: &Value) -> String {
+    match value {
+        Value::Array(items) => {
+            let rendered: Vec<String> = items
+                .iter()
+                .map(|item| serde_json::to_string(item).unwrap_or_else(|_| "null".to_string()))
+                .collect();
+            format!("[{}]", rendered.join(", "))
+        }
+        _ => serde_json::to_string(value).unwrap_or_else(|_| "null".to_string()),
+    }
+}
+
 fn detect_language_hint(content: &str) -> String {
     let mut cyrillic = 0usize;
     let mut latin = 0usize;
@@ -1136,5 +1195,29 @@ mod tests {
             .and_then(|insights| insights.get("new_facts"))
             .and_then(Value::as_array)
             .is_some_and(|facts| facts.len() == 2));
+    }
+
+    #[test]
+    fn chunk_synthesis_prompt_snapshot_builds_prompt() {
+        let input = ChunkSynthesisPromptInput {
+            aggregated: serde_json::json!({
+                "tldr": "TLDR section.",
+                "summary_250": "Summary section.",
+                "key_ideas": ["Idea A", "Idea B"],
+            }),
+            chosen_lang: "ru".to_string(),
+        };
+
+        let snapshot = build_chunk_synthesis_prompt_snapshot(&input);
+        assert!(snapshot.context_text.contains("TLDR DRAFT:\nTLDR section."));
+        assert!(snapshot
+            .context_text
+            .contains("DETAILED SUMMARY DRAFT:\nSummary section."));
+        assert!(snapshot
+            .context_text
+            .contains("KEY IDEAS DRAFT:\n[\"Idea A\", \"Idea B\"]"));
+        assert!(snapshot.user_content.contains("Respond in Russian."));
+        assert!(snapshot.user_content.contains("DRAFT CONTENT START"));
+        assert!(snapshot.user_content.contains("DRAFT CONTENT END"));
     }
 }

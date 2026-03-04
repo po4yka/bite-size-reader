@@ -24,6 +24,23 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+def build_chunk_synthesis_user_content(aggregated: dict[str, Any], chosen_lang: str) -> str:
+    """Build synthesis prompt user content from aggregated chunk drafts."""
+    context_text = (
+        f"TLDR DRAFT:\n{aggregated.get('tldr', '')}\n\n"
+        f"DETAILED SUMMARY DRAFT:\n{aggregated.get('summary_250', '')}\n\n"
+        f"KEY IDEAS DRAFT:\n{json.dumps(aggregated.get('key_ideas', []), ensure_ascii=False)}"
+    )
+    response_language = "Russian" if chosen_lang == LANG_RU else "English"
+    return (
+        "Synthesize the following draft summaries (generated from article chunks) into a single, cohesive, high-quality summary. "
+        "Ensure the flow is natural and redundant information is removed. "
+        "Output ONLY a valid JSON object matching the schema.\n"
+        f"Respond in {response_language}.\n\n"
+        f"DRAFT CONTENT START\n{context_text}\nDRAFT CONTENT END"
+    )
+
+
 class ContentChunker:
     """Handles content chunking and chunk aggregation for large texts."""
 
@@ -262,25 +279,18 @@ class ContentChunker:
         correlation_id: str | None,
     ) -> dict[str, Any] | None:
         """Synthesize a final cohesive summary from aggregated chunk summaries."""
-        # Convert aggregated dict to a text representation for the LLM
-        # We focus on the key components: tldr, summary_250, key_ideas
-        context_text = (
-            f"TLDR DRAFT:\n{aggregated.get('tldr', '')}\n\n"
-            f"DETAILED SUMMARY DRAFT:\n{aggregated.get('summary_250', '')}\n\n"
-            f"KEY IDEAS DRAFT:\n{json.dumps(aggregated.get('key_ideas', []), ensure_ascii=False)}"
+        user_content = await self._resolve_chunk_synthesis_prompt(
+            aggregated=aggregated,
+            chosen_lang=chosen_lang,
+            req_id=req_id,
+            correlation_id=correlation_id,
         )
 
         messages = [
             {"role": "system", "content": system_prompt},
             {
                 "role": "user",
-                "content": (
-                    f"Synthesize the following draft summaries (generated from article chunks) into a single, cohesive, high-quality summary. "
-                    f"Ensure the flow is natural and redundant information is removed. "
-                    f"Output ONLY a valid JSON object matching the schema.\n"
-                    f"Respond in {'Russian' if chosen_lang == LANG_RU else 'English'}.\n\n"
-                    f"DRAFT CONTENT START\n{context_text}\nDRAFT CONTENT END"
-                ),
+                "content": user_content,
             },
         ]
 
@@ -331,6 +341,28 @@ class ContentChunker:
                 parsed = None
 
         return parsed
+
+    async def _resolve_chunk_synthesis_prompt(
+        self,
+        *,
+        aggregated: dict[str, Any],
+        chosen_lang: str,
+        req_id: int,
+        correlation_id: str | None,
+    ) -> str:
+        pipeline_shadow = getattr(self, "pipeline_shadow", None)
+        options = getattr(pipeline_shadow, "options", None)
+        if pipeline_shadow is not None and bool(getattr(options, "enabled", False)):
+            snapshot = await pipeline_shadow.resolve_chunk_synthesis_prompt(
+                correlation_id=correlation_id,
+                request_id=req_id,
+                aggregated=aggregated,
+                chosen_lang=chosen_lang,
+            )
+            rust_content = str(snapshot.get("user_content") or "").strip()
+            if rust_content:
+                return rust_content
+        return build_chunk_synthesis_user_content(aggregated, chosen_lang)
 
     def _build_structured_response_format(self) -> dict[str, Any]:
         """Build response format configuration for structured outputs."""

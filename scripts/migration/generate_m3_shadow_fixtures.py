@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from app.migration.pipeline_shadow import (
+    build_python_chunk_synthesis_prompt_snapshot_from_input,
     build_python_chunking_preprocess_snapshot_from_input,
     build_python_content_cleaner_snapshot_from_input,
     build_python_extraction_adapter_snapshot,
@@ -43,6 +44,9 @@ def _build_expected(fixture_name: str, payload: dict[str, Any]) -> dict[str, Any
 
     if fixture_name == "summary_aggregate":
         return build_python_summary_aggregate_snapshot_from_input(payload)
+
+    if fixture_name == "chunk_synthesis_prompt":
+        return build_python_chunk_synthesis_prompt_snapshot_from_input(payload)
 
     msg = f"unknown fixture name: {fixture_name}"
     raise ValueError(msg)

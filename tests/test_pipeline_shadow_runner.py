@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
+from typing import Any
 from unittest.mock import patch
 
 import pytest
@@ -8,6 +9,7 @@ import pytest
 from app.adapters.content.llm_response_workflow import LLMRequestConfig
 from app.migration.pipeline_shadow import (
     PipelineShadowRunner,
+    build_python_chunk_synthesis_prompt_snapshot_from_input,
     build_python_chunking_preprocess_snapshot_from_input,
     build_python_extraction_adapter_snapshot,
     build_python_summary_aggregate_snapshot_from_input,
@@ -252,6 +254,50 @@ async def test_resolve_summary_aggregate_uses_rust_when_enabled() -> None:
             correlation_id="cid",
             request_id=12,
             summaries=summaries,
+        )
+
+    assert result == rust_payload
+
+
+@pytest.mark.asyncio
+async def test_resolve_chunk_synthesis_prompt_uses_python_when_disabled() -> None:
+    runner = PipelineShadowRunner(_runtime_cfg(migration_shadow_mode_enabled=False))
+    payload: dict[str, Any] = {
+        "aggregated": {
+            "tldr": "Draft TLDR",
+            "summary_250": "Draft summary",
+            "key_ideas": ["A", "B"],
+        },
+        "chosen_lang": "en",
+    }
+    expected = build_python_chunk_synthesis_prompt_snapshot_from_input(payload)
+
+    with patch("app.migration.pipeline_shadow.run_rust_shadow_command") as rust_call:
+        result = await runner.resolve_chunk_synthesis_prompt(
+            correlation_id="cid",
+            request_id=13,
+            aggregated=payload["aggregated"],
+            chosen_lang="en",
+        )
+
+    rust_call.assert_not_called()
+    assert result == expected
+
+
+@pytest.mark.asyncio
+async def test_resolve_chunk_synthesis_prompt_uses_rust_when_enabled() -> None:
+    runner = PipelineShadowRunner(_runtime_cfg(migration_shadow_mode_enabled=True))
+    rust_payload = {"context_text": "ctx", "user_content": "prompt"}
+
+    with patch(
+        "app.migration.pipeline_shadow.run_rust_shadow_command",
+        return_value=rust_payload,
+    ):
+        result = await runner.resolve_chunk_synthesis_prompt(
+            correlation_id="cid",
+            request_id=14,
+            aggregated={"summary_250": "draft"},
+            chosen_lang="ru",
         )
 
     assert result == rust_payload
