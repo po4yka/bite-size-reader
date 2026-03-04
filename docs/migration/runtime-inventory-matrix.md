@@ -333,6 +333,11 @@ First implementation slice after inventory lock:
   covered in both `bsr-telegram-runtime` Rust tests and Python bridge routing
   tests to keep non-handled case-sensitive passthrough semantics stable for
   bare command invocations without bot mentions.
+- **Mixed-case known command bare no-mention case-sensitivity parity hardening (M6-S64):**
+  explicit mixed-case known fixture `/Findonline` without trailing arguments is
+  covered in both `bsr-telegram-runtime` Rust tests and Python bridge routing
+  tests to keep non-handled case-sensitive passthrough semantics stable for
+  bare command invocations without bot mentions.
 
 Out-of-scope for M6-S1 (defer to later slices):
 
