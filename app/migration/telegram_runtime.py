@@ -10,7 +10,6 @@ from pathlib import Path
 from typing import Any
 
 from app.migration.cutover_monitor import record_cutover_event
-from app.migration.interface_router import build_python_telegram_command_decision
 
 logger = logging.getLogger(__name__)
 
@@ -97,11 +96,6 @@ def run_rust_telegram_runtime_command(
     return parsed
 
 
-def _build_python_command_decision(text: str) -> TelegramRuntimeCommandDecision:
-    decision = build_python_telegram_command_decision(text=text)
-    return TelegramRuntimeCommandDecision(command=decision.command, handled=decision.handled)
-
-
 @dataclass(frozen=True)
 class TelegramRuntimeOptions:
     backend: str = "rust"
@@ -109,7 +103,7 @@ class TelegramRuntimeOptions:
 
 
 class TelegramRuntimeRunner:
-    """M6 command route-decision runner (Python rollback, Rust fail-closed)."""
+    """M6 command route-decision runner (Rust authoritative, fail-closed)."""
 
     def __init__(self, runtime_cfg: Any) -> None:
         self.options = TelegramRuntimeOptions(
@@ -121,14 +115,17 @@ class TelegramRuntimeRunner:
 
     def _normalized_backend(self) -> str:
         backend = self.options.backend
-        if backend in {"python", "rust"}:
+        if backend == "rust":
             return backend
 
         logger.error(
             "m6_telegram_runtime_invalid_backend",
             extra={"requested_backend": backend},
         )
-        msg = "MIGRATION_TELEGRAM_RUNTIME_BACKEND must be 'python' or 'rust'"
+        msg = (
+            "Migration telegram runtime backend fallback modes are decommissioned; "
+            "MIGRATION_TELEGRAM_RUNTIME_BACKEND must be 'rust'"
+        )
         raise ValueError(msg)
 
     async def resolve_command_route(
@@ -140,9 +137,6 @@ class TelegramRuntimeRunner:
     ) -> TelegramRuntimeCommandDecision:
         backend = self._normalized_backend()
         _ = actor_key
-
-        if backend == "python":
-            return _build_python_command_decision(text)
 
         try:
             actual_payload = await asyncio.to_thread(

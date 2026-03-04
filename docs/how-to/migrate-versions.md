@@ -66,20 +66,19 @@ MIGRATION_INTERFACE_BACKEND=rust
 # Legacy values (`canary`, `python`) are decommissioned for runtime execution.
 ```
 
-### M6 Telegram Route-Decision Toggle
+### M6 Telegram Route-Decision Runtime
 
-M6 currently uses a scoped Telegram command route-decision toggle:
+M6 Telegram command route decisions are now Rust-authoritative:
 
 ```bash
-# Rust authoritative default mode (no implicit Python fallback on Rust failures)
+# Required
 MIGRATION_TELEGRAM_RUNTIME_BACKEND=rust
 
-# Explicit rollback mode
-# MIGRATION_TELEGRAM_RUNTIME_BACKEND=python
+# Legacy value (`python`) is decommissioned for runtime execution.
 MIGRATION_TELEGRAM_RUNTIME_TIMEOUT_MS=150
 ```
 
-Run the M6 suite before rollout and when toggling to rollback mode:
+Run the M6 suite before rollout and after migration config changes:
 
 ```bash
 make m6-telegram-runtime-suite

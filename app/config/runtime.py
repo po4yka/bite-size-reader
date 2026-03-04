@@ -328,9 +328,11 @@ class RuntimeConfig(BaseModel):
     @classmethod
     def _validate_migration_telegram_runtime_backend(cls, value: Any) -> str:
         backend = str(value or "rust").strip().lower()
-        allowed = {"python", "rust"}
-        if backend not in allowed:
-            msg = f"MIGRATION_TELEGRAM_RUNTIME_BACKEND must be one of {sorted(allowed)}"
+        if backend != "rust":
+            msg = (
+                "Migration telegram runtime backend fallback modes are decommissioned; "
+                "MIGRATION_TELEGRAM_RUNTIME_BACKEND must be 'rust'"
+            )
             raise ValueError(msg)
         return backend
 

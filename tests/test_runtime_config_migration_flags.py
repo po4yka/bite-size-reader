@@ -26,6 +26,11 @@ def test_m6_telegram_runtime_backend_accepts_rust() -> None:
     assert cfg.migration_telegram_runtime_backend == "rust"
 
 
+def test_m6_telegram_runtime_backend_rejects_python_value() -> None:
+    with pytest.raises(ValidationError, match="must be 'rust'"):
+        RuntimeConfig(migration_telegram_runtime_backend="python")
+
+
 def test_m6_telegram_runtime_backend_rejects_unknown_value() -> None:
-    with pytest.raises(ValidationError, match="MIGRATION_TELEGRAM_RUNTIME_BACKEND"):
+    with pytest.raises(ValidationError, match="must be 'rust'"):
         RuntimeConfig(migration_telegram_runtime_backend="canary")

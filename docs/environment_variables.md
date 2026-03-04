@@ -141,7 +141,7 @@ API_RATE_LIMIT_DEFAULT=100
 
 | Variable | Default | Description |
 | ---------- | --------- | ------------- |
-| `MIGRATION_TELEGRAM_RUNTIME_BACKEND` | `rust` | Telegram command route-decision backend: `rust` (authoritative fail-closed mode) or `python` (explicit rollback mode). |
+| `MIGRATION_TELEGRAM_RUNTIME_BACKEND` | `rust` | Telegram command route-decision backend (Rust required; legacy `python` mode is decommissioned). |
 | `MIGRATION_TELEGRAM_RUNTIME_TIMEOUT_MS` | `150` | Timeout per Rust telegram runtime command-route call (milliseconds) |
 | `TELEGRAM_RUNTIME_RUST_BIN` | _(auto-discover)_ | Absolute path to `bsr-telegram-runtime` binary override |
 
@@ -457,7 +457,7 @@ uv run python scripts/twitter_article_live_smoke.py \
 | `MIGRATION_INTERFACE_TIMEOUT_MS` | `150` | Per-call Rust interface timeout (ms) |
 | `MIGRATION_INTERFACE_EMIT_MATCH_LOGS` | `false` | Deprecated (ignored after fallback decommission) |
 | `MIGRATION_INTERFACE_MAX_DIFFS` | `8` | Deprecated (ignored after fallback decommission) |
-| `MIGRATION_TELEGRAM_RUNTIME_BACKEND` | `rust` | M6 Telegram command route-decision backend (`rust` fail-closed mode, `python` explicit rollback mode) |
+| `MIGRATION_TELEGRAM_RUNTIME_BACKEND` | `rust` | M6 Telegram command route-decision backend (Rust required; legacy fallback modes are decommissioned) |
 | `MIGRATION_TELEGRAM_RUNTIME_TIMEOUT_MS` | `150` | Per-call Rust telegram runtime timeout (ms) |
 | `MIGRATION_CUTOVER_EVENTS_FILE` | `data/migration_cutover_events.jsonl` | JSONL sink for M5 migration events |
 | `MIGRATION_RELEASE_WINDOW_DAYS` | `14` | Release-window duration used by M5 fallback checker |

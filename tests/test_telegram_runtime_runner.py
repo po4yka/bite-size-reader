@@ -30,14 +30,6 @@ async def test_runner_defaults_to_rust_backend_when_not_configured() -> None:
 
 
 @pytest.mark.asyncio
-async def test_python_backend_routes_aliases() -> None:
-    runner = TelegramRuntimeRunner(_runtime_cfg(migration_telegram_runtime_backend="python"))
-    decision = await runner.resolve_command_route(text="/unread@mybot 5")
-    assert decision.command == "/unread"
-    assert decision.handled is True
-
-
-@pytest.mark.asyncio
 async def test_rust_backend_uses_rust_runtime_command() -> None:
     runner = TelegramRuntimeRunner(_runtime_cfg(migration_telegram_runtime_backend="rust"))
     with patch(
@@ -70,6 +62,6 @@ async def test_rust_backend_raises_on_failure_without_python_fallback_and_record
 
 @pytest.mark.asyncio
 async def test_invalid_backend_value_is_rejected() -> None:
-    runner = TelegramRuntimeRunner(_runtime_cfg(migration_telegram_runtime_backend="unexpected"))
-    with pytest.raises(ValueError, match="must be 'python' or 'rust'"):
+    runner = TelegramRuntimeRunner(_runtime_cfg(migration_telegram_runtime_backend="python"))
+    with pytest.raises(ValueError, match="must be 'rust'"):
         await runner.resolve_command_route(text="/start")

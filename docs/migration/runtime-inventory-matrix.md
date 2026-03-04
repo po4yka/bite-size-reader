@@ -55,9 +55,9 @@ First implementation slice after inventory lock:
   crate tests against expanded M4 telegram-command fixtures (aliases,
   non-command URL/plain text, unknown commands, and forwarded-ingress
   command/non-command payloads).
-- **Rollback switch policy:** `MIGRATION_TELEGRAM_RUNTIME_BACKEND=rust|python`
-  with `rust` as authoritative/fail-closed default; `python` remains explicit
-  rollback mode; invalid backend values are rejected (no implicit fallback).
+- **Rollback switch policy:** `MIGRATION_TELEGRAM_RUNTIME_BACKEND` is Rust-only.
+  Non-rust backend values are rejected (no implicit or explicit Python
+  fallback path).
 
 Out-of-scope for M6-S1 (defer to later slices):
 
@@ -72,8 +72,8 @@ Implementation acceptance gates for M6-S1:
    `docs/SPEC.md` fixtures.
 2. Existing observability/cutover events remain emitted on Rust decision
    failures.
-3. Rollback to Python decision path requires only
-   `MIGRATION_TELEGRAM_RUNTIME_BACKEND=python` (no code revert).
+3. Non-rust decision backend values are rejected at config/runtime validation
+   (`MIGRATION_TELEGRAM_RUNTIME_BACKEND` must be `rust`).
 
 ## Verification Baseline Before and After Each Slice
 
