@@ -448,6 +448,12 @@ First implementation slice after inventory lock:
   bridge routing tests to keep non-handled passthrough semantics stable when
   slash-prefixed text is followed by a four-per-em space rather than a command
   token.
+- **Slash-three-per-em-space command-shape parity hardening (M6-S85):**
+  slash-three-per-em-space fixture `"/\u2004findonline rust"` is now
+  explicitly covered in both `bsr-telegram-runtime` Rust command-route tests
+  and Python bridge routing tests to keep non-handled passthrough semantics
+  stable when slash-prefixed text is followed by a three-per-em space rather
+  than a command token.
 
 Out-of-scope for M6-S1 (defer to later slices):
 
