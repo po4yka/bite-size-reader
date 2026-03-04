@@ -483,19 +483,24 @@ class URLProcessor:
             progress_tracker,
         )
         pipeline_shadow = getattr(self, "pipeline_shadow", None)
-        if pipeline_shadow is not None:
-            self._schedule_background_task(
-                pipeline_shadow.compare_extraction_adapter(
-                    correlation_id=correlation_id,
-                    request_id=req_id,
-                    url_hash=dedupe_hash,
-                    content_text=content_text,
-                    content_source=_content_source,
-                    title=title,
-                    images_count=len(images or []),
-                ),
-                correlation_id,
-                "m3_shadow_extraction_adapter",
+        if pipeline_shadow is not None and pipeline_shadow.options.enabled:
+            extraction_snapshot = await pipeline_shadow.resolve_extraction_adapter(
+                correlation_id=correlation_id,
+                request_id=req_id,
+                url_hash=dedupe_hash,
+                content_text=content_text,
+                content_source=_content_source,
+                title=title,
+                images_count=len(images or []),
+            )
+            logger.debug(
+                "m3_pipeline_extraction_adapter_resolved",
+                extra={
+                    "cid": correlation_id,
+                    "request_id": req_id,
+                    "language_hint": extraction_snapshot.get("language_hint"),
+                    "low_value": extraction_snapshot.get("low_value"),
+                },
             )
 
         chosen_lang = choose_language(self.cfg.runtime.preferred_lang, detected)
@@ -518,32 +523,12 @@ class URLProcessor:
                 silent=silent,
             )
 
-        should_chunk, max_chars, chunks = self._compute_chunk_strategy(
+        should_chunk, max_chars, chunks = await self._compute_chunk_strategy(
             content_text=content_text,
             chosen_lang=chosen_lang,
             correlation_id=correlation_id,
+            request_id=req_id,
         )
-        if pipeline_shadow is not None:
-            enable_chunking_value = getattr(self.cfg.runtime, "enable_chunking", False)
-            enable_chunking = (
-                enable_chunking_value if isinstance(enable_chunking_value, bool) else False
-            )
-            long_context_model = getattr(self.cfg.openrouter, "long_context_model", None)
-            if not isinstance(long_context_model, str):
-                long_context_model = None
-            self._schedule_background_task(
-                pipeline_shadow.compare_chunking_preprocess(
-                    correlation_id=correlation_id,
-                    request_id=req_id,
-                    content_text=content_text,
-                    enable_chunking=enable_chunking,
-                    max_chars=max_chars,
-                    long_context_model=long_context_model,
-                    should_chunk=should_chunk,
-                ),
-                correlation_id,
-                "m3_shadow_chunking_preprocess",
-            )
 
         if not batch_mode:
             await self.response_formatter.send_content_analysis_notification(
@@ -570,28 +555,51 @@ class URLProcessor:
             chunks=chunks,
         )
 
-    def _compute_chunk_strategy(
+    async def _compute_chunk_strategy(
         self,
         *,
         content_text: str,
         chosen_lang: str,
         correlation_id: str | None,
+        request_id: int | None,
     ) -> tuple[bool, int, list[str] | None]:
-        """Choose chunking strategy with long-context model bypass."""
+        """Choose chunking strategy, with optional Rust-authoritative M3 preprocessing."""
         should_chunk, max_chars, chunks = self.content_chunker.should_chunk_content(
             content_text, chosen_lang
         )
-        if should_chunk and self.cfg.openrouter.long_context_model:
+        long_context_model = self.cfg.openrouter.long_context_model
+        if should_chunk and long_context_model:
             logger.info(
                 "chunking_bypassed_long_context",
                 extra={
                     "cid": correlation_id,
-                    "long_context_model": self.cfg.openrouter.long_context_model,
+                    "long_context_model": long_context_model,
                     "content_length": len(content_text),
                 },
             )
             should_chunk = False
             chunks = None
+
+        pipeline_shadow = getattr(self, "pipeline_shadow", None)
+        if pipeline_shadow is not None and pipeline_shadow.options.enabled:
+            enable_chunking_value = getattr(self.cfg.runtime, "enable_chunking", False)
+            enable_chunking = (
+                enable_chunking_value if isinstance(enable_chunking_value, bool) else False
+            )
+            lc_model = long_context_model if isinstance(long_context_model, str) else None
+            rust_snapshot = await pipeline_shadow.resolve_chunking_preprocess(
+                correlation_id=correlation_id,
+                request_id=request_id,
+                content_text=content_text,
+                enable_chunking=enable_chunking,
+                max_chars=max_chars,
+                long_context_model=lc_model,
+            )
+            rust_should_chunk = bool(rust_snapshot.get("should_chunk", False))
+            max_chars = int(rust_snapshot.get("max_chars", max_chars))
+            if not rust_should_chunk:
+                should_chunk = False
+                chunks = None
 
         logger.info(
             "content_handling",

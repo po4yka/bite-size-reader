@@ -53,9 +53,9 @@ This roadmap tracks the project-wide migration from the current Python runtime t
   1. content extraction adapter
   2. chunking + preprocessing
   3. LLM orchestration wrappers
-- Run shadow mode (Python authoritative, Rust comparison path).
+- Support Rust-authoritative execution for M3 slices via runtime toggle.
 
-**Exit criteria:** shadow mismatch rate below agreed threshold; no regression in p95 latency.
+**Exit criteria:** Rust-authoritative M3 slice execution available with parity fixtures and no regression in p95 latency.
 
 ### M4 — Interface Layer Migration ✅ Implemented
 
@@ -95,8 +95,8 @@ This roadmap tracks the project-wide migration from the current Python runtime t
   - Detailed notes: `docs/migration/m2.md`
 - **M3 artifacts**
   - Rust pipeline shadow service: `rust/crates/bsr-pipeline-shadow/src/lib.rs`, `src/main.rs`
-  - Python shadow runner: `app/migration/pipeline_shadow.py`
-  - Shadow hooks in runtime flow: `app/adapters/content/url_processor.py`, `app/adapters/content/llm_summarizer.py`
+  - Python runtime bridge (authoritative + parity helpers): `app/migration/pipeline_shadow.py`
+  - Runtime hooks in flow: `app/adapters/content/url_processor.py`, `app/adapters/content/llm_summarizer.py`
   - Fixture corpus: `docs/migration/fixtures/m3_pipeline_shadow/`
   - Fixture generator/check: `scripts/migration/generate_m3_shadow_fixtures.py`
   - M3 suite runner: `scripts/migration/run_m3_parity_suite.sh` (`make m3-parity-suite`)

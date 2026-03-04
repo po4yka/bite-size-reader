@@ -5,12 +5,11 @@ from unittest.mock import patch
 
 import pytest
 
+from app.adapters.content.llm_response_workflow import LLMRequestConfig
 from app.migration.pipeline_shadow import (
     PipelineShadowRunner,
     build_python_chunking_preprocess_snapshot_from_input,
     build_python_extraction_adapter_snapshot,
-    get_shadow_stats_snapshot,
-    reset_shadow_stats,
 )
 
 
@@ -41,8 +40,7 @@ def test_chunking_snapshot_from_input_handles_long_context_bypass() -> None:
 
 
 @pytest.mark.asyncio
-async def test_compare_extraction_adapter_records_match() -> None:
-    reset_shadow_stats()
+async def test_resolve_extraction_adapter_uses_rust_when_enabled() -> None:
     runner = PipelineShadowRunner(_runtime_cfg())
     expected = build_python_extraction_adapter_snapshot(
         url_hash="hash",
@@ -53,7 +51,7 @@ async def test_compare_extraction_adapter_records_match() -> None:
     )
 
     with patch("app.migration.pipeline_shadow.run_rust_shadow_command", return_value=expected):
-        await runner.compare_extraction_adapter(
+        result = await runner.resolve_extraction_adapter(
             correlation_id="cid",
             request_id=42,
             url_hash="hash",
@@ -63,44 +61,122 @@ async def test_compare_extraction_adapter_records_match() -> None:
             images_count=1,
         )
 
-    stats = get_shadow_stats_snapshot()["extraction_adapter"]
-    assert stats["total"] == 1
-    assert stats["matched"] == 1
-    assert stats["mismatched"] == 0
-    assert stats["errors"] == 0
+    assert result == expected
 
 
 @pytest.mark.asyncio
-async def test_compare_extraction_adapter_records_mismatch() -> None:
-    reset_shadow_stats()
-    runner = PipelineShadowRunner(_runtime_cfg())
+async def test_resolve_extraction_adapter_raises_when_rust_fails() -> None:
+    runner = PipelineShadowRunner(_runtime_cfg(migration_shadow_mode_enabled=True))
+
+    with (
+        patch(
+            "app.migration.pipeline_shadow.run_rust_shadow_command",
+            side_effect=RuntimeError("boom"),
+        ),
+        patch("app.migration.pipeline_shadow.record_cutover_event") as event_call,
+    ):
+        with pytest.raises(RuntimeError, match="Python fallback is decommissioned"):
+            await runner.resolve_extraction_adapter(
+                correlation_id="cid",
+                request_id=43,
+                url_hash="hash",
+                content_text="Rust pipeline parity keeps Python authoritative.",
+                content_source="markdown",
+                title="Demo",
+                images_count=1,
+            )
+
+    event_call.assert_called_once()
+    assert event_call.call_args.kwargs["event_type"] == "rust_failure"
+    assert event_call.call_args.kwargs["surface"] == "pipeline_extraction_adapter"
+
+
+@pytest.mark.asyncio
+async def test_resolve_chunking_preprocess_uses_python_when_disabled() -> None:
+    runner = PipelineShadowRunner(_runtime_cfg(migration_shadow_mode_enabled=False))
+    content_text = "x" * 12_000
+    enable_chunking = True
+    max_chars = 8_000
+    long_context_model = "moonshotai/kimi-k2.5"
+    payload = {
+        "content_text": content_text,
+        "enable_chunking": enable_chunking,
+        "max_chars": max_chars,
+        "long_context_model": long_context_model,
+    }
+    expected = build_python_chunking_preprocess_snapshot_from_input(payload)
+
+    with patch("app.migration.pipeline_shadow.run_rust_shadow_command") as rust_call:
+        result = await runner.resolve_chunking_preprocess(
+            correlation_id="cid",
+            request_id=1,
+            content_text=content_text,
+            enable_chunking=enable_chunking,
+            max_chars=max_chars,
+            long_context_model=long_context_model,
+        )
+
+    rust_call.assert_not_called()
+    assert result == expected
+
+
+@pytest.mark.asyncio
+async def test_resolve_llm_wrapper_plan_uses_rust_when_enabled() -> None:
+    runner = PipelineShadowRunner(_runtime_cfg(migration_shadow_mode_enabled=True))
+    requests = [
+        LLMRequestConfig(
+            messages=[{"role": "user", "content": "demo"}],
+            response_format={"type": "json_schema"},
+            preset_name="schema_strict",
+            model_override="base-model",
+            max_tokens=1024,
+            temperature=0.2,
+            top_p=0.9,
+        ),
+        LLMRequestConfig(
+            messages=[{"role": "user", "content": "demo"}],
+            response_format={"type": "json_object"},
+            preset_name="json_object_guardrail",
+            model_override="base-model",
+            max_tokens=2048,
+            temperature=0.15,
+            top_p=0.9,
+        ),
+    ]
+    rust_plan = {
+        "request_count": 2,
+        "requests": [
+            {
+                "preset": "schema_strict",
+                "model": "base-model",
+                "response_type": "json_schema",
+                "max_tokens": 1024,
+                "temperature": 0.2,
+                "top_p": 0.9,
+            },
+            {
+                "preset": "json_object_guardrail",
+                "model": "base-model",
+                "response_type": "json_object",
+                "max_tokens": 2048,
+                "temperature": 0.15,
+                "top_p": 0.9,
+            },
+        ],
+    }
 
     with patch(
         "app.migration.pipeline_shadow.run_rust_shadow_command",
-        return_value={
-            "url_hash": "hash",
-            "content_length": 10,
-            "word_count": 1,
-            "content_source": "markdown",
-            "title_present": False,
-            "images_count": 0,
-            "has_media": False,
-            "language_hint": "en",
-            "content_fingerprint": "0000000000000000",
-            "low_value": True,
-        },
+        return_value=rust_plan,
     ):
-        await runner.compare_extraction_adapter(
+        result = await runner.resolve_llm_wrapper_plan(
             correlation_id="cid",
-            request_id=43,
-            url_hash="hash",
-            content_text="Rust pipeline parity keeps Python authoritative.",
-            content_source="markdown",
-            title="Demo",
-            images_count=1,
+            request_id=2,
+            base_model="base-model",
+            requests=requests,
+            fallback_models=("fallback-model",),
+            flash_model=None,
+            flash_fallback_models=(),
         )
 
-    stats = get_shadow_stats_snapshot()["extraction_adapter"]
-    assert stats["total"] == 1
-    assert stats["matched"] == 0
-    assert stats["mismatched"] == 1
+    assert result == rust_plan

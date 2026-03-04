@@ -45,6 +45,19 @@ Run the milestone suite before promotion:
 make m2-parity-suite
 ```
 
+### M3 Pipeline Runtime Toggle
+
+M3 slices can run via Rust-authoritative execution through the legacy toggle name:
+
+```bash
+# false (default): keep Python runtime path for M3 slices
+# true: use Rust-authoritative M3 execution
+MIGRATION_SHADOW_MODE_ENABLED=true
+
+# Optional timeout override
+MIGRATION_SHADOW_MODE_TIMEOUT_MS=250
+```
+
 ### M4 Interface Router Toggle
 
 M4 interface routing is Rust-only after fallback decommission:

@@ -377,23 +377,29 @@ class TestOnPhaseChangeCallback(unittest.IsolatedAsyncioTestCase):
 
 
 class TestPipelineShadowHooks(unittest.IsolatedAsyncioTestCase):
-    async def test_prepare_context_schedules_m3_shadow_comparisons(self) -> None:
+    async def test_prepare_context_uses_m3_rust_authoritative_resolvers(self) -> None:
         formatter = AsyncMock()
         proc = _make_processor(response_formatter=formatter)
         proc.pipeline_shadow = MagicMock()
-        proc.pipeline_shadow.compare_extraction_adapter = AsyncMock(return_value=None)
-        proc.pipeline_shadow.compare_chunking_preprocess = AsyncMock(return_value=None)
-
-        scheduled_labels: list[str] = []
-
-        def _capture_background_task(coro: Any, _cid: str | None, label: str) -> None:
-            scheduled_labels.append(label)
-            coro.close()
+        proc.pipeline_shadow.options.enabled = True
+        proc.pipeline_shadow.resolve_extraction_adapter = AsyncMock(
+            return_value={"language_hint": "en", "low_value": False}
+        )
+        proc.pipeline_shadow.resolve_chunking_preprocess = AsyncMock(
+            return_value={
+                "content_length": 29,
+                "max_chars": 10000,
+                "chunk_size": 4000,
+                "should_chunk": False,
+                "long_context_bypass": False,
+                "estimated_chunk_count": 0,
+                "first_chunk_size": 0,
+            }
+        )
 
         with (
             patch(_PATCH_LANG, return_value="en"),
             patch(_PATCH_PROMPT, return_value="prompt"),
-            patch.object(proc, "_schedule_background_task", side_effect=_capture_background_task),
         ):
             context = await proc._prepare_url_flow_context(
                 message=DummyMessage(),
@@ -408,7 +414,5 @@ class TestPipelineShadowHooks(unittest.IsolatedAsyncioTestCase):
             )
 
         assert context.req_id == 1
-        assert "m3_shadow_extraction_adapter" in scheduled_labels
-        assert "m3_shadow_chunking_preprocess" in scheduled_labels
-        proc.pipeline_shadow.compare_extraction_adapter.assert_called_once()
-        proc.pipeline_shadow.compare_chunking_preprocess.assert_called_once()
+        proc.pipeline_shadow.resolve_extraction_adapter.assert_called_once()
+        proc.pipeline_shadow.resolve_chunking_preprocess.assert_called_once()

@@ -48,7 +48,7 @@ Current completed milestones:
 - ✅ **M0**: Contract freeze + parity suite + baseline metrics capture (`scripts/migration/*`, `docs/migration/baseline_metrics.json`)
 - ✅ **M1**: Rust workspace foundation with shared crates for config, logging, and summary-contract validation (`rust/`)
 - ✅ **M2**: Rust summary-contract service + fixture parity corpus + SQLite compatibility checks (`docs/migration/m2.md`)
-- ✅ **M3**: Pipeline shadow-mode slices (extraction/chunking/LLM wrapper plan) with Rust parity fixtures (`docs/migration/m3.md`)
+- ✅ **M3**: Pipeline slices with Rust-authoritative runtime toggle and parity fixtures (`docs/migration/m3.md`)
 - ✅ **M4**: Interface-layer Rust routing for Mobile API + Telegram commands with parity fixtures (`docs/migration/m4.md`)
 - ✅ **M5**: Rust-first cutover defaults + Python fallback decommission for migrated slices (`docs/migration/m5.md`)
 

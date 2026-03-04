@@ -301,17 +301,75 @@ async def _execute_summary_with_progress_for(
         raise
 
 
-def _schedule_m3_shadow_llm_wrapper_plan_for(
+def _requests_from_m3_rust_plan(
+    summarizer: LLMSummarizer,
+    *,
+    plan_payload: dict[str, Any],
+    messages: list[dict[str, Any]],
+    silent: bool,
+) -> list[LLMRequestConfig]:
+    response_format_schema = summarizer._workflow.build_structured_response_format()
+    response_format_json_object = summarizer._workflow.build_structured_response_format(
+        mode="json_object"
+    )
+    requests_payload = plan_payload.get("requests")
+    if not isinstance(requests_payload, list) or not requests_payload:
+        msg = "Rust M3 llm-wrapper-plan returned invalid request list"
+        raise RuntimeError(msg)
+
+    requests: list[LLMRequestConfig] = []
+    for item in requests_payload:
+        if not isinstance(item, dict):
+            msg = "Rust M3 llm-wrapper-plan returned invalid request entry"
+            raise RuntimeError(msg)
+        response_type = str(item.get("response_type") or "")
+        if response_type == "json_schema":
+            response_format = response_format_schema
+        elif response_type == "json_object":
+            response_format = response_format_json_object
+        else:
+            msg = f"Rust M3 llm-wrapper-plan returned unsupported response type: {response_type}"
+            raise RuntimeError(msg)
+
+        model_name = str(item.get("model") or "").strip()
+        if not model_name:
+            msg = "Rust M3 llm-wrapper-plan returned empty model name"
+            raise RuntimeError(msg)
+
+        max_tokens_raw = item.get("max_tokens")
+        max_tokens = int(max_tokens_raw) if isinstance(max_tokens_raw, int) else None
+        temperature_raw = item.get("temperature")
+        temperature = float(temperature_raw) if isinstance(temperature_raw, (int, float)) else None
+        top_p_raw = item.get("top_p")
+        top_p = float(top_p_raw) if isinstance(top_p_raw, (int, float)) else None
+        preset_name = str(item.get("preset") or "unknown")
+
+        requests.append(
+            LLMRequestConfig(
+                preset_name=preset_name,
+                messages=messages,
+                response_format=response_format,
+                max_tokens=max_tokens,
+                temperature=temperature,
+                top_p=top_p,
+                model_override=model_name,
+                silent=silent,
+            )
+        )
+    return requests
+
+
+async def _resolve_m3_rust_llm_wrapper_plan_for(
     summarizer: LLMSummarizer,
     *,
     correlation_id: str | None,
     request_id: int,
     base_model: str,
     requests: list[LLMRequestConfig],
-) -> None:
+) -> list[LLMRequestConfig]:
     runner = getattr(summarizer, "pipeline_shadow", None)
-    if runner is None:
-        return
+    if runner is None or not runner.options.enabled:
+        return requests
 
     fallback_models = tuple(getattr(summarizer.cfg.openrouter, "fallback_models", ()) or ())
     flash_model = getattr(summarizer.cfg.openrouter, "flash_model", None)
@@ -319,18 +377,20 @@ def _schedule_m3_shadow_llm_wrapper_plan_for(
         getattr(summarizer.cfg.openrouter, "flash_fallback_models", ()) or ()
     )
 
-    summarizer._workflow._schedule_background_task(
-        runner.compare_llm_wrapper_plan(
-            correlation_id=correlation_id,
-            request_id=request_id,
-            base_model=base_model,
-            requests=requests,
-            fallback_models=fallback_models,
-            flash_model=flash_model if isinstance(flash_model, str) else None,
-            flash_fallback_models=flash_fallback_models,
-        ),
-        "m3_shadow_llm_wrapper_plan",
-        correlation_id,
+    plan_payload = await runner.resolve_llm_wrapper_plan(
+        correlation_id=correlation_id,
+        request_id=request_id,
+        base_model=base_model,
+        requests=requests,
+        fallback_models=fallback_models,
+        flash_model=flash_model if isinstance(flash_model, str) else None,
+        flash_fallback_models=flash_fallback_models,
+    )
+    return _requests_from_m3_rust_plan(
+        summarizer,
+        plan_payload=plan_payload,
+        messages=requests[0].messages if requests else [],
+        silent=requests[0].silent if requests else False,
     )
 
 
@@ -470,7 +530,7 @@ class LLMSummarizer:
             user_content=user_content,
             silent=silent,
         )
-        _schedule_m3_shadow_llm_wrapper_plan_for(
+        requests = await _resolve_m3_rust_llm_wrapper_plan_for(
             self,
             correlation_id=correlation_id,
             request_id=req_id,

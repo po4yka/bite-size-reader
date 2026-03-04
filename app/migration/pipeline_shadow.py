@@ -11,6 +11,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from app.migration.cutover_monitor import record_cutover_event
+
 if TYPE_CHECKING:
     from app.adapters.content.llm_response_workflow import LLMRequestConfig
 
@@ -408,7 +410,7 @@ class PipelineShadowRuntimeOptions:
 
 
 class PipelineShadowRunner:
-    """Run M3 shadow comparisons (Python authoritative, Rust comparison path)."""
+    """Run M3 pipeline slices with Rust-authoritative execution when enabled."""
 
     def __init__(self, runtime_cfg: Any) -> None:
         self.options = PipelineShadowRuntimeOptions(
@@ -420,6 +422,153 @@ class PipelineShadowRunner:
             timeout_ms=int(getattr(runtime_cfg, "migration_shadow_mode_timeout_ms", 250)),
             max_diffs=int(getattr(runtime_cfg, "migration_shadow_mode_max_diffs", 8)),
         )
+        if self.options.enabled and (
+            self.options.sample_rate != 0.0
+            or self.options.emit_match_logs
+            or self.options.max_diffs != 8
+        ):
+            logger.warning(
+                "m3_shadow_legacy_options_ignored",
+                extra={
+                    "sample_rate": self.options.sample_rate,
+                    "emit_match_logs": self.options.emit_match_logs,
+                    "max_diffs": self.options.max_diffs,
+                },
+            )
+
+    async def resolve_extraction_adapter(
+        self,
+        *,
+        correlation_id: str | None,
+        request_id: int | None,
+        url_hash: str,
+        content_text: str,
+        content_source: str | None,
+        title: str | None,
+        images_count: int,
+    ) -> dict[str, Any]:
+        rust_input = {
+            "url_hash": url_hash,
+            "content_text": content_text,
+            "content_source": content_source,
+            "title": title,
+            "images_count": int(images_count),
+        }
+        if not self.options.enabled:
+            return build_python_extraction_adapter_snapshot(
+                url_hash=url_hash,
+                content_text=content_text,
+                content_source=content_source,
+                title=title,
+                images_count=images_count,
+            )
+
+        return await self._run_authoritative_slice(
+            command="extraction-adapter",
+            rust_input=rust_input,
+            correlation_id=correlation_id,
+            request_id=request_id,
+            surface="pipeline_extraction_adapter",
+        )
+
+    async def resolve_chunking_preprocess(
+        self,
+        *,
+        correlation_id: str | None,
+        request_id: int | None,
+        content_text: str,
+        enable_chunking: bool,
+        max_chars: int,
+        long_context_model: str | None,
+    ) -> dict[str, Any]:
+        rust_input = {
+            "content_text": content_text,
+            "enable_chunking": bool(enable_chunking),
+            "max_chars": int(max_chars),
+            "long_context_model": long_context_model,
+        }
+        if not self.options.enabled:
+            return build_python_chunking_preprocess_snapshot_from_input(rust_input)
+
+        return await self._run_authoritative_slice(
+            command="chunking-preprocess",
+            rust_input=rust_input,
+            correlation_id=correlation_id,
+            request_id=request_id,
+            surface="pipeline_chunking_preprocess",
+        )
+
+    async def resolve_llm_wrapper_plan(
+        self,
+        *,
+        correlation_id: str | None,
+        request_id: int | None,
+        base_model: str,
+        requests: list[LLMRequestConfig],
+        fallback_models: tuple[str, ...] | list[str],
+        flash_model: str | None,
+        flash_fallback_models: tuple[str, ...] | list[str],
+    ) -> dict[str, Any]:
+        rust_input = build_rust_llm_wrapper_input_from_requests(
+            base_model=base_model,
+            requests=requests,
+            fallback_models=fallback_models,
+            flash_model=flash_model,
+            flash_fallback_models=flash_fallback_models,
+        )
+        if rust_input is None:
+            return build_python_llm_wrapper_plan_snapshot_from_requests(requests)
+
+        if not self.options.enabled:
+            return build_python_llm_wrapper_plan_snapshot_from_input(rust_input)
+
+        return await self._run_authoritative_slice(
+            command="llm-wrapper-plan",
+            rust_input=rust_input,
+            correlation_id=correlation_id,
+            request_id=request_id,
+            surface="pipeline_llm_wrapper_plan",
+        )
+
+    async def _run_authoritative_slice(
+        self,
+        *,
+        command: str,
+        rust_input: dict[str, Any],
+        correlation_id: str | None,
+        request_id: int | None,
+        surface: str,
+    ) -> dict[str, Any]:
+        try:
+            return await asyncio.to_thread(
+                run_rust_shadow_command,
+                command,
+                rust_input,
+                timeout_ms=self.options.timeout_ms,
+            )
+        except Exception as exc:
+            logger.warning(
+                "m3_pipeline_rust_execution_failed",
+                extra={
+                    "command": command,
+                    "cid": correlation_id,
+                    "request_id": request_id,
+                    "error": str(exc),
+                },
+            )
+            record_cutover_event(
+                event_type="rust_failure",
+                surface=surface,
+                reason=(
+                    "rust_binary_missing"
+                    if isinstance(exc, FileNotFoundError)
+                    else "rust_backend_failed"
+                ),
+                correlation_id=correlation_id,
+                metadata={"command": command},
+            )
+            msg = f"Rust M3 {command} failed; Python fallback is decommissioned for this slice."
+            raise RuntimeError(msg) from exc
 
     def _should_sample(
         self,

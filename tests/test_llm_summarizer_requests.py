@@ -110,7 +110,7 @@ class LLMSummarizerRequestTests(unittest.IsolatedAsyncioTestCase):
         assert captured_requests[0].response_format.get("type") == "json_schema"
 
     @patch("app.adapters.content.llm_summarizer.RedisCache")
-    async def test_schedules_m3_shadow_llm_wrapper_comparison(
+    async def test_uses_m3_rust_authoritative_llm_wrapper_plan(
         self, redis_cache_mock: MagicMock
     ) -> None:
         cache_stub = MagicMock()
@@ -128,22 +128,49 @@ class LLMSummarizerRequestTests(unittest.IsolatedAsyncioTestCase):
             sem=lambda: _DummySemaphore(),
         )
         summarizer.pipeline_shadow = MagicMock()
-        summarizer.pipeline_shadow.compare_llm_wrapper_plan = AsyncMock(return_value=None)
+        summarizer.pipeline_shadow.options.enabled = True
+        summarizer.pipeline_shadow.resolve_llm_wrapper_plan = AsyncMock(
+            return_value={
+                "request_count": 3,
+                "requests": [
+                    {
+                        "preset": "schema_strict",
+                        "model": "primary-model",
+                        "response_type": "json_schema",
+                        "max_tokens": 4096,
+                        "temperature": 0.2,
+                        "top_p": 0.9,
+                    },
+                    {
+                        "preset": "json_object_guardrail",
+                        "model": "primary-model",
+                        "response_type": "json_object",
+                        "max_tokens": 4096,
+                        "temperature": 0.15,
+                        "top_p": 0.9,
+                    },
+                    {
+                        "preset": "json_object_fallback",
+                        "model": "fallback-model",
+                        "response_type": "json_object",
+                        "max_tokens": 4096,
+                        "temperature": 0.15,
+                        "top_p": 0.9,
+                    },
+                ],
+            }
+        )
 
-        async def _capture_requests(**_: Any):
+        captured_requests: list[Any] = []
+
+        async def _capture_requests(**kwargs: Any):
+            captured_requests.extend(kwargs.get("requests") or [])
             return {"summary_250": "ok", "summary_1000": "ok", "tldr": "ok"}
 
-        with (
-            patch.object(
-                summarizer._workflow,
-                "execute_summary_workflow",
-                AsyncMock(side_effect=_capture_requests),
-            ),
-            patch.object(
-                summarizer._workflow,
-                "_schedule_background_task",
-                MagicMock(return_value=None),
-            ) as schedule_background,
+        with patch.object(
+            summarizer._workflow,
+            "execute_summary_workflow",
+            AsyncMock(side_effect=_capture_requests),
         ):
             summary = await summarizer.summarize_content(
                 message=MagicMock(),
@@ -156,9 +183,10 @@ class LLMSummarizerRequestTests(unittest.IsolatedAsyncioTestCase):
             )
 
         assert summary is not None
-        assert schedule_background.call_count >= 1
-        shadow_call = schedule_background.call_args_list[0]
-        assert shadow_call.args[1] == "m3_shadow_llm_wrapper_plan"
-        assert shadow_call.args[2] == "cid-shadow"
-        shadow_call.args[0].close()
-        summarizer.pipeline_shadow.compare_llm_wrapper_plan.assert_called_once()
+        summarizer.pipeline_shadow.resolve_llm_wrapper_plan.assert_called_once()
+        assert captured_requests, "requests should be passed to the workflow"
+        assert [req.preset_name for req in captured_requests] == [
+            "schema_strict",
+            "json_object_guardrail",
+            "json_object_fallback",
+        ]
