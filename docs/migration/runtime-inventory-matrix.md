@@ -53,8 +53,8 @@ First implementation slice after inventory lock:
     `app/adapters/telegram/message_router_content.py`.
 - **Parity harness status:** command route parity coverage now includes Rust
   crate tests against expanded M4 telegram-command fixtures (aliases,
-  non-command URL/plain text, unknown commands); forwarded-post ingress
-  fixtures remain pending.
+  non-command URL/plain text, unknown commands, and forwarded-ingress
+  command/non-command payloads).
 - **Rollback switch policy:** `MIGRATION_TELEGRAM_RUNTIME_BACKEND=python|rust`
   during rollout, defaulting to `python` in this scaffold stage.
 

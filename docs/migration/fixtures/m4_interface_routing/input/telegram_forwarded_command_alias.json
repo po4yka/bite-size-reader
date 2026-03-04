@@ -1,0 +1,7 @@
+{
+  "type": "telegram_command",
+  "payload": {
+    "text": "/findonline rust migration update",
+    "has_forward": true
+  }
+}
