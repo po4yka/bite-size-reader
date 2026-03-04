@@ -609,6 +609,12 @@ First implementation slice after inventory lock:
   bridge routing tests to keep non-handled passthrough semantics stable when
   slash-prefixed text is followed by a reverse-line-feed control character
   rather than a command token.
+- **Slash-single-shift-two command-shape parity hardening (M6-S112):**
+  slash-single-shift-two fixture `"/\u008Efindonline rust"` is now explicitly
+  covered in both `bsr-telegram-runtime` Rust command-route tests and Python
+  bridge routing tests to keep non-handled passthrough semantics stable when
+  slash-prefixed text is followed by a single-shift-two control character
+  rather than a command token.
 
 Out-of-scope for M6-S1 (defer to later slices):
 
