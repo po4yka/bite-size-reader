@@ -90,6 +90,52 @@ async def test_route_command_message_preserves_original_alias_with_bot_mention()
 
 
 @pytest.mark.asyncio
+async def test_route_command_message_preserves_legacy_alias_with_bot_mention() -> None:
+    router = _Router()
+    router.telegram_runtime_runner.resolve_command_route = AsyncMock(
+        return_value=TelegramRuntimeCommandDecision(command="/find", handled=True)
+    )
+
+    handled = await router._route_command_message(
+        message=SimpleNamespace(),
+        text="/findweb@mybot rust migration",
+        uid=18,
+        correlation_id="cid-18",
+        interaction_id=0,
+        start_time=0.0,
+    )
+
+    assert handled is True
+    router.command_processor.handle_find_online_command.assert_called_once()
+    call = router.command_processor.handle_find_online_command.call_args
+    assert call.args[1].startswith("/findweb@mybot ")
+    assert call.kwargs["command"] == "/findweb"
+
+
+@pytest.mark.asyncio
+async def test_route_command_message_preserves_canonical_find_with_bot_mention() -> None:
+    router = _Router()
+    router.telegram_runtime_runner.resolve_command_route = AsyncMock(
+        return_value=TelegramRuntimeCommandDecision(command="/find", handled=True)
+    )
+
+    handled = await router._route_command_message(
+        message=SimpleNamespace(),
+        text="/find@mybot rust migration",
+        uid=19,
+        correlation_id="cid-19",
+        interaction_id=0,
+        start_time=0.0,
+    )
+
+    assert handled is True
+    router.command_processor.handle_find_online_command.assert_called_once()
+    call = router.command_processor.handle_find_online_command.call_args
+    assert call.args[1].startswith("/find@mybot ")
+    assert call.kwargs["command"] == "/find"
+
+
+@pytest.mark.asyncio
 async def test_route_command_message_preserves_original_local_alias_for_handler_payload() -> None:
     router = _Router()
     router.telegram_runtime_runner.resolve_command_route = AsyncMock(

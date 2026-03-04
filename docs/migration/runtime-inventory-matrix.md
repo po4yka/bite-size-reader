@@ -84,6 +84,10 @@ First implementation slice after inventory lock:
   mention fixtures for `/start` and `/help` are covered in both
   `bsr-telegram-runtime` Rust tests and Python bridge routing tests to keep
   core command-route dispatch stable for bot-directed invocations.
+- **Bot-mention find-alias parity hardening (M6-S17):** explicit `@bot`
+  mention fixtures for `/findweb` and `/find` are covered in both
+  `bsr-telegram-runtime` Rust tests and Python bridge routing tests to keep
+  online-search alias dispatch stable for bot-directed invocations.
 
 Out-of-scope for M6-S1 (defer to later slices):
 
