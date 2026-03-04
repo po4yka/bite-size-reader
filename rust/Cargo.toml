@@ -5,6 +5,7 @@ members = [
   "crates/bsr-summary-contract",
   "crates/bsr-pipeline-shadow",
   "crates/bsr-interface-router",
+  "crates/bsr-telegram-runtime",
 ]
 resolver = "2"
 

@@ -66,6 +66,19 @@ MIGRATION_INTERFACE_BACKEND=rust
 # Legacy values (`canary`, `python`) are decommissioned for runtime execution.
 ```
 
+### M6-S1 Telegram Route-Decision Toggle
+
+M6-S1 introduces a scoped Telegram command route-decision canary:
+
+```bash
+# Default during scaffold rollout
+MIGRATION_TELEGRAM_RUNTIME_BACKEND=python
+
+# Canary mode
+# MIGRATION_TELEGRAM_RUNTIME_BACKEND=rust
+MIGRATION_TELEGRAM_RUNTIME_TIMEOUT_MS=150
+```
+
 ## Before You Start
 
 ### Backup First

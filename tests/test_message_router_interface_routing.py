@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from app.adapters.telegram.message_router_content import MessageRouterContentMixin
-from app.migration.interface_router import TelegramCommandDecision
+from app.migration.telegram_runtime import TelegramRuntimeCommandDecision
 
 
 class _Router(MessageRouterContentMixin):
@@ -37,6 +37,7 @@ class _Router(MessageRouterContentMixin):
 
         self.url_handler = MagicMock()
         self.url_handler.add_awaiting_user = AsyncMock()
+        self.telegram_runtime_runner = MagicMock()
         self.interface_router = MagicMock()
         self.response_formatter = MagicMock()
         self.user_repo = MagicMock()
@@ -46,8 +47,8 @@ class _Router(MessageRouterContentMixin):
 @pytest.mark.asyncio
 async def test_route_command_message_preserves_original_alias_for_handler_payload() -> None:
     router = _Router()
-    router.interface_router.resolve_telegram_command = AsyncMock(
-        return_value=TelegramCommandDecision(command="/find", handled=True)
+    router.telegram_runtime_runner.resolve_command_route = AsyncMock(
+        return_value=TelegramRuntimeCommandDecision(command="/find", handled=True)
     )
 
     handled = await router._route_command_message(

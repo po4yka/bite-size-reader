@@ -17,7 +17,7 @@ coverage, and rollback controls.
 | M2 summary contract shaping | `app/core/summary_contract.py`, `app/core/summary_contract_impl/rust_backend.py` | `rust/crates/bsr-summary-contract` (`bsr-summary-contract`) | `rust-authoritative` | `bash scripts/migration/run_m2_parity_suite.sh` | `SUMMARY_CONTRACT_BACKEND` (Rust required; non-rust values ignored) |
 | M3 pipeline transform slices | `app/migration/pipeline_shadow.py`, `app/adapters/content/url_processor.py`, `app/adapters/content/llm_summarizer.py` | `rust/crates/bsr-pipeline-shadow` (`bsr-pipeline-shadow`) | `rust-authoritative` | `bash scripts/migration/run_m3_parity_suite.sh` | `MIGRATION_SHADOW_MODE_ENABLED` (must stay `true`) |
 | M4 interface command/route selection | `app/migration/interface_router.py`, `app/api/middleware.py`, `app/adapters/telegram/message_router.py` | `rust/crates/bsr-interface-router` (`bsr-interface-router`) | `rust-authoritative` | `bash scripts/migration/run_m4_parity_suite.sh` | `MIGRATION_INTERFACE_BACKEND` (Rust required; non-rust values ignored) |
-| Telegram bot orchestration and command lifecycle | `bot.py`, `app/adapters/telegram/*`, `app/handlers/*` | `rust/crates/bsr-telegram-runtime` + `rust/bin/bsr-bot` | `python-owned` | Gap: add Telegram command behavior parity suite for Rust runner | Planned: `MIGRATION_TELEGRAM_RUNTIME_BACKEND` (`python`/`rust`) during rollout |
+| Telegram bot orchestration and command lifecycle | `bot.py`, `app/adapters/telegram/*`, `app/handlers/*` | `rust/crates/bsr-telegram-runtime` + `rust/bin/bsr-bot` | `python-owned` | M6-S1 scaffold delivered: command route-decision bridge + Rust command parity tests; ingress parity suite still pending | `MIGRATION_TELEGRAM_RUNTIME_BACKEND` (`python`/`rust`) during rollout |
 | URL/forward summarization orchestration (network + pipeline composition) | `app/adapters/content/url_processor.py`, `app/adapters/content/llm_summarizer.py`, `app/adapters/telegram/forward_processor.py` | `rust/crates/bsr-processing-orchestrator` + `rust/bin/bsr-worker` | `python-owned` | Gap: add end-to-end orchestration parity pack (URL + forwarded content) | Planned: `MIGRATION_PROCESSING_ORCHESTRATOR_BACKEND` |
 | Mobile API request execution and background processing | `app/api/main.py`, `app/api/routers/*`, `app/api/background_processor.py`, `app/api/services/*` | `rust/crates/bsr-mobile-api` + `rust/bin/bsr-api` | `python-owned` | Existing API tests are Python-runtime only; add cross-runtime response parity harness | Planned: `MIGRATION_API_RUNTIME_BACKEND` |
 | Persistence/service orchestration (SQLite access + write paths) | `app/db/*`, `app/infrastructure/persistence/*`, `app/services/*` | `rust/crates/bsr-persistence` | `python-owned` | M2 covers schema compatibility only; add CRUD parity against production snapshots | Planned: `MIGRATION_PERSISTENCE_BACKEND` |
@@ -31,7 +31,7 @@ coverage, and rollback controls.
 4. Persistence crate (`bsr-persistence`) once read/write parity tests are in place.
 5. MCP/gRPC interop gateway (`bsr-interop-gateway`) after core runtime cutover.
 
-## First Post-Inventory Runtime Slice (M6-S1, Planned)
+## First Post-Inventory Runtime Slice (M6-S1, Scaffold Implemented)
 
 First implementation slice after inventory lock:
 
@@ -43,12 +43,19 @@ First implementation slice after inventory lock:
   (decision-only path for this slice).
 - **Python integration point:** `bot.py` + `app/adapters/telegram/message_router.py`
   bridge to Rust decision output.
-- **Parity harness plan:** add Telegram command-routing fixtures for
-  `/start`, `/help`, `/summarize`, `/search`, `/digest`, URL text, forwarded
-  posts, and unsupported command variants.
-- **Rollback switch policy:** introduce
-  `MIGRATION_TELEGRAM_RUNTIME_BACKEND=python|rust` during rollout; default to
-  `python` until parity is proven in CI and local migration suites.
+- **Delivered scaffold artifacts:**
+  - `rust/crates/bsr-telegram-runtime` (`command-route` CLI + canonical
+    command mapping tests).
+  - `app/migration/telegram_runtime.py` runner bridge with Rust failure event
+    capture and Python fallback.
+  - Telegram command route-decision wiring in
+    `app/adapters/telegram/message_router.py` and
+    `app/adapters/telegram/message_router_content.py`.
+- **Parity harness status:** command route parity coverage now includes Rust
+  crate tests against existing M4 telegram-command fixtures; full ingress
+  fixtures (`URL text`, `forwarded posts`, unsupported payloads) remain pending.
+- **Rollback switch policy:** `MIGRATION_TELEGRAM_RUNTIME_BACKEND=python|rust`
+  during rollout, defaulting to `python` in this scaffold stage.
 
 Out-of-scope for M6-S1 (defer to later slices):
 

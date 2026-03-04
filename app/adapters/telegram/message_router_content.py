@@ -112,11 +112,19 @@ class MessageRouterContentMixin:
     ) -> bool:
         """Route command message. Returns True when command was handled."""
         route_probe = text
-        decision = await self.interface_router.resolve_telegram_command(
-            text=text,
-            correlation_id=correlation_id,
-            actor_key=str(uid),
-        )
+        runtime_runner = getattr(self, "telegram_runtime_runner", None)
+        if runtime_runner is not None:
+            decision = await runtime_runner.resolve_command_route(
+                text=text,
+                correlation_id=correlation_id,
+                actor_key=str(uid),
+            )
+        else:
+            decision = await self.interface_router.resolve_telegram_command(
+                text=text,
+                correlation_id=correlation_id,
+                actor_key=str(uid),
+            )
         if decision.handled and decision.command:
             route_probe = decision.command
 

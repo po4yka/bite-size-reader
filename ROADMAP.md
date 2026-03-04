@@ -135,10 +135,19 @@ This roadmap tracks the project-wide migration from the current Python runtime t
 - **Post-M5 planning artifact**
   - Runtime ownership matrix for remaining Python-owned surfaces:
     - `docs/migration/runtime-inventory-matrix.md`
-- **Post-M5 first implementation slice (planned)**
-  - M6-S1 Telegram command lifecycle decision scaffold (Rust route decisions,
+- **Post-M5 first implementation slice (M6-S1 scaffold implemented)**
+  - Telegram command lifecycle decision scaffold (Rust route decisions,
     Python handlers retained):
-    - `docs/migration/runtime-inventory-matrix.md` (First Post-Inventory Runtime Slice section)
+    - Rust scaffold crate: `rust/crates/bsr-telegram-runtime`
+    - Python bridge: `app/migration/telegram_runtime.py`
+    - Telegram route-decision wiring:
+      `app/adapters/telegram/message_router.py`,
+      `app/adapters/telegram/message_router_content.py`
+    - Runtime toggle/config docs:
+      `.env.example`, `docs/environment_variables.md`,
+      `docs/how-to/migrate-versions.md`
+    - Planning/status record:
+      `docs/migration/runtime-inventory-matrix.md`
 
 ## Cross-Cutting Workstreams
 

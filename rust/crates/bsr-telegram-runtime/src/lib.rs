@@ -1,0 +1,110 @@
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct TelegramCommandRouteInput {
+    pub text: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct TelegramCommandRouteDecision {
+    pub command: Option<String>,
+    pub handled: bool,
+}
+
+pub fn resolve_command_route(input: &TelegramCommandRouteInput) -> TelegramCommandRouteDecision {
+    let text = input.text.as_str();
+    if !text.starts_with('/') {
+        return TelegramCommandRouteDecision {
+            command: None,
+            handled: false,
+        };
+    }
+
+    let Some(token) = text.split_whitespace().next() else {
+        return TelegramCommandRouteDecision {
+            command: None,
+            handled: false,
+        };
+    };
+    let normalized = strip_bot_mention(token);
+
+    let canonical = match normalized.as_str() {
+        "/start" => Some("/start"),
+        "/help" => Some("/help"),
+        "/dbinfo" => Some("/dbinfo"),
+        "/dbverify" => Some("/dbverify"),
+        "/clearcache" => Some("/clearcache"),
+        "/finddb" | "/findlocal" => Some("/finddb"),
+        "/findweb" | "/findonline" | "/find" => Some("/find"),
+        "/summarize_all" => Some("/summarize_all"),
+        "/summarize" => Some("/summarize"),
+        "/cancel" => Some("/cancel"),
+        "/unread" => Some("/unread"),
+        "/read" => Some("/read"),
+        "/search" => Some("/search"),
+        "/sync_karakeep" => Some("/sync_karakeep"),
+        "/cdigest" => Some("/cdigest"),
+        "/digest" => Some("/digest"),
+        "/channels" => Some("/channels"),
+        "/subscribe" => Some("/subscribe"),
+        "/unsubscribe" => Some("/unsubscribe"),
+        "/init_session" => Some("/init_session"),
+        "/settings" => Some("/settings"),
+        "/debug" => Some("/debug"),
+        _ => None,
+    };
+
+    TelegramCommandRouteDecision {
+        command: canonical.map(str::to_string),
+        handled: canonical.is_some(),
+    }
+}
+
+fn strip_bot_mention(token: &str) -> String {
+    let Some(stripped) = token.strip_prefix('/') else {
+        return token.to_string();
+    };
+    let base = stripped.split('@').next().unwrap_or(stripped);
+    format!("/{base}")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn command_alias_is_normalized() {
+        let decision = resolve_command_route(&TelegramCommandRouteInput {
+            text: "/findonline rust".to_string(),
+        });
+        assert_eq!(decision.command, Some("/find".to_string()));
+        assert!(decision.handled);
+    }
+
+    #[test]
+    fn command_strips_bot_mention() {
+        let decision = resolve_command_route(&TelegramCommandRouteInput {
+            text: "/unread@mybot 10".to_string(),
+        });
+        assert_eq!(decision.command, Some("/unread".to_string()));
+        assert!(decision.handled);
+    }
+
+    #[test]
+    fn command_is_case_sensitive() {
+        let decision = resolve_command_route(&TelegramCommandRouteInput {
+            text: "/Findonline rust".to_string(),
+        });
+        assert_eq!(decision.command, None);
+        assert!(!decision.handled);
+    }
+
+    #[test]
+    fn command_requires_leading_slash_at_start() {
+        let decision = resolve_command_route(&TelegramCommandRouteInput {
+            text: " /findonline rust".to_string(),
+        });
+        assert_eq!(decision.command, None);
+        assert!(!decision.handled);
+    }
+}
