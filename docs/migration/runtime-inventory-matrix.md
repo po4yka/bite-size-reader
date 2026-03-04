@@ -31,6 +31,41 @@ coverage, and rollback controls.
 4. Persistence crate (`bsr-persistence`) once read/write parity tests are in place.
 5. MCP/gRPC interop gateway (`bsr-interop-gateway`) after core runtime cutover.
 
+## First Post-Inventory Runtime Slice (M6-S1, Planned)
+
+First implementation slice after inventory lock:
+
+- **Surface:** Telegram bot orchestration and command lifecycle.
+- **Slice objective:** Move Telegram ingress classification and command route
+  decisions to Rust while keeping downstream command handlers/persistence in
+  their current Python runtime paths.
+- **Rust target:** `rust/crates/bsr-telegram-runtime` + `rust/bin/bsr-bot`
+  (decision-only path for this slice).
+- **Python integration point:** `bot.py` + `app/adapters/telegram/message_router.py`
+  bridge to Rust decision output.
+- **Parity harness plan:** add Telegram command-routing fixtures for
+  `/start`, `/help`, `/summarize`, `/search`, `/digest`, URL text, forwarded
+  posts, and unsupported command variants.
+- **Rollback switch policy:** introduce
+  `MIGRATION_TELEGRAM_RUNTIME_BACKEND=python|rust` during rollout; default to
+  `python` until parity is proven in CI and local migration suites.
+
+Out-of-scope for M6-S1 (defer to later slices):
+
+- LLM orchestration migration.
+- SQLite persistence ownership migration.
+- Mobile API runtime execution migration.
+- MCP/gRPC server migration.
+
+Implementation acceptance gates for M6-S1:
+
+1. Telegram route decisions from Rust match frozen command semantics in
+   `docs/SPEC.md` fixtures.
+2. Existing observability/cutover events remain emitted on Rust decision
+   failures.
+3. Rollback to Python decision path requires only
+   `MIGRATION_TELEGRAM_RUNTIME_BACKEND=python` (no code revert).
+
 ## Verification Baseline Before and After Each Slice
 
 Run all required migration suites at each slice boundary:

@@ -135,6 +135,10 @@ This roadmap tracks the project-wide migration from the current Python runtime t
 - **Post-M5 planning artifact**
   - Runtime ownership matrix for remaining Python-owned surfaces:
     - `docs/migration/runtime-inventory-matrix.md`
+- **Post-M5 first implementation slice (planned)**
+  - M6-S1 Telegram command lifecycle decision scaffold (Rust route decisions,
+    Python handlers retained):
+    - `docs/migration/runtime-inventory-matrix.md` (First Post-Inventory Runtime Slice section)
 
 ## Cross-Cutting Workstreams
 
