@@ -379,6 +379,11 @@ First implementation slice after inventory lock:
   bridge routing tests to keep non-handled passthrough semantics stable when
   slash-prefixed text is followed by a carriage return rather than a command
   token.
+- **Slash-form-feed command-shape parity hardening (M6-S73):**
+  slash-form-feed fixture `"/\ffindonline rust"` is now explicitly covered in
+  both `bsr-telegram-runtime` Rust command-route tests and Python bridge
+  routing tests to keep non-handled passthrough semantics stable when
+  slash-prefixed text is followed by a form feed rather than a command token.
 
 Out-of-scope for M6-S1 (defer to later slices):
 

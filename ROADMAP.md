@@ -452,6 +452,14 @@ This roadmap tracks the project-wide migration from the current Python runtime t
       `rust/crates/bsr-telegram-runtime/src/lib.rs`,
       `tests/test_message_router_interface_routing.py`,
       `docs/migration/runtime-inventory-matrix.md`
+    - M6-S73 slash-form-feed command-shape parity hardening (slash-form-feed
+      fixture `"/\ffindonline rust"` is explicitly covered to preserve
+      non-handled passthrough semantics for command-shaped text where slash is
+      followed by a form feed instead of a command token across Rust route
+      decisions + Python bridge tests):
+      `rust/crates/bsr-telegram-runtime/src/lib.rs`,
+      `tests/test_message_router_interface_routing.py`,
+      `docs/migration/runtime-inventory-matrix.md`
 
 ## Cross-Cutting Workstreams
 
