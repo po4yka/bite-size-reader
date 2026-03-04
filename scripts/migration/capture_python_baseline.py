@@ -43,7 +43,7 @@ def main() -> int:
     command = ["bash", "scripts/migration/run_parity_suite.sh"]
 
     start = time.perf_counter()
-    proc = subprocess.run(command, cwd=repo_root)
+    proc = subprocess.run(command, cwd=repo_root, check=False)
     duration_s = time.perf_counter() - start
     usage = resource.getrusage(resource.RUSAGE_CHILDREN)
 
