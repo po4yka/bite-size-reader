@@ -234,6 +234,10 @@ This roadmap tracks the project-wide migration from the current Python runtime t
       `rust/crates/bsr-telegram-runtime/src/lib.rs`,
       `tests/test_message_router_interface_routing.py`,
       `docs/migration/runtime-inventory-matrix.md`
+    - M6-S23 bot-mention utility/admin parity hardening (explicit `@bot` coverage for `/sync_karakeep`, `/cdigest`, `/digest`, `/channels`, `/subscribe`, and `/unsubscribe` in Rust + bridge tests):
+      `rust/crates/bsr-telegram-runtime/src/lib.rs`,
+      `tests/test_message_router_interface_routing.py`,
+      `docs/migration/runtime-inventory-matrix.md`
 
 ## Cross-Cutting Workstreams
 

@@ -483,6 +483,148 @@ async def test_route_command_message_routes_read_with_bot_mention_and_preserves_
 
 
 @pytest.mark.asyncio
+async def test_route_command_message_routes_sync_karakeep_with_bot_mention_and_preserves_text() -> (
+    None
+):
+    router = _Router()
+    router.telegram_runtime_runner.resolve_command_route = AsyncMock(
+        return_value=TelegramRuntimeCommandDecision(command="/sync_karakeep", handled=True)
+    )
+
+    handled = await router._route_command_message(
+        message=SimpleNamespace(),
+        text="/sync_karakeep@mybot",
+        uid=29,
+        correlation_id="cid-29",
+        interaction_id=0,
+        start_time=0.0,
+    )
+
+    assert handled is True
+    router.command_processor.handle_sync_karakeep_command.assert_awaited_once()
+    call = router.command_processor.handle_sync_karakeep_command.call_args
+    assert call.args[1] == "/sync_karakeep@mybot"
+    assert call.args[2:] == (29, "cid-29", 0, 0.0)
+
+
+@pytest.mark.asyncio
+async def test_route_command_message_routes_cdigest_with_bot_mention_and_preserves_text() -> None:
+    router = _Router()
+    router.telegram_runtime_runner.resolve_command_route = AsyncMock(
+        return_value=TelegramRuntimeCommandDecision(command="/cdigest", handled=True)
+    )
+
+    handled = await router._route_command_message(
+        message=SimpleNamespace(),
+        text="/cdigest@mybot",
+        uid=30,
+        correlation_id="cid-30",
+        interaction_id=0,
+        start_time=0.0,
+    )
+
+    assert handled is True
+    router.command_processor.handle_cdigest_command.assert_awaited_once()
+    call = router.command_processor.handle_cdigest_command.call_args
+    assert call.args[1] == "/cdigest@mybot"
+    assert call.args[2:] == (30, "cid-30", 0, 0.0)
+
+
+@pytest.mark.asyncio
+async def test_route_command_message_routes_digest_with_bot_mention_and_preserves_text() -> None:
+    router = _Router()
+    router.telegram_runtime_runner.resolve_command_route = AsyncMock(
+        return_value=TelegramRuntimeCommandDecision(command="/digest", handled=True)
+    )
+
+    handled = await router._route_command_message(
+        message=SimpleNamespace(),
+        text="/digest@mybot",
+        uid=31,
+        correlation_id="cid-31",
+        interaction_id=0,
+        start_time=0.0,
+    )
+
+    assert handled is True
+    router.command_processor.handle_digest_command.assert_awaited_once()
+    call = router.command_processor.handle_digest_command.call_args
+    assert call.args[1] == "/digest@mybot"
+    assert call.args[2:] == (31, "cid-31", 0, 0.0)
+
+
+@pytest.mark.asyncio
+async def test_route_command_message_routes_channels_with_bot_mention_and_preserves_text() -> None:
+    router = _Router()
+    router.telegram_runtime_runner.resolve_command_route = AsyncMock(
+        return_value=TelegramRuntimeCommandDecision(command="/channels", handled=True)
+    )
+
+    handled = await router._route_command_message(
+        message=SimpleNamespace(),
+        text="/channels@mybot",
+        uid=32,
+        correlation_id="cid-32",
+        interaction_id=0,
+        start_time=0.0,
+    )
+
+    assert handled is True
+    router.command_processor.handle_channels_command.assert_awaited_once()
+    call = router.command_processor.handle_channels_command.call_args
+    assert call.args[1] == "/channels@mybot"
+    assert call.args[2:] == (32, "cid-32", 0, 0.0)
+
+
+@pytest.mark.asyncio
+async def test_route_command_message_routes_subscribe_with_bot_mention_and_preserves_text() -> None:
+    router = _Router()
+    router.telegram_runtime_runner.resolve_command_route = AsyncMock(
+        return_value=TelegramRuntimeCommandDecision(command="/subscribe", handled=True)
+    )
+
+    handled = await router._route_command_message(
+        message=SimpleNamespace(),
+        text="/subscribe@mybot",
+        uid=33,
+        correlation_id="cid-33",
+        interaction_id=0,
+        start_time=0.0,
+    )
+
+    assert handled is True
+    router.command_processor.handle_subscribe_command.assert_awaited_once()
+    call = router.command_processor.handle_subscribe_command.call_args
+    assert call.args[1] == "/subscribe@mybot"
+    assert call.args[2:] == (33, "cid-33", 0, 0.0)
+
+
+@pytest.mark.asyncio
+async def test_route_command_message_routes_unsubscribe_with_bot_mention_and_preserves_text() -> (
+    None
+):
+    router = _Router()
+    router.telegram_runtime_runner.resolve_command_route = AsyncMock(
+        return_value=TelegramRuntimeCommandDecision(command="/unsubscribe", handled=True)
+    )
+
+    handled = await router._route_command_message(
+        message=SimpleNamespace(),
+        text="/unsubscribe@mybot",
+        uid=34,
+        correlation_id="cid-34",
+        interaction_id=0,
+        start_time=0.0,
+    )
+
+    assert handled is True
+    router.command_processor.handle_unsubscribe_command.assert_awaited_once()
+    call = router.command_processor.handle_unsubscribe_command.call_args
+    assert call.args[1] == "/unsubscribe@mybot"
+    assert call.args[2:] == (34, "cid-34", 0, 0.0)
+
+
+@pytest.mark.asyncio
 async def test_route_command_message_routes_init_session_with_bot_mention_and_preserves_text() -> (
     None
 ):

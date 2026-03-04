@@ -226,6 +226,60 @@ mod tests {
     }
 
     #[test]
+    fn sync_karakeep_command_with_bot_mention_is_normalized() {
+        let decision = resolve_command_route(&TelegramCommandRouteInput {
+            text: "/sync_karakeep@mybot".to_string(),
+        });
+        assert_eq!(decision.command, Some("/sync_karakeep".to_string()));
+        assert!(decision.handled);
+    }
+
+    #[test]
+    fn cdigest_command_with_bot_mention_is_normalized() {
+        let decision = resolve_command_route(&TelegramCommandRouteInput {
+            text: "/cdigest@mybot".to_string(),
+        });
+        assert_eq!(decision.command, Some("/cdigest".to_string()));
+        assert!(decision.handled);
+    }
+
+    #[test]
+    fn digest_command_with_bot_mention_is_normalized() {
+        let decision = resolve_command_route(&TelegramCommandRouteInput {
+            text: "/digest@mybot".to_string(),
+        });
+        assert_eq!(decision.command, Some("/digest".to_string()));
+        assert!(decision.handled);
+    }
+
+    #[test]
+    fn channels_command_with_bot_mention_is_normalized() {
+        let decision = resolve_command_route(&TelegramCommandRouteInput {
+            text: "/channels@mybot".to_string(),
+        });
+        assert_eq!(decision.command, Some("/channels".to_string()));
+        assert!(decision.handled);
+    }
+
+    #[test]
+    fn subscribe_command_with_bot_mention_is_normalized() {
+        let decision = resolve_command_route(&TelegramCommandRouteInput {
+            text: "/subscribe@mybot".to_string(),
+        });
+        assert_eq!(decision.command, Some("/subscribe".to_string()));
+        assert!(decision.handled);
+    }
+
+    #[test]
+    fn unsubscribe_command_with_bot_mention_is_normalized() {
+        let decision = resolve_command_route(&TelegramCommandRouteInput {
+            text: "/unsubscribe@mybot".to_string(),
+        });
+        assert_eq!(decision.command, Some("/unsubscribe".to_string()));
+        assert!(decision.handled);
+    }
+
+    #[test]
     fn init_session_command_with_bot_mention_is_normalized() {
         let decision = resolve_command_route(&TelegramCommandRouteInput {
             text: "/init_session@mybot".to_string(),

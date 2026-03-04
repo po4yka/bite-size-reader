@@ -109,6 +109,11 @@ First implementation slice after inventory lock:
   covered in both `bsr-telegram-runtime` Rust tests and Python bridge routing
   tests to keep session/diagnostic command-route dispatch stable for
   bot-directed invocations.
+- **Bot-mention utility/admin parity hardening (M6-S23):** explicit `@bot`
+  mention fixtures for `/sync_karakeep`, `/cdigest`, `/digest`, `/channels`,
+  `/subscribe`, and `/unsubscribe` are covered in both
+  `bsr-telegram-runtime` Rust tests and Python bridge routing tests to keep
+  utility/admin command-route dispatch stable for bot-directed invocations.
 
 Out-of-scope for M6-S1 (defer to later slices):
 
