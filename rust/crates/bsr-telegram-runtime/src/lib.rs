@@ -719,4 +719,13 @@ mod tests {
         assert_eq!(decision.command, None);
         assert!(!decision.handled);
     }
+
+    #[test]
+    fn slash_tab_command_like_text_is_not_handled() {
+        let decision = resolve_command_route(&TelegramCommandRouteInput {
+            text: "/\tfindonline rust".to_string(),
+        });
+        assert_eq!(decision.command, None);
+        assert!(!decision.handled);
+    }
 }
