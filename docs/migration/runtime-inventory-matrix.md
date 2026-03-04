@@ -80,6 +80,10 @@ First implementation slice after inventory lock:
   `@bot` mention fixture with trailing arguments for `/search` is covered in
   both `bsr-telegram-runtime` Rust tests and Python bridge routing tests to
   keep text-command payload semantics stable for argument-bearing commands.
+- **Bot-mention core-command parity hardening (M6-S16):** explicit `@bot`
+  mention fixtures for `/start` and `/help` are covered in both
+  `bsr-telegram-runtime` Rust tests and Python bridge routing tests to keep
+  core command-route dispatch stable for bot-directed invocations.
 
 Out-of-scope for M6-S1 (defer to later slices):
 

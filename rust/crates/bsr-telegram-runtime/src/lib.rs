@@ -127,6 +127,24 @@ mod tests {
     }
 
     #[test]
+    fn start_command_with_bot_mention_is_normalized() {
+        let decision = resolve_command_route(&TelegramCommandRouteInput {
+            text: "/start@mybot".to_string(),
+        });
+        assert_eq!(decision.command, Some("/start".to_string()));
+        assert!(decision.handled);
+    }
+
+    #[test]
+    fn help_command_with_bot_mention_is_normalized() {
+        let decision = resolve_command_route(&TelegramCommandRouteInput {
+            text: "/help@mybot".to_string(),
+        });
+        assert_eq!(decision.command, Some("/help".to_string()));
+        assert!(decision.handled);
+    }
+
+    #[test]
     fn command_strips_bot_mention() {
         let decision = resolve_command_route(&TelegramCommandRouteInput {
             text: "/unread@mybot 10".to_string(),

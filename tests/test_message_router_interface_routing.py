@@ -210,6 +210,50 @@ async def test_route_command_message_routes_cancel_with_bot_mention() -> None:
 
 
 @pytest.mark.asyncio
+async def test_route_command_message_routes_start_with_bot_mention() -> None:
+    router = _Router()
+    router.telegram_runtime_runner.resolve_command_route = AsyncMock(
+        return_value=TelegramRuntimeCommandDecision(command="/start", handled=True)
+    )
+
+    handled = await router._route_command_message(
+        message=SimpleNamespace(),
+        text="/start@mybot",
+        uid=16,
+        correlation_id="cid-16",
+        interaction_id=0,
+        start_time=0.0,
+    )
+
+    assert handled is True
+    router.command_processor.handle_start_command.assert_awaited_once()
+    call = router.command_processor.handle_start_command.call_args
+    assert call.args[1:] == (16, "cid-16", 0, 0.0)
+
+
+@pytest.mark.asyncio
+async def test_route_command_message_routes_help_with_bot_mention() -> None:
+    router = _Router()
+    router.telegram_runtime_runner.resolve_command_route = AsyncMock(
+        return_value=TelegramRuntimeCommandDecision(command="/help", handled=True)
+    )
+
+    handled = await router._route_command_message(
+        message=SimpleNamespace(),
+        text="/help@mybot",
+        uid=17,
+        correlation_id="cid-17",
+        interaction_id=0,
+        start_time=0.0,
+    )
+
+    assert handled is True
+    router.command_processor.handle_help_command.assert_awaited_once()
+    call = router.command_processor.handle_help_command.call_args
+    assert call.args[1:] == (17, "cid-17", 0, 0.0)
+
+
+@pytest.mark.asyncio
 async def test_route_command_message_routes_search_with_bot_mention_and_preserves_text() -> None:
     router = _Router()
     router.telegram_runtime_runner.resolve_command_route = AsyncMock(
