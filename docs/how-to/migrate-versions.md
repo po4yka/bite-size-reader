@@ -71,10 +71,8 @@ MIGRATION_INTERFACE_BACKEND=rust
 M6 Telegram command route decisions are now Rust-authoritative:
 
 ```bash
-# Required
-MIGRATION_TELEGRAM_RUNTIME_BACKEND=rust
-
-# Legacy value (`python`) is decommissioned for runtime execution.
+# Command-route backend is fixed to Rust.
+# Legacy MIGRATION_TELEGRAM_RUNTIME_BACKEND values are ignored.
 MIGRATION_TELEGRAM_RUNTIME_TIMEOUT_MS=150
 ```
 

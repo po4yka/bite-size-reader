@@ -10,7 +10,6 @@ from app.migration.telegram_runtime import TelegramRuntimeRunner
 
 def _runtime_cfg(**overrides: object) -> SimpleNamespace:
     defaults: dict[str, object] = {
-        "migration_telegram_runtime_backend": "rust",
         "migration_telegram_runtime_timeout_ms": 150,
     }
     defaults.update(overrides)
@@ -31,7 +30,7 @@ async def test_runner_defaults_to_rust_backend_when_not_configured() -> None:
 
 @pytest.mark.asyncio
 async def test_rust_backend_uses_rust_runtime_command() -> None:
-    runner = TelegramRuntimeRunner(_runtime_cfg(migration_telegram_runtime_backend="rust"))
+    runner = TelegramRuntimeRunner(_runtime_cfg())
     with patch(
         "app.migration.telegram_runtime.run_rust_telegram_runtime_command",
         return_value={"command": "/find", "handled": True},
@@ -44,7 +43,7 @@ async def test_rust_backend_uses_rust_runtime_command() -> None:
 
 @pytest.mark.asyncio
 async def test_rust_backend_raises_on_failure_without_python_fallback_and_records_event() -> None:
-    runner = TelegramRuntimeRunner(_runtime_cfg(migration_telegram_runtime_backend="rust"))
+    runner = TelegramRuntimeRunner(_runtime_cfg())
     with (
         patch(
             "app.migration.telegram_runtime.run_rust_telegram_runtime_command",
@@ -61,7 +60,15 @@ async def test_rust_backend_raises_on_failure_without_python_fallback_and_record
 
 
 @pytest.mark.asyncio
-async def test_invalid_backend_value_is_rejected() -> None:
-    runner = TelegramRuntimeRunner(_runtime_cfg(migration_telegram_runtime_backend="python"))
-    with pytest.raises(ValueError, match="must be 'rust'"):
-        await runner.resolve_command_route(text="/start")
+async def test_legacy_backend_toggle_is_ignored_with_warning() -> None:
+    with patch("app.migration.telegram_runtime.logger.warning") as warn_call:
+        runner = TelegramRuntimeRunner(_runtime_cfg(migration_telegram_runtime_backend="python"))
+
+    warn_call.assert_called_once()
+    with patch(
+        "app.migration.telegram_runtime.run_rust_telegram_runtime_command",
+        return_value={"command": "/start", "handled": True},
+    ):
+        decision = await runner.resolve_command_route(text="/start")
+    assert decision.command == "/start"
+    assert decision.handled is True

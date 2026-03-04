@@ -64,9 +64,6 @@ class RuntimeConfig(BaseModel):
     migration_interface_max_diffs: int = Field(
         default=8, validation_alias="MIGRATION_INTERFACE_MAX_DIFFS"
     )
-    migration_telegram_runtime_backend: str = Field(
-        default="rust", validation_alias="MIGRATION_TELEGRAM_RUNTIME_BACKEND"
-    )
     migration_telegram_runtime_timeout_ms: int = Field(
         default=150, validation_alias="MIGRATION_TELEGRAM_RUNTIME_TIMEOUT_MS"
     )
@@ -323,18 +320,6 @@ class RuntimeConfig(BaseModel):
             msg = "Migration interface timeout must be between 25 and 10000 milliseconds"
             raise ValueError(msg)
         return parsed
-
-    @field_validator("migration_telegram_runtime_backend", mode="before")
-    @classmethod
-    def _validate_migration_telegram_runtime_backend(cls, value: Any) -> str:
-        backend = str(value or "rust").strip().lower()
-        if backend != "rust":
-            msg = (
-                "Migration telegram runtime backend fallback modes are decommissioned; "
-                "MIGRATION_TELEGRAM_RUNTIME_BACKEND must be 'rust'"
-            )
-            raise ValueError(msg)
-        return backend
 
     @field_validator("migration_telegram_runtime_timeout_ms", mode="before")
     @classmethod

@@ -98,7 +98,6 @@ def run_rust_telegram_runtime_command(
 
 @dataclass(frozen=True)
 class TelegramRuntimeOptions:
-    backend: str = "rust"
     timeout_ms: int = 150
 
 
@@ -106,27 +105,15 @@ class TelegramRuntimeRunner:
     """M6 command route-decision runner (Rust authoritative, fail-closed)."""
 
     def __init__(self, runtime_cfg: Any) -> None:
+        legacy_backend = getattr(runtime_cfg, "migration_telegram_runtime_backend", None)
+        if legacy_backend not in (None, ""):
+            logger.warning(
+                "m6_telegram_runtime_legacy_backend_toggle_ignored",
+                extra={"requested_backend": str(legacy_backend).strip().lower()},
+            )
         self.options = TelegramRuntimeOptions(
-            backend=str(getattr(runtime_cfg, "migration_telegram_runtime_backend", "rust"))
-            .strip()
-            .lower(),
             timeout_ms=int(getattr(runtime_cfg, "migration_telegram_runtime_timeout_ms", 150)),
         )
-
-    def _normalized_backend(self) -> str:
-        backend = self.options.backend
-        if backend == "rust":
-            return backend
-
-        logger.error(
-            "m6_telegram_runtime_invalid_backend",
-            extra={"requested_backend": backend},
-        )
-        msg = (
-            "Migration telegram runtime backend fallback modes are decommissioned; "
-            "MIGRATION_TELEGRAM_RUNTIME_BACKEND must be 'rust'"
-        )
-        raise ValueError(msg)
 
     async def resolve_command_route(
         self,
@@ -135,7 +122,6 @@ class TelegramRuntimeRunner:
         correlation_id: str | None = None,
         actor_key: str | None = None,
     ) -> TelegramRuntimeCommandDecision:
-        backend = self._normalized_backend()
         _ = actor_key
 
         try:
@@ -160,7 +146,7 @@ class TelegramRuntimeRunner:
                 surface="telegram_runtime_command_route",
                 reason="rust_backend_failed",
                 correlation_id=correlation_id,
-                metadata={"backend": backend},
+                metadata={"backend": "rust"},
             )
             msg = (
                 "Rust telegram runtime command-route failed; "

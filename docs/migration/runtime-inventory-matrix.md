@@ -17,7 +17,7 @@ coverage, and rollback controls.
 | M2 summary contract shaping | `app/core/summary_contract.py`, `app/core/summary_contract_impl/rust_backend.py` | `rust/crates/bsr-summary-contract` (`bsr-summary-contract`) | `rust-authoritative` | `bash scripts/migration/run_m2_parity_suite.sh` | `SUMMARY_CONTRACT_BACKEND` (Rust required; non-rust values ignored) |
 | M3 pipeline transform slices | `app/migration/pipeline_shadow.py`, `app/adapters/content/url_processor.py`, `app/adapters/content/llm_summarizer.py` | `rust/crates/bsr-pipeline-shadow` (`bsr-pipeline-shadow`) | `rust-authoritative` | `bash scripts/migration/run_m3_parity_suite.sh` | `MIGRATION_SHADOW_MODE_ENABLED` (must stay `true`) |
 | M4 interface command/route selection | `app/migration/interface_router.py`, `app/api/middleware.py` | `rust/crates/bsr-interface-router` (`bsr-interface-router`) | `rust-authoritative` | `bash scripts/migration/run_m4_parity_suite.sh` | `MIGRATION_INTERFACE_BACKEND` (Rust required; non-rust values ignored) |
-| Telegram bot orchestration and command lifecycle | `bot.py`, `app/adapters/telegram/*`, `app/handlers/*` | `rust/crates/bsr-telegram-runtime` + `rust/bin/bsr-bot` | `python-owned` | `bash scripts/migration/run_m6_telegram_runtime_suite.sh` (Rust command parity + Python bridge checks) | `MIGRATION_TELEGRAM_RUNTIME_BACKEND` (Rust required; non-rust values rejected) |
+| Telegram bot orchestration and command lifecycle | `bot.py`, `app/adapters/telegram/*`, `app/handlers/*` | `rust/crates/bsr-telegram-runtime` + `rust/bin/bsr-bot` | `python-owned` | `bash scripts/migration/run_m6_telegram_runtime_suite.sh` (Rust command parity + Python bridge checks) | `MIGRATION_TELEGRAM_RUNTIME_TIMEOUT_MS` (backend fixed to Rust; legacy backend toggle ignored) |
 | URL/forward summarization orchestration (network + pipeline composition) | `app/adapters/content/url_processor.py`, `app/adapters/content/llm_summarizer.py`, `app/adapters/telegram/forward_processor.py` | `rust/crates/bsr-processing-orchestrator` + `rust/bin/bsr-worker` | `python-owned` | Gap: add end-to-end orchestration parity pack (URL + forwarded content) | Planned: `MIGRATION_PROCESSING_ORCHESTRATOR_BACKEND` |
 | Mobile API request execution and background processing | `app/api/main.py`, `app/api/routers/*`, `app/api/background_processor.py`, `app/api/services/*` | `rust/crates/bsr-mobile-api` + `rust/bin/bsr-api` | `python-owned` | Existing API tests are Python-runtime only; add cross-runtime response parity harness | Planned: `MIGRATION_API_RUNTIME_BACKEND` |
 | Persistence/service orchestration (SQLite access + write paths) | `app/db/*`, `app/infrastructure/persistence/*`, `app/services/*` | `rust/crates/bsr-persistence` | `python-owned` | M2 covers schema compatibility only; add CRUD parity against production snapshots | Planned: `MIGRATION_PERSISTENCE_BACKEND` |
@@ -55,9 +55,9 @@ First implementation slice after inventory lock:
   crate tests against expanded M4 telegram-command fixtures (aliases,
   non-command URL/plain text, unknown commands, and forwarded-ingress
   command/non-command payloads).
-- **Rollback switch policy:** `MIGRATION_TELEGRAM_RUNTIME_BACKEND` is Rust-only.
-  Non-rust backend values are rejected (no implicit or explicit Python
-  fallback path).
+- **Rollback switch policy:** command-route backend is fixed to Rust.
+  Legacy `MIGRATION_TELEGRAM_RUNTIME_BACKEND` values are ignored (no
+  implicit or explicit Python fallback path).
 - **Routing ownership hardening:** `MessageRouterContentMixin` now requires
   `telegram_runtime_runner`; legacy command fallback through
   `interface_router` is decommissioned.
@@ -78,8 +78,8 @@ Implementation acceptance gates for M6-S1:
    `docs/SPEC.md` fixtures.
 2. Existing observability/cutover events remain emitted on Rust decision
    failures.
-3. Non-rust decision backend values are rejected at config/runtime validation
-   (`MIGRATION_TELEGRAM_RUNTIME_BACKEND` must be `rust`).
+3. Runtime execution remains Rust-only even if legacy backend toggles are set
+   (`MIGRATION_TELEGRAM_RUNTIME_BACKEND` is ignored when present).
 
 ## Verification Baseline Before and After Each Slice
 

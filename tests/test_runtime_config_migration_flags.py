@@ -16,21 +16,16 @@ def test_m3_shadow_mode_disallows_disabled_value() -> None:
         RuntimeConfig(migration_shadow_mode_enabled=False)
 
 
-def test_m6_telegram_runtime_backend_defaults_to_rust() -> None:
+def test_m6_telegram_runtime_timeout_defaults_to_expected_value() -> None:
     cfg = RuntimeConfig()
-    assert cfg.migration_telegram_runtime_backend == "rust"
+    assert cfg.migration_telegram_runtime_timeout_ms == 150
 
 
-def test_m6_telegram_runtime_backend_accepts_rust() -> None:
-    cfg = RuntimeConfig(migration_telegram_runtime_backend="rust")
-    assert cfg.migration_telegram_runtime_backend == "rust"
+def test_m6_telegram_runtime_timeout_accepts_valid_value() -> None:
+    cfg = RuntimeConfig(migration_telegram_runtime_timeout_ms=200)
+    assert cfg.migration_telegram_runtime_timeout_ms == 200
 
 
-def test_m6_telegram_runtime_backend_rejects_python_value() -> None:
-    with pytest.raises(ValidationError, match="must be 'rust'"):
-        RuntimeConfig(migration_telegram_runtime_backend="python")
-
-
-def test_m6_telegram_runtime_backend_rejects_unknown_value() -> None:
-    with pytest.raises(ValidationError, match="must be 'rust'"):
-        RuntimeConfig(migration_telegram_runtime_backend="canary")
+def test_m6_telegram_runtime_legacy_backend_toggle_is_ignored() -> None:
+    cfg = RuntimeConfig(migration_telegram_runtime_backend="python")
+    assert "migration_telegram_runtime_backend" not in cfg.model_dump()

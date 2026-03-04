@@ -176,6 +176,13 @@ This roadmap tracks the project-wide migration from the current Python runtime t
       `app/adapters/telegram/message_router.py`,
       `tests/test_message_router_interface_routing.py`,
       `docs/migration/runtime-inventory-matrix.md`
+    - M6-S9 backend-toggle decommission cleanup (remove redundant Telegram backend config field):
+      `app/config/runtime.py`, `app/migration/telegram_runtime.py`,
+      `tests/test_runtime_config_migration_flags.py`,
+      `tests/test_telegram_runtime_runner.py`,
+      `.env.example`, `docs/environment_variables.md`,
+      `docs/how-to/migrate-versions.md`,
+      `docs/migration/runtime-inventory-matrix.md`
 
 ## Cross-Cutting Workstreams
 
