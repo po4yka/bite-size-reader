@@ -72,7 +72,8 @@ You want to track or contribute to the migration from Python to Rust.
 6. [M3 Implementation Notes](migration/m3.md) - Pipeline runtime bridge with Rust-authoritative execution and parity path
 7. [M4 Implementation Notes](migration/m4.md) - Mobile API + Telegram interface routing migration and decommission notes
 8. [M5 Implementation Notes](migration/m5.md) - Rust-first cutover defaults and fallback decommission for migrated slices
-9. [Baseline Metrics Guide](migration/baseline-metrics.md) - How to capture and compare Python baseline runs
+9. [Runtime Inventory Matrix](migration/runtime-inventory-matrix.md) - Current Python/Rust ownership map for remaining runtime surfaces
+10. [Baseline Metrics Guide](migration/baseline-metrics.md) - How to capture and compare Python baseline runs
 
 ### 🤝 I'm a Contributor
 

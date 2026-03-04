@@ -132,6 +132,9 @@ This roadmap tracks the project-wide migration from the current Python runtime t
   - M5 suite runner: `scripts/migration/run_m5_cutover_suite.sh` (`make m5-cutover-suite`)
   - CI job: `m5-cutover-suite` in `.github/workflows/ci.yml`
   - Detailed notes: `docs/migration/m5.md`
+- **Post-M5 planning artifact**
+  - Runtime ownership matrix for remaining Python-owned surfaces:
+    - `docs/migration/runtime-inventory-matrix.md`
 
 ## Cross-Cutting Workstreams
 
