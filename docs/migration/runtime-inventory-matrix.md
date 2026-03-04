@@ -700,6 +700,12 @@ First implementation slice after inventory lock:
   bridge routing tests to keep non-handled passthrough semantics stable when
   slash-prefixed text is followed by a string-terminator control character
   rather than a command token.
+- **Slash-operating-system-command command-shape parity hardening (M6-S127):**
+  slash-operating-system-command fixture `"/\u009Dfindonline rust"` is now
+  explicitly covered in both `bsr-telegram-runtime` Rust command-route tests
+  and Python bridge routing tests to keep non-handled passthrough semantics
+  stable when slash-prefixed text is followed by an
+  operating-system-command control character rather than a command token.
 
 Out-of-scope for M6-S1 (defer to later slices):
 
