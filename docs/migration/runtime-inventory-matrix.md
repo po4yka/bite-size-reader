@@ -348,6 +348,11 @@ First implementation slice after inventory lock:
   explicitly covered across existing `bsr-telegram-runtime` slash-at-start Rust
   command-route tests and Python bridge routing tests to keep non-handled
   passthrough semantics stable when slash-prefixed tokens are not at offset 0.
+- **No-leading-slash command-shape parity hardening (M6-S67):**
+  command-like fixture without a leading slash `"findonline rust"` is now
+  explicitly covered across existing `bsr-telegram-runtime` slash-at-start Rust
+  command-route tests and Python bridge routing tests to keep non-handled
+  passthrough semantics stable when text does not begin with `/`.
 
 Out-of-scope for M6-S1 (defer to later slices):
 
