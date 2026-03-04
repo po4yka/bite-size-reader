@@ -715,6 +715,15 @@ This roadmap tracks the project-wide migration from the current Python runtime t
       `rust/crates/bsr-telegram-runtime/src/lib.rs`,
       `tests/test_message_router_interface_routing.py`,
       `docs/migration/runtime-inventory-matrix.md`
+    - M6-S104 slash-start-of-selected-area command-shape parity hardening
+      (slash-start-of-selected-area fixture `"/\u0086findonline rust"` is
+      explicitly covered to preserve non-handled passthrough semantics for
+      command-shaped text where slash is followed by a start-of-selected-area
+      control character instead of a command token across Rust route decisions
+      and Python bridge tests):
+      `rust/crates/bsr-telegram-runtime/src/lib.rs`,
+      `tests/test_message_router_interface_routing.py`,
+      `docs/migration/runtime-inventory-matrix.md`
 
 ## Cross-Cutting Workstreams
 

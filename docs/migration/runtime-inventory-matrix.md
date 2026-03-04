@@ -560,6 +560,12 @@ First implementation slice after inventory lock:
   routing tests to keep non-handled passthrough semantics stable when
   slash-prefixed text is followed by an index control character rather than a
   command token.
+- **Slash-start-of-selected-area command-shape parity hardening (M6-S104):**
+  slash-start-of-selected-area fixture `"/\u0086findonline rust"` is now
+  explicitly covered in both `bsr-telegram-runtime` Rust command-route tests
+  and Python bridge routing tests to keep non-handled passthrough semantics
+  stable when slash-prefixed text is followed by a start-of-selected-area
+  control character rather than a command token.
 
 Out-of-scope for M6-S1 (defer to later slices):
 
