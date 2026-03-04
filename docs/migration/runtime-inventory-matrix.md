@@ -712,6 +712,12 @@ First implementation slice after inventory lock:
   bridge routing tests to keep non-handled passthrough semantics stable when
   slash-prefixed text is followed by a privacy-message control character rather
   than a command token.
+- **Slash-application-program-command command-shape parity hardening (M6-S129):**
+  slash-application-program-command fixture `"/\u009Ffindonline rust"` is now
+  explicitly covered in both `bsr-telegram-runtime` Rust command-route tests
+  and Python bridge routing tests to keep non-handled passthrough semantics
+  stable when slash-prefixed text is followed by an
+  application-program-command control character rather than a command token.
 
 Out-of-scope for M6-S1 (defer to later slices):
 
