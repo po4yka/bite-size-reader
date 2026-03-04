@@ -38,7 +38,6 @@ class _Router(MessageRouterContentMixin):
         self.url_handler = MagicMock()
         self.url_handler.add_awaiting_user = AsyncMock()
         self.telegram_runtime_runner = MagicMock()
-        self.interface_router = MagicMock()
         self.response_formatter = MagicMock()
         self.user_repo = MagicMock()
         self._lang = "en"
@@ -70,7 +69,6 @@ async def test_route_command_message_preserves_original_alias_for_handler_payloa
 @pytest.mark.asyncio
 async def test_route_command_message_requires_telegram_runtime_runner() -> None:
     router = _Router()
-    router.interface_router.resolve_telegram_command = AsyncMock()
     delattr(router, "telegram_runtime_runner")
 
     with pytest.raises(RuntimeError, match="fallback is decommissioned"):
@@ -82,5 +80,3 @@ async def test_route_command_message_requires_telegram_runtime_runner() -> None:
             interaction_id=0,
             start_time=0.0,
         )
-
-    router.interface_router.resolve_telegram_command.assert_not_called()

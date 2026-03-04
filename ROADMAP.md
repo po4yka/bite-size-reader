@@ -112,7 +112,6 @@ This roadmap tracks the project-wide migration from the current Python runtime t
   - Python interface router integration bridge: `app/migration/interface_router.py`
   - Runtime hooks for interface routing:
     - Mobile API middleware: `app/api/middleware.py`
-    - Telegram command routing: `app/adapters/telegram/message_router.py`, `app/adapters/telegram/message_router_content.py`
   - Fixture corpus: `docs/migration/fixtures/m4_interface_routing/`
   - Fixture generator/check: `scripts/migration/generate_m4_interface_fixtures.py`
   - M4 suite runner: `scripts/migration/run_m4_parity_suite.sh` (`make m4-parity-suite`)
@@ -171,6 +170,10 @@ This roadmap tracks the project-wide migration from the current Python runtime t
       `docs/migration/runtime-inventory-matrix.md`
     - M6-S7 message-router hardening (legacy interface-router command fallback removed):
       `app/adapters/telegram/message_router_content.py`,
+      `tests/test_message_router_interface_routing.py`,
+      `docs/migration/runtime-inventory-matrix.md`
+    - M6-S8 wiring cleanup hardening (remove stale Telegram interface-router runner construction):
+      `app/adapters/telegram/message_router.py`,
       `tests/test_message_router_interface_routing.py`,
       `docs/migration/runtime-inventory-matrix.md`
 
