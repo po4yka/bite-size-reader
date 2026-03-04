@@ -323,6 +323,31 @@ async def test_route_command_message_routes_search_with_bot_mention_and_preserve
 
 
 @pytest.mark.asyncio
+async def test_route_command_message_routes_summarize_all_with_bot_mention_and_preserves_text() -> (
+    None
+):
+    router = _Router()
+    router.telegram_runtime_runner.resolve_command_route = AsyncMock(
+        return_value=TelegramRuntimeCommandDecision(command="/summarize_all", handled=True)
+    )
+
+    handled = await router._route_command_message(
+        message=SimpleNamespace(),
+        text="/summarize_all@mybot",
+        uid=20,
+        correlation_id="cid-20",
+        interaction_id=0,
+        start_time=0.0,
+    )
+
+    assert handled is True
+    router.command_processor.handle_summarize_all_command.assert_awaited_once()
+    call = router.command_processor.handle_summarize_all_command.call_args
+    assert call.args[1] == "/summarize_all@mybot"
+    assert call.args[2:] == (20, "cid-20", 0, 0.0)
+
+
+@pytest.mark.asyncio
 async def test_route_command_message_requires_telegram_runtime_runner() -> None:
     router = _Router()
     delattr(router, "telegram_runtime_runner")
