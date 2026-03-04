@@ -76,6 +76,10 @@ First implementation slice after inventory lock:
   `@bot` mention fixtures for `/summarize` and `/cancel` are covered in both
   `bsr-telegram-runtime` Rust tests and Python bridge routing tests to keep
   stateful command-route behavior stable.
+- **Bot-mention argument-command parity hardening (M6-S15):** explicit
+  `@bot` mention fixture with trailing arguments for `/search` is covered in
+  both `bsr-telegram-runtime` Rust tests and Python bridge routing tests to
+  keep text-command payload semantics stable for argument-bearing commands.
 
 Out-of-scope for M6-S1 (defer to later slices):
 

@@ -118,6 +118,15 @@ mod tests {
     }
 
     #[test]
+    fn search_command_with_bot_mention_and_arguments_is_normalized() {
+        let decision = resolve_command_route(&TelegramCommandRouteInput {
+            text: "/search@mybot rust migration".to_string(),
+        });
+        assert_eq!(decision.command, Some("/search".to_string()));
+        assert!(decision.handled);
+    }
+
+    #[test]
     fn command_strips_bot_mention() {
         let decision = resolve_command_route(&TelegramCommandRouteInput {
             text: "/unread@mybot 10".to_string(),
