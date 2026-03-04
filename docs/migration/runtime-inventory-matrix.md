@@ -390,6 +390,12 @@ First implementation slice after inventory lock:
   routing tests to keep non-handled passthrough semantics stable when
   slash-prefixed text is followed by a vertical tab rather than a command
   token.
+- **Slash-non-breaking-space command-shape parity hardening (M6-S75):**
+  slash-non-breaking-space fixture `"/\u00A0findonline rust"` is now
+  explicitly covered in both `bsr-telegram-runtime` Rust command-route tests
+  and Python bridge routing tests to keep non-handled passthrough semantics
+  stable when slash-prefixed text is followed by a non-breaking space rather
+  than a command token.
 
 Out-of-scope for M6-S1 (defer to later slices):
 
