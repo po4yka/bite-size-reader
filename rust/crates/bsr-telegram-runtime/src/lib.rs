@@ -397,6 +397,15 @@ mod tests {
     }
 
     #[test]
+    fn unknown_mixed_case_bare_command_with_mixed_case_bot_mention_is_not_handled() {
+        let decision = resolve_command_route(&TelegramCommandRouteInput {
+            text: "/Unknowncmd@MyBot".to_string(),
+        });
+        assert_eq!(decision.command, None);
+        assert!(!decision.handled);
+    }
+
+    #[test]
     fn unknown_mixed_case_command_with_empty_bot_mention_suffix_is_not_handled() {
         let decision = resolve_command_route(&TelegramCommandRouteInput {
             text: "/Unknowncmd@ rust".to_string(),
