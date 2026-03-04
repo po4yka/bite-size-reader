@@ -64,6 +64,10 @@ First implementation slice after inventory lock:
 - **Wiring cleanup hardening (M6-S8):** `MessageRouter` no longer constructs an
   `InterfaceRouterRunner` instance for Telegram flows; command routing runtime
   ownership is exclusively `telegram_runtime_runner`.
+- **Command dispatch hardening (M6-S12):** command routing in
+  `MessageRouterContentMixin` is table-driven via shared dispatch helpers,
+  preserving alias semantics while reducing branch complexity in the
+  Python-side bridge.
 
 Out-of-scope for M6-S1 (defer to later slices):
 

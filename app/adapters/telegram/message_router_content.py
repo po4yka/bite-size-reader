@@ -16,6 +16,35 @@ from app.db.user_interactions import async_safe_update_user_interaction
 
 logger = logging.getLogger("app.adapters.telegram.message_router")
 
+_LOCAL_SEARCH_ALIASES: tuple[str, ...] = ("/finddb", "/findlocal")
+_ONLINE_SEARCH_ALIASES: tuple[str, ...] = ("/findweb", "/findonline", "/find")
+
+_PRE_ALIAS_UID_COMMANDS: tuple[tuple[str, str], ...] = (
+    ("/start", "handle_start_command"),
+    ("/help", "handle_help_command"),
+    ("/dbinfo", "handle_dbinfo_command"),
+    ("/dbverify", "handle_dbverify_command"),
+    ("/clearcache", "handle_clearcache_command"),
+)
+_PRE_SUMMARIZE_TEXT_COMMANDS: tuple[tuple[str, str], ...] = (
+    ("/summarize_all", "handle_summarize_all_command"),
+)
+_POST_SUMMARIZE_UID_COMMANDS: tuple[tuple[str, str], ...] = (("/cancel", "handle_cancel_command"),)
+_POST_SUMMARIZE_TEXT_COMMANDS: tuple[tuple[str, str], ...] = (
+    ("/unread", "handle_unread_command"),
+    ("/read", "handle_read_command"),
+    ("/search", "handle_search_command"),
+    ("/sync_karakeep", "handle_sync_karakeep_command"),
+    ("/cdigest", "handle_cdigest_command"),
+    ("/digest", "handle_digest_command"),
+    ("/channels", "handle_channels_command"),
+    ("/subscribe", "handle_subscribe_command"),
+    ("/unsubscribe", "handle_unsubscribe_command"),
+    ("/init_session", "handle_init_session_command"),
+    ("/settings", "handle_settings_command"),
+)
+_TAIL_UID_COMMANDS: tuple[tuple[str, str], ...] = (("/debug", "handle_debug_command"),)
+
 
 class MessageRouterContentMixin:
     """Command/content dispatch for MessageRouter."""
@@ -111,7 +140,35 @@ class MessageRouterContentMixin:
         start_time: float,
     ) -> bool:
         """Route command message. Returns True when command was handled."""
-        route_probe = text
+        route_probe = await self._resolve_command_route_probe(
+            text=text,
+            uid=uid,
+            correlation_id=correlation_id,
+        )
+        return await self._dispatch_command_route(
+            message=message,
+            text=text,
+            route_probe=route_probe,
+            uid=uid,
+            correlation_id=correlation_id,
+            interaction_id=interaction_id,
+            start_time=start_time,
+        )
+
+    @staticmethod
+    def _match_prefix(text: str, prefixes: tuple[str, ...]) -> str | None:
+        for prefix in prefixes:
+            if text.startswith(prefix):
+                return prefix
+        return None
+
+    async def _resolve_command_route_probe(
+        self,
+        *,
+        text: str,
+        uid: int,
+        correlation_id: str,
+    ) -> str:
         runtime_runner = getattr(self, "telegram_runtime_runner", None)
         if runtime_runner is None:
             logger.error(
@@ -130,174 +187,196 @@ class MessageRouterContentMixin:
             actor_key=str(uid),
         )
         if decision.handled and decision.command:
-            route_probe = decision.command
+            return decision.command
+        return text
 
-        if route_probe.startswith("/start"):
-            await self.command_processor.handle_start_command(
-                message, uid, correlation_id, interaction_id, start_time
-            )
-            return True
-
-        if route_probe.startswith("/help"):
-            await self.command_processor.handle_help_command(
-                message, uid, correlation_id, interaction_id, start_time
-            )
-            return True
-
-        if route_probe.startswith("/dbinfo"):
-            await self.command_processor.handle_dbinfo_command(
-                message, uid, correlation_id, interaction_id, start_time
-            )
-            return True
-
-        if route_probe.startswith("/dbverify"):
-            await self.command_processor.handle_dbverify_command(
-                message, uid, correlation_id, interaction_id, start_time
-            )
-            return True
-
-        if route_probe.startswith("/clearcache"):
-            await self.command_processor.handle_clearcache_command(
-                message, uid, correlation_id, interaction_id, start_time
-            )
-            return True
-
-        def _match_original_alias(aliases: tuple[str, ...]) -> str | None:
-            for alias in aliases:
-                if text.startswith(alias):
-                    return alias
-            return None
-
-        local_aliases = ("/finddb", "/findlocal")
-        original_local_command = _match_original_alias(local_aliases)
-
-        for local_command in local_aliases:
-            if route_probe.startswith(local_command):
-                await self.command_processor.handle_find_local_command(
-                    message,
-                    text,
-                    uid,
-                    correlation_id,
-                    interaction_id,
-                    start_time,
-                    command=original_local_command or local_command,
-                )
+    async def _dispatch_uid_command(
+        self,
+        route_probe: str,
+        handlers: tuple[tuple[str, str], ...],
+        message: Any,
+        uid: int,
+        correlation_id: str,
+        interaction_id: int,
+        start_time: float,
+    ) -> bool:
+        for prefix, handler_name in handlers:
+            if route_probe.startswith(prefix):
+                handler = getattr(self.command_processor, handler_name)
+                await handler(message, uid, correlation_id, interaction_id, start_time)
                 return True
-
-        online_aliases = ("/findweb", "/findonline", "/find")
-        original_online_command = _match_original_alias(online_aliases)
-
-        for online_command in online_aliases:
-            if route_probe.startswith(online_command):
-                await self.command_processor.handle_find_online_command(
-                    message,
-                    text,
-                    uid,
-                    correlation_id,
-                    interaction_id,
-                    start_time,
-                    command=original_online_command or online_command,
-                )
-                return True
-
-        if route_probe.startswith("/summarize_all"):
-            await self.command_processor.handle_summarize_all_command(
-                message, text, uid, correlation_id, interaction_id, start_time
-            )
-            return True
-
-        if route_probe.startswith("/summarize"):
-            action, _should_continue = await self.command_processor.handle_summarize_command(
-                message, text, uid, correlation_id, interaction_id, start_time
-            )
-            if action == "awaiting_url":
-                await self.url_handler.add_awaiting_user(uid)
-            return True
-
-        if route_probe.startswith("/cancel"):
-            await self.command_processor.handle_cancel_command(
-                message, uid, correlation_id, interaction_id, start_time
-            )
-            return True
-
-        if route_probe.startswith("/unread"):
-            await self.command_processor.handle_unread_command(
-                message, text, uid, correlation_id, interaction_id, start_time
-            )
-            return True
-
-        if route_probe.startswith("/read"):
-            await self.command_processor.handle_read_command(
-                message, text, uid, correlation_id, interaction_id, start_time
-            )
-            return True
-
-        if route_probe.startswith("/search"):
-            await self.command_processor.handle_search_command(
-                message, text, uid, correlation_id, interaction_id, start_time
-            )
-            return True
-
-        if route_probe.startswith("/sync_karakeep"):
-            await self.command_processor.handle_sync_karakeep_command(
-                message, text, uid, correlation_id, interaction_id, start_time
-            )
-            return True
-
-        if route_probe.startswith("/cdigest"):
-            await self.command_processor.handle_cdigest_command(
-                message,
-                text,
-                uid,
-                correlation_id,
-                interaction_id,
-                start_time,
-            )
-            return True
-
-        if route_probe.startswith("/digest"):
-            await self.command_processor.handle_digest_command(
-                message, text, uid, correlation_id, interaction_id, start_time
-            )
-            return True
-
-        if route_probe.startswith("/channels"):
-            await self.command_processor.handle_channels_command(
-                message, text, uid, correlation_id, interaction_id, start_time
-            )
-            return True
-
-        if route_probe.startswith("/subscribe"):
-            await self.command_processor.handle_subscribe_command(
-                message, text, uid, correlation_id, interaction_id, start_time
-            )
-            return True
-
-        if route_probe.startswith("/unsubscribe"):
-            await self.command_processor.handle_unsubscribe_command(
-                message, text, uid, correlation_id, interaction_id, start_time
-            )
-            return True
-
-        if route_probe.startswith("/init_session"):
-            await self.command_processor.handle_init_session_command(
-                message, text, uid, correlation_id, interaction_id, start_time
-            )
-            return True
-
-        if route_probe.startswith("/settings"):
-            await self.command_processor.handle_settings_command(
-                message, text, uid, correlation_id, interaction_id, start_time
-            )
-            return True
-
-        if route_probe.startswith("/debug"):
-            await self.command_processor.handle_debug_command(
-                message, uid, correlation_id, interaction_id, start_time
-            )
-            return True
-
         return False
+
+    async def _dispatch_text_command(
+        self,
+        route_probe: str,
+        handlers: tuple[tuple[str, str], ...],
+        message: Any,
+        text: str,
+        uid: int,
+        correlation_id: str,
+        interaction_id: int,
+        start_time: float,
+    ) -> bool:
+        for prefix, handler_name in handlers:
+            if route_probe.startswith(prefix):
+                handler = getattr(self.command_processor, handler_name)
+                await handler(message, text, uid, correlation_id, interaction_id, start_time)
+                return True
+        return False
+
+    async def _dispatch_alias_command(
+        self,
+        route_probe: str,
+        aliases: tuple[str, ...],
+        handler_name: str,
+        message: Any,
+        text: str,
+        uid: int,
+        correlation_id: str,
+        interaction_id: int,
+        start_time: float,
+    ) -> bool:
+        matched_alias = self._match_prefix(route_probe, aliases)
+        if matched_alias is None:
+            return False
+
+        original_alias = self._match_prefix(text, aliases)
+        handler = getattr(self.command_processor, handler_name)
+        await handler(
+            message,
+            text,
+            uid,
+            correlation_id,
+            interaction_id,
+            start_time,
+            command=original_alias or matched_alias,
+        )
+        return True
+
+    async def _dispatch_summarize_command(
+        self,
+        route_probe: str,
+        message: Any,
+        text: str,
+        uid: int,
+        correlation_id: str,
+        interaction_id: int,
+        start_time: float,
+    ) -> bool:
+        if not route_probe.startswith("/summarize"):
+            return False
+
+        action, _should_continue = await self.command_processor.handle_summarize_command(
+            message, text, uid, correlation_id, interaction_id, start_time
+        )
+        if action == "awaiting_url":
+            await self.url_handler.add_awaiting_user(uid)
+        return True
+
+    async def _dispatch_command_route(
+        self,
+        *,
+        message: Any,
+        text: str,
+        route_probe: str,
+        uid: int,
+        correlation_id: str,
+        interaction_id: int,
+        start_time: float,
+    ) -> bool:
+        if await self._dispatch_uid_command(
+            route_probe,
+            _PRE_ALIAS_UID_COMMANDS,
+            message,
+            uid,
+            correlation_id,
+            interaction_id,
+            start_time,
+        ):
+            return True
+
+        if await self._dispatch_alias_command(
+            route_probe,
+            _LOCAL_SEARCH_ALIASES,
+            "handle_find_local_command",
+            message,
+            text,
+            uid,
+            correlation_id,
+            interaction_id,
+            start_time,
+        ):
+            return True
+
+        if await self._dispatch_alias_command(
+            route_probe,
+            _ONLINE_SEARCH_ALIASES,
+            "handle_find_online_command",
+            message,
+            text,
+            uid,
+            correlation_id,
+            interaction_id,
+            start_time,
+        ):
+            return True
+
+        if await self._dispatch_text_command(
+            route_probe,
+            _PRE_SUMMARIZE_TEXT_COMMANDS,
+            message,
+            text,
+            uid,
+            correlation_id,
+            interaction_id,
+            start_time,
+        ):
+            return True
+
+        if await self._dispatch_summarize_command(
+            route_probe,
+            message,
+            text,
+            uid,
+            correlation_id,
+            interaction_id,
+            start_time,
+        ):
+            return True
+
+        if await self._dispatch_uid_command(
+            route_probe,
+            _POST_SUMMARIZE_UID_COMMANDS,
+            message,
+            uid,
+            correlation_id,
+            interaction_id,
+            start_time,
+        ):
+            return True
+
+        if await self._dispatch_text_command(
+            route_probe,
+            _POST_SUMMARIZE_TEXT_COMMANDS,
+            message,
+            text,
+            uid,
+            correlation_id,
+            interaction_id,
+            start_time,
+        ):
+            return True
+
+        return await self._dispatch_uid_command(
+            route_probe,
+            _TAIL_UID_COMMANDS,
+            message,
+            uid,
+            correlation_id,
+            interaction_id,
+            start_time,
+        )
 
     async def _route_forward_message(
         self,

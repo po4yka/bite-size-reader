@@ -67,6 +67,53 @@ async def test_route_command_message_preserves_original_alias_for_handler_payloa
 
 
 @pytest.mark.asyncio
+async def test_route_command_message_preserves_original_local_alias_for_handler_payload() -> None:
+    router = _Router()
+    router.telegram_runtime_runner.resolve_command_route = AsyncMock(
+        return_value=TelegramRuntimeCommandDecision(command="/finddb", handled=True)
+    )
+
+    handled = await router._route_command_message(
+        message=SimpleNamespace(),
+        text="/findlocal rust migration",
+        uid=2,
+        correlation_id="cid-2",
+        interaction_id=0,
+        start_time=0.0,
+    )
+
+    assert handled is True
+    router.command_processor.handle_find_local_command.assert_called_once()
+    call = router.command_processor.handle_find_local_command.call_args
+    assert call.args[1].startswith("/findlocal ")
+    assert call.kwargs["command"] == "/findlocal"
+
+
+@pytest.mark.asyncio
+async def test_route_command_message_marks_awaiting_user_for_summarize_prompt() -> None:
+    router = _Router()
+    router.telegram_runtime_runner.resolve_command_route = AsyncMock(
+        return_value=TelegramRuntimeCommandDecision(command="/summarize", handled=True)
+    )
+    router.command_processor.handle_summarize_command = AsyncMock(
+        return_value=("awaiting_url", True)
+    )
+
+    handled = await router._route_command_message(
+        message=SimpleNamespace(),
+        text="/summarize",
+        uid=3,
+        correlation_id="cid-3",
+        interaction_id=0,
+        start_time=0.0,
+    )
+
+    assert handled is True
+    router.command_processor.handle_summarize_command.assert_called_once()
+    router.url_handler.add_awaiting_user.assert_awaited_once_with(3)
+
+
+@pytest.mark.asyncio
 async def test_route_command_message_requires_telegram_runtime_runner() -> None:
     router = _Router()
     delattr(router, "telegram_runtime_runner")
