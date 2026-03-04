@@ -79,6 +79,12 @@ MIGRATION_TELEGRAM_RUNTIME_BACKEND=python
 MIGRATION_TELEGRAM_RUNTIME_TIMEOUT_MS=150
 ```
 
+Run the M6 suite before enabling Rust canary mode:
+
+```bash
+make m6-telegram-runtime-suite
+```
+
 ## Before You Start
 
 ### Backup First

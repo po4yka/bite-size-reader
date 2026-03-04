@@ -479,6 +479,44 @@ jobs:
       - name: Run M5 cutover suite
         run: bash scripts/migration/run_m5_cutover_suite.sh
 
+  m6-telegram-runtime-suite:
+    name: Migration Telegram Runtime Suite (M6)
+    needs: prepare-environment
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Download compiled requirements
+        uses: actions/download-artifact@v8
+        with:
+          name: compiled-requirements
+          path: .
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          version: "0.8.17"
+          enable-cache: true
+          cache-dependency-glob: |
+            pyproject.toml
+            uv.lock
+
+      - name: Install dependencies
+        run: uv pip sync --system requirements-all.txt requirements-dev.txt
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Run M6 telegram runtime suite
+        run: bash scripts/migration/run_m6_telegram_runtime_suite.sh
+
   rust-foundation:
     name: Rust Foundation (M1)
     runs-on: ubuntu-latest

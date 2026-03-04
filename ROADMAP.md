@@ -146,6 +146,10 @@ This roadmap tracks the project-wide migration from the current Python runtime t
     - Runtime toggle/config docs:
       `.env.example`, `docs/environment_variables.md`,
       `docs/how-to/migrate-versions.md`
+    - M6 suite runner and CI enforcement:
+      `scripts/migration/run_m6_telegram_runtime_suite.sh`,
+      `make m6-telegram-runtime-suite`, `m6-telegram-runtime-suite` job in
+      `.github/workflows/ci.yml`
     - Planning/status record:
       `docs/migration/runtime-inventory-matrix.md`
 
