@@ -122,6 +122,11 @@ First implementation slice after inventory lock:
   mention fixture for mixed-case command passthrough is covered in both
   `bsr-telegram-runtime` Rust tests and Python bridge routing tests to keep
   case-sensitive non-handled semantics stable for bot-directed invocations.
+- **Mixed-case bot-username mention parity hardening (M6-S26):** explicit
+  mixed-case username `@bot` fixture for known-command canonical dispatch is
+  covered in both `bsr-telegram-runtime` Rust tests and Python bridge routing
+  tests to keep bot-username casing behavior stable for bot-directed
+  invocations.
 
 Out-of-scope for M6-S1 (defer to later slices):
 
