@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from app.core.content_cleaner import clean_content_for_llm
+from app.core.summary_aggregate import aggregate_chunk_summaries
 from app.migration.cutover_monitor import record_cutover_event
 
 if TYPE_CHECKING:
@@ -255,6 +256,15 @@ def build_python_llm_wrapper_plan_snapshot_from_input(
 def build_python_content_cleaner_snapshot_from_input(payload: dict[str, Any]) -> dict[str, Any]:
     content_text = str(payload.get("content_text") or "")
     return {"content_text": clean_content_for_llm(content_text)}
+
+
+def build_python_summary_aggregate_snapshot_from_input(payload: dict[str, Any]) -> dict[str, Any]:
+    raw_summaries = payload.get("summaries")
+    if not isinstance(raw_summaries, list):
+        return aggregate_chunk_summaries([])
+
+    summaries: list[dict[str, Any]] = [item for item in raw_summaries if isinstance(item, dict)]
+    return aggregate_chunk_summaries(summaries)
 
 
 def build_rust_llm_wrapper_input_from_requests(
@@ -553,6 +563,25 @@ class PipelineShadowRunner:
             correlation_id=correlation_id,
             request_id=request_id,
             surface="pipeline_content_cleaner",
+        )
+
+    async def resolve_summary_aggregate(
+        self,
+        *,
+        correlation_id: str | None,
+        request_id: int | None,
+        summaries: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        rust_input = {"summaries": summaries}
+        if not self.options.enabled:
+            return build_python_summary_aggregate_snapshot_from_input(rust_input)
+
+        return await self._run_authoritative_slice(
+            command="summary-aggregate",
+            rust_input=rust_input,
+            correlation_id=correlation_id,
+            request_id=request_id,
+            surface="pipeline_summary_aggregate",
         )
 
     async def _run_authoritative_slice(

@@ -1,0 +1,94 @@
+{
+  "summaries": [
+    {
+      "summary_250": "First chunk explains the migration baseline and current runtime split.",
+      "summary_1000": "First chunk details baseline parity checks. It captures fixture generation mechanics.",
+      "tldr": "Baseline parity and fixture generation are established.",
+      "key_ideas": ["Parity first", "Fixture corpus"],
+      "topic_tags": ["migration", "testing"],
+      "entities": {
+        "people": ["Ada"],
+        "organizations": ["Bite-Size Reader"],
+        "locations": ["Rust workspace"]
+      },
+      "estimated_reading_time_min": 3,
+      "key_stats": [
+        {
+          "label": "Parity suites",
+          "value": 3,
+          "unit": "count",
+          "source_excerpt": "m2/m3/m4 parity suites"
+        }
+      ],
+      "answered_questions": ["What exists now?"],
+      "seo_keywords": ["python to rust migration", "parity testing"],
+      "insights": {
+        "topic_overview": "Migration begins with deterministic parity fixtures.",
+        "new_facts": [
+          {
+            "fact": "M3 supports rust-authoritative slices.",
+            "why_it_matters": "It removes runtime drift.",
+            "source_hint": "ROADMAP.md",
+            "confidence": 0.9
+          }
+        ],
+        "open_questions": ["Which slices are left?"],
+        "suggested_sources": ["docs/migration/m3.md"],
+        "expansion_topics": ["cutover monitoring"],
+        "next_exploration": ["fallback decommission"],
+        "caution": "Measure p95 after each cutover."
+      }
+    },
+    {
+      "summary_250": "Second chunk covers fallback decommission and runtime defaults.",
+      "summary_1000": "Second chunk describes fallback decommission. It captures fixture generation mechanics.",
+      "tldr": "Fallback paths are removed for migrated slices.",
+      "key_ideas": ["Fallback decommission", "Fixture corpus"],
+      "topic_tags": ["Migration", "operations"],
+      "entities": {
+        "people": ["ada"],
+        "organizations": ["Bite-Size Reader", "Ops"],
+        "locations": ["Rust workspace", "Production"]
+      },
+      "estimated_reading_time_min": 2,
+      "key_stats": [
+        {
+          "label": "Fallback surfaces",
+          "value": 2,
+          "unit": "count",
+          "source_excerpt": "summary contract and interface router"
+        },
+        {
+          "label": "Parity suites",
+          "value": 4,
+          "unit": "count",
+          "source_excerpt": "m2/m3/m4/m5"
+        }
+      ],
+      "answered_questions": ["What ships now?"],
+      "seo_keywords": ["rust runtime", "parity testing"],
+      "insights": {
+        "topic_overview": "Decommission follows a release-window check.",
+        "new_facts": [
+          {
+            "fact": "M5 cutover suite includes m2/m3/m4 parity jobs.",
+            "why_it_matters": "It guards regressions.",
+            "source_hint": "docs/migration/m5.md",
+            "confidence": 0.8
+          },
+          {
+            "fact": "M3 supports rust-authoritative slices.",
+            "why_it_matters": "Duplicate fact should dedupe.",
+            "source_hint": "ROADMAP.md",
+            "confidence": 0.7
+          }
+        ],
+        "open_questions": ["Which slices are left?", "How is p95 trending?"],
+        "suggested_sources": ["docs/migration/m5.md"],
+        "expansion_topics": ["release validation"],
+        "next_exploration": ["latency dashboards"],
+        "caution": "Measure p95 after each cutover."
+      }
+    }
+  ]
+}

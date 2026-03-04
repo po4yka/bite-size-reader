@@ -1,0 +1,91 @@
+{
+  "summary_250": "First chunk explains the migration baseline and current runtime split.",
+  "summary_1000": "First chunk details baseline parity checks. It captures fixture generation mechanics. Second chunk describes fallback decommission.",
+  "tldr": "First chunk details baseline parity checks. It captures fixture generation mechanics. Second chunk describes fallback decommission. Baseline parity and fixture generation are established. Fallback paths are removed for migrated slices.",
+  "key_ideas": [
+    "Parity first",
+    "Fixture corpus",
+    "Fallback decommission"
+  ],
+  "topic_tags": [
+    "migration",
+    "testing",
+    "operations"
+  ],
+  "entities": {
+    "people": [
+      "Ada"
+    ],
+    "organizations": [
+      "Bite-Size Reader",
+      "Ops"
+    ],
+    "locations": [
+      "Rust workspace",
+      "Production"
+    ]
+  },
+  "estimated_reading_time_min": 5,
+  "key_stats": [
+    {
+      "label": "Parity suites",
+      "value": 3.0,
+      "unit": "count",
+      "source_excerpt": "m2/m3/m4 parity suites"
+    },
+    {
+      "label": "Fallback surfaces",
+      "value": 2.0,
+      "unit": "count",
+      "source_excerpt": "summary contract and interface router"
+    }
+  ],
+  "answered_questions": [
+    "What exists now?",
+    "What ships now?"
+  ],
+  "readability": {
+    "method": "Flesch-Kincaid",
+    "score": 0.0,
+    "level": "Unknown"
+  },
+  "seo_keywords": [
+    "python to rust migration",
+    "parity testing",
+    "rust runtime"
+  ],
+  "insights": {
+    "topic_overview": "Migration begins with deterministic parity fixtures.\n\nDecommission follows a release-window check.",
+    "new_facts": [
+      {
+        "fact": "M3 supports rust-authoritative slices.",
+        "why_it_matters": "It removes runtime drift.",
+        "source_hint": "ROADMAP.md",
+        "confidence": 0.9
+      },
+      {
+        "fact": "M5 cutover suite includes m2/m3/m4 parity jobs.",
+        "why_it_matters": "It guards regressions.",
+        "source_hint": "docs/migration/m5.md",
+        "confidence": 0.8
+      }
+    ],
+    "open_questions": [
+      "Which slices are left?",
+      "How is p95 trending?"
+    ],
+    "suggested_sources": [
+      "docs/migration/m3.md",
+      "docs/migration/m5.md"
+    ],
+    "expansion_topics": [
+      "cutover monitoring",
+      "release validation"
+    ],
+    "next_exploration": [
+      "fallback decommission",
+      "latency dashboards"
+    ],
+    "caution": "Measure p95 after each cutover."
+  }
+}

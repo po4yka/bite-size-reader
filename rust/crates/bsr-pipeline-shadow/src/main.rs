@@ -3,8 +3,9 @@ use std::io::{self, Read};
 
 use bsr_pipeline_shadow::{
     build_chunking_preprocess_snapshot, build_content_cleaner_snapshot,
-    build_extraction_adapter_snapshot, build_llm_wrapper_plan_snapshot, ChunkingPreprocessInput,
-    ContentCleanerInput, ExtractionAdapterInput, LlmWrapperPlanInput,
+    build_extraction_adapter_snapshot, build_llm_wrapper_plan_snapshot,
+    build_summary_aggregate_snapshot, ChunkingPreprocessInput, ContentCleanerInput,
+    ExtractionAdapterInput, LlmWrapperPlanInput, SummaryAggregateInput,
 };
 use serde_json::Value;
 
@@ -48,12 +49,20 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             println!("{}", serde_json::to_string_pretty(&output)?);
             Ok(())
         }
+        "summary-aggregate" => {
+            let payload = read_json_stdin()?;
+            let input: SummaryAggregateInput = serde_json::from_value(payload)?;
+            let output = build_summary_aggregate_snapshot(&input);
+            println!("{}", serde_json::to_string_pretty(&output)?);
+            Ok(())
+        }
         _ => {
             println!("Usage:");
             println!("  bsr-pipeline-shadow extraction-adapter < input.json");
             println!("  bsr-pipeline-shadow chunking-preprocess < input.json");
             println!("  bsr-pipeline-shadow llm-wrapper-plan < input.json");
             println!("  bsr-pipeline-shadow content-cleaner < input.json");
+            println!("  bsr-pipeline-shadow summary-aggregate < input.json");
             Ok(())
         }
     }

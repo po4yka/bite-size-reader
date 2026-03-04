@@ -200,6 +200,7 @@ class URLProcessor:
 
         self.message_persistence = MessagePersistence(db=db)
         self.pipeline_shadow = PipelineShadowRunner(cfg.runtime)
+        self.content_chunker.pipeline_shadow = self.pipeline_shadow
         # Registry for tracking background tasks to prevent GC and ensure shutdown
         self._background_tasks: set[asyncio.Task[Any]] = set()
 

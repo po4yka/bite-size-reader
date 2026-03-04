@@ -10,6 +10,7 @@ from app.migration.pipeline_shadow import (
     PipelineShadowRunner,
     build_python_chunking_preprocess_snapshot_from_input,
     build_python_extraction_adapter_snapshot,
+    build_python_summary_aggregate_snapshot_from_input,
 )
 
 
@@ -212,6 +213,45 @@ async def test_resolve_content_cleaner_uses_rust_when_enabled() -> None:
             correlation_id="cid",
             request_id=10,
             content_text="raw",
+        )
+
+    assert result == rust_payload
+
+
+@pytest.mark.asyncio
+async def test_resolve_summary_aggregate_uses_python_when_disabled() -> None:
+    runner = PipelineShadowRunner(_runtime_cfg(migration_shadow_mode_enabled=False))
+    summaries = [
+        {"summary_250": "A", "estimated_reading_time_min": 1},
+        {"summary_250": "B", "estimated_reading_time_min": 2},
+    ]
+    expected = build_python_summary_aggregate_snapshot_from_input({"summaries": summaries})
+
+    with patch("app.migration.pipeline_shadow.run_rust_shadow_command") as rust_call:
+        result = await runner.resolve_summary_aggregate(
+            correlation_id="cid",
+            request_id=11,
+            summaries=summaries,
+        )
+
+    rust_call.assert_not_called()
+    assert result == expected
+
+
+@pytest.mark.asyncio
+async def test_resolve_summary_aggregate_uses_rust_when_enabled() -> None:
+    runner = PipelineShadowRunner(_runtime_cfg(migration_shadow_mode_enabled=True))
+    summaries = [{"summary_250": "A"}, {"summary_250": "B"}]
+    rust_payload = {"summary_250": "B", "tldr": "B"}
+
+    with patch(
+        "app.migration.pipeline_shadow.run_rust_shadow_command",
+        return_value=rust_payload,
+    ):
+        result = await runner.resolve_summary_aggregate(
+            correlation_id="cid",
+            request_id=12,
+            summaries=summaries,
         )
 
     assert result == rust_payload

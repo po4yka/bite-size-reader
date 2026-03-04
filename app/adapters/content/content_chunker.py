@@ -19,6 +19,7 @@ if TYPE_CHECKING:
     from app.adapters.external.response_formatter import ResponseFormatter
     from app.adapters.llm.protocol import LLMClientProtocol
     from app.config import AppConfig
+    from app.migration.pipeline_shadow import PipelineShadowRunner
 
 logger = logging.getLogger(__name__)
 
@@ -39,6 +40,7 @@ class ContentChunker:
         self.response_formatter = response_formatter
         self._audit = audit_func
         self._sem = sem
+        self.pipeline_shadow: PipelineShadowRunner | None = None
 
     def estimate_max_chars_for_model(self, model_name: str | None, base_default: int) -> int:
         """Return an adaptive chunk threshold based on concrete context limits.
@@ -216,7 +218,11 @@ class ContentChunker:
 
         # Aggregate chunk summaries into final draft
         if chunk_summaries:
-            aggregated = aggregate_chunk_summaries(chunk_summaries)
+            aggregated = await self._resolve_aggregated_summary(
+                chunk_summaries=chunk_summaries,
+                req_id=req_id,
+                correlation_id=correlation_id,
+            )
 
             # Recursive Summarization: Synthesize the final summary from the aggregated chunks
             # This ensures the final output is cohesive and not just a concatenation of parts
@@ -229,6 +235,23 @@ class ContentChunker:
             # Fallback to aggregated if synthesis fails
             return validate_and_shape_summary(aggregated)
         return None
+
+    async def _resolve_aggregated_summary(
+        self,
+        *,
+        chunk_summaries: list[dict[str, Any]],
+        req_id: int,
+        correlation_id: str | None,
+    ) -> dict[str, Any]:
+        pipeline_shadow = getattr(self, "pipeline_shadow", None)
+        options = getattr(pipeline_shadow, "options", None)
+        if pipeline_shadow is not None and bool(getattr(options, "enabled", False)):
+            return await pipeline_shadow.resolve_summary_aggregate(
+                correlation_id=correlation_id,
+                request_id=req_id,
+                summaries=chunk_summaries,
+            )
+        return aggregate_chunk_summaries(chunk_summaries)
 
     async def _synthesize_chunks(
         self,
