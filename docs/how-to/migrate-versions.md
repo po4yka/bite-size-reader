@@ -2,8 +2,8 @@
 
 Upgrade Bite-Size Reader to a new version safely.
 
-> **Migration context:** the project is transitioning from a Python runtime to a Rust runtime in phases.
-> Use this guide for both normal upgrades and dual-runtime migration windows.
+> **Migration context:** M5 cutover is complete and production is now Rust-first.
+> Use this guide for normal upgrades, Rust canary rollouts, and release-window rollback readiness.
 > See [ROADMAP.md](../../ROADMAP.md) for milestone-level planning.
 
 **Audience:** Operators
@@ -14,7 +14,7 @@ Upgrade Bite-Size Reader to a new version safely.
 
 ## Runtime Track Matrix (Python → Rust)
 
-During migration, choose one of these tracks per release:
+Choose one runtime track per release:
 
 | Track | When to use | Runtime | Risk profile |
 | --- | --- | --- | --- |
@@ -22,7 +22,8 @@ During migration, choose one of these tracks per release:
 | `rust-canary` | Validation/canary environments | Mixed (Rust components enabled) | Medium |
 | `rust-primary` | Default after M5 cutover | Rust-first | Depends on fallback telemetry |
 
-Recommended progression: `python-stable` → `rust-canary` → `rust-primary`.
+Recommended progression for new environments: `rust-canary` → `rust-primary`.
+Keep `python-stable` available as the emergency rollback path.
 
 ### M2 Contract Backend Toggle
 
@@ -451,7 +452,7 @@ docker run -d \
 
 ---
 
-**Last Updated:** 2026-02-09
+**Last Updated:** 2026-03-04
 
 
 ## Migration-Specific Validation Checklist

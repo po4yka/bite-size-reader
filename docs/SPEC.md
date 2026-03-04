@@ -1,7 +1,7 @@
 # Bite‑Size Reader — Technical Specification
 
 **Version:** 3.0
-**Last Updated:** 2026-02-23
+**Last Updated:** 2026-03-04
 
 ---
 
@@ -59,8 +59,8 @@
 
 ## Runtime Migration Status
 
-- **Current production runtime:** Python
-- **Target runtime:** Rust (incremental migration)
+- **Current production runtime:** Rust-first (with release-window Python fallbacks)
+- **Target runtime:** Rust
 - **Roadmap:** [ROADMAP.md](../ROADMAP.md)
 
 This specification defines the contracts that must remain stable during migration (API shape, Telegram semantics, summary JSON schema, and SQLite compatibility).
