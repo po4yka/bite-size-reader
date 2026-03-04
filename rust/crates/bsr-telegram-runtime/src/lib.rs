@@ -845,4 +845,13 @@ mod tests {
         assert_eq!(decision.command, None);
         assert!(!decision.handled);
     }
+
+    #[test]
+    fn slash_four_per_em_space_command_like_text_is_not_handled() {
+        let decision = resolve_command_route(&TelegramCommandRouteInput {
+            text: "/\u{2005}findonline rust".to_string(),
+        });
+        assert_eq!(decision.command, None);
+        assert!(!decision.handled);
+    }
 }
