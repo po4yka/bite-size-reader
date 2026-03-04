@@ -114,6 +114,10 @@ First implementation slice after inventory lock:
   `/subscribe`, and `/unsubscribe` are covered in both
   `bsr-telegram-runtime` Rust tests and Python bridge routing tests to keep
   utility/admin command-route dispatch stable for bot-directed invocations.
+- **Unknown-command bot-mention parity hardening (M6-S24):** explicit `@bot`
+  mention fixture for unknown command passthrough is covered in both
+  `bsr-telegram-runtime` Rust tests and Python bridge routing tests to keep
+  unknown-command non-handled semantics stable for bot-directed invocations.
 
 Out-of-scope for M6-S1 (defer to later slices):
 
