@@ -51,7 +51,7 @@ Current milestone status:
 - ✅ **M3**: Pipeline slices with Rust-authoritative runtime execution and parity fixtures (`docs/migration/m3.md`)
 - ✅ **M4**: Interface-layer Rust routing for Mobile API + Telegram commands with parity fixtures (`docs/migration/m4.md`)
 - ✅ **M5**: Rust-first cutover defaults + Python fallback decommission for migrated slices (`docs/migration/m5.md`)
-- 🟡 **M6**: Telegram command-route migration slices (S1-S122) are implemented
+- 🟡 **M6**: Telegram command-route migration slices (S1-S123) are implemented
   with Rust-authoritative route decisions; Python handlers/orchestration remain
   in scope for later slices (`docs/migration/runtime-inventory-matrix.md`,
   `scripts/migration/run_m6_telegram_runtime_suite.sh`)
