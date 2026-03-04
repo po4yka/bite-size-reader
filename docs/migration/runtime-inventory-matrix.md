@@ -353,6 +353,11 @@ First implementation slice after inventory lock:
   explicitly covered across existing `bsr-telegram-runtime` slash-at-start Rust
   command-route tests and Python bridge routing tests to keep non-handled
   passthrough semantics stable when text does not begin with `/`.
+- **Slash-only command-shape parity hardening (M6-S68):**
+  slash-only fixture `"/"` is now explicitly covered in both
+  `bsr-telegram-runtime` Rust command-route tests and Python bridge routing
+  tests to keep non-handled passthrough semantics stable when command-shaped
+  text lacks a canonical command token.
 
 Out-of-scope for M6-S1 (defer to later slices):
 
