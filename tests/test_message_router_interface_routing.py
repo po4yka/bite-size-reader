@@ -796,6 +796,36 @@ async def test_route_command_message_ignores_unknown_command_with_mixed_case_bot
 
 
 @pytest.mark.asyncio
+async def test_route_command_message_ignores_unknown_command_with_empty_bot_mention_suffix() -> (
+    None
+):
+    router = _Router()
+    router.telegram_runtime_runner.resolve_command_route = AsyncMock(
+        return_value=TelegramRuntimeCommandDecision(command=None, handled=False)
+    )
+
+    handled = await router._route_command_message(
+        message=SimpleNamespace(),
+        text="/unknowncmd@ rust migration",
+        uid=39,
+        correlation_id="cid-39",
+        interaction_id=0,
+        start_time=0.0,
+    )
+
+    assert handled is False
+    router.telegram_runtime_runner.resolve_command_route.assert_awaited_once_with(
+        text="/unknowncmd@ rust migration",
+        correlation_id="cid-39",
+        actor_key="39",
+    )
+    router.command_processor.handle_find_online_command.assert_not_awaited()
+    router.command_processor.handle_find_local_command.assert_not_awaited()
+    router.command_processor.handle_start_command.assert_not_awaited()
+    router.command_processor.handle_debug_command.assert_not_awaited()
+
+
+@pytest.mark.asyncio
 async def test_route_command_message_ignores_mixed_case_command_with_bot_mention() -> None:
     router = _Router()
     router.telegram_runtime_runner.resolve_command_route = AsyncMock(

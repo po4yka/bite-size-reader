@@ -142,6 +142,12 @@ First implementation slice after inventory lock:
   non-handled passthrough semantics is covered in both
   `bsr-telegram-runtime` Rust tests and Python bridge routing tests to keep
   unknown-command mention-casing behavior stable for bot-directed invocations.
+- **Unknown-command empty bot-mention suffix parity hardening (M6-S30):**
+  explicit unknown-command fixture with empty username `@bot` suffix for
+  non-handled passthrough semantics is covered in both
+  `bsr-telegram-runtime` Rust tests and Python bridge routing tests to keep
+  unknown-command empty-mention suffix behavior stable for bot-directed
+  invocations.
 
 Out-of-scope for M6-S1 (defer to later slices):
 
