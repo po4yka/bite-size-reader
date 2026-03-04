@@ -793,6 +793,15 @@ mod tests {
     }
 
     #[test]
+    fn slash_thin_space_command_like_text_is_not_handled() {
+        let decision = resolve_command_route(&TelegramCommandRouteInput {
+            text: "/\u{2009}findonline rust".to_string(),
+        });
+        assert_eq!(decision.command, None);
+        assert!(!decision.handled);
+    }
+
+    #[test]
     fn slash_ideographic_space_command_like_text_is_not_handled() {
         let decision = resolve_command_route(&TelegramCommandRouteInput {
             text: "/\u{3000}findonline rust".to_string(),
