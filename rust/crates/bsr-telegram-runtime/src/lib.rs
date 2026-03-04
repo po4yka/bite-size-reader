@@ -226,6 +226,33 @@ mod tests {
     }
 
     #[test]
+    fn init_session_command_with_bot_mention_is_normalized() {
+        let decision = resolve_command_route(&TelegramCommandRouteInput {
+            text: "/init_session@mybot".to_string(),
+        });
+        assert_eq!(decision.command, Some("/init_session".to_string()));
+        assert!(decision.handled);
+    }
+
+    #[test]
+    fn settings_command_with_bot_mention_is_normalized() {
+        let decision = resolve_command_route(&TelegramCommandRouteInput {
+            text: "/settings@mybot".to_string(),
+        });
+        assert_eq!(decision.command, Some("/settings".to_string()));
+        assert!(decision.handled);
+    }
+
+    #[test]
+    fn debug_command_with_bot_mention_is_normalized() {
+        let decision = resolve_command_route(&TelegramCommandRouteInput {
+            text: "/debug@mybot".to_string(),
+        });
+        assert_eq!(decision.command, Some("/debug".to_string()));
+        assert!(decision.handled);
+    }
+
+    #[test]
     fn command_is_case_sensitive() {
         let decision = resolve_command_route(&TelegramCommandRouteInput {
             text: "/Findonline rust".to_string(),

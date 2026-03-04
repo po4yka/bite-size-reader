@@ -104,6 +104,11 @@ First implementation slice after inventory lock:
   `@bot` mention fixture for canonical `/finddb` is covered in both
   `bsr-telegram-runtime` Rust tests and Python bridge routing tests to keep
   local-search canonical dispatch stable for bot-directed invocations.
+- **Bot-mention session/diagnostic parity hardening (M6-S22):** explicit
+  `@bot` mention fixtures for `/init_session`, `/settings`, and `/debug` are
+  covered in both `bsr-telegram-runtime` Rust tests and Python bridge routing
+  tests to keep session/diagnostic command-route dispatch stable for
+  bot-directed invocations.
 
 Out-of-scope for M6-S1 (defer to later slices):
 
