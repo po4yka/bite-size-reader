@@ -73,7 +73,7 @@ You want to track or contribute to the migration from Python to Rust.
 7. [M4 Implementation Notes](migration/m4.md) - Mobile API + Telegram interface routing migration and decommission notes
 8. [M5 Implementation Notes](migration/m5.md) - Rust-first cutover defaults and fallback decommission for migrated slices
 9. [M6 Implementation Status](../ROADMAP.md#post-m5-first-implementation-slice-m6-s1-scaffold-implemented) -
-   Telegram runtime command-route slices (S1-S40) and hardening chronology
+   Telegram runtime command-route slices (S1-S41) and hardening chronology
 10. [Runtime Inventory Matrix](migration/runtime-inventory-matrix.md) - Current Python/Rust ownership map for remaining runtime surfaces
 11. [Baseline Metrics Guide](migration/baseline-metrics.md) - How to capture and compare Python baseline runs
 
