@@ -178,6 +178,11 @@ First implementation slice after inventory lock:
   `bsr-telegram-runtime` Rust tests and Python bridge routing tests to keep
   unknown-command case-sensitive no-mention behavior stable for direct command
   invocations.
+- **Unknown command no-mention parity hardening (M6-S36):**
+  explicit lowercase unknown-command fixture without `@bot` mention for
+  non-handled passthrough semantics is covered in both
+  `bsr-telegram-runtime` Rust tests and Python bridge routing tests to keep
+  unknown-command no-mention behavior stable for direct command invocations.
 
 Out-of-scope for M6-S1 (defer to later slices):
 
