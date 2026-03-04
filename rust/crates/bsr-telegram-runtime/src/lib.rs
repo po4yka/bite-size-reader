@@ -541,7 +541,7 @@ mod tests {
     }
 
     #[test]
-    fn command_is_case_sensitive() {
+    fn known_command_without_bot_mention_is_case_sensitive() {
         let decision = resolve_command_route(&TelegramCommandRouteInput {
             text: "/Findonline rust".to_string(),
         });
