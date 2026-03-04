@@ -1492,6 +1492,36 @@ async def test_route_command_message_ignores_mixed_case_canonical_command_with_b
 
 
 @pytest.mark.asyncio
+async def test_route_command_message_ignores_mixed_case_bare_canonical_command_with_bot_mention() -> (
+    None
+):
+    router = _Router()
+    router.telegram_runtime_runner.resolve_command_route = AsyncMock(
+        return_value=TelegramRuntimeCommandDecision(command=None, handled=False)
+    )
+
+    handled = await router._route_command_message(
+        message=SimpleNamespace(),
+        text="/Find@mybot",
+        uid=63,
+        correlation_id="cid-63",
+        interaction_id=0,
+        start_time=0.0,
+    )
+
+    assert handled is False
+    router.telegram_runtime_runner.resolve_command_route.assert_awaited_once_with(
+        text="/Find@mybot",
+        correlation_id="cid-63",
+        actor_key="63",
+    )
+    router.command_processor.handle_find_online_command.assert_not_awaited()
+    router.command_processor.handle_find_local_command.assert_not_awaited()
+    router.command_processor.handle_start_command.assert_not_awaited()
+    router.command_processor.handle_debug_command.assert_not_awaited()
+
+
+@pytest.mark.asyncio
 async def test_route_command_message_ignores_mixed_case_canonical_command_with_mixed_case_bot_mention() -> (
     None
 ):
