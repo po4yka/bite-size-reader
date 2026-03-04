@@ -43,7 +43,7 @@ Bite-Size Reader is now **Rust-first in production** with Python fallbacks decom
 
 The migration follows a parity-first approach: external contracts remain stable while internals move from Python modules to Rust components over time.
 
-Current completed milestones:
+Current milestone status:
 
 - ✅ **M0**: Contract freeze + parity suite + baseline metrics capture (`scripts/migration/*`, `docs/migration/baseline_metrics.json`)
 - ✅ **M1**: Rust workspace foundation with shared crates for config, logging, and summary-contract validation (`rust/`)
@@ -51,6 +51,10 @@ Current completed milestones:
 - ✅ **M3**: Pipeline slices with Rust-authoritative runtime execution and parity fixtures (`docs/migration/m3.md`)
 - ✅ **M4**: Interface-layer Rust routing for Mobile API + Telegram commands with parity fixtures (`docs/migration/m4.md`)
 - ✅ **M5**: Rust-first cutover defaults + Python fallback decommission for migrated slices (`docs/migration/m5.md`)
+- 🟡 **M6**: Telegram command-route migration slices (S1-S12) are implemented
+  with Rust-authoritative route decisions; Python handlers/orchestration remain
+  in scope for later slices (`docs/migration/runtime-inventory-matrix.md`,
+  `scripts/migration/run_m6_telegram_runtime_suite.sh`)
 
 ---
 

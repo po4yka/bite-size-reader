@@ -188,6 +188,8 @@ This roadmap tracks the project-wide migration from the current Python runtime t
       `docs/environment_variables.md`,
       `docs/how-to/migrate-versions.md`,
       `docs/migration/runtime-inventory-matrix.md`
+    - M6-S11 documentation drift hardening (remove stale backend-toggle rollout guidance):
+      `rust/README.md`
     - M6-S12 command-dispatch complexity hardening (table-driven Telegram command routing):
       `app/adapters/telegram/message_router_content.py`,
       `tests/test_message_router_interface_routing.py`,
