@@ -322,6 +322,10 @@ This roadmap tracks the project-wide migration from the current Python runtime t
       `rust/crates/bsr-telegram-runtime/src/lib.rs`,
       `tests/test_message_router_interface_routing.py`,
       `docs/migration/runtime-inventory-matrix.md`
+    - M6-S45 mixed-case command bare bot-mention case-sensitivity parity hardening (explicit mixed-case known-alias fixture with lowercase username `@bot` mention and without trailing arguments coverage for non-handled passthrough semantics in Rust + bridge tests):
+      `rust/crates/bsr-telegram-runtime/src/lib.rs`,
+      `tests/test_message_router_interface_routing.py`,
+      `docs/migration/runtime-inventory-matrix.md`
 
 ## Cross-Cutting Workstreams
 
