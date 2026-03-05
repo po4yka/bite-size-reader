@@ -132,3 +132,11 @@ app/static/digest/
 
 # --- Rust ---
 rust/target/
+
+# --- Ralph (migration agent) ---
+.ralph/
+ralph.yml
+PROMPT.md
+
+# --- Desloppify ---
+.desloppify/
