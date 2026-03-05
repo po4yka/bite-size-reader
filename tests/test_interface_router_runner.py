@@ -11,6 +11,7 @@ from app.migration.interface_router import (
     build_python_telegram_command_decision,
     rewrite_command_prefix,
 )
+from tests.rust_bridge_helpers import ensure_rust_binary
 
 
 def _runtime_cfg(**overrides: object) -> SimpleNamespace:
@@ -137,3 +138,20 @@ async def test_telegram_command_decision_uses_token_cache() -> None:
     assert first.command == "/find"
     assert second.command == "/find"
     assert rust_call.call_count == 1
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_interface_runner_executes_real_rust_binary(monkeypatch) -> None:
+    binary = ensure_rust_binary("bsr-interface-router", "bsr-interface-router")
+    monkeypatch.setenv("INTERFACE_ROUTER_RUST_BIN", str(binary))
+
+    runner = InterfaceRouterRunner(_runtime_cfg(migration_interface_timeout_ms=2_000))
+    mobile = await runner.resolve_mobile_route(method="GET", path="/v1/summaries")
+    command = await runner.resolve_telegram_command(text="/findonline rust migration")
+
+    assert mobile.route_key == "summaries"
+    assert mobile.rate_limit_bucket == "summaries"
+    assert mobile.handled is True
+    assert command.command == "/find"
+    assert command.handled is True

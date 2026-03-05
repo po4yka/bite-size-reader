@@ -6,6 +6,7 @@ from unittest.mock import patch
 import pytest
 
 from app.migration.telegram_runtime import TelegramRuntimeRunner
+from tests.rust_bridge_helpers import ensure_rust_binary
 
 
 def _runtime_cfg(**overrides: object) -> SimpleNamespace:
@@ -102,3 +103,16 @@ async def test_command_route_uses_shared_non_command_cache_bucket() -> None:
     assert first.handled is False
     assert second.handled is False
     assert rust_call.call_count == 1
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_telegram_runtime_runner_executes_real_rust_binary(monkeypatch) -> None:
+    binary = ensure_rust_binary("bsr-telegram-runtime", "bsr-telegram-runtime")
+    monkeypatch.setenv("TELEGRAM_RUNTIME_RUST_BIN", str(binary))
+
+    runner = TelegramRuntimeRunner(_runtime_cfg(migration_telegram_runtime_timeout_ms=2_000))
+    decision = await runner.resolve_command_route(text="/findonline rust migration")
+
+    assert decision.command == "/find"
+    assert decision.handled is True

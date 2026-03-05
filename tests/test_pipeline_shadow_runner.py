@@ -12,6 +12,7 @@ from app.migration.pipeline_shadow import (
     build_python_chunking_preprocess_snapshot_from_input,
     build_python_extraction_adapter_snapshot,
 )
+from tests.rust_bridge_helpers import ensure_rust_binary
 
 
 def _runtime_cfg(**overrides: object) -> SimpleNamespace:
@@ -326,6 +327,28 @@ async def test_resolve_chunk_synthesis_prompt_ignores_disabled_mode_and_uses_rus
         )
 
     assert result == expected
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_pipeline_shadow_runner_executes_real_rust_binary(monkeypatch) -> None:
+    binary = ensure_rust_binary("bsr-pipeline-shadow", "bsr-pipeline-shadow")
+    monkeypatch.setenv("PIPELINE_SHADOW_RUST_BIN", str(binary))
+
+    runner = PipelineShadowRunner(_runtime_cfg(migration_shadow_mode_timeout_ms=2_000))
+    snapshot = await runner.resolve_extraction_adapter(
+        correlation_id="integration-cid",
+        request_id=777,
+        url_hash="integration-hash",
+        content_text="Rust bridge integration keeps extraction snapshots aligned.",
+        content_source="markdown",
+        title="Bridge integration",
+        images_count=0,
+    )
+
+    assert snapshot.get("url_hash") == "integration-hash"
+    assert snapshot.get("content_source") == "markdown"
+    assert "language_hint" in snapshot
 
 
 @pytest.mark.asyncio
