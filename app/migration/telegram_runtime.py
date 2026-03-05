@@ -5,6 +5,7 @@ import json
 import logging
 import os
 import subprocess
+from collections import OrderedDict
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -14,6 +15,7 @@ from app.migration.cutover_monitor import record_cutover_event
 logger = logging.getLogger(__name__)
 
 _TELEGRAM_RUNTIME_BIN_ENV = "TELEGRAM_RUNTIME_RUST_BIN"
+_NON_COMMAND_CACHE_KEY = "__m6_non_command__"
 
 
 @dataclass(frozen=True)
@@ -31,6 +33,14 @@ class TelegramRuntimeCommandDecision:
 
     def to_mapping(self) -> dict[str, Any]:
         return {"command": self.command, "handled": self.handled}
+
+
+def _command_route_cache_key(text: str) -> str:
+    raw_text = text or ""
+    if not raw_text.startswith("/"):
+        return _NON_COMMAND_CACHE_KEY
+    token = raw_text.split(maxsplit=1)[0]
+    return token or _NON_COMMAND_CACHE_KEY
 
 
 def _repo_root() -> Path:
@@ -114,6 +124,22 @@ class TelegramRuntimeRunner:
         self.options = TelegramRuntimeOptions(
             timeout_ms=int(getattr(runtime_cfg, "migration_telegram_runtime_timeout_ms", 150)),
         )
+        self._cache_max_entries = 1024
+        self._command_route_cache: OrderedDict[str, TelegramRuntimeCommandDecision] = OrderedDict()
+
+    def _get_cached_command_route(self, key: str) -> TelegramRuntimeCommandDecision | None:
+        cached = self._command_route_cache.get(key)
+        if cached is not None:
+            self._command_route_cache.move_to_end(key)
+        return cached
+
+    def _store_cached_command_route(
+        self, key: str, decision: TelegramRuntimeCommandDecision
+    ) -> None:
+        self._command_route_cache[key] = decision
+        self._command_route_cache.move_to_end(key)
+        if len(self._command_route_cache) > self._cache_max_entries:
+            self._command_route_cache.popitem(last=False)
 
     async def resolve_command_route(
         self,
@@ -123,15 +149,22 @@ class TelegramRuntimeRunner:
         actor_key: str | None = None,
     ) -> TelegramRuntimeCommandDecision:
         _ = actor_key
+        cache_key = _command_route_cache_key(text)
+        cached = self._get_cached_command_route(cache_key)
+        if cached is not None:
+            return cached
+        rust_input_text = "not-a-command" if cache_key == _NON_COMMAND_CACHE_KEY else cache_key
 
         try:
             actual_payload = await asyncio.to_thread(
                 run_rust_telegram_runtime_command,
                 "command-route",
-                {"text": text},
+                {"text": rust_input_text},
                 timeout_ms=self.options.timeout_ms,
             )
-            return TelegramRuntimeCommandDecision.from_mapping(actual_payload)
+            decision = TelegramRuntimeCommandDecision.from_mapping(actual_payload)
+            self._store_cached_command_route(cache_key, decision)
+            return decision
         except Exception as exc:
             logger.warning(
                 "m6_telegram_runtime_error",

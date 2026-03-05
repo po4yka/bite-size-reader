@@ -5,6 +5,7 @@ import json
 import logging
 import os
 import subprocess
+from collections import OrderedDict
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -14,6 +15,7 @@ from app.migration.cutover_monitor import record_cutover_event
 logger = logging.getLogger(__name__)
 
 _ROUTER_BIN_ENV = "INTERFACE_ROUTER_RUST_BIN"
+_NON_COMMAND_CACHE_KEY = "__m4_non_command__"
 
 
 @dataclass(frozen=True)
@@ -174,6 +176,14 @@ def rewrite_command_prefix(text: str, canonical_command: str) -> str:
     return f"{canonical_command} {remainder}".rstrip()
 
 
+def _command_cache_key(text: str) -> str:
+    raw_text = text or ""
+    if not raw_text.startswith("/"):
+        return _NON_COMMAND_CACHE_KEY
+    token = raw_text.split(maxsplit=1)[0]
+    return token or _NON_COMMAND_CACHE_KEY
+
+
 def _repo_root() -> Path:
     return Path(__file__).resolve().parents[2]
 
@@ -250,6 +260,39 @@ class InterfaceRouterRunner:
             .lower(),
             timeout_ms=int(getattr(runtime_cfg, "migration_interface_timeout_ms", 150)),
         )
+        self._cache_max_entries = 512
+        self._mobile_route_cache: OrderedDict[tuple[str, str], MobileRouteDecision] = OrderedDict()
+        self._telegram_command_cache: OrderedDict[str, TelegramCommandDecision] = OrderedDict()
+
+    @staticmethod
+    def _mobile_route_cache_key(method: str, path: str) -> tuple[str, str]:
+        return ((method or "").strip().upper(), path or "/")
+
+    def _get_cached_mobile_route(self, key: tuple[str, str]) -> MobileRouteDecision | None:
+        cached = self._mobile_route_cache.get(key)
+        if cached is not None:
+            self._mobile_route_cache.move_to_end(key)
+        return cached
+
+    def _store_cached_mobile_route(
+        self, key: tuple[str, str], decision: MobileRouteDecision
+    ) -> None:
+        self._mobile_route_cache[key] = decision
+        self._mobile_route_cache.move_to_end(key)
+        if len(self._mobile_route_cache) > self._cache_max_entries:
+            self._mobile_route_cache.popitem(last=False)
+
+    def _get_cached_telegram_command(self, key: str) -> TelegramCommandDecision | None:
+        cached = self._telegram_command_cache.get(key)
+        if cached is not None:
+            self._telegram_command_cache.move_to_end(key)
+        return cached
+
+    def _store_cached_telegram_command(self, key: str, decision: TelegramCommandDecision) -> None:
+        self._telegram_command_cache[key] = decision
+        self._telegram_command_cache.move_to_end(key)
+        if len(self._telegram_command_cache) > self._cache_max_entries:
+            self._telegram_command_cache.popitem(last=False)
 
     def _normalized_backend(self) -> str:
         backend = self.options.backend
@@ -270,12 +313,16 @@ class InterfaceRouterRunner:
     ) -> MobileRouteDecision:
         backend = self._normalized_backend()
         _ = actor_key
+        cache_key = self._mobile_route_cache_key(method, path)
+        cached = self._get_cached_mobile_route(cache_key)
+        if cached is not None:
+            return cached
 
         try:
             actual_payload = await asyncio.to_thread(
                 run_rust_interface_command,
                 "mobile-route",
-                {"method": method, "path": path},
+                {"method": cache_key[0], "path": cache_key[1]},
                 timeout_ms=self.options.timeout_ms,
             )
         except Exception as exc:
@@ -293,7 +340,9 @@ class InterfaceRouterRunner:
             msg = "Rust interface mobile-route failed; Python fallback is decommissioned."
             raise RuntimeError(msg) from exc
 
-        return MobileRouteDecision.from_mapping(actual_payload)
+        decision = MobileRouteDecision.from_mapping(actual_payload)
+        self._store_cached_mobile_route(cache_key, decision)
+        return decision
 
     async def resolve_telegram_command(
         self,
@@ -304,12 +353,17 @@ class InterfaceRouterRunner:
     ) -> TelegramCommandDecision:
         backend = self._normalized_backend()
         _ = actor_key
+        cache_key = _command_cache_key(text)
+        cached = self._get_cached_telegram_command(cache_key)
+        if cached is not None:
+            return cached
+        rust_input_text = "not-a-command" if cache_key == _NON_COMMAND_CACHE_KEY else cache_key
 
         try:
             actual_payload = await asyncio.to_thread(
                 run_rust_interface_command,
                 "telegram-command",
-                {"text": text},
+                {"text": rust_input_text},
                 timeout_ms=self.options.timeout_ms,
             )
         except Exception as exc:
@@ -327,4 +381,6 @@ class InterfaceRouterRunner:
             msg = "Rust interface telegram-command failed; Python fallback is decommissioned."
             raise RuntimeError(msg) from exc
 
-        return TelegramCommandDecision.from_mapping(actual_payload)
+        decision = TelegramCommandDecision.from_mapping(actual_payload)
+        self._store_cached_telegram_command(cache_key, decision)
+        return decision

@@ -72,3 +72,33 @@ async def test_legacy_backend_toggle_is_ignored_with_warning() -> None:
         decision = await runner.resolve_command_route(text="/start")
     assert decision.command == "/start"
     assert decision.handled is True
+
+
+@pytest.mark.asyncio
+async def test_command_route_uses_cache_for_same_command_token() -> None:
+    runner = TelegramRuntimeRunner(_runtime_cfg())
+    with patch(
+        "app.migration.telegram_runtime.run_rust_telegram_runtime_command",
+        return_value={"command": "/find", "handled": True},
+    ) as rust_call:
+        first = await runner.resolve_command_route(text="/findonline rust migration")
+        second = await runner.resolve_command_route(text="/findonline another query")
+
+    assert first.command == "/find"
+    assert second.command == "/find"
+    assert rust_call.call_count == 1
+
+
+@pytest.mark.asyncio
+async def test_command_route_uses_shared_non_command_cache_bucket() -> None:
+    runner = TelegramRuntimeRunner(_runtime_cfg())
+    with patch(
+        "app.migration.telegram_runtime.run_rust_telegram_runtime_command",
+        return_value={"command": None, "handled": False},
+    ) as rust_call:
+        first = await runner.resolve_command_route(text="hello")
+        second = await runner.resolve_command_route(text="world")
+
+    assert first.handled is False
+    assert second.handled is False
+    assert rust_call.call_count == 1

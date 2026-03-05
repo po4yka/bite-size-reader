@@ -101,3 +101,39 @@ async def test_rust_mode_raises_on_error_without_python_fallback() -> None:
     event_call.assert_called_once()
     assert event_call.call_args.kwargs["event_type"] == "rust_failure"
     assert event_call.call_args.kwargs["surface"] == "interface_telegram_command"
+
+
+@pytest.mark.asyncio
+async def test_mobile_route_decision_uses_cache_for_repeated_routes() -> None:
+    runner = InterfaceRouterRunner(_runtime_cfg())
+    rust_payload = {
+        "route_key": "summaries",
+        "rate_limit_bucket": "summaries",
+        "requires_auth": True,
+        "handled": True,
+    }
+    with patch(
+        "app.migration.interface_router.run_rust_interface_command",
+        return_value=rust_payload,
+    ) as rust_call:
+        first = await runner.resolve_mobile_route(method="GET", path="/v1/summaries")
+        second = await runner.resolve_mobile_route(method="get", path="/v1/summaries")
+
+    assert first.route_key == "summaries"
+    assert second.route_key == "summaries"
+    assert rust_call.call_count == 1
+
+
+@pytest.mark.asyncio
+async def test_telegram_command_decision_uses_token_cache() -> None:
+    runner = InterfaceRouterRunner(_runtime_cfg())
+    with patch(
+        "app.migration.interface_router.run_rust_interface_command",
+        return_value={"command": "/find", "handled": True},
+    ) as rust_call:
+        first = await runner.resolve_telegram_command(text="/findonline rust migration")
+        second = await runner.resolve_telegram_command(text="/findonline another query")
+
+    assert first.command == "/find"
+    assert second.command == "/find"
+    assert rust_call.call_count == 1
