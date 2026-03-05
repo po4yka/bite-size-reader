@@ -367,7 +367,7 @@ pub fn build_summary_user_content_snapshot(
     input: &SummaryUserContentInput,
 ) -> SummaryUserContentSnapshot {
     let content_hint = detect_summary_content_type_hint(&input.content_for_summary);
-    let response_language = if input.chosen_lang == "ru" {
+    let response_language = if input.chosen_lang.trim().eq_ignore_ascii_case("ru") {
         "Russian"
     } else {
         "English"
@@ -1482,5 +1482,17 @@ mod tests {
         assert!(snapshot.user_content.contains("CONTENT START"));
         assert!(snapshot.user_content.contains("CONTENT END"));
         assert!(snapshot.user_content.contains("WEB SEARCH CONTEXT"));
+    }
+
+    #[test]
+    fn summary_user_content_snapshot_treats_uppercase_ru_as_russian() {
+        let input = SummaryUserContentInput {
+            content_for_summary: "Simple content.".to_string(),
+            chosen_lang: " RU ".to_string(),
+            search_context: String::new(),
+        };
+
+        let snapshot = build_summary_user_content_snapshot(&input);
+        assert!(snapshot.user_content.contains("Respond in Russian."));
     }
 }
