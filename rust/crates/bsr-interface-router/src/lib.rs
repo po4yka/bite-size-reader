@@ -70,43 +70,43 @@ pub fn resolve_mobile_route(input: &MobileRouteInput) -> MobileRouteDecision {
     let mut bucket = "default".to_string();
     let mut handled = false;
 
-    if path.starts_with("/v1/auth") {
+    if matches_route_prefix(&path, "/v1/auth") {
         route_key = "auth".to_string();
         handled = true;
-    } else if path.starts_with("/v1/collections") {
+    } else if matches_route_prefix(&path, "/v1/collections") {
         route_key = "collections".to_string();
         handled = true;
-    } else if path.starts_with("/v1/summaries") {
+    } else if matches_route_prefix(&path, "/v1/summaries") {
         route_key = "summaries".to_string();
         bucket = "summaries".to_string();
         handled = true;
-    } else if path.starts_with("/v1/articles") {
+    } else if matches_route_prefix(&path, "/v1/articles") {
         route_key = "articles".to_string();
         handled = true;
-    } else if path.starts_with("/v1/requests") {
+    } else if matches_route_prefix(&path, "/v1/requests") {
         route_key = "requests".to_string();
         bucket = "requests".to_string();
         handled = true;
-    } else if path.starts_with("/v1/search") {
+    } else if matches_route_prefix(&path, "/v1/search") {
         route_key = "search".to_string();
         bucket = "search".to_string();
         handled = true;
-    } else if path.starts_with("/v1/sync") {
+    } else if matches_route_prefix(&path, "/v1/sync") {
         route_key = "sync".to_string();
         handled = true;
-    } else if path.starts_with("/v1/user") {
+    } else if matches_route_prefix(&path, "/v1/user") {
         route_key = "user".to_string();
         handled = true;
-    } else if path.starts_with("/v1/system") {
+    } else if matches_route_prefix(&path, "/v1/system") {
         route_key = "system".to_string();
         handled = true;
-    } else if path.starts_with("/v1/proxy") {
+    } else if matches_route_prefix(&path, "/v1/proxy") {
         route_key = "proxy".to_string();
         handled = true;
-    } else if path.starts_with("/v1/notifications") {
+    } else if matches_route_prefix(&path, "/v1/notifications") {
         route_key = "notifications".to_string();
         handled = true;
-    } else if path.starts_with("/v1/digest") {
+    } else if matches_route_prefix(&path, "/v1/digest") {
         route_key = "digest".to_string();
         handled = true;
     }
@@ -182,6 +182,15 @@ fn normalize_path(path: &str) -> String {
     path.to_string()
 }
 
+fn matches_route_prefix(path: &str, prefix: &str) -> bool {
+    if path == prefix {
+        return true;
+    }
+
+    path.strip_prefix(prefix)
+        .is_some_and(|rest| rest.starts_with('/') || rest.starts_with('?'))
+}
+
 fn strip_bot_mention(token: &str) -> String {
     let Some(stripped) = token.strip_prefix('/') else {
         return token.to_string();
@@ -226,6 +235,30 @@ mod tests {
         });
         assert_eq!(decision.route_key, "articles");
         assert_eq!(decision.rate_limit_bucket, "default");
+        assert!(decision.requires_auth);
+        assert!(decision.handled);
+    }
+
+    #[test]
+    fn mobile_route_rejects_partial_segment_overmatch() {
+        let decision = resolve_mobile_route(&MobileRouteInput {
+            method: "GET".to_string(),
+            path: "/v1/summariesevil".to_string(),
+        });
+        assert_eq!(decision.route_key, "unknown");
+        assert_eq!(decision.rate_limit_bucket, "default");
+        assert!(decision.requires_auth);
+        assert!(!decision.handled);
+    }
+
+    #[test]
+    fn mobile_route_accepts_nested_segment_match() {
+        let decision = resolve_mobile_route(&MobileRouteInput {
+            method: "GET".to_string(),
+            path: "/v1/summaries/123".to_string(),
+        });
+        assert_eq!(decision.route_key, "summaries");
+        assert_eq!(decision.rate_limit_bucket, "summaries");
         assert!(decision.requires_auth);
         assert!(decision.handled);
     }
