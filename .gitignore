@@ -140,3 +140,8 @@ PROMPT.md
 
 # --- Desloppify ---
 .desloppify/
+
+# --- Local audit artifacts ---
+.desloppify/*
+docs/
+scorecard.png
