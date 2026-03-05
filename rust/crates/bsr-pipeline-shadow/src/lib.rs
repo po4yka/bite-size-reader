@@ -1130,7 +1130,7 @@ fn parse_python_int(value: Option<&Value>) -> Option<i64> {
             .as_i64()
             .or_else(|| num.as_u64().map(|v| v as i64))
             .or_else(|| num.as_f64().map(|v| v as i64)),
-        Some(Value::String(text)) => text.parse::<i64>().ok(),
+        Some(Value::String(text)) => text.trim().parse::<i64>().ok(),
         Some(Value::Array(_)) | Some(Value::Object(_)) => None,
     }
 }
@@ -1146,7 +1146,7 @@ fn parse_python_float(value: Option<&Value>) -> f64 {
             }
         }
         Some(Value::Number(num)) => num.as_f64().unwrap_or(0.0),
-        Some(Value::String(text)) => text.parse::<f64>().unwrap_or(0.0),
+        Some(Value::String(text)) => text.trim().parse::<f64>().unwrap_or(0.0),
         Some(Value::Array(_)) | Some(Value::Object(_)) => 0.0,
     }
 }
@@ -1438,6 +1438,29 @@ mod tests {
             .and_then(|insights| insights.get("new_facts"))
             .and_then(Value::as_array)
             .is_some_and(|facts| facts.len() == 2));
+    }
+
+    #[test]
+    fn summary_aggregate_parses_whitespace_padded_numeric_strings() {
+        let input = SummaryAggregateInput {
+            summaries: vec![serde_json::json!({
+                "summary_250": "Chunk one summary.",
+                "estimated_reading_time_min": " 3 ",
+            })],
+        };
+
+        let snapshot = build_summary_aggregate_snapshot(&input);
+        let object = snapshot
+            .as_object()
+            .expect("summary aggregate should be object");
+
+        assert_eq!(
+            object
+                .get("estimated_reading_time_min")
+                .and_then(Value::as_i64)
+                .unwrap_or_default(),
+            3
+        );
     }
 
     #[test]

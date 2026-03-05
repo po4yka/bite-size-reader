@@ -29,7 +29,7 @@ pub fn resolve_mobile_route(input: &MobileRouteInput) -> MobileRouteDecision {
     let method = input.method.trim().to_uppercase();
     let path = normalize_path(&input.path);
 
-    if path == "/" {
+    if path == "/" || path.starts_with("/?") {
         return MobileRouteDecision {
             route_key: "root".to_string(),
             rate_limit_bucket: "default".to_string(),
@@ -37,7 +37,7 @@ pub fn resolve_mobile_route(input: &MobileRouteInput) -> MobileRouteDecision {
             handled: true,
         };
     }
-    if path == "/health" {
+    if matches_route_prefix(&path, "/health") {
         return MobileRouteDecision {
             route_key: "health".to_string(),
             rate_limit_bucket: "default".to_string(),
@@ -45,7 +45,7 @@ pub fn resolve_mobile_route(input: &MobileRouteInput) -> MobileRouteDecision {
             handled: true,
         };
     }
-    if path == "/metrics" {
+    if matches_route_prefix(&path, "/metrics") {
         return MobileRouteDecision {
             route_key: "metrics".to_string(),
             rate_limit_bucket: "default".to_string(),
@@ -53,10 +53,10 @@ pub fn resolve_mobile_route(input: &MobileRouteInput) -> MobileRouteDecision {
             handled: true,
         };
     }
-    if path == "/docs"
-        || path == "/redoc"
-        || path == "/openapi.json"
-        || path.starts_with("/static/")
+    if matches_route_prefix(&path, "/docs")
+        || matches_route_prefix(&path, "/redoc")
+        || matches_route_prefix(&path, "/openapi.json")
+        || matches_route_prefix(&path, "/static")
     {
         return MobileRouteDecision {
             route_key: "docs".to_string(),
@@ -220,6 +220,18 @@ mod tests {
         let decision = resolve_mobile_route(&MobileRouteInput {
             method: "GET".to_string(),
             path: "/health".to_string(),
+        });
+        assert_eq!(decision.route_key, "health");
+        assert_eq!(decision.rate_limit_bucket, "default");
+        assert!(!decision.requires_auth);
+        assert!(decision.handled);
+    }
+
+    #[test]
+    fn mobile_route_health_with_query_string_is_public_and_handled() {
+        let decision = resolve_mobile_route(&MobileRouteInput {
+            method: "GET".to_string(),
+            path: "/health?probe=1".to_string(),
         });
         assert_eq!(decision.route_key, "health");
         assert_eq!(decision.rate_limit_bucket, "default");

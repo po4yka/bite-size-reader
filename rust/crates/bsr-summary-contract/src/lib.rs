@@ -1253,36 +1253,65 @@ fn shape_questions_answered(raw: Option<&Value>) -> Vec<Value> {
 }
 
 fn parse_qa_string(raw: &str) -> Option<(String, String)> {
-    let lowercase = raw.to_lowercase();
+    let trimmed = raw.trim();
 
-    if lowercase.starts_with("q:") {
-        if let Some(answer_idx) = lowercase.find("a:") {
-            let question = raw[2..answer_idx].trim();
-            let answer = raw[answer_idx + 2..].trim();
+    if let Some(rest) = strip_ascii_prefix_ci(trimmed, "q:") {
+        if let Some(answer_idx) = find_ascii_ci(rest, "a:") {
+            let question = rest[..answer_idx].trim();
+            let answer = rest[answer_idx + 2..].trim();
             if !question.is_empty() && !answer.is_empty() {
                 return Some((question.to_string(), answer.to_string()));
             }
         }
     }
 
-    if lowercase.starts_with("question:") {
-        if let Some(answer_idx) = lowercase.find("answer:") {
-            let question = raw[9..answer_idx].trim();
-            let answer = raw[answer_idx + 7..].trim();
+    if let Some(rest) = strip_ascii_prefix_ci(trimmed, "question:") {
+        if let Some(answer_idx) = find_ascii_ci(rest, "answer:") {
+            let question = rest[..answer_idx].trim();
+            let answer = rest[answer_idx + "answer:".len()..].trim();
             if !question.is_empty() && !answer.is_empty() {
                 return Some((question.to_string(), answer.to_string()));
             }
         }
     }
 
-    if let Some(question_mark_idx) = raw.find('?') {
-        let question = raw[..question_mark_idx].trim();
-        let answer = raw[question_mark_idx + 1..].trim();
+    if let Some(question_mark_idx) = trimmed.find('?') {
+        let question = trimmed[..question_mark_idx].trim();
+        let answer = trimmed[question_mark_idx + 1..].trim();
         if !question.is_empty() && !answer.is_empty() {
             return Some((question.to_string(), answer.to_string()));
         }
     }
 
+    None
+}
+
+fn strip_ascii_prefix_ci<'a>(value: &'a str, prefix: &str) -> Option<&'a str> {
+    let head = value.get(..prefix.len())?;
+    if head.eq_ignore_ascii_case(prefix) {
+        value.get(prefix.len()..)
+    } else {
+        None
+    }
+}
+
+fn find_ascii_ci(value: &str, needle: &str) -> Option<usize> {
+    if needle.is_empty() {
+        return Some(0);
+    }
+
+    let end = value.len().checked_sub(needle.len())?;
+    for (idx, _) in value.char_indices() {
+        if idx > end {
+            break;
+        }
+        if value
+            .get(idx..idx + needle.len())
+            .is_some_and(|segment| segment.eq_ignore_ascii_case(needle))
+        {
+            return Some(idx);
+        }
+    }
     None
 }
 
@@ -1578,30 +1607,43 @@ fn normalize_entities_field(raw: Option<&Value>) -> Value {
         Some(Value::Array(items)) => {
             for item in items {
                 if let Value::Object(obj) = item {
+                    let mut bucket_key_used: Option<&str> = None;
                     let bucket = obj
                         .get("type")
                         .and_then(Value::as_str)
-                        .and_then(resolve_entity_bucket)
+                        .and_then(|value| {
+                            bucket_key_used = Some("type");
+                            resolve_entity_bucket(value)
+                        })
                         .or_else(|| {
                             obj.get("category")
                                 .and_then(Value::as_str)
-                                .and_then(resolve_entity_bucket)
+                                .and_then(|value| {
+                                    bucket_key_used = Some("category");
+                                    resolve_entity_bucket(value)
+                                })
                         })
                         .or_else(|| {
                             obj.get("label")
                                 .and_then(Value::as_str)
-                                .and_then(resolve_entity_bucket)
+                                .and_then(|value| {
+                                    bucket_key_used = Some("label");
+                                    resolve_entity_bucket(value)
+                                })
                         })
                         .or_else(|| {
                             obj.get("group")
                                 .and_then(Value::as_str)
-                                .and_then(resolve_entity_bucket)
+                                .and_then(|value| {
+                                    bucket_key_used = Some("group");
+                                    resolve_entity_bucket(value)
+                                })
                         })
                         .unwrap_or("people");
                     buckets
                         .entry(bucket)
                         .or_default()
-                        .extend(coerce_entity_values(item));
+                        .extend(coerce_entity_values_for_item(obj, bucket_key_used));
                 } else {
                     buckets
                         .entry("people")
@@ -1624,6 +1666,36 @@ fn normalize_entities_field(raw: Option<&Value>) -> Value {
         "organizations": dedupe_case_insensitive(buckets.remove("organizations").unwrap_or_default()),
         "locations": dedupe_case_insensitive(buckets.remove("locations").unwrap_or_default()),
     })
+}
+
+fn coerce_entity_values_for_item(
+    obj: &Map<String, Value>,
+    bucket_key_used: Option<&str>,
+) -> Vec<String> {
+    let nested_keys = ["entities", "items", "names", "values", "list", "members"];
+    for key in nested_keys {
+        if let Some(value) = obj.get(key) {
+            return coerce_entity_values(value);
+        }
+    }
+
+    for key in ["name", "entity", "text", "value", "label"] {
+        if bucket_key_used.is_some_and(|bucket_key| bucket_key == key) {
+            continue;
+        }
+        if let Some(value) = obj.get(key) {
+            return coerce_entity_values(value);
+        }
+    }
+
+    obj.iter()
+        .filter(|(key, _)| {
+            let key = key.as_str();
+            !is_entity_metadata_key(key)
+                && (bucket_key_used != Some(key))
+        })
+        .flat_map(|(_, value)| coerce_entity_values(value))
+        .collect()
 }
 
 fn resolve_entity_bucket(raw: &str) -> Option<&'static str> {
@@ -1659,16 +1731,47 @@ fn coerce_entity_values(raw: &Value) -> Vec<String> {
                 }
             }
 
-            let fallback_keys = ["name", "label", "entity", "text", "value"];
+            let fallback_keys = ["name", "entity", "text", "value"];
             for key in fallback_keys {
                 if let Some(value) = obj.get(key) {
                     return coerce_entity_values(value);
                 }
             }
 
-            obj.values().flat_map(coerce_entity_values).collect()
+            obj.iter()
+                .filter(|(key, _)| !is_entity_metadata_key(key))
+                .flat_map(|(_, value)| coerce_entity_values(value))
+                .collect()
         }
     }
+}
+
+fn is_entity_metadata_key(key: &str) -> bool {
+    matches!(
+        key.trim().to_lowercase().as_str(),
+        "type"
+            | "category"
+            | "group"
+            | "kind"
+            | "confidence"
+            | "score"
+            | "probability"
+            | "relevance"
+            | "salience"
+            | "weight"
+            | "rank"
+            | "start"
+            | "end"
+            | "offset"
+            | "count"
+            | "id"
+            | "uid"
+            | "uuid"
+            | "metadata"
+            | "attrs"
+            | "attributes"
+            | "meta"
+    )
 }
 
 const SQLITE_REQUIRED_COLUMNS: &[(&str, &[&str])] = &[
@@ -1876,6 +1979,54 @@ mod tests {
                 .cloned()
                 .unwrap_or(Value::Null),
             json!(["OpenAI"])
+        );
+    }
+
+    #[test]
+    fn parse_qa_string_preserves_unicode_boundaries() {
+        let input = json!({
+            "summary_250": "short",
+            "questions_answered": ["Question: İ test Answer: ok"],
+        });
+
+        let output = validate_and_shape_summary(&input).expect("should shape summary");
+
+        assert_eq!(
+            output
+                .get("questions_answered")
+                .and_then(Value::as_array)
+                .and_then(|items| items.first())
+                .cloned()
+                .unwrap_or(Value::Null),
+            json!({
+                "question": "İ test",
+                "answer": "ok",
+            })
+        );
+    }
+
+    #[test]
+    fn entity_array_items_ignore_metadata_without_entity_values() {
+        let input = json!({
+            "summary_250": "short",
+            "entities": [
+                {
+                    "type": "organization",
+                    "confidence": 0.9
+                }
+            ]
+        });
+
+        let output = validate_and_shape_summary(&input).expect("should shape summary");
+
+        assert_eq!(
+            output
+                .get("entities")
+                .and_then(Value::as_object)
+                .and_then(|obj| obj.get("organizations"))
+                .cloned()
+                .unwrap_or(Value::Null),
+            json!([])
         );
     }
 
