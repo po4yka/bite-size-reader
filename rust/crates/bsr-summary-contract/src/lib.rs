@@ -1658,6 +1658,29 @@ const SQLITE_REQUIRED_COLUMNS: &[(&str, &[&str])] = &[
     ("requests", &["id", "type", "status"]),
     ("summaries", &["id", "request_id", "json_payload"]),
 ];
+const SQLITE_ROUNDTRIP_REQUEST_INSERT_COLUMNS: &[&str] = &[
+    "type",
+    "status",
+    "input_url",
+    "normalized_url",
+    "created_at",
+    "updated_at",
+    "server_version",
+    "is_deleted",
+];
+const SQLITE_ROUNDTRIP_SUMMARY_INSERT_COLUMNS: &[&str] = &[
+    "request_id",
+    "lang",
+    "json_payload",
+    "insights_json",
+    "version",
+    "server_version",
+    "is_read",
+    "is_favorited",
+    "is_deleted",
+    "updated_at",
+    "created_at",
+];
 
 fn check_sqlite_compatibility_conn(
     conn: &Connection,
@@ -1677,6 +1700,18 @@ fn check_sqlite_compatibility_conn(
             .filter(|column| !existing_columns.contains(**column))
             .map(|column| (*column).to_string())
             .collect();
+
+        if let Some(insert_columns) = roundtrip_insert_columns(table_name) {
+            let unsupported_required_columns =
+                required_insert_columns_without_defaults(conn, table_name)?
+                    .into_iter()
+                    .filter(|column| !insert_columns.contains(&column.as_str()))
+                    .map(|column| {
+                        format!("{column} (required insert column unsupported by roundtrip)")
+                    });
+            missing_for_table.extend(unsupported_required_columns);
+        }
+
         missing_for_table.sort();
 
         if !missing_for_table.is_empty() {
@@ -1710,6 +1745,38 @@ fn table_columns(conn: &Connection, table_name: &str) -> Result<HashSet<String>,
     }
 
     Ok(columns)
+}
+
+fn roundtrip_insert_columns(table_name: &str) -> Option<&'static [&'static str]> {
+    match table_name {
+        "requests" => Some(SQLITE_ROUNDTRIP_REQUEST_INSERT_COLUMNS),
+        "summaries" => Some(SQLITE_ROUNDTRIP_SUMMARY_INSERT_COLUMNS),
+        _ => None,
+    }
+}
+
+fn required_insert_columns_without_defaults(
+    conn: &Connection,
+    table_name: &str,
+) -> Result<Vec<String>, rusqlite::Error> {
+    let mut stmt = conn.prepare(&format!("PRAGMA table_info({table_name})"))?;
+    let rows = stmt.query_map([], |row| {
+        let name: String = row.get(1)?;
+        let not_null: i64 = row.get(3)?;
+        let default_value: Option<String> = row.get(4)?;
+        let part_of_pk: i64 = row.get(5)?;
+        Ok((name, not_null != 0, default_value.is_some(), part_of_pk != 0))
+    })?;
+
+    let mut required = Vec::new();
+    for row in rows {
+        let (name, not_null, has_default, part_of_pk) = row?;
+        if not_null && !has_default && !part_of_pk {
+            required.push(name);
+        }
+    }
+
+    Ok(required)
 }
 
 fn unix_now_millis() -> i64 {
@@ -1865,5 +1932,38 @@ mod tests {
 
         drop(conn);
         sqlite_roundtrip_smoke(file.path()).expect("roundtrip should work");
+    }
+
+    #[test]
+    fn sqlite_compatibility_detects_required_columns_unsupported_by_roundtrip() {
+        let file = NamedTempFile::new().expect("temp file");
+        let conn = Connection::open(file.path()).expect("open sqlite");
+
+        conn.execute_batch(
+            "
+            CREATE TABLE requests (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                type TEXT NOT NULL,
+                status TEXT NOT NULL,
+                must_fill TEXT NOT NULL
+            );
+
+            CREATE TABLE summaries (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                request_id INTEGER UNIQUE,
+                json_payload TEXT NOT NULL
+            );
+            ",
+        )
+        .expect("create schema with extra required column");
+
+        let report = check_sqlite_compatibility_conn(&conn).expect("check report");
+        assert!(!report.compatible);
+        assert!(report.missing_columns.get("requests").is_some_and(|columns| {
+            columns.iter().any(|column| {
+                column.contains("must_fill")
+                    && column.contains("required insert column unsupported by roundtrip")
+            })
+        }));
     }
 }
