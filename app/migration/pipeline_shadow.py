@@ -113,7 +113,7 @@ def build_python_chunking_preprocess_snapshot(
 ) -> dict[str, Any]:
     content_length = len(content_text)
     safe_max_chars = max(1, int(max_chars))
-    chunk_size = max(4000, min(12000, safe_max_chars // 10))
+    chunk_size = min(max(4000, min(12000, safe_max_chars // 10)), safe_max_chars)
     chunk_candidate = bool(enable_chunking and content_length > safe_max_chars)
     has_long_context_model = bool(
         long_context_model is not None and str(long_context_model).strip()
