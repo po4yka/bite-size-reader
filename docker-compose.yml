@@ -234,7 +234,7 @@ services:
           memory: 512M
           cpus: "0.25"
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v2/heartbeat', timeout=5).read()"]
+      test: ["CMD", "bash", "-c", "echo > /dev/tcp/localhost/8000"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -250,5 +250,6 @@ services:
 networks:
   karakeep:
     name: karakeep_default
+    external: true
 volumes:
   redis_data:
