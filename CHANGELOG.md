@@ -32,6 +32,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Hardened X article extraction flow with strict article-path matching plus redirect/canonical resolution before routing
 - Added article-stage metadata fields for observability (`article_resolution_reason`, `article_resolved_url`, `article_canonical_url`, `article_id`, `article_extraction_stage`)
 - Added Twitter article config flags (`TWITTER_ARTICLE_REDIRECT_RESOLUTION_ENABLED`, `TWITTER_ARTICLE_RESOLUTION_TIMEOUT_SEC`, `TWITTER_ARTICLE_LIVE_SMOKE_ENABLED`)
+- Rust interface routing now treats query-suffixed public endpoints (`/health?*`, `/metrics?*`, `/docs?*`, `/openapi.json?*`) as handled routes.
+- Rust summary aggregation now trims whitespace-padded numeric strings before parsing (`" 3 "` -> `3`).
+- Rust logging bootstrap now falls back to `info` instead of panicking on invalid log-level config.
 
 ### Fixed
 - Updated tests for renamed ContentExtractor methods
@@ -40,6 +43,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Limited verification scope to prevent performance issues
 - Implemented integrity checks for data validation
 - Improved Playwright X article scraping reliability by moving to locator-first readiness and selector fallback diagnostics
+- Fixed Unicode boundary corruption in Rust `questions_answered` parsing for `Question:/Answer:` textual payloads.
+- Fixed Rust entity normalization to avoid emitting metadata-only values (for example `type`, `confidence`) as entity names.
 
 ## Release History
 

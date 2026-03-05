@@ -19,6 +19,18 @@ This workspace contains migration crates delivered across milestones **M1–M6**
 - M6 Telegram command-route execution is Rust-authoritative.
 - Legacy `MIGRATION_TELEGRAM_RUNTIME_BACKEND` values are ignored with a warning.
 
+## Recent Correctness Updates (2026-03-05)
+
+- `bsr-summary-contract`
+  - Unicode-safe `questions_answered` parsing for `Q:/A:` and `Question:/Answer:` text payloads.
+  - Entity-array normalization ignores metadata-only objects (for example, `type`, `confidence`) unless an entity value is present.
+- `bsr-pipeline-shadow`
+  - Aggregation parser trims numeric strings before conversion (for example, `" 3 "` now parses as `3`).
+- `bsr-interface-router`
+  - Public endpoints accept query-string variants (`/health?probe=1`, `/metrics?x=1`, `/docs?x=1`, `/openapi.json?x=1`).
+- `bsr-logging`
+  - Logging bootstrap no longer panics on invalid env/default log levels; it falls back to `info`.
+
 ## Local checks
 
 ```bash

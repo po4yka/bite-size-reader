@@ -11,7 +11,7 @@ Complete specification for the strict JSON schema enforced by Bite-Size Reader f
 ## Contract Version
 
 **Current Version:** 3.0
-**Last Updated:** 2026-02-09
+**Last Updated:** 2026-03-05
 
 **Validation Location:** `app/core/summary_contract.py`
 **Rust Service/Library (M2):** `rust/crates/bsr-summary-contract`
@@ -74,7 +74,8 @@ Complete specification for the strict JSON schema enforced by Bite-Size Reader f
 - `key_ideas`: 3-8 strings, deduplicated, 3-10 words each
 - `topic_tags`: 3-8 strings, leading `#`, deduplicated, max 10
 - `entities.*`: Deduplicated case-insensitively
-- `estimated_reading_time_min`: Integer >= 1
+- `entities` object-array inputs ignore metadata-only records unless an actual entity value is present
+- `estimated_reading_time_min`: Integer >= 0
 - `readability.audience_level`: Enum (Elementary, Middle School, High School, College, Graduate)
 
 ---
@@ -166,6 +167,7 @@ Complete specification for the strict JSON schema enforced by Bite-Size Reader f
 - `source_type`: Enum (article, video, academic_paper, podcast, documentation, blog_post, news_article, social_media, forum_post, other)
 - `content_type`: Enum (technical, general, academic, opinion, news, tutorial, review)
 - `extractive_quotes`: 0-5 quotes
+- `questions_answered` textual forms (`Q:/A:` and `Question:/Answer:`) are parsed with Unicode-safe boundary handling
 
 ---
 
@@ -523,4 +525,4 @@ summary_v2 = {
 
 ---
 
-**Last Updated:** 2026-02-09
+**Last Updated:** 2026-03-05
