@@ -722,7 +722,7 @@ async def _attempt_stream_request(
                     data = json.loads(body_text) if body_text else {}
                 except Exception:
                     data = {}
-                model_reported = data.get("model", model) if isinstance(data, dict) else model
+                model_reported = model
                 result = await self._handle_error_response(
                     status_code=status_code,
                     data=data if isinstance(data, dict) else {},

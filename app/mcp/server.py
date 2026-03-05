@@ -1286,7 +1286,7 @@ def list_collections(limit: int = 20, offset: int = 0) -> str:
 
         return json.dumps(
             {
-                "results": results,
+                "collections": results,
                 "total": total,
                 "limit": limit,
                 "offset": offset,
@@ -1429,7 +1429,7 @@ def list_videos(limit: int = 20, offset: int = 0, status: str | None = None) -> 
 
         return json.dumps(
             {
-                "results": results,
+                "videos": results,
                 "total": total,
                 "limit": limit,
                 "offset": offset,
