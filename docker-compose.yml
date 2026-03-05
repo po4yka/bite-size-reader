@@ -251,5 +251,4 @@ networks:
   karakeep:
     name: karakeep_default
 volumes:
-  chroma_data:
   redis_data:

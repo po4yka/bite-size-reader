@@ -2,7 +2,8 @@
 # Optimized for Raspberry Pi 5 (16GB RAM)
 #
 # Usage:
-#   docker-compose -f docker-compose.monitoring.yml up -d
+#   export GRAFANA_ADMIN_PASSWORD='<strong-password>'
+#   docker compose -f docker-compose.monitoring.yml up -d
 #
 # This creates a lightweight monitoring stack with:
 # - Prometheus: Metrics collection (512MB limit, 15-day retention)
