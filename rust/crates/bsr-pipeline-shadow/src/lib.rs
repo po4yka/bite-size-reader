@@ -187,7 +187,7 @@ pub fn build_chunking_preprocess_snapshot(
 ) -> ChunkingPreprocessSnapshot {
     let content_length = input.content_text.chars().count();
     let max_chars = input.max_chars.max(1);
-    let chunk_size = (max_chars / 10).clamp(4_000, 12_000);
+    let chunk_size = (max_chars / 10).clamp(4_000, 12_000).min(max_chars);
 
     let chunk_candidate = input.enable_chunking && content_length > max_chars;
     let long_context_bypass = chunk_candidate
@@ -1294,6 +1294,22 @@ mod tests {
         assert!(snapshot.long_context_bypass);
         assert!(!snapshot.should_chunk);
         assert_eq!(snapshot.estimated_chunk_count, 0);
+    }
+
+    #[test]
+    fn chunking_preprocess_snapshot_respects_small_max_chars() {
+        let input = ChunkingPreprocessInput {
+            content_text: "x".repeat(28),
+            enable_chunking: true,
+            max_chars: 20,
+            long_context_model: None,
+        };
+
+        let snapshot = build_chunking_preprocess_snapshot(&input);
+        assert_eq!(snapshot.chunk_size, 20);
+        assert!(snapshot.should_chunk);
+        assert_eq!(snapshot.estimated_chunk_count, 2);
+        assert_eq!(snapshot.first_chunk_size, 20);
     }
 
     #[test]
