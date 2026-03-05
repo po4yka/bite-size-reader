@@ -282,45 +282,52 @@ pub fn sqlite_roundtrip_smoke(db_path: impl AsRef<Path>) -> Result<(), SqliteCom
 
     let now_ms = unix_now_millis();
     let mut request_insert_cols: Vec<&str> = Vec::new();
+    let mut request_insert_terms: Vec<String> = Vec::new();
     let mut request_insert_values: Vec<SqlValue> = Vec::new();
 
     request_insert_cols.push("type");
+    request_insert_terms.push("?".to_string());
     request_insert_values.push(SqlValue::Text("url".to_string()));
     request_insert_cols.push("status");
+    request_insert_terms.push("?".to_string());
     request_insert_values.push(SqlValue::Text("pending".to_string()));
     if request_columns.contains("input_url") {
         request_insert_cols.push("input_url");
+        request_insert_terms.push("?".to_string());
         request_insert_values.push(SqlValue::Text(
             "https://example.com/rust-m2-smoke".to_string(),
         ));
     }
     if request_columns.contains("normalized_url") {
         request_insert_cols.push("normalized_url");
+        request_insert_terms.push("?".to_string());
         request_insert_values.push(SqlValue::Text(
             "https://example.com/rust-m2-smoke".to_string(),
         ));
     }
     if request_columns.contains("created_at") {
         request_insert_cols.push("created_at");
-        request_insert_values.push(SqlValue::Text("CURRENT_TIMESTAMP".to_string()));
+        request_insert_terms.push("CURRENT_TIMESTAMP".to_string());
     }
     if request_columns.contains("updated_at") {
         request_insert_cols.push("updated_at");
-        request_insert_values.push(SqlValue::Text("CURRENT_TIMESTAMP".to_string()));
+        request_insert_terms.push("CURRENT_TIMESTAMP".to_string());
     }
     if request_columns.contains("server_version") {
         request_insert_cols.push("server_version");
+        request_insert_terms.push("?".to_string());
         request_insert_values.push(SqlValue::Integer(now_ms));
     }
     if request_columns.contains("is_deleted") {
         request_insert_cols.push("is_deleted");
+        request_insert_terms.push("?".to_string());
         request_insert_values.push(SqlValue::Integer(0));
     }
 
     let request_sql = format!(
         "INSERT INTO requests ({}) VALUES ({})",
         request_insert_cols.join(", "),
-        vec!["?"; request_insert_cols.len()].join(", ")
+        request_insert_terms.join(", ")
     );
     tx.execute(&request_sql, params_from_iter(request_insert_values))?;
     let request_id = tx.last_insert_rowid();
@@ -333,53 +340,63 @@ pub fn sqlite_roundtrip_smoke(db_path: impl AsRef<Path>) -> Result<(), SqliteCom
     .to_string();
 
     let mut summary_insert_cols: Vec<&str> = Vec::new();
+    let mut summary_insert_terms: Vec<String> = Vec::new();
     let mut summary_insert_values: Vec<SqlValue> = Vec::new();
 
     summary_insert_cols.push("request_id");
+    summary_insert_terms.push("?".to_string());
     summary_insert_values.push(SqlValue::Integer(request_id));
     if summary_columns.contains("lang") {
         summary_insert_cols.push("lang");
+        summary_insert_terms.push("?".to_string());
         summary_insert_values.push(SqlValue::Text("en".to_string()));
     }
     summary_insert_cols.push("json_payload");
+    summary_insert_terms.push("?".to_string());
     summary_insert_values.push(SqlValue::Text(summary_payload));
     if summary_columns.contains("insights_json") {
         summary_insert_cols.push("insights_json");
+        summary_insert_terms.push("?".to_string());
         summary_insert_values.push(SqlValue::Text("{}".to_string()));
     }
     if summary_columns.contains("version") {
         summary_insert_cols.push("version");
+        summary_insert_terms.push("?".to_string());
         summary_insert_values.push(SqlValue::Integer(1));
     }
     if summary_columns.contains("server_version") {
         summary_insert_cols.push("server_version");
+        summary_insert_terms.push("?".to_string());
         summary_insert_values.push(SqlValue::Integer(now_ms));
     }
     if summary_columns.contains("is_read") {
         summary_insert_cols.push("is_read");
+        summary_insert_terms.push("?".to_string());
         summary_insert_values.push(SqlValue::Integer(0));
     }
     if summary_columns.contains("is_favorited") {
         summary_insert_cols.push("is_favorited");
+        summary_insert_terms.push("?".to_string());
         summary_insert_values.push(SqlValue::Integer(0));
     }
     if summary_columns.contains("is_deleted") {
         summary_insert_cols.push("is_deleted");
+        summary_insert_terms.push("?".to_string());
         summary_insert_values.push(SqlValue::Integer(0));
     }
     if summary_columns.contains("updated_at") {
         summary_insert_cols.push("updated_at");
-        summary_insert_values.push(SqlValue::Text("CURRENT_TIMESTAMP".to_string()));
+        summary_insert_terms.push("CURRENT_TIMESTAMP".to_string());
     }
     if summary_columns.contains("created_at") {
         summary_insert_cols.push("created_at");
-        summary_insert_values.push(SqlValue::Text("CURRENT_TIMESTAMP".to_string()));
+        summary_insert_terms.push("CURRENT_TIMESTAMP".to_string());
     }
 
     let summary_sql = format!(
         "INSERT INTO summaries ({}) VALUES ({})",
         summary_insert_cols.join(", "),
-        vec!["?"; summary_insert_cols.len()].join(", ")
+        summary_insert_terms.join(", ")
     );
     tx.execute(&summary_sql, params_from_iter(summary_insert_values))?;
 
@@ -1932,6 +1949,37 @@ mod tests {
 
         drop(conn);
         sqlite_roundtrip_smoke(file.path()).expect("roundtrip should work");
+    }
+
+    #[test]
+    fn sqlite_roundtrip_uses_sql_timestamp_expressions() {
+        let file = NamedTempFile::new().expect("temp file");
+        let conn = Connection::open(file.path()).expect("open sqlite");
+
+        conn.execute_batch(
+            "
+            CREATE TABLE requests (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                type TEXT NOT NULL,
+                status TEXT NOT NULL,
+                created_at TEXT NOT NULL CHECK(created_at != 'CURRENT_TIMESTAMP'),
+                updated_at TEXT NOT NULL CHECK(updated_at != 'CURRENT_TIMESTAMP')
+            );
+
+            CREATE TABLE summaries (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                request_id INTEGER UNIQUE,
+                json_payload TEXT NOT NULL,
+                created_at TEXT NOT NULL CHECK(created_at != 'CURRENT_TIMESTAMP'),
+                updated_at TEXT NOT NULL CHECK(updated_at != 'CURRENT_TIMESTAMP'),
+                FOREIGN KEY(request_id) REFERENCES requests(id)
+            );
+            ",
+        )
+        .expect("create schema with timestamp checks");
+
+        drop(conn);
+        sqlite_roundtrip_smoke(file.path()).expect("roundtrip should use SQL timestamps");
     }
 
     #[test]
