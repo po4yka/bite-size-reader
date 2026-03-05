@@ -99,7 +99,7 @@ services:
   mobile-api:       # FastAPI REST API
     build: {dockerfile: Dockerfile.api}
     env_file: .env
-    ports: ["18000:8000"]
+    ports: ["127.0.0.1:18000:8000"]
     depends_on: [redis, chroma (optional)]
     healthcheck: HTTP /health every 30s
 
@@ -117,7 +117,7 @@ services:
     healthcheck: redis-cli ping every 10s
 
   chroma:           # Vector search (ChromaDB)
-    image: bsr-chroma:1.5.0-curl
+    image: bsr-chroma:1.5.2
     build: {dockerfile: Dockerfile.chroma}
     ports: ["127.0.0.1:8001:8000"]
     healthcheck: HTTP /api/v2/heartbeat every 30s

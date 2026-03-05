@@ -82,7 +82,7 @@ services:
       - ./data:/data
       - /etc/localtime:/etc/localtime:ro
     ports:
-      - "18000:8000"
+      - "127.0.0.1:18000:8000"
     depends_on:
       redis:
         condition: service_healthy
@@ -200,7 +200,7 @@ services:
       - no-new-privileges:true
     stop_grace_period: 30s
   chroma:
-    image: bsr-chroma:1.5.0-curl
+    image: bsr-chroma:1.5.2
     build:
       context: .
       dockerfile: Dockerfile.chroma
@@ -234,7 +234,7 @@ services:
           memory: 512M
           cpus: "0.25"
     healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://localhost:8000/api/v2/heartbeat"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v2/heartbeat', timeout=5).read()"]
       interval: 30s
       timeout: 10s
       retries: 3
