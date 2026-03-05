@@ -27,16 +27,16 @@ scrape_configs:
   - job_name: 'bsr-mobile-api'
     metrics_path: '/metrics'
     static_configs:
-      - targets: ['host.docker.internal:18000']
+      - targets: ['mobile-api:8000']
     relabel_configs:
       - source_labels: [__address__]
         target_label: instance
         replacement: 'bsr-mobile-api'
 
-  # Node Exporter (if available)
+  # Host metrics via node-exporter sidecar
   - job_name: 'node'
     static_configs:
-      - targets: ['host.docker.internal:9100']
+      - targets: ['node-exporter:9100']
     relabel_configs:
       - source_labels: [__address__]
         target_label: instance
