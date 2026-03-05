@@ -198,6 +198,33 @@ def test_run_server_rejects_insecure_sse(monkeypatch: pytest.MonkeyPatch) -> Non
         mcp_server.run_server(transport="sse", host="127.0.0.1", user_id=None)
 
 
+def test_init_database_opens_sqlite_read_only(tmp_path: Any) -> None:
+    import peewee
+
+    old_proxy_obj = database_proxy.obj
+    db_path = tmp_path / "mcp-read-only.db"
+
+    seed_db = peewee.SqliteDatabase(str(db_path))
+    seed_db.connect()
+    seed_db.execute_sql("CREATE TABLE sample(id INTEGER PRIMARY KEY, value TEXT)")
+    seed_db.execute_sql("INSERT INTO sample(value) VALUES ('seed')")
+    seed_db.close()
+
+    db_path.chmod(0o444)
+    try:
+        mcp_server._init_database(str(db_path))
+        assert database_proxy.obj.execute_sql("SELECT value FROM sample").fetchone() == ("seed",)
+        with pytest.raises(peewee.OperationalError):
+            database_proxy.obj.execute_sql("INSERT INTO sample(value) VALUES ('write')")
+    finally:
+        try:
+            database_proxy.obj.close()
+        except Exception:
+            pass
+        database_proxy.initialize(old_proxy_obj)
+        db_path.chmod(0o644)
+
+
 @pytest.mark.asyncio
 async def test_get_chroma_service_retries_after_backoff(monkeypatch: pytest.MonkeyPatch) -> None:
     import app.config as app_config

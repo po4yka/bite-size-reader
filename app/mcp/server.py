@@ -25,6 +25,7 @@ import os
 import re
 import sys
 import time
+from pathlib import Path
 from typing import Any
 
 from mcp.server.fastmcp import FastMCP
@@ -48,6 +49,12 @@ logger = logging.getLogger("bsr.mcp")
 _DB_PATH = os.getenv("DB_PATH", "/data/app.db")
 
 
+def _sqlite_read_only_uri(path: str) -> str:
+    """Build a file URI that forces SQLite read-only mode."""
+    resolved = Path(path).expanduser().resolve()
+    return f"{resolved.as_uri()}?mode=ro"
+
+
 def _init_database(db_path: str | None = None) -> None:
     """Connect Peewee proxy to the SQLite database file."""
     import peewee
@@ -55,18 +62,18 @@ def _init_database(db_path: str | None = None) -> None:
     from app.db.models import database_proxy
 
     path = db_path or _DB_PATH
+    sqlite_uri = _sqlite_read_only_uri(path)
     db = peewee.SqliteDatabase(
-        path,
+        sqlite_uri,
+        uri=True,
         pragmas={
-            "journal_mode": "wal",
-            "cache_size": -8000,  # 8 MB
             "foreign_keys": 1,
             "busy_timeout": 5000,
         },
     )
     database_proxy.initialize(db)
     db.connect(reuse_if_open=True)
-    logger.info("Database connected: %s", path)
+    logger.info("Database connected (read-only): %s", path)
 
 
 # ---------------------------------------------------------------------------
