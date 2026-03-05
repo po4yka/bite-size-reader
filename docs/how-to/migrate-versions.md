@@ -18,12 +18,13 @@ Choose one runtime track per release:
 
 | Track | When to use | Runtime | Risk profile |
 | --- | --- | --- | --- |
-| `python-stable` | Emergency rollback path | Python | Lowest |
 | `rust-canary` | Validation/canary environments | Rust-first with synthetic/parity checks | Medium |
 | `rust-primary` | Default after M5 cutover | Rust-first | Medium |
 
 Recommended progression for new environments: `rust-canary` → `rust-primary`.
-Keep `python-stable` available as the emergency rollback path.
+Emergency rollback should be release-based: revert to the previous known-good image/tag.
+Do not rely on legacy Python migration toggles (`SUMMARY_CONTRACT_BACKEND=python`,
+`MIGRATION_INTERFACE_BACKEND=python`, etc.); those modes are decommissioned.
 
 ### M2 Contract Backend
 
@@ -459,7 +460,7 @@ docker run -d \
 
 ---
 
-**Last Updated:** 2026-03-04
+**Last Updated:** 2026-03-05
 
 
 ## Migration-Specific Validation Checklist
@@ -476,4 +477,4 @@ Run this checklist whenever changing runtime track:
    - Keep previous image/tag available.
    - Confirm rollback command path is tested in staging.
 
-If any parity check fails, revert to `python-stable` and open a migration blocker issue.
+If any parity check fails, revert to the previous known-good release image/tag and open a migration blocker issue.
