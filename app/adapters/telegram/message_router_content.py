@@ -61,6 +61,7 @@ class MessageRouterContentMixin:
     response_formatter: Any
     url_handler: Any
     user_repo: Any
+    callback_handler: Any
 
     async def _route_message_content(
         self,
@@ -73,6 +74,15 @@ class MessageRouterContentMixin:
         start_time: float,
     ) -> None:
         """Route message to appropriate handler based on content."""
+        callback_handler = getattr(self, "callback_handler", None)
+        if text.startswith("/") and callback_handler is not None:
+            try:
+                if await callback_handler.has_pending_followup(uid):
+                    await callback_handler.clear_pending_followup(uid)
+            except Exception as exc:
+                callback_handler = None
+                logger.warning("followup_clear_on_command_failed", extra={"error": str(exc)})
+
         if getattr(message, "contact", None) and self.command_processor.has_active_init_session(
             uid
         ):
@@ -102,6 +112,21 @@ class MessageRouterContentMixin:
             start_time,
         ):
             return
+
+        if callback_handler is not None and text and not text.startswith("/"):
+            try:
+                if await callback_handler.handle_followup_question(
+                    message=message,
+                    uid=uid,
+                    question=text,
+                    correlation_id=correlation_id,
+                ):
+                    return
+            except Exception as exc:
+                logger.exception(
+                    "followup_question_route_failed",
+                    extra={"uid": uid, "cid": correlation_id, "error": str(exc)},
+                )
 
         if await self.url_handler.is_awaiting_url(uid) and looks_like_url(text):
             await self.url_handler.handle_awaited_url(

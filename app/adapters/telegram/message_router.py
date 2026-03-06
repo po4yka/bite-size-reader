@@ -70,6 +70,7 @@ class MessageRouter(
         self.response_formatter = response_formatter
         self._audit = audit_func
         self._task_manager = task_manager
+        self.callback_handler: Any | None = None
 
         self._url_processor = url_handler.url_processor
         self.telegram_runtime_runner = TelegramRuntimeRunner(cfg.runtime)

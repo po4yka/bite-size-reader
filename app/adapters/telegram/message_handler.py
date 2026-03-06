@@ -111,6 +111,7 @@ class MessageHandler:
             hybrid_search=hybrid_search,
             lang=_lang,
         )
+        self.message_router.callback_handler = self.callback_handler
 
     async def handle_message(self, message: Any) -> None:
         """Main message handling entry point."""

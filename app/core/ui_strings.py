@@ -331,6 +331,7 @@ _STRINGS: dict[str, dict[str, str]] = {
     "btn_html": {"en": "HTML", "ru": "HTML"},
     "btn_save": {"en": "Save", "ru": "Сохранить"},
     "btn_similar": {"en": "Similar", "ru": "Похожие"},
+    "btn_ask": {"en": "Ask", "ru": "Спросить"},
     # ------------------------------------------------------------------
     # Callback responses (callback_handler.py)
     # ------------------------------------------------------------------
@@ -379,6 +380,22 @@ _STRINGS: dict[str, dict[str, str]] = {
     "cb_not_enough_info": {
         "en": "Not enough information to perform similarity search.",
         "ru": "Недостаточно информации для поиска похожих.",
+    },
+    "cb_followup_prompt": {
+        "en": "Ask a follow-up question about this summary. I will answer using the stored summary and source context.",
+        "ru": "Задайте уточняющий вопрос по этому резюме. Я отвечу, используя сохраненное резюме и исходный контекст.",
+    },
+    "cb_followup_continue": {
+        "en": "Ask another follow-up, or send /cancel to exit follow-up mode.",
+        "ru": "Задайте следующий вопрос или отправьте /cancel для выхода из режима уточнений.",
+    },
+    "cb_followup_unavailable": {
+        "en": "Follow-up Q&A is temporarily unavailable.",
+        "ru": "Режим уточняющих вопросов временно недоступен.",
+    },
+    "cb_followup_no_answer": {
+        "en": "I could not generate a grounded answer from the stored summary and source.",
+        "ru": "Не удалось сформировать обоснованный ответ на основе сохраненных резюме и источника.",
     },
     # ------------------------------------------------------------------
     # Callback handler -- "More" section headers

@@ -22,6 +22,7 @@ def create_action_buttons(summary_id: int | str, lang: str = "en") -> list[list[
     action_row = [
         {"text": t("btn_save", lang), "callback_data": f"save:{summary_id_str}"},
         {"text": t("btn_similar", lang), "callback_data": f"similar:{summary_id_str}"},
+        {"text": t("btn_ask", lang), "callback_data": f"ask:{summary_id_str}"},
     ]
 
     feedback_row = [
@@ -68,6 +69,7 @@ def create_inline_keyboard(
                 InlineKeyboardButton(
                     t("btn_similar", lang), callback_data=f"similar:{summary_id_str}"
                 ),
+                InlineKeyboardButton(t("btn_ask", lang), callback_data=f"ask:{summary_id_str}"),
             ],
             [
                 InlineKeyboardButton(

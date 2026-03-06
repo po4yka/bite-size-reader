@@ -6,6 +6,7 @@ import html
 import logging
 from typing import TYPE_CHECKING, Any, TypedDict, cast
 
+from app.adapters.telegram.summary_followup import SummaryFollowupManager
 from app.core.logging_utils import generate_correlation_id
 from app.core.ui_strings import t
 
@@ -34,6 +35,7 @@ class _Insights(TypedDict, total=False):
 #   "rate:abc123:1"         - Rate summary (thumbs up)
 #   "rate:abc123:-1"        - Rate summary (thumbs down)
 #   "more:abc123"           - Show additional details
+#   "ask:abc123"            - Start follow-up Q&A mode
 
 
 class CallbackHandler:
@@ -55,6 +57,12 @@ class CallbackHandler:
         # Rate limit: track recent clicks per user (debounce)
         self._recent_clicks: dict[tuple[int, str], float] = {}
         self._click_cooldown_seconds = 1.0
+        self._followup = SummaryFollowupManager(
+            response_formatter=response_formatter,
+            url_handler=url_handler,
+            lang=lang,
+            load_summary_payload=self._load_summary_payload,
+        )
 
     async def handle_callback(
         self,
@@ -119,6 +127,8 @@ class CallbackHandler:
                     return await self._handle_rate(message, uid, parts, correlation_id)
                 case "more":
                     return await self._handle_more(message, uid, parts, correlation_id)
+                case "ask":
+                    return await self._handle_followup_entry(message, uid, parts, correlation_id)
                 case _:
                     logger.warning(
                         "unknown_callback_action",
@@ -744,6 +754,54 @@ class CallbackHandler:
             extra={"summary_id": summary_id, "uid": uid, "cid": correlation_id},
         )
         return True
+
+    async def has_pending_followup(self, uid: int) -> bool:
+        """Return True when user has an active follow-up Q&A session."""
+        return await self._followup.has_pending(uid)
+
+    async def clear_pending_followup(self, uid: int) -> None:
+        """Clear active follow-up session for a user."""
+        await self._followup.clear(uid)
+
+    async def handle_followup_question(
+        self,
+        message: Any,
+        uid: int,
+        question: str,
+        correlation_id: str,
+    ) -> bool:
+        """Answer a free-form follow-up question against stored summary + source context."""
+        return await self._followup.answer(
+            message=message,
+            uid=uid,
+            question=question,
+            correlation_id=correlation_id,
+        )
+
+    async def _handle_followup_entry(
+        self,
+        message: Any,
+        uid: int,
+        parts: list[str],
+        correlation_id: str,
+    ) -> bool:
+        """Start follow-up Q&A mode for a summary."""
+        if len(parts) < 2:
+            return False
+
+        summary_id = ":".join(parts[1:]).strip()
+        if not summary_id:
+            return False
+
+        return await self._followup.handle_entry(
+            message=message,
+            uid=uid,
+            summary_id=summary_id,
+            correlation_id=correlation_id,
+        )
+
+    async def _activate_followup_session(self, uid: int, summary_id: str) -> None:
+        await self._followup.activate(uid, summary_id)
 
     async def _load_summary_payload(
         self, summary_id: str, *, correlation_id: str | None = None
