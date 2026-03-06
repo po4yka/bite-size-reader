@@ -7,17 +7,15 @@ from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, ConfigDict
 
-from app.infrastructure.persistence.sqlite.repositories.llm_repository import (
-    SqliteLLMRepositoryAdapter,
-)
-from app.infrastructure.persistence.sqlite.repositories.request_repository import (
-    SqliteRequestRepositoryAdapter,
-)
-from app.infrastructure.persistence.sqlite.repositories.summary_repository import (
-    SqliteSummaryRepositoryAdapter,
-)
-from app.infrastructure.persistence.sqlite.repositories.user_repository import (
-    SqliteUserRepositoryAdapter,
+from app.adapters.repository_ports import (
+    LLMRepositoryPort,
+    RequestRepositoryPort,
+    SummaryRepositoryPort,
+    UserRepositoryPort,
+    create_llm_repository,
+    create_request_repository,
+    create_summary_repository,
+    create_user_repository,
 )
 from app.utils.json_validation import parse_summary_response  # noqa: F401
 
@@ -145,6 +143,10 @@ class LLMResponseWorkflow(
         sem: Callable[[], Any],
         db_write_queue: DbWriteQueue | None = None,
         adaptive_timeout_service: Any | None = None,
+        summary_repo: SummaryRepositoryPort | None = None,
+        request_repo: RequestRepositoryPort | None = None,
+        llm_repo: LLMRepositoryPort | None = None,
+        user_repo: UserRepositoryPort | None = None,
     ) -> None:
         """Initialize workflow dependencies and repositories."""
         self.cfg = cfg
@@ -155,10 +157,10 @@ class LLMResponseWorkflow(
         self._sem = sem
         self._db_write_queue = db_write_queue
         self._adaptive_timeout = adaptive_timeout_service
-        self.summary_repo = SqliteSummaryRepositoryAdapter(db)
-        self.request_repo = SqliteRequestRepositoryAdapter(db)
-        self.llm_repo = SqliteLLMRepositoryAdapter(db)
-        self.user_repo = SqliteUserRepositoryAdapter(db)
+        self.summary_repo = summary_repo or create_summary_repository(db)
+        self.request_repo = request_repo or create_request_repository(db)
+        self.llm_repo = llm_repo or create_llm_repository(db)
+        self.user_repo = user_repo or create_user_repository(db)
         self._background_tasks: set[Any] = set()
 
         try:

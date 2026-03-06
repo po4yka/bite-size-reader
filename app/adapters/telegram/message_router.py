@@ -9,6 +9,10 @@ import logging
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
+from app.adapters.repository_ports import (
+    UserRepositoryPort,
+    create_user_repository,
+)
 from app.adapters.telegram.message_router_content import MessageRouterContentMixin
 from app.adapters.telegram.message_router_entrypoint import MessageRouterEntrypointMixin
 from app.adapters.telegram.message_router_interactions import MessageRouterInteractionsMixin
@@ -16,9 +20,6 @@ from app.adapters.telegram.message_router_rate_limiter import MessageRouterRateL
 from app.adapters.telegram.task_manager import UserTaskManager
 from app.config import AppConfig
 from app.db.session import DatabaseSessionManager
-from app.infrastructure.persistence.sqlite.repositories.user_repository import (
-    SqliteUserRepositoryAdapter,
-)
 from app.migration.telegram_runtime import TelegramRuntimeRunner
 from app.security.file_validation import SecureFileValidator
 from app.security.rate_limiter import RateLimitConfig, RedisUserRateLimiter, UserRateLimiter
@@ -56,12 +57,13 @@ class MessageRouter(
         audit_func: Callable[[str, str, dict], None],
         task_manager: UserTaskManager | None = None,
         attachment_processor: AttachmentProcessor | None = None,
+        user_repo: UserRepositoryPort | None = None,
         lang: str = "en",
     ) -> None:
         self.cfg = cfg
         self.db = db
         self._lang = lang
-        self.user_repo = SqliteUserRepositoryAdapter(db)
+        self.user_repo = user_repo or create_user_repository(db)
         self.access_controller = access_controller
         self.command_processor = command_processor
         self.url_handler = url_handler

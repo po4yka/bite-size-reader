@@ -10,6 +10,7 @@ from app.adapters.content.url_processor import URLProcessor
 from app.adapters.external.firecrawl_parser import FirecrawlClient
 from app.adapters.external.response_formatter import ResponseFormatter
 from app.adapters.llm import LLMClientFactory, LLMClientProtocol
+from app.adapters.repository_ports import create_user_repository
 from app.adapters.telegram.forward_processor import ForwardProcessor
 from app.adapters.telegram.message_handler import MessageHandler
 from app.adapters.telegram.telegram_client import TelegramClient
@@ -139,11 +140,8 @@ class BotFactory:
     ) -> BotComponents:
         """Create all bot components and wire them together."""
         from app.core.verbosity import VerbosityResolver
-        from app.infrastructure.persistence.sqlite.repositories.user_repository import (
-            SqliteUserRepositoryAdapter,
-        )
 
-        user_repo = SqliteUserRepositoryAdapter(db)
+        user_repo = create_user_repository(db)
         verbosity_resolver = VerbosityResolver(user_repo)
 
         # Resolve UI language from config

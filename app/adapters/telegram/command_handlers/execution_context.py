@@ -15,9 +15,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
     from app.adapters.external.response_formatter import ResponseFormatter
-    from app.infrastructure.persistence.sqlite.repositories.user_repository import (
-        SqliteUserRepositoryAdapter,
-    )
+    from app.adapters.repository_ports import UserRepositoryPort
 
 logger = logging.getLogger(__name__)
 
@@ -49,7 +47,7 @@ class CommandExecutionContext:
     correlation_id: str
     interaction_id: int
     start_time: float
-    user_repo: SqliteUserRepositoryAdapter
+    user_repo: UserRepositoryPort
     response_formatter: ResponseFormatter
     audit_func: Callable[[str, str, dict[str, Any]], None]
 
@@ -65,7 +63,7 @@ class CommandExecutionContext:
         correlation_id: str,
         interaction_id: int,
         start_time: float,
-        user_repo: SqliteUserRepositoryAdapter,
+        user_repo: UserRepositoryPort,
         response_formatter: ResponseFormatter,
         audit_func: Callable[[str, str, dict[str, Any]], None],
         text: str = "",

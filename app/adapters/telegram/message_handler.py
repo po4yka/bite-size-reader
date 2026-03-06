@@ -5,6 +5,10 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any
 
+from app.adapters.repository_ports import (
+    AuditLogRepositoryPort,
+    create_audit_log_repository,
+)
 from app.adapters.telegram.access_controller import AccessController
 from app.adapters.telegram.callback_handler import CallbackHandler
 from app.adapters.telegram.command_processor import CommandProcessor
@@ -12,9 +16,6 @@ from app.adapters.telegram.message_router import MessageRouter
 from app.adapters.telegram.task_manager import UserTaskManager
 from app.adapters.telegram.url_handler import URLHandler
 from app.core.async_utils import raise_if_cancelled
-from app.infrastructure.persistence.sqlite.repositories.audit_log_repository import (
-    SqliteAuditLogRepositoryAdapter,
-)
 
 if TYPE_CHECKING:
     from app.adapters.attachment.attachment_processor import AttachmentProcessor
@@ -47,10 +48,11 @@ class MessageHandler:
         attachment_processor: AttachmentProcessor | None = None,
         verbosity_resolver: Any | None = None,
         adaptive_timeout_service: AdaptiveTimeoutService | None = None,
+        audit_repo: AuditLogRepositoryPort | None = None,
     ) -> None:
         self.cfg = cfg
         self.db = db
-        self.audit_repo = SqliteAuditLogRepositoryAdapter(db)
+        self.audit_repo = audit_repo or create_audit_log_repository(db)
 
         # Initialize components
         self.task_manager = UserTaskManager()

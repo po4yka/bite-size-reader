@@ -22,6 +22,16 @@ import logging
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
+from app.adapters.repository_ports import (
+    LLMRepositoryPort,
+    RequestRepositoryPort,
+    SummaryRepositoryPort,
+    UserRepositoryPort,
+    create_llm_repository,
+    create_request_repository,
+    create_summary_repository,
+    create_user_repository,
+)
 from app.adapters.telegram.command_handlers.admin_handler import AdminHandlerImpl
 from app.adapters.telegram.command_handlers.content_handler import ContentHandlerImpl
 from app.adapters.telegram.command_handlers.digest_handler import DigestHandlerImpl
@@ -35,18 +45,6 @@ from app.adapters.telegram.command_handlers.url_commands_handler import URLComma
 from app.adapters.telegram.command_handlers.utils import maybe_load_json
 from app.adapters.telegram.task_manager import UserTaskManager
 from app.config import AppConfig
-from app.infrastructure.persistence.sqlite.repositories.llm_repository import (
-    SqliteLLMRepositoryAdapter,
-)
-from app.infrastructure.persistence.sqlite.repositories.request_repository import (
-    SqliteRequestRepositoryAdapter,
-)
-from app.infrastructure.persistence.sqlite.repositories.summary_repository import (
-    SqliteSummaryRepositoryAdapter,
-)
-from app.infrastructure.persistence.sqlite.repositories.user_repository import (
-    SqliteUserRepositoryAdapter,
-)
 from app.services.topic_search import LocalTopicSearchService, TopicSearchService
 
 if TYPE_CHECKING:
@@ -85,6 +83,10 @@ class CommandProcessor:
         container: Any | None = None,
         hybrid_search: HybridSearchService | None = None,
         verbosity_resolver: Any | None = None,
+        user_repo: UserRepositoryPort | None = None,
+        summary_repo: SummaryRepositoryPort | None = None,
+        request_repo: RequestRepositoryPort | None = None,
+        llm_repo: LLMRepositoryPort | None = None,
     ) -> None:
         """Initialize the CommandProcessor facade.
 
@@ -107,10 +109,10 @@ class CommandProcessor:
         self._audit = audit_func
 
         # Initialize repositories
-        self.user_repo = SqliteUserRepositoryAdapter(db)
-        self.summary_repo = SqliteSummaryRepositoryAdapter(db)
-        self.request_repo = SqliteRequestRepositoryAdapter(db)
-        self.llm_repo = SqliteLLMRepositoryAdapter(db)
+        self.user_repo = user_repo or create_user_repository(db)
+        self.summary_repo = summary_repo or create_summary_repository(db)
+        self.request_repo = request_repo or create_request_repository(db)
+        self.llm_repo = llm_repo or create_llm_repository(db)
 
         # Store references for backward compatibility and delegation
         self.url_processor = url_processor

@@ -28,14 +28,14 @@ from app.adapters.content.llm_response_workflow import (
     LLMSummaryPersistenceSettings,
     LLMWorkflowNotifications,
 )
+from app.adapters.repository_ports import (
+    RequestRepositoryPort,
+    UserRepositoryPort,
+    create_request_repository,
+    create_user_repository,
+)
 from app.core.lang import LANG_AUTO, LANG_RU, choose_language, detect_language
 from app.db.user_interactions import async_safe_update_user_interaction
-from app.infrastructure.persistence.sqlite.repositories.request_repository import (
-    SqliteRequestRepositoryAdapter,
-)
-from app.infrastructure.persistence.sqlite.repositories.user_repository import (
-    SqliteUserRepositoryAdapter,
-)
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -86,6 +86,8 @@ class AttachmentProcessor:
         audit_func: Callable[[str, str, dict], None],
         sem: Callable[[], Any],
         db_write_queue: DbWriteQueue | None = None,
+        request_repo: RequestRepositoryPort | None = None,
+        user_repo: UserRepositoryPort | None = None,
     ) -> None:
         self.cfg = cfg
         self.db = db
@@ -93,8 +95,8 @@ class AttachmentProcessor:
         self.response_formatter = response_formatter
         self._audit = audit_func
         self._sem = sem
-        self.request_repo = SqliteRequestRepositoryAdapter(db)
-        self.user_repo = SqliteUserRepositoryAdapter(db)
+        self.request_repo = request_repo or create_request_repository(db)
+        self.user_repo = user_repo or create_user_repository(db)
         self._workflow = LLMResponseWorkflow(
             cfg=cfg,
             db=db,

@@ -27,6 +27,14 @@ from app.adapters.content.llm_summarizer_text import coerce_string_list, truncat
 from app.adapters.external.formatting.single_url_progress_formatter import (
     SingleURLProgressFormatter,
 )
+from app.adapters.repository_ports import (
+    CrawlResultRepositoryPort,
+    RequestRepositoryPort,
+    SummaryRepositoryPort,
+    create_crawl_result_repository,
+    create_request_repository,
+    create_summary_repository,
+)
 from app.core.content_cleaner import clean_content_for_llm
 from app.core.json_utils import extract_json
 from app.core.lang import LANG_RU
@@ -34,15 +42,6 @@ from app.core.summary_contract import validate_and_shape_summary
 from app.core.token_utils import count_tokens
 from app.db.user_interactions import async_safe_update_user_interaction
 from app.infrastructure.cache.redis_cache import RedisCache
-from app.infrastructure.persistence.sqlite.repositories.crawl_result_repository import (
-    SqliteCrawlResultRepositoryAdapter,
-)
-from app.infrastructure.persistence.sqlite.repositories.request_repository import (
-    SqliteRequestRepositoryAdapter,
-)
-from app.infrastructure.persistence.sqlite.repositories.summary_repository import (
-    SqliteSummaryRepositoryAdapter,
-)
 from app.migration.pipeline_shadow import PipelineShadowRunner
 from app.utils.progress_message_updater import ProgressMessageUpdater
 from app.utils.typing_indicator import typing_indicator
@@ -487,6 +486,9 @@ class LLMSummarizer:
         sem: Callable[[], Any],
         topic_search: TopicSearchService | None = None,
         db_write_queue: DbWriteQueue | None = None,
+        summary_repo: SummaryRepositoryPort | None = None,
+        request_repo: RequestRepositoryPort | None = None,
+        crawl_result_repo: CrawlResultRepositoryPort | None = None,
     ) -> None:
         self.cfg = cfg
         self.db = db
@@ -496,9 +498,9 @@ class LLMSummarizer:
         self._sem = sem
         self._topic_search = topic_search
         self._db_write_queue = db_write_queue
-        self.summary_repo = SqliteSummaryRepositoryAdapter(db)
-        self.request_repo = SqliteRequestRepositoryAdapter(db)
-        self.crawl_result_repo = SqliteCrawlResultRepositoryAdapter(db)
+        self.summary_repo = summary_repo or create_summary_repository(db)
+        self.request_repo = request_repo or create_request_repository(db)
+        self.crawl_result_repo = crawl_result_repo or create_crawl_result_repository(db)
         self._workflow = LLMResponseWorkflow(
             cfg=cfg,
             db=db,

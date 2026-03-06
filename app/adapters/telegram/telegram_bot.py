@@ -10,13 +10,14 @@ from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from app.adapters.repository_ports import (
+    create_audit_log_repository,
+    create_batch_session_repository,
+)
 from app.adapters.telegram import telegram_client as telegram_client_module
 from app.core.async_utils import raise_if_cancelled
 from app.core.logging_utils import generate_correlation_id, setup_json_logging
 from app.core.time_utils import UTC, format_iso_z
-from app.infrastructure.persistence.sqlite.repositories.audit_log_repository import (
-    SqliteAuditLogRepositoryAdapter,
-)
 
 try:
     from pyrogram import Client as _PyroClient, filters as _pyro_filters
@@ -67,7 +68,7 @@ class TelegramBot:
         self._ext_sem_size = max(1, self.cfg.runtime.max_concurrent_calls)
         self._ext_sem_obj: asyncio.Semaphore | None = None
 
-        self.audit_repo = SqliteAuditLogRepositoryAdapter(self.db)
+        self.audit_repo = create_audit_log_repository(self.db)
 
         # Create external clients using factory
         from app.adapters.telegram.bot_factory import BotFactory
@@ -113,11 +114,7 @@ class TelegramBot:
         self.message_handler.url_processor = self.url_processor
 
         # Wire up combined summary dependencies for batch processing
-        from app.infrastructure.persistence.sqlite.repositories.batch_session_repository import (
-            SqliteBatchSessionRepositoryAdapter,
-        )
-
-        self._batch_session_repo = SqliteBatchSessionRepositoryAdapter(self.db)
+        self._batch_session_repo = create_batch_session_repository(self.db)
         self.message_handler.url_handler._llm_client = self._llm_client
         self.message_handler.url_handler._batch_session_repo = self._batch_session_repo
         self.message_handler.url_handler._batch_config = self.cfg.batch_analysis

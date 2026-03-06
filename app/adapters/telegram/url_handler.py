@@ -7,16 +7,16 @@ import logging
 import time
 from typing import TYPE_CHECKING, Any
 
+from app.adapters.repository_ports import (
+    RequestRepositoryPort,
+    UserRepositoryPort,
+    create_request_repository,
+    create_user_repository,
+)
 from app.adapters.telegram.message_router_helpers import process_url_batch
 from app.core.url_utils import extract_all_urls, extract_domain
 from app.core.verbosity import VerbosityLevel
 from app.db.user_interactions import async_safe_update_user_interaction
-from app.infrastructure.persistence.sqlite.repositories.request_repository import (
-    SqliteRequestRepositoryAdapter,
-)
-from app.infrastructure.persistence.sqlite.repositories.user_repository import (
-    SqliteUserRepositoryAdapter,
-)
 
 if TYPE_CHECKING:
     from app.adapters.content.url_processor import URLProcessor
@@ -58,10 +58,12 @@ class URLHandler:
         llm_client: Any | None = None,
         batch_session_repo: Any | None = None,
         batch_config: Any | None = None,
+        user_repo: UserRepositoryPort | None = None,
+        request_repo: RequestRepositoryPort | None = None,
     ) -> None:
         self.db = db
-        self.user_repo = SqliteUserRepositoryAdapter(db)
-        self.request_repo = SqliteRequestRepositoryAdapter(db)
+        self.user_repo = user_repo or create_user_repository(db)
+        self.request_repo = request_repo or create_request_repository(db)
         self.response_formatter = response_formatter
         self.url_processor = url_processor
         self._adaptive_timeout = adaptive_timeout_service

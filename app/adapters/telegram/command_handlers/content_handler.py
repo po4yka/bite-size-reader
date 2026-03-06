@@ -17,14 +17,9 @@ from app.services.topic_search_utils import ensure_mapping
 
 if TYPE_CHECKING:
     from app.adapters.external.response_formatter import ResponseFormatter
+    from app.adapters.repository_ports import LLMRepositoryPort, SummaryRepositoryPort
     from app.adapters.telegram.command_handlers.execution_context import (
         CommandExecutionContext,
-    )
-    from app.infrastructure.persistence.sqlite.repositories.llm_repository import (
-        SqliteLLMRepositoryAdapter,
-    )
-    from app.infrastructure.persistence.sqlite.repositories.summary_repository import (
-        SqliteSummaryRepositoryAdapter,
     )
 
 logger = logging.getLogger(__name__)
@@ -40,8 +35,8 @@ class ContentHandlerImpl:
     def __init__(
         self,
         response_formatter: ResponseFormatter,
-        summary_repo: SqliteSummaryRepositoryAdapter,
-        llm_repo: SqliteLLMRepositoryAdapter,
+        summary_repo: SummaryRepositoryPort,
+        llm_repo: LLMRepositoryPort,
         container: Any | None = None,
     ) -> None:
         """Initialize the content handler.

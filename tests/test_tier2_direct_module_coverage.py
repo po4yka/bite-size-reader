@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from app.adapters import repository_ports
 from app.adapters.content import llm_response_workflow_execution
 from app.adapters.content.scraper import diagnostics as scraper_diagnostics
 from app.adapters.external.firecrawl import options as firecrawl_options
@@ -22,6 +23,7 @@ DIRECT_MODULES = [
     export_formatter,
     chat_completions,
     request_builder,
+    repository_ports,
     async_utils,
     logging_utils,
     ui_strings,
@@ -50,3 +52,8 @@ def test_scraper_diagnostics_shape() -> None:
 def test_ui_strings_lookup() -> None:
     assert ui_strings.t("tldr", lang="ru") == "TL;DR"
     assert ui_strings.t("definitely_missing_key", lang="en") == "definitely_missing_key"
+
+
+def test_repository_ports_exports() -> None:
+    assert callable(repository_ports.create_request_repository)
+    assert hasattr(repository_ports, "RequestRepositoryPort")

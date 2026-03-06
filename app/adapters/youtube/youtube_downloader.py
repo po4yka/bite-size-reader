@@ -20,6 +20,12 @@ from youtube_transcript_api._errors import NoTranscriptFound, TranscriptsDisable
 from app.adapters.external.formatting.single_url_progress_formatter import (
     SingleURLProgressFormatter,
 )
+from app.adapters.repository_ports import (
+    RequestRepositoryPort,
+    VideoDownloadRepositoryPort,
+    create_request_repository,
+    create_video_download_repository,
+)
 from app.adapters.youtube.youtube_downloader_parts import (
     metadata as _metadata,
     storage as _storage,
@@ -30,12 +36,6 @@ from app.adapters.youtube.youtube_downloader_parts import (
 from app.core.async_utils import raise_if_cancelled
 from app.core.lang import detect_language
 from app.core.url_utils import extract_youtube_video_id, normalize_url, url_hash_sha256
-from app.infrastructure.persistence.sqlite.repositories.request_repository import (
-    SqliteRequestRepositoryAdapter,
-)
-from app.infrastructure.persistence.sqlite.repositories.video_download_repository import (
-    SqliteVideoDownloadRepositoryAdapter,
-)
 from app.utils.progress_message_updater import ProgressMessageUpdater
 from app.utils.typing_indicator import typing_indicator
 
@@ -61,13 +61,15 @@ class YouTubeDownloader:
         db: DatabaseSessionManager,
         response_formatter: ResponseFormatter,
         audit_func: Callable[[str, str, dict], None],
+        request_repo: RequestRepositoryPort | None = None,
+        video_repo: VideoDownloadRepositoryPort | None = None,
     ) -> None:
         self.cfg = cfg
         self.db = db
         self.response_formatter = response_formatter
         self._audit = audit_func
-        self.video_repo = SqliteVideoDownloadRepositoryAdapter(db)
-        self.request_repo = SqliteRequestRepositoryAdapter(db)
+        self.video_repo = video_repo or create_video_download_repository(db)
+        self.request_repo = request_repo or create_request_repository(db)
 
         # Create storage directory
         self.storage_path = Path(cfg.youtube.storage_path)

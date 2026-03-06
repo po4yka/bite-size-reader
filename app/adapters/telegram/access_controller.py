@@ -7,10 +7,11 @@ import logging
 import time
 from typing import TYPE_CHECKING, Any
 
-from app.db.user_interactions import async_safe_update_user_interaction
-from app.infrastructure.persistence.sqlite.repositories.user_repository import (
-    SqliteUserRepositoryAdapter,
+from app.adapters.repository_ports import (
+    UserRepositoryPort,
+    create_user_repository,
 )
+from app.db.user_interactions import async_safe_update_user_interaction
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -31,10 +32,11 @@ class AccessController:
         db: DatabaseSessionManager,
         response_formatter: ResponseFormatter,
         audit_func: Callable[[str, str, dict], None],
+        user_repo: UserRepositoryPort | None = None,
     ) -> None:
         self.cfg = cfg
         self.db = db
-        self.user_repo = SqliteUserRepositoryAdapter(db)
+        self.user_repo = user_repo or create_user_repository(db)
         self.response_formatter = response_formatter
         self._audit = audit_func
 

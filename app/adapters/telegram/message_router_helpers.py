@@ -388,8 +388,8 @@ async def process_url_batch(
     correlation_id: str,
     url_processor: Any,  # URLProcessor
     response_formatter: Any,  # ResponseFormatter
-    request_repo: Any,  # SqliteRequestRepositoryAdapter
-    user_repo: Any,  # SqliteUserRepositoryAdapter
+    request_repo: Any,  # RequestRepositoryPort
+    user_repo: Any,  # UserRepositoryPort
     interaction_id: int | None = None,
     start_time: float | None = None,
     initial_message_id: int | None = None,

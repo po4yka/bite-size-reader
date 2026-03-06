@@ -11,14 +11,15 @@ from typing import TYPE_CHECKING, Any
 from app.adapters.content.content_chunker import ContentChunker
 from app.adapters.content.content_extractor import ContentExtractor
 from app.adapters.content.llm_summarizer import LLMSummarizer
+from app.adapters.repository_ports import (
+    SummaryRepositoryPort,
+    create_summary_repository,
+)
 from app.core.async_utils import raise_if_cancelled
 from app.core.lang import LANG_RU, choose_language
 from app.core.url_utils import compute_dedupe_hash
 from app.db.user_interactions import async_safe_update_user_interaction
 from app.infrastructure.persistence.message_persistence import MessagePersistence
-from app.infrastructure.persistence.sqlite.repositories.summary_repository import (
-    SqliteSummaryRepositoryAdapter,
-)
 from app.migration.pipeline_shadow import PipelineShadowRunner
 from app.prompts.manager import get_prompt_manager
 
@@ -161,13 +162,14 @@ class URLProcessor:
         sem: Callable[[], Any],
         topic_search: TopicSearchService | None = None,
         db_write_queue: DbWriteQueue | None = None,
+        summary_repo: SummaryRepositoryPort | None = None,
     ) -> None:
         self.cfg = cfg
         self.db = db
         self.response_formatter = response_formatter
         self._audit = audit_func
         self._db_write_queue = db_write_queue
-        self.summary_repo = SqliteSummaryRepositoryAdapter(db)
+        self.summary_repo = summary_repo or create_summary_repository(db)
 
         # Initialize modular components
         self.content_extractor = ContentExtractor(
