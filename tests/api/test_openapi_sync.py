@@ -358,6 +358,51 @@ class TestErrorEnumSync:
 
 
 # ---------------------------------------------------------------------------
+# 4. Envelope / wire-shape conventions
+# ---------------------------------------------------------------------------
+
+
+class TestWireShapeConventions:
+    """Critical response envelopes should match runtime wire casing/shape."""
+
+    def test_pagination_uses_has_more_alias(self, spec: dict[str, Any]) -> None:
+        pagination = spec["components"]["schemas"]["Pagination"]
+        required = set(pagination.get("required", []))
+        properties = set(pagination.get("properties", {}).keys())
+
+        assert "hasMore" in required
+        assert "hasMore" in properties
+        assert "has_more" not in properties
+
+    def test_submit_request_data_is_nested_request_object(self, spec: dict[str, Any]) -> None:
+        submit_data = spec["components"]["schemas"]["SubmitRequestData"]
+        assert submit_data.get("required") == ["request"]
+        request_prop = submit_data["properties"]["request"]
+        assert request_prop["$ref"] == "#/components/schemas/SubmitRequestResponse"
+
+    def test_request_status_schema_uses_camel_case_wire_keys(self, spec: dict[str, Any]) -> None:
+        status_data = spec["components"]["schemas"]["RequestStatusData"]
+        required = set(status_data.get("required", []))
+        props = set(status_data.get("properties", {}).keys())
+
+        assert {"requestId", "canRetry", "updatedAt"}.issubset(required)
+        assert {"requestId", "canRetry", "updatedAt"}.issubset(props)
+        assert "request_id" not in props
+        assert "can_retry" not in props
+        assert "updated_at" not in props
+
+    def test_success_response_requires_data_envelope(self, spec: dict[str, Any]) -> None:
+        success = spec["components"]["schemas"]["SuccessResponse"]
+        assert "allOf" in success
+        has_base_success_ref = any(
+            isinstance(part, dict)
+            and part.get("$ref") == "#/components/schemas/BaseSuccessResponse"
+            for part in success["allOf"]
+        )
+        assert has_base_success_ref, "SuccessResponse must include BaseSuccessResponse"
+
+
+# ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
 

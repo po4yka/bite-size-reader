@@ -191,7 +191,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SuccessResponse'
+                $ref: '#/components/schemas/ToggleFavoriteResponseEnvelope'
 
   /v1/proxy/image:
     get:
@@ -2748,7 +2748,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SuccessResponse'
+                $ref: '#/components/schemas/ToggleFavoriteResponseEnvelope'
         '401':
           $ref: '#/components/responses/UnauthorizedError'
         '404':
@@ -2880,7 +2880,7 @@ components:
       - total
       - limit
       - offset
-      - has_more
+      - hasMore
       properties:
         total:
           type: integer
@@ -2891,10 +2891,10 @@ components:
         offset:
           type: integer
           description: Current offset from start.
-        has_more:
+        hasMore:
           type: boolean
           description: Whether more items are available.
-        next_cursor:
+        nextCursor:
           type: integer
           nullable: true
           description: Cursor for next page (if using cursor-based pagination).
@@ -3931,14 +3931,33 @@ components:
               deleted_at:
                 type: string
                 format: date-time
+    ToggleFavoriteResponseEnvelope:
+      allOf:
+      - $ref: '#/components/schemas/BaseSuccessResponse'
+      - type: object
+        required:
+        - data
+        properties:
+          data:
+            type: object
+            required:
+            - success
+            - isFavorited
+            properties:
+              success:
+                type: boolean
+                const: true
+              isFavorited:
+                type: boolean
     SuccessResponse:
-      type: object
-      required:
-      - success
-      properties:
-        success:
-          type: boolean
-          const: true
+      allOf:
+      - $ref: '#/components/schemas/BaseSuccessResponse'
+      - type: object
+        required:
+        - data
+        properties:
+          data:
+            type: object
     AppleLoginRequest:
       type: object
       required:
@@ -4443,16 +4462,24 @@ components:
     SubmitRequestData:
       type: object
       required:
-      - request_id
-      - correlation_id
+      - request
+      properties:
+        request:
+          $ref: '#/components/schemas/SubmitRequestResponse'
+    SubmitRequestResponse:
+      type: object
+      required:
+      - requestId
+      - correlationId
       - type
       - status
-      - is_duplicate
-      - created_at
+      - estimatedWaitSeconds
+      - createdAt
+      - isDuplicate
       properties:
-        request_id:
+        requestId:
           type: integer
-        correlation_id:
+        correlationId:
           type: string
         type:
           type: string
@@ -4464,25 +4491,16 @@ components:
           enum:
           - pending
           - processing
-          - success
+          - complete
           - failed
-        estimated_wait_seconds:
+        estimatedWaitSeconds:
           type: integer
           nullable: true
-        created_at:
+        createdAt:
           type: string
           format: date-time
-        is_duplicate:
+        isDuplicate:
           type: boolean
-        duplicate_request_id:
-          type: integer
-          nullable: true
-        duplicate_summary_id:
-          type: integer
-          nullable: true
-        duplicate_summary:
-          $ref: '#/components/schemas/SummaryListItem'
-          nullable: true
     SubmitRequestResponseEnvelope:
       allOf:
       - $ref: '#/components/schemas/BaseSuccessResponse'
@@ -4495,21 +4513,17 @@ components:
     RequestStatusData:
       type: object
       required:
-      - request_id
+      - requestId
       - status
       - stage
-      - can_retry
-      - updated_at
+      - canRetry
+      - updatedAt
       properties:
-        request_id:
+        requestId:
           type: integer
         status:
           type: string
-          enum:
-          - pending
-          - processing
-          - success
-          - error
+          description: Raw request status from storage.
         stage:
           type: string
           enum:
@@ -4529,33 +4543,45 @@ components:
               type: integer
             percentage:
               type: integer
-        estimated_seconds_remaining:
+        estimatedSecondsRemaining:
           type: integer
           nullable: true
-        queue_position:
+        queuePosition:
           type: integer
           nullable: true
           description: 1-indexed position in processing queue (only when pending).
-        error_stage:
+        errorStage:
           type: string
           nullable: true
           description: Stage where error occurred (only when failed).
-        error_type:
+        errorType:
           type: string
           nullable: true
           description: Error classification (only when failed).
-        error_message:
+        errorMessage:
           type: string
           nullable: true
           description: Human-readable error message (only when failed).
-        can_retry:
+        errorReasonCode:
+          type: string
+          nullable: true
+          description: Stable machine-readable reason code for failed requests.
+        retryable:
+          type: boolean
+          nullable: true
+          description: Whether the latest failure can be retried.
+        debug:
+          type: object
+          nullable: true
+          description: Optional sanitized debug context for failed requests.
+        canRetry:
           type: boolean
           default: false
           description: Whether the request can be retried.
-        correlation_id:
+        correlationId:
           type: string
           nullable: true
-        updated_at:
+        updatedAt:
           type: string
           format: date-time
     RequestStatusResponseEnvelope:
