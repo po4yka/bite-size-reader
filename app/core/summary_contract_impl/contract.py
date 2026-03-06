@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import difflib
 import logging
+import math
 import re
 from typing import Any
 
@@ -36,6 +37,17 @@ __all__ = [
     "SummaryDict",
     "SummaryJSON",
 ]
+
+
+def _normalize_readability_score(score: Any) -> float:
+    """Normalize readability score precision for deterministic repeated shaping."""
+    try:
+        numeric = float(score)
+    except (TypeError, ValueError):
+        return 0.0
+    if not math.isfinite(numeric):
+        return 0.0
+    return round(numeric, 6)
 
 
 def _compute_flesch_reading_ease(text: str) -> float:
@@ -868,7 +880,7 @@ def validate_and_shape_summary(payload: SummaryJSON) -> SummaryJSON:
             level = "Very Confusing"
     p["readability"] = {
         "method": method,
-        "score": score,
+        "score": _normalize_readability_score(score),
         "level": level,
     }
 

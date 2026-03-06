@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import os
 import subprocess
 from pathlib import Path
@@ -13,6 +14,26 @@ logger = logging.getLogger(__name__)
 
 _BACKEND_ENV = "SUMMARY_CONTRACT_BACKEND"
 _BINARY_ENV = "SUMMARY_CONTRACT_RUST_BIN"
+
+
+def _normalize_readability_score(payload: dict[str, Any]) -> dict[str, Any]:
+    """Normalize readability score precision for idempotent repeated shaping."""
+    readability = payload.get("readability")
+    if not isinstance(readability, dict):
+        return payload
+
+    score = readability.get("score")
+    if isinstance(score, bool):
+        return payload
+
+    try:
+        numeric = float(score)
+    except (TypeError, ValueError):
+        return payload
+
+    if math.isfinite(numeric):
+        readability["score"] = round(numeric, 6)
+    return payload
 
 
 def _repo_root() -> Path:
@@ -72,7 +93,7 @@ def run_rust_validate_and_shape_summary(
     if not isinstance(parsed, dict):
         msg = "Rust summary-contract returned non-object JSON"
         raise RuntimeError(msg)
-    return parsed
+    return _normalize_readability_score(parsed)
 
 
 def validate_with_backend(

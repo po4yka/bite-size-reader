@@ -12,10 +12,25 @@ from tests.conftest import make_test_app_config
 def _create_mock_db() -> MagicMock:
     """Create a mock DatabaseSessionManager with all required async methods."""
     db = MagicMock()
+
+    def _mock_safe_db_operation(operation: Any, *args: Any, **kwargs: Any) -> Any:
+        """Emulate DatabaseSessionManager._safe_db_operation call contract.
+
+        Repository adapters pass framework-level control kwargs
+        (timeout/operation_name/read_only) that must not be forwarded to the
+        inner operation callable.
+        """
+        if not callable(operation):
+            return None
+
+        operation_kwargs = dict(kwargs)
+        operation_kwargs.pop("timeout", None)
+        operation_kwargs.pop("operation_name", None)
+        operation_kwargs.pop("read_only", None)
+        return operation(*args, **operation_kwargs)
+
     # Mock the _safe_db_operation method used by repositories
-    db._safe_db_operation = AsyncMock(
-        side_effect=lambda op, *a, **kw: op(*a, **kw) if callable(op) else None
-    )
+    db._safe_db_operation = AsyncMock(side_effect=_mock_safe_db_operation)
     # Mock connection_context for fallback
     db.connection_context = MagicMock(
         return_value=MagicMock(__enter__=MagicMock(), __exit__=MagicMock())
