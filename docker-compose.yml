@@ -23,6 +23,8 @@ services:
       - PYTHONDONTWRITEBYTECODE=1
       - MAX_CONCURRENT_CALLS=${MAX_CONCURRENT_CALLS:-4}
       - REQUEST_TIMEOUT_SEC=${REQUEST_TIMEOUT_SEC:-60}
+      - FIRECRAWL_SELF_HOSTED_ENABLED=${FIRECRAWL_SELF_HOSTED_ENABLED:-0}
+      - FIRECRAWL_SELF_HOSTED_URL=http://firecrawl:3002
     dns:
       - 1.1.1.1
       - 8.8.8.8
@@ -47,6 +49,9 @@ services:
       chroma:
         condition: service_healthy
         required: false # Allow bot to start without ChromaDB (graceful degradation)
+      firecrawl:
+        condition: service_healthy
+        required: false # Graceful degradation -- Scrapling works without it
     logging:
       driver: "json-file"
       options:
@@ -169,6 +174,36 @@ services:
         reservations:
           memory: 128M
           cpus: "0.10"
+  firecrawl:
+    image: ghcr.io/mendableai/firecrawl:latest
+    container_name: bsr-firecrawl
+    init: true
+    environment:
+      - PORT=3002
+      - FIRECRAWL_API_KEY=fc-bsr-local
+      - NUM_WORKERS_PER_QUEUE=1
+    ports:
+      - "127.0.0.1:3002:3002"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:3002/v2/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: "0.50"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    security_opt:
+      - no-new-privileges:true
+    stop_grace_period: 30s
   redis:
     image: redis:7-alpine
     container_name: bsr-redis

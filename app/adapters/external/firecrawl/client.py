@@ -31,6 +31,7 @@ from app.adapters.external.firecrawl.constants import (
     FIRECRAWL_EXTRACT_URL,
     FIRECRAWL_SCRAPE_URL,
     FIRECRAWL_SEARCH_URL,
+    build_urls,
 )
 from app.adapters.external.firecrawl.error_handler import ErrorHandler, asyncio_sleep_backoff
 from app.adapters.external.firecrawl.models import (
@@ -97,6 +98,7 @@ class FirecrawlClient:
         json_schema: dict[str, Any] | None = None,
         circuit_breaker: CircuitBreaker | None = None,
         wait_for_ms: int | None = None,
+        base_url: str | None = None,
     ) -> None:
         validate_init(
             api_key=api_key,
@@ -113,7 +115,19 @@ class FirecrawlClient:
 
         self._api_key = api_key
         self._timeout = int(timeout_sec)
-        self._base_url = FIRECRAWL_SCRAPE_URL
+        if base_url:
+            urls = build_urls(base_url)
+            self._base_url = urls["scrape"]
+            self._search_url = urls["search"]
+            self._crawl_url = urls["crawl"]
+            self._batch_scrape_url = urls["batch_scrape"]
+            self._extract_url = urls["extract"]
+        else:
+            self._base_url = FIRECRAWL_SCRAPE_URL
+            self._search_url = FIRECRAWL_SEARCH_URL
+            self._crawl_url = FIRECRAWL_CRAWL_URL
+            self._batch_scrape_url = FIRECRAWL_BATCH_SCRAPE_URL
+            self._extract_url = FIRECRAWL_EXTRACT_URL
         self._max_retries = max(0, int(max_retries))
         self._backoff_base = float(backoff_base)
         self._logger = logging.getLogger(__name__)
@@ -197,7 +211,7 @@ class FirecrawlClient:
 
         started = time.perf_counter()
         try:
-            resp = await self._client.post(FIRECRAWL_SEARCH_URL, headers=headers, json=body)
+            resp = await self._client.post(self._search_url, headers=headers, json=body)
             await validate_response_size(resp, self._max_response_size_bytes, "Firecrawl Search")
         except ResponseSizeError as exc:
             return self._error_handler.build_search_size_error(exc, trimmed_query, started)
@@ -265,13 +279,13 @@ class FirecrawlClient:
         payload = {"url": url, **(options or {})}
         payload.setdefault("formats", self._options.build_formats())
         headers = {"Authorization": f"Bearer {self._api_key}"}
-        resp = await self._client.post(FIRECRAWL_CRAWL_URL, headers=headers, json=payload)
+        resp = await self._client.post(self._crawl_url, headers=headers, json=payload)
         await validate_response_size(resp, self._max_response_size_bytes, "Firecrawl Crawl")
         return resp.json()
 
     async def get_crawl_status(self, job_id: str) -> dict[str, Any]:
         headers = {"Authorization": f"Bearer {self._api_key}"}
-        resp = await self._client.get(f"{FIRECRAWL_CRAWL_URL}/{job_id}", headers=headers)
+        resp = await self._client.get(f"{self._crawl_url}/{job_id}", headers=headers)
         await validate_response_size(resp, self._max_response_size_bytes, "Firecrawl Crawl")
         return resp.json()
 
@@ -346,13 +360,13 @@ class FirecrawlClient:
         payload = {"urls": urls, **(options or {})}
         payload.setdefault("formats", self._options.build_formats())
         headers = {"Authorization": f"Bearer {self._api_key}"}
-        resp = await self._client.post(FIRECRAWL_BATCH_SCRAPE_URL, headers=headers, json=payload)
+        resp = await self._client.post(self._batch_scrape_url, headers=headers, json=payload)
         await validate_response_size(resp, self._max_response_size_bytes, "Firecrawl BatchScrape")
         return resp.json()
 
     async def get_batch_scrape_status(self, job_id: str) -> dict[str, Any]:
         headers = {"Authorization": f"Bearer {self._api_key}"}
-        resp = await self._client.get(f"{FIRECRAWL_BATCH_SCRAPE_URL}/{job_id}", headers=headers)
+        resp = await self._client.get(f"{self._batch_scrape_url}/{job_id}", headers=headers)
         await validate_response_size(resp, self._max_response_size_bytes, "Firecrawl BatchScrape")
         return resp.json()
 
@@ -360,7 +374,7 @@ class FirecrawlClient:
         payload = dict(args)
         payload.setdefault("formats", self._options.build_formats())
         headers = {"Authorization": f"Bearer {self._api_key}"}
-        resp = await self._client.post(FIRECRAWL_EXTRACT_URL, headers=headers, json=payload)
+        resp = await self._client.post(self._extract_url, headers=headers, json=payload)
         await validate_response_size(resp, self._max_response_size_bytes, "Firecrawl Extract")
         return resp.json()
 

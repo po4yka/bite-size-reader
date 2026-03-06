@@ -12,3 +12,15 @@ FIRECRAWL_SEARCH_URL = f"{FIRECRAWL_BASE_URL}{FIRECRAWL_SEARCH_ENDPOINT}"
 FIRECRAWL_CRAWL_URL = f"{FIRECRAWL_BASE_URL}{FIRECRAWL_CRAWL_ENDPOINT}"
 FIRECRAWL_BATCH_SCRAPE_URL = f"{FIRECRAWL_BASE_URL}{FIRECRAWL_BATCH_SCRAPE_ENDPOINT}"
 FIRECRAWL_EXTRACT_URL = f"{FIRECRAWL_BASE_URL}{FIRECRAWL_EXTRACT_ENDPOINT}"
+
+
+def build_urls(base: str) -> dict[str, str]:
+    """Build all Firecrawl endpoint URLs from a custom base URL."""
+    base = base.rstrip("/")
+    return {
+        "scrape": f"{base}{FIRECRAWL_SCRAPE_ENDPOINT}",
+        "search": f"{base}{FIRECRAWL_SEARCH_ENDPOINT}",
+        "crawl": f"{base}{FIRECRAWL_CRAWL_ENDPOINT}",
+        "batch_scrape": f"{base}{FIRECRAWL_BATCH_SCRAPE_ENDPOINT}",
+        "extract": f"{base}{FIRECRAWL_EXTRACT_ENDPOINT}",
+    }

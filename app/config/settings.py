@@ -31,6 +31,7 @@ from .llm import AnthropicConfig, OpenAIConfig, OpenRouterConfig
 from .media import AttachmentConfig, YouTubeConfig
 from .redis import RedisConfig
 from .runtime import RuntimeConfig
+from .scraper import ScraperConfig
 from .telegram import TelegramConfig, TelegramLimitsConfig
 from .twitter import TwitterConfig
 
@@ -66,6 +67,7 @@ class AppConfig:
     twitter: TwitterConfig = field(default_factory=TwitterConfig)
     digest: ChannelDigestConfig = field(default_factory=ChannelDigestConfig)
     mcp: McpConfig = field(default_factory=McpConfig)
+    scraper: ScraperConfig = field(default_factory=ScraperConfig)
 
 
 class Settings(BaseSettings):
@@ -109,6 +111,7 @@ class Settings(BaseSettings):
     batch_analysis: BatchAnalysisConfig = Field(default_factory=BatchAnalysisConfig)
     twitter: TwitterConfig = Field(default_factory=TwitterConfig)
     digest: ChannelDigestConfig = Field(default_factory=ChannelDigestConfig)
+    scraper: ScraperConfig = Field(default_factory=ScraperConfig)
 
     @model_validator(mode="before")
     @classmethod
@@ -222,6 +225,7 @@ class Settings(BaseSettings):
             twitter=self.twitter,
             digest=self.digest,
             mcp=self.mcp,
+            scraper=self.scraper,
         )
 
 

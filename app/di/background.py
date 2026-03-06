@@ -3,6 +3,7 @@ import logging
 from collections.abc import Callable
 from typing import Any
 
+from app.adapters.content.scraper.factory import ContentScraperFactory
 from app.adapters.content.url_processor import URLProcessor
 from app.adapters.external.firecrawl import FirecrawlClient
 from app.adapters.external.response_formatter import ResponseFormatter
@@ -112,10 +113,13 @@ async def build_background_processor(
     if audit_func is None:
         audit_func = _default_audit
 
+    # Build multi-provider scraper chain for URL processing
+    scraper_chain = ContentScraperFactory.create_from_config(cfg, audit=audit_func)
+
     url_processor = URLProcessor(
         cfg=cfg,
         db=db,
-        firecrawl=firecrawl,
+        firecrawl=scraper_chain,
         openrouter=llm_client,  # URLProcessor still uses 'openrouter' param name for compatibility
         response_formatter=response_formatter,
         audit_func=audit_func,

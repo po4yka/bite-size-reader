@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from app.adapters.attachment.attachment_processor import AttachmentProcessor
+from app.adapters.content.scraper.factory import ContentScraperFactory
 from app.adapters.content.url_processor import URLProcessor
 from app.adapters.external.firecrawl_parser import FirecrawlClient
 from app.adapters.external.response_formatter import ResponseFormatter
@@ -26,6 +27,7 @@ if TYPE_CHECKING:
     import asyncio
     from collections.abc import Callable
 
+    from app.adapters.content.scraper.chain import ContentScraperChain
     from app.adapters.telegram.telegram_bot import TelegramBot
     from app.config import AppConfig
     from app.core.verbosity import VerbosityResolver
@@ -43,6 +45,7 @@ class ExternalClients:
 
     firecrawl: FirecrawlClient
     llm_client: LLMClientProtocol
+    scraper_chain: ContentScraperChain | None = None
 
 
 @dataclass
@@ -114,7 +117,12 @@ class BotFactory:
         # Create LLM client using factory based on LLM_PROVIDER config
         llm_client = LLMClientFactory.create_from_config(cfg, audit=audit_func)
 
-        return ExternalClients(firecrawl=firecrawl, llm_client=llm_client)
+        # Create multi-provider scraper chain for content extraction
+        scraper_chain = ContentScraperFactory.create_from_config(cfg, audit=audit_func)
+
+        return ExternalClients(
+            firecrawl=firecrawl, llm_client=llm_client, scraper_chain=scraper_chain
+        )
 
     @staticmethod
     def create_components(
@@ -162,11 +170,17 @@ class BotFactory:
             audit_func=audit_func,
         )
 
-        # Create URL processor with topic search service for web search enrichment
+        # Create URL processor with scraper chain (multi-provider fallback)
+        # scraper_chain is always created in create_external_clients; fall back to
+        # wrapping the raw FirecrawlClient only if something went wrong upstream.
+        if clients.scraper_chain is not None:
+            scraper: ContentScraperChain | FirecrawlClient = clients.scraper_chain
+        else:
+            scraper = clients.firecrawl
         url_processor = URLProcessor(
             cfg=cfg,
             db=db,
-            firecrawl=clients.firecrawl,
+            firecrawl=scraper,  # type: ignore[arg-type]
             openrouter=clients.llm_client,
             response_formatter=response_formatter,
             audit_func=audit_func,

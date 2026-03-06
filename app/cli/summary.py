@@ -14,6 +14,7 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from app.adapters.content.scraper.factory import ContentScraperFactory
 from app.adapters.content.url_processor import URLProcessor
 from app.adapters.external.firecrawl_parser import FirecrawlClient
 from app.adapters.external.response_formatter import ResponseFormatter
@@ -359,10 +360,13 @@ async def run_summary_cli(args: argparse.Namespace) -> None:
         )
         logger.info("web_search_enabled_in_cli", extra={"max_queries": cfg.web_search.max_queries})
 
+    # Build multi-provider scraper chain for content extraction
+    scraper_chain = ContentScraperFactory.create_from_config(cfg, audit=audit)
+
     url_processor = URLProcessor(
         cfg=cfg,
         db=db,
-        firecrawl=firecrawl,
+        firecrawl=scraper_chain,
         openrouter=llm_client,  # URLProcessor still uses 'openrouter' param name for compatibility
         response_formatter=response_formatter,
         audit_func=audit,

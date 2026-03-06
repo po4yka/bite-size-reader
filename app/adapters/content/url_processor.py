@@ -25,7 +25,7 @@ from app.prompts.manager import get_prompt_manager
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable, Coroutine
 
-    from app.adapters.external.firecrawl import FirecrawlClient
+    from app.adapters.content.scraper.protocol import ContentScraperProtocol
     from app.adapters.external.response_formatter import ResponseFormatter
     from app.adapters.llm.protocol import LLMClientProtocol
     from app.config import AppConfig
@@ -154,7 +154,7 @@ class URLProcessor:
         self,
         cfg: AppConfig,
         db: DatabaseSessionManager,
-        firecrawl: FirecrawlClient,
+        firecrawl: ContentScraperProtocol,
         openrouter: LLMClientProtocol,
         response_formatter: ResponseFormatter,
         audit_func: Callable[[str, str, dict], None],

@@ -13,6 +13,7 @@ from .llm import AnthropicConfig, OpenAIConfig, OpenRouterConfig
 from .media import AttachmentConfig, YouTubeConfig
 from .redis import RedisConfig
 from .runtime import RuntimeConfig
+from .scraper import ScraperConfig
 from .settings import AppConfig, Config, ConfigHelper, Settings, load_config
 from .telegram import TelegramConfig, TelegramLimitsConfig
 from .twitter import TwitterConfig
@@ -38,6 +39,7 @@ __all__ = [
     "OpenRouterConfig",
     "RedisConfig",
     "RuntimeConfig",
+    "ScraperConfig",
     "Settings",
     "SyncConfig",
     "TelegramConfig",

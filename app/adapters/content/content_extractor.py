@@ -13,7 +13,8 @@ from app.adapters.content.content_extractor_crawl import ContentExtractorCrawlMi
 from app.adapters.content.content_extractor_platforms import ContentExtractorPlatformsMixin
 from app.adapters.content.content_extractor_requests import ContentExtractorRequestsMixin
 from app.adapters.content.quality_filters import detect_low_value_content
-from app.adapters.external.firecrawl_parser import FirecrawlClient, FirecrawlResult
+from app.adapters.content.scraper.protocol import ContentScraperProtocol
+from app.adapters.external.firecrawl.models import FirecrawlResult
 from app.config import AppConfig
 from app.core.html_utils import clean_markdown_article_text, html_to_text
 from app.core.lang import detect_language
@@ -49,7 +50,7 @@ class ContentExtractor(
         self,
         cfg: AppConfig,
         db: DatabaseSessionManager,
-        firecrawl: FirecrawlClient,
+        firecrawl: ContentScraperProtocol,
         response_formatter: ResponseFormatter,
         audit_func: Callable[[str, str, dict], None],
         sem: Callable[[], Any],
