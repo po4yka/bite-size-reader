@@ -9,7 +9,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 from urllib.parse import unquote, urlparse
 
 import httpx
@@ -63,6 +63,11 @@ def _load_cookies_netscape(cookies_path: Path) -> list[dict[str, Any]]:
     return cookies
 
 
+def _as_playwright_cookies(cookies: list[dict[str, Any]]) -> Any:
+    """Convert parsed cookie dicts for Playwright context cookie injection."""
+    return cast("Any", cookies)
+
+
 def _extract_tweet_sync(
     url: str,
     cookies_path: Path | None = None,
@@ -111,7 +116,7 @@ def _extract_tweet_sync(
         if cookies_path and cookies_path.exists():
             cookies = _load_cookies_netscape(cookies_path)
             if cookies:
-                context.add_cookies(cookies)
+                context.add_cookies(_as_playwright_cookies(cookies))
 
         page = context.new_page()
         page.on("response", _on_response)
@@ -172,7 +177,7 @@ def _scrape_article_sync(
         if cookies_path and cookies_path.exists():
             cookies = _load_cookies_netscape(cookies_path)
             if cookies:
-                context.add_cookies(cookies)
+                context.add_cookies(_as_playwright_cookies(cookies))
 
         page = context.new_page()
         try:

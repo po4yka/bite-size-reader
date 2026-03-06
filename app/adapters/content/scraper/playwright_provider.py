@@ -7,12 +7,12 @@ import logging
 import time
 from typing import Any, cast
 
+from app.adapters.content.scraper.runtime_tuning import tuned_provider_timeout
 from app.adapters.external.firecrawl.models import FirecrawlResult
 from app.core.html_utils import html_to_text
 
 logger = logging.getLogger(__name__)
 
-_MIN_TEXT_LENGTH = 400
 _DEFAULT_TIMEOUT_SEC = 30
 
 _DESKTOP_USER_AGENT = (
@@ -28,9 +28,20 @@ _DESKTOP_VIEWPORT = {"width": 1366, "height": 768}
 class PlaywrightProvider:
     """Browser-rendered fallback for pages requiring JavaScript execution."""
 
-    def __init__(self, timeout_sec: int = _DEFAULT_TIMEOUT_SEC, headless: bool = True) -> None:
+    def __init__(
+        self,
+        timeout_sec: int = _DEFAULT_TIMEOUT_SEC,
+        headless: bool = True,
+        *,
+        min_text_length: int = 400,
+        profile: str = "balanced",
+        js_heavy_hosts: tuple[str, ...] = (),
+    ) -> None:
         self._timeout_sec = timeout_sec
         self._headless = headless
+        self._min_text_length = min_text_length
+        self._profile = profile
+        self._js_heavy_hosts = js_heavy_hosts
 
     @property
     def provider_name(self) -> str:
@@ -44,20 +55,27 @@ class PlaywrightProvider:
         request_id: int | None = None,
     ) -> FirecrawlResult:
         started = time.perf_counter()
+        timeout_sec = tuned_provider_timeout(
+            base_timeout_sec=self._timeout_sec,
+            profile=self._profile,
+            provider="playwright",
+            url=url,
+            js_heavy_hosts=self._js_heavy_hosts,
+        )
         try:
             html = await asyncio.wait_for(
-                self._render_html(url, mobile=mobile),
-                timeout=self._timeout_sec + 5,
+                self._render_html(url, mobile=mobile, timeout_sec=timeout_sec),
+                timeout=timeout_sec + 5,
             )
         except TimeoutError:
             latency = int((time.perf_counter() - started) * 1000)
             logger.warning(
                 "playwright_timeout",
-                extra={"url": url, "timeout_sec": self._timeout_sec, "request_id": request_id},
+                extra={"url": url, "timeout_sec": round(timeout_sec, 2), "request_id": request_id},
             )
             return FirecrawlResult(
                 status="error",
-                error_text=f"Playwright timeout after {self._timeout_sec}s",
+                error_text=f"Playwright timeout after {round(timeout_sec, 2)}s",
                 latency_ms=latency,
                 source_url=url,
                 endpoint="playwright",
@@ -92,7 +110,7 @@ class PlaywrightProvider:
             )
 
         content_text = html_to_text(html)
-        if len(content_text) < _MIN_TEXT_LENGTH:
+        if len(content_text) < self._min_text_length:
             return FirecrawlResult(
                 status="error",
                 error_text=f"Playwright: content too short ({len(content_text)} chars)",
@@ -117,10 +135,23 @@ class PlaywrightProvider:
             },
         )
 
-    async def _render_html(self, url: str, *, mobile: bool = True) -> str | None:
-        return await asyncio.to_thread(self._render_html_sync, url, mobile=mobile)
+    async def _render_html(
+        self, url: str, *, mobile: bool = True, timeout_sec: float | None = None
+    ) -> str | None:
+        return await asyncio.to_thread(
+            self._render_html_sync,
+            url,
+            mobile=mobile,
+            timeout_sec=timeout_sec,
+        )
 
-    def _render_html_sync(self, url: str, *, mobile: bool = True) -> str | None:
+    def _render_html_sync(
+        self,
+        url: str,
+        *,
+        mobile: bool = True,
+        timeout_sec: float | None = None,
+    ) -> str | None:
         try:
             from playwright.sync_api import (
                 Error as PlaywrightError,
@@ -134,7 +165,8 @@ class PlaywrightProvider:
             )
             raise ImportError(msg) from exc
 
-        timeout_ms = max(1_000, int(self._timeout_sec * 1000))
+        effective_timeout_sec = timeout_sec if timeout_sec is not None else self._timeout_sec
+        timeout_ms = max(1_000, int(effective_timeout_sec * 1000))
         with sync_playwright() as p:
             browser = p.chromium.launch(
                 headless=self._headless,

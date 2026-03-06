@@ -7,12 +7,12 @@ import logging
 import time
 from datetime import timedelta
 
+from app.adapters.content.scraper.runtime_tuning import tuned_provider_timeout
 from app.adapters.external.firecrawl.models import FirecrawlResult
 from app.core.html_utils import html_to_text
 
 logger = logging.getLogger(__name__)
 
-_MIN_CONTENT_LENGTH = 400
 _DEFAULT_TIMEOUT_SEC = 45
 _DEFAULT_MAX_RETRIES = 2
 
@@ -25,10 +25,17 @@ class CrawleeProvider:
         timeout_sec: int = _DEFAULT_TIMEOUT_SEC,
         headless: bool = True,
         max_retries: int = _DEFAULT_MAX_RETRIES,
+        *,
+        min_content_length: int = 400,
+        profile: str = "balanced",
+        js_heavy_hosts: tuple[str, ...] = (),
     ) -> None:
         self._timeout_sec = timeout_sec
         self._headless = headless
         self._max_retries = max_retries
+        self._min_content_length = min_content_length
+        self._profile = profile
+        self._js_heavy_hosts = js_heavy_hosts
 
     @property
     def provider_name(self) -> str:
@@ -43,16 +50,23 @@ class CrawleeProvider:
     ) -> FirecrawlResult:
         started = time.perf_counter()
         stage_errors: list[str] = []
+        timeout_sec = tuned_provider_timeout(
+            base_timeout_sec=self._timeout_sec,
+            profile=self._profile,
+            provider="crawlee",
+            url=url,
+            js_heavy_hosts=self._js_heavy_hosts,
+        )
 
         # Stage 1: lightweight HTTP-first crawl.
         try:
             bs_html = await asyncio.wait_for(
-                self._extract_with_beautifulsoup(url),
-                timeout=self._timeout_sec + 5,
+                self._extract_with_beautifulsoup(url, timeout_sec=timeout_sec),
+                timeout=timeout_sec + 5,
             )
         except TimeoutError:
             bs_html = None
-            stage_errors.append(f"BeautifulSoup timeout after {self._timeout_sec}s")
+            stage_errors.append(f"BeautifulSoup timeout after {round(timeout_sec, 2)}s")
         except Exception as exc:
             bs_html = None
             stage_errors.append(f"BeautifulSoup error: {exc}")
@@ -74,12 +88,12 @@ class CrawleeProvider:
         # Stage 2: browser rendering fallback.
         try:
             pw_html = await asyncio.wait_for(
-                self._extract_with_playwright(url, mobile=mobile),
-                timeout=self._timeout_sec + 10,
+                self._extract_with_playwright(url, mobile=mobile, timeout_sec=timeout_sec),
+                timeout=timeout_sec + 10,
             )
         except TimeoutError:
             pw_html = None
-            stage_errors.append(f"Playwright timeout after {self._timeout_sec}s")
+            stage_errors.append(f"Playwright timeout after {round(timeout_sec, 2)}s")
         except Exception as exc:
             pw_html = None
             stage_errors.append(f"Playwright error: {exc}")
@@ -130,7 +144,7 @@ class CrawleeProvider:
             return None
 
         content_text = html_to_text(html)
-        if len(content_text) < _MIN_CONTENT_LENGTH:
+        if len(content_text) < self._min_content_length:
             return None
 
         return FirecrawlResult(
@@ -150,7 +164,7 @@ class CrawleeProvider:
             },
         )
 
-    async def _extract_with_beautifulsoup(self, url: str) -> str | None:
+    async def _extract_with_beautifulsoup(self, url: str, *, timeout_sec: float) -> str | None:
         try:
             from crawlee.crawlers import BeautifulSoupCrawler, BeautifulSoupCrawlingContext
         except ImportError as exc:
@@ -163,7 +177,7 @@ class CrawleeProvider:
         extracted_html: str | None = None
         crawler = BeautifulSoupCrawler(
             max_request_retries=self._max_retries,
-            request_handler_timeout=timedelta(seconds=self._timeout_sec),
+            request_handler_timeout=timedelta(seconds=timeout_sec),
             max_requests_per_crawl=1,
         )
 
@@ -175,7 +189,13 @@ class CrawleeProvider:
         await crawler.run([url])
         return extracted_html
 
-    async def _extract_with_playwright(self, url: str, *, mobile: bool = True) -> str | None:
+    async def _extract_with_playwright(
+        self,
+        url: str,
+        *,
+        mobile: bool = True,
+        timeout_sec: float,
+    ) -> str | None:
         del mobile  # Crawlee controls browser context; provider keeps API symmetry.
         try:
             from crawlee.crawlers import PlaywrightCrawler, PlaywrightCrawlingContext
@@ -190,7 +210,7 @@ class CrawleeProvider:
         crawler = PlaywrightCrawler(
             headless=self._headless,
             max_request_retries=self._max_retries,
-            request_handler_timeout=timedelta(seconds=self._timeout_sec),
+            request_handler_timeout=timedelta(seconds=timeout_sec),
             max_requests_per_crawl=1,
         )
 

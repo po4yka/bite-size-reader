@@ -379,7 +379,12 @@ class FirecrawlClient:
         return resp.json()
 
     async def scrape_markdown(
-        self, url: str, *, mobile: bool = True, request_id: int | None = None
+        self,
+        url: str,
+        *,
+        mobile: bool = True,
+        request_id: int | None = None,
+        wait_for_ms_override: int | None = None,
     ) -> FirecrawlResult:
         validate_scrape_inputs(url, request_id)
 
@@ -416,7 +421,11 @@ class FirecrawlClient:
         cur_pdf = pdf_hint
 
         for attempt in range(self._max_retries + 1):
-            options_snapshot = self._options.options_snapshot(mobile=cur_mobile, pdf=cur_pdf)
+            options_snapshot = self._options.options_snapshot(
+                mobile=cur_mobile,
+                pdf=cur_pdf,
+                wait_for_ms_override=wait_for_ms_override,
+            )
             self._payload_logger.log_scrape_attempt(
                 attempt=attempt,
                 url=url,
@@ -438,6 +447,7 @@ class FirecrawlClient:
                     url=url,
                     request_id=request_id,
                     started=started,
+                    wait_for_ms_override=wait_for_ms_override,
                 )
                 if result is not None:
                     if isinstance(result, tuple):
@@ -500,6 +510,7 @@ class FirecrawlClient:
         url: str,
         request_id: int | None,
         started: float,
+        wait_for_ms_override: int | None,
     ) -> FirecrawlResult | tuple[bool, float, dict | None, int | None, str | None] | None:
         """Execute a single scrape attempt.
 
@@ -510,7 +521,11 @@ class FirecrawlClient:
         """
         json_body = {
             **body_base,
-            **self._options.base_options(mobile=cur_mobile, pdf=cur_pdf),
+            **self._options.base_options(
+                mobile=cur_mobile,
+                pdf=cur_pdf,
+                wait_for_ms_override=wait_for_ms_override,
+            ),
         }
         self._payload_logger.log_request_payload(json_body)
 

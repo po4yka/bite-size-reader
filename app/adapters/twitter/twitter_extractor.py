@@ -27,6 +27,7 @@ from app.adapters.twitter.text_formatter import (
     format_tweets_for_summary,
     parse_article_header,
 )
+from app.config.scraper import profile_timeout_multiplier
 from app.core.async_utils import raise_if_cancelled
 from app.core.html_utils import clean_markdown_article_text, html_to_text
 from app.core.lang import detect_language
@@ -63,9 +64,6 @@ if TYPE_CHECKING:
     from app.infrastructure.persistence.message_persistence import MessagePersistence
 
 logger = logging.getLogger(__name__)
-
-# Limit concurrent Playwright browser sessions
-_MAX_CONCURRENT_BROWSERS = 2
 _TCO_URL_RE = re.compile(r"https?://t\.co/[A-Za-z0-9]+", re.IGNORECASE)
 _MAX_TCO_EXPANSIONS = 20
 _ARTICLE_REDIRECT_HOSTS = {
@@ -106,7 +104,8 @@ class TwitterExtractor:
         self._firecrawl_sem = firecrawl_sem
         self._handle_request_dedupe_or_create = handle_request_dedupe_or_create
         self._schedule_crawl_persistence = schedule_crawl_persistence
-        self._pw_sem = asyncio.Semaphore(_MAX_CONCURRENT_BROWSERS)
+        browser_limit = max(1, int(getattr(cfg.twitter, "max_concurrent_browsers", 2)))
+        self._pw_sem = asyncio.Semaphore(browser_limit)
         self._cookies_path = Path(cfg.twitter.cookies_path)
 
     async def extract_and_process(
@@ -157,11 +156,16 @@ class TwitterExtractor:
 
         content_text = ""
         content_source = "none"
+        tier_mode = self._twitter_force_tier()
+        run_firecrawl_tier = self._run_firecrawl_tier()
+        run_playwright_tier = self._run_playwright_tier()
+
         metadata: dict[str, Any] = {
             "source": "twitter",
             "tweet_id": tweet_id,
             "is_article": is_article,
             "article_id": article_id,
+            "tier_mode": tier_mode,
             "article_resolution_reason": article_resolution.reason,
             "article_resolved_url": article_resolution.resolved_url,
             "article_canonical_url": article_resolution.canonical_url,
@@ -171,16 +175,23 @@ class TwitterExtractor:
 
         # Tier 1: Try Firecrawl first (if preferred)
         firecrawl_ok = False
-        if self._cfg.twitter.prefer_firecrawl:
+        if run_firecrawl_tier:
             firecrawl_ok, content_text, content_source = await self._try_firecrawl(
                 extraction_url, req_id, tweet_id, metadata, correlation_id, is_article
             )
             metadata["tier_outcomes"]["firecrawl"] = "success" if firecrawl_ok else "failed"
+        else:
+            metadata["tier_outcomes"]["firecrawl"] = (
+                "forced_skip" if tier_mode == "playwright" else "disabled"
+            )
 
         # Tier 2: Playwright fallback (if Firecrawl failed and Playwright is enabled)
-        if not firecrawl_ok and self._cfg.twitter.playwright_enabled:
+        should_try_playwright = run_playwright_tier and (
+            tier_mode == "playwright" or not firecrawl_ok
+        )
+        if should_try_playwright:
             try:
-                content_text, content_source, metadata = await self._extract_playwright(
+                pw_text, pw_source, pw_metadata = await self._extract_playwright(
                     extraction_url,
                     tweet_id,
                     is_article,
@@ -188,6 +199,10 @@ class TwitterExtractor:
                     metadata,
                     request_id=req_id,
                 )
+                content_text = pw_text
+                content_source = pw_source
+                if pw_metadata is not metadata:
+                    metadata.update(pw_metadata)
                 metadata["tier_outcomes"]["playwright"] = "success"
             except Exception as e:
                 raise_if_cancelled(e)
@@ -201,6 +216,10 @@ class TwitterExtractor:
                         "article_id": article_id,
                     },
                 )
+        elif not run_playwright_tier:
+            metadata["tier_outcomes"]["playwright"] = (
+                "forced_skip" if tier_mode == "firecrawl" else "disabled"
+            )
 
         if not content_text:
             error_msg = self._build_extraction_error_message()
@@ -266,11 +285,16 @@ class TwitterExtractor:
             is_article = True
             article_id = article_resolution.article_id or article_id
 
+        tier_mode = self._twitter_force_tier()
+        run_firecrawl_tier = self._run_firecrawl_tier()
+        run_playwright_tier = self._run_playwright_tier()
+
         metadata: dict[str, Any] = {
             "source": "twitter",
             "tweet_id": tweet_id,
             "is_article": is_article,
             "article_id": article_id,
+            "tier_mode": tier_mode,
             "article_resolution_reason": article_resolution.reason,
             "article_resolved_url": article_resolution.resolved_url,
             "article_canonical_url": article_resolution.canonical_url,
@@ -284,7 +308,7 @@ class TwitterExtractor:
             raise ValueError(self._build_extraction_error_message())
 
         firecrawl_ok = False
-        if self._cfg.twitter.prefer_firecrawl:
+        if run_firecrawl_tier:
             firecrawl_ok, content_text, content_source = await self._try_firecrawl(
                 url_text=extraction_url,
                 req_id=request_id,
@@ -295,10 +319,17 @@ class TwitterExtractor:
                 persist_result=False,
             )
             metadata["tier_outcomes"]["firecrawl"] = "success" if firecrawl_ok else "failed"
+        else:
+            metadata["tier_outcomes"]["firecrawl"] = (
+                "forced_skip" if tier_mode == "playwright" else "disabled"
+            )
 
-        if not firecrawl_ok and self._cfg.twitter.playwright_enabled:
+        should_try_playwright = run_playwright_tier and (
+            tier_mode == "playwright" or not firecrawl_ok
+        )
+        if should_try_playwright:
             try:
-                content_text, content_source, metadata = await self._extract_playwright(
+                pw_text, pw_source, pw_metadata = await self._extract_playwright(
                     url_text=extraction_url,
                     tweet_id=tweet_id,
                     is_article=is_article,
@@ -306,10 +337,18 @@ class TwitterExtractor:
                     metadata=metadata,
                     request_id=request_id,
                 )
+                content_text = pw_text
+                content_source = pw_source
+                if pw_metadata is not metadata:
+                    metadata.update(pw_metadata)
                 metadata["tier_outcomes"]["playwright"] = "success"
             except Exception:
                 metadata["tier_outcomes"]["playwright"] = "failed"
                 raise
+        elif not run_playwright_tier:
+            metadata["tier_outcomes"]["playwright"] = (
+                "forced_skip" if tier_mode == "firecrawl" else "disabled"
+            )
 
         if not content_text:
             reason_code = (
@@ -571,17 +610,50 @@ class TwitterExtractor:
 
     def _build_extraction_error_message(self) -> str:
         """Build a consistent error message for failed/misconfigured extraction."""
+        tier_mode = self._twitter_force_tier()
         if not self._cfg.twitter.prefer_firecrawl and not self._cfg.twitter.playwright_enabled:
             return (
                 "Twitter extraction misconfigured: both Firecrawl and Playwright are disabled. "
                 "Enable TWITTER_PREFER_FIRECRAWL or TWITTER_PLAYWRIGHT_ENABLED."
             )
+        if tier_mode == "firecrawl":
+            return "Twitter content extraction failed (forced Firecrawl tier)"
+        if tier_mode == "playwright":
+            return "Twitter content extraction failed (forced Playwright tier)"
         if not self._cfg.twitter.playwright_enabled:
             return (
                 "Twitter content extraction via Firecrawl returned insufficient content. "
                 "Enable TWITTER_PLAYWRIGHT_ENABLED for authenticated extraction."
             )
         return "Twitter content extraction failed (both Firecrawl and Playwright)"
+
+    def _twitter_force_tier(self) -> str:
+        return str(getattr(self._cfg.twitter, "force_tier", "auto")).strip().lower() or "auto"
+
+    def _run_firecrawl_tier(self) -> bool:
+        if self._twitter_force_tier() == "playwright":
+            return False
+        return bool(getattr(self._cfg.twitter, "prefer_firecrawl", True))
+
+    def _run_playwright_tier(self) -> bool:
+        if self._twitter_force_tier() == "firecrawl":
+            return False
+        return bool(getattr(self._cfg.twitter, "playwright_enabled", False))
+
+    def _twitter_profile(self) -> str:
+        twitter_profile = (
+            str(getattr(self._cfg.twitter, "scraper_profile", "inherit")).strip().lower()
+        )
+        if twitter_profile == "inherit":
+            scraper_cfg = getattr(self._cfg, "scraper", None)
+            inherited = str(getattr(scraper_cfg, "profile", "balanced")).strip().lower()
+            return inherited or "balanced"
+        return twitter_profile or "balanced"
+
+    def _effective_twitter_timeout_ms(self) -> int:
+        multiplier = profile_timeout_multiplier(self._twitter_profile())
+        timeout_ms = int(getattr(self._cfg.twitter, "page_timeout_ms", 15_000) * multiplier)
+        return max(1_000, timeout_ms)
 
     # ------------------------------------------------------------------
     # Tier 2: Playwright
@@ -598,17 +670,27 @@ class TwitterExtractor:
     ) -> tuple[str, str, dict[str, Any]]:
         """Extract Twitter content via Playwright browser automation."""
         headless = self._cfg.twitter.headless
-        timeout_ms = self._cfg.twitter.page_timeout_ms
+        timeout_ms = self._effective_twitter_timeout_ms()
         cookies = self._cookies_path if self._cookies_path.exists() else None
 
         async with self._pw_sem:
             if is_article:
                 content_text, content_source, pw_metadata = await self._pw_extract_article(
-                    url_text, cookies, headless, timeout_ms, correlation_id, request_id
+                    url=url_text,
+                    cookies=cookies,
+                    headless=headless,
+                    timeout_ms=timeout_ms,
+                    correlation_id=correlation_id,
+                    request_id=request_id,
                 )
             else:
                 content_text, content_source, pw_metadata = await self._pw_extract_tweet(
-                    url_text, tweet_id, cookies, headless, timeout_ms, correlation_id
+                    url=url_text,
+                    tweet_id=tweet_id,
+                    cookies=cookies,
+                    headless=headless,
+                    timeout_ms=timeout_ms,
+                    correlation_id=correlation_id,
                 )
 
         metadata.update(pw_metadata)

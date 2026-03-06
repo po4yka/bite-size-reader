@@ -913,6 +913,7 @@ Content extraction uses an ordered fallback chain via `ContentScraperChain`:
 5. **Direct HTML** (last resort) -- httpx streaming fetch + `html_to_text()`. Minimum 400-char content threshold.
 
 All providers return `FirecrawlResult` as the universal output model. Cloud Firecrawl remains available for `TopicSearchService` (web search) when `FIRECRAWL_API_KEY` is set.
+Operational controls include `SCRAPER_ENABLED`, `SCRAPER_PROFILE`, `SCRAPER_BROWSER_ENABLED`, and `SCRAPER_FORCE_PROVIDER`; startup fails fast on deprecated scraper env names (`SCRAPLING_*`, `SCRAPER_DIRECT_HTTP_ENABLED`).
 
 - Config: `app/config/scraper.py` (`ScraperConfig`)
 - Protocol: `app/adapters/content/scraper/protocol.py` (`ContentScraperProtocol`)

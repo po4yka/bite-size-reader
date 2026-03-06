@@ -13,9 +13,7 @@ from app.core.html_utils import html_to_text
 
 logger = logging.getLogger(__name__)
 
-_MIN_TEXT_LENGTH = 400
 _DEFAULT_TIMEOUT_SEC = 30
-_MAX_RESPONSE_BYTES = 10 * 1024 * 1024  # 10 MB
 
 _HEADERS = {
     "User-Agent": (
@@ -31,8 +29,16 @@ _HEADERS = {
 class DirectHTMLProvider:
     """Tertiary fallback: fetch raw HTML and convert to text."""
 
-    def __init__(self, timeout_sec: int = _DEFAULT_TIMEOUT_SEC) -> None:
+    def __init__(
+        self,
+        timeout_sec: int = _DEFAULT_TIMEOUT_SEC,
+        *,
+        min_text_length: int = 400,
+        max_response_mb: int = 10,
+    ) -> None:
         self._timeout_sec = timeout_sec
+        self._min_text_length = min_text_length
+        self._max_response_bytes = max_response_mb * 1024 * 1024
 
     @property
     def provider_name(self) -> str:
@@ -74,7 +80,7 @@ class DirectHTMLProvider:
             )
 
         content_text = html_to_text(html)
-        if len(content_text) < _MIN_TEXT_LENGTH:
+        if len(content_text) < self._min_text_length:
             return FirecrawlResult(
                 status="error",
                 error_text=f"Direct HTML: content too short ({len(content_text)} chars)",
@@ -110,16 +116,19 @@ class DirectHTMLProvider:
                 content_length = resp.headers.get("content-length")
                 if content_length:
                     try:
-                        if int(content_length) > _MAX_RESPONSE_BYTES:
+                        if int(content_length) > self._max_response_bytes:
                             return None
                     except ValueError:
-                        pass
+                        logger.debug(
+                            "direct_html_invalid_content_length_header",
+                            extra={"url": url, "content_length": content_length},
+                        )
 
                 chunks: list[bytes] = []
                 total = 0
                 async for chunk in resp.aiter_bytes():
                     total += len(chunk)
-                    if total > _MAX_RESPONSE_BYTES:
+                    if total > self._max_response_bytes:
                         return None
                     chunks.append(chunk)
 

@@ -124,6 +124,30 @@ async def _check_redis() -> dict[str, Any]:
         }
 
 
+async def _check_scraper() -> dict[str, Any]:
+    """Return scraper configuration diagnostics."""
+    start = time.perf_counter()
+    try:
+        from app.adapters.content.scraper.diagnostics import build_scraper_diagnostics
+        from app.config import load_config
+
+        config = load_config()
+        diagnostics = build_scraper_diagnostics(config)
+        diagnostics["latency_ms"] = round((time.perf_counter() - start) * 1000, 2)
+        return diagnostics
+    except Exception as exc:
+        latency_ms = (time.perf_counter() - start) * 1000
+        logger.debug(
+            "health_check_scraper_failed",
+            extra={"error": str(exc), "latency_ms": latency_ms},
+        )
+        return {
+            "status": "unhealthy",
+            "error": str(exc),
+            "latency_ms": round(latency_ms, 2),
+        }
+
+
 def _get_circuit_breaker_states() -> dict[str, Any]:
     """Get circuit breaker states for all services."""
     states = {}
@@ -151,20 +175,24 @@ async def detailed_health_check(request: Request):
     # Run component checks concurrently
     try:
         async with asyncio.timeout(10.0):
-            db_status, redis_status = await asyncio.gather(
+            db_status, redis_status, scraper_status = await asyncio.gather(
                 _check_database(),
                 _check_redis(),
+                _check_scraper(),
                 return_exceptions=True,
             )
     except TimeoutError:
         db_status = {"status": "timeout", "error": "Health check timed out"}
         redis_status = {"status": "timeout", "error": "Health check timed out"}
+        scraper_status = {"status": "timeout", "error": "Health check timed out"}
 
     # Handle exceptions from gather
     if isinstance(db_status, BaseException):
         db_status = {"status": "error", "error": str(db_status)}
     if isinstance(redis_status, BaseException):
         redis_status = {"status": "error", "error": str(redis_status)}
+    if isinstance(scraper_status, BaseException):
+        scraper_status = {"status": "error", "error": str(scraper_status)}
 
     circuit_breaker_states = _get_circuit_breaker_states()
 
@@ -197,6 +225,7 @@ async def detailed_health_check(request: Request):
             "components": {
                 "database": db_status,
                 "redis": redis_status,
+                "scraper": scraper_status,
                 "circuit_breakers": circuit_breaker_states,
             },
         }

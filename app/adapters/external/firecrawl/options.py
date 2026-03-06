@@ -83,7 +83,13 @@ class FirecrawlOptionsBuilder:
             formats.append("markdown")
         return formats
 
-    def base_options(self, *, mobile: bool, pdf: bool) -> dict[str, Any]:
+    def base_options(
+        self,
+        *,
+        mobile: bool,
+        pdf: bool,
+        wait_for_ms_override: int | None = None,
+    ) -> dict[str, Any]:
         options: dict[str, Any] = {
             "mobile": mobile,
             "maxAge": self.max_age_seconds,
@@ -94,11 +100,24 @@ class FirecrawlOptionsBuilder:
         if pdf:
             options["parsers"] = ["pdf"]
         # Wait for JS content to load (helps with dynamic pages)
-        if self.wait_for_ms and self.wait_for_ms > 0:
-            options["waitFor"] = self.wait_for_ms
+        effective_wait_for = (
+            self.wait_for_ms if wait_for_ms_override is None else wait_for_ms_override
+        )
+        if effective_wait_for and effective_wait_for > 0:
+            options["waitFor"] = effective_wait_for
         return options
 
-    def options_snapshot(self, *, mobile: bool, pdf: bool) -> dict[str, Any]:
-        options = self.base_options(mobile=mobile, pdf=pdf)
+    def options_snapshot(
+        self,
+        *,
+        mobile: bool,
+        pdf: bool,
+        wait_for_ms_override: int | None = None,
+    ) -> dict[str, Any]:
+        options = self.base_options(
+            mobile=mobile,
+            pdf=pdf,
+            wait_for_ms_override=wait_for_ms_override,
+        )
         options["formats"] = self.build_formats()
         return options

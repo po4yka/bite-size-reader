@@ -197,6 +197,8 @@ EOF
 
 See [environment_variables.md](environment_variables.md) for full reference.
 
+> **Breaking scraper rename**: startup now fails if legacy vars are present (`SCRAPLING_ENABLED`, `SCRAPLING_TIMEOUT_SEC`, `SCRAPLING_STEALTH_FALLBACK`, `SCRAPER_DIRECT_HTTP_ENABLED`). Use the new `SCRAPER_*` names from `docs/environment_variables.md`.
+
 ### Invalid API Keys
 
 **Symptom**: Bot starts but all summaries fail with "401 Unauthorized" or "Invalid API key".
@@ -275,8 +277,8 @@ curl -H "Authorization: Bearer $FIRECRAWL_API_KEY" \
 **Solution**:
 
 ```bash
-# Increase timeout (default: 30s)
-echo "FIRECRAWL_TIMEOUT_SECONDS=60" >> .env
+# Increase self-hosted scraper Firecrawl timeout (default: 90s)
+echo "SCRAPER_FIRECRAWL_TIMEOUT_SEC=120" >> .env
 
 # Restart bot
 docker restart bite-size-reader

@@ -33,17 +33,24 @@ def _make_cfg(
     playwright_enabled: bool = False,
     prefer_firecrawl: bool = True,
     article_redirect_resolution_enabled: bool = True,
+    force_tier: str = "auto",
+    twitter_scraper_profile: str = "inherit",
+    scraper_profile: str = "balanced",
 ) -> SimpleNamespace:
     return SimpleNamespace(
+        scraper=SimpleNamespace(profile=scraper_profile),
         twitter=SimpleNamespace(
             cookies_path="/tmp/nonexistent-twitter-cookies.txt",
             prefer_firecrawl=prefer_firecrawl,
             playwright_enabled=playwright_enabled,
+            force_tier=force_tier,
+            scraper_profile=twitter_scraper_profile,
+            max_concurrent_browsers=2,
             headless=True,
             page_timeout_ms=15000,
             article_redirect_resolution_enabled=article_redirect_resolution_enabled,
             article_resolution_timeout_sec=5.0,
-        )
+        ),
     )
 
 
@@ -137,7 +144,7 @@ async def test_extract_content_pure_resolves_redirected_article_links() -> None:
     assert metadata["article_canonical_url"] == "https://x.com/i/article/42"
     assert metadata["article_extraction_stage"] == "playwright"
     pw_extract_article.assert_awaited_once()
-    assert pw_extract_article.await_args.args[0] == "https://x.com/i/article/42"
+    assert pw_extract_article.await_args.kwargs["url"] == "https://x.com/i/article/42"
 
 
 @pytest.mark.asyncio
@@ -194,6 +201,90 @@ async def test_try_firecrawl_keeps_article_quality_gate() -> None:
     assert ok is False
     assert content_text == ""
     assert content_source == "none"
+
+
+@pytest.mark.asyncio
+async def test_force_tier_playwright_skips_firecrawl() -> None:
+    crawl_result = SimpleNamespace(status="ok", content_markdown="unused", content_html=None)
+    extractor = _make_extractor(
+        cfg=_make_cfg(playwright_enabled=True, force_tier="playwright"),
+        crawl_result=crawl_result,
+    )
+
+    with (
+        patch.object(extractor, "_try_firecrawl", new=AsyncMock()) as mock_try_firecrawl,
+        patch.object(
+            extractor,
+            "_extract_playwright",
+            new=AsyncMock(return_value=("pw body", "twitter_graphql", {"source": "twitter"})),
+        ) as mock_extract_playwright,
+    ):
+        content_text, content_source, _meta = await extractor.extract_content_pure(
+            "https://x.com/user/status/1",
+            correlation_id="cid",
+        )
+
+    assert content_text == "pw body"
+    assert content_source == "twitter_graphql"
+    mock_try_firecrawl.assert_not_awaited()
+    mock_extract_playwright.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_force_tier_firecrawl_skips_playwright() -> None:
+    crawl_result = SimpleNamespace(status="ok", content_markdown="yes", content_html=None)
+    extractor = _make_extractor(
+        cfg=_make_cfg(playwright_enabled=True, force_tier="firecrawl"),
+        crawl_result=crawl_result,
+    )
+
+    with (
+        patch.object(
+            extractor,
+            "_try_firecrawl",
+            new=AsyncMock(return_value=(True, "firecrawl body", "markdown")),
+        ) as mock_try_firecrawl,
+        patch.object(extractor, "_extract_playwright", new=AsyncMock()) as mock_extract_playwright,
+    ):
+        content_text, content_source, _meta = await extractor.extract_content_pure(
+            "https://x.com/user/status/1",
+            correlation_id="cid",
+        )
+
+    assert content_text == "firecrawl body"
+    assert content_source == "markdown"
+    mock_try_firecrawl.assert_awaited_once()
+    mock_extract_playwright.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_twitter_profile_inherit_applies_timeout_multiplier() -> None:
+    crawl_result = SimpleNamespace(status="error", content_markdown=None, content_html=None)
+    extractor = _make_extractor(
+        cfg=_make_cfg(
+            playwright_enabled=True,
+            force_tier="playwright",
+            twitter_scraper_profile="inherit",
+            scraper_profile="robust",
+        ),
+        crawl_result=crawl_result,
+    )
+
+    with patch.object(
+        extractor,
+        "_pw_extract_tweet",
+        new=AsyncMock(return_value=("tweet", "twitter_graphql", {})),
+    ) as mock_pw:
+        await extractor._extract_playwright(
+            "https://x.com/user/status/1",
+            tweet_id="1",
+            is_article=False,
+            correlation_id="cid",
+            metadata={},
+            request_id=1,
+        )
+
+    assert mock_pw.await_args.kwargs["timeout_ms"] == 20250
 
 
 @pytest.mark.asyncio

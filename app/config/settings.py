@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import os
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -38,6 +39,36 @@ from .twitter import TwitterConfig
 logger = logging.getLogger(__name__)
 
 _M6_TELEGRAM_RUNTIME_BACKEND_ENV = "MIGRATION_TELEGRAM_RUNTIME_BACKEND"
+_DEPRECATED_SCRAPER_ENV_RENAMES = {
+    "SCRAPLING_ENABLED": "SCRAPER_SCRAPLING_ENABLED",
+    "SCRAPLING_TIMEOUT_SEC": "SCRAPER_SCRAPLING_TIMEOUT_SEC",
+    "SCRAPLING_STEALTH_FALLBACK": "SCRAPER_SCRAPLING_STEALTH_FALLBACK",
+    "SCRAPER_DIRECT_HTTP_ENABLED": "SCRAPER_DIRECT_HTML_ENABLED",
+}
+
+
+def _raise_on_deprecated_scraper_env_vars() -> None:
+    present: dict[str, str] = {}
+    for old_name, new_name in _DEPRECATED_SCRAPER_ENV_RENAMES.items():
+        if old_name in os.environ:
+            present[old_name] = new_name
+
+    env_file_path = Path(".env")
+    if env_file_path.exists():
+        for line in env_file_path.read_text(encoding="utf-8").splitlines():
+            stripped = line.strip()
+            if not stripped or stripped.startswith("#") or "=" not in stripped:
+                continue
+            key = stripped.split("=", 1)[0].strip()
+            if key in _DEPRECATED_SCRAPER_ENV_RENAMES:
+                present[key] = _DEPRECATED_SCRAPER_ENV_RENAMES[key]
+
+    if not present:
+        return
+
+    details = "; ".join(f"{old} -> {new}" for old, new in sorted(present.items()))
+    msg = f"Deprecated scraper environment variables detected. Use the new names only: {details}"
+    raise RuntimeError(msg)
 
 
 @dataclass(frozen=True)
@@ -131,6 +162,7 @@ class Settings(BaseSettings):
         env_data: dict[str, Any] = dict(os.environ)
         merged_source = {**env_data, **data}
         cls._warn_legacy_m6_telegram_backend_toggle(merged_source)
+        cls._fail_on_deprecated_scraper_envs(merged_source)
 
         for field_name, field_info in cls.model_fields.items():
             if field_name in ("allow_stub_telegram",):
@@ -168,6 +200,20 @@ class Settings(BaseSettings):
             "m6_telegram_runtime_legacy_backend_toggle_ignored",
             extra={"requested_backend": requested_backend},
         )
+
+    @staticmethod
+    def _fail_on_deprecated_scraper_envs(source: dict[str, Any]) -> None:
+        deprecated: list[str] = []
+        for old_name, new_name in _DEPRECATED_SCRAPER_ENV_RENAMES.items():
+            if old_name in source:
+                deprecated.append(f"{old_name} -> {new_name}")
+        if not deprecated:
+            return
+        msg = (
+            "Deprecated scraper environment variables detected. "
+            "Use the new names only: " + "; ".join(deprecated)
+        )
+        raise RuntimeError(msg)
 
     @staticmethod
     def _resolve_env_value(data: dict[str, Any], field: Any) -> Any | None:
@@ -248,6 +294,7 @@ def load_config(*, allow_stub_telegram: bool = False) -> AppConfig:
     """
     overrides: dict[str, Any] = {"allow_stub_telegram": allow_stub_telegram}
     using_stub_telegram = False
+    _raise_on_deprecated_scraper_env_vars()
 
     if allow_stub_telegram:
         telegram_overrides: dict[str, Any] = {}

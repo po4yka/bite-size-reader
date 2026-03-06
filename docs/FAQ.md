@@ -626,6 +626,8 @@ See [HEXAGONAL_ARCHITECTURE_QUICKSTART.md](HEXAGONAL_ARCHITECTURE_QUICKSTART.md)
    - Cloud Firecrawl is only needed for sites that resist local scraping
 
    ```bash
+   SCRAPER_ENABLED=true
+   SCRAPER_SCRAPLING_ENABLED=true
    SCRAPER_PROVIDER_ORDER=["scrapling", "direct_html"]  # Skip cloud Firecrawl entirely
    ```
 
@@ -676,12 +678,14 @@ Yes, but requires setup:
    OPENAI_MODEL=llama3.2:70b
    ```
 
-3. **Disable Firecrawl** (use trafilatura):
+3. **Disable self-hosted Firecrawl provider** (keep local extraction only):
 
    ```bash
-   CONTENT_EXTRACTION_FALLBACK=true
-   # Don't call Firecrawl at all (set dummy key)
+   FIRECRAWL_SELF_HOSTED_ENABLED=false
+   SCRAPER_PROVIDER_ORDER=["scrapling", "playwright", "crawlee", "direct_html"]
    ```
+
+**Breaking rename note**: legacy scraper vars `SCRAPLING_*` and `SCRAPER_DIRECT_HTTP_ENABLED` now fail fast at startup.
 
 **Hardware requirements**: 70B model needs 40+ GB VRAM (A100, H100, or multiple GPUs).
 

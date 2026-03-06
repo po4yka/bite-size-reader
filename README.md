@@ -242,6 +242,7 @@ OPENROUTER_MODEL=deepseek/deepseek-v3.2  # Primary LLM model
 | **Web Search** | `WEB_SEARCH_ENABLED=false`<br>`WEB_SEARCH_MAX_QUERIES=3` | Add real-time context to summaries |
 | **Redis** | `REDIS_ENABLED=true`<br>`REDIS_URL` or `REDIS_HOST`/`REDIS_PORT` | Cache responses, speed up bot |
 | **Draft Streaming** | `SUMMARY_STREAMING_ENABLED=true`<br>`SUMMARY_STREAMING_MODE=section`<br>`TELEGRAM_DRAFT_STREAMING_ENABLED=true` | Live section previews during OpenRouter summaries |
+| **Scraper Chain** | `SCRAPER_ENABLED=true`<br>`SCRAPER_PROFILE=balanced`<br>`SCRAPER_BROWSER_ENABLED=true`<br>`SCRAPER_PROVIDER_ORDER=[...]` | Control article extraction fallback behavior and tuning |
 | **ChromaDB** | `CHROMA_HOST=http://localhost:8000`<br>`CHROMA_AUTH_TOKEN` | Semantic search |
 | **MCP Server** | `MCP_ENABLED=false`<br>`MCP_TRANSPORT=stdio`<br>`MCP_PORT=8200` | AI agent integration (Claude Desktop) |
 | **Mobile API** | `JWT_SECRET_KEY`<br>`ALLOWED_CLIENT_IDS`<br>`API_RATE_LIMIT_*` | Build mobile clients |
@@ -259,6 +260,8 @@ OPENROUTER_MODEL=deepseek/deepseek-v3.2  # Primary LLM model
 **📖 Full Reference**: [environment_variables.md](docs/environment_variables.md) (250+ variables documented)
 
 **❓ Configuration Help**: [FAQ § Configuration](docs/FAQ.md#configuration) | [TROUBLESHOOTING § Configuration](docs/TROUBLESHOOTING.md#configuration-issues)
+
+**⚠️ Breaking Rename**: scraper legacy variables `SCRAPLING_*` and `SCRAPER_DIRECT_HTTP_ENABLED` are no longer accepted; startup fails fast with replacement hints.
 
 ---
 

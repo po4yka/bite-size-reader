@@ -28,6 +28,7 @@ def _dummy_cfg() -> AppConfig:
         "AppConfig",
         SimpleNamespace(
             runtime=SimpleNamespace(enable_textacy=False, request_timeout_sec=5),
+            scraper=SimpleNamespace(profile="balanced"),
             redis=SimpleNamespace(
                 enabled=False,
                 cache_enabled=False,
@@ -40,6 +41,9 @@ def _dummy_cfg() -> AppConfig:
                 enabled=True,
                 prefer_firecrawl=True,
                 playwright_enabled=False,
+                force_tier="auto",
+                scraper_profile="inherit",
+                max_concurrent_browsers=2,
                 headless=True,
                 page_timeout_ms=15000,
                 cookies_path="/tmp/nonexistent-twitter-cookies.txt",

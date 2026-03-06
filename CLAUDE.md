@@ -384,12 +384,18 @@ OPENROUTER_API_KEY=...              # OpenRouter API key
 OPENROUTER_MODEL=deepseek/deepseek-v3.2  # Default model
 OPENROUTER_FALLBACK_MODELS=moonshotai/kimi-k2.5,qwen/qwen3-max,deepseek/deepseek-r1
 
-# Scraper chain (all optional -- defaults enable Scrapling + direct HTTP)
+# Scraper chain (all optional -- defaults enable full fallback chain)
 FIRECRAWL_API_KEY=                  # Optional; enables cloud Firecrawl for TopicSearchService web search
+FIRECRAWL_SELF_HOSTED_ENABLED=false
 FIRECRAWL_SELF_HOSTED_URL=http://firecrawl:3002  # Self-hosted Firecrawl URL (Docker Compose service)
+SCRAPER_ENABLED=true
+SCRAPER_PROFILE=balanced
+SCRAPER_BROWSER_ENABLED=true
 SCRAPER_SCRAPLING_ENABLED=true      # Enable Scrapling provider (primary)
-SCRAPER_FIRECRAWL_SELF_HOSTED_ENABLED=true  # Enable self-hosted Firecrawl (secondary)
-SCRAPER_DIRECT_HTTP_ENABLED=true    # Enable direct HTTP + trafilatura (tertiary)
+SCRAPER_FIRECRAWL_TIMEOUT_SEC=90
+SCRAPER_PLAYWRIGHT_ENABLED=true
+SCRAPER_CRAWLEE_ENABLED=true
+SCRAPER_DIRECT_HTML_ENABLED=true
 
 # Channel Digest (optional)
 DIGEST_ENABLED=false                # Enable channel digest subsystem

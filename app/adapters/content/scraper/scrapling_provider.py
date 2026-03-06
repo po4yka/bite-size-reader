@@ -7,11 +7,10 @@ import logging
 import time
 from typing import Any
 
+from app.adapters.content.scraper.runtime_tuning import tuned_provider_timeout
 from app.adapters.external.firecrawl.models import FirecrawlResult
 
 logger = logging.getLogger(__name__)
-
-_MIN_CONTENT_LENGTH = 400
 
 
 class ScraplingProvider:
@@ -21,9 +20,16 @@ class ScraplingProvider:
         self,
         timeout_sec: int = 30,
         stealth_fallback: bool = True,
+        *,
+        min_content_length: int = 400,
+        profile: str = "balanced",
+        js_heavy_hosts: tuple[str, ...] = (),
     ) -> None:
         self._timeout_sec = timeout_sec
         self._stealth_fallback = stealth_fallback
+        self._min_content_length = min_content_length
+        self._profile = profile
+        self._js_heavy_hosts = js_heavy_hosts
 
     @property
     def provider_name(self) -> str:
@@ -37,20 +43,27 @@ class ScraplingProvider:
         request_id: int | None = None,
     ) -> FirecrawlResult:
         started = time.perf_counter()
+        timeout_sec = tuned_provider_timeout(
+            base_timeout_sec=self._timeout_sec,
+            profile=self._profile,
+            provider="scrapling",
+            url=url,
+            js_heavy_hosts=self._js_heavy_hosts,
+        )
         try:
             content_html, content_text = await asyncio.wait_for(
                 self._fetch(url),
-                timeout=self._timeout_sec,
+                timeout=timeout_sec,
             )
         except TimeoutError:
             latency = int((time.perf_counter() - started) * 1000)
             logger.warning(
                 "scrapling_timeout",
-                extra={"url": url, "timeout_sec": self._timeout_sec},
+                extra={"url": url, "timeout_sec": round(timeout_sec, 2)},
             )
             return FirecrawlResult(
                 status="error",
-                error_text=f"Scrapling timeout after {self._timeout_sec}s",
+                error_text=f"Scrapling timeout after {round(timeout_sec, 2)}s",
                 latency_ms=latency,
                 source_url=url,
                 endpoint="scrapling",
@@ -71,13 +84,13 @@ class ScraplingProvider:
 
         latency = int((time.perf_counter() - started) * 1000)
 
-        if not content_text or len(content_text) < _MIN_CONTENT_LENGTH:
+        if not content_text or len(content_text) < self._min_content_length:
             logger.info(
                 "scrapling_thin_content",
                 extra={
                     "url": url,
                     "content_len": len(content_text or ""),
-                    "threshold": _MIN_CONTENT_LENGTH,
+                    "threshold": self._min_content_length,
                 },
             )
             return FirecrawlResult(
@@ -105,7 +118,7 @@ class ScraplingProvider:
         loop = asyncio.get_running_loop()
 
         html, text = await loop.run_in_executor(None, self._sync_fetch_basic, url)
-        if text and len(text) >= _MIN_CONTENT_LENGTH:
+        if text and len(text) >= self._min_content_length:
             return html, text
 
         if self._stealth_fallback:
