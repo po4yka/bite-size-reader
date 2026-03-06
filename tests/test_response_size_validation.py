@@ -11,7 +11,7 @@ import pytest
 from app.core.http_utils import ResponseSizeError, bytes_to_mb, validate_response_size
 
 
-class TestResponseSizeValidation(unittest.TestCase):
+class TestResponseSizeValidation(unittest.IsolatedAsyncioTestCase):
     """Test response size validation function."""
 
     def setUp(self):
@@ -200,7 +200,7 @@ class TestResponseSizeErrorException(unittest.TestCase):
 
 
 # Integration-style tests with more realistic scenarios
-class TestResponseSizeValidationIntegration(unittest.TestCase):
+class TestResponseSizeValidationIntegration(unittest.IsolatedAsyncioTestCase):
     """Integration tests for response size validation."""
 
     async def test_firecrawl_response_validation(self):

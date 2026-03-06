@@ -89,6 +89,9 @@ async def validate_response_size(
                     },
                 )
 
+        except ResponseSizeError:
+            # Preserve explicit size-limit violations; do not treat as parse errors.
+            raise
         except ValueError:
             # Invalid Content-Length header - log but continue
             logger.warning(
