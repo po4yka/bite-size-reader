@@ -99,6 +99,23 @@ def test_db_info_requires_owner(client: TestClient, db):
     assert "table_counts" in data
 
 
+def test_db_info_skips_unallowlisted_tables(client: TestClient, db):
+    owner = User.create(telegram_user_id=555555555, username="owner_user3", is_owner=True)
+    owner_token = create_access_token(owner.telegram_user_id, client_id="test")
+    owner_headers = {"Authorization": f"Bearer {owner_token}"}
+
+    db._database.execute_sql("CREATE TABLE unexpected_table (id INTEGER PRIMARY KEY)")
+    db._database.execute_sql("INSERT INTO unexpected_table (id) VALUES (1)")
+
+    with patch("app.api.routers.auth.dependencies.Config.get_allowed_user_ids", return_value=[]):
+        response = client.get("/v1/system/db-info", headers=owner_headers)
+
+    assert response.status_code == 200
+    table_counts = response.json().get("data", {}).get("table_counts", {})
+    assert "unexpected_table" not in table_counts
+    assert "requests" in table_counts
+
+
 def test_clear_cache_requires_owner(client: TestClient, db):
     owner = User.create(telegram_user_id=333333333, username="owner_user2", is_owner=True)
     non_owner = User.create(telegram_user_id=444444444, username="normal_user2", is_owner=False)

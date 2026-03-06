@@ -1,11 +1,13 @@
 """System maintenance endpoints."""
 
 import os
+import re
 import sqlite3
 import tempfile
 import time
 from datetime import UTC, datetime
 
+import peewee
 from fastapi import APIRouter, Depends, Request
 from starlette.responses import FileResponse
 
@@ -14,10 +16,27 @@ from app.api.routers.auth import get_current_user
 from app.api.services.auth_service import AuthService
 from app.config import Config
 from app.core.logging_utils import get_logger
+from app.db.models import ALL_MODELS
 
 logger = get_logger(__name__)
 
 router = APIRouter()
+
+
+def _is_safe_sqlite_identifier(identifier: str) -> bool:
+    return bool(re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", identifier))
+
+
+_DB_INFO_TABLE_ALLOWLIST: frozenset[str] = frozenset(
+    model._meta.table_name
+    for model in ALL_MODELS
+    if _is_safe_sqlite_identifier(model._meta.table_name)
+)
+_DB_INFO_MODELS_BY_TABLE = {
+    model._meta.table_name: model
+    for model in ALL_MODELS
+    if model._meta.table_name in _DB_INFO_TABLE_ALLOWLIST
+}
 
 
 def _build_db_dump_response(request: Request, user: dict):
@@ -133,21 +152,42 @@ async def get_db_info(user=Depends(get_current_user)):
 
     table_counts: dict[str, int] = {}
     try:
-        conn = sqlite3.connect(db_path)
-        cursor = conn.cursor()
-        cursor.execute(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"
-        )
-        tables = [row[0] for row in cursor.fetchall()]
-        for table in sorted(tables):
-            try:
-                cursor.execute(f"SELECT COUNT(*) FROM [{table}]")
-                table_counts[table] = cursor.fetchone()[0]
-            except Exception:
+        allowlisted_tables: list[str] = []
+        with sqlite3.connect(db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"
+            )
+            tables = [row[0] for row in cursor.fetchall()]
+            for table in sorted(tables):
+                if not _is_safe_sqlite_identifier(table):
+                    table_counts[table] = -1
+                    logger.warning("db_info_unsafe_table_name_skipped", extra={"table": table})
+                    continue
+                if table not in _DB_INFO_TABLE_ALLOWLIST:
+                    logger.warning(
+                        "db_info_unallowlisted_table_name_skipped", extra={"table": table}
+                    )
+                    continue
+                allowlisted_tables.append(table)
+
+        for table in allowlisted_tables:
+            model = _DB_INFO_MODELS_BY_TABLE.get(table)
+            if model is None:
                 table_counts[table] = -1
-        conn.close()
-    except Exception as e:
+                logger.warning("db_info_table_model_missing", extra={"table": table})
+                continue
+            try:
+                table_counts[table] = int(model.select().count())
+            except peewee.DatabaseError as table_exc:
+                table_counts[table] = -1
+                logger.warning(
+                    "db_info_table_count_failed",
+                    extra={"table": table, "error": str(table_exc)},
+                )
+    except sqlite3.Error as e:
         logger.error("db_info_failed", extra={"error": str(e)})
+        table_counts["__error__"] = -1
 
     return success_response(
         {
