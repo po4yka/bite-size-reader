@@ -233,7 +233,7 @@ Content extraction uses an ordered chain of providers. Each provider is tried in
 
 | Variable | Default | Description |
 | ---------- | --------- | ------------- |
-| `SCRAPER_PROVIDER_ORDER` | `["scrapling", "firecrawl", "playwright", "direct_html"]` | Ordered list of scraping providers to try |
+| `SCRAPER_PROVIDER_ORDER` | `["scrapling", "firecrawl", "playwright", "crawlee", "direct_html"]` | Ordered list of scraping providers to try |
 | `SCRAPLING_ENABLED` | `true` | Enable Scrapling in-process provider |
 | `SCRAPLING_TIMEOUT_SEC` | `30` | Scrapling fetch timeout (seconds) |
 | `SCRAPLING_STEALTH_FALLBACK` | `true` | Try stealth fetch if basic fetch returns thin content |
@@ -243,12 +243,17 @@ Content extraction uses an ordered chain of providers. Each provider is tried in
 | `SCRAPER_PLAYWRIGHT_ENABLED` | `true` | Enable Playwright rendering fallback provider |
 | `SCRAPER_PLAYWRIGHT_HEADLESS` | `true` | Run Playwright browser headless in scraper fallback |
 | `SCRAPER_PLAYWRIGHT_TIMEOUT_SEC` | `30` | Playwright render timeout (seconds) |
+| `SCRAPER_CRAWLEE_ENABLED` | `true` | Enable Crawlee advanced fallback provider |
+| `SCRAPER_CRAWLEE_TIMEOUT_SEC` | `45` | Crawlee stage timeout budget (seconds) |
+| `SCRAPER_CRAWLEE_HEADLESS` | `true` | Run Crawlee Playwright stage in headless mode |
+| `SCRAPER_CRAWLEE_MAX_RETRIES` | `2` | Max retries per Crawlee stage |
 
 **Notes**:
 
 - Scrapling is a free, in-process scraper that requires no API key. It is tried first by default.
 - Self-hosted Firecrawl runs as a Docker Compose service (`bsr-firecrawl` on port 3002) and also requires no cloud API key.
 - Playwright fallback is useful for JS-heavy pages that fail in HTTP-only extractors.
+- Crawlee fallback is a single-page advanced fallback (BeautifulSoup stage, then Playwright stage); it is not broad multi-page site crawling in this pipeline.
 - Cloud Firecrawl (`FIRECRAWL_API_KEY`) is only needed when it appears in `SCRAPER_PROVIDER_ORDER` as `"firecrawl"` or when web search enrichment is enabled.
 - `direct_html` is a lightweight fallback using trafilatura for simple pages.
 

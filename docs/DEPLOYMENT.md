@@ -33,7 +33,7 @@ This guide explains how to prepare environments, configure secrets, and run the 
 
 ## Firecrawl Setup (Optional)
 
-`FIRECRAWL_API_KEY` is **optional**. The default scraper chain (`SCRAPER_PROVIDER_ORDER`) tries Scrapling (free, in-process) first, then falls back to Firecrawl, Playwright, and direct HTML extraction. You only need a cloud Firecrawl API key if you want to use cloud Firecrawl or web search enrichment.
+`FIRECRAWL_API_KEY` is **optional**. The default scraper chain (`SCRAPER_PROVIDER_ORDER`) tries Scrapling (free, in-process) first, then falls back to Firecrawl, Playwright, Crawlee, and direct HTML extraction. You only need a cloud Firecrawl API key if you want to use cloud Firecrawl or web search enrichment.
 
 - Cloud Firecrawl: Sign up at https://www.firecrawl.dev/ and set `FIRECRAWL_API_KEY`.
 - Self-hosted Firecrawl: Enable via `FIRECRAWL_SELF_HOSTED_ENABLED=true`. Docker Compose includes a `bsr-firecrawl` service on port 3002.

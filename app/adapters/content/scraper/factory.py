@@ -30,6 +30,7 @@ class ContentScraperFactory:
             "scrapling": lambda: _build_scrapling(scraper_cfg),
             "firecrawl": lambda: _build_firecrawl(cfg, audit),
             "playwright": lambda: _build_playwright(scraper_cfg),
+            "crawlee": lambda: _build_crawlee(scraper_cfg),
             "direct_html": lambda: _build_direct_html(scraper_cfg),
         }
 
@@ -123,6 +124,25 @@ def _build_playwright(scraper_cfg: object) -> ContentScraperProtocol | None:
     except Exception as exc:
         logger.warning(
             "playwright_provider_init_failed",
+            extra={"error": str(exc), "error_type": type(exc).__name__},
+        )
+        return None
+
+
+def _build_crawlee(scraper_cfg: object) -> ContentScraperProtocol | None:
+    if not getattr(scraper_cfg, "crawlee_enabled", True):
+        return None
+    try:
+        from app.adapters.content.scraper.crawlee_provider import CrawleeProvider
+
+        return CrawleeProvider(
+            timeout_sec=getattr(scraper_cfg, "crawlee_timeout_sec", 45),
+            headless=getattr(scraper_cfg, "crawlee_headless", True),
+            max_retries=getattr(scraper_cfg, "crawlee_max_retries", 2),
+        )
+    except Exception as exc:
+        logger.warning(
+            "crawlee_provider_init_failed",
             extra={"error": str(exc), "error_type": type(exc).__name__},
         )
         return None

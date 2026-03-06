@@ -9,7 +9,7 @@ class ScraperConfig(BaseModel):
     model_config = ConfigDict(frozen=True, populate_by_name=True)
 
     provider_order: list[str] = Field(
-        default=["scrapling", "firecrawl", "playwright", "direct_html"],
+        default=["scrapling", "firecrawl", "playwright", "crawlee", "direct_html"],
         validation_alias="SCRAPER_PROVIDER_ORDER",
         description="Ordered list of scraping providers to try",
     )
@@ -48,4 +48,20 @@ class ScraperConfig(BaseModel):
     playwright_timeout_sec: int = Field(
         default=30,
         validation_alias="SCRAPER_PLAYWRIGHT_TIMEOUT_SEC",
+    )
+    crawlee_enabled: bool = Field(
+        default=True,
+        validation_alias="SCRAPER_CRAWLEE_ENABLED",
+    )
+    crawlee_timeout_sec: int = Field(
+        default=45,
+        validation_alias="SCRAPER_CRAWLEE_TIMEOUT_SEC",
+    )
+    crawlee_headless: bool = Field(
+        default=True,
+        validation_alias="SCRAPER_CRAWLEE_HEADLESS",
+    )
+    crawlee_max_retries: int = Field(
+        default=2,
+        validation_alias="SCRAPER_CRAWLEE_MAX_RETRIES",
     )

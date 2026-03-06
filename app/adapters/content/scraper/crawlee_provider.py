@@ -1,0 +1,206 @@
+"""Crawlee-based advanced fallback provider for difficult pages."""
+
+from __future__ import annotations
+
+import asyncio
+import logging
+import time
+from datetime import timedelta
+
+from app.adapters.external.firecrawl.models import FirecrawlResult
+from app.core.html_utils import html_to_text
+
+logger = logging.getLogger(__name__)
+
+_MIN_CONTENT_LENGTH = 400
+_DEFAULT_TIMEOUT_SEC = 45
+_DEFAULT_MAX_RETRIES = 2
+
+
+class CrawleeProvider:
+    """Hybrid Crawlee provider: BeautifulSoup stage, then Playwright stage."""
+
+    def __init__(
+        self,
+        timeout_sec: int = _DEFAULT_TIMEOUT_SEC,
+        headless: bool = True,
+        max_retries: int = _DEFAULT_MAX_RETRIES,
+    ) -> None:
+        self._timeout_sec = timeout_sec
+        self._headless = headless
+        self._max_retries = max_retries
+
+    @property
+    def provider_name(self) -> str:
+        return "crawlee"
+
+    async def scrape_markdown(
+        self,
+        url: str,
+        *,
+        mobile: bool = True,
+        request_id: int | None = None,
+    ) -> FirecrawlResult:
+        started = time.perf_counter()
+        stage_errors: list[str] = []
+
+        # Stage 1: lightweight HTTP-first crawl.
+        try:
+            bs_html = await asyncio.wait_for(
+                self._extract_with_beautifulsoup(url),
+                timeout=self._timeout_sec + 5,
+            )
+        except TimeoutError:
+            bs_html = None
+            stage_errors.append(f"BeautifulSoup timeout after {self._timeout_sec}s")
+        except Exception as exc:
+            bs_html = None
+            stage_errors.append(f"BeautifulSoup error: {exc}")
+
+        if bs_html:
+            ok_result = self._build_success_result(
+                html=bs_html,
+                url=url,
+                latency_ms=int((time.perf_counter() - started) * 1000),
+                stage="beautifulsoup",
+                mobile=mobile,
+            )
+            if ok_result is not None:
+                return ok_result
+            stage_errors.append("BeautifulSoup stage produced insufficient content")
+        else:
+            stage_errors.append("BeautifulSoup stage produced no HTML")
+
+        # Stage 2: browser rendering fallback.
+        try:
+            pw_html = await asyncio.wait_for(
+                self._extract_with_playwright(url, mobile=mobile),
+                timeout=self._timeout_sec + 10,
+            )
+        except TimeoutError:
+            pw_html = None
+            stage_errors.append(f"Playwright timeout after {self._timeout_sec}s")
+        except Exception as exc:
+            pw_html = None
+            stage_errors.append(f"Playwright error: {exc}")
+
+        if pw_html:
+            ok_result = self._build_success_result(
+                html=pw_html,
+                url=url,
+                latency_ms=int((time.perf_counter() - started) * 1000),
+                stage="playwright",
+                mobile=mobile,
+            )
+            if ok_result is not None:
+                return ok_result
+            stage_errors.append("Playwright stage produced insufficient content")
+        else:
+            stage_errors.append("Playwright stage produced no HTML")
+
+        latency = int((time.perf_counter() - started) * 1000)
+        logger.info(
+            "crawlee_exhausted",
+            extra={
+                "url": url,
+                "request_id": request_id,
+                "latency_ms": latency,
+                "errors": stage_errors,
+            },
+        )
+
+        return FirecrawlResult(
+            status="error",
+            error_text=f"Crawlee exhausted: {'; '.join(stage_errors)}",
+            latency_ms=latency,
+            source_url=url,
+            endpoint="crawlee",
+        )
+
+    def _build_success_result(
+        self,
+        *,
+        html: str,
+        url: str,
+        latency_ms: int,
+        stage: str,
+        mobile: bool,
+    ) -> FirecrawlResult | None:
+        if not html.strip():
+            return None
+
+        content_text = html_to_text(html)
+        if len(content_text) < _MIN_CONTENT_LENGTH:
+            return None
+
+        return FirecrawlResult(
+            status="ok",
+            http_status=200,
+            content_markdown=None,
+            content_html=html,
+            latency_ms=latency_ms,
+            source_url=url,
+            endpoint="crawlee",
+            options_json={
+                "provider": "crawlee",
+                "stage": stage,
+                "headless": self._headless,
+                "mobile": mobile,
+                "max_retries": self._max_retries,
+            },
+        )
+
+    async def _extract_with_beautifulsoup(self, url: str) -> str | None:
+        try:
+            from crawlee.crawlers import BeautifulSoupCrawler, BeautifulSoupCrawlingContext
+        except ImportError as exc:
+            msg = (
+                "Crawlee BeautifulSoup crawler is required. "
+                "Install with: pip install 'crawlee[beautifulsoup,playwright]'"
+            )
+            raise ImportError(msg) from exc
+
+        extracted_html: str | None = None
+        crawler = BeautifulSoupCrawler(
+            max_request_retries=self._max_retries,
+            request_handler_timeout=timedelta(seconds=self._timeout_sec),
+            max_requests_per_crawl=1,
+        )
+
+        @crawler.router.default_handler
+        async def request_handler(context: BeautifulSoupCrawlingContext) -> None:
+            nonlocal extracted_html
+            extracted_html = str(context.soup) if context.soup is not None else None
+
+        await crawler.run([url])
+        return extracted_html
+
+    async def _extract_with_playwright(self, url: str, *, mobile: bool = True) -> str | None:
+        del mobile  # Crawlee controls browser context; provider keeps API symmetry.
+        try:
+            from crawlee.crawlers import PlaywrightCrawler, PlaywrightCrawlingContext
+        except ImportError as exc:
+            msg = (
+                "Crawlee Playwright crawler is required. "
+                "Install with: pip install 'crawlee[beautifulsoup,playwright]'"
+            )
+            raise ImportError(msg) from exc
+
+        extracted_html: str | None = None
+        crawler = PlaywrightCrawler(
+            headless=self._headless,
+            max_request_retries=self._max_retries,
+            request_handler_timeout=timedelta(seconds=self._timeout_sec),
+            max_requests_per_crawl=1,
+        )
+
+        @crawler.router.default_handler
+        async def request_handler(context: PlaywrightCrawlingContext) -> None:
+            nonlocal extracted_html
+            extracted_html = await context.page.content()
+
+        await crawler.run([url])
+        return extracted_html
+
+    async def aclose(self) -> None:
+        pass

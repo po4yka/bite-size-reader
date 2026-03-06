@@ -298,6 +298,28 @@ class TestContentScraperChain:
         assert len(playwright.calls) == 1
         assert len(direct_html.calls) == 0
 
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_crawlee_success_stops_before_direct_html(self):
+        """When Crawlee succeeds, direct_html is not invoked."""
+        scrapling = _MockProvider(name="scrapling", result=_error_result(error="scrapling failed"))
+        firecrawl = _MockProvider(name="firecrawl", result=_error_result(error="firecrawl failed"))
+        playwright = _MockProvider(
+            name="playwright", result=_error_result(error="playwright failed")
+        )
+        crawlee = _MockProvider(name="crawlee", result=_ok_result(markdown="# Crawlee"))
+        direct_html = _MockProvider(name="direct_html", result=_ok_result(markdown="# Direct"))
+
+        chain = ContentScraperChain([scrapling, firecrawl, playwright, crawlee, direct_html])
+        result = await chain.scrape_markdown("https://example.com")
+
+        assert result.status == "ok"
+        assert result.content_markdown == "# Crawlee"
+        assert len(scrapling.calls) == 1
+        assert len(firecrawl.calls) == 1
+        assert len(playwright.calls) == 1
+        assert len(crawlee.calls) == 1
+        assert len(direct_html.calls) == 0
+
 
 # ===================================================================
 # ContentScraperFactory tests
@@ -307,25 +329,28 @@ class TestContentScraperChain:
 class TestContentScraperFactory:
     """Tests for the factory that builds a scraper chain from config."""
 
-    def test_default_config_creates_chain_with_scrapling_playwright_and_direct_html(self):
-        """Default config enables scrapling + playwright + direct_html; firecrawl disabled."""
+    def test_default_config_creates_chain_with_scrapling_playwright_crawlee_and_direct_html(self):
+        """Default config enables scrapling + playwright + crawlee + direct_html."""
         cfg = make_test_app_config(scraper=ScraperConfig())
 
         with (
             patch("app.adapters.content.scraper.factory._build_scrapling") as mock_scrapling,
             patch("app.adapters.content.scraper.factory._build_playwright") as mock_playwright,
+            patch("app.adapters.content.scraper.factory._build_crawlee") as mock_crawlee,
             patch("app.adapters.content.scraper.factory._build_direct_html") as mock_direct,
         ):
             mock_scrapling.return_value = _MockProvider(name="scrapling")
             mock_playwright.return_value = _MockProvider(name="playwright")
+            mock_crawlee.return_value = _MockProvider(name="crawlee")
             mock_direct.return_value = _MockProvider(name="direct_html")
 
             chain = ContentScraperFactory.create_from_config(cfg)
 
-        assert len(chain._providers) == 3
+        assert len(chain._providers) == 4
         assert chain._providers[0].provider_name == "scrapling"
         assert chain._providers[1].provider_name == "playwright"
-        assert chain._providers[2].provider_name == "direct_html"
+        assert chain._providers[2].provider_name == "crawlee"
+        assert chain._providers[3].provider_name == "direct_html"
 
     def test_scrapling_disabled_skipped(self):
         """When scrapling_enabled=False, the scrapling provider is skipped."""
@@ -335,10 +360,12 @@ class TestContentScraperFactory:
         with (
             patch("app.adapters.content.scraper.factory._build_scrapling") as mock_scrapling,
             patch("app.adapters.content.scraper.factory._build_playwright") as mock_playwright,
+            patch("app.adapters.content.scraper.factory._build_crawlee") as mock_crawlee,
             patch("app.adapters.content.scraper.factory._build_direct_html") as mock_direct,
         ):
             mock_scrapling.return_value = None  # disabled
             mock_playwright.return_value = _MockProvider(name="playwright")
+            mock_crawlee.return_value = _MockProvider(name="crawlee")
             mock_direct.return_value = _MockProvider(name="direct_html")
 
             chain = ContentScraperFactory.create_from_config(cfg)
@@ -346,6 +373,7 @@ class TestContentScraperFactory:
         names = [p.provider_name for p in chain._providers]
         assert "scrapling" not in names
         assert "playwright" in names
+        assert "crawlee" in names
         assert "direct_html" in names
 
     def test_playwright_disabled_skipped(self):
@@ -356,23 +384,48 @@ class TestContentScraperFactory:
         with (
             patch("app.adapters.content.scraper.factory._build_scrapling") as mock_scrapling,
             patch("app.adapters.content.scraper.factory._build_playwright") as mock_playwright,
+            patch("app.adapters.content.scraper.factory._build_crawlee") as mock_crawlee,
             patch("app.adapters.content.scraper.factory._build_direct_html") as mock_direct,
         ):
             mock_scrapling.return_value = _MockProvider(name="scrapling")
             mock_playwright.return_value = None
+            mock_crawlee.return_value = _MockProvider(name="crawlee")
             mock_direct.return_value = _MockProvider(name="direct_html")
 
             chain = ContentScraperFactory.create_from_config(cfg)
 
         names = [p.provider_name for p in chain._providers]
         assert "playwright" not in names
+        assert "crawlee" in names
+        assert "direct_html" in names
+
+    def test_crawlee_disabled_skipped(self):
+        """When crawlee_enabled=False, the Crawlee provider is skipped."""
+        scraper_cfg = ScraperConfig(crawlee_enabled=False)
+        cfg = make_test_app_config(scraper=scraper_cfg)
+
+        with (
+            patch("app.adapters.content.scraper.factory._build_scrapling") as mock_scrapling,
+            patch("app.adapters.content.scraper.factory._build_playwright") as mock_playwright,
+            patch("app.adapters.content.scraper.factory._build_crawlee") as mock_crawlee,
+            patch("app.adapters.content.scraper.factory._build_direct_html") as mock_direct,
+        ):
+            mock_scrapling.return_value = _MockProvider(name="scrapling")
+            mock_playwright.return_value = _MockProvider(name="playwright")
+            mock_crawlee.return_value = None
+            mock_direct.return_value = _MockProvider(name="direct_html")
+
+            chain = ContentScraperFactory.create_from_config(cfg)
+
+        names = [p.provider_name for p in chain._providers]
+        assert "crawlee" not in names
         assert "direct_html" in names
 
     def test_firecrawl_self_hosted_enabled_included(self):
         """When firecrawl_self_hosted_enabled=True, firecrawl is in the chain."""
         scraper_cfg = ScraperConfig(
             firecrawl_self_hosted_enabled=True,
-            provider_order=["scrapling", "firecrawl", "playwright", "direct_html"],
+            provider_order=["scrapling", "firecrawl", "playwright", "crawlee", "direct_html"],
         )
         cfg = make_test_app_config(scraper=scraper_cfg)
 
@@ -382,11 +435,13 @@ class TestContentScraperFactory:
             patch("app.adapters.content.scraper.factory._build_scrapling") as mock_scrapling,
             patch("app.adapters.content.scraper.factory._build_firecrawl") as mock_firecrawl,
             patch("app.adapters.content.scraper.factory._build_playwright") as mock_playwright,
+            patch("app.adapters.content.scraper.factory._build_crawlee") as mock_crawlee,
             patch("app.adapters.content.scraper.factory._build_direct_html") as mock_direct,
         ):
             mock_scrapling.return_value = _MockProvider(name="scrapling")
             mock_firecrawl.return_value = mock_fc_provider
             mock_playwright.return_value = _MockProvider(name="playwright")
+            mock_crawlee.return_value = _MockProvider(name="crawlee")
             mock_direct.return_value = _MockProvider(name="direct_html")
 
             chain = ContentScraperFactory.create_from_config(cfg)
@@ -394,7 +449,8 @@ class TestContentScraperFactory:
         names = [p.provider_name for p in chain._providers]
         assert "firecrawl_self_hosted" in names
         assert "playwright" in names
-        assert len(chain._providers) == 4
+        assert "crawlee" in names
+        assert len(chain._providers) == 5
 
     def test_empty_provider_order_falls_back_to_direct_html(self):
         """When provider_order is empty, the factory falls back to direct_html."""
@@ -481,6 +537,142 @@ class TestFirecrawlProvider:
         provider = FirecrawlProvider(mock_client, name="fc_test")
         await provider.aclose()
         mock_client.aclose.assert_awaited_once()
+
+
+# ===================================================================
+# CrawleeProvider tests
+# ===================================================================
+
+
+class TestCrawleeProvider:
+    """Tests for the Crawlee hybrid fallback provider."""
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_beautifulsoup_success_short_circuits_playwright_stage(self):
+        """BeautifulSoup stage success should skip Playwright stage."""
+        from app.adapters.content.scraper.crawlee_provider import CrawleeProvider
+
+        provider = CrawleeProvider(timeout_sec=5, headless=True, max_retries=2)
+        html_body = "<html><body><main>" + ("A" * 500) + "</main></body></html>"
+
+        with (
+            patch.object(
+                provider,
+                "_extract_with_beautifulsoup",
+                new_callable=AsyncMock,
+                return_value=html_body,
+            ) as mock_bs,
+            patch.object(provider, "_extract_with_playwright", new_callable=AsyncMock) as mock_pw,
+            patch(
+                "app.adapters.content.scraper.crawlee_provider.html_to_text",
+                return_value="A" * 500,
+            ),
+        ):
+            result = await provider.scrape_markdown("https://example.com")
+
+        assert result.status == "ok"
+        assert result.endpoint == "crawlee"
+        assert isinstance(result.options_json, dict)
+        assert result.options_json.get("stage") == "beautifulsoup"
+        mock_bs.assert_awaited_once()
+        mock_pw.assert_not_awaited()
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_beautifulsoup_thin_then_playwright_success(self):
+        """If BeautifulSoup is thin, provider should fallback to Playwright stage."""
+        from app.adapters.content.scraper.crawlee_provider import CrawleeProvider
+
+        provider = CrawleeProvider(timeout_sec=5, headless=True, max_retries=2)
+        bs_html = "<html><body><p>tiny</p></body></html>"
+        pw_html = "<html><body><article>" + ("B" * 500) + "</article></body></html>"
+
+        with (
+            patch.object(
+                provider,
+                "_extract_with_beautifulsoup",
+                new_callable=AsyncMock,
+                return_value=bs_html,
+            ) as mock_bs,
+            patch.object(
+                provider,
+                "_extract_with_playwright",
+                new_callable=AsyncMock,
+                return_value=pw_html,
+            ) as mock_pw,
+            patch(
+                "app.adapters.content.scraper.crawlee_provider.html_to_text",
+                side_effect=lambda html: "tiny" if "tiny" in html else ("B" * 500),
+            ),
+        ):
+            result = await provider.scrape_markdown("https://example.com", mobile=False)
+
+        assert result.status == "ok"
+        assert isinstance(result.options_json, dict)
+        assert result.options_json.get("stage") == "playwright"
+        mock_bs.assert_awaited_once()
+        mock_pw.assert_awaited_once()
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_both_stages_fail_returns_error(self):
+        """If both stages fail to produce content, provider returns error result."""
+        from app.adapters.content.scraper.crawlee_provider import CrawleeProvider
+
+        provider = CrawleeProvider(timeout_sec=5)
+
+        with (
+            patch.object(
+                provider,
+                "_extract_with_beautifulsoup",
+                new_callable=AsyncMock,
+                return_value=None,
+            ),
+            patch.object(
+                provider,
+                "_extract_with_playwright",
+                new_callable=AsyncMock,
+                return_value=None,
+            ),
+        ):
+            result = await provider.scrape_markdown("https://example.com")
+
+        assert result.status == "error"
+        assert result.endpoint == "crawlee"
+        assert "exhausted" in (result.error_text or "").lower()
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_timeout_path_returns_error(self):
+        """Timeout in both stages should still return a graceful error result."""
+        from app.adapters.content.scraper.crawlee_provider import CrawleeProvider
+
+        provider = CrawleeProvider(timeout_sec=1)
+
+        with (
+            patch.object(
+                provider,
+                "_extract_with_beautifulsoup",
+                new_callable=AsyncMock,
+                side_effect=TimeoutError("bs timeout"),
+            ),
+            patch.object(
+                provider,
+                "_extract_with_playwright",
+                new_callable=AsyncMock,
+                side_effect=TimeoutError("pw timeout"),
+            ),
+        ):
+            result = await provider.scrape_markdown("https://example.com")
+
+        assert result.status == "error"
+        assert result.endpoint == "crawlee"
+        assert "timeout" in (result.error_text or "").lower()
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_aclose_is_noop(self):
+        """aclose() completes without error (no persistent resources)."""
+        from app.adapters.content.scraper.crawlee_provider import CrawleeProvider
+
+        provider = CrawleeProvider()
+        await provider.aclose()
 
 
 # ===================================================================

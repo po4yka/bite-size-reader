@@ -92,11 +92,12 @@ Everything runs in one Docker container; code lives on GitHub. Access is restric
 
 ## External systems & authoritative docs
 
-- **Content Extraction (multi-provider)** — ordered fallback chain: Scrapling (in-process) → self-hosted Firecrawl → Playwright-rendered HTML → direct HTML fetch. All providers return `FirecrawlResult` as the universal output model. Cloud Firecrawl remains available for web search (`TopicSearchService`).
+- **Content Extraction (multi-provider)** — ordered fallback chain: Scrapling (in-process) → self-hosted Firecrawl → Playwright-rendered HTML → Crawlee hybrid fallback → direct HTML fetch. All providers return `FirecrawlResult` as the universal output model. Cloud Firecrawl remains available for web search (`TopicSearchService`).
   - **Scrapling** — in-process Python library with TLS impersonation + trafilatura extraction. Zero external dependencies.
   - **Firecrawl** — converts pages into LLM‑ready content; handles proxies, caching, JS, PDFs; outputs **markdown**, **structured**, **screenshots**, **html**. Can run self-hosted (Docker) or cloud API.
     Docs: https://docs.firecrawl.dev/features/scrape | API: https://docs.firecrawl.dev/api-reference/endpoint/scrape
   - **Playwright** — browser-rendered fallback for JS-heavy pages before direct HTTP salvage.
+  - **Crawlee** — advanced single-page fallback that runs BeautifulSoup crawler first, then Playwright crawler.
   - **Direct HTML** — httpx streaming fetch + trafilatura/html_to_text extraction. Last-resort fallback.
 
 - **OpenRouter** — unified **Chat Completions** endpoint compatible with OpenAI schema; requires `Authorization: Bearer`; supports optional attribution headers `HTTP-Referer`, `X-Title`.
@@ -569,10 +570,11 @@ classDiagram
 ### URL flow
 
 1) `MessageRouter` classifies the interaction, persists a `requests` row (`type='url'`), normalizes the URL, and records the `dedupe_hash` via `MessagePersistence`.
-2) `URLProcessor.content_extractor` invokes the **`ContentScraperChain`** (ordered fallback: Scrapling -> self-hosted Firecrawl -> Playwright -> direct HTML fetch):
+2) `URLProcessor.content_extractor` invokes the **`ContentScraperChain`** (ordered fallback: Scrapling -> self-hosted Firecrawl -> Playwright -> Crawlee -> direct HTML fetch):
    - **Scrapling** (primary): In-process TLS-impersonated fetch + trafilatura text extraction. Zero external dependencies.
    - **Self-hosted Firecrawl** (secondary): Same v2 API as cloud, running in Docker Compose. Formats: markdown/html by default; optional links/summary/images.
    - **Playwright** (tertiary): Browser-rendered HTML extraction for JS-heavy pages. Minimum 400-char threshold.
+   - **Crawlee** (quaternary): Hybrid single-page extraction (`BeautifulSoupCrawler` -> `PlaywrightCrawler`) with retry budget.
    - **Direct HTML** (last resort): httpx streaming fetch + `html_to_text()` extraction. Minimum 400-char threshold.
    - All providers return `FirecrawlResult` as the universal output model.
    - Persist the full raw response, extracted content, metadata, and latency telemetry in SQLite.
@@ -710,7 +712,7 @@ flowchart LR
 
 ## Error handling & retries
 
-- **ContentScraperChain**: ordered fallback (Scrapling -> self-hosted Firecrawl -> Playwright -> direct HTML). Each provider is tried in sequence; first successful result is used. Individual providers may retry internally (e.g., Firecrawl retries 3× with exponential backoff on 5xx/timeouts).
+- **ContentScraperChain**: ordered fallback (Scrapling -> self-hosted Firecrawl -> Playwright -> Crawlee -> direct HTML). Each provider is tried in sequence; first successful result is used. Individual providers may retry internally (e.g., Firecrawl retries 3× with exponential backoff on 5xx/timeouts).
 - **OpenRouter**: retry on 429/5xx; allow model fallback; always persist failing payload.
 - Telegram send errors -> short user notice + audit log.
 
@@ -907,7 +909,8 @@ Content extraction uses an ordered fallback chain via `ContentScraperChain`:
 1. **Scrapling** (primary) -- in-process Python library with TLS impersonation. Uses `trafilatura.extract()` for text extraction. Zero external dependencies, fastest path.
 2. **Self-hosted Firecrawl** (secondary) -- same v2 API running in Docker Compose (`bsr-firecrawl` on port 3002). Handles JS rendering, proxies, PDFs.
 3. **Playwright** (tertiary) -- browser-rendered extraction for JS-heavy pages. Minimum 400-char content threshold.
-4. **Direct HTML** (last resort) -- httpx streaming fetch + `html_to_text()`. Minimum 400-char content threshold.
+4. **Crawlee** (quaternary) -- hybrid single-page extraction (`BeautifulSoupCrawler` then `PlaywrightCrawler`) before final salvage.
+5. **Direct HTML** (last resort) -- httpx streaming fetch + `html_to_text()`. Minimum 400-char content threshold.
 
 All providers return `FirecrawlResult` as the universal output model. Cloud Firecrawl remains available for `TopicSearchService` (web search) when `FIRECRAWL_API_KEY` is set.
 

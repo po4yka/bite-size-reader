@@ -1,6 +1,6 @@
 # Bite-Size Reader
 
-Async Telegram bot that summarizes web articles and YouTube videos into structured JSON. For articles, it uses a multi-provider scraper chain (Scrapling / self-hosted Firecrawl / Playwright / direct HTML) + OpenRouter; for YouTube videos, it downloads the video (1080p) and extracts transcripts. Also supports summarizing forwarded channel posts. Returns a strict JSON summary and stores artifacts in SQLite.
+Async Telegram bot that summarizes web articles and YouTube videos into structured JSON. For articles, it uses a multi-provider scraper chain (Scrapling / self-hosted Firecrawl / Playwright / Crawlee / direct HTML) + OpenRouter; for YouTube videos, it downloads the video (1080p) and extracts transcripts. Also supports summarizing forwarded channel posts. Returns a strict JSON summary and stores artifacts in SQLite.
 
 **🚀 New to Bite-Size Reader?** Start with the [5-Minute Quickstart Tutorial](docs/tutorials/quickstart.md)
 
@@ -79,6 +79,7 @@ flowchart LR
     ScraperChain -->|primary| Scrapling[Scrapling]
     ScraperChain -->|secondary| Firecrawl[(Firecrawl /scrape)]
     ScraperChain -->|tertiary| Playwright[Playwright]
+    ScraperChain -->|quaternary| Crawlee[Crawlee]
     ScraperChain -->|last_resort| DirectHTML[Direct HTML]
     URLProcessor --> ContentChunker
     URLProcessor --> LLMSummarizer
@@ -293,7 +294,7 @@ OPENROUTER_MODEL=deepseek/deepseek-v3.2  # Primary LLM model
 app/
   adapters/
     content/     -- Multi-provider scraper chain, content chunking, LLM summarization, web search context
-      scraper/   -- Protocol, chain, factory, providers (Scrapling, Firecrawl, Playwright, direct HTML)
+      scraper/   -- Protocol, chain, factory, providers (Scrapling, Firecrawl, Playwright, Crawlee, direct HTML)
     youtube/     -- YouTube video download and transcript extraction
     external/    -- Response formatting helpers shared by adapters
     karakeep/    -- Karakeep bookmark sync

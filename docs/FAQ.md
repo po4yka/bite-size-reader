@@ -60,7 +60,7 @@ See [Cost Optimization](#cost-optimization) for ways to minimize costs.
 ### How does it work?
 
 1. **You send a URL** (article or YouTube video) to the Telegram bot
-2. **Content extraction**: Multi-provider scraper chain (Scrapling, Firecrawl, Playwright, direct HTML) extracts the article (or yt-dlp downloads YouTube transcript)
+2. **Content extraction**: Multi-provider scraper chain (Scrapling, Firecrawl, Playwright, Crawlee, direct HTML) extracts the article (or yt-dlp downloads YouTube transcript)
 3. **LLM summarization**: OpenRouter sends content to an LLM (e.g., DeepSeek, Qwen, Kimi)
 4. **Structured output**: LLM returns JSON summary (validated, self-corrected via multi-agent pipeline)
 5. **Storage**: Summary stored in SQLite with metadata (topics, entities, timestamps)
