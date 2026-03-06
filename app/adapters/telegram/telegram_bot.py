@@ -12,9 +12,10 @@ from typing import TYPE_CHECKING, Any
 
 from app.adapters.repository_ports import (
     create_audit_log_repository,
-    create_batch_session_repository,
 )
 from app.adapters.telegram import telegram_client as telegram_client_module
+from app.adapters.telegram.component_wiring import TelegramComponentWiring
+from app.adapters.telegram.lifecycle_manager import TelegramLifecycleManager
 from app.core.async_utils import raise_if_cancelled
 from app.core.logging_utils import generate_correlation_id, setup_json_logging
 from app.core.time_utils import UTC, format_iso_z
@@ -57,12 +58,12 @@ class TelegramBot:
             },
         )
 
-        # Reflect monkeypatches from tests into the telegram_client module so
-        # that no real Pyrogram client is constructed.
-        setattr(telegram_client_module, "Client", _PYRO_CLIENT_CLS)  # noqa: B010
-        setattr(telegram_client_module, "filters", _PYRO_FILTERS)  # noqa: B010
-        if _PYRO_CLIENT_CLS is object:
-            telegram_client_module.PYROGRAM_AVAILABLE = False
+        self._component_wiring = TelegramComponentWiring(cfg=self.cfg, db=self.db)
+        self._component_wiring.apply_client_shims(
+            telegram_client_module=telegram_client_module,
+            client_cls=_PYRO_CLIENT_CLS,
+            filters_obj=_PYRO_FILTERS,
+        )
 
         # Initialize semaphore for concurrency control
         self._ext_sem_size = max(1, self.cfg.runtime.max_concurrent_calls)
@@ -92,40 +93,21 @@ class TelegramBot:
             db_write_queue=self.db_write_queue,
         )
 
-        # Assign components to instance attributes
-        self.telegram_client = components.telegram_client
-        self.response_formatter = components.response_formatter
-        self.url_processor = components.url_processor
-        self.forward_processor = components.forward_processor
-        self.message_handler = components.message_handler
-        self.topic_searcher = components.topic_searcher
-        self.local_searcher = components.local_searcher
-        self.embedding_service = components.embedding_service
-        # Backward-compat alias for legacy usages
-        self.vector_search_service = components.chroma_vector_search_service
-        self.query_expansion_service = components.query_expansion_service
-        self.hybrid_search_service = components.hybrid_search_service
-        self.vector_store = components.vector_store
-        self._container = components.container
-
-        # Point handlers directly at the real url_processor
-        self.message_handler.command_processor.url_processor = self.url_processor
-        self.message_handler.url_handler.url_processor = self.url_processor
-        self.message_handler.url_processor = self.url_processor
-
-        # Wire up combined summary dependencies for batch processing
-        self._batch_session_repo = create_batch_session_repository(self.db)
-        self.message_handler.url_handler._llm_client = self._llm_client
-        self.message_handler.url_handler._batch_session_repo = self._batch_session_repo
-        self.message_handler.url_handler._batch_config = self.cfg.batch_analysis
-
-        # Expose in-memory state containers for unit tests
-        self._awaiting_url_users = self.message_handler.url_handler._awaiting_url_users
+        self._component_wiring.bind_runtime_components(
+            bot=self,
+            components=components,
+            llm_client=self._llm_client,
+        )
 
         # Sync dependencies (in case they were updated)
         self._sync_client_dependencies()
 
-        # Scheduler will be lazily initialized when start() is called
+        # Lifecycle helpers for background startup/shutdown orchestration.
+        self._lifecycle = TelegramLifecycleManager(self)
+        self._backup_task: asyncio.Task[None] | None = None
+        self._rate_limiter_cleanup_task: asyncio.Task[None] | None = None
+
+        # Scheduler will be lazily initialized when start() is called.
         self._scheduler: SchedulerService | None = None
 
     def _sem(self) -> asyncio.Semaphore:
@@ -140,49 +122,9 @@ class TelegramBot:
 
     async def start(self) -> None:
         """Start the bot."""
-        backup_enabled, interval, retention, backup_dir = self._get_backup_settings()
-        if backup_enabled and interval > 0:
-            self._backup_task = asyncio.create_task(
-                self._run_backup_loop(interval, retention, backup_dir),
-                name="db_backup_loop",
-            )
-        elif backup_enabled:
-            logger.warning(
-                "db_backup_disabled_invalid_interval",
-                extra={"interval_minutes": interval},
-            )
-
-        # Start rate limiter cleanup task (runs every 5 minutes)
-        self._rate_limiter_cleanup_task = asyncio.create_task(
-            self._run_rate_limiter_cleanup_loop(),
-            name="rate_limiter_cleanup_loop",
-        )
-
-        # Warm the adaptive timeout cache with historical data
-        adaptive_timeout = getattr(self._container, "adaptive_timeout_service", None)
-        if adaptive_timeout is None:
-            # Try getting from message handler's url handler
-            url_handler = getattr(self.message_handler, "url_handler", None)
-            if url_handler is not None:
-                adaptive_timeout = getattr(url_handler, "_adaptive_timeout", None)
-        if adaptive_timeout is not None:
-            try:
-                await adaptive_timeout.warm_cache()
-                logger.info("adaptive_timeout_cache_warmed_on_startup")
-            except Exception as e:
-                raise_if_cancelled(e)
-                logger.warning(
-                    "adaptive_timeout_warmup_failed_on_startup",
-                    extra={"error": str(e)},
-                )
-
-        # Clear cache on startup to prevent stale processing issues
-        try:
-            cleaned = await self.url_processor.clear_cache()
-            logger.info("startup_cache_cleared", extra={"count": cleaned})
-        except Exception as e:
-            raise_if_cancelled(e)
-            logger.warning("startup_cache_clear_failed", extra={"error": str(e)})
+        await self._lifecycle.on_startup()
+        self._backup_task = self._lifecycle.backup_task
+        self._rate_limiter_cleanup_task = self._lifecycle.rate_limiter_cleanup_task
 
         # Start background scheduler for periodic tasks (e.g., Karakeep sync)
         # Lazy import to avoid apscheduler dependency in tests
@@ -201,18 +143,7 @@ class TelegramBot:
             if self._scheduler is not None:
                 await self._scheduler.stop()
 
-            if hasattr(self, "_backup_task") and self._backup_task is not None:
-                self._backup_task.cancel()
-                with contextlib.suppress(asyncio.CancelledError):
-                    await self._backup_task
-
-            if (
-                hasattr(self, "_rate_limiter_cleanup_task")
-                and self._rate_limiter_cleanup_task is not None
-            ):
-                self._rate_limiter_cleanup_task.cancel()
-                with contextlib.suppress(asyncio.CancelledError):
-                    await self._rate_limiter_cleanup_task
+            await self._lifecycle.on_shutdown()
 
             # Close external clients and drain in-flight tasks
             await self._shutdown()

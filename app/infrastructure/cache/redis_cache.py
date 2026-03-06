@@ -111,11 +111,18 @@ class RedisCache:
 
         Uses SCAN instead of KEYS to avoid blocking Redis on large datasets.
         """
+        return await self._clear_pattern(f"{self.cfg.redis.prefix}:*")
+
+    async def clear_prefix(self, *parts: str) -> int:
+        """Clear cache keys under a specific sub-prefix."""
+        key_prefix = redis_key(self.cfg.redis.prefix, *[p for p in parts if p])
+        return await self._clear_pattern(f"{key_prefix}:*")
+
+    async def _clear_pattern(self, pattern: str) -> int:
         client = await self._get_client()
         if not client:
             return 0
 
-        pattern = f"{self.cfg.redis.prefix}:*"
         deleted_count = 0
         try:
             # Use SCAN to iterate without blocking Redis

@@ -1,230 +1,94 @@
 """System maintenance endpoints."""
 
-import os
-import re
-import sqlite3
-import tempfile
-import time
-from datetime import UTC, datetime
+from __future__ import annotations
 
-import peewee
+from typing import Any
+
 from fastapi import APIRouter, Depends, Request
 from starlette.responses import FileResponse
 
-from app.api.exceptions import ProcessingError, ResourceNotFoundError
+from app.api.models.responses import success_response
 from app.api.routers.auth import get_current_user
 from app.api.services.auth_service import AuthService
-from app.config import Config
-from app.core.logging_utils import get_logger
-from app.db.models import ALL_MODELS
-
-logger = get_logger(__name__)
+from app.api.services.system_maintenance_service import SystemMaintenanceService
 
 router = APIRouter()
 
 
-def _is_safe_sqlite_identifier(identifier: str) -> bool:
-    return bool(re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", identifier))
+def get_system_maintenance_service() -> SystemMaintenanceService:
+    """FastAPI dependency provider for maintenance service."""
+    return SystemMaintenanceService()
 
 
-_DB_INFO_TABLE_ALLOWLIST: frozenset[str] = frozenset(
-    model._meta.table_name
-    for model in ALL_MODELS
-    if _is_safe_sqlite_identifier(model._meta.table_name)
-)
-_DB_INFO_MODELS_BY_TABLE = {
-    model._meta.table_name: model
-    for model in ALL_MODELS
-    if model._meta.table_name in _DB_INFO_TABLE_ALLOWLIST
-}
-
-
-def _build_db_dump_response(request: Request, user: dict):
-    """Create or reuse a SQLite backup and prepare a streaming response."""
-    db_path = Config.get("DB_PATH", "/data/app.db")
-
-    if not os.path.exists(db_path):
-        raise ResourceNotFoundError("Database file", db_path)
-
-    backup_dir = tempfile.gettempdir()
-    backup_filename = "bite_size_reader_backup.sqlite"
-    backup_path = os.path.join(backup_dir, backup_filename)
-
-    should_regenerate = True
-
-    if (
-        "range" in request.headers
-        or "if-match" in request.headers
-        or "if-unmodified-since" in request.headers
-    ):
-        should_regenerate = False
-
-    if os.path.exists(backup_path):
-        try:
-            mtime = os.path.getmtime(backup_path)
-            if time.time() - mtime < 60:
-                should_regenerate = False
-        except OSError:
-            should_regenerate = True
-
-    if not os.path.exists(backup_path):
-        should_regenerate = True
-
-    if should_regenerate:
-        temp_backup_path = backup_path + ".tmp"
-
-        try:
-            if os.path.exists(temp_backup_path):
-                os.remove(temp_backup_path)
-
-            # Use SQLite backup API instead of VACUUM INTO to avoid SQL injection
-            source_conn = sqlite3.connect(db_path)
-            backup_conn = sqlite3.connect(temp_backup_path)
-            try:
-                source_conn.backup(backup_conn)
-            finally:
-                backup_conn.close()
-                source_conn.close()
-
-            os.replace(temp_backup_path, backup_path)
-            logger.info(f"Created database backup at {backup_path} for user {user['user_id']}")
-        except Exception as e:
-            logger.error(f"Database backup failed: {e}", exc_info=True)
-            cleanup_error: str | None = None
-
-            if os.path.exists(temp_backup_path):
-                try:
-                    os.remove(temp_backup_path)
-                except OSError as cleanup_exc:
-                    logger.debug("temp_backup_cleanup_failed", extra={"error": str(cleanup_exc)})
-                    cleanup_error = str(cleanup_exc)
-
-            details = f"Backup failed: {e!s}"
-            if cleanup_error:
-                details += f" (temporary file cleanup also failed: {cleanup_error})"
-            raise ProcessingError(details) from e
-
-    if not os.path.exists(backup_path):
-        raise ResourceNotFoundError("Backup file", backup_path)
-
-    mtime = os.path.getmtime(backup_path)
-    timestamp = datetime.fromtimestamp(mtime, tz=UTC).strftime("%Y%m%d_%H%M%S")
-    download_filename = f"bite_size_reader_backup_{timestamp}.sqlite"
-
-    return FileResponse(
-        path=backup_path,
-        filename=download_filename,
-        media_type="application/x-sqlite3",
-    )
+def _extract_user_id(user: dict[str, Any]) -> int:
+    raw_user_id = user.get("user_id")
+    if isinstance(raw_user_id, bool) or not isinstance(raw_user_id, int):
+        raise ValueError("Authenticated user payload is missing integer user_id")
+    return raw_user_id
 
 
 @router.get("/db-dump")
-async def download_database(request: Request, user=Depends(get_current_user)):
+async def download_database(
+    request: Request,
+    user: dict[str, Any] = Depends(get_current_user),
+    service: SystemMaintenanceService = Depends(get_system_maintenance_service),
+):
     """
     Download a consistent snapshot of the SQLite database.
 
-    Uses SQLite backup API to create a safe backup without locking the live database.
-    Supports interrupted downloads via Range header (handled by FileResponse).
-
     Requires owner permissions.
     """
     await AuthService.require_owner(user)
-    return _build_db_dump_response(request, user)
 
+    dump_file = service.build_db_dump_file(
+        request_headers=request.headers,
+        user_id=_extract_user_id(user),
+    )
 
-@router.head("/db-dump")
-async def head_database(request: Request, user=Depends(get_current_user)):
-    """HEAD variant for clients that only need headers/ETag before downloading.
-
-    Requires owner permissions.
-    """
-    await AuthService.require_owner(user)
-    return _build_db_dump_response(request, user)
-
-
-@router.get("/db-info")
-async def get_db_info(user=Depends(get_current_user)):
-    """Get database information: table row counts and file size."""
-    from app.api.models.responses import success_response
-
-    await AuthService.require_owner(user)
-
-    db_path = Config.get("DB_PATH", "/data/app.db")
-
-    file_size_mb = 0.0
-    if os.path.exists(db_path):
-        file_size_mb = round(os.path.getsize(db_path) / (1024 * 1024), 1)
-
-    table_counts: dict[str, int] = {}
-    try:
-        allowlisted_tables: list[str] = []
-        with sqlite3.connect(db_path) as conn:
-            cursor = conn.cursor()
-            cursor.execute(
-                "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"
-            )
-            tables = [row[0] for row in cursor.fetchall()]
-            for table in sorted(tables):
-                if not _is_safe_sqlite_identifier(table):
-                    table_counts[table] = -1
-                    logger.warning("db_info_unsafe_table_name_skipped", extra={"table": table})
-                    continue
-                if table not in _DB_INFO_TABLE_ALLOWLIST:
-                    logger.warning(
-                        "db_info_unallowlisted_table_name_skipped", extra={"table": table}
-                    )
-                    continue
-                allowlisted_tables.append(table)
-
-        for table in allowlisted_tables:
-            model = _DB_INFO_MODELS_BY_TABLE.get(table)
-            if model is None:
-                table_counts[table] = -1
-                logger.warning("db_info_table_model_missing", extra={"table": table})
-                continue
-            try:
-                table_counts[table] = int(model.select().count())
-            except peewee.DatabaseError as table_exc:
-                table_counts[table] = -1
-                logger.warning(
-                    "db_info_table_count_failed",
-                    extra={"table": table, "error": str(table_exc)},
-                )
-    except sqlite3.Error as e:
-        logger.error("db_info_failed", extra={"error": str(e)})
-        table_counts["__error__"] = -1
-
-    return success_response(
-        {
-            "file_size_mb": file_size_mb,
-            "table_counts": table_counts,
-            "db_path": db_path,
-        }
+    return FileResponse(
+        path=dump_file.path,
+        filename=dump_file.filename,
+        media_type=dump_file.media_type,
     )
 
 
-@router.post("/clear-cache")
-async def clear_cache(user=Depends(get_current_user)):
-    """Clear Redis URL cache."""
-    from app.api.models.responses import success_response
-    from app.config.settings import load_config
-    from app.infrastructure.redis import get_redis
-
+@router.head("/db-dump")
+async def head_database(
+    request: Request,
+    user: dict[str, Any] = Depends(get_current_user),
+    service: SystemMaintenanceService = Depends(get_system_maintenance_service),
+):
+    """HEAD variant for clients that only need headers before downloading."""
     await AuthService.require_owner(user)
 
-    cfg = load_config(allow_stub_telegram=True)
-    redis_client = await get_redis(cfg)
+    dump_file = service.build_db_dump_file(
+        request_headers=request.headers,
+        user_id=_extract_user_id(user),
+    )
 
-    cleared = 0
-    if redis_client:
-        try:
-            keys: list[bytes] = []
-            async for key in redis_client.scan_iter(match=f"{cfg.redis.prefix}:url:*"):
-                keys.append(key)
-            if keys:
-                cleared = await redis_client.delete(*keys)
-        except Exception as e:
-            logger.error("clear_cache_failed", extra={"error": str(e)})
-            raise ProcessingError(f"Cache clear failed: {e}") from e
+    return FileResponse(
+        path=dump_file.path,
+        filename=dump_file.filename,
+        media_type=dump_file.media_type,
+    )
 
+
+@router.get("/db-info")
+async def get_db_info(
+    user: dict[str, Any] = Depends(get_current_user),
+    service: SystemMaintenanceService = Depends(get_system_maintenance_service),
+):
+    """Get database information: table row counts and file size."""
+    await AuthService.require_owner(user)
+    return success_response(service.get_db_info())
+
+
+@router.post("/clear-cache")
+async def clear_cache(
+    user: dict[str, Any] = Depends(get_current_user),
+    service: SystemMaintenanceService = Depends(get_system_maintenance_service),
+):
+    """Clear Redis URL cache."""
+    await AuthService.require_owner(user)
+    cleared = await service.clear_url_cache()
     return success_response({"cleared_keys": cleared})
