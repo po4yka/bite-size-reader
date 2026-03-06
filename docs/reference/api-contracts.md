@@ -142,9 +142,13 @@ except httpx.HTTPStatusError as e:
 
 **Fallback Strategy:**
 
-- Firecrawl fails → Trafilatura (local HTML parser)
-- Trafilatura fails → Spacy NLP extraction
-- All fail → Error to user
+- Primary extraction path uses `ScraperChain`:
+  1. Scrapling (in-process extraction)
+  2. Firecrawl (self-hosted/cloud API)
+  3. Playwright-rendered fallback
+  4. Crawlee hybrid fallback
+  5. Direct HTML extraction
+- If all providers fail, the request is surfaced as a user-visible extraction failure with correlation metadata.
 
 ---
 

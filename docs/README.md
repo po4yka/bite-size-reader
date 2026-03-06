@@ -4,6 +4,14 @@ Welcome to the Bite-Size Reader documentation. This guide helps you find the rig
 
 > Note: this directory keeps current, user-facing and engineering reference docs; temporary planning notes and historical implementation reports are removed after completion.
 
+## Documentation freshness
+
+- Last documentation refresh: **2026-03-06**
+- This refresh aligns architecture and API docs with:
+  - Telegram orchestration decomposition (`CallbackActionRegistry`/`CallbackActionService`, `URLBatchPolicyService`, `URLAwaitingStateStore`, `TelegramLifecycleManager`)
+  - FastAPI router/service boundaries (`DigestFacade`, `SystemMaintenanceService`)
+  - Formatting seam policy (protocol interfaces at constructor/public boundaries)
+
 ## Documentation by Audience
 
 ### 👤 I'm a User

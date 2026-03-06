@@ -7,6 +7,8 @@ This doc keeps our layering consistent across Telegram, CLI, and the mobile API.
 - DI container is always enabled in runtime entrypoints (Telegram bot and CLI harness).
 - Presentation handlers call application use cases for business workflows.
 - No presentation-layer fallback path should call repositories directly for the same workflow.
+- FastAPI routers remain transport-only: orchestration belongs in dedicated application/service classes.
+- Adapter seams should depend on protocol contracts, not concrete `*Impl` classes, at constructor/public boundaries.
 
 ## Layer Map (project-specific)
 
@@ -25,6 +27,14 @@ This doc keeps our layering consistent across Telegram, CLI, and the mobile API.
   - `app/db/database_summary_ops.py`
   - `app/db/database_embedding_media_ops.py`
 - New business workflows should go through application use cases and repository ports in `app/infrastructure/persistence/sqlite/repositories/*`, not directly through the facade.
+
+## Current seam examples (2026-03)
+
+- `app/api/routers/digest.py` → delegates orchestration to `DigestFacade`.
+- `app/api/routers/system.py` → delegates DB/Redis/file maintenance work to `SystemMaintenanceService`.
+- Telegram callback flow delegates action execution through `CallbackActionRegistry` + `CallbackActionService`.
+- Telegram URL flow delegates security/timeout/batch/state policy through `URLBatchPolicyService` + `URLAwaitingStateStore`.
+- Formatting stack constructor seams use protocol interfaces from `app/adapters/external/formatting/protocols.py` (for example `ResponseSender`, `DataFormatter`, `TextProcessor`) instead of concrete implementation types.
 
 ```mermaid
 flowchart LR

@@ -65,11 +65,18 @@ flowchart LR
   subgraph TelegramBot
     TGClient[TelegramClient] --> MsgHandler[MessageHandler]
     MsgHandler --> AccessController
+    MsgHandler --> CallbackHandler
+    CallbackHandler --> CallbackRegistry[CallbackActionRegistry]
+    CallbackRegistry --> CallbackActions[CallbackActionService]
     AccessController --> MessageRouter
     MessageRouter --> CommandProcessor
     MessageRouter --> URLHandler
+    URLHandler --> URLBatchPolicy[URLBatchPolicyService]
+    URLHandler --> URLAwaitingState[URLAwaitingStateStore]
     MessageRouter --> ForwardProcessor
     MessageRouter --> MessagePersistence
+    LifecycleMgr[TelegramLifecycleManager] -.-> TGClient
+    LifecycleMgr -.-> URLHandler
   end
 
   subgraph URLPipeline[URL processing pipeline]
@@ -125,10 +132,18 @@ flowchart LR
   subgraph MobileAPI[Mobile API]
     FastAPI[FastAPI + JWT] --> SQLite
     FastAPI --> SearchService[SearchService]
+    FastAPI --> DigestFacade
+    DigestFacade --> DigestAPIService
+    DigestAPIService --> SQLite
+    FastAPI --> SystemMaint[SystemMaintenanceService]
+    SystemMaint --> SQLite
+    SystemMaint -.-> Redis
   end
 ```
 
-The bot ingests updates via a lightweight `TelegramClient`, normalizes them through `MessageHandler`, and hands them to `MessageRouter`. The router enforces access control, persists interaction metadata, and dispatches requests either to the command processor, the URL handler (which orchestrates Firecrawl + OpenRouter summarization through `URLProcessor`), or the forward processor for channel reposts. The channel digest subsystem uses a separate `UserbotClient` (authenticated as a real Telegram user) to read channel histories, analyzes posts via LLM, and delivers formatted digests on a schedule or via `/digest`. `ResponseFormatter` centralizes Telegram replies and audit logging while all artifacts land in SQLite.
+The bot ingests updates via a lightweight `TelegramClient`, normalizes them through `MessageHandler`, and hands them to `MessageRouter`/`CallbackHandler` flows. `CallbackHandler` delegates action execution through `CallbackActionRegistry` + `CallbackActionService`, and `URLHandler` delegates URL policy/state concerns through `URLBatchPolicyService` + `URLAwaitingStateStore` before invoking `URLProcessor`. `TelegramLifecycleManager` owns startup/shutdown orchestration of background tasks and warmups. The channel digest subsystem uses a separate `UserbotClient` (authenticated as a real Telegram user) to read channel histories, analyzes posts via LLM, and delivers formatted digests on a schedule or via `/digest`.
+
+For the mobile API, routers are transport-focused and delegate infrastructure orchestration to dedicated services (`DigestFacade`, `SystemMaintenanceService`) rather than performing DB/Redis/file operations inline. `ResponseFormatter` centralizes Telegram replies and audit logging while all artifacts land in SQLite.
 
 ## Quick start
 

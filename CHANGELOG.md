@@ -35,6 +35,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Rust interface routing now treats query-suffixed public endpoints (`/health?*`, `/metrics?*`, `/docs?*`, `/openapi.json?*`) as handled routes.
 - Rust summary aggregation now trims whitespace-padded numeric strings before parsing (`" 3 "` -> `3`).
 - Rust logging bootstrap now falls back to `info` instead of panicking on invalid log-level config.
+- Telegram orchestration flow now delegates lifecycle, callback action execution, and URL policy/state to focused collaborators (`TelegramLifecycleManager`, `CallbackActionRegistry` + `CallbackActionService`, `URLBatchPolicyService`, `URLAwaitingStateStore`).
+- Mobile API digest/system routers now delegate orchestration to dedicated services (`DigestFacade`, `SystemMaintenanceService`) instead of in-router DB/Redis/file workflows.
+- Formatter component boundaries now enforce protocol interfaces at constructor/public seams rather than concrete `*Impl` coupling.
+- Project docs refreshed to reflect current architecture boundaries and service decomposition across Telegram/API/formatting flows.
 
 ### Fixed
 - Updated tests for renamed ContentExtractor methods
@@ -45,6 +49,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Improved Playwright X article scraping reliability by moving to locator-first readiness and selector fallback diagnostics
 - Fixed Unicode boundary corruption in Rust `questions_answered` parsing for `Question:/Answer:` textual payloads.
 - Fixed Rust entity normalization to avoid emitting metadata-only values (for example `type`, `confidence`) as entity names.
+- Fixed protocol seam drift in response formatting stack by aligning protocol contracts with actual consumer method signatures (message-thread safe replies, admin logging, draft controls, text/link helpers, and summary forwarding signatures).
 
 ## Release History
 

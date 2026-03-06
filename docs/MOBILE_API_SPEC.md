@@ -31,6 +31,16 @@ Most `/v1/*` endpoints require bearer auth:
 
 Digest Mini App endpoints (`/v1/digest/*`) use Telegram WebApp authentication via initData (validated by the backend middleware/dependencies).
 
+## Router and Service Boundaries
+
+FastAPI routers are transport-focused and delegate orchestration to service collaborators:
+
+- `app/api/routers/digest.py` delegates digest workflow construction and trigger queueing through `DigestFacade`.
+- `app/api/routers/system.py` delegates DB dump/info/cache orchestration through `SystemMaintenanceService`.
+- System cache clearing uses `RedisCache.clear_prefix("url")` through the service layer rather than direct inline Redis scan/delete in router handlers.
+
+This keeps auth/input/output mapping in routers while DB/Redis/file logic remains in dedicated service classes.
+
 ## Envelope and Error Contract
 
 Success response shape:

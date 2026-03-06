@@ -1,7 +1,7 @@
 # Bite‑Size Reader — Technical Specification
 
 **Version:** 3.0
-**Last Updated:** 2026-03-04
+**Last Updated:** 2026-03-06
 
 ---
 
@@ -136,11 +136,18 @@ flowchart TD
   TG -->| updates | TGClient[TelegramClient]
   TGClient --> MsgHandler[MessageHandler]
   MsgHandler --> AccessController
+  MsgHandler --> CallbackHandler
+  CallbackHandler --> CallbackRegistry[CallbackActionRegistry]
+  CallbackRegistry --> CallbackActions[CallbackActionService]
   AccessController --> MessageRouter
   MessageRouter --> CommandProcessor
   MessageRouter --> URLHandler
+  URLHandler --> URLBatchPolicy[URLBatchPolicyService]
+  URLHandler --> URLAwaitingState[URLAwaitingStateStore]
   MessageRouter --> ForwardProcessor
   MessageRouter --> MessagePersistence
+  LifecycleMgr[TelegramLifecycleManager] -.-> TGClient
+  LifecycleMgr -.-> URLHandler
   MessagePersistence --> DB[(SQLite)]
 
   subgraph URL_Pipeline [URL processing pipeline]
@@ -164,11 +171,23 @@ flowchart TD
   ResponseFormatter --> TGClient
   ResponseFormatter --> Logs[(Structured + audit logs)]
   TGClient -->| replies | TG
+
+  subgraph Mobile_API [Mobile API]
+    FastAPI[FastAPI + JWT] --> SearchService[Search service]
+    FastAPI --> DigestFacade
+    DigestFacade --> DigestAPIService
+    FastAPI --> SystemMaint[SystemMaintenanceService]
+    DigestAPIService --> DB
+    SystemMaint --> DB
+    SystemMaint -.-> Redis[(Redis)]
+  end
 ```
 
-Incoming updates are normalized via `MessageHandler`, which delegates access checks to `AccessController` and durable logging to `MessagePersistence`. Authorized interactions are routed to either command handling, URL processing (Firecrawl → OpenRouter), or forwarded message summarization. `ResponseFormatter` provides a single path for replies, edits, and error handling while emitting structured logs and audit events.
+Incoming updates are normalized via `MessageHandler`, which delegates access checks to `AccessController` and durable logging to `MessagePersistence`. Authorized interactions are routed to command handling, URL processing, forwarded message summarization, or callback actions through dedicated collaborators (`CallbackActionRegistry` + `CallbackActionService`). URL policy/state concerns are isolated in `URLBatchPolicyService` and `URLAwaitingStateStore`, and startup/shutdown orchestration is isolated in `TelegramLifecycleManager`. `ResponseFormatter` provides a single path for replies, edits, and error handling while emitting structured logs and audit events.
 
 Telegram and CLI entrypoints both wire the DI container by default; business flows in presentation adapters execute through application use cases rather than repository fallbacks.
+
+For FastAPI, routers are transport-focused: digest orchestration is delegated via `DigestFacade`, and DB/Redis/file maintenance tasks are delegated via `SystemMaintenanceService`.
 
 ### Telegram message routing
 
