@@ -444,6 +444,98 @@ class TestWireShapeConventions:
                 "Secured operations missing documented 4xx/5xx responses:\n" + "\n".join(failures)
             )
 
+    def test_user_schema_uses_camel_case_wire_keys(self, spec: dict[str, Any]) -> None:
+        user = spec["components"]["schemas"]["User"]
+        required = set(user.get("required", []))
+        props = set(user.get("properties", {}).keys())
+
+        expected = {"userId", "username", "clientId", "isOwner", "createdAt"}
+        assert expected.issubset(required)
+        assert expected.issubset(props)
+        assert "id" not in props
+        assert "is_owner" not in props
+        assert "client_id" not in props
+        assert "created_at" not in props
+
+    def test_user_stats_schema_uses_camel_case_wire_keys(self, spec: dict[str, Any]) -> None:
+        stats = spec["components"]["schemas"]["UserStats"]
+        required = set(stats.get("required", []))
+        props = set(stats.get("properties", {}).keys())
+
+        expected = {
+            "totalSummaries",
+            "unreadCount",
+            "readCount",
+            "totalReadingTimeMin",
+            "averageReadingTimeMin",
+            "favoriteTopics",
+            "favoriteDomains",
+            "languageDistribution",
+        }
+        assert expected.issubset(required)
+        assert expected.issubset(props)
+        assert "total_summaries" not in props
+        assert "unread_count" not in props
+        assert "favorite_topics" not in props
+        assert "favorite_domains" not in props
+
+    def test_summary_list_schema_uses_runtime_wire_shape(self, spec: dict[str, Any]) -> None:
+        paginated = spec["components"]["schemas"]["PaginatedSummariesData"]
+        required = set(paginated.get("required", []))
+        props = set(paginated.get("properties", {}).keys())
+        assert "summaries" in required
+        assert "summaries" in props
+        assert "items" not in props
+
+        summary_item = spec["components"]["schemas"]["SummaryListItem"]
+        item_required = set(summary_item.get("required", []))
+        item_props = set(summary_item.get("properties", {}).keys())
+        expected_item = {
+            "requestId",
+            "summary250",
+            "readingTimeMin",
+            "topicTags",
+            "isRead",
+            "createdAt",
+            "hallucinationRisk",
+        }
+        assert expected_item.issubset(item_required)
+        assert expected_item.issubset(item_props)
+        assert "request_id" not in item_props
+        assert "summary_250" not in item_props
+        assert "reading_time_min" not in item_props
+
+    def test_summary_content_schema_uses_camel_case_wire_keys(self, spec: dict[str, Any]) -> None:
+        content = spec["components"]["schemas"]["SummaryContent"]
+        required = set(content.get("required", []))
+        props = set(content.get("properties", {}).keys())
+        expected = {"summaryId", "contentType", "retrievedAt"}
+        assert expected.issubset(required)
+        assert expected.issubset(props)
+        assert "summary_id" not in props
+        assert "content_type" not in props
+        assert "retrieved_at" not in props
+
+    def test_collection_schema_uses_camel_case_wire_keys(self, spec: dict[str, Any]) -> None:
+        collection = spec["components"]["schemas"]["Collection"]
+        required = set(collection.get("required", []))
+        props = set(collection.get("properties", {}).keys())
+        expected = {"createdAt", "updatedAt", "serverVersion", "isShared"}
+        assert expected.issubset(required)
+        assert expected.issubset(props)
+        assert "created_at" not in props
+        assert "updated_at" not in props
+        assert "is_shared" not in props
+
+        item = spec["components"]["schemas"]["CollectionItem"]
+        item_required = set(item.get("required", []))
+        item_props = set(item.get("properties", {}).keys())
+        assert {"collectionId", "summaryId", "createdAt"}.issubset(item_required)
+        assert {"collectionId", "summaryId", "createdAt"}.issubset(item_props)
+        assert "collection_id" not in item_props
+        assert "summary_id" not in item_props
+        assert "created_at" not in item_props
+
 
 # ---------------------------------------------------------------------------
 # Internal helpers

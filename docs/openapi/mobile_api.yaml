@@ -3501,29 +3501,23 @@ components:
     User:
       type: object
       required:
-      - id
-      - is_owner
+      - userId
+      - username
+      - clientId
+      - isOwner
+      - createdAt
       properties:
-        id:
+        userId:
           type: integer
         username:
           type: string
-          nullable: true
-        display_name:
+        clientId:
           type: string
-          nullable: true
-        photo_url:
-          type: string
-          nullable: true
-        is_owner:
+        isOwner:
           type: boolean
-        client_id:
-          type: string
-          nullable: true
-        created_at:
+        createdAt:
           type: string
           format: date-time
-          nullable: true
     UserResponseEnvelope:
       allOf:
       - $ref: '#/components/schemas/BaseSuccessResponse'
@@ -3536,16 +3530,16 @@ components:
     UserPreferences:
       type: object
       required:
-      - user_id
+      - userId
       properties:
-        user_id:
+        userId:
           type: integer
           description: User identifier.
-        telegram_username:
+        telegramUsername:
           type: string
           nullable: true
           description: Telegram username (if linked).
-        lang_preference:
+        langPreference:
           type: string
           enum:
           - auto
@@ -3553,11 +3547,11 @@ components:
           - ru
           default: auto
           nullable: true
-        notification_settings:
+        notificationSettings:
           type: object
           additionalProperties: true
           nullable: true
-        app_settings:
+        appSettings:
           type: object
           additionalProperties: true
           nullable: true
@@ -3573,26 +3567,26 @@ components:
     UserStats:
       type: object
       required:
-      - total_summaries
-      - unread_count
-      - read_count
-      - total_reading_time_min
-      - average_reading_time_min
-      - favorite_topics
-      - favorite_domains
-      - language_distribution
+      - totalSummaries
+      - unreadCount
+      - readCount
+      - totalReadingTimeMin
+      - averageReadingTimeMin
+      - favoriteTopics
+      - favoriteDomains
+      - languageDistribution
       properties:
-        total_summaries:
+        totalSummaries:
           type: integer
-        unread_count:
+        unreadCount:
           type: integer
-        read_count:
+        readCount:
           type: integer
-        total_reading_time_min:
+        totalReadingTimeMin:
           type: integer
-        average_reading_time_min:
+        averageReadingTimeMin:
           type: number
-        favorite_topics:
+        favoriteTopics:
           type: array
           items:
             type: object
@@ -3604,7 +3598,7 @@ components:
                 type: string
               count:
                 type: integer
-        favorite_domains:
+        favoriteDomains:
           type: array
           items:
             type: object
@@ -3616,15 +3610,15 @@ components:
                 type: string
               count:
                 type: integer
-        language_distribution:
+        languageDistribution:
           type: object
           additionalProperties:
             type: integer
-        joined_at:
+        joinedAt:
           type: string
           format: date-time
           nullable: true
-        last_summary_at:
+        lastSummaryAt:
           type: string
           format: date-time
           nullable: true
@@ -3854,24 +3848,24 @@ components:
       description: Compact summary representation for list views.
       required:
       - id
-      - request_id
+      - requestId
       - title
       - domain
       - url
       - tldr
-      - summary_250
-      - reading_time_min
-      - topic_tags
-      - is_read
+      - summary250
+      - readingTimeMin
+      - topicTags
+      - isRead
       - lang
-      - created_at
+      - createdAt
       - confidence
-      - hallucination_risk
+      - hallucinationRisk
       properties:
         id:
           type: integer
           description: Unique summary identifier.
-        request_id:
+        requestId:
           type: integer
           description: Associated request ID.
         title:
@@ -3886,26 +3880,26 @@ components:
         tldr:
           type: string
           description: Concise multi-sentence summary.
-        summary_250:
+        summary250:
           type: string
           maxLength: 250
           description: Short summary (maximum 250 characters).
-        reading_time_min:
+        readingTimeMin:
           type: integer
           description: Estimated reading time in minutes.
-        topic_tags:
+        topicTags:
           type: array
           items:
             type: string
           description: Topic hashtags (e.g., #technology, #ai).
-        is_read:
+        isRead:
           type: boolean
           description: Whether the user has marked this as read.
         lang:
           type: string
           enum: [en, ru, auto]
           description: Detected or preferred language.
-        created_at:
+        createdAt:
           type: string
           format: date-time
           description: ISO 8601 creation timestamp.
@@ -3914,35 +3908,35 @@ components:
           minimum: 0
           maximum: 1
           description: LLM confidence score (0.0-1.0).
-        hallucination_risk:
+        hallucinationRisk:
           type: string
           enum: [low, medium, high, unknown]
           description: Assessed hallucination risk level.
-        is_favorited:
+        isFavorited:
           type: boolean
           default: false
           description: Whether the user has favorited this summary.
-        image_url:
+        imageUrl:
           type: string
           nullable: true
           description: Featured image URL (if available).
     SummaryStats:
       type: object
       required:
-      - total_summaries
-      - unread_count
+      - totalSummaries
+      - unreadCount
       properties:
-        total_summaries:
+        totalSummaries:
           type: integer
-        unread_count:
+        unreadCount:
           type: integer
     PaginatedSummariesData:
       type: object
       required:
-      - items
+      - summaries
       - pagination
       properties:
-        items:
+        summaries:
           type: array
           items:
             $ref: '#/components/schemas/SummaryListItem'
@@ -3964,63 +3958,177 @@ components:
       type: object
       required:
       - summary
+      - request
+      - source
+      - processing
       properties:
         summary:
-          $ref: '#/components/schemas/Summary'
+          type: object
+          required:
+          - summary250
+          - summary1000
+          - tldr
+          - keyIdeas
+          - topicTags
+          - entities
+          - estimatedReadingTimeMin
+          properties:
+            summary250:
+              type: string
+              maxLength: 250
+            summary1000:
+              type: string
+              maxLength: 1000
+            tldr:
+              type: string
+            keyIdeas:
+              type: array
+              items:
+                type: string
+            topicTags:
+              type: array
+              items:
+                type: string
+            entities:
+              type: object
+              properties:
+                people:
+                  type: array
+                  items:
+                    type: string
+                organizations:
+                  type: array
+                  items:
+                    type: string
+                locations:
+                  type: array
+                  items:
+                    type: string
+            estimatedReadingTimeMin:
+              type: integer
+            keyStats:
+              type: array
+              items:
+                type: object
+                properties:
+                  label:
+                    type: string
+                  value:
+                    type: number
+                  unit:
+                    type: string
+                    nullable: true
+                  sourceExcerpt:
+                    type: string
+            answeredQuestions:
+              type: array
+              items:
+                type: string
+            readability:
+              type: object
+              nullable: true
+              properties:
+                method:
+                  type: string
+                score:
+                  type: number
+                level:
+                  type: string
+            seoKeywords:
+              type: array
+              items:
+                type: string
         request:
-          $ref: '#/components/schemas/Request'
-          nullable: true
+          type: object
+          required:
+          - id
+          - type
+          - status
+          - createdAt
+          - updatedAt
+          properties:
+            id:
+              type: string
+            type:
+              type: string
+            status:
+              type: string
+            url:
+              type: string
+              nullable: true
+            normalizedUrl:
+              type: string
+              nullable: true
+            dedupeHash:
+              type: string
+              nullable: true
+            langDetected:
+              type: string
+              nullable: true
+            createdAt:
+              type: string
+              format: date-time
+            updatedAt:
+              type: string
+              format: date-time
         source:
           type: object
-          nullable: true
           properties:
             url:
               type: string
+              nullable: true
             title:
               type: string
+              nullable: true
             domain:
               type: string
+              nullable: true
             author:
               type: string
               nullable: true
-            published_at:
+            publishedAt:
               type: string
               format: date-time
               nullable: true
-            http_status:
+            wordCount:
               type: integer
               nullable: true
-            image_url:
+            contentType:
               type: string
               nullable: true
         processing:
           type: object
-          nullable: true
           properties:
-            model:
+            modelUsed:
               type: string
-            tokens_used:
+              nullable: true
+            tokensUsed:
               type: integer
-            cost_usd:
+              nullable: true
+            processingTimeMs:
+              type: integer
+              nullable: true
+            crawlTimeMs:
+              type: integer
+              nullable: true
+            confidence:
               type: number
-            latency_ms:
-              type: integer
-            crawl_latency_ms:
-              type: integer
-            llm_latency_ms:
-              type: integer
+              nullable: true
+            hallucinationRisk:
+              type: string
+              nullable: true
     SummaryContent:
       type: object
       required:
-      - summary_id
+      - summaryId
       - format
       - content
-      - content_type
-      - retrieved_at
+      - contentType
+      - retrievedAt
       properties:
-        summary_id:
+        summaryId:
           type: integer
-        request_id:
+        requestId:
           type: integer
           nullable: true
         format:
@@ -4028,16 +4136,17 @@ components:
           enum:
           - markdown
           - text
+          - html
         content:
           type: string
           description: Full article content for offline reading.
-        content_type:
+        contentType:
           type: string
           description: MIME type for the returned content (e.g., text/markdown).
         lang:
           type: string
           nullable: true
-        source_url:
+        sourceUrl:
           type: string
           nullable: true
         title:
@@ -4046,13 +4155,13 @@ components:
         domain:
           type: string
           nullable: true
-        retrieved_at:
+        retrievedAt:
           type: string
           format: date-time
-        size_bytes:
+        sizeBytes:
           type: integer
           nullable: true
-        checksum_sha256:
+        checksumSha256:
           type: string
           nullable: true
     SummaryContentData:
@@ -4091,14 +4200,14 @@ components:
             type: object
             required:
             - id
-            - is_read
-            - updated_at
+            - isRead
+            - updatedAt
             properties:
               id:
                 type: integer
-              is_read:
+              isRead:
                 type: boolean
-              updated_at:
+              updatedAt:
                 type: string
                 format: date-time
     SummaryDeleteResponseEnvelope:
@@ -4112,11 +4221,11 @@ components:
             type: object
             required:
             - id
-            - deleted_at
+            - deletedAt
             properties:
               id:
                 type: integer
-              deleted_at:
+              deletedAt:
                 type: string
                 format: date-time
     ToggleFavoriteResponseEnvelope:
@@ -4173,7 +4282,10 @@ components:
       required:
       - id
       - name
-      - created_at
+      - createdAt
+      - updatedAt
+      - serverVersion
+      - isShared
       properties:
         id:
           type: integer
@@ -4182,27 +4294,27 @@ components:
         description:
           type: string
           nullable: true
-        parent_id:
+        parentId:
           type: integer
           nullable: true
         position:
           type: integer
           nullable: true
-        created_at:
+        createdAt:
           type: string
           format: date-time
-        updated_at:
+        updatedAt:
           type: string
           format: date-time
-        server_version:
+        serverVersion:
           type: integer
-        is_shared:
+        isShared:
           type: boolean
           default: false
-        share_count:
+        shareCount:
           type: integer
           nullable: true
-        item_count:
+        itemCount:
           type: integer
           nullable: true
         children:
@@ -4210,11 +4322,11 @@ components:
           items:
             $ref: '#/components/schemas/Collection'
           nullable: true
-        acl_summary:
+        aclSummary:
           type: object
           nullable: true
           properties:
-            total_collaborators:
+            totalCollaborators:
               type: integer
             roles:
               type: array
@@ -4261,18 +4373,18 @@ components:
     CollectionItem:
       type: object
       required:
-      - collection_id
-      - summary_id
-      - created_at
+      - collectionId
+      - summaryId
+      - createdAt
       properties:
-        collection_id:
+        collectionId:
           type: integer
-        summary_id:
+        summaryId:
           type: integer
         position:
           type: integer
           nullable: true
-        created_at:
+        createdAt:
           type: string
           format: date-time
     CollectionItemsResponse:
@@ -4302,7 +4414,7 @@ components:
       - role
       - status
       properties:
-        user_id:
+        userId:
           type: integer
           nullable: true
         role:
@@ -4311,13 +4423,13 @@ components:
         status:
           type: string
           enum: [active, pending, revoked]
-        invited_by:
+        invitedBy:
           type: integer
           nullable: true
-        created_at:
+        createdAt:
           type: string
           format: date-time
-        updated_at:
+        updatedAt:
           type: string
           format: date-time
     CollectionAclResponse:
@@ -4425,7 +4537,7 @@ components:
           type: string
         role:
           type: string
-        expires_at:
+        expiresAt:
           type: string
           format: date-time
           nullable: true
@@ -4433,27 +4545,27 @@ components:
       type: object
       required:
       - id
-      - parent_id
+      - parentId
       - position
       properties:
         id:
           type: integer
-        parent_id:
+        parentId:
           type: integer
           nullable: true
         position:
           type: integer
-        server_version:
+        serverVersion:
           type: integer
-        updated_at:
+        updatedAt:
           type: string
           format: date-time
     CollectionItemsMoveResponse:
       type: object
       required:
-      - moved_summary_ids
+      - movedSummaryIds
       properties:
-        moved_summary_ids:
+        movedSummaryIds:
           type: array
           items:
             type: integer

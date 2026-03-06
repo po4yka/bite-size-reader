@@ -279,10 +279,19 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SuccessResponse"
+                  "$ref": "#/components/schemas/ToggleFavoriteResponseEnvelope"
                 }
               }
             }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundError"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
           }
         }
       }
@@ -366,6 +375,15 @@
           },
           "401": {
             "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenError"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
           }
         }
       }
@@ -392,6 +410,18 @@
                 }
               }
             }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenError"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
           }
         }
       },
@@ -425,6 +455,18 @@
                 }
               }
             }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenError"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
           }
         }
       }
@@ -461,6 +503,21 @@
                 }
               }
             }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenError"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundError"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
           }
         }
       },
@@ -504,6 +561,21 @@
                 }
               }
             }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenError"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundError"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
           }
         }
       },
@@ -538,6 +610,21 @@
                 }
               }
             }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenError"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundError"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
           }
         }
       }
@@ -583,6 +670,21 @@
                 }
               }
             }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenError"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundError"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
           }
         }
       },
@@ -638,6 +740,21 @@
                 }
               }
             }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenError"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundError"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
           }
         }
       }
@@ -682,6 +799,21 @@
                 }
               }
             }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenError"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundError"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
           }
         }
       }
@@ -719,6 +851,18 @@
                 }
               }
             }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenError"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
           }
         }
       }
@@ -755,6 +899,21 @@
                 }
               }
             }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenError"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundError"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
           }
         }
       }
@@ -800,6 +959,21 @@
                 }
               }
             }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenError"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundError"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
           }
         }
       }
@@ -844,6 +1018,21 @@
                 }
               }
             }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenError"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundError"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
           }
         }
       }
@@ -889,6 +1078,21 @@
                 }
               }
             }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenError"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundError"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
           }
         }
       }
@@ -925,6 +1129,21 @@
                 }
               }
             }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenError"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundError"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
           }
         }
       }
@@ -970,6 +1189,21 @@
                 }
               }
             }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenError"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundError"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
           }
         }
       }
@@ -1015,6 +1249,21 @@
                 }
               }
             }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenError"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundError"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
           }
         }
       }
@@ -1060,6 +1309,21 @@
                 }
               }
             }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenError"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundError"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
           }
         }
       }
@@ -1105,6 +1369,21 @@
                 }
               }
             }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenError"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundError"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
           }
         }
       }
@@ -2488,6 +2767,71 @@
         }
       }
     },
+    "/v1/search/insights": {
+      "get": {
+        "tags": [
+          "Search"
+        ],
+        "summary": "Search Insights",
+        "description": "Search analytics snapshot including trends, entities, diversity, topic mix and coverage gaps.",
+        "operationId": "get_search_insights_v1_search_insights_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "days",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 365,
+              "minimum": 7,
+              "default": 30,
+              "title": "Days"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 5,
+              "default": 20,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Search insights data",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SearchResponseEnvelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenError"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequestsError"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      }
+    },
     "/v1/topics/trending": {
       "get": {
         "tags": [
@@ -3293,6 +3637,498 @@
         }
       }
     },
+    "/v1/digest/channels": {
+      "get": {
+        "tags": [
+          "Digest"
+        ],
+        "summary": "List Digest Channels",
+        "description": "List user's channel subscriptions and slot usage.",
+        "operationId": "list_channels_v1_digest_channels_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Digest channel subscriptions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenError"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      }
+    },
+    "/v1/digest/channels/subscribe": {
+      "post": {
+        "tags": [
+          "Digest"
+        ],
+        "summary": "Subscribe Digest Channel",
+        "description": "Subscribe to a Telegram channel for digest generation.",
+        "operationId": "subscribe_channel_v1_digest_channels_subscribe_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "channel_username": {
+                    "type": "string",
+                    "minLength": 5,
+                    "maxLength": 32
+                  }
+                },
+                "required": [
+                  "channel_username"
+                ]
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Subscription result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenError"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      }
+    },
+    "/v1/digest/channels/unsubscribe": {
+      "post": {
+        "tags": [
+          "Digest"
+        ],
+        "summary": "Unsubscribe Digest Channel",
+        "description": "Unsubscribe from a Telegram channel.",
+        "operationId": "unsubscribe_channel_v1_digest_channels_unsubscribe_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "channel_username": {
+                    "type": "string",
+                    "minLength": 5,
+                    "maxLength": 32
+                  }
+                },
+                "required": [
+                  "channel_username"
+                ]
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Unsubscribe result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenError"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      }
+    },
+    "/v1/digest/preferences": {
+      "get": {
+        "tags": [
+          "Digest"
+        ],
+        "summary": "Get Digest Preferences",
+        "description": "Get merged digest preferences (user overrides plus global defaults).",
+        "operationId": "get_preferences_v1_digest_preferences_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Digest preferences",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenError"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "Digest"
+        ],
+        "summary": "Update Digest Preferences",
+        "description": "Update user digest preferences.",
+        "operationId": "update_preferences_v1_digest_preferences_patch",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "delivery_time": {
+                    "type": "string",
+                    "pattern": "^\\d{2}:\\d{2}$"
+                  },
+                  "timezone": {
+                    "type": "string",
+                    "maxLength": 50
+                  },
+                  "hours_lookback": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 168
+                  },
+                  "max_posts_per_digest": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 100
+                  },
+                  "min_relevance_score": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                  }
+                }
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Preferences update result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenError"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      }
+    },
+    "/v1/digest/history": {
+      "get": {
+        "tags": [
+          "Digest"
+        ],
+        "summary": "List Digest History",
+        "description": "Get paginated list of past digest deliveries.",
+        "operationId": "list_history_v1_digest_history_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Digest history",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenError"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      }
+    },
+    "/v1/digest/trigger": {
+      "post": {
+        "tags": [
+          "Digest"
+        ],
+        "summary": "Trigger Digest",
+        "description": "Trigger an on-demand digest generation for current user.",
+        "operationId": "trigger_digest_v1_digest_trigger_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Trigger accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenError"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      }
+    },
+    "/v1/digest/trigger-channel": {
+      "post": {
+        "tags": [
+          "Digest"
+        ],
+        "summary": "Trigger Channel Digest",
+        "description": "Trigger digest for a single channel.",
+        "operationId": "trigger_channel_digest_v1_digest_trigger_channel_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "channel_username": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "channel_username"
+                ]
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Trigger accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenError"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      }
+    },
+    "/v1/system/db-info": {
+      "get": {
+        "tags": [
+          "System"
+        ],
+        "summary": "Get Database Info",
+        "description": "Return database file size and table row counts. Owner-only.",
+        "operationId": "get_db_info_v1_system_db_info_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Database information",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenError"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      }
+    },
+    "/v1/system/clear-cache": {
+      "post": {
+        "tags": [
+          "System"
+        ],
+        "summary": "Clear URL Cache",
+        "description": "Clear Redis URL cache keys. Owner-only.",
+        "operationId": "clear_cache_v1_system_clear_cache_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Cache clear result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenError"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      }
+    },
     "/v1/system/db-dump": {
       "get": {
         "tags": [
@@ -3418,6 +4254,9 @@
           },
           "404": {
             "$ref": "#/components/responses/NotFoundError"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
           }
         }
       }
@@ -3805,7 +4644,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SuccessResponse"
+                  "$ref": "#/components/schemas/ToggleFavoriteResponseEnvelope"
                 }
               }
             }
@@ -4014,7 +4853,7 @@
           "total",
           "limit",
           "offset",
-          "has_more"
+          "hasMore"
         ],
         "properties": {
           "total": {
@@ -4029,11 +4868,11 @@
             "type": "integer",
             "description": "Current offset from start."
           },
-          "has_more": {
+          "hasMore": {
             "type": "boolean",
             "description": "Whether more items are available."
           },
-          "next_cursor": {
+          "nextCursor": {
             "type": "integer",
             "nullable": true,
             "description": "Cursor for next page (if using cursor-based pagination)."
@@ -4633,36 +5472,28 @@
       "User": {
         "type": "object",
         "required": [
-          "id",
-          "is_owner"
+          "userId",
+          "username",
+          "clientId",
+          "isOwner",
+          "createdAt"
         ],
         "properties": {
-          "id": {
+          "userId": {
             "type": "integer"
           },
           "username": {
-            "type": "string",
-            "nullable": true
+            "type": "string"
           },
-          "display_name": {
-            "type": "string",
-            "nullable": true
+          "clientId": {
+            "type": "string"
           },
-          "photo_url": {
-            "type": "string",
-            "nullable": true
-          },
-          "is_owner": {
+          "isOwner": {
             "type": "boolean"
           },
-          "client_id": {
+          "createdAt": {
             "type": "string",
-            "nullable": true
-          },
-          "created_at": {
-            "type": "string",
-            "format": "date-time",
-            "nullable": true
+            "format": "date-time"
           }
         }
       },
@@ -4687,19 +5518,19 @@
       "UserPreferences": {
         "type": "object",
         "required": [
-          "user_id"
+          "userId"
         ],
         "properties": {
-          "user_id": {
+          "userId": {
             "type": "integer",
             "description": "User identifier."
           },
-          "telegram_username": {
+          "telegramUsername": {
             "type": "string",
             "nullable": true,
             "description": "Telegram username (if linked)."
           },
-          "lang_preference": {
+          "langPreference": {
             "type": "string",
             "enum": [
               "auto",
@@ -4709,12 +5540,12 @@
             "default": "auto",
             "nullable": true
           },
-          "notification_settings": {
+          "notificationSettings": {
             "type": "object",
             "additionalProperties": true,
             "nullable": true
           },
-          "app_settings": {
+          "appSettings": {
             "type": "object",
             "additionalProperties": true,
             "nullable": true
@@ -4742,32 +5573,32 @@
       "UserStats": {
         "type": "object",
         "required": [
-          "total_summaries",
-          "unread_count",
-          "read_count",
-          "total_reading_time_min",
-          "average_reading_time_min",
-          "favorite_topics",
-          "favorite_domains",
-          "language_distribution"
+          "totalSummaries",
+          "unreadCount",
+          "readCount",
+          "totalReadingTimeMin",
+          "averageReadingTimeMin",
+          "favoriteTopics",
+          "favoriteDomains",
+          "languageDistribution"
         ],
         "properties": {
-          "total_summaries": {
+          "totalSummaries": {
             "type": "integer"
           },
-          "unread_count": {
+          "unreadCount": {
             "type": "integer"
           },
-          "read_count": {
+          "readCount": {
             "type": "integer"
           },
-          "total_reading_time_min": {
+          "totalReadingTimeMin": {
             "type": "integer"
           },
-          "average_reading_time_min": {
+          "averageReadingTimeMin": {
             "type": "number"
           },
-          "favorite_topics": {
+          "favoriteTopics": {
             "type": "array",
             "items": {
               "type": "object",
@@ -4785,7 +5616,7 @@
               }
             }
           },
-          "favorite_domains": {
+          "favoriteDomains": {
             "type": "array",
             "items": {
               "type": "object",
@@ -4803,18 +5634,18 @@
               }
             }
           },
-          "language_distribution": {
+          "languageDistribution": {
             "type": "object",
             "additionalProperties": {
               "type": "integer"
             }
           },
-          "joined_at": {
+          "joinedAt": {
             "type": "string",
             "format": "date-time",
             "nullable": true
           },
-          "last_summary_at": {
+          "lastSummaryAt": {
             "type": "string",
             "format": "date-time",
             "nullable": true
@@ -5148,26 +5979,26 @@
         "description": "Compact summary representation for list views.",
         "required": [
           "id",
-          "request_id",
+          "requestId",
           "title",
           "domain",
           "url",
           "tldr",
-          "summary_250",
-          "reading_time_min",
-          "topic_tags",
-          "is_read",
+          "summary250",
+          "readingTimeMin",
+          "topicTags",
+          "isRead",
           "lang",
-          "created_at",
+          "createdAt",
           "confidence",
-          "hallucination_risk"
+          "hallucinationRisk"
         ],
         "properties": {
           "id": {
             "type": "integer",
             "description": "Unique summary identifier."
           },
-          "request_id": {
+          "requestId": {
             "type": "integer",
             "description": "Associated request ID."
           },
@@ -5187,23 +6018,23 @@
             "type": "string",
             "description": "Concise multi-sentence summary."
           },
-          "summary_250": {
+          "summary250": {
             "type": "string",
             "maxLength": 250,
             "description": "Short summary (maximum 250 characters)."
           },
-          "reading_time_min": {
+          "readingTimeMin": {
             "type": "integer",
             "description": "Estimated reading time in minutes."
           },
-          "topic_tags": {
+          "topicTags": {
             "type": "array",
             "items": {
               "type": "string"
             },
             "description": "Topic hashtags (e.g.,"
           },
-          "is_read": {
+          "isRead": {
             "type": "boolean",
             "description": "Whether the user has marked this as read."
           },
@@ -5216,7 +6047,7 @@
             ],
             "description": "Detected or preferred language."
           },
-          "created_at": {
+          "createdAt": {
             "type": "string",
             "format": "date-time",
             "description": "ISO 8601 creation timestamp."
@@ -5227,7 +6058,7 @@
             "maximum": 1,
             "description": "LLM confidence score (0.0-1.0)."
           },
-          "hallucination_risk": {
+          "hallucinationRisk": {
             "type": "string",
             "enum": [
               "low",
@@ -5237,12 +6068,12 @@
             ],
             "description": "Assessed hallucination risk level."
           },
-          "is_favorited": {
+          "isFavorited": {
             "type": "boolean",
             "default": false,
             "description": "Whether the user has favorited this summary."
           },
-          "image_url": {
+          "imageUrl": {
             "type": "string",
             "nullable": true,
             "description": "Featured image URL (if available)."
@@ -5252,14 +6083,14 @@
       "SummaryStats": {
         "type": "object",
         "required": [
-          "total_summaries",
-          "unread_count"
+          "totalSummaries",
+          "unreadCount"
         ],
         "properties": {
-          "total_summaries": {
+          "totalSummaries": {
             "type": "integer"
           },
-          "unread_count": {
+          "unreadCount": {
             "type": "integer"
           }
         }
@@ -5267,11 +6098,11 @@
       "PaginatedSummariesData": {
         "type": "object",
         "required": [
-          "items",
+          "summaries",
           "pagination"
         ],
         "properties": {
-          "items": {
+          "summaries": {
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/SummaryListItem"
@@ -5307,43 +6138,197 @@
       "SummaryDetailData": {
         "type": "object",
         "required": [
-          "summary"
+          "summary",
+          "request",
+          "source",
+          "processing"
         ],
         "properties": {
           "summary": {
-            "$ref": "#/components/schemas/Summary"
+            "type": "object",
+            "required": [
+              "summary250",
+              "summary1000",
+              "tldr",
+              "keyIdeas",
+              "topicTags",
+              "entities",
+              "estimatedReadingTimeMin"
+            ],
+            "properties": {
+              "summary250": {
+                "type": "string",
+                "maxLength": 250
+              },
+              "summary1000": {
+                "type": "string",
+                "maxLength": 1000
+              },
+              "tldr": {
+                "type": "string"
+              },
+              "keyIdeas": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "topicTags": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "entities": {
+                "type": "object",
+                "properties": {
+                  "people": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "organizations": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "locations": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                }
+              },
+              "estimatedReadingTimeMin": {
+                "type": "integer"
+              },
+              "keyStats": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "label": {
+                      "type": "string"
+                    },
+                    "value": {
+                      "type": "number"
+                    },
+                    "unit": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "sourceExcerpt": {
+                      "type": "string"
+                    }
+                  }
+                }
+              },
+              "answeredQuestions": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "readability": {
+                "type": "object",
+                "nullable": true,
+                "properties": {
+                  "method": {
+                    "type": "string"
+                  },
+                  "score": {
+                    "type": "number"
+                  },
+                  "level": {
+                    "type": "string"
+                  }
+                }
+              },
+              "seoKeywords": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "request": {
-            "$ref": "#/components/schemas/Request",
-            "nullable": true
+            "type": "object",
+            "required": [
+              "id",
+              "type",
+              "status",
+              "createdAt",
+              "updatedAt"
+            ],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string"
+              },
+              "url": {
+                "type": "string",
+                "nullable": true
+              },
+              "normalizedUrl": {
+                "type": "string",
+                "nullable": true
+              },
+              "dedupeHash": {
+                "type": "string",
+                "nullable": true
+              },
+              "langDetected": {
+                "type": "string",
+                "nullable": true
+              },
+              "createdAt": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "updatedAt": {
+                "type": "string",
+                "format": "date-time"
+              }
+            }
           },
           "source": {
             "type": "object",
-            "nullable": true,
             "properties": {
               "url": {
-                "type": "string"
+                "type": "string",
+                "nullable": true
               },
               "title": {
-                "type": "string"
+                "type": "string",
+                "nullable": true
               },
               "domain": {
-                "type": "string"
+                "type": "string",
+                "nullable": true
               },
               "author": {
                 "type": "string",
                 "nullable": true
               },
-              "published_at": {
+              "publishedAt": {
                 "type": "string",
                 "format": "date-time",
                 "nullable": true
               },
-              "http_status": {
+              "wordCount": {
                 "type": "integer",
                 "nullable": true
               },
-              "image_url": {
+              "contentType": {
                 "type": "string",
                 "nullable": true
               }
@@ -5351,25 +6336,30 @@
           },
           "processing": {
             "type": "object",
-            "nullable": true,
             "properties": {
-              "model": {
-                "type": "string"
+              "modelUsed": {
+                "type": "string",
+                "nullable": true
               },
-              "tokens_used": {
-                "type": "integer"
+              "tokensUsed": {
+                "type": "integer",
+                "nullable": true
               },
-              "cost_usd": {
-                "type": "number"
+              "processingTimeMs": {
+                "type": "integer",
+                "nullable": true
               },
-              "latency_ms": {
-                "type": "integer"
+              "crawlTimeMs": {
+                "type": "integer",
+                "nullable": true
               },
-              "crawl_latency_ms": {
-                "type": "integer"
+              "confidence": {
+                "type": "number",
+                "nullable": true
               },
-              "llm_latency_ms": {
-                "type": "integer"
+              "hallucinationRisk": {
+                "type": "string",
+                "nullable": true
               }
             }
           }
@@ -5378,17 +6368,17 @@
       "SummaryContent": {
         "type": "object",
         "required": [
-          "summary_id",
+          "summaryId",
           "format",
           "content",
-          "content_type",
-          "retrieved_at"
+          "contentType",
+          "retrievedAt"
         ],
         "properties": {
-          "summary_id": {
+          "summaryId": {
             "type": "integer"
           },
-          "request_id": {
+          "requestId": {
             "type": "integer",
             "nullable": true
           },
@@ -5396,14 +6386,15 @@
             "type": "string",
             "enum": [
               "markdown",
-              "text"
+              "text",
+              "html"
             ]
           },
           "content": {
             "type": "string",
             "description": "Full article content for offline reading."
           },
-          "content_type": {
+          "contentType": {
             "type": "string",
             "description": "MIME type for the returned content (e.g., text/markdown)."
           },
@@ -5411,7 +6402,7 @@
             "type": "string",
             "nullable": true
           },
-          "source_url": {
+          "sourceUrl": {
             "type": "string",
             "nullable": true
           },
@@ -5423,15 +6414,15 @@
             "type": "string",
             "nullable": true
           },
-          "retrieved_at": {
+          "retrievedAt": {
             "type": "string",
             "format": "date-time"
           },
-          "size_bytes": {
+          "sizeBytes": {
             "type": "integer",
             "nullable": true
           },
-          "checksum_sha256": {
+          "checksumSha256": {
             "type": "string",
             "nullable": true
           }
@@ -5499,17 +6490,17 @@
                 "type": "object",
                 "required": [
                   "id",
-                  "is_read",
-                  "updated_at"
+                  "isRead",
+                  "updatedAt"
                 ],
                 "properties": {
                   "id": {
                     "type": "integer"
                   },
-                  "is_read": {
+                  "isRead": {
                     "type": "boolean"
                   },
-                  "updated_at": {
+                  "updatedAt": {
                     "type": "string",
                     "format": "date-time"
                   }
@@ -5534,13 +6525,13 @@
                 "type": "object",
                 "required": [
                   "id",
-                  "deleted_at"
+                  "deletedAt"
                 ],
                 "properties": {
                   "id": {
                     "type": "integer"
                   },
-                  "deleted_at": {
+                  "deletedAt": {
                     "type": "string",
                     "format": "date-time"
                   }
@@ -5550,17 +6541,54 @@
           }
         ]
       },
-      "SuccessResponse": {
-        "type": "object",
-        "required": [
-          "success"
-        ],
-        "properties": {
-          "success": {
-            "type": "boolean",
-            "const": true
+      "ToggleFavoriteResponseEnvelope": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/BaseSuccessResponse"
+          },
+          {
+            "type": "object",
+            "required": [
+              "data"
+            ],
+            "properties": {
+              "data": {
+                "type": "object",
+                "required": [
+                  "success",
+                  "isFavorited"
+                ],
+                "properties": {
+                  "success": {
+                    "type": "boolean",
+                    "const": true
+                  },
+                  "isFavorited": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
           }
-        }
+        ]
+      },
+      "SuccessResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/BaseSuccessResponse"
+          },
+          {
+            "type": "object",
+            "required": [
+              "data"
+            ],
+            "properties": {
+              "data": {
+                "type": "object"
+              }
+            }
+          }
+        ]
       },
       "AppleLoginRequest": {
         "type": "object",
@@ -5597,7 +6625,10 @@
         "required": [
           "id",
           "name",
-          "created_at"
+          "createdAt",
+          "updatedAt",
+          "serverVersion",
+          "isShared"
         ],
         "properties": {
           "id": {
@@ -5610,7 +6641,7 @@
             "type": "string",
             "nullable": true
           },
-          "parent_id": {
+          "parentId": {
             "type": "integer",
             "nullable": true
           },
@@ -5618,26 +6649,26 @@
             "type": "integer",
             "nullable": true
           },
-          "created_at": {
+          "createdAt": {
             "type": "string",
             "format": "date-time"
           },
-          "updated_at": {
+          "updatedAt": {
             "type": "string",
             "format": "date-time"
           },
-          "server_version": {
+          "serverVersion": {
             "type": "integer"
           },
-          "is_shared": {
+          "isShared": {
             "type": "boolean",
             "default": false
           },
-          "share_count": {
+          "shareCount": {
             "type": "integer",
             "nullable": true
           },
-          "item_count": {
+          "itemCount": {
             "type": "integer",
             "nullable": true
           },
@@ -5648,11 +6679,11 @@
             },
             "nullable": true
           },
-          "acl_summary": {
+          "aclSummary": {
             "type": "object",
             "nullable": true,
             "properties": {
-              "total_collaborators": {
+              "totalCollaborators": {
                 "type": "integer"
               },
               "roles": {
@@ -5723,22 +6754,22 @@
       "CollectionItem": {
         "type": "object",
         "required": [
-          "collection_id",
-          "summary_id",
-          "created_at"
+          "collectionId",
+          "summaryId",
+          "createdAt"
         ],
         "properties": {
-          "collection_id": {
+          "collectionId": {
             "type": "integer"
           },
-          "summary_id": {
+          "summaryId": {
             "type": "integer"
           },
           "position": {
             "type": "integer",
             "nullable": true
           },
-          "created_at": {
+          "createdAt": {
             "type": "string",
             "format": "date-time"
           }
@@ -5783,7 +6814,7 @@
           "status"
         ],
         "properties": {
-          "user_id": {
+          "userId": {
             "type": "integer",
             "nullable": true
           },
@@ -5803,15 +6834,15 @@
               "revoked"
             ]
           },
-          "invited_by": {
+          "invitedBy": {
             "type": "integer",
             "nullable": true
           },
-          "created_at": {
+          "createdAt": {
             "type": "string",
             "format": "date-time"
           },
-          "updated_at": {
+          "updatedAt": {
             "type": "string",
             "format": "date-time"
           }
@@ -5984,7 +7015,7 @@
           "role": {
             "type": "string"
           },
-          "expires_at": {
+          "expiresAt": {
             "type": "string",
             "format": "date-time",
             "nullable": true
@@ -5995,24 +7026,24 @@
         "type": "object",
         "required": [
           "id",
-          "parent_id",
+          "parentId",
           "position"
         ],
         "properties": {
           "id": {
             "type": "integer"
           },
-          "parent_id": {
+          "parentId": {
             "type": "integer",
             "nullable": true
           },
           "position": {
             "type": "integer"
           },
-          "server_version": {
+          "serverVersion": {
             "type": "integer"
           },
-          "updated_at": {
+          "updatedAt": {
             "type": "string",
             "format": "date-time"
           }
@@ -6021,10 +7052,10 @@
       "CollectionItemsMoveResponse": {
         "type": "object",
         "required": [
-          "moved_summary_ids"
+          "movedSummaryIds"
         ],
         "properties": {
-          "moved_summary_ids": {
+          "movedSummaryIds": {
             "type": "array",
             "items": {
               "type": "integer"
@@ -6356,18 +7387,30 @@
       "SubmitRequestData": {
         "type": "object",
         "required": [
-          "request_id",
-          "correlation_id",
-          "type",
-          "status",
-          "is_duplicate",
-          "created_at"
+          "request"
         ],
         "properties": {
-          "request_id": {
+          "request": {
+            "$ref": "#/components/schemas/SubmitRequestResponse"
+          }
+        }
+      },
+      "SubmitRequestResponse": {
+        "type": "object",
+        "required": [
+          "requestId",
+          "correlationId",
+          "type",
+          "status",
+          "estimatedWaitSeconds",
+          "createdAt",
+          "isDuplicate"
+        ],
+        "properties": {
+          "requestId": {
             "type": "integer"
           },
-          "correlation_id": {
+          "correlationId": {
             "type": "string"
           },
           "type": {
@@ -6382,32 +7425,20 @@
             "enum": [
               "pending",
               "processing",
-              "success",
+              "complete",
               "failed"
             ]
           },
-          "estimated_wait_seconds": {
+          "estimatedWaitSeconds": {
             "type": "integer",
             "nullable": true
           },
-          "created_at": {
+          "createdAt": {
             "type": "string",
             "format": "date-time"
           },
-          "is_duplicate": {
+          "isDuplicate": {
             "type": "boolean"
-          },
-          "duplicate_request_id": {
-            "type": "integer",
-            "nullable": true
-          },
-          "duplicate_summary_id": {
-            "type": "integer",
-            "nullable": true
-          },
-          "duplicate_summary": {
-            "$ref": "#/components/schemas/SummaryListItem",
-            "nullable": true
           }
         }
       },
@@ -6432,24 +7463,19 @@
       "RequestStatusData": {
         "type": "object",
         "required": [
-          "request_id",
+          "requestId",
           "status",
           "stage",
-          "can_retry",
-          "updated_at"
+          "canRetry",
+          "updatedAt"
         ],
         "properties": {
-          "request_id": {
+          "requestId": {
             "type": "integer"
           },
           "status": {
             "type": "string",
-            "enum": [
-              "pending",
-              "processing",
-              "success",
-              "error"
-            ]
+            "description": "Raw request status from storage."
           },
           "stage": {
             "type": "string",
@@ -6477,40 +7503,55 @@
               }
             }
           },
-          "estimated_seconds_remaining": {
+          "estimatedSecondsRemaining": {
             "type": "integer",
             "nullable": true
           },
-          "queue_position": {
+          "queuePosition": {
             "type": "integer",
             "nullable": true,
             "description": "1-indexed position in processing queue (only when pending)."
           },
-          "error_stage": {
+          "errorStage": {
             "type": "string",
             "nullable": true,
             "description": "Stage where error occurred (only when failed)."
           },
-          "error_type": {
+          "errorType": {
             "type": "string",
             "nullable": true,
             "description": "Error classification (only when failed)."
           },
-          "error_message": {
+          "errorMessage": {
             "type": "string",
             "nullable": true,
             "description": "Human-readable error message (only when failed)."
           },
-          "can_retry": {
+          "errorReasonCode": {
+            "type": "string",
+            "nullable": true,
+            "description": "Stable machine-readable reason code for failed requests."
+          },
+          "retryable": {
+            "type": "boolean",
+            "nullable": true,
+            "description": "Whether the latest failure can be retried."
+          },
+          "debug": {
+            "type": "object",
+            "nullable": true,
+            "description": "Optional sanitized debug context for failed requests."
+          },
+          "canRetry": {
             "type": "boolean",
             "default": false,
             "description": "Whether the request can be retried."
           },
-          "correlation_id": {
+          "correlationId": {
             "type": "string",
             "nullable": true
           },
-          "updated_at": {
+          "updatedAt": {
             "type": "string",
             "format": "date-time"
           }
@@ -7616,38 +8657,38 @@
         "type": "object",
         "required": [
           "id",
-          "client_id",
-          "device_info",
-          "ip_address",
-          "last_used_at",
-          "created_at"
+          "clientId",
+          "deviceInfo",
+          "ipAddress",
+          "lastUsedAt",
+          "createdAt"
         ],
         "properties": {
           "id": {
             "type": "integer"
           },
-          "client_id": {
+          "clientId": {
             "type": "string",
             "nullable": true
           },
-          "device_info": {
+          "deviceInfo": {
             "type": "string",
             "nullable": true
           },
-          "ip_address": {
+          "ipAddress": {
             "type": "string",
             "nullable": true
           },
-          "last_used_at": {
+          "lastUsedAt": {
             "type": "string",
             "format": "date-time",
             "nullable": true
           },
-          "created_at": {
+          "createdAt": {
             "type": "string",
             "format": "date-time"
           },
-          "is_current": {
+          "isCurrent": {
             "type": "boolean",
             "default": false
           }
