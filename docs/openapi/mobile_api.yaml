@@ -192,6 +192,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ToggleFavoriteResponseEnvelope'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
 
   /v1/proxy/image:
     get:
@@ -246,6 +252,12 @@ paths:
                 $ref: '#/components/schemas/BaseResponse'
         '401':
           $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
 
   /v1/collections:
     get:
