@@ -18,12 +18,12 @@ class OpenRouterConfig(BaseModel):
     model_config = ConfigDict(frozen=True, populate_by_name=True)
 
     api_key: str = Field(..., validation_alias="OPENROUTER_API_KEY")
-    model: str = Field(default="google/gemini-3.1-pro-preview", validation_alias="OPENROUTER_MODEL")
+    model: str = Field(default="deepseek/deepseek-v3.2", validation_alias="OPENROUTER_MODEL")
     fallback_models: tuple[str, ...] = Field(
         default_factory=lambda: (
-            "anthropic/claude-sonnet-4.6",
-            "google/gemini-3-flash-preview",
-            "deepseek/deepseek-v3.2",
+            "moonshotai/kimi-k2.5",
+            "qwen/qwen3-max",
+            "deepseek/deepseek-r1",
         ),
         validation_alias="OPENROUTER_FALLBACK_MODELS",
     )

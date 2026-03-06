@@ -33,7 +33,7 @@ ALLOWED_USER_IDS=your_user_id
 # [OPTIONAL] - Content Extraction (only needed for cloud Firecrawl or web search)
 FIRECRAWL_API_KEY=your_firecrawl_key
 OPENROUTER_API_KEY=your_openrouter_key
-OPENROUTER_MODEL=google/gemini-3.1-pro-preview
+OPENROUTER_MODEL=deepseek/deepseek-v3.2
 
 # [OPTIONAL] - Database
 DB_PATH=/data/app.db
@@ -173,8 +173,8 @@ Telegram command-route execution is fixed to Rust. Legacy
 
 | Variable | Default | Description |
 | ---------- | --------- | ------------- |
-| `OPENROUTER_MODEL` | `google/gemini-3.1-pro-preview` | Primary model |
-| `OPENROUTER_FALLBACK_MODELS` | `anthropic/claude-sonnet-4.6,google/gemini-3-flash-preview,deepseek/deepseek-v3.2` | Comma-separated fallback chain |
+| `OPENROUTER_MODEL` | `deepseek/deepseek-v3.2` | Primary model |
+| `OPENROUTER_FALLBACK_MODELS` | `moonshotai/kimi-k2.5,qwen/qwen3-max,deepseek/deepseek-r1` | Comma-separated fallback chain |
 | `OPENROUTER_LONG_CONTEXT_MODEL` | `google/gemini-3-flash-preview` | Model for long-context content (1M ctx) |
 | `OPENROUTER_TEMPERATURE` | `0.2` | Sampling temperature (0-2) |
 | `OPENROUTER_TOP_P` | _(none)_ | Top-p sampling |
@@ -501,7 +501,7 @@ Use this checklist to verify your configuration before deploying:
 - [ ] **User whitelist configured**: `ALLOWED_USER_IDS` contains your Telegram user ID
 - [ ] **Firecrawl API key valid** (if using cloud Firecrawl): Test with `curl -H "Authorization: Bearer $FIRECRAWL_API_KEY" https://api.firecrawl.dev/v1/account`
 - [ ] **OpenRouter API key valid**: Test with `curl -H "Authorization: Bearer $OPENROUTER_API_KEY" https://openrouter.ai/api/v1/models`
-- [ ] **OpenRouter model specified**: `OPENROUTER_MODEL` set to valid model (e.g., `google/gemini-3.1-pro-preview`)
+- [ ] **OpenRouter model specified**: `OPENROUTER_MODEL` set to valid model (e.g., `deepseek/deepseek-v3.2`)
 
 ### ✅ Optional Features (If Enabled)
 
