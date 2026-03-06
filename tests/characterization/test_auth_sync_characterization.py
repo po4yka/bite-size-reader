@@ -35,7 +35,9 @@ async def test_characterization_telegram_login_response_shape_is_stable() -> Non
         patch.object(
             endpoints_telegram.SqliteUserRepositoryAdapter,
             "async_get_or_create_user",
-            AsyncMock(return_value=({"telegram_user_id": 12345, "username": "characterization"}, True)),
+            AsyncMock(
+                return_value=({"telegram_user_id": 12345, "username": "characterization"}, True)
+            ),
         ),
         patch.object(endpoints_telegram, "create_access_token", return_value="access-token"),
         patch.object(endpoints_telegram.logger, "info", return_value=None),
