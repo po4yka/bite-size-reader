@@ -1,6 +1,6 @@
 # Bite-Size Reader
 
-Async Telegram bot that summarizes web articles and YouTube videos into structured JSON. For articles, it uses Firecrawl + OpenRouter; for YouTube videos, it downloads the video (1080p) and extracts transcripts. Also supports summarizing forwarded channel posts. Returns a strict JSON summary and stores artifacts in SQLite.
+Async Telegram bot that summarizes web articles and YouTube videos into structured JSON. For articles, it uses a multi-provider scraper chain (Scrapling / self-hosted Firecrawl / direct HTML) + OpenRouter; for YouTube videos, it downloads the video (1080p) and extracts transcripts. Also supports summarizing forwarded channel posts. Returns a strict JSON summary and stores artifacts in SQLite.
 
 **🚀 New to Bite-Size Reader?** Start with the [5-Minute Quickstart Tutorial](docs/tutorials/quickstart.md)
 
@@ -75,7 +75,10 @@ flowchart LR
   subgraph URLPipeline[URL processing pipeline]
     URLHandler --> URLProcessor
     URLProcessor --> ContentExtractor
-    ContentExtractor --> Firecrawl[(Firecrawl /scrape)]
+    ContentExtractor --> ScraperChain[ScraperChain]
+    ScraperChain -->|primary| Scrapling[Scrapling]
+    ScraperChain -->|fallback| Firecrawl[(Firecrawl /scrape)]
+    ScraperChain -->|tertiary| DirectHTML[Direct HTML]
     URLProcessor --> ContentChunker
     URLProcessor --> LLMSummarizer
     LLMSummarizer --> OpenRouter[(OpenRouter Chat Completions)]
@@ -224,7 +227,7 @@ API_ID=...                          # Telegram API ID (from https://my.telegram.
 API_HASH=...                        # Telegram API hash
 BOT_TOKEN=...                       # Telegram bot token (from @BotFather)
 ALLOWED_USER_IDS=123456789          # Comma-separated Telegram user IDs (your ID)
-FIRECRAWL_API_KEY=...               # Firecrawl API key (free tier: 500 credits/month)
+FIRECRAWL_API_KEY=...               # Firecrawl API key (optional -- only for cloud Firecrawl or web search)
 OPENROUTER_API_KEY=...              # OpenRouter API key (or use OPENAI_API_KEY/ANTHROPIC_API_KEY)
 OPENROUTER_MODEL=deepseek/deepseek-v3.2  # Primary LLM model
 ```
@@ -288,7 +291,8 @@ OPENROUTER_MODEL=deepseek/deepseek-v3.2  # Primary LLM model
 ```
 app/
   adapters/
-    content/     -- Firecrawl integration, content chunking, LLM summarization, web search context
+    content/     -- Multi-provider scraper chain, content chunking, LLM summarization, web search context
+      scraper/   -- Protocol, chain, factory, providers (Scrapling, Firecrawl, direct HTML)
     youtube/     -- YouTube video download and transcript extraction
     external/    -- Response formatting helpers shared by adapters
     karakeep/    -- Karakeep bookmark sync

@@ -48,7 +48,7 @@ Bite-Size Reader is an AI-powered Telegram bot that transforms long web articles
 
 The software is **free and open-source** (BSD 3-Clause license), but you'll need API keys:
 
-- **Firecrawl**: 500 free credits/month (~500 articles), then $25/month for 5,000 credits
+- **Content extraction**: Scrapling (default, free, in-process) or self-hosted Firecrawl (free). Cloud Firecrawl is optional: 500 free credits/month (~500 articles), then $25/month for 5,000 credits
 - **OpenRouter**: Pay-per-use ($0.01-0.05 per summary depending on model)
   - Alternative: Use free models (Google Gemini 2.0, some DeepSeek R1 providers offer free tier)
 - **YouTube**: Free (uses yt-dlp, no API costs)
@@ -60,7 +60,7 @@ See [Cost Optimization](#cost-optimization) for ways to minimize costs.
 ### How does it work?
 
 1. **You send a URL** (article or YouTube video) to the Telegram bot
-2. **Content extraction**: Firecrawl scrapes the article (or yt-dlp downloads YouTube transcript)
+2. **Content extraction**: Multi-provider scraper chain (Scrapling, Firecrawl, direct HTML) extracts the article (or yt-dlp downloads YouTube transcript)
 3. **LLM summarization**: OpenRouter sends content to an LLM (e.g., DeepSeek, Qwen, Kimi)
 4. **Structured output**: LLM returns JSON summary (validated, self-corrected via multi-agent pipeline)
 5. **Storage**: Summary stored in SQLite with metadata (topics, entities, timestamps)
@@ -151,8 +151,13 @@ API_ID=...              # Telegram API ID (from https://my.telegram.org/apps)
 API_HASH=...            # Telegram API hash
 BOT_TOKEN=...           # Bot token (from @BotFather)
 ALLOWED_USER_IDS=...    # Your Telegram user ID
-FIRECRAWL_API_KEY=...   # Firecrawl API key
 OPENROUTER_API_KEY=...  # OpenRouter API key
+```
+
+**Optional but common**:
+
+```bash
+FIRECRAWL_API_KEY=...   # Only needed for cloud Firecrawl or web search (Scrapling is the free default)
 ```
 
 **Optional but recommended**:
@@ -615,12 +620,13 @@ See [HEXAGONAL_ARCHITECTURE_QUICKSTART.md](HEXAGONAL_ARCHITECTURE_QUICKSTART.md)
    OPENROUTER_FALLBACK_MODELS=deepseek/deepseek-r1:free
    ```
 
-2. **Maximize Firecrawl free tier** (500 credits/month):
-   - Use trafilatura fallback for simple sites
-   - Only send complex sites to Firecrawl
+2. **Use free content extraction** (no Firecrawl costs):
+   - Scrapling is the default provider (free, in-process, no API key)
+   - Self-hosted Firecrawl is another free option (`FIRECRAWL_SELF_HOSTED_ENABLED=true`)
+   - Cloud Firecrawl is only needed for sites that resist local scraping
 
    ```bash
-   CONTENT_EXTRACTION_FALLBACK=true  # Try trafilatura first
+   SCRAPER_PROVIDER_ORDER=["scrapling", "direct_html"]  # Skip cloud Firecrawl entirely
    ```
 
 3. **Cache aggressively**:

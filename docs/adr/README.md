@@ -31,6 +31,7 @@ We follow the [Michael Nygard ADR format](https://cognitect.com/blog/2011/11/15/
 | [ADR-0003](0003-single-user-access-control.md) | Single-User Access Control Model | Accepted | 2024-12-20 |
 | [ADR-0004](0004-hexagonal-architecture.md) | Hexagonal Architecture Pattern | Accepted | 2025-01-10 |
 | [ADR-0005](0005-multi-agent-llm-pipeline.md) | Multi-Agent LLM Processing Pipeline | Accepted | 2025-01-25 |
+| [ADR-0006](0006-multi-provider-scraper-chain.md) | Multi-Provider Content Extraction with Fallback Chain | Accepted | 2026-03-06 |
 
 ## Creating a New ADR
 

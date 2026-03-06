@@ -9,7 +9,7 @@ This guide explains how to prepare environments, configure secrets, and run the 
 - Python 3.13+
 - Telegram account and bot token
 - OpenRouter API key
-- Firecrawl API key
+- Firecrawl API key (optional -- Scrapling and self-hosted Firecrawl are free alternatives)
 - Docker (for containerized deployment)
 - Rust toolchain (optional; needed for local Rust binary builds and migration parity suites)
 - (Optional) Redis for API rate limits/sync locks
@@ -31,10 +31,15 @@ This guide explains how to prepare environments, configure secrets, and run the 
 - Choose a model (e.g., `deepseek/deepseek-v3.2`) and set `OPENROUTER_MODEL`.
 - Optional attribution: `OPENROUTER_HTTP_REFERER`, `OPENROUTER_X_TITLE`.
 
-## Firecrawl Setup
+## Firecrawl Setup (Optional)
 
-- Sign up: https://www.firecrawl.dev/
-- Create an API key and set `FIRECRAWL_API_KEY`.
+`FIRECRAWL_API_KEY` is **optional**. The default scraper chain (`SCRAPER_PROVIDER_ORDER`) tries Scrapling (free, in-process) first, then falls back to Firecrawl and direct HTML extraction. You only need a cloud Firecrawl API key if you want to use cloud Firecrawl or web search enrichment.
+
+- Cloud Firecrawl: Sign up at https://www.firecrawl.dev/ and set `FIRECRAWL_API_KEY`.
+- Self-hosted Firecrawl: Enable via `FIRECRAWL_SELF_HOSTED_ENABLED=true`. Docker Compose includes a `bsr-firecrawl` service on port 3002.
+- Scrapling: Enabled by default (`SCRAPLING_ENABLED=true`), no API key required.
+
+See `docs/environment_variables.md` for the full multi-provider scraper chain configuration.
 
 ## Environment Variables (essentials)
 

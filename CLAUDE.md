@@ -6,7 +6,7 @@ This document helps AI assistants (like Claude) understand and work effectively 
 
 **Bite-Size Reader** is an async Telegram bot that:
 
-- Accepts web article URLs and summarizes them using Firecrawl (content extraction) + OpenRouter (LLM summarization)
+- Accepts web article URLs and summarizes them using a multi-provider scraper chain (content extraction) + OpenRouter (LLM summarization)
 - Accepts YouTube video URLs, downloads them in 1080p, extracts transcripts, and generates summaries
 - Accepts forwarded channel posts and summarizes them directly
 - Returns structured JSON summaries with a strict contract
@@ -17,7 +17,8 @@ This document helps AI assistants (like Claude) understand and work effectively 
 
 - Python 3.13+
 - Pyrogram (async Telegram MTProto)
-- Firecrawl API (content extraction for web articles)
+- Scrapling (primary in-process content scraper)
+- Firecrawl API (self-hosted secondary scraper; cloud API optional for web search)
 - yt-dlp (YouTube video downloading)
 - youtube-transcript-api (YouTube transcript extraction)
 - ffmpeg (video/audio merging for yt-dlp)
@@ -49,7 +50,7 @@ Telegram Message -> MessageHandler -> AccessController -> MessageRouter
                     | |
               URLProcessor                                  LLMSummarizer
                     | |
-     ContentExtractor -> Firecrawl                              OpenRouter
+     ContentExtractor -> ScraperChain                             OpenRouter
                     | |
               LLMSummarizer -> OpenRouter                     Summary JSON
                     | |
@@ -63,7 +64,7 @@ Telegram Message -> MessageHandler -> AccessController -> MessageRouter
 ### Key Components
 
 - **Telegram Layer** (`app/adapters/telegram/`) -- Bot orchestration, message routing, access control, persistence, command processing, URL/forward handling
-- **Content Pipeline** (`app/adapters/content/`) -- Firecrawl integration, content chunking, LLM summarization, web search context
+- **Content Pipeline** (`app/adapters/content/`) -- Multi-provider scraper chain (Scrapling -> self-hosted Firecrawl -> direct HTTP/trafilatura), content chunking, LLM summarization, web search context. Scraper protocol, chain, factory, and providers in `app/adapters/content/scraper/`
 - **YouTube Adapter** (`app/adapters/youtube/`) -- yt-dlp video download, transcript extraction, storage management
 - **Twitter/X Adapter** (`app/adapters/twitter/`) -- Two-tier extraction: Firecrawl (public) + Playwright (authenticated). GraphQL interception for tweets/threads, DOM scraping for X Articles
 - **LLM Abstraction** (`app/adapters/llm/`) -- Provider-agnostic LLM interface (OpenRouter, OpenAI, Anthropic)
@@ -88,6 +89,7 @@ Telegram Message -> MessageHandler -> AccessController -> MessageRouter
 app/
 +-- adapters/           # External service integrations
 |   +-- content/        # URL processing pipeline
+|   |   +-- scraper/    # Multi-provider scraper chain (protocol, chain, factory, providers)
 |   +-- external/       # Firecrawl parser, response formatter
 |   +-- karakeep/       # Karakeep bookmark sync
 |   +-- llm/            # Provider-agnostic LLM abstraction
@@ -201,7 +203,8 @@ GitHub Actions (`.github/workflows/ci.yml`) enforces:
 1. **URL Flow Changes:**
    - Respect URL normalization (`app/core/url_utils.py`) -- all URLs must be normalized before deduplication
    - Preserve `dedupe_hash` (sha256) for idempotence
-   - Always persist Firecrawl responses in `crawl_results` table
+   - Always persist scraper responses in `crawl_results` table (`FirecrawlResult` is the universal output model)
+   - Content extraction uses `ContentScraperChain` (ordered fallback: Scrapling -> self-hosted Firecrawl -> direct HTTP). See `app/adapters/content/scraper/` for protocol, chain, factory, and providers
    - Check `app/adapters/content/url_processor.py` for orchestration logic
 
 2. **Summary Contract Changes:**
@@ -278,6 +281,7 @@ When `WEB_SEARCH_ENABLED=true`, the bot enriches summaries with current web cont
 3. **CLI Runner:** Use `python -m app.cli.summary` to test URL processing without Telegram
 4. **Database Inspection:** SQLite at `DB_PATH` (default: `/data/app.db`) -- use any SQLite browser
 5. **Logs:** Structured JSON logs to stdout; use `LOG_LEVEL=DEBUG` for verbose traces
+6. **Scraper Chain:** Each provider logs success/failure with provider name. Check logs for `scraper` context to see which provider served the request and which ones failed in the fallback chain. Config in `app/config/scraper.py` (`ScraperConfig`)
 
 ### Multi-Agent Architecture
 
@@ -348,6 +352,8 @@ When making changes, these are the most critical files to understand:
 - **`app/core/url_utils.py`** -- URL normalization and deduplication
 - **`app/db/models.py`** -- Database schema (ORM models)
 - **`app/config/settings.py`** -- Configuration loading
+- **`app/config/scraper.py`** -- Scraper chain configuration (`ScraperConfig`)
+- **`app/adapters/content/scraper/`** -- `ContentScraperProtocol`, `ContentScraperChain`, `ContentScraperFactory`, providers
 - **`app/api/main.py`** -- Mobile API entry point
 - **`app/mcp/server.py`** -- MCP server for AI agents
 - **`bot.py`** -- Entrypoint (wires everything together)
@@ -374,10 +380,16 @@ API_ID=...                          # Telegram API ID
 API_HASH=...                        # Telegram API hash
 BOT_TOKEN=...                       # Telegram bot token
 ALLOWED_USER_IDS=123456789          # Comma-separated owner IDs
-FIRECRAWL_API_KEY=...               # Firecrawl API key
 OPENROUTER_API_KEY=...              # OpenRouter API key
 OPENROUTER_MODEL=deepseek/deepseek-v3.2  # Default model
 OPENROUTER_FALLBACK_MODELS=moonshotai/kimi-k2.5,qwen/qwen3-max,deepseek/deepseek-r1
+
+# Scraper chain (all optional -- defaults enable Scrapling + direct HTTP)
+FIRECRAWL_API_KEY=                  # Optional; enables cloud Firecrawl for TopicSearchService web search
+FIRECRAWL_SELF_HOSTED_URL=http://firecrawl:3002  # Self-hosted Firecrawl URL (Docker Compose service)
+SCRAPER_SCRAPLING_ENABLED=true      # Enable Scrapling provider (primary)
+SCRAPER_FIRECRAWL_SELF_HOSTED_ENABLED=true  # Enable self-hosted Firecrawl (secondary)
+SCRAPER_DIRECT_HTTP_ENABLED=true    # Enable direct HTTP + trafilatura (tertiary)
 
 # Channel Digest (optional)
 DIGEST_ENABLED=false                # Enable channel digest subsystem
@@ -388,7 +400,7 @@ Full reference: `docs/environment_variables.md`
 
 ---
 
-**Last Updated:** 2026-02-16
+**Last Updated:** 2026-03-06
 
 For questions about the codebase, always refer to:
 

@@ -190,8 +190,8 @@ API_ID=your_api_id
 API_HASH=your_api_hash
 BOT_TOKEN=your_bot_token
 ALLOWED_USER_IDS=123456789
-FIRECRAWL_API_KEY=your_key
 OPENROUTER_API_KEY=your_key
+# FIRECRAWL_API_KEY is optional (Scrapling is the free default scraper)
 EOF
 ```
 
@@ -246,6 +246,8 @@ docker restart bite-size-reader
 ---
 
 ## Firecrawl Issues
+
+> **Multi-provider fallback**: Content extraction uses an ordered chain of providers (default: Scrapling -> Firecrawl -> direct HTML). If one provider fails, the next is tried automatically. Most Firecrawl issues below only apply when cloud Firecrawl is in your `SCRAPER_PROVIDER_ORDER`. Scrapling (free, in-process) handles the majority of sites without needing an API key. You can also enable self-hosted Firecrawl (`FIRECRAWL_SELF_HOSTED_ENABLED=true`) as a middle ground. See `docs/environment_variables.md` for scraper chain configuration.
 
 ### API Rate Limits
 

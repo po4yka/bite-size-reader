@@ -30,7 +30,7 @@ API_HASH=your_api_hash
 BOT_TOKEN=your_bot_token
 ALLOWED_USER_IDS=your_user_id
 
-# [REQUIRED] - Content Extraction & LLM
+# [OPTIONAL] - Content Extraction (only needed for cloud Firecrawl or web search)
 FIRECRAWL_API_KEY=your_firecrawl_key
 OPENROUTER_API_KEY=your_openrouter_key
 OPENROUTER_MODEL=deepseek/deepseek-v3.2
@@ -105,7 +105,7 @@ API_RATE_LIMIT_DEFAULT=100
 | `API_HASH` | Telegram API hash |
 | `BOT_TOKEN` | Telegram bot token (from BotFather) |
 | `ALLOWED_USER_IDS` | Comma-separated Telegram user IDs allowed to interact |
-| `FIRECRAWL_API_KEY` | Firecrawl API key |
+| `FIRECRAWL_API_KEY` | Firecrawl API key (optional -- only required for cloud Firecrawl or web search enrichment; defaults to empty) |
 | `OPENROUTER_API_KEY` | OpenRouter API key |
 
 ## [OPTIONAL] Migration / Rust Contract Backend
@@ -226,6 +226,27 @@ Telegram command-route execution is fixed to Rust. Legacy
 | `FIRECRAWL_SCREENSHOT_FULL_PAGE` | `true` | Full-page screenshot |
 | `FIRECRAWL_SCREENSHOT_QUALITY` | `80` | Screenshot JPEG quality (1-100) |
 | `FIRECRAWL_JSON_PROMPT` | _(none)_ | Custom JSON extraction prompt |
+
+## Multi-Provider Scraper Chain
+
+Content extraction uses an ordered chain of providers. Each provider is tried in sequence until one succeeds. Configuration lives in `app/config/scraper.py`.
+
+| Variable | Default | Description |
+| ---------- | --------- | ------------- |
+| `SCRAPER_PROVIDER_ORDER` | `["scrapling", "firecrawl", "direct_html"]` | Ordered list of scraping providers to try |
+| `SCRAPLING_ENABLED` | `true` | Enable Scrapling in-process provider |
+| `SCRAPLING_TIMEOUT_SEC` | `30` | Scrapling fetch timeout (seconds) |
+| `SCRAPLING_STEALTH_FALLBACK` | `true` | Try stealth fetch if basic fetch returns thin content |
+| `FIRECRAWL_SELF_HOSTED_ENABLED` | `false` | Enable self-hosted Firecrawl provider |
+| `FIRECRAWL_SELF_HOSTED_URL` | `http://firecrawl:3002` | Self-hosted Firecrawl base URL |
+| `FIRECRAWL_SELF_HOSTED_API_KEY` | `fc-bsr-local` | Self-hosted Firecrawl API key |
+
+**Notes**:
+
+- Scrapling is a free, in-process scraper that requires no API key. It is tried first by default.
+- Self-hosted Firecrawl runs as a Docker Compose service (`bsr-firecrawl` on port 3002) and also requires no cloud API key.
+- Cloud Firecrawl (`FIRECRAWL_API_KEY`) is only needed when it appears in `SCRAPER_PROVIDER_ORDER` as `"firecrawl"` or when web search enrichment is enabled.
+- `direct_html` is a lightweight fallback using trafilatura for simple pages.
 
 ## YouTube Video Download
 
@@ -474,7 +495,7 @@ Use this checklist to verify your configuration before deploying:
 
 - [ ] **Telegram API credentials set**: `API_ID`, `API_HASH`, `BOT_TOKEN`
 - [ ] **User whitelist configured**: `ALLOWED_USER_IDS` contains your Telegram user ID
-- [ ] **Firecrawl API key valid**: Test with `curl -H "Authorization: Bearer $FIRECRAWL_API_KEY" https://api.firecrawl.dev/v1/account`
+- [ ] **Firecrawl API key valid** (if using cloud Firecrawl): Test with `curl -H "Authorization: Bearer $FIRECRAWL_API_KEY" https://api.firecrawl.dev/v1/account`
 - [ ] **OpenRouter API key valid**: Test with `curl -H "Authorization: Bearer $OPENROUTER_API_KEY" https://openrouter.ai/api/v1/models`
 - [ ] **OpenRouter model specified**: `OPENROUTER_MODEL` set to valid model (e.g., `deepseek/deepseek-v3.2`)
 
