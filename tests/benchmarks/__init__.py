@@ -8,6 +8,6 @@ To run benchmarks:
 
 Targets:
 - URL normalization: >10k ops/sec
-- JSON validation: p99 < 10ms
+- JSON validation: estimated p99 < 100ms on shared CI runners
 - Database queries: p99 < 100ms
 """
