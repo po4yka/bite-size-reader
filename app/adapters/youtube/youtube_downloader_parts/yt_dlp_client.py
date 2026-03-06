@@ -169,7 +169,10 @@ def download_video_sync(
             try:
                 vtt_path.unlink()
             except OSError as exc:
-                logger.warning("youtube_subtitle_cleanup_failed", extra={"path": str(vtt_path), "error": str(exc), "cid": correlation_id})
+                logger.warning(
+                    "youtube_subtitle_cleanup_failed",
+                    extra={"path": str(vtt_path), "error": str(exc), "cid": correlation_id},
+                )
 
         metadata_file = video_path.with_suffix(".info.json")
         thumbnail_file = None

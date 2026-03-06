@@ -127,7 +127,9 @@ class ContentHandlerImpl:
                 try:
                     parsed_limit = int(raw_limit_value)
                 except ValueError:
-                    logger.debug("content_query_limit_parse_failed", extra={"raw_value": raw_limit_value})
+                    logger.debug(
+                        "content_query_limit_parse_failed", extra={"raw_value": raw_limit_value}
+                    )
                 else:
                     if parsed_limit <= max_limit:
                         has_non_digit_before = any(

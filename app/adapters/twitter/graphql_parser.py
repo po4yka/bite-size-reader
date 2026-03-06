@@ -5,8 +5,8 @@ Pure functions with no I/O -- suitable for unit testing with canned fixtures.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 import logging
+from dataclasses import dataclass, field
 from typing import Any
 
 LOGGER = logging.getLogger(__name__)
