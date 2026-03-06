@@ -9,6 +9,8 @@ from typing import TYPE_CHECKING, Any
 from app.core.async_utils import raise_if_cancelled
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from app.core.progress_tracker import ProgressTracker
 
 logger = logging.getLogger("app.adapters.content.content_extractor")
@@ -16,6 +18,17 @@ logger = logging.getLogger("app.adapters.content.content_extractor")
 
 class ContentExtractorPlatformsMixin:
     """YouTube and Twitter/X extraction paths."""
+
+    # Explicit host contract: these members are supplied by URLProcessor.
+    _audit: Callable[..., None]
+    _handle_request_dedupe_or_create: Callable[..., Any]
+    _schedule_crawl_persistence: Callable[..., Any]
+    _sem: Callable[..., Any]
+    cfg: Any
+    db: Any
+    firecrawl: Any
+    message_persistence: Any
+    response_formatter: Any
 
     _youtube_downloader: Any | None
     _twitter_extractor: Any | None

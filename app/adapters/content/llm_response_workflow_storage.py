@@ -12,6 +12,11 @@ logger = logging.getLogger("app.adapters.content.llm_response_workflow")
 class LLMWorkflowStorageMixin:
     """Persistence helpers for raw LLM calls."""
 
+    # Explicit host contract for composition with LLMResponseWorkflow.
+    _db_write_queue: Any
+    cfg: Any
+    llm_repo: Any
+
     async def _persist_llm_call(self, llm: Any, req_id: int, correlation_id: str | None) -> None:
         if self._db_write_queue is not None:
             _llm = llm

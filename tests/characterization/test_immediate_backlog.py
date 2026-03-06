@@ -5,6 +5,9 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+pytest.importorskip("yt_dlp", reason="yt-dlp not installed")
+pytest.importorskip("youtube_transcript_api", reason="youtube-transcript-api not installed")
+
 from app.adapters.youtube.youtube_downloader import YouTubeDownloader
 from app.application.use_cases.get_unread_summaries import (
     GetUnreadSummariesQuery,

@@ -13,7 +13,7 @@ from app.db.user_interactions import async_safe_update_user_interaction
 from app.utils.json_validation import finalize_summary_texts
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Callable, Sequence
 
     from app.adapters.content.llm_response_workflow import AttemptContext
 
@@ -22,6 +22,17 @@ logger = logging.getLogger("app.adapters.content.llm_response_workflow")
 
 class LLMWorkflowAttemptsMixin:
     """Per-attempt processing, summary finalization, and persistence."""
+
+    # Explicit host contract for composition with LLMResponseWorkflow.
+    _attempt_json_repair: Callable[..., Any]
+    _attempt_salvage_parsing: Callable[..., Any]
+    _audit: Callable[..., None]
+    _handle_llm_error: Callable[..., Any]
+    _schedule_background_task: Callable[..., Any]
+    cfg: Any
+    request_repo: Any
+    summary_repo: Any
+    user_repo: Any
 
     async def _process_attempt(self, ctx: AttemptContext) -> dict[str, Any] | None:
         """Process a single LLM attempt using a typed context bundle."""

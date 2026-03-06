@@ -19,6 +19,17 @@ logger = logging.getLogger("app.adapters.content.llm_response_workflow")
 class LLMWorkflowExecutionMixin:
     """Workflow execution, retries, and lifecycle helpers."""
 
+    # Explicit host contract for composition with LLMResponseWorkflow.
+    _adaptive_timeout: Any
+    _background_tasks: set[asyncio.Task[Any]]
+    _handle_all_attempts_failed: Callable[..., Any]
+    _persist_llm_call: Callable[..., Any]
+    _process_attempt: Callable[..., Any]
+    _sem: Callable[..., Any]
+    _set_failure_context: Callable[..., None]
+    cfg: Any
+    openrouter: Any
+
     def _schedule_background_task(
         self, coro: Coroutine[Any, Any, Any], label: str, correlation_id: str | None
     ) -> asyncio.Task[Any] | None:

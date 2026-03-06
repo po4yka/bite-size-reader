@@ -5,7 +5,10 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 from app.core.summary_contract import validate_and_shape_summary
 from app.db.user_interactions import async_safe_update_user_interaction
@@ -16,6 +19,15 @@ logger = logging.getLogger("app.adapters.content.llm_response_workflow")
 
 class LLMWorkflowRepairMixin:
     """JSON salvage/repair and failure reporting helpers."""
+
+    # Explicit host contract for composition with LLMResponseWorkflow.
+    _audit: Callable[..., None]
+    _sem: Callable[..., Any]
+    _set_failure_context: Callable[..., None]
+    cfg: Any
+    openrouter: Any
+    request_repo: Any
+    user_repo: Any
 
     async def _attempt_salvage_parsing(
         self, llm: Any, correlation_id: str | None

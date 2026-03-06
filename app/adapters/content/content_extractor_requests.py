@@ -5,7 +5,10 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 from app.core.async_utils import raise_if_cancelled
 
@@ -14,6 +17,10 @@ logger = logging.getLogger("app.adapters.content.content_extractor")
 
 class ContentExtractorRequestsMixin:
     """Request creation/dedupe and persistence primitives."""
+
+    # Explicit host contract: these members are provided by URLProcessor.
+    _audit: Callable[..., None]
+    message_persistence: Any
 
     def _schedule_crawl_persistence(
         self, req_id: int, crawl: Any, correlation_id: str | None

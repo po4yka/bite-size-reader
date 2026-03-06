@@ -4,7 +4,10 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 from app.adapters.telegram.message_router_helpers import (
     handle_document_file,
@@ -48,6 +51,16 @@ _TAIL_UID_COMMANDS: tuple[tuple[str, str], ...] = (("/debug", "handle_debug_comm
 
 class MessageRouterContentMixin:
     """Command/content dispatch for MessageRouter."""
+
+    # Explicit host contract for MessageRouter composition.
+    _lang: str
+    _should_handle_attachment: Callable[..., bool]
+    attachment_processor: Any
+    command_processor: Any
+    forward_processor: Any
+    response_formatter: Any
+    url_handler: Any
+    user_repo: Any
 
     async def _route_message_content(
         self,
