@@ -3,6 +3,7 @@
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
@@ -173,6 +174,13 @@ class TestFileValidation(unittest.TestCase):
         """Test cleanup with invalid path doesn't crash."""
         # Should not raise exception
         self.validator.cleanup_file("/nonexistent/path/to/file.txt")
+
+    def test_temp_dir_resolution_failure_does_not_fallback_to_tmp(self):
+        """Temp dir resolution failure must not implicitly allow-list /tmp."""
+        with patch("app.security.file_validation.tempfile.gettempdir", side_effect=RuntimeError):
+            validator = SecureFileValidator()
+
+        assert Path("/tmp") not in validator._allowed_dirs
 
     def test_unicode_file_content(self):
         """Test reading files with Unicode content."""

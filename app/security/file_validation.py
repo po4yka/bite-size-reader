@@ -46,25 +46,31 @@ class SecureFileValidator:
             List of allowed directory paths (resolved and normalized)
 
         """
-        allowed = []
+        allowed: list[Path] = []
 
-        # System temp directory
+        # System temp directory (do not fall back to broad hardcoded paths like /tmp).
         try:
-            temp_dir = Path(tempfile.gettempdir()).resolve()
-            allowed.append(temp_dir)
+            temp_dir = Path(tempfile.gettempdir()).resolve(strict=True)
+            if temp_dir.is_dir():
+                allowed.append(temp_dir)
+            else:
+                logger.warning(
+                    "temp_dir_is_not_directory",
+                    extra={"path": str(temp_dir)},
+                )
         except (OSError, ValueError, RuntimeError) as e:
             logger.warning("failed_to_resolve_temp_dir", extra={"error": str(e)})
-            fallback_temp = Path("/tmp")
-            if fallback_temp.exists():
-                allowed.append(fallback_temp.resolve())
 
         # Pyrogram download directory (if exists)
-        try:
-            pyrogram_temp = Path.home() / "Downloads" / "pyrogram"
-            if pyrogram_temp.exists():
+        pyrogram_temp = Path.home() / "Downloads" / "pyrogram"
+        if pyrogram_temp.exists():
+            try:
                 allowed.append(pyrogram_temp.resolve())
-        except (OSError, ValueError, RuntimeError) as e:
-            logger.debug("failed_to_resolve_pyrogram_temp_dir", extra={"error": str(e)})
+            except (OSError, ValueError, RuntimeError) as e:
+                logger.warning(
+                    "failed_to_resolve_pyrogram_temp_dir",
+                    extra={"error": str(e), "path": str(pyrogram_temp)},
+                )
 
         return allowed
 
