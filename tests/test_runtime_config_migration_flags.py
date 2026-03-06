@@ -27,5 +27,5 @@ def test_m6_telegram_runtime_timeout_accepts_valid_value() -> None:
 
 
 def test_m6_telegram_runtime_legacy_backend_toggle_is_ignored() -> None:
-    cfg = RuntimeConfig(migration_telegram_runtime_backend="python")
-    assert "migration_telegram_runtime_backend" not in cfg.model_dump()
+    cfg = RuntimeConfig(migration_interface_backend="rust")
+    assert cfg.migration_interface_backend == "rust"

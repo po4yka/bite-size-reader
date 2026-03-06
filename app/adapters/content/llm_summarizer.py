@@ -782,7 +782,7 @@ class LLMSummarizer:
 
         return [
             {"role": "system", "content": system_prompt},
-            {"role": "user", "content": content_parts},  # type: ignore[dict-item]
+            {"role": "user", "content": content_parts},
         ]
 
     def _build_summary_repair_context(

@@ -56,7 +56,7 @@ async def test_extract_content_pure_routes_twitter_urls_to_twitter_extractor() -
     extractor = ContentExtractor(
         cfg=_dummy_cfg(),
         db=cast("DatabaseSessionManager", SimpleNamespace()),
-        firecrawl=firecrawl,
+        firecrawl=firecrawl,  # type: ignore[arg-type]
         response_formatter=cast("ResponseFormatter", SimpleNamespace()),
         audit_func=lambda *args, **kwargs: None,
         sem=_dummy_sem,
@@ -88,7 +88,7 @@ async def test_extract_content_pure_routes_youtube_urls_to_youtube_extractor() -
     extractor = ContentExtractor(
         cfg=_dummy_cfg(),
         db=cast("DatabaseSessionManager", SimpleNamespace()),
-        firecrawl=firecrawl,
+        firecrawl=firecrawl,  # type: ignore[arg-type]
         response_formatter=cast("ResponseFormatter", SimpleNamespace()),
         audit_func=lambda *args, **kwargs: None,
         sem=_dummy_sem,

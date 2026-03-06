@@ -19,8 +19,8 @@ from app.api.routers.auth import endpoints_telegram
 @pytest.mark.asyncio
 async def test_characterization_telegram_login_response_shape_is_stable() -> None:
     login = TelegramLoginRequest(
-        telegram_user_id=12345,
-        auth_hash="deadbeef",
+        id=12345,
+        hash="deadbeef",
         auth_date=1700000000,
         username="characterization",
         first_name="Char",

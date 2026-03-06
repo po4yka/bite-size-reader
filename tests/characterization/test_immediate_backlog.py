@@ -1,11 +1,15 @@
 from __future__ import annotations
 
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 from app.adapters.youtube.youtube_downloader import YouTubeDownloader
-from app.application.use_cases.get_unread_summaries import GetUnreadSummariesQuery, GetUnreadSummariesUseCase
+from app.application.use_cases.get_unread_summaries import (
+    GetUnreadSummariesQuery,
+    GetUnreadSummariesUseCase,
+)
 from app.application.use_cases.mark_summary_as_read import (
     MarkSummaryAsReadCommand,
     MarkSummaryAsReadUseCase,
@@ -21,6 +25,9 @@ pytest.importorskip("grpc", reason="grpcio not installed")
 
 from app.grpc.client import ProcessingClient
 from app.protos import processing_pb2
+
+# Cast to Any so mypy doesn't complain about dynamically-generated protobuf attrs
+_pb2: Any = processing_pb2
 
 
 async def _async_generator(items):
@@ -73,7 +80,9 @@ async def test_characterization_youtube_uses_vtt_fallback_when_api_transcript_em
     rf.notifications.send_youtube_download_notification = AsyncMock()
     rf.notifications.send_youtube_download_complete_notification = AsyncMock()
 
-    downloader = YouTubeDownloader(cfg=cfg, db=MagicMock(), response_formatter=rf, audit_func=lambda *_a, **_k: None)
+    downloader: Any = YouTubeDownloader(
+        cfg=cfg, db=MagicMock(), response_formatter=rf, audit_func=lambda *_a, **_k: None
+    )
 
     downloader._check_storage_limits = AsyncMock()
     downloader.request_repo = MagicMock()
@@ -108,7 +117,13 @@ async def test_characterization_youtube_uses_vtt_fallback_when_api_transcript_em
     )
     downloader._load_transcript_from_vtt = MagicMock(return_value=("vtt transcript body", "en"))
 
-    req_id, combined_text, transcript_source, detected_lang, _metadata = await downloader.download_and_extract(
+    (
+        req_id,
+        combined_text,
+        transcript_source,
+        detected_lang,
+        _metadata,
+    ) = await downloader.download_and_extract(
         message=MagicMock(),
         url="https://www.youtube.com/watch?v=dQw4w9WgXcQ",
         silent=True,
@@ -124,6 +139,7 @@ async def test_characterization_youtube_uses_vtt_fallback_when_api_transcript_em
 @pytest.mark.asyncio
 async def test_characterization_unread_read_unread_transition_with_topic_filter() -> None:
     """Lock unread filtering and read-state transitions around topic-like filtering."""
+
     class InMemorySummaryRepo:
         def __init__(self) -> None:
             self.rows = {
@@ -131,7 +147,13 @@ async def test_characterization_unread_read_unread_transition_with_topic_filter(
                     "id": 1,
                     "request_id": 10,
                     "lang": "en",
-                    "json_payload": {"title": "Rust migration notes", "topic_tags": ["rust"], "tldr": "r", "summary_250": "rust", "key_ideas": ["idea"]},
+                    "json_payload": {
+                        "title": "Rust migration notes",
+                        "topic_tags": ["rust"],
+                        "tldr": "r",
+                        "summary_250": "rust",
+                        "key_ideas": ["idea"],
+                    },
                     "is_read": False,
                     "version": 1,
                 },
@@ -139,7 +161,13 @@ async def test_characterization_unread_read_unread_transition_with_topic_filter(
                     "id": 2,
                     "request_id": 11,
                     "lang": "en",
-                    "json_payload": {"title": "Python release notes", "topic_tags": ["python"], "tldr": "p", "summary_250": "python", "key_ideas": ["idea"]},
+                    "json_payload": {
+                        "title": "Python release notes",
+                        "topic_tags": ["python"],
+                        "tldr": "p",
+                        "summary_250": "python",
+                        "key_ideas": ["idea"],
+                    },
                     "is_read": False,
                     "version": 1,
                 },
@@ -177,12 +205,14 @@ async def test_characterization_unread_read_unread_transition_with_topic_filter(
                 created_at=datetime.utcnow(),
             )
 
-    repo = InMemorySummaryRepo()
+    repo: Any = InMemorySummaryRepo()
     unread_use_case = GetUnreadSummariesUseCase(repo)
     mark_read = MarkSummaryAsReadUseCase(repo)
     mark_unread = MarkSummaryAsUnreadUseCase(repo)
 
-    rust_only = await unread_use_case.execute(GetUnreadSummariesQuery(user_id=1, chat_id=1, topic="rust"))
+    rust_only = await unread_use_case.execute(
+        GetUnreadSummariesQuery(user_id=1, chat_id=1, topic="rust")
+    )
     assert [s.id for s in rust_only] == [1]
 
     await mark_read.execute(MarkSummaryAsReadCommand(summary_id=1, user_id=1))
@@ -204,24 +234,24 @@ async def test_characterization_grpc_submit_url_stream_order_and_terminal_state(
     from unittest.mock import AsyncMock, MagicMock, patch
 
     updates = [
-        processing_pb2.ProcessingUpdate(
+        _pb2.ProcessingUpdate(
             request_id=101,
-            status=processing_pb2.ProcessingStatus.ProcessingStatus_PENDING,
-            stage=processing_pb2.ProcessingStage.ProcessingStage_QUEUED,
+            status=_pb2.ProcessingStatus.ProcessingStatus_PENDING,
+            stage=_pb2.ProcessingStage.ProcessingStage_QUEUED,
             message="queued",
             progress=0.0,
         ),
-        processing_pb2.ProcessingUpdate(
+        _pb2.ProcessingUpdate(
             request_id=101,
-            status=processing_pb2.ProcessingStatus.ProcessingStatus_PROCESSING,
-            stage=processing_pb2.ProcessingStage.ProcessingStage_EXTRACTION,
+            status=_pb2.ProcessingStatus.ProcessingStatus_PROCESSING,
+            stage=_pb2.ProcessingStage.ProcessingStage_EXTRACTION,
             message="extracting",
             progress=0.3,
         ),
-        processing_pb2.ProcessingUpdate(
+        _pb2.ProcessingUpdate(
             request_id=101,
-            status=processing_pb2.ProcessingStatus.ProcessingStatus_COMPLETED,
-            stage=processing_pb2.ProcessingStage.ProcessingStage_DONE,
+            status=_pb2.ProcessingStatus.ProcessingStatus_COMPLETED,
+            stage=_pb2.ProcessingStage.ProcessingStage_DONE,
             message="done",
             progress=1.0,
             summary_id=777,
@@ -235,8 +265,9 @@ async def test_characterization_grpc_submit_url_stream_order_and_terminal_state(
     mock_stub = MagicMock()
     mock_stub.SubmitUrl = MagicMock(return_value=_async_generator(updates))
 
-    with patch("grpc.aio.insecure_channel", return_value=mock_channel), patch(
-        "app.grpc.client.processing_pb2_grpc.ProcessingServiceStub", return_value=mock_stub
+    with (
+        patch("grpc.aio.insecure_channel", return_value=mock_channel),
+        patch("app.grpc.client.processing_pb2_grpc.ProcessingServiceStub", return_value=mock_stub),
     ):
         client = ProcessingClient("localhost:50051")
         await client.connect()

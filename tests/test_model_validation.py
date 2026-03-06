@@ -51,7 +51,7 @@ class TestModelValidation(unittest.TestCase):
         }
 
         with patch.dict(os.environ, test_env, clear=True):
-            settings = Settings(_env_file=None)
+            settings = Settings(_env_file=None)  # type: ignore[call-arg]
             cfg = settings.as_app_config()
 
             # fallback/model is a valid model name (alphanumeric + slash)
@@ -75,7 +75,7 @@ class TestModelValidation(unittest.TestCase):
         }
 
         with patch.dict(os.environ, test_env, clear=True):
-            settings = Settings(_env_file=None)
+            settings = Settings(_env_file=None)  # type: ignore[call-arg]
             cfg = settings.as_app_config()
 
             assert cfg.openrouter.max_tokens == 4096
@@ -97,7 +97,7 @@ class TestModelValidation(unittest.TestCase):
         }
 
         with patch.dict(os.environ, test_env, clear=True):
-            settings = Settings(_env_file=None)
+            settings = Settings(_env_file=None)  # type: ignore[call-arg]
             cfg = settings.as_app_config()
 
             # Check that defaults are applied when env vars are not set
@@ -129,7 +129,7 @@ class TestModelValidation(unittest.TestCase):
             patch.dict(os.environ, test_env, clear=True),
             patch("app.config.settings.logger.warning") as warn_call,
         ):
-            settings = Settings(_env_file=None)
+            settings = Settings(_env_file=None)  # type: ignore[call-arg]
             cfg = settings.as_app_config()
 
             assert cfg.runtime.migration_telegram_runtime_timeout_ms == 150
@@ -152,13 +152,13 @@ class TestModelValidation(unittest.TestCase):
             settings = Settings(
                 _env_file=None,
                 allow_stub_telegram=True,
-                telegram={
+                telegram={  # type: ignore[arg-type]
                     "api_id": 1,
                     "api_hash": "test_api_hash_placeholder_value___",
                     "bot_token": "1000000000:TESTTOKENPLACEHOLDER1234567890ABC",
                     "allowed_user_ids": (),
                 },
-            )
+            )  # type: ignore[call-arg]
             cfg = settings.as_app_config()
 
             assert cfg.telegram.api_id == 1
@@ -180,7 +180,7 @@ class TestModelValidation(unittest.TestCase):
 
         with patch.dict(os.environ, test_env, clear=True):
             with pytest.raises(RuntimeError):
-                Settings(_env_file=None)
+                Settings(_env_file=None)  # type: ignore[call-arg]
 
 
 if __name__ == "__main__":

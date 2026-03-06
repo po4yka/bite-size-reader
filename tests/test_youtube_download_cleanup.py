@@ -64,7 +64,7 @@ except ModuleNotFoundError:
     class VideoUnavailable(Exception):  # type: ignore[no-redef]
         pass
 
-    YouTubeTranscriptApi = MagicMock()  # type: ignore[misc]
+    YouTubeTranscriptApi = MagicMock()
     sys.modules["youtube_transcript_api"] = MagicMock(YouTubeTranscriptApi=YouTubeTranscriptApi)
     sys.modules["youtube_transcript_api._errors"] = MagicMock(
         NoTranscriptFound=NoTranscriptFound,

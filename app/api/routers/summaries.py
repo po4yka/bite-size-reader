@@ -56,9 +56,12 @@ router = APIRouter()
 _HR_NORMALIZE: dict[str, str] = {"med": "medium"}
 
 
-def _normalize_hallucination_risk(raw: str) -> str:
+def _normalize_hallucination_risk(raw: str) -> Literal["low", "medium", "high", "unknown"]:
     """Map internal short-form values to the API contract enum."""
-    return _HR_NORMALIZE.get(raw, raw)
+    result = _HR_NORMALIZE.get(raw, raw)
+    if result not in {"low", "medium", "high", "unknown"}:
+        return "unknown"
+    return result  # type: ignore[return-value]
 
 
 def _isotime(dt: Any) -> str:
