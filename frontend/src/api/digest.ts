@@ -96,3 +96,14 @@ export function fetchHistory(limit = 20, offset = 0): Promise<HistoryData> {
 export function triggerDigest(): Promise<TriggerResult> {
   return apiRequest("/v1/digest/trigger", { method: "POST" });
 }
+
+export function triggerChannelDigest(channelUsername: string): Promise<{
+  status: string;
+  channel: string;
+  correlation_id: string;
+}> {
+  return apiRequest("/v1/digest/trigger-channel", {
+    method: "POST",
+    body: JSON.stringify({ channel_username: channelUsername }),
+  });
+}

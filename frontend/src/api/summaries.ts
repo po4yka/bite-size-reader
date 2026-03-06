@@ -257,17 +257,28 @@ export function fetchSummaryContent(id: number): Promise<SummaryContent> {
   });
 }
 
-export function markAsRead(id: number): Promise<{ is_read: boolean; updated_at: string }> {
+export function setReadStatus(
+  id: number,
+  isRead: boolean,
+): Promise<{ is_read: boolean; updated_at: string }> {
   return apiRequest<{ isRead?: boolean; is_read?: boolean; updatedAt?: string; updated_at?: string }>(
     `/v1/summaries/${id}`,
     {
       method: "PATCH",
-      body: JSON.stringify({ is_read: true }),
+      body: JSON.stringify({ is_read: isRead }),
     },
   ).then((payload) => ({
     is_read: Boolean(payload.isRead ?? payload.is_read),
     updated_at: payload.updatedAt ?? payload.updated_at ?? "",
   }));
+}
+
+export function markAsRead(id: number): Promise<{ is_read: boolean; updated_at: string }> {
+  return setReadStatus(id, true);
+}
+
+export function markAsUnread(id: number): Promise<{ is_read: boolean; updated_at: string }> {
+  return setReadStatus(id, false);
 }
 
 export function toggleFavorite(id: number): Promise<{ is_favorite: boolean }> {
@@ -276,5 +287,14 @@ export function toggleFavorite(id: number): Promise<{ is_favorite: boolean }> {
     { method: "POST" },
   ).then((payload) => ({
     is_favorite: Boolean(payload.isFavorited ?? payload.is_favorited),
+  }));
+}
+
+export function deleteSummary(id: number): Promise<{ id: number; deleted_at: string }> {
+  return apiRequest<{ id: number; deletedAt?: string; deleted_at?: string }>(`/v1/summaries/${id}`, {
+    method: "DELETE",
+  }).then((payload) => ({
+    id: payload.id,
+    deleted_at: payload.deletedAt ?? payload.deleted_at ?? "",
   }));
 }
