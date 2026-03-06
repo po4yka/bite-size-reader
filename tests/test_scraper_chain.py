@@ -1,0 +1,558 @@
+"""Tests for multi-provider scraper chain, factory, and individual providers."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from typing import Any
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
+
+from app.adapters.content.scraper.chain import ContentScraperChain
+from app.adapters.content.scraper.factory import ContentScraperFactory
+from app.adapters.content.scraper.firecrawl_provider import FirecrawlProvider
+from app.adapters.external.firecrawl.models import FirecrawlResult
+from app.config.scraper import ScraperConfig
+
+from .conftest import make_test_app_config
+
+# ---------------------------------------------------------------------------
+# Helpers -- lightweight mock provider (protocol-conformant without MagicMock)
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class _MockProvider:
+    """Minimal ContentScraperProtocol-conformant stub."""
+
+    name: str = "mock"
+    result: FirecrawlResult | None = None
+    exception: Exception | None = None
+    calls: list[dict[str, Any]] = field(default_factory=list)
+    closed: bool = False
+
+    @property
+    def provider_name(self) -> str:
+        return self.name
+
+    async def scrape_markdown(
+        self,
+        url: str,
+        *,
+        mobile: bool = True,
+        request_id: int | None = None,
+    ) -> FirecrawlResult:
+        self.calls.append({"url": url, "mobile": mobile, "request_id": request_id})
+        if self.exception is not None:
+            raise self.exception
+        assert self.result is not None, "MockProvider.result must be set if no exception"
+        return self.result
+
+    async def aclose(self) -> None:
+        self.closed = True
+
+
+def _ok_result(url: str = "https://example.com", markdown: str = "# OK") -> FirecrawlResult:
+    return FirecrawlResult(
+        status="ok",
+        http_status=200,
+        content_markdown=markdown,
+        source_url=url,
+        endpoint="mock",
+    )
+
+
+def _error_result(
+    url: str = "https://example.com",
+    error: str = "provider failed",
+) -> FirecrawlResult:
+    return FirecrawlResult(
+        status="error",
+        error_text=error,
+        source_url=url,
+        endpoint="mock",
+    )
+
+
+# ===================================================================
+# ContentScraperChain tests
+# ===================================================================
+
+
+class TestContentScraperChain:
+    """Tests for the ordered-fallback ContentScraperChain."""
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_first_provider_succeeds_second_not_called(self):
+        """When the first provider returns OK, the second is never invoked."""
+        p1 = _MockProvider(name="first", result=_ok_result())
+        p2 = _MockProvider(name="second", result=_ok_result(markdown="# Second"))
+
+        chain = ContentScraperChain([p1, p2])
+        result = await chain.scrape_markdown("https://example.com")
+
+        assert result.status == "ok"
+        assert result.content_markdown == "# OK"
+        assert len(p1.calls) == 1
+        assert len(p2.calls) == 0
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_first_fails_second_succeeds(self):
+        """When the first provider returns an error result, the chain tries the second."""
+        p1 = _MockProvider(name="first", result=_error_result())
+        p2 = _MockProvider(name="second", result=_ok_result(markdown="# Fallback"))
+
+        chain = ContentScraperChain([p1, p2])
+        result = await chain.scrape_markdown("https://example.com")
+
+        assert result.status == "ok"
+        assert result.content_markdown == "# Fallback"
+        assert len(p1.calls) == 1
+        assert len(p2.calls) == 1
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_first_raises_exception_second_succeeds(self):
+        """When the first provider raises, the chain catches and tries the next."""
+        p1 = _MockProvider(name="first", exception=RuntimeError("boom"))
+        p2 = _MockProvider(name="second", result=_ok_result(markdown="# Recovered"))
+
+        chain = ContentScraperChain([p1, p2])
+        result = await chain.scrape_markdown("https://example.com")
+
+        assert result.status == "ok"
+        assert result.content_markdown == "# Recovered"
+        assert len(p1.calls) == 1
+        assert len(p2.calls) == 1
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_all_providers_fail_returns_last_result(self):
+        """When every provider returns an error, the chain returns the last failed result."""
+        p1 = _MockProvider(name="first", result=_error_result(error="p1 fail"))
+        p2 = _MockProvider(name="second", result=_error_result(error="p2 fail"))
+
+        chain = ContentScraperChain([p1, p2])
+        result = await chain.scrape_markdown("https://example.com")
+
+        assert result.status == "error"
+        assert result.error_text == "p2 fail"
+        assert len(p1.calls) == 1
+        assert len(p2.calls) == 1
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_all_providers_raise_returns_synthetic_error(self):
+        """When every provider raises an exception, the chain returns a synthetic error."""
+        p1 = _MockProvider(name="first", exception=RuntimeError("err1"))
+        p2 = _MockProvider(name="second", exception=ValueError("err2"))
+
+        chain = ContentScraperChain([p1, p2])
+        result = await chain.scrape_markdown("https://example.com")
+
+        assert result.status == "error"
+        assert "All providers failed" in result.error_text
+        assert "first: err1" in result.error_text
+        assert "second: err2" in result.error_text
+        assert result.source_url == "https://example.com"
+        assert result.endpoint == "chain"
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_single_provider_chain_success(self):
+        """A chain with a single provider works correctly on success."""
+        p = _MockProvider(name="solo", result=_ok_result(markdown="# Solo"))
+        chain = ContentScraperChain([p])
+        result = await chain.scrape_markdown("https://example.com")
+
+        assert result.status == "ok"
+        assert result.content_markdown == "# Solo"
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_single_provider_chain_failure(self):
+        """A chain with a single provider returns its error result on failure."""
+        p = _MockProvider(name="solo", result=_error_result(error="solo fail"))
+        chain = ContentScraperChain([p])
+        result = await chain.scrape_markdown("https://example.com")
+
+        assert result.status == "error"
+        assert result.error_text == "solo fail"
+
+    def test_empty_providers_raises_value_error(self):
+        """Constructing a chain with no providers raises ValueError."""
+        with pytest.raises(ValueError, match="at least one provider"):
+            ContentScraperChain([])
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_aclose_closes_all_providers(self):
+        """aclose() calls aclose() on every provider, even if one raises."""
+        p1 = _MockProvider(name="first", result=_ok_result())
+        p2 = _MockProvider(name="second", result=_ok_result())
+
+        chain = ContentScraperChain([p1, p2])
+        await chain.aclose()
+
+        assert p1.closed is True
+        assert p2.closed is True
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_aclose_tolerates_provider_error(self):
+        """aclose() does not propagate if a provider's aclose raises."""
+
+        class _FailClose(_MockProvider):
+            async def aclose(self) -> None:
+                raise RuntimeError("close error")
+
+        p1 = _FailClose(name="fail_close", result=_ok_result())
+        p2 = _MockProvider(name="ok_close", result=_ok_result())
+
+        chain = ContentScraperChain([p1, p2])
+        await chain.aclose()  # Should not raise
+
+        assert p2.closed is True
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_audit_callback_invoked_on_success(self):
+        """The optional audit callback is fired when a provider succeeds."""
+        audit_calls: list[tuple[str, str, dict]] = []
+
+        def audit(level: str, event: str, data: dict) -> None:
+            audit_calls.append((level, event, data))
+
+        p = _MockProvider(name="audited", result=_ok_result())
+        chain = ContentScraperChain([p], audit=audit)
+        await chain.scrape_markdown("https://example.com", request_id=42)
+
+        assert len(audit_calls) == 1
+        level, event, data = audit_calls[0]
+        assert level == "INFO"
+        assert event == "scraper_chain_success"
+        assert data["provider"] == "audited"
+        assert data["url"] == "https://example.com"
+        assert data["request_id"] == 42
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_audit_callback_not_invoked_on_failure(self):
+        """The audit callback is not fired when all providers fail."""
+        audit_calls: list[tuple[str, str, dict]] = []
+
+        def audit(level: str, event: str, data: dict) -> None:
+            audit_calls.append((level, event, data))
+
+        p = _MockProvider(name="fail", result=_error_result())
+        chain = ContentScraperChain([p], audit=audit)
+        await chain.scrape_markdown("https://example.com")
+
+        assert len(audit_calls) == 0
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_provider_name_is_chain(self):
+        """The chain's own provider_name is 'chain'."""
+        p = _MockProvider(name="inner", result=_ok_result())
+        chain = ContentScraperChain([p])
+        assert chain.provider_name == "chain"
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_ok_status_but_empty_content_treated_as_failure(self):
+        """A result with status='ok' but no content is treated as a failure."""
+        empty_ok = FirecrawlResult(
+            status="ok",
+            http_status=200,
+            content_markdown="",
+            content_html=None,
+            source_url="https://example.com",
+            endpoint="mock",
+        )
+        p1 = _MockProvider(name="empty", result=empty_ok)
+        p2 = _MockProvider(name="good", result=_ok_result(markdown="# Content"))
+
+        chain = ContentScraperChain([p1, p2])
+        result = await chain.scrape_markdown("https://example.com")
+
+        assert result.status == "ok"
+        assert result.content_markdown == "# Content"
+        assert len(p1.calls) == 1
+        assert len(p2.calls) == 1
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_passes_mobile_and_request_id_to_providers(self):
+        """The chain forwards mobile and request_id kwargs to providers."""
+        p = _MockProvider(name="check", result=_ok_result())
+        chain = ContentScraperChain([p])
+        await chain.scrape_markdown("https://example.com", mobile=False, request_id=99)
+
+        assert p.calls[0]["mobile"] is False
+        assert p.calls[0]["request_id"] == 99
+
+
+# ===================================================================
+# ContentScraperFactory tests
+# ===================================================================
+
+
+class TestContentScraperFactory:
+    """Tests for the factory that builds a scraper chain from config."""
+
+    def test_default_config_creates_chain_with_scrapling_and_direct_html(self):
+        """Default ScraperConfig enables scrapling + direct_html; firecrawl disabled."""
+        cfg = make_test_app_config(scraper=ScraperConfig())
+
+        with (
+            patch("app.adapters.content.scraper.factory._build_scrapling") as mock_scrapling,
+            patch("app.adapters.content.scraper.factory._build_direct_html") as mock_direct,
+        ):
+            mock_scrapling.return_value = _MockProvider(name="scrapling")
+            mock_direct.return_value = _MockProvider(name="direct_html")
+
+            chain = ContentScraperFactory.create_from_config(cfg)
+
+        assert len(chain._providers) == 2
+        assert chain._providers[0].provider_name == "scrapling"
+        assert chain._providers[1].provider_name == "direct_html"
+
+    def test_scrapling_disabled_skipped(self):
+        """When scrapling_enabled=False, the scrapling provider is skipped."""
+        scraper_cfg = ScraperConfig(scrapling_enabled=False)
+        cfg = make_test_app_config(scraper=scraper_cfg)
+
+        with (
+            patch("app.adapters.content.scraper.factory._build_scrapling") as mock_scrapling,
+            patch("app.adapters.content.scraper.factory._build_direct_html") as mock_direct,
+        ):
+            mock_scrapling.return_value = None  # disabled
+            mock_direct.return_value = _MockProvider(name="direct_html")
+
+            chain = ContentScraperFactory.create_from_config(cfg)
+
+        names = [p.provider_name for p in chain._providers]
+        assert "scrapling" not in names
+        assert "direct_html" in names
+
+    def test_firecrawl_self_hosted_enabled_included(self):
+        """When firecrawl_self_hosted_enabled=True, firecrawl is in the chain."""
+        scraper_cfg = ScraperConfig(
+            firecrawl_self_hosted_enabled=True,
+            provider_order=["scrapling", "firecrawl", "direct_html"],
+        )
+        cfg = make_test_app_config(scraper=scraper_cfg)
+
+        mock_fc_provider = _MockProvider(name="firecrawl_self_hosted")
+
+        with (
+            patch("app.adapters.content.scraper.factory._build_scrapling") as mock_scrapling,
+            patch("app.adapters.content.scraper.factory._build_firecrawl") as mock_firecrawl,
+            patch("app.adapters.content.scraper.factory._build_direct_html") as mock_direct,
+        ):
+            mock_scrapling.return_value = _MockProvider(name="scrapling")
+            mock_firecrawl.return_value = mock_fc_provider
+            mock_direct.return_value = _MockProvider(name="direct_html")
+
+            chain = ContentScraperFactory.create_from_config(cfg)
+
+        names = [p.provider_name for p in chain._providers]
+        assert "firecrawl_self_hosted" in names
+        assert len(chain._providers) == 3
+
+    def test_empty_provider_order_falls_back_to_direct_html(self):
+        """When provider_order is empty, the factory falls back to direct_html."""
+        scraper_cfg = ScraperConfig(provider_order=[])
+        cfg = make_test_app_config(scraper=scraper_cfg)
+
+        chain = ContentScraperFactory.create_from_config(cfg)
+
+        assert len(chain._providers) >= 1
+        names = [p.provider_name for p in chain._providers]
+        assert "direct_html" in names
+
+    def test_unknown_provider_name_skipped_with_warning(self):
+        """An unrecognized provider name is silently skipped (logged as warning)."""
+        scraper_cfg = ScraperConfig(provider_order=["nonexistent", "direct_html"])
+        cfg = make_test_app_config(scraper=scraper_cfg)
+
+        with (
+            patch("app.adapters.content.scraper.factory._build_direct_html") as mock_direct,
+            patch("app.adapters.content.scraper.factory.logger") as mock_logger,
+        ):
+            mock_direct.return_value = _MockProvider(name="direct_html")
+
+            chain = ContentScraperFactory.create_from_config(cfg)
+
+        mock_logger.warning.assert_any_call(
+            "scraper_unknown_provider", extra={"provider": "nonexistent"}
+        )
+        assert len(chain._providers) == 1
+        assert chain._providers[0].provider_name == "direct_html"
+
+    def test_audit_callback_forwarded_to_chain(self):
+        """The audit callback is passed through to the created chain."""
+        scraper_cfg = ScraperConfig(provider_order=["direct_html"])
+        cfg = make_test_app_config(scraper=scraper_cfg)
+        audit = MagicMock()
+
+        with patch("app.adapters.content.scraper.factory._build_direct_html") as mock_direct:
+            mock_direct.return_value = _MockProvider(name="direct_html")
+            chain = ContentScraperFactory.create_from_config(cfg, audit=audit)
+
+        assert chain._audit is audit
+
+
+# ===================================================================
+# FirecrawlProvider tests
+# ===================================================================
+
+
+class TestFirecrawlProvider:
+    """Tests for the thin FirecrawlProvider wrapper."""
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_delegates_to_client_scrape_markdown(self):
+        """scrape_markdown forwards the call to the underlying client."""
+        mock_client = AsyncMock()
+        expected = _ok_result(markdown="# From Firecrawl")
+        mock_client.scrape_markdown.return_value = expected
+
+        provider = FirecrawlProvider(mock_client, name="fc_test")
+        result = await provider.scrape_markdown("https://example.com", mobile=False, request_id=7)
+
+        assert result is expected
+        mock_client.scrape_markdown.assert_awaited_once_with(
+            "https://example.com", mobile=False, request_id=7
+        )
+
+    def test_provider_name_returns_configured_name(self):
+        """provider_name returns the name passed at construction."""
+        mock_client = AsyncMock()
+        provider = FirecrawlProvider(mock_client, name="firecrawl_self_hosted")
+        assert provider.provider_name == "firecrawl_self_hosted"
+
+    def test_provider_name_default(self):
+        """Default provider_name is 'firecrawl'."""
+        mock_client = AsyncMock()
+        provider = FirecrawlProvider(mock_client)
+        assert provider.provider_name == "firecrawl"
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_aclose_delegates_to_client(self):
+        """aclose() calls the client's aclose()."""
+        mock_client = AsyncMock()
+        provider = FirecrawlProvider(mock_client, name="fc_test")
+        await provider.aclose()
+        mock_client.aclose.assert_awaited_once()
+
+
+# ===================================================================
+# DirectHTMLProvider tests
+# ===================================================================
+
+
+class TestDirectHTMLProvider:
+    """Tests for the direct HTML fetch provider."""
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_successful_fetch_returns_ok(self):
+        """A successful HTML fetch with enough content returns status='ok'."""
+        from app.adapters.content.scraper.direct_html_provider import DirectHTMLProvider
+
+        html_body = "<html><body><p>" + ("A" * 500) + "</p></body></html>"
+        extracted_text = "A" * 500
+
+        provider = DirectHTMLProvider(timeout_sec=5)
+
+        with (
+            patch.object(provider, "_fetch_html", new_callable=AsyncMock, return_value=html_body),
+            patch(
+                "app.adapters.content.scraper.direct_html_provider.html_to_text",
+                return_value=extracted_text,
+            ),
+        ):
+            result = await provider.scrape_markdown("https://example.com")
+
+        assert result.status == "ok"
+        assert result.http_status == 200
+        assert result.content_html == html_body
+        assert result.source_url == "https://example.com"
+        assert result.endpoint == "direct_html"
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_non_200_returns_none_html_and_error(self):
+        """When _fetch_html returns None (non-200 or non-HTML), result is an error."""
+        from app.adapters.content.scraper.direct_html_provider import DirectHTMLProvider
+
+        provider = DirectHTMLProvider(timeout_sec=5)
+
+        with patch.object(provider, "_fetch_html", new_callable=AsyncMock, return_value=None):
+            result = await provider.scrape_markdown("https://example.com")
+
+        assert result.status == "error"
+        assert "no usable content" in result.error_text
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_content_too_short_returns_error(self):
+        """When extracted text is shorter than the threshold, result is an error."""
+        from app.adapters.content.scraper.direct_html_provider import DirectHTMLProvider
+
+        short_html = "<html><body><p>Hi</p></body></html>"
+        provider = DirectHTMLProvider(timeout_sec=5)
+
+        with (
+            patch.object(provider, "_fetch_html", new_callable=AsyncMock, return_value=short_html),
+            patch(
+                "app.adapters.content.scraper.direct_html_provider.html_to_text",
+                return_value="Hi",
+            ),
+        ):
+            result = await provider.scrape_markdown("https://example.com")
+
+        assert result.status == "error"
+        assert "too short" in result.error_text
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_timeout_returns_error(self):
+        """When _fetch_html raises a timeout, the result is an error."""
+        from app.adapters.content.scraper.direct_html_provider import DirectHTMLProvider
+
+        provider = DirectHTMLProvider(timeout_sec=1)
+
+        with patch.object(
+            provider,
+            "_fetch_html",
+            new_callable=AsyncMock,
+            side_effect=TimeoutError("timed out"),
+        ):
+            result = await provider.scrape_markdown("https://example.com")
+
+        assert result.status == "error"
+        assert "failed" in result.error_text.lower() or "timed out" in result.error_text.lower()
+        assert result.source_url == "https://example.com"
+        assert result.endpoint == "direct_html"
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_httpx_connect_error_returns_error(self):
+        """An httpx connection error is caught and returned as error result."""
+        import httpx
+
+        from app.adapters.content.scraper.direct_html_provider import DirectHTMLProvider
+
+        provider = DirectHTMLProvider(timeout_sec=1)
+
+        with patch.object(
+            provider,
+            "_fetch_html",
+            new_callable=AsyncMock,
+            side_effect=httpx.ConnectError("connection refused"),
+        ):
+            result = await provider.scrape_markdown("https://example.com")
+
+        assert result.status == "error"
+        assert result.endpoint == "direct_html"
+
+    def test_provider_name(self):
+        """provider_name is 'direct_html'."""
+        from app.adapters.content.scraper.direct_html_provider import DirectHTMLProvider
+
+        provider = DirectHTMLProvider()
+        assert provider.provider_name == "direct_html"
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_aclose_is_noop(self):
+        """aclose() completes without error (no resources to release)."""
+        from app.adapters.content.scraper.direct_html_provider import DirectHTMLProvider
+
+        provider = DirectHTMLProvider()
+        await provider.aclose()  # Should not raise

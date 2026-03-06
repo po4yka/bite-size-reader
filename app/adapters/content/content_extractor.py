@@ -128,30 +128,7 @@ class ContentExtractor(
         has_html = bool(crawl.content_html and crawl.content_html.strip())
 
         if crawl.status != "ok" or not (has_markdown or has_html):
-            try:
-                salvage_html = await self._attempt_direct_html_salvage(url)
-                if salvage_html:
-                    content_text = html_to_text(salvage_html)
-                    content_source = "html"
-                    metadata = {
-                        "extraction_method": "direct_fetch",
-                        "http_status": 200,
-                        "salvaged": True,
-                    }
-
-                    logger.info(
-                        "pure_extraction_salvaged",
-                        extra={"cid": correlation_id, "content_len": len(content_text)},
-                    )
-
-                    return content_text, content_source, metadata
-            except Exception as exc:
-                logger.debug(
-                    "html_salvage_failed",
-                    extra={"cid": correlation_id, "url": url, "error": str(exc)},
-                )
-
-            error_msg = crawl.error_text or "Firecrawl extraction failed"
+            error_msg = crawl.error_text or "Content extraction failed"
             if request_id is not None:
                 await persist_request_failure(
                     request_repo=self.message_persistence.request_repo,
@@ -181,7 +158,7 @@ class ContentExtractor(
             content_source = "none"
 
         metadata = {
-            "extraction_method": "firecrawl",
+            "extraction_method": crawl.endpoint or "scraper_chain",
             "http_status": crawl.http_status,
             "endpoint": crawl.endpoint,
             "latency_ms": crawl.latency_ms,

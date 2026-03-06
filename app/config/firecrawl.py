@@ -10,7 +10,11 @@ from ._validators import _ensure_api_key
 class FirecrawlConfig(BaseModel):
     model_config = ConfigDict(frozen=True, populate_by_name=True)
 
-    api_key: str = Field(..., validation_alias="FIRECRAWL_API_KEY", description="Firecrawl API key")
+    api_key: str = Field(
+        default="",
+        validation_alias="FIRECRAWL_API_KEY",
+        description="Firecrawl API key (optional when using only Scrapling + self-hosted)",
+    )
     timeout_sec: int = Field(
         default=90,
         validation_alias="FIRECRAWL_TIMEOUT_SEC",
@@ -79,7 +83,10 @@ class FirecrawlConfig(BaseModel):
     @field_validator("api_key", mode="before")
     @classmethod
     def _validate_api_key(cls, value: Any) -> str:
-        return _ensure_api_key(str(value or ""), name="Firecrawl")
+        raw = str(value or "").strip()
+        if not raw:
+            return ""
+        return _ensure_api_key(raw, name="Firecrawl")
 
     @field_validator(
         "timeout_sec",

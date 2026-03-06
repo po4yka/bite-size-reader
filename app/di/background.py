@@ -58,7 +58,7 @@ async def build_background_processor(
             json_max_dict_keys=cfg.database.json_max_dict_keys,
         )
 
-    if firecrawl is None:
+    if firecrawl is None and cfg.firecrawl.api_key:
         firecrawl = FirecrawlClient(
             api_key=cfg.firecrawl.api_key,
             timeout_sec=cfg.firecrawl.timeout_sec,

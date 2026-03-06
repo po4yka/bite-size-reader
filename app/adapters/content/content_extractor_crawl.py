@@ -3,14 +3,14 @@
 
 from __future__ import annotations
 
-import asyncio
 import json
 import logging
 import re
 from collections.abc import Mapping
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-import httpx
+if TYPE_CHECKING:
+    import asyncio
 
 from app.adapters.content.quality_filters import detect_low_value_content
 from app.adapters.external.firecrawl.models import FirecrawlResult
@@ -349,56 +349,8 @@ class ContentExtractorCrawlMixin:
         has_html: bool,
         silent: bool,
     ) -> tuple[str, str, str | None, list[str]]:
-        try:
-            salvage_html = await self._attempt_direct_html_salvage(url_text)
-        except (OSError, TimeoutError, RuntimeError):
-            salvage_html = None
-
-        if salvage_html:
-            logger.info(
-                "direct_html_salvage_success",
-                extra={
-                    "cid": correlation_id,
-                    "html_len": len(salvage_html or ""),
-                    "reason": (crawl.error_text or "no_content_from_firecrawl"),
-                },
-            )
-            salvage_crawl = FirecrawlResult(
-                status="ok",
-                http_status=200,
-                content_markdown=None,
-                content_html=salvage_html,
-                structured_json=None,
-                metadata_json=None,
-                links_json=None,
-                response_success=None,
-                response_error_code=None,
-                response_error_message=None,
-                response_details=None,
-                latency_ms=None,
-                error_text=None,
-                source_url=url_text,
-                endpoint="direct_fetch",
-                options_json={"direct_fetch": True},
-                correlation_id=None,
-            )
-            salvage_persist_task = self._schedule_crawl_persistence(
-                req_id, salvage_crawl, correlation_id
-            )
-            await self.response_formatter.send_html_fallback_notification(
-                message, len(html_to_text(salvage_html)), silent=silent
-            )
-            result = await self._process_successful_crawl_with_title(
-                message, salvage_crawl, correlation_id, silent
-            )
-            await self._write_firecrawl_cache(dedupe_hash, salvage_crawl)
-            await self._await_persist_task(
-                salvage_persist_task,
-                correlation_id=correlation_id,
-                event_name="salvage_persist_wait_failed",
-            )
-            return result
-
+        # The scraper chain already tried all providers (including direct HTML).
+        # No further salvage attempts needed -- just report the failure.
         await self._await_persist_task(
             persist_task, correlation_id=correlation_id, event_name="persist_wait_failed"
         )
@@ -412,8 +364,8 @@ class ContentExtractorCrawlMixin:
             has_html,
             silent,
         )
-        failure_reason = crawl.error_text or "Firecrawl extraction failed"
-        raise ValueError(f"Firecrawl extraction failed: {failure_reason}") from None
+        failure_reason = crawl.error_text or "Content extraction failed"
+        raise ValueError(f"Content extraction failed: {failure_reason}") from None
 
     async def _get_cached_crawl(
         self, dedupe_hash: str, correlation_id: str | None
@@ -538,83 +490,6 @@ class ContentExtractorCrawlMixin:
 
         if interaction_id:
             pass
-
-    async def _attempt_direct_html_salvage(self, url: str) -> str | None:
-        """Try to fetch raw HTML directly and validate it contains readable text."""
-        headers = {
-            "User-Agent": (
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                "AppleWebKit/537.36 (KHTML, like Gecko) "
-                "Chrome/125.0.0.0 Safari/537.36"
-            ),
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-            "Accept-Language": "ru,en-US;q=0.9,en;q=0.8",
-        }
-        timeout = max(5, int(getattr(self.cfg.runtime, "request_timeout_sec", 30)))
-        overall_timeout = timeout + 5
-        max_size_mb = int(getattr(getattr(self.cfg, "firecrawl", None), "max_response_size_mb", 10))
-        max_bytes = max(1, max_size_mb) * 1024 * 1024
-
-        try:
-
-            async def _fetch_html() -> str | None:
-                async with (
-                    httpx.AsyncClient(follow_redirects=True, timeout=timeout) as client,
-                    client.stream("GET", url, headers=headers) as resp,
-                ):
-                    ctype = resp.headers.get("content-type", "").lower()
-                    if resp.status_code != 200 or "text/html" not in ctype:
-                        return None
-
-                    content_length = resp.headers.get("content-length")
-                    if content_length:
-                        try:
-                            if int(content_length) > max_bytes:
-                                logger.debug(
-                                    "direct_html_salvage_too_large",
-                                    extra={"url": url, "content_length": content_length},
-                                )
-                                return None
-                        except ValueError as e:
-                            logger.debug(
-                                "content_length_parse_failed",
-                                extra={"url": url, "error": str(e)},
-                            )
-
-                    chunks: list[bytes] = []
-                    total = 0
-                    async for chunk in resp.aiter_bytes():
-                        total += len(chunk)
-                        if total > max_bytes:
-                            logger.debug(
-                                "direct_html_salvage_too_large",
-                                extra={"url": url, "max_bytes": max_bytes},
-                            )
-                            return None
-                        chunks.append(chunk)
-
-                    encoding = resp.encoding or "utf-8"
-                    html = b"".join(chunks).decode(encoding, errors="replace")
-                    text_preview = html_to_text(html)
-                    if len(text_preview) < 400:
-                        return None
-                    return html
-
-            async with asyncio.timeout(overall_timeout):
-                return await _fetch_html()
-        except TimeoutError:
-            logger.warning(
-                "direct_html_salvage_timeout",
-                extra={"url": url, "timeout": overall_timeout},
-            )
-            return None
-        except Exception as e:
-            raise_if_cancelled(e)
-            logger.debug(
-                "direct_html_salvage_failed",
-                extra={"url": url, "error": str(e), "error_type": type(e).__name__},
-            )
-            return None
 
     def _extract_images(self, crawl: FirecrawlResult) -> list[str]:
         """Extract image URLs from Firecrawl result metadata and markdown."""

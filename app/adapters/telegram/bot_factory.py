@@ -43,7 +43,7 @@ DEFAULT_TOPIC_SEARCH_MAX_RESULTS = 5
 class ExternalClients:
     """Container for external service clients."""
 
-    firecrawl: FirecrawlClient
+    firecrawl: FirecrawlClient | None
     llm_client: LLMClientProtocol
     scraper_chain: ContentScraperChain | None = None
 
@@ -83,36 +83,38 @@ class BotFactory:
         The LLM client is created based on the LLM_PROVIDER config setting,
         which can be "openrouter", "openai", or "anthropic".
         """
-        firecrawl = FirecrawlClient(
-            api_key=cfg.firecrawl.api_key,
-            timeout_sec=cfg.firecrawl.timeout_sec,
-            audit=audit_func,
-            debug_payloads=cfg.runtime.debug_payloads,
-            log_truncate_length=cfg.runtime.log_truncate_length,
-            max_connections=cfg.firecrawl.max_connections,
-            max_keepalive_connections=cfg.firecrawl.max_keepalive_connections,
-            keepalive_expiry=cfg.firecrawl.keepalive_expiry,
-            credit_warning_threshold=cfg.firecrawl.credit_warning_threshold,
-            credit_critical_threshold=cfg.firecrawl.credit_critical_threshold,
-            max_response_size_mb=cfg.firecrawl.max_response_size_mb,
-            max_age_seconds=cfg.firecrawl.max_age_seconds,
-            remove_base64_images=cfg.firecrawl.remove_base64_images,
-            block_ads=cfg.firecrawl.block_ads,
-            skip_tls_verification=cfg.firecrawl.skip_tls_verification,
-            include_markdown_format=cfg.firecrawl.include_markdown_format,
-            include_html_format=cfg.firecrawl.include_html_format,
-            include_links_format=cfg.firecrawl.include_links_format,
-            include_summary_format=cfg.firecrawl.include_summary_format,
-            include_images_format=cfg.firecrawl.include_images_format,
-            enable_screenshot_format=cfg.firecrawl.enable_screenshot_format,
-            screenshot_full_page=cfg.firecrawl.screenshot_full_page,
-            screenshot_quality=cfg.firecrawl.screenshot_quality,
-            screenshot_viewport_width=cfg.firecrawl.screenshot_viewport_width,
-            screenshot_viewport_height=cfg.firecrawl.screenshot_viewport_height,
-            json_prompt=cfg.firecrawl.json_prompt,
-            json_schema=cfg.firecrawl.json_schema,
-            wait_for_ms=cfg.firecrawl.wait_for_ms,
-        )
+        firecrawl: FirecrawlClient | None = None
+        if cfg.firecrawl.api_key:
+            firecrawl = FirecrawlClient(
+                api_key=cfg.firecrawl.api_key,
+                timeout_sec=cfg.firecrawl.timeout_sec,
+                audit=audit_func,
+                debug_payloads=cfg.runtime.debug_payloads,
+                log_truncate_length=cfg.runtime.log_truncate_length,
+                max_connections=cfg.firecrawl.max_connections,
+                max_keepalive_connections=cfg.firecrawl.max_keepalive_connections,
+                keepalive_expiry=cfg.firecrawl.keepalive_expiry,
+                credit_warning_threshold=cfg.firecrawl.credit_warning_threshold,
+                credit_critical_threshold=cfg.firecrawl.credit_critical_threshold,
+                max_response_size_mb=cfg.firecrawl.max_response_size_mb,
+                max_age_seconds=cfg.firecrawl.max_age_seconds,
+                remove_base64_images=cfg.firecrawl.remove_base64_images,
+                block_ads=cfg.firecrawl.block_ads,
+                skip_tls_verification=cfg.firecrawl.skip_tls_verification,
+                include_markdown_format=cfg.firecrawl.include_markdown_format,
+                include_html_format=cfg.firecrawl.include_html_format,
+                include_links_format=cfg.firecrawl.include_links_format,
+                include_summary_format=cfg.firecrawl.include_summary_format,
+                include_images_format=cfg.firecrawl.include_images_format,
+                enable_screenshot_format=cfg.firecrawl.enable_screenshot_format,
+                screenshot_full_page=cfg.firecrawl.screenshot_full_page,
+                screenshot_quality=cfg.firecrawl.screenshot_quality,
+                screenshot_viewport_width=cfg.firecrawl.screenshot_viewport_width,
+                screenshot_viewport_height=cfg.firecrawl.screenshot_viewport_height,
+                json_prompt=cfg.firecrawl.json_prompt,
+                json_schema=cfg.firecrawl.json_schema,
+                wait_for_ms=cfg.firecrawl.wait_for_ms,
+            )
 
         # Create LLM client using factory based on LLM_PROVIDER config
         llm_client = LLMClientFactory.create_from_config(cfg, audit=audit_func)
@@ -164,23 +166,20 @@ class BotFactory:
         topic_search_max_results = BotFactory._get_topic_search_limit(cfg)
 
         # Create topic search service first (needed by URLProcessor for web search enrichment)
-        topic_searcher = TopicSearchService(
-            firecrawl=clients.firecrawl,
-            max_results=topic_search_max_results,
-            audit_func=audit_func,
-        )
+        # Requires cloud Firecrawl client -- skip if no API key configured
+        topic_searcher = None
+        if clients.firecrawl is not None:
+            topic_searcher = TopicSearchService(
+                firecrawl=clients.firecrawl,
+                max_results=topic_search_max_results,
+                audit_func=audit_func,
+            )
 
         # Create URL processor with scraper chain (multi-provider fallback)
-        # scraper_chain is always created in create_external_clients; fall back to
-        # wrapping the raw FirecrawlClient only if something went wrong upstream.
-        if clients.scraper_chain is not None:
-            scraper: ContentScraperChain | FirecrawlClient = clients.scraper_chain
-        else:
-            scraper = clients.firecrawl
         url_processor = URLProcessor(
             cfg=cfg,
             db=db,
-            firecrawl=scraper,  # type: ignore[arg-type]
+            firecrawl=clients.scraper_chain,
             openrouter=clients.llm_client,
             response_formatter=response_formatter,
             audit_func=audit_func,

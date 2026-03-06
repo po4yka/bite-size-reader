@@ -17,6 +17,7 @@ except Exception:  # pragma: no cover
 
 LOGGER = logging.getLogger(__name__)
 
+
 def loads(data: str | bytes) -> Any:
     """Parse JSON string or bytes using orjson if available, else stdlib json.
 
