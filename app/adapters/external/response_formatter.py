@@ -32,6 +32,15 @@ from app.adapters.external.formatting.text_processor import TextProcessorImpl
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable, Sequence
 
+    from app.adapters.external.formatting.protocols import (
+        DatabasePresenter,
+        DataFormatter,
+        MessageValidator,
+        NotificationFormatter,
+        ResponseSender,
+        SummaryPresenter,
+        TextProcessor,
+    )
     from app.adapters.telegram.topic_manager import TopicManager
     from app.core.progress_tracker import ProgressTracker
     from app.core.verbosity import VerbosityResolver
@@ -91,13 +100,13 @@ class ResponseFormatter:
             self.MIN_MESSAGE_INTERVAL_MS = 100
 
         # Initialize components
-        self._data_formatter = DataFormatterImpl(lang=lang)
+        self._data_formatter: DataFormatter = DataFormatterImpl(lang=lang)
 
-        self._message_validator = MessageValidatorImpl(
+        self._message_validator: MessageValidator = MessageValidatorImpl(
             min_message_interval_ms=self.MIN_MESSAGE_INTERVAL_MS
         )
 
-        self._response_sender = ResponseSenderImpl(
+        self._response_sender: ResponseSender = ResponseSenderImpl(
             self._message_validator,
             max_message_chars=self.MAX_MESSAGE_CHARS,
             safe_reply_func=safe_reply_func,
@@ -112,7 +121,7 @@ class ResponseFormatter:
             ),
         )
 
-        self._text_processor = TextProcessorImpl(
+        self._text_processor: TextProcessor = TextProcessorImpl(
             self._response_sender,
             max_message_chars=self.MAX_MESSAGE_CHARS,
         )
@@ -122,7 +131,7 @@ class ResponseFormatter:
 
         self._progress_tracker = ProgressTracker(self._response_sender)
 
-        self._notification_formatter = NotificationFormatterImpl(
+        self._notification_formatter: NotificationFormatter = NotificationFormatterImpl(
             self._response_sender,
             self._data_formatter,
             safe_reply_func=safe_reply_func,
@@ -131,7 +140,7 @@ class ResponseFormatter:
             lang=lang,
         )
 
-        self._summary_presenter = SummaryPresenterImpl(
+        self._summary_presenter: SummaryPresenter = SummaryPresenterImpl(
             self._response_sender,
             self._text_processor,
             self._data_formatter,
@@ -141,7 +150,7 @@ class ResponseFormatter:
             lang=lang,
         )
 
-        self._database_presenter = DatabasePresenterImpl(
+        self._database_presenter: DatabasePresenter = DatabasePresenterImpl(
             self._response_sender,
             self._data_formatter,
         )
@@ -156,22 +165,22 @@ class ResponseFormatter:
         return self._progress_tracker
 
     @property
-    def sender(self) -> ResponseSenderImpl:
+    def sender(self) -> ResponseSender:
         """Expose response sender for backward-compatible direct access."""
         return self._response_sender
 
     @property
-    def notifications(self) -> NotificationFormatterImpl:
+    def notifications(self) -> NotificationFormatter:
         """Expose notification formatter for backward-compatible direct access."""
         return self._notification_formatter
 
     @property
-    def summaries(self) -> SummaryPresenterImpl:
+    def summaries(self) -> SummaryPresenter:
         """Expose summary presenter for backward-compatible direct access."""
         return self._summary_presenter
 
     @property
-    def database(self) -> DatabasePresenterImpl:
+    def database(self) -> DatabasePresenter:
         """Expose database presenter for backward-compatible direct access."""
         return self._database_presenter
 

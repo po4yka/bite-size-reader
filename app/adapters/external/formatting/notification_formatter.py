@@ -10,8 +10,7 @@ from app.core.ui_strings import t
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
-    from app.adapters.external.formatting.data_formatter import DataFormatterImpl
-    from app.adapters.external.formatting.response_sender import ResponseSenderImpl
+    from app.adapters.external.formatting.protocols import DataFormatter, ResponseSender
     from app.core.progress_tracker import ProgressTracker
     from app.core.verbosity import VerbosityResolver
 
@@ -21,8 +20,8 @@ class NotificationFormatterImpl:
 
     def __init__(
         self,
-        response_sender: ResponseSenderImpl,
-        data_formatter: DataFormatterImpl,
+        response_sender: ResponseSender,
+        data_formatter: DataFormatter,
         *,
         safe_reply_func: Callable[[Any, str], Awaitable[None]] | None = None,
         verbosity_resolver: VerbosityResolver | None = None,

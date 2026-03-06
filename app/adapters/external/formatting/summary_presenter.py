@@ -11,9 +11,11 @@ from app.core.async_utils import raise_if_cancelled
 from app.core.ui_strings import t
 
 if TYPE_CHECKING:
-    from app.adapters.external.formatting.data_formatter import DataFormatterImpl
-    from app.adapters.external.formatting.response_sender import ResponseSenderImpl
-    from app.adapters.external.formatting.text_processor import TextProcessorImpl
+    from app.adapters.external.formatting.protocols import (
+        DataFormatter,
+        ResponseSender,
+        TextProcessor,
+    )
     from app.adapters.telegram.topic_manager import TopicManager
     from app.core.progress_tracker import ProgressTracker
     from app.core.verbosity import VerbosityResolver
@@ -71,9 +73,9 @@ class SummaryPresenterImpl:
 
     def __init__(
         self,
-        response_sender: ResponseSenderImpl,
-        text_processor: TextProcessorImpl,
-        data_formatter: DataFormatterImpl,
+        response_sender: ResponseSender,
+        text_processor: TextProcessor,
+        data_formatter: DataFormatter,
         *,
         verbosity_resolver: VerbosityResolver | None = None,
         progress_tracker: ProgressTracker | None = None,

@@ -7,8 +7,7 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-    from app.adapters.external.formatting.data_formatter import DataFormatterImpl
-    from app.adapters.external.formatting.response_sender import ResponseSenderImpl
+    from app.adapters.external.formatting.protocols import DataFormatter, ResponseSender
     from app.services.topic_search import TopicArticle
 
 
@@ -17,8 +16,8 @@ class DatabasePresenterImpl:
 
     def __init__(
         self,
-        response_sender: ResponseSenderImpl,
-        data_formatter: DataFormatterImpl,
+        response_sender: ResponseSender,
+        data_formatter: DataFormatter,
     ) -> None:
         """Initialize the database presenter.
 

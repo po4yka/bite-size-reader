@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Any
 logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
-    from app.adapters.external.formatting.response_sender import ResponseSenderImpl
+    from app.adapters.external.formatting.protocols import ResponseSender
 
 
 class TextProcessorImpl:
@@ -20,7 +20,7 @@ class TextProcessorImpl:
 
     def __init__(
         self,
-        response_sender: ResponseSenderImpl,
+        response_sender: ResponseSender,
         *,
         max_message_chars: int = 3500,
     ) -> None:

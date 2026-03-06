@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any
 from app.core.async_utils import raise_if_cancelled
 
 if TYPE_CHECKING:
-    from app.adapters.external.formatting.response_sender import ResponseSenderImpl
+    from app.adapters.external.formatting.protocols import ResponseSender
     from app.adapters.telegram.topic_manager import TopicManager
 
 logger = logging.getLogger(__name__)
@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 async def crosspost_to_topic(
     *,
     topic_manager: TopicManager,
-    response_sender: ResponseSenderImpl,
+    response_sender: ResponseSender,
     message: Any,
     summary_shaped: dict[str, Any],
     summary_id: int | str | None,

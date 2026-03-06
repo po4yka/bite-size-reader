@@ -57,7 +57,14 @@ class ResponseSender(Protocol):
     """Protocol for core Telegram message sending."""
 
     async def safe_reply(
-        self, message: Any, text: str, *, parse_mode: str | None = None, reply_markup: Any = None
+        self,
+        message: Any,
+        text: str,
+        *,
+        parse_mode: str | None = None,
+        reply_markup: Any = None,
+        disable_web_page_preview: bool | None = None,
+        message_thread_id: int | None = None,
     ) -> None:
         """Safely reply to a message with comprehensive security checks."""
         ...
@@ -73,8 +80,19 @@ class ResponseSender(Protocol):
         """Safely reply to a message and return the message ID."""
         ...
 
-    async def edit_message(self, chat_id: int, message_id: int, text: str) -> bool:
+    async def edit_message(
+        self,
+        chat_id: int,
+        message_id: int,
+        text: str,
+        *,
+        parse_mode: str | None = None,
+    ) -> bool:
         """Edit an existing message in Telegram with security checks."""
+        ...
+
+    async def send_chat_action(self, chat_id: int, action: str = "typing") -> bool:
+        """Send chat action (typing/upload indicator) to Telegram."""
         ...
 
     async def reply_json(
@@ -98,8 +116,20 @@ class ResponseSender(Protocol):
         """Clear request-level draft stream state."""
         ...
 
+    def is_draft_streaming_enabled(self) -> bool:
+        """Return whether draft-stream sending is enabled."""
+        ...
+
+    def set_telegram_client(self, telegram_client: Any) -> None:
+        """Inject/replace telegram client dependency after construction."""
+        ...
+
     def create_inline_keyboard(self, buttons: list[dict[str, str]]) -> Any:
         """Create an inline keyboard markup from button definitions."""
+        ...
+
+    async def send_to_admin_log(self, text: str, *, correlation_id: str | None = None) -> None:
+        """Forward diagnostic text to admin log chat when configured."""
         ...
 
 
@@ -109,6 +139,10 @@ class TextProcessor(Protocol):
 
     def chunk_text(self, text: str, *, max_len: int) -> list[str]:
         """Split text into chunks respecting Telegram's message length limit."""
+        ...
+
+    def _find_split_index(self, text: str, limit: int) -> int:
+        """Find a sensible split index before the length limit."""
         ...
 
     def sanitize_summary_text(self, text: str) -> str:
@@ -123,7 +157,17 @@ class TextProcessor(Protocol):
         """Build a descriptive filename for the JSON attachment."""
         ...
 
-    async def send_long_text(self, message: Any, text: str) -> None:
+    def linkify_urls(self, text: str) -> str:
+        """Convert bare URLs in text to clickable HTML links."""
+        ...
+
+    async def send_long_text(
+        self,
+        message: Any,
+        text: str,
+        *,
+        parse_mode: str | None = None,
+    ) -> None:
         """Send text, splitting into multiple messages if too long for Telegram."""
         ...
 
@@ -287,13 +331,22 @@ class SummaryPresenter(Protocol):
     """Protocol for summary presentation."""
 
     async def send_structured_summary_response(
-        self, message: Any, summary_shaped: dict[str, Any], llm: Any, chunks: int | None = None
+        self,
+        message: Any,
+        summary_shaped: dict[str, Any],
+        llm: Any,
+        chunks: int | None = None,
+        summary_id: int | str | None = None,
+        correlation_id: str | None = None,
     ) -> None:
         """Send summary where each top-level JSON field is a separate message."""
         ...
 
     async def send_forward_summary_response(
-        self, message: Any, forward_shaped: dict[str, Any]
+        self,
+        message: Any,
+        forward_shaped: dict[str, Any],
+        summary_id: int | str | None = None,
     ) -> None:
         """Send forward summary with per-field messages."""
         ...
@@ -312,6 +365,10 @@ class SummaryPresenter(Protocol):
 
     async def send_custom_article(self, message: Any, article: dict[str, Any]) -> None:
         """Send the custom generated article with a nice header and downloadable JSON."""
+        ...
+
+    async def _send_new_field_messages(self, message: Any, shaped: dict[str, Any]) -> None:
+        """Compatibility seam for legacy callers needing field-level detail messages."""
         ...
 
 

@@ -20,7 +20,7 @@ from app.utils.retry_utils import retry_telegram_operation
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
-    from app.adapters.external.formatting.message_validator import MessageValidatorImpl
+    from app.adapters.external.formatting.protocols import MessageValidator
 
 logger = logging.getLogger(__name__)
 
@@ -59,7 +59,7 @@ class ResponseSenderImpl:
 
     def __init__(
         self,
-        validator: MessageValidatorImpl,
+        validator: MessageValidator,
         *,
         max_message_chars: int = 3500,
         safe_reply_func: Callable[[Any, str], Awaitable[None]] | None = None,
