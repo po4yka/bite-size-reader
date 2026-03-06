@@ -9,6 +9,7 @@ import pytest
 from app.adapters.twitter.playwright_client import (
     _load_cookies_netscape,
     _merge_captured_tweets,
+    _parse_tco_html_redirect,
     _response_matches_requested_tweet,
     resolve_tco_url,
 )
@@ -153,3 +154,67 @@ async def test_resolve_tco_url_accepts_http_and_mixed_case_scheme(monkeypatch) -
     assert await resolve_tco_url("http://t.co/abc123") == "https://resolved.example/final"
     assert await resolve_tco_url("HTTPS://t.co/abc123") == "https://resolved.example/final"
     assert await resolve_tco_url("https://example.com/nope") is None
+
+
+class TestParseTcoHtmlRedirect:
+    """Unit tests for t.co HTML fallback parsing."""
+
+    def test_meta_refresh(self) -> None:
+        html = '<html><head><meta http-equiv="refresh" content="0;URL=https://example.com/article"></head></html>'
+        assert _parse_tco_html_redirect(html) == "https://example.com/article"
+
+    def test_location_replace(self) -> None:
+        html = '<script>location.replace("https://example.com/page")</script>'
+        assert _parse_tco_html_redirect(html) == "https://example.com/page"
+
+    def test_location_replace_escaped_slashes(self) -> None:
+        html = "<script>location.replace('https:\\/\\/example.com\\/page')</script>"
+        assert _parse_tco_html_redirect(html) == "https://example.com/page"
+
+    def test_title_url(self) -> None:
+        html = "<html><head><title>https://example.com/dest</title></head></html>"
+        assert _parse_tco_html_redirect(html) == "https://example.com/dest"
+
+    def test_title_non_url_ignored(self) -> None:
+        html = "<html><head><title>Page Title</title></head></html>"
+        assert _parse_tco_html_redirect(html) is None
+
+    def test_empty_html(self) -> None:
+        assert _parse_tco_html_redirect("") is None
+
+    def test_priority_meta_over_location(self) -> None:
+        html = (
+            '<meta http-equiv="refresh" content="0;URL=https://first.com">'
+            '<script>location.replace("https://second.com")</script>'
+        )
+        assert _parse_tco_html_redirect(html) == "https://first.com"
+
+
+@pytest.mark.asyncio
+async def test_resolve_tco_url_html_fallback(monkeypatch) -> None:
+    """When HEAD stays on t.co, GET + HTML parsing should resolve."""
+
+    class _FakeAsyncClient:
+        def __init__(self, *args, **kwargs) -> None:
+            pass
+
+        async def __aenter__(self) -> _FakeAsyncClient:
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb) -> bool:
+            return False
+
+        async def head(self, url: str) -> SimpleNamespace:
+            return SimpleNamespace(url="https://t.co/abc123")  # stays on t.co
+
+        async def get(self, url: str) -> SimpleNamespace:
+            return SimpleNamespace(
+                text='<script>location.replace("https://example.com/real")</script>'
+            )
+
+    monkeypatch.setattr(
+        "app.adapters.twitter.playwright_client.httpx.AsyncClient", _FakeAsyncClient
+    )
+
+    result = await resolve_tco_url("https://t.co/abc123")
+    assert result == "https://example.com/real"

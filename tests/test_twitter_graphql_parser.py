@@ -107,6 +107,31 @@ class TestExtractTweetsFromGraphql:
         assert len(tweets[0].images) == 2  # only photos
         assert "img1.jpg" in tweets[0].images[0]
 
+    def test_tweet_with_alt_texts(self) -> None:
+        images = [
+            {
+                "type": "photo",
+                "media_url_https": "https://pbs.twimg.com/media/img1.jpg",
+                "ext_alt_text": "A chart showing growth trends",
+            },
+            {
+                "type": "photo",
+                "media_url_https": "https://pbs.twimg.com/media/img2.jpg",
+                "ext_alt_text": None,
+            },
+            {
+                "type": "photo",
+                "media_url_https": "https://pbs.twimg.com/media/img3.jpg",
+            },
+        ]
+        tr = _make_tweet_result(images=images)
+        response = _make_thread_response(tr)
+        tweets = extract_tweets_from_graphql(response)
+        assert len(tweets[0].alt_texts) == 3
+        assert tweets[0].alt_texts[0] == "A chart showing growth trends"
+        assert tweets[0].alt_texts[1] == ""
+        assert tweets[0].alt_texts[2] == ""
+
     def test_tweet_with_quote_tweet(self) -> None:
         qt = _make_tweet_result(tweet_id="999", text="Original take", handle="bob")
         tr = _make_tweet_result(tweet_id="1000", text="My reply", quote=qt)
@@ -207,7 +232,20 @@ class TestTweetDataSerialization:
         t = TweetData(tweet_id="1", author="A", author_handle="a", text="hi", order=0)
         d = t.to_dict()
         assert d["tweet_id"] == "1"
+        assert d["alt_texts"] == []
         assert "quote_tweet" not in d
+
+    def test_to_dict_includes_alt_texts(self) -> None:
+        t = TweetData(
+            tweet_id="1",
+            author="A",
+            author_handle="a",
+            text="hi",
+            alt_texts=["desc1", ""],
+            order=0,
+        )
+        d = t.to_dict()
+        assert d["alt_texts"] == ["desc1", ""]
 
     def test_to_dict_with_quote(self) -> None:
         qt = TweetData(tweet_id="2", author="B", author_handle="b", text="original", order=0)

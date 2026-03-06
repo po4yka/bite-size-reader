@@ -21,6 +21,7 @@ class TweetData:
     author_handle: str
     text: str
     images: list[str] = field(default_factory=list)
+    alt_texts: list[str] = field(default_factory=list)
     quote_tweet: TweetData | None = None
     order: int = 0
 
@@ -31,6 +32,7 @@ class TweetData:
             "author_handle": self.author_handle,
             "text": self.text,
             "images": self.images,
+            "alt_texts": self.alt_texts,
             "order": self.order,
         }
         if self.quote_tweet:
@@ -128,14 +130,16 @@ def _parse_single_tweet(result: dict[str, Any], order: int) -> TweetData | None:
     tweet_id = legacy.get("id_str", result.get("rest_id", ""))
     text = _extract_tweet_text(result, legacy)
 
-    # Extract image URLs
+    # Extract image URLs and alt texts
     images: list[str] = []
+    alt_texts: list[str] = []
     media = legacy.get("extended_entities", {}).get("media", [])
     for m in media:
         if m.get("type") == "photo":
             url = m.get("media_url_https", "")
             if url:
                 images.append(url)
+                alt_texts.append(m.get("ext_alt_text") or "")
 
     # Extract quote tweet
     quote_tweet = None
@@ -149,6 +153,7 @@ def _parse_single_tweet(result: dict[str, Any], order: int) -> TweetData | None:
         author_handle=author_handle,
         text=text,
         images=images,
+        alt_texts=alt_texts,
         quote_tweet=quote_tweet,
         order=order,
     )

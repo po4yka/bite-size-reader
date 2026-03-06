@@ -73,6 +73,39 @@ class TestFormatTweetsForSummary:
         assert "Quoting @bob (Bob):" in result
         assert "Hot take" in result
 
+    def test_single_tweet_with_alt_texts(self) -> None:
+        t = TweetData(
+            tweet_id="1",
+            author="Alice",
+            author_handle="alice",
+            text="Check out this chart",
+            alt_texts=["A line chart showing revenue growth", ""],
+            order=0,
+        )
+        result = format_tweets_for_summary([t])
+        assert "[Image: A line chart showing revenue growth]" in result
+        # Empty alt text should NOT appear
+        assert result.count("[Image:") == 1
+
+    def test_thread_with_alt_texts(self) -> None:
+        t1 = TweetData(
+            tweet_id="1",
+            author="Bob",
+            author_handle="bob",
+            text="Part 1",
+            alt_texts=["Photo of sunset"],
+            order=0,
+        )
+        t2 = TweetData(
+            tweet_id="2",
+            author="Bob",
+            author_handle="bob",
+            text="Part 2",
+            order=1,
+        )
+        result = format_tweets_for_summary([t1, t2])
+        assert "[Image: Photo of sunset]" in result
+
     def test_empty_list(self) -> None:
         assert format_tweets_for_summary([]) == ""
 

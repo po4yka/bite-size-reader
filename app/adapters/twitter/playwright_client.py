@@ -316,6 +316,10 @@ def _scrape_article_sync(
 async def resolve_tco_url(short_url: str, timeout: int = 10) -> str | None:
     """Follow a t.co redirect via HTTP and return the resolved URL.
 
+    First tries a HEAD request with redirect following.  If the final URL
+    is still on t.co (JavaScript/meta-refresh redirect), falls back to a
+    GET request and parses the destination from HTML.
+
     Args:
         short_url: URL starting with https://t.co/
         timeout: HTTP request timeout in seconds
@@ -331,9 +335,49 @@ async def resolve_tco_url(short_url: str, timeout: int = 10) -> str | None:
     try:
         async with httpx.AsyncClient(follow_redirects=True, timeout=timeout) as client:
             resp = await client.head(short_url)
-            return str(resp.url)
+            resolved = str(resp.url)
+            if (urlparse(resolved).hostname or "").lower() != "t.co":
+                return resolved
+
+            # HEAD didn't escape t.co -- try GET and parse HTML fallbacks
+            get_resp = await client.get(short_url)
+            html = get_resp.text
+            url = _parse_tco_html_redirect(html)
+            if url:
+                return url
+            return resolved
     except Exception:
         return None
+
+
+def _parse_tco_html_redirect(html: str) -> str | None:
+    """Extract destination URL from a t.co HTML redirect page.
+
+    Handles three patterns used by t.co when HTTP 3xx is not available:
+    1. ``<meta ... URL=...>`` (meta-refresh)
+    2. ``location.replace("...")`` (JavaScript redirect)
+    3. ``<title>http...</title>`` (URL-in-title fallback)
+    """
+    import re
+
+    # Method 1: meta-refresh
+    meta_match = re.search(r'<meta[^>]*?URL=(["\']?)([^"\'\s>]+)', html, re.IGNORECASE)
+    if meta_match:
+        return meta_match.group(2)
+
+    # Method 2: location.replace()
+    loc_match = re.search(r'location\.replace\(["\']([^"\']+)', html)
+    if loc_match:
+        return loc_match.group(1).replace("\\/", "/")
+
+    # Method 3: URL in <title> tag
+    title_match = re.search(r"<title>([^<]+)</title>", html, re.IGNORECASE)
+    if title_match:
+        title = title_match.group(1).strip()
+        if title.startswith("http"):
+            return title
+
+    return None
 
 
 async def extract_tweet(

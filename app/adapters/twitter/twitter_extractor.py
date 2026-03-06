@@ -764,9 +764,32 @@ class TwitterExtractor:
             raise ValueError(msg)
 
         await self._expand_tco_urls_in_tweets(result.tweets, correlation_id)
+
+        # Check if main tweet is just a t.co link to an X Article
+        article_redirect = self._detect_article_redirect(result.tweets)
+        if article_redirect:
+            logger.info(
+                "twitter_article_redirect_detected",
+                extra={
+                    "cid": correlation_id,
+                    "article_url": article_redirect,
+                    "tweet_id": tweet_id,
+                },
+            )
+            content_text, content_source, pw_metadata = await self._pw_extract_article(
+                url=article_redirect,
+                cookies=cookies,
+                headless=headless,
+                timeout_ms=timeout_ms,
+                correlation_id=correlation_id,
+            )
+            pw_metadata["article_redirect_from_tweet"] = True
+            pw_metadata["original_tweet_id"] = tweet_id
+            return content_text, content_source, pw_metadata
+
         content_text = format_tweets_for_summary(result.tweets)
 
-        pw_metadata: dict[str, Any] = {
+        pw_metadata = {
             "tweet_count": len(result.tweets),
             "tweet_id": tweet_id or (result.tweets[0].tweet_id if result.tweets else None),
             "author_handle": result.tweets[0].author_handle if result.tweets else None,
@@ -965,6 +988,24 @@ class TwitterExtractor:
                 "resolved": len(replacements),
             },
         )
+
+    @staticmethod
+    def _detect_article_redirect(tweets: list[TweetData]) -> str | None:
+        """Check if the main tweet is just a single URL pointing to an X Article.
+
+        Returns the article URL if detected, None otherwise.
+        """
+        if not tweets:
+            return None
+        main_tweet = min(tweets, key=lambda t: t.order)
+        text = main_tweet.text.strip()
+        url_match = re.match(r"^(https?://\S+)\s*$", text)
+        if not url_match:
+            return None
+        url = url_match.group(1)
+        if is_twitter_article_url(url):
+            return url
+        return None
 
     @staticmethod
     def _collect_tco_urls(tweets: list[TweetData]) -> list[str]:

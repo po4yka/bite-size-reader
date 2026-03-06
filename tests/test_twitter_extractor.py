@@ -492,3 +492,50 @@ async def test_pw_extract_article_rejects_empty_content_with_reason() -> None:
                 timeout_ms=30000,
                 correlation_id="cid",
             )
+
+
+def test_detect_article_redirect_single_url() -> None:
+    """Tweet with only an article URL should be detected as redirect."""
+    tweets = [
+        TweetData(
+            tweet_id="1",
+            author="A",
+            author_handle="a",
+            text="https://x.com/i/article/12345",
+            order=0,
+        )
+    ]
+    result = TwitterExtractor._detect_article_redirect(tweets)
+    assert result == "https://x.com/i/article/12345"
+
+
+def test_detect_article_redirect_non_article_url() -> None:
+    """Tweet with a non-article URL should not trigger redirect."""
+    tweets = [
+        TweetData(
+            tweet_id="1",
+            author="A",
+            author_handle="a",
+            text="https://example.com/article",
+            order=0,
+        )
+    ]
+    assert TwitterExtractor._detect_article_redirect(tweets) is None
+
+
+def test_detect_article_redirect_text_with_url() -> None:
+    """Tweet with text + URL should not trigger redirect."""
+    tweets = [
+        TweetData(
+            tweet_id="1",
+            author="A",
+            author_handle="a",
+            text="Check out https://x.com/i/article/12345",
+            order=0,
+        )
+    ]
+    assert TwitterExtractor._detect_article_redirect(tweets) is None
+
+
+def test_detect_article_redirect_empty() -> None:
+    assert TwitterExtractor._detect_article_redirect([]) is None

@@ -147,10 +147,17 @@ def format_tweets_for_summary(tweets: list[TweetData]) -> str:
         text = _clean_tweet_text(tweet.text)
         parts.append(f"[{i}/{len(tweets)}] {text}")
 
+        alt_block = _format_alt_texts(tweet)
+        if alt_block:
+            parts.append(alt_block)
+
         if tweet.quote_tweet:
             qt_text = _clean_tweet_text(tweet.quote_tweet.text)
             qt_handle = tweet.quote_tweet.author_handle
             parts.append(f"  > Quoting @{qt_handle}: {qt_text}")
+            qt_alt = _format_alt_texts(tweet.quote_tweet)
+            if qt_alt:
+                parts.append(qt_alt)
 
     return "\n\n".join(parts)
 
@@ -199,6 +206,15 @@ def format_article_for_summary(article_data: dict[str, Any]) -> str:
     return "\n".join(parts)
 
 
+def _format_alt_texts(tweet: TweetData) -> str:
+    """Format non-empty alt texts from tweet images."""
+    lines: list[str] = []
+    for alt in tweet.alt_texts:
+        if alt.strip():
+            lines.append(f"[Image: {alt.strip()}]")
+    return "\n".join(lines)
+
+
 def _format_single_tweet(tweet: TweetData) -> str:
     """Format a single tweet with optional quote tweet."""
     parts: list[str] = []
@@ -207,11 +223,18 @@ def _format_single_tweet(tweet: TweetData) -> str:
     text = _clean_tweet_text(tweet.text)
     parts.append(f"@{tweet.author_handle} ({author}):\n{text}")
 
+    alt_block = _format_alt_texts(tweet)
+    if alt_block:
+        parts.append(alt_block)
+
     if tweet.quote_tweet:
         qt_text = _clean_tweet_text(tweet.quote_tweet.text)
         qt_handle = tweet.quote_tweet.author_handle
         qt_author = tweet.quote_tweet.author or qt_handle
         parts.append(f"\nQuoting @{qt_handle} ({qt_author}):\n{qt_text}")
+        qt_alt = _format_alt_texts(tweet.quote_tweet)
+        if qt_alt:
+            parts.append(qt_alt)
 
     return "\n".join(parts)
 
