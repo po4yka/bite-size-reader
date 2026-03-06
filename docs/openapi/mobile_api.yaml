@@ -186,7 +186,7 @@ paths:
       tags:
       - Summaries
       responses:
-        200:
+        '200':
           description: Favorite status updated
           content:
             application/json:
@@ -214,18 +214,18 @@ paths:
       tags:
       - Proxy
       responses:
-        200:
+        '200':
           description: Image content stream
           content:
             image/*:
               schema:
                 type: string
                 format: binary
-        400:
+        '400':
           $ref: '#/components/responses/ValidationError'
-        404:
+        '404':
           $ref: '#/components/responses/NotFoundError'
-        500:
+        '500':
           $ref: '#/components/responses/InternalServerError'
 
   /v1/notifications/device:
@@ -268,12 +268,20 @@ paths:
       tags:
       - Collections
       responses:
-        200:
+        '200':
           description: List of user collections
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/CollectionListResponseEnvelope'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
     post:
       summary: Create collection
       operationId: createCollection
@@ -287,12 +295,20 @@ paths:
             schema:
               $ref: '#/components/schemas/CollectionCreateRequest'
       responses:
-        200:
+        '200':
           description: Collection created
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/CollectionResponseEnvelope'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
 
   /v1/collections/{collection_id}:
     get:
@@ -309,12 +325,22 @@ paths:
       tags:
       - Collections
       responses:
-        200:
+        '200':
           description: Collection details
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/CollectionResponseEnvelope'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
     patch:
       summary: Update collection
       operationId: updateCollection
@@ -334,12 +360,22 @@ paths:
             schema:
               $ref: '#/components/schemas/CollectionUpdateRequest'
       responses:
-        200:
+        '200':
           description: Collection updated
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/CollectionResponseEnvelope'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
     delete:
       summary: Delete collection
       operationId: deleteCollection
@@ -354,12 +390,22 @@ paths:
       tags:
       - Collections
       responses:
-        200:
+        '200':
           description: Collection deleted
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/SuccessResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
 
   /v1/collections/{collection_id}/items:
     post:
@@ -381,12 +427,22 @@ paths:
             schema:
               $ref: '#/components/schemas/CollectionItemCreateRequest'
       responses:
-        200:
+        '200':
           description: Item added
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/SuccessResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
     get:
       summary: List items in collection
       operationId: listCollectionItems
@@ -416,12 +472,22 @@ paths:
       tags:
       - Collections
       responses:
-        200:
+        '200':
           description: Items listed
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/CollectionItemsResponseEnvelope'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
 
   /v1/collections/{collection_id}/items/{summary_id}:
     delete:
@@ -443,12 +509,22 @@ paths:
       tags:
       - Collections
       responses:
-        200:
+        '200':
           description: Item removed
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/SuccessResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
   /v1/collections/tree:
     get:
       summary: List collections as tree
@@ -465,12 +541,20 @@ paths:
           type: integer
           default: 3
       responses:
-        200:
+        '200':
           description: Collection tree
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/CollectionTreeResponseEnvelope'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
   /v1/collections/{collection_id}/acl:
     get:
       summary: Get collection ACL
@@ -486,12 +570,22 @@ paths:
       tags:
       - Collections
       responses:
-        200:
+        '200':
           description: ACL entries
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/CollectionAclResponseEnvelope'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
   /v1/collections/{collection_id}/share:
     post:
       summary: Add collaborator
@@ -512,12 +606,22 @@ paths:
             schema:
               $ref: '#/components/schemas/CollectionShareRequest'
       responses:
-        200:
+        '200':
           description: Collaborator added
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/SuccessResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
   /v1/collections/{collection_id}/share/{target_user_id}:
     delete:
       summary: Remove collaborator
@@ -538,12 +642,22 @@ paths:
       tags:
       - Collections
       responses:
-        200:
+        '200':
           description: Collaborator removed
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/SuccessResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
   /v1/collections/{collection_id}/invite:
     post:
       summary: Create invite token
@@ -564,12 +678,22 @@ paths:
             schema:
               $ref: '#/components/schemas/CollectionInviteRequest'
       responses:
-        200:
+        '200':
           description: Invite created
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/CollectionInviteResponseEnvelope'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
   /v1/collections/invites/{token}/accept:
     post:
       summary: Accept collection invite
@@ -585,12 +709,22 @@ paths:
       tags:
       - Collections
       responses:
-        200:
+        '200':
           description: Invite accepted
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/SuccessResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
   /v1/collections/{collection_id}/reorder:
     post:
       summary: Reorder child collections
@@ -611,12 +745,22 @@ paths:
             schema:
               $ref: '#/components/schemas/CollectionReorderRequest'
       responses:
-        200:
+        '200':
           description: Reordered
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/CollectionReorderResponseEnvelope'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
   /v1/collections/{collection_id}/items/reorder:
     post:
       summary: Reorder collection items
@@ -637,12 +781,22 @@ paths:
             schema:
               $ref: '#/components/schemas/CollectionItemReorderRequest'
       responses:
-        200:
+        '200':
           description: Items reordered
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/CollectionReorderResponseEnvelope'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
   /v1/collections/{collection_id}/move:
     post:
       summary: Move collection to another parent
@@ -663,12 +817,22 @@ paths:
             schema:
               $ref: '#/components/schemas/CollectionMoveRequest'
       responses:
-        200:
+        '200':
           description: Collection moved
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/CollectionMoveResponseEnvelope'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
   /v1/collections/{collection_id}/items/move:
     post:
       summary: Move items to another collection
@@ -689,12 +853,22 @@ paths:
             schema:
               $ref: '#/components/schemas/CollectionItemMoveRequest'
       responses:
-        200:
+        '200':
           description: Items moved
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/CollectionItemsMoveResponseEnvelope'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
   /v1/auth/apple-login:
     post:
       tags:
@@ -2527,6 +2701,8 @@ paths:
           $ref: '#/components/responses/ForbiddenError'
         '404':
           $ref: '#/components/responses/NotFoundError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
   /v1/articles:
     get:
       tags:

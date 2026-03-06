@@ -401,6 +401,49 @@ class TestWireShapeConventions:
         )
         assert has_base_success_ref, "SuccessResponse must include BaseSuccessResponse"
 
+    def test_response_status_code_keys_are_strings(self, spec: dict[str, Any]) -> None:
+        """YAML response status keys must be quoted/string-typed for tool compatibility."""
+        errors: list[str] = []
+        for path, methods in spec.get("paths", {}).items():
+            for method, operation in methods.items():
+                method_upper = method.upper()
+                if method_upper not in RELEVANT_METHODS:
+                    continue
+                responses = operation.get("responses", {})
+                for key in responses:
+                    if not isinstance(key, str):
+                        errors.append(f"{method_upper} {path} has non-string response key: {key!r}")
+        if errors:
+            pytest.fail("Non-string response status keys found:\n" + "\n".join(errors))
+
+    def test_secured_operations_document_4xx_and_5xx(self, spec: dict[str, Any]) -> None:
+        """Every HTTPBearer-protected operation should document both client/server errors."""
+        failures: list[str] = []
+
+        for path, methods in spec.get("paths", {}).items():
+            for method, operation in methods.items():
+                method_upper = method.upper()
+                if method_upper not in RELEVANT_METHODS:
+                    continue
+
+                security = operation.get("security") or []
+                uses_http_bearer = any(
+                    isinstance(sec_req, dict) and "HTTPBearer" in sec_req for sec_req in security
+                )
+                if not uses_http_bearer:
+                    continue
+
+                responses = operation.get("responses", {})
+                has_4xx = any(str(code).startswith("4") for code in responses)
+                has_5xx = any(str(code).startswith("5") for code in responses)
+                if not has_4xx or not has_5xx:
+                    failures.append(f"{method_upper} {path} (has_4xx={has_4xx}, has_5xx={has_5xx})")
+
+        if failures:
+            pytest.fail(
+                "Secured operations missing documented 4xx/5xx responses:\n" + "\n".join(failures)
+            )
+
 
 # ---------------------------------------------------------------------------
 # Internal helpers
