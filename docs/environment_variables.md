@@ -233,18 +233,22 @@ Content extraction uses an ordered chain of providers. Each provider is tried in
 
 | Variable | Default | Description |
 | ---------- | --------- | ------------- |
-| `SCRAPER_PROVIDER_ORDER` | `["scrapling", "firecrawl", "direct_html"]` | Ordered list of scraping providers to try |
+| `SCRAPER_PROVIDER_ORDER` | `["scrapling", "firecrawl", "playwright", "direct_html"]` | Ordered list of scraping providers to try |
 | `SCRAPLING_ENABLED` | `true` | Enable Scrapling in-process provider |
 | `SCRAPLING_TIMEOUT_SEC` | `30` | Scrapling fetch timeout (seconds) |
 | `SCRAPLING_STEALTH_FALLBACK` | `true` | Try stealth fetch if basic fetch returns thin content |
 | `FIRECRAWL_SELF_HOSTED_ENABLED` | `false` | Enable self-hosted Firecrawl provider |
 | `FIRECRAWL_SELF_HOSTED_URL` | `http://firecrawl:3002` | Self-hosted Firecrawl base URL |
 | `FIRECRAWL_SELF_HOSTED_API_KEY` | `fc-bsr-local` | Self-hosted Firecrawl API key |
+| `SCRAPER_PLAYWRIGHT_ENABLED` | `true` | Enable Playwright rendering fallback provider |
+| `SCRAPER_PLAYWRIGHT_HEADLESS` | `true` | Run Playwright browser headless in scraper fallback |
+| `SCRAPER_PLAYWRIGHT_TIMEOUT_SEC` | `30` | Playwright render timeout (seconds) |
 
 **Notes**:
 
 - Scrapling is a free, in-process scraper that requires no API key. It is tried first by default.
 - Self-hosted Firecrawl runs as a Docker Compose service (`bsr-firecrawl` on port 3002) and also requires no cloud API key.
+- Playwright fallback is useful for JS-heavy pages that fail in HTTP-only extractors.
 - Cloud Firecrawl (`FIRECRAWL_API_KEY`) is only needed when it appears in `SCRAPER_PROVIDER_ORDER` as `"firecrawl"` or when web search enrichment is enabled.
 - `direct_html` is a lightweight fallback using trafilatura for simple pages.
 
@@ -275,7 +279,7 @@ Content extraction uses an ordered chain of providers. Each provider is tried in
 | `TWITTER_ARTICLE_RESOLUTION_TIMEOUT_SEC` | `5` | Timeout for article link resolution requests (seconds) |
 | `TWITTER_ARTICLE_LIVE_SMOKE_ENABLED` | `false` | Enable optional live smoke checks for article links (manual script only) |
 
-**Two-tier extraction**: By default, Twitter URLs are extracted via Firecrawl (free, no auth needed). If Firecrawl fails (login wall), enable `TWITTER_PLAYWRIGHT_ENABLED` and provide a `cookies.txt` for authenticated extraction. Docker: build with `--build-arg WITH_PLAYWRIGHT=1`.
+**Two-tier extraction**: By default, Twitter URLs are extracted via Firecrawl (free, no auth needed). If Firecrawl fails (login wall), enable `TWITTER_PLAYWRIGHT_ENABLED` and provide a `cookies.txt` for authenticated extraction.
 
 **Manual live smoke (non-CI)**: Validate real article links with redirect-aware routing and stage-level diagnostics:
 

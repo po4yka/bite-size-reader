@@ -9,7 +9,7 @@ class ScraperConfig(BaseModel):
     model_config = ConfigDict(frozen=True, populate_by_name=True)
 
     provider_order: list[str] = Field(
-        default=["scrapling", "firecrawl", "direct_html"],
+        default=["scrapling", "firecrawl", "playwright", "direct_html"],
         validation_alias="SCRAPER_PROVIDER_ORDER",
         description="Ordered list of scraping providers to try",
     )
@@ -36,4 +36,16 @@ class ScraperConfig(BaseModel):
     firecrawl_self_hosted_api_key: str = Field(
         default="fc-bsr-local",
         validation_alias="FIRECRAWL_SELF_HOSTED_API_KEY",
+    )
+    playwright_enabled: bool = Field(
+        default=True,
+        validation_alias="SCRAPER_PLAYWRIGHT_ENABLED",
+    )
+    playwright_headless: bool = Field(
+        default=True,
+        validation_alias="SCRAPER_PLAYWRIGHT_HEADLESS",
+    )
+    playwright_timeout_sec: int = Field(
+        default=30,
+        validation_alias="SCRAPER_PLAYWRIGHT_TIMEOUT_SEC",
     )

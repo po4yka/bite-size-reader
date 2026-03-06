@@ -29,6 +29,7 @@ class ContentScraperFactory:
         builder_map = {
             "scrapling": lambda: _build_scrapling(scraper_cfg),
             "firecrawl": lambda: _build_firecrawl(cfg, audit),
+            "playwright": lambda: _build_playwright(scraper_cfg),
             "direct_html": lambda: _build_direct_html(scraper_cfg),
         }
 
@@ -107,3 +108,21 @@ def _build_direct_html(scraper_cfg: object) -> ContentScraperProtocol | None:
     return DirectHTMLProvider(
         timeout_sec=getattr(scraper_cfg, "scrapling_timeout_sec", 30),
     )
+
+
+def _build_playwright(scraper_cfg: object) -> ContentScraperProtocol | None:
+    if not getattr(scraper_cfg, "playwright_enabled", True):
+        return None
+    try:
+        from app.adapters.content.scraper.playwright_provider import PlaywrightProvider
+
+        return PlaywrightProvider(
+            timeout_sec=getattr(scraper_cfg, "playwright_timeout_sec", 30),
+            headless=getattr(scraper_cfg, "playwright_headless", True),
+        )
+    except Exception as exc:
+        logger.warning(
+            "playwright_provider_init_failed",
+            extra={"error": str(exc), "error_type": type(exc).__name__},
+        )
+        return None

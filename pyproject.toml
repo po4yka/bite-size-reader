@@ -144,6 +144,7 @@ dependencies = [
   "pydantic-settings>=2.12.0",
   "peewee>=4.0.0",
   "scrapling>=0.2",
+  "playwright>=1.40",
   "trafilatura>=2.0.0",
   "spacy>=3.8.11,<4",
   "json-repair>=0.55.1",
@@ -189,10 +190,8 @@ youtube = [
   "youtube-transcript-api>=1.2.4",
 ]
 
-# Twitter/X content extraction via Playwright browser automation
-twitter = [
-  "playwright>=1.40",
-]
+# Twitter/X extraction (uses base runtime dependencies)
+twitter = []
 
 # PDF export functionality
 export = [

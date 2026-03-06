@@ -36,6 +36,8 @@ confection==0.1.5
     #   weasel
 courlan==1.3.2
     # via trafilatura
+cssselect==1.4.0
+    # via scrapling
 cymem==2.0.13
     # via
     #   preshed
@@ -49,6 +51,8 @@ en-core-web-sm @ https://github.com/explosion/spacy-models/releases/download/en_
     # via bite-size-reader (pyproject.toml)
 fakeredis==2.34.1
     # via bite-size-reader (pyproject.toml)
+greenlet==3.3.2
+    # via playwright
 h11==0.16.0
     # via httpcore
 h2==4.3.0
@@ -81,6 +85,7 @@ lxml==6.0.2
     #   htmldate
     #   justext
     #   lxml-html-clean
+    #   scrapling
     #   trafilatura
 lxml-html-clean==0.4.4
     # via lxml
@@ -101,15 +106,19 @@ numpy==2.4.2
     #   spacy
     #   thinc
 orjson==3.11.7
-    # via bite-size-reader (pyproject.toml)
+    # via
+    #   bite-size-reader (pyproject.toml)
+    #   scrapling
 packaging==26.0
     # via
     #   spacy
     #   thinc
     #   weasel
-peewee==3.19.0
+peewee==4.0.1
     # via bite-size-reader (pyproject.toml)
 pillow==12.1.1
+    # via bite-size-reader (pyproject.toml)
+playwright==1.58.0
     # via bite-size-reader (pyproject.toml)
 preshed==3.0.12
     # via
@@ -125,10 +134,12 @@ pydantic==2.12.5
     #   spacy
     #   thinc
     #   weasel
-pydantic-core==2.42.0
+pydantic-core==2.41.5
     # via pydantic
 pydantic-settings==2.13.1
     # via bite-size-reader (pyproject.toml)
+pyee==13.0.1
+    # via playwright
 pygments==2.19.2
     # via rich
 pymorphy3==2.0.6
@@ -165,6 +176,8 @@ rich==14.3.3
     # via typer
 ru-core-news-sm @ https://github.com/explosion/spacy-models/releases/download/ru_core_news_sm-3.8.0/ru_core_news_sm-3.8.0-py3-none-any.whl
     # via bite-size-reader (pyproject.toml)
+scrapling==0.4.1
+    # via bite-size-reader (pyproject.toml)
 setuptools==82.0.0
     # via
     #   pymorphy3
@@ -193,7 +206,9 @@ srsly==2.5.2
 thinc==8.3.10
     # via spacy
 tld==0.13.1
-    # via courlan
+    # via
+    #   courlan
+    #   scrapling
 tqdm==4.67.3
     # via spacy
 trafilatura==2.0.0
@@ -208,6 +223,8 @@ typing-extensions==4.15.0
     # via
     #   pydantic
     #   pydantic-core
+    #   pyee
+    #   scrapling
     #   typing-inspection
 typing-inspection==0.4.2
     # via
@@ -223,6 +240,8 @@ urllib3==2.6.3
     #   trafilatura
 uvloop==0.22.1
     # via bite-size-reader (pyproject.toml)
+w3lib==2.4.0
+    # via scrapling
 wasabi==1.1.3
     # via
     #   spacy

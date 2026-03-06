@@ -87,9 +87,7 @@ WORKDIR /app
 
 # Install only runtime dependencies (no build tools)
 # ffmpeg is required for yt-dlp video/audio merging (can be disabled with build-arg)
-# WITH_PLAYWRIGHT=1 adds Chromium for Twitter/X extraction (~400MB)
 ARG WITH_FFMPEG=1
-ARG WITH_PLAYWRIGHT=0
 RUN set -eux; \
     apt-get update; \
     pkgs="sqlite3 libsqlite3-0 libxml2 libxslt1.1 zlib1g"; \
@@ -101,12 +99,9 @@ RUN set -eux; \
 # Copy virtual environment from builder stage
 COPY --from=builder /app/.venv /app/.venv
 
-# Optional: install Playwright + Chromium for Twitter/X extraction
+# Install Chromium for Playwright-based scraping fallback.
 RUN set -eux; \
-    if [ "${WITH_PLAYWRIGHT}" = "1" ]; then \
-      pip install --no-cache-dir 'playwright>=1.40'; \
-      playwright install --with-deps chromium; \
-    fi
+    playwright install --with-deps chromium
 
 # Copy application code
 COPY app ./app

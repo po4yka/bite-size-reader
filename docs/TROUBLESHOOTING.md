@@ -247,7 +247,7 @@ docker restart bite-size-reader
 
 ## Firecrawl Issues
 
-> **Multi-provider fallback**: Content extraction uses an ordered chain of providers (default: Scrapling -> Firecrawl -> direct HTML). If one provider fails, the next is tried automatically. Most Firecrawl issues below only apply when cloud Firecrawl is in your `SCRAPER_PROVIDER_ORDER`. Scrapling (free, in-process) handles the majority of sites without needing an API key. You can also enable self-hosted Firecrawl (`FIRECRAWL_SELF_HOSTED_ENABLED=true`) as a middle ground. See `docs/environment_variables.md` for scraper chain configuration.
+> **Multi-provider fallback**: Content extraction uses an ordered chain of providers (default: Scrapling -> Firecrawl -> Playwright -> direct HTML). If one provider fails, the next is tried automatically. Most Firecrawl issues below only apply when cloud Firecrawl is in your `SCRAPER_PROVIDER_ORDER`. Scrapling (free, in-process) handles the majority of sites without needing an API key. You can also enable self-hosted Firecrawl (`FIRECRAWL_SELF_HOSTED_ENABLED=true`) as a middle ground. See `docs/environment_variables.md` for scraper chain configuration.
 
 ### API Rate Limits
 

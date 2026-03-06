@@ -184,7 +184,7 @@ Firecrawl scored highest across all high-priority criteria.
 
 **2025-02-05**: Observed 95%+ success rate across 500+ articles. Primary failures due to paywalled content (WSJ, NYT), not Firecrawl limitations.
 
-**2026-03-06**: Extended by [ADR-0006](0006-multi-provider-scraper-chain.md) -- content extraction now uses a multi-provider fallback chain (Scrapling -> self-hosted Firecrawl -> direct HTML), with cloud Firecrawl remaining available as an option.
+**2026-03-06**: Extended by [ADR-0006](0006-multi-provider-scraper-chain.md) -- content extraction now uses a multi-provider fallback chain (Scrapling -> self-hosted Firecrawl -> Playwright -> direct HTML), with cloud Firecrawl remaining available as an option.
 
 ---
 

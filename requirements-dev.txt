@@ -35,7 +35,7 @@ certifi==2026.2.25
     #   trafilatura
 cfgv==3.5.0
     # via pre-commit
-charset-normalizer==3.4.4
+charset-normalizer==3.4.5
     # via
     #   -c .requirements-all.tmp.txt
     #   htmldate
@@ -58,6 +58,10 @@ courlan==1.3.2
     # via
     #   -c .requirements-all.tmp.txt
     #   trafilatura
+cssselect==1.4.0
+    # via
+    #   -c .requirements-all.tmp.txt
+    #   scrapling
 cymem==2.0.13
     # via
     #   -c .requirements-all.tmp.txt
@@ -86,6 +90,10 @@ filelock==3.25.0
     # via
     #   -c .requirements-all.tmp.txt
     #   virtualenv
+greenlet==3.3.2
+    # via
+    #   -c .requirements-all.tmp.txt
+    #   playwright
 h11==0.16.0
     # via
     #   -c .requirements-all.tmp.txt
@@ -132,7 +140,7 @@ jinja2==3.1.6
     # via
     #   -c .requirements-all.tmp.txt
     #   spacy
-json-repair==0.58.1
+json-repair==0.58.4
     # via
     #   -c .requirements-all.tmp.txt
     #   bite-size-reader (pyproject.toml)
@@ -152,6 +160,7 @@ lxml==6.0.2
     #   htmldate
     #   justext
     #   lxml-html-clean
+    #   scrapling
     #   trafilatura
 lxml-html-clean==0.4.4
     # via
@@ -191,6 +200,7 @@ orjson==3.11.7
     # via
     #   -c .requirements-all.tmp.txt
     #   bite-size-reader (pyproject.toml)
+    #   scrapling
 packaging==26.0
     # via
     #   -c .requirements-all.tmp.txt
@@ -200,7 +210,7 @@ packaging==26.0
     #   weasel
 pathspec==1.0.4
     # via mypy
-peewee==4.0.0
+peewee==4.0.1
     # via
     #   -c .requirements-all.tmp.txt
     #   bite-size-reader (pyproject.toml)
@@ -210,6 +220,10 @@ pillow==12.1.1
     #   bite-size-reader (pyproject.toml)
 platformdirs==4.9.2
     # via virtualenv
+playwright==1.58.0
+    # via
+    #   -c .requirements-all.tmp.txt
+    #   bite-size-reader (pyproject.toml)
 pluggy==1.6.0
     # via pytest
 pre-commit==4.5.1
@@ -234,7 +248,7 @@ pydantic==2.12.5
     #   spacy
     #   thinc
     #   weasel
-pydantic-core==2.42.0
+pydantic-core==2.41.5
     # via
     #   -c .requirements-all.tmp.txt
     #   pydantic
@@ -242,6 +256,10 @@ pydantic-settings==2.13.1
     # via
     #   -c .requirements-all.tmp.txt
     #   bite-size-reader (pyproject.toml)
+pyee==13.0.1
+    # via
+    #   -c .requirements-all.tmp.txt
+    #   playwright
 pygments==2.19.2
     # via
     #   -c .requirements-all.tmp.txt
@@ -259,7 +277,7 @@ pymupdf==1.27.1
     # via
     #   -c .requirements-all.tmp.txt
     #   bite-size-reader (pyproject.toml)
-pyrotgfork==2.2.19
+pyrotgfork==2.2.20
     # via
     #   -c .requirements-all.tmp.txt
     #   bite-size-reader (pyproject.toml)
@@ -289,7 +307,7 @@ python-dotenv==1.2.2
     # via
     #   -c .requirements-all.tmp.txt
     #   pydantic-settings
-pytz==2025.2
+pytz==2026.1.post1
     # via
     #   -c .requirements-all.tmp.txt
     #   dateparser
@@ -322,6 +340,10 @@ ru-core-news-sm @ https://github.com/explosion/spacy-models/releases/download/ru
     #   bite-size-reader (pyproject.toml)
 ruff==0.15.4
     # via bite-size-reader (pyproject.toml)
+scrapling==0.4.1
+    # via
+    #   -c .requirements-all.tmp.txt
+    #   bite-size-reader (pyproject.toml)
 setuptools==82.0.0
     # via
     #   -c .requirements-all.tmp.txt
@@ -372,6 +394,7 @@ tld==0.13.1
     # via
     #   -c .requirements-all.tmp.txt
     #   courlan
+    #   scrapling
 tqdm==4.67.3
     # via
     #   -c .requirements-all.tmp.txt
@@ -395,6 +418,8 @@ typing-extensions==4.15.0
     #   mypy
     #   pydantic
     #   pydantic-core
+    #   pyee
+    #   scrapling
     #   typing-inspection
 typing-inspection==0.4.2
     # via
@@ -418,6 +443,10 @@ uvloop==0.22.1
     #   bite-size-reader (pyproject.toml)
 virtualenv==20.38.0
     # via pre-commit
+w3lib==2.4.0
+    # via
+    #   -c .requirements-all.tmp.txt
+    #   scrapling
 wasabi==1.1.3
     # via
     #   -c .requirements-all.tmp.txt
@@ -428,7 +457,7 @@ weasel==0.4.3
     # via
     #   -c .requirements-all.tmp.txt
     #   spacy
-wrapt==2.1.1
+wrapt==2.1.2
     # via
     #   -c .requirements-all.tmp.txt
     #   smart-open

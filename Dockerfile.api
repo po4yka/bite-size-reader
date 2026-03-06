@@ -79,6 +79,9 @@ RUN apt-get update \
 # Copy virtual environment from builder stage
 COPY --from=builder /app/.venv /app/.venv
 
+# Install Chromium for Playwright-based scraping fallback.
+RUN playwright install --with-deps chromium
+
 # Copy application source
 COPY app ./app
 
